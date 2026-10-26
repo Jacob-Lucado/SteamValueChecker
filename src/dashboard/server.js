@@ -59,7 +59,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, logs = null, botInfo = null, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, logs = null, botInfo = null, botGuilds = null, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -176,7 +176,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         return s.guilds
             .map(g => ({
                 id: g.id, name: g.name, icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
-                manageable: isManager(g), alertChannel: db.getGuild(g.id)?.channel_id ?? null,
+                manageable: isManager(g), bot: botGuilds ? Boolean(botGuilds(g.id)) : null, alertChannel: db.getGuild(g.id)?.channel_id ?? null,
                 groupMin: db.getGuild(g.id)?.group_min ?? 0
             }))
             .sort((a, b) => Number(b.manageable) - Number(a.manageable) || a.name.localeCompare(b.name));

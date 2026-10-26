@@ -4,4 +4,4 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 COPY . .
-CMD ["node", "src/index.js"]
+CMD ["node", "--disable-warning=ExperimentalWarning", "src/index.js"]

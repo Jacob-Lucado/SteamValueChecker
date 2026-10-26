@@ -23,6 +23,7 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
 
     function add(level, args) {
         const text = mask(args.map(a => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : safeJson(a))).join(" ")).slice(0, 4000);
+        if (/ExperimentalWarning: SQLite/.test(text)) return null; // harmless Node notice, not worth an admin entry
         const entry = { at: now(), level, text };
         lines.push(entry);
         if (lines.length > max + maxFile) lines = lines.slice(-max - maxFile);

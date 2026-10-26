@@ -98,6 +98,7 @@ code { background: var(--soft); padding: 1px 6px; border-radius: 6px; font-size:
 .grid .panel { margin-bottom: 0; }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .grid.four { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 /* forms */
 label { display: block; color: var(--muted); font-size: 12.5px; font-weight: 600; margin: 12px 0 6px; }
@@ -306,3 +307,44 @@ textarea[autocomplete="off"] { font-family: ui-monospace, Menlo, Consolas, monos
   .dc-card { margin: 0 auto; transform: none; }
   .lp-grid, .lp-grid.three, .lp-split { grid-template-columns: 1fr; }
 }
+
+/* ---------- servers ---------- */
+.sv-toolbar { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 6px 0 22px; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 22px; }
+.sv-toolbar .tabs { margin: 0; }
+.tab { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 9px 16px; border-radius: 999px; font: inherit; font-weight: 600; cursor: pointer; }
+.tab:hover { border-color: var(--accent); }
+.tab.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.sv-search { min-width: 240px; max-width: 100%; }
+.sv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.sv-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 20px; box-shadow: var(--shadow); transition: transform .15s ease, border-color .15s ease; }
+.sv-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.sv-card.off { opacity: .88; }
+.sv-top { display: flex; align-items: center; gap: 16px; }
+.sv-icon { width: 64px; height: 64px; border-radius: 18px; object-fit: cover; flex: none; }
+.sv-icon.big { width: 88px; height: 88px; border-radius: 24px; }
+.sv-icon.noicon { display: grid; place-items: center; background: var(--panel-2); color: var(--white); font-weight: 800; font-size: 26px; }
+.sv-name strong { font-size: 18px; color: var(--white); display: block; margin-bottom: 8px; overflow-wrap: anywhere; }
+.sv-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.chip.ok { background: var(--good-bg); color: var(--good); }
+.chip.warn { background: rgba(242, 184, 75, .16); color: var(--warn); }
+.chip.dim { background: var(--soft); color: var(--muted); }
+.sv-stats { display: grid; gap: 10px; padding: 16px; background: var(--panel-2); border-radius: 12px; }
+.sv-stat { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.sv-stat b { margin-left: auto; color: var(--white); }
+.sv-ico { font-size: 16px; }
+.sv-ico.big { font-size: 26px; }
+.sv-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; }
+.back { display: inline-block; margin-bottom: 16px; color: var(--muted); text-decoration: none; font-weight: 600; }
+.back:hover { color: var(--white); }
+.sv-hero { display: flex; align-items: center; gap: 22px; margin-bottom: 26px; }
+.sv-hero h1 { margin: 0 0 10px; }
+.sv-body { display: grid; gap: 22px; }
+.sv-body .panel { padding: 24px; }
+.sv-status { font-size: 16px; color: var(--white); margin: 0 0 14px; }
+.sv-actions-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.sv-action { display: flex; align-items: center; gap: 16px; text-align: left; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; color: var(--text); font: inherit; cursor: pointer; }
+.sv-action:hover { border-color: var(--accent); }
+.sv-action b { display: block; color: var(--white); font-size: 16px; margin-bottom: 2px; }
+@media (max-width: 760px) { .sv-grid, .sv-actions-grid { grid-template-columns: 1fr; } .sv-hero { flex-direction: column; align-items: flex-start; } }

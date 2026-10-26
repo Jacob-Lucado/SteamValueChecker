@@ -110,7 +110,8 @@
 
   // ---------- chrome ----------
   const NAV = [["home", "Home"], ["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["mydata", "My Data"], ["help", "Help"], ["about", "About"], ["admin", "Admin"]];
-  const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0];
+  const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[0];
+  const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
 
   function renderChrome() {
     const view = currentView();
@@ -589,57 +590,134 @@
   }
 
   // ---------- servers ----------
+  // ---------- servers ----------
+  const guildInvite = g => (state.cfg.inviteUrl ? `${state.cfg.inviteUrl}&guild_id=${encodeURIComponent(g.id)}&disable_guild_select=true` : null);
+  const serverIcon = (g, cls) => (g.icon ? h("img", { class: cls, src: g.icon, alt: "" }) : h("div", { class: cls + " noicon", text: (g.name || "?").trim().charAt(0).toUpperCase() }));
+  const botBadge = g => (g.bot === null || g.bot === undefined ? null : h("span", { class: "chip " + (g.bot ? "ok" : "warn"), text: g.bot ? "Bot installed" : "Bot not added" }));
+
   function serversView() {
-    const panels = state.me.servers.map(g => {
-      const body = h("div", { class: "body" });
-      const status = h("span", { class: "muted", text: g.alertChannel ? "Alert channel is set." : "No alert channel yet." });
-      body.append(...[h("strong", { text: g.name }), " ", g.manageable ? h("span", { class: "tag", text: "You manage this" }) : null, h("div", {}, status)].filter(Boolean));
-      if (g.manageable) {
-        const holder = h("div");
-        const manage = h("button", { class: "btn blue small", text: "Choose channel" });
-        manage.addEventListener("click", () => busy(manage, async () => {
-          const data = await api("/api/servers/channels?guild=" + encodeURIComponent(g.id));
-          const pick = select(data.channels.map(c => ["" + c.id, "#" + c.name]), data.current || "");
-          const set = h("button", { class: "btn green small", text: "Set channel" });
-          set.addEventListener("click", () => busy(set, async () => {
-            const r = await api("/api/servers/channel", { guild_id: g.id, channel_id: pick.value });
-            g.alertChannel = r.channel.id; status.textContent = "Alert channel is #" + r.channel.name + ".";
-            toast("Alert channel set. A confirmation was posted there.", "ok");
-          }));
-          const clear = h("button", { class: "btn red small", text: "Clear" });
-          clear.addEventListener("click", () => busy(clear, async () => {
-            await api("/api/servers/channel", { guild_id: g.id, clear: true });
-            g.alertChannel = null; status.textContent = "No alert channel yet."; toast("Alert channel removed.", "ok");
-          }));
-          holder.replaceChildren(h("div", { class: "row" }, pick, h("span", { class: "shrink" }, set), h("span", { class: "shrink" }, clear)));
-          manage.remove();
-        }));
-        body.append(holder, manage);
-      }
-      const extra = h("div", { class: "wide" });
-      const showList = h("button", { class: "btn gray small", text: "Shared list" });
-      showList.addEventListener("click", () => busy(showList, () => sharedList(g, extra)));
-      const showBoard = h("button", { class: "btn gray small", text: "Leaderboard" });
-      showBoard.addEventListener("click", () => busy(showBoard, () => board(g, extra)));
-      body.append(h("div", { class: "actions" }, showList, showBoard));
-      if (g.manageable) {
-        const min = h("input", { type: "number", min: "0", max: "20", value: String(g.groupMin || 0) });
-        const setMin = h("button", { class: "btn gray small", text: "Save" });
-        setMin.addEventListener("click", () => busy(setMin, async () => {
-          const r = await api("/api/servers/group", { guild_id: g.id, minimum: Number(min.value) });
-          g.groupMin = r.groupMin; toast(r.groupMin ? `Group alerts on from ${r.groupMin} members.` : "Group alerts off.", "ok");
-        }));
-        body.append(h("div", { class: "rule inline" }, h("span", { class: "muted small", text: "Group alert when this many opted-in members watch a game (0 = off, needs an alert channel):" }), min, setMin));
-      }
-      body.append(extra);
-      return h("div", { class: "server" }, g.icon ? h("img", { src: g.icon, alt: "" }) : h("div", { class: "noicon" }), body);
-    });
+    const all = state.me.servers;
+    const mine = all.filter(g => g.manageable);
+    const withBot = all.filter(g => g.bot);
+    let filter = "all", q = "";
+    const grid = h("div", { class: "sv-grid" });
+
+    function card(g) {
+      const open = () => { location.hash = "#/servers/" + g.id; };
+      const stat = (icon, label, value) => h("div", { class: "sv-stat" }, h("span", { class: "sv-ico", text: icon }), h("span", { class: "muted", text: label }), h("b", { text: value }));
+      const actions = g.bot === false
+        ? [guildInvite(g) && g.manageable ? ext(guildInvite(g), "Add the bot", "btn green") : null, h("button", { class: "btn gray", text: "Details", onclick: open })]
+        : [h("button", { class: "btn blue", text: g.manageable ? "Manage" : "Open", onclick: open })];
+      return h("div", { class: "sv-card" + (g.bot === false ? " off" : "") },
+        h("div", { class: "sv-top" }, serverIcon(g, "sv-icon"),
+          h("div", { class: "sv-name" }, h("strong", { text: g.name }), h("div", { class: "sv-badges" }, g.manageable ? h("span", { class: "chip", text: "You manage this" }) : h("span", { class: "chip dim", text: "Member" }), botBadge(g)))),
+        h("div", { class: "sv-stats" },
+          stat("📣", "Alert channel", g.alertChannel ? "Set" : "Not set"),
+          stat("👥", "Group alerts", g.groupMin ? `From ${g.groupMin} members` : "Off")),
+        h("div", { class: "sv-actions" }, ...actions.filter(Boolean)));
+    }
+
+    function draw() {
+      const rows = all.filter(g => (filter === "all" || (filter === "mine" && g.manageable) || (filter === "bot" && g.bot) || (filter === "nobot" && g.bot === false)) && g.name.toLowerCase().includes(q));
+      grid.replaceChildren(...(rows.length ? rows.map(card) : [h("div", { class: "empty", text: all.length ? "No servers match." : "You are not in any servers." })]));
+    }
+    const tabBtn = (id, label, count) => {
+      const b = h("button", { class: "tab" + (filter === id ? " active" : ""), text: count === null ? label : `${label} (${count})`, onclick: () => { filter = id; tabs.querySelectorAll(".tab").forEach(t => t.classList.remove("active")); b.classList.add("active"); draw(); } });
+      return b;
+    };
+    const known = all.some(g => g.bot !== null && g.bot !== undefined);
+    const tabs = h("div", { class: "tabs" }, tabBtn("all", "All", all.length), tabBtn("mine", "I manage", mine.length),
+      ...(known ? [tabBtn("bot", "Bot installed", withBot.length), tabBtn("nobot", "Needs the bot", all.length - withBot.length)] : []));
+    const search = h("input", { type: "search", class: "sv-search", placeholder: "Search your servers", "aria-label": "Search your servers" });
+    search.addEventListener("input", () => { q = search.value.trim().toLowerCase(); draw(); });
+    draw();
     app.replaceChildren(
-      pageHead("Servers", "Alert channels are used when a DM cannot be delivered, or when a member chooses channel delivery.", state.cfg.inviteUrl && ext(state.cfg.inviteUrl, "Invite the bot", "btn blue")),
-      h("div", { class: "panel" }, panels.length ? panels : h("div", { class: "empty", text: "You are not in any servers." })),
-      h("div", { class: "notice", text: "Setting a channel posts a short confirmation there, which also checks that the bot can post. If that fails, give the bot View Channel, Send Messages and Embed Links in the channel." }));
+      pageHead("Servers", "Set up alerts, the shared wishlist and giveaways for the servers you are in.", state.cfg.inviteUrl && ext(state.cfg.inviteUrl, "Add the bot to a server", "btn blue")),
+      h("div", { class: "sv-toolbar" }, tabs, search),
+      grid);
   }
 
+  function serverDetail(id) {
+    const g = state.me.servers.find(x => x.id === id);
+    if (!g) { location.hash = "#/servers"; return; }
+    const canUse = g.bot !== false;
+    const body = h("div", { class: "sv-body" });
+    const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Alert channel", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["giveaways", "Giveaways", true]] : [])]
+      .filter(([, , managerOnly]) => !managerOnly || g.manageable);
+    let current = "overview";
+    const tabs = h("div", { class: "tabs" }, sections.map(([key, label]) => h("button", { class: "tab" + (key === current ? " active" : ""), text: label, onclick: ev => {
+      current = key; tabs.querySelectorAll(".tab").forEach(t => t.classList.remove("active")); ev.currentTarget.classList.add("active"); show();
+    } })));
+
+    function overview() {
+      const tile = (icon, k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: `${icon} ${k}` }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
+      const go = key => () => { const t = [...tabs.children].find(b => b.textContent === sections.find(s => s[0] === key)[1]); t && t.click(); };
+      const action = (icon, title, text, onclick) => h("button", { class: "sv-action", onclick }, h("span", { class: "sv-ico big", text: icon }), h("span", {}, h("b", { text: title }), h("span", { class: "muted small", text })));
+      const out = [];
+      if (g.bot === false) out.push(h("div", { class: "notice warn" }, "The bot is not in this server yet. ", guildInvite(g) && g.manageable ? ext(guildInvite(g), "Add it now", "btn green small") : "Ask a server manager to add it."));
+      out.push(h("div", { class: "grid three" },
+        tile("📣", "Alert channel", g.alertChannel ? "Set" : "Not set", g.alertChannel ? "Used when a DM fails or a member picks channel delivery" : "Alerts go by DM only"),
+        tile("👥", "Group alerts", g.groupMin ? `From ${g.groupMin}` : "Off", "When several opted-in members want the same game"),
+        tile("🤖", "Bot", g.bot === null ? "-" : g.bot ? "Installed" : "Not added")));
+      if (canUse) {
+        out.push(h("div", { class: "sv-actions-grid" },
+          g.manageable && action("📣", "Choose the alert channel", "Where alerts go when a DM cannot be delivered", go("alerts")),
+          action("🎮", "Shared wishlist", "Suggest games and vote with your server", go("list")),
+          action("🏆", "Leaderboard", "Who has saved the most against MSRP", go("board")),
+          g.manageable && action("🎁", "Giveaways", "Create and manage key giveaways", () => { location.hash = "#/giveaways"; })));
+      }
+      return out.filter(Boolean);
+    }
+
+    function alertsPanel() {
+      const holder = h("div", { class: "muted", text: "Loading channels…" });
+      (async () => {
+        try {
+          const data = await api("/api/servers/channels?guild=" + encodeURIComponent(g.id));
+          const pick = select(data.channels.map(c => ["" + c.id, "#" + c.name]), data.current || "");
+          const status = h("p", { class: "sv-status", text: g.alertChannel ? "Alerts are posted in #" + ((data.channels.find(c => "" + c.id === "" + data.current) || {}).name || "the chosen channel") + "." : "No alert channel yet. Alerts go by DM only." });
+          const set = h("button", { class: "btn green", text: "Save channel" });
+          set.addEventListener("click", () => busy(set, async () => {
+            const r = await api("/api/servers/channel", { guild_id: g.id, channel_id: pick.value });
+            g.alertChannel = r.channel.id; status.textContent = "Alerts are posted in #" + r.channel.name + "."; toast("Alert channel set. A confirmation was posted there.", "ok");
+          }));
+          const clear = h("button", { class: "btn red", text: "Remove" });
+          clear.addEventListener("click", () => busy(clear, async () => {
+            await api("/api/servers/channel", { guild_id: g.id, clear: true }); g.alertChannel = null; status.textContent = "No alert channel yet. Alerts go by DM only."; toast("Alert channel removed.", "ok");
+          }));
+          const min = h("input", { type: "number", min: "0", max: "20", value: String(g.groupMin || 0) });
+          const setMin = h("button", { class: "btn gray", text: "Save" });
+          setMin.addEventListener("click", () => busy(setMin, async () => {
+            const r = await api("/api/servers/group", { guild_id: g.id, minimum: Number(min.value) });
+            g.groupMin = r.groupMin; toast(r.groupMin ? `Group alerts on from ${r.groupMin} members.` : "Group alerts off.", "ok");
+          }));
+          holder.className = ""; holder.replaceChildren(
+            h("div", { class: "panel" }, h("h3", { text: "Alert channel" }), status,
+              h("div", { class: "rule inline" }, pick, set, g.alertChannel && clear),
+              h("p", { class: "muted small", text: "Saving posts a short confirmation there, which also checks that the bot can post. If that fails, give the bot View Channel, Send Messages and Embed Links in the channel." })),
+            h("div", { class: "panel" }, h("h3", { text: "Group alerts" }),
+              h("p", { class: "muted", text: "Post in the channel when this many opted-in members watch the same game and it hits their alert. 0 turns it off. Needs an alert channel." }),
+              h("div", { class: "rule inline" }, min, setMin)));
+        } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+      })();
+      return [holder];
+    }
+
+    function show() {
+      body.replaceChildren();
+      if (current === "overview") body.append(...overview());
+      else if (current === "alerts") body.append(...alertsPanel());
+      else if (current === "list") { const into = h("div"); body.append(into); sharedList(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
+      else if (current === "board") { const into = h("div"); body.append(into); board(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
+      else if (current === "giveaways") { location.hash = "#/giveaways"; }
+    }
+    show();
+    app.replaceChildren(
+      h("a", { class: "back", href: "#/servers", text: "← All servers" }),
+      h("div", { class: "sv-hero" }, serverIcon(g, "sv-icon big"),
+        h("div", {}, h("h1", { text: g.name }), h("div", { class: "sv-badges" }, g.manageable ? h("span", { class: "chip", text: "You manage this" }) : h("span", { class: "chip dim", text: "Member" }), botBadge(g)))),
+      tabs, body);
+  }
 
   // ---------- shared server list and leaderboard ----------
   async function sharedList(g, into) {
@@ -964,6 +1042,7 @@
     renderChrome();
     const view = currentView();
     if (!state.me && view !== "help" && view !== "about" && view !== "home") return landing();
+    if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo(0, 0); return; }
     (VIEWS[view] || (state.me ? valueView : landing))();
     window.scrollTo(0, 0);
   }
