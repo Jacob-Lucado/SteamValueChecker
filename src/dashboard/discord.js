@@ -62,6 +62,14 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
                 .map(c => ({ id: c.id, name: c.name }));
         },
 
+        /** Display name of a member of a server the bot is in, or null when unknown. */
+        async memberName(guildId, userId) {
+            try {
+                const m = await call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`, { headers: bot });
+                return m?.nick || m?.user?.global_name || m?.user?.username || null;
+            } catch { return null; }
+        },
+
         async sendMessage(channelId, payload) {
             return call(`/channels/${encodeURIComponent(channelId)}/messages`, {
                 method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload)

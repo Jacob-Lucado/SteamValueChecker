@@ -38,5 +38,17 @@ export function createNotifier({ db, discord }) {
         }
     }
 
-    return { deliver };
+    /** Posts to a server's alert channel without mentioning anyone. Returns true on success. */
+    async function postGuild(guildId, payload) {
+        const guild = db.getGuild(guildId);
+        if (!guild) return false;
+        try {
+            await discord.sendChannel(guild.channel_id, { ...payload, allowedMentions: { parse: [] } });
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    return { deliver, postGuild };
 }

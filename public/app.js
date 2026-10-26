@@ -109,14 +109,14 @@
   }
 
   // ---------- chrome ----------
-  const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["alerts", "Alerts"], ["servers", "Servers"], ["mydata", "My Data"], ["help", "Help"]];
+  const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["mydata", "My Data"], ["help", "Help"], ["admin", "Admin"]];
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0];
 
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
     nav.replaceChildren(...NAV
-      .filter(([id]) => state.me || id === "help")
+      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : state.me || id === "help"))
       .map(([id, text]) => h("a", { href: "#/" + id, class: view === id ? "active" : "", text })));
 
     const acct = document.getElementById("account");
@@ -227,14 +227,98 @@
       const a = h("a", { href: url, download: "steam-value.csv" });
       document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } });
+    const toLib = h("button", { class: "btn gray small", text: "Add found games to my library", onclick: () => busy(toLib, async () => {
+      const entries = d.rows.filter(r => r.found).map(r => ({ title: r.matched || r.title, paid: r.paid }));
+      const r = await api("/api/library/import", { entries });
+      toast(`Library: added ${r.added}, updated ${r.updated}.`, "ok");
+      state.me.library = (state.me.library || 0) + r.added;
+    }) });
     blocks.push(h("div", { class: "panel" },
-      h("div", { class: "page-head" }, h("h3", { text: `Results (${d.region})` }), csv),
+      h("div", { class: "page-head" }, h("h3", { text: `Results (${d.region})` }), h("div", { class: "actions" }, toLib, csv)),
       h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, head.map((c, i) => h("th", { class: i > 0 && c !== "Store" ? "num" : "", text: c })))), h("tbody", {}, body))),
       h("p", { class: "muted small", text: "~ = approximate title match. Prices by IsThereAnyDeal." })));
     into.replaceChildren(...blocks);
   }
 
   const pageHead = (title, sub, right) => h("div", { class: "page-head" }, h("div", {}, h("h1", { text: title }), sub && h("p", { class: "muted", text: sub })), right);
+
+
+  // ---------- charts (inline SVG, drawn with the DOM so nothing is parsed as HTML) ----------
+  const SVGNS = "http://www.w3.org/2000/svg";
+  function svg(tag, attrs, ...kids) {
+    const el = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+    for (const kid of kids) if (kid) el.append(kid);
+    return el;
+  }
+  const shortDate = t => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" });
+
+  /**
+   * Line chart. series: [{ name, cls, points: [{ x, y }] }] (x = ms). One y axis, starts at zero for money.
+   * Two or more series get a legend. Hover or touch shows the nearest point of every series.
+   */
+  function lineChart(series, { format, label }) {
+    const W = 640, H = 240, L = 54, R = 14, T = 12, B = 28;
+    const pts = series.flatMap(s => s.points);
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs) === x0 ? x0 + 1 : Math.max(...xs);
+    // round the top of the axis to a tidy number so the ticks read as 0, 5, 10 and not 4.86, 9.72
+    const rough = Math.max(...ys, 1) * 1.05 / 4, mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(v => v >= rough);
+    const yMax = step * 4;
+    const X = x => L + ((x - x0) / (x1 - x0)) * (W - L - R);
+    const Y = y => T + (1 - y / yMax) * (H - T - B);
+    const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": label });
+    for (let i = 0; i <= 4; i++) {
+      const v = (yMax / 4) * i, y = Y(v);
+      root.append(svg("line", { x1: L, x2: W - R, y1: y, y2: y, class: "grid" }));
+      const t = svg("text", { x: L - 8, y: y + 4, class: "axis", "text-anchor": "end" }); t.textContent = format(v); root.append(t);
+    }
+    [0, 0.5, 1].forEach(f => {
+      const t = svg("text", { x: L + f * (W - L - R), y: H - 8, class: "axis", "text-anchor": f === 0 ? "start" : f === 1 ? "end" : "middle" });
+      t.textContent = shortDate(x0 + f * (x1 - x0)); root.append(t);
+    });
+    for (const s of series) {
+      if (s.points.length === 1) {
+        root.append(svg("circle", { cx: X(s.points[0].x), cy: Y(s.points[0].y), r: 4, class: "dot " + s.cls }));
+      } else {
+        root.append(svg("polyline", { points: s.points.map(p => `${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(" "), class: "line " + s.cls, fill: "none" }));
+      }
+    }
+    const cross = svg("line", { y1: T, y2: H - B, class: "cross", visibility: "hidden" });
+    root.append(cross);
+    const markers = series.map(s => svg("circle", { r: 4.5, class: "dot " + s.cls, visibility: "hidden" }));
+    markers.forEach(m => root.append(m));
+    const tip = h("div", { class: "tip", hidden: true });
+    const hit = svg("rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "transparent" });
+    const nearest = (s, x) => s.points.reduce((a, b) => (Math.abs(b.x - x) < Math.abs(a.x - x) ? b : a));
+    const show = ev => {
+      const box = root.getBoundingClientRect();
+      const cx = ((ev.clientX - box.left) / box.width) * W;
+      const x = x0 + ((cx - L) / (W - L - R)) * (x1 - x0);
+      const hits = series.map(s => nearest(s, x));
+      const ref = hits[0];
+      cross.setAttribute("x1", X(ref.x)); cross.setAttribute("x2", X(ref.x)); cross.setAttribute("visibility", "visible");
+      hits.forEach((p, i) => { markers[i].setAttribute("cx", X(p.x)); markers[i].setAttribute("cy", Y(p.y)); markers[i].setAttribute("visibility", "visible"); });
+      tip.hidden = false;
+      tip.replaceChildren(h("strong", { text: shortDate(ref.x) }), ...series.map((s, i) => h("div", { text: `${s.name}: ${format(hits[i].y)}` })));
+      const frac = X(ref.x) / W;
+      tip.className = "tip " + (frac > 0.6 ? "left" : "right");
+      tip.dataset.x = String(Math.round(frac * 100));
+    };
+    const hide = () => { cross.setAttribute("visibility", "hidden"); markers.forEach(m => m.setAttribute("visibility", "hidden")); tip.hidden = true; };
+    hit.addEventListener("pointermove", show); hit.addEventListener("pointerleave", hide); hit.addEventListener("pointerdown", show);
+    root.append(hit);
+
+    const legend = series.length > 1 ? h("div", { class: "legend" }, series.map(s => h("span", {}, h("i", { class: "swatch " + s.cls }), s.name))) : null;
+    return h("figure", { class: "chart-box" }, legend, h("div", { class: "chart-wrap" }, root, tip),
+      h("details", { class: "chart-table" }, h("summary", { text: "Show as table" }),
+        h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "Date" }), ...series.map(s => h("th", { class: "num", text: s.name })))),
+          h("tbody", {}, series[0].points.slice(-30).reverse().map((p, i) => h("tr", {}, h("td", { text: shortDate(p.x) }),
+            ...series.map(s => { const q = s.points[s.points.length - 1 - i]; return h("td", { class: "num", text: q ? format(q.y) : "–" }); })))))));
+  }
+
+  const verdictBadge = v => v && h("span", { class: "verdict " + v.level, text: v.text });
 
   // ---------- wishlist ----------
   function ruleControl(init, onSave, label) {
@@ -287,7 +371,28 @@
             toast(`${r.updated} games will now alert on: ${r.label}.`, "ok");
             loadList();
           }, "Apply to all")));
-        list.replaceChildren(all, ...data.rows.map(r => wishRow(r, cur, loadList)));
+        const picked = new Set();
+        const count = h("span", { class: "muted small", text: "0 selected" });
+        const sync = () => { count.textContent = picked.size + " selected"; };
+        const bulkRule = h("div", { class: "rule inline" }, ...ruleControl({ type: "any" }, async (type, value) => {
+          if (!picked.size) throw new Error("Select at least one game first.");
+          const r = await api("/api/wishlist/bulk", { action: "alert", itad_ids: [...picked], type, value });
+          toast(`${r.updated} games will alert on: ${r.label}.`, "ok"); loadList();
+        }, "Apply to selected"));
+        const removeSel = h("button", { class: "btn red small", text: "Remove selected" });
+        removeSel.addEventListener("click", () => busy(removeSel, async () => {
+          if (!picked.size) throw new Error("Select at least one game first.");
+          const r = await api("/api/wishlist/bulk", { action: "remove", itad_ids: [...picked] });
+          state.me.games -= r.removed; toast(`Removed ${r.removed} games.`, "ok"); loadList();
+        }));
+        const rows = data.rows.map(r => wishRow(r, cur, loadList, (id, on) => { if (on) picked.add(id); else picked.delete(id); sync(); }));
+        const selectAll = h("input", { type: "checkbox", "aria-label": "Select all games" });
+        selectAll.addEventListener("change", () => {
+          rows.forEach(el => { const c = el.querySelector("input.pick"); if (c.checked !== selectAll.checked) c.click(); });
+        });
+        const bulk = h("div", { class: "panel" }, h("h3", { text: "Several games at once" }),
+          h("div", { class: "rule inline" }, h("label", { class: "check" }, selectAll, "Select all"), count, bulkRule, removeSel));
+        list.replaceChildren(all, bulk, ...rows);
       } catch (e) {
         list.className = "";
         list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
@@ -303,14 +408,27 @@
     loadList();
   }
 
-  function wishRow(r, cur, reload) {
+  function wishRow(r, cur, reload, onPick) {
     const best = r.best;
     const sale = r.discount > 0;
     const pct = Math.round(r.discount * 100);
     const remove = h("button", { class: "btn red small", text: "Remove" });
     remove.addEventListener("click", () => busy(remove, async () => { await api("/api/wishlist/remove", { itad_id: r.itad_id }); state.me.games--; reload(); }));
+    const chartHolder = h("div", { class: "wide" });
+    const hist = h("button", { class: "btn gray small", text: "Price history" });
+    hist.addEventListener("click", () => {
+      if (chartHolder.firstChild) { chartHolder.replaceChildren(); return; }
+      busy(hist, async () => {
+        const d = await api("/api/wishlist/history?itad_id=" + encodeURIComponent(r.itad_id));
+        if (!d.points.length) { chartHolder.replaceChildren(h("p", { class: "muted small", text: "No price history yet." })); return; }
+        chartHolder.replaceChildren(h("p", { class: "muted small", text: "Lowest store price over the last year, " + r.title }),
+          lineChart([{ name: "Price", cls: "s0", points: d.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }));
+      });
+    });
+    const pick = h("input", { type: "checkbox", class: "pick", "aria-label": "Select " + r.title });
+    pick.addEventListener("change", () => onPick && onPick(r.itad_id, pick.checked));
     return h("div", { class: "wish" + (sale ? " sale" : "") },
-      h("div", {}, h("div", { class: "name", text: r.title }), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}` })),
+      h("div", {}, h("div", { class: "name" }, pick, " ", r.title, " ", verdictBadge(r.verdict)), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}` })),
       h("div", { class: "price-box" },
         h("span", { class: "badge" + (sale ? "" : " none"), text: sale ? "-" + pct + "%" : "–" }),
         sale && r.regular !== null && h("span", { class: "was", text: money(r.regular, cur) }),
@@ -319,7 +437,7 @@
       h("div", { class: "rule" }, ...ruleControl({ type: r.trigger_type, value: r.trigger_value }, async (type, value) => {
         await api("/api/wishlist/alert", { itad_id: r.itad_id, type, value });
         toast("Rule saved.", "ok"); reload();
-      }), remove));
+      }), hist, remove), chartHolder);
   }
 
   // ---------- alerts ----------
@@ -333,9 +451,28 @@
     const withChannel = state.me.servers.filter(g => g.alertChannel);
     const server = select([["", "None"], ...state.me.servers.map(g => [g.id, g.name + (g.alertChannel ? "" : " (no alert channel)")])],
       s.guild_id || (withChannel.length === 1 ? withChannel[0].id : ""));
+    const myTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "UTC"; } })();
+    const qs = h("input", { type: "time", value: s.quiet_start || "" });
+    const qe = h("input", { type: "time", value: s.quiet_end || "" });
+    const tz = h("input", { type: "text", value: s.tz && s.tz !== "UTC" ? s.tz : myTz, maxlength: "60" });
+    const digest = h("input", { type: "checkbox", checked: s.digest });
+    const digestDay = select(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => [String(i), d]), String(s.digest_day));
+    const bundles = h("input", { type: "checkbox", checked: s.bundles });
+    const share = h("input", { type: "checkbox", checked: s.share });
+    const history = h("div", { class: "panel" }, h("h3", { text: "Recent alerts" }), h("p", { class: "muted", text: "Loading…" }));
+    api("/api/alerts/history").then(d => {
+      const kinds = { sale: "Sale", bundle: "Bundle", giveaway: "Free", group: "Group", digest: "Digest" };
+      history.replaceChildren(h("h3", { text: "Recent alerts" }), d.alerts.length
+        ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["When", "Type", "Game", "Price", "Store", "Sent by"].map((c, i) => h("th", { class: i === 3 ? "num" : "", text: c })))),
+          h("tbody", {}, d.alerts.map(a => h("tr", {}, h("td", { text: new Date(a.at).toLocaleString() }), h("td", { text: kinds[a.kind] || a.kind }), h("td", { text: a.title }),
+            h("td", { class: "num", text: a.price === null ? "–" : a.price.toFixed(2) }), h("td", { text: a.shop || "–" }), h("td", { text: a.via || "–" }))))))
+        : h("div", { class: "empty", text: "No alerts yet." }));
+    }).catch(e => history.replaceChildren(h("div", { class: "notice warn", text: e.message })));
     const save = h("button", { class: "btn green", text: "Save settings", onclick: () => busy(save, async () => {
       const r = await api("/api/settings", {
-        delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null
+        delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
+        quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
+        bundles: bundles.checked, share: share.checked
       });
       state.me.settings = r.settings;
       toast("Settings saved.", "ok");
@@ -351,8 +488,17 @@
       h("div", { class: "panel" },
         h("h3", { text: "Prices" }),
         h("div", { class: "row" }, field("Region", region), field("Stores that count", stores))),
+      h("div", { class: "panel" },
+        h("h3", { text: "Quiet hours and digest" }),
+        h("p", { class: "muted small", text: "Alerts that arrive during quiet hours are held and sent afterwards. Leave both empty to turn quiet hours off." }),
+        h("div", { class: "row" }, field("Quiet from", qs), field("Until", qe), field("Your time zone", tz)),
+        h("label", { class: "check" }, digest, "Weekly digest of your wishlist sales, sent from 9:00 in your time zone on"), field("Day", digestDay),
+        h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away")),
+      h("div", { class: "panel" },
+        h("h3", { text: "Share with your server" }),
+        h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
       h("p", { class: "muted", text: `Watching ${state.me.games} game${state.me.games === 1 ? "" : "s"}. Prices are checked about once an hour.` }),
-      save);
+      save, history);
   }
 
   // ---------- servers ----------
@@ -360,7 +506,7 @@
     const panels = state.me.servers.map(g => {
       const body = h("div", { class: "body" });
       const status = h("span", { class: "muted", text: g.alertChannel ? "Alert channel is set." : "No alert channel yet." });
-      body.append(h("strong", { text: g.name }), " ", g.manageable && h("span", { class: "tag", text: "You manage this" }), h("div", {}, status));
+      body.append(...[h("strong", { text: g.name }), " ", g.manageable ? h("span", { class: "tag", text: "You manage this" }) : null, h("div", {}, status)].filter(Boolean));
       if (g.manageable) {
         const holder = h("div");
         const manage = h("button", { class: "btn blue small", text: "Choose channel" });
@@ -383,12 +529,148 @@
         }));
         body.append(holder, manage);
       }
+      const extra = h("div", { class: "wide" });
+      const showList = h("button", { class: "btn gray small", text: "Shared list" });
+      showList.addEventListener("click", () => busy(showList, () => sharedList(g, extra)));
+      const showBoard = h("button", { class: "btn gray small", text: "Leaderboard" });
+      showBoard.addEventListener("click", () => busy(showBoard, () => board(g, extra)));
+      body.append(h("div", { class: "actions" }, showList, showBoard));
+      if (g.manageable) {
+        const min = h("input", { type: "number", min: "0", max: "20", value: String(g.groupMin || 0) });
+        const setMin = h("button", { class: "btn gray small", text: "Save" });
+        setMin.addEventListener("click", () => busy(setMin, async () => {
+          const r = await api("/api/servers/group", { guild_id: g.id, minimum: Number(min.value) });
+          g.groupMin = r.groupMin; toast(r.groupMin ? `Group alerts on from ${r.groupMin} members.` : "Group alerts off.", "ok");
+        }));
+        body.append(h("div", { class: "rule inline" }, h("span", { class: "muted small", text: "Group alert when this many opted-in members watch a game (0 = off, needs an alert channel):" }), min, setMin));
+      }
+      body.append(extra);
       return h("div", { class: "server" }, g.icon ? h("img", { src: g.icon, alt: "" }) : h("div", { class: "noicon" }), body);
     });
     app.replaceChildren(
       pageHead("Servers", "Alert channels are used when a DM cannot be delivered, or when a member chooses channel delivery.", state.cfg.inviteUrl && ext(state.cfg.inviteUrl, "Invite the bot", "btn blue")),
-      h("div", { class: "panel" }, panels.length ? panels : h("div", { class: "empty", text: "None of your servers manage an alert channel yet. Only people with Manage Server can set one." })),
+      h("div", { class: "panel" }, panels.length ? panels : h("div", { class: "empty", text: "You are not in any servers." })),
       h("div", { class: "notice", text: "Setting a channel posts a short confirmation there, which also checks that the bot can post. If that fails, give the bot View Channel, Send Messages and Embed Links in the channel." }));
+  }
+
+
+  // ---------- shared server list and leaderboard ----------
+  async function sharedList(g, into) {
+    const d = await api("/api/servers/list?guild=" + encodeURIComponent(g.id));
+    const title = h("input", { type: "text", placeholder: "Suggest a game", maxlength: "100" });
+    const add = h("button", { class: "btn blue small", text: "Add" });
+    add.addEventListener("click", () => busy(add, async () => { await api("/api/servers/list/add", { guild_id: g.id, title: title.value }); toast("Added to the server list.", "ok"); await sharedList(g, into); }));
+    const rows = d.rows.map(r => {
+      const vote = h("button", { class: "btn small " + (r.voted ? "green" : "gray"), text: (r.voted ? "Voted " : "Vote ") + r.votes });
+      vote.addEventListener("click", () => busy(vote, async () => { await api("/api/servers/list/vote", { guild_id: g.id, itad_id: r.itad_id }); await sharedList(g, into); }));
+      const rm = h("button", { class: "btn red small", text: "Remove" });
+      rm.addEventListener("click", () => busy(rm, async () => { await api("/api/servers/list/remove", { guild_id: g.id, itad_id: r.itad_id }); await sharedList(g, into); }));
+      const sale = r.discount > 0;
+      return h("tr", {}, h("td", {}, r.title, " ", verdictBadge(r.verdict)),
+        h("td", { class: "num" }, sale && h("span", { class: "badge", text: "-" + Math.round(r.discount * 100) + "%" }), " ", money(r.best && r.best.price, d.currency)),
+        h("td", { text: r.best ? r.best.shop : "–" }), h("td", { class: "actions" }, vote, rm));
+    });
+    into.replaceChildren(h("div", { class: "subpanel" }, h("h4", { text: "Server wishlist" }), h("div", { class: "rule inline" }, title, add),
+      rows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Game", "Price now", "Store", ""].map((c, i) => h("th", { class: i === 1 ? "num" : "", text: c })))), h("tbody", {}, rows)))
+        : h("div", { class: "empty", text: "Nothing here yet. Suggest a game above." }),
+      h("p", { class: "muted small", text: "Everyone in the server can see this list. You can remove games you added; server managers can remove any." })));
+  }
+
+  async function board(g, into) {
+    const d = await api("/api/servers/leaderboard?guild=" + encodeURIComponent(g.id));
+    into.replaceChildren(h("div", { class: "subpanel" }, h("h4", { text: "Savings leaderboard" }),
+      d.entries.length ? h("ol", { class: "board" }, d.entries.map(e => h("li", {}, h("strong", { text: e.name + (e.you ? " (you)" : "") }), ` ${Math.round(e.savedPct)}% saved across ${e.games} games`)))
+        : h("div", { class: "empty", text: "Nobody has joined yet." }),
+      h("p", { class: "muted small", text: d.joined ? "You are on the leaderboard. Change this on the Alerts page." : "You are not on it. Opt in on the Alerts page (“Share with your server”). Ranked by percent saved vs MSRP, since members shop in different currencies." })));
+  }
+
+  // ---------- library ----------
+  async function libraryView() {
+    const body = h("div", { class: "muted", text: "Loading prices…" });
+    const title = h("input", { type: "text", placeholder: "Game title", maxlength: "100" });
+    const paid = h("input", { type: "number", min: "0", max: "10000", step: "0.01", placeholder: "What you paid (optional)" });
+    const add = h("button", { class: "btn blue", text: "Add game", onclick: () => busy(add, async () => {
+      await api("/api/library/add", { title: title.value, paid: paid.value === "" ? null : Number(paid.value) });
+      title.value = ""; paid.value = ""; toast("Added.", "ok"); load();
+    }) });
+    const file = h("input", { type: "file", accept: ".csv,.json,.txt,.md" });
+    const imp = h("button", { class: "btn gray", text: "Import file", onclick: () => busy(imp, async () => {
+      const f = file.files[0];
+      if (!f) throw new Error("Choose a file first.");
+      if (f.size > state.cfg.maxUploadChars) throw new Error("That file is too large (200 KB max).");
+      const r = await api("/api/library/import", { file: { name: f.name, text: await f.text() } });
+      toast(`Added ${r.added}, updated ${r.updated}.` + (r.notFound.length ? ` ${r.notFound.length} not found.` : ""), "ok"); load();
+    }) });
+
+    async function load() {
+      try {
+        const d = await api("/api/library");
+        state.me.library = d.rows.length;
+        if (!d.rows.length) { body.className = ""; body.replaceChildren(h("div", { class: "empty", text: "Your library is empty. Add games above, import a FanaticalGrabber export, or send results from the Value Checker." })); return; }
+        const t = d.totals, cur = d.currency;
+        const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
+        const snaps = d.snapshots;
+        const chart = snaps.length > 1
+          ? h("div", { class: "panel" }, h("h3", { text: "Value over time" }), lineChart([
+              { name: "Worth at MSRP", cls: "s1", points: snaps.map(x => ({ x: Date.parse(x.day), y: x.msrp })) },
+              { name: "Cheapest now", cls: "s0", points: snaps.map(x => ({ x: Date.parse(x.day), y: x.cheapest })) }
+            ], { format: v => money(v, cur), label: "Library value over time" }))
+          : h("p", { class: "muted small", text: "The value chart appears after the second day of data." });
+        const rows = d.rows.map(r => {
+          const rm = h("button", { class: "btn red small", text: "Remove" });
+          rm.addEventListener("click", () => busy(rm, async () => { await api("/api/library/remove", { itad_id: r.itad_id }); load(); }));
+          const holder = h("tr", { class: "chart-row", hidden: true }, h("td", { colspan: "6" }));
+          const hist = h("button", { class: "btn gray small", text: "Price history" });
+          hist.addEventListener("click", () => {
+            if (!holder.hidden) { holder.hidden = true; return; }
+            busy(hist, async () => {
+              const h2 = await api("/api/wishlist/history?itad_id=" + encodeURIComponent(r.itad_id));
+              holder.firstChild.replaceChildren(h2.points.length ? lineChart([{ name: "Price", cls: "s0", points: h2.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }) : h("p", { class: "muted small", text: "No price history yet." }));
+              holder.hidden = false;
+            });
+          });
+          return [h("tr", {}, h("td", { text: r.title }), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
+            h("td", { class: "num", text: money(r.best && r.best.price, cur) }),
+            h("td", { class: "num", text: r.saved === null ? "–" : (r.saved >= 0 ? "+" : "−") + money(Math.abs(r.saved), cur) }), h("td", { class: "actions" }, hist, rm)), holder];
+        });
+        body.className = "";
+        body.replaceChildren(
+          h("div", { class: "grid four" }, tile("Games", String(t.games), t.paidGames < t.games ? `${t.paidGames} with a price` : ""), tile("You paid", money(t.paid, cur)),
+            tile("Worth at MSRP", money(t.msrp, cur)), tile("Saved vs MSRP", money(t.saved, cur), t.msrpPaid > 0 ? Math.round(t.savedPct) + "% off" : "add prices to see savings")),
+          chart,
+          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Game", "Paid", "MSRP", "Cheapest now", "Saved", ""].map((c, i) => h("th", { class: i > 0 && i < 5 ? "num" : "", text: c })))), h("tbody", {}, rows.flat())))));
+      } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+
+    app.replaceChildren(pageHead("Library", "Games you own and what you paid, against what they are worth now."),
+      h("div", { class: "grid two" },
+        h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), field("Paid", paid), h("p"), add),
+        h("div", { class: "panel" }, h("h3", { text: "Import" }), field("FanaticalGrabber export (a Paid column is used)", file), h("p"), imp)),
+      body);
+    load();
+  }
+
+  // ---------- owner ----------
+  async function adminView() {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Admin", "Only you, the bot owner, can see this."), holder);
+    try {
+      const d = await api("/api/admin/stats");
+      const st = d.stats, hl = d.health || {};
+      const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
+      const when = t => (t ? new Date(t).toLocaleString() : "never");
+      holder.className = "";
+      holder.replaceChildren(
+        h("div", { class: "grid four" }, tile("Members", st.users, `${st.activeUsers} with alerts on`), tile("Wishlist games", st.wishlistGames, `${st.uniqueGames} different games`),
+          tile("Library games", st.libraryGames), tile("Servers with a channel", st.serversWithChannel),
+          tile("Alerts, last 24h", st.alerts24h), tile("DM delivery", st.dmUsers, `${st.channelUsers} use the channel`), tile("DMs failing", st.usersFailingDm, "3 or more failures in a row")),
+        h("div", { class: "panel" }, h("h3", { text: "Alerts in the last 7 days" }),
+          Object.keys(st.alerts7d).length ? h("p", { text: Object.entries(st.alerts7d).map(([k, n]) => `${k}: ${n}`).join("   ") }) : h("p", { class: "muted", text: "None." })),
+        h("div", { class: "panel" }, h("h3", { text: "Health" }),
+          h("p", { text: "Last price check: " + when(hl.cycle && hl.cycle.at) }),
+          h("p", { text: "Last backup: " + (hl.backup ? `${when(hl.backup.at)} (${hl.backup.ok ? "ok" : "FAILED"})` : "none yet") }),
+          h("p", { class: "muted small", text: "Recent errors: " + ((hl.errors || []).slice(0, 5).map(e => `${e.where} (${when(e.at)})`).join(", ") || "none") })));
+    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
   // ---------- my data ----------
@@ -403,10 +685,10 @@
     app.replaceChildren(
       pageHead("My Data", "Everything the bot stores about you, and control over it."),
       h("div", { class: "panel" }, h("h3", { text: "Stored" }),
-        h("p", { text: "Your Discord ID, your wishlist and alert rules, your settings, the server you last used, and your public Steam ID if you imported a wishlist. The Value Checker stores nothing." }),
+        h("p", { text: "Your Discord ID, your wishlist and alert rules, your library and what you paid, your settings (including quiet hours and time zone), your last 90 days of alert history, the server you last used, and your public Steam ID if you imported a wishlist. Games you suggest or vote for on a server list are stored with that server. The Value Checker stores nothing." }),
         h("a", { class: "btn blue", href: "/api/mydata/download", text: "Download my data (JSON)" })),
       h("div", { class: "panel" }, h("h3", { text: "Delete" }),
-        h("p", { text: "This deletes your wishlist, alert settings and Steam profile ID. It cannot be undone." }),
+        h("p", { text: "This deletes your wishlist, library, alert history and settings, your Steam profile ID, your votes and the games you added to server lists. It cannot be undone. Backups made before you delete are removed as they rotate out (7 days)." }),
         field("Confirm", confirm), h("p"), del));
   }
 
@@ -421,7 +703,7 @@
   }
 
   // ---------- routing ----------
-  const VIEWS = { value: valueView, wishlist: wishlistView, alerts: alertsView, servers: serversView, mydata: myDataView, help: helpView };
+  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, mydata: myDataView, help: helpView, admin: adminView };
 
   function route() {
     renderChrome();

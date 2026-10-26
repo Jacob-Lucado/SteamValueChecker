@@ -1,7 +1,7 @@
 // Wishlist logic that does not depend on Discord: finding games, building the overview rows.
 
 import { summarize } from "./report.js";
-import { current, describeTrigger, parseTrigger } from "./alerts.js";
+import { current, describeTrigger, parseTrigger, dealVerdict } from "./alerts.js";
 
 /** Finds one of the user's games by title. Returns { item } | { ambiguous: [titles] } | { none: true }. */
 export function findItem(items, query) {
@@ -35,7 +35,8 @@ export async function viewRows(db, itad, user) {
         return {
             itad_id: it.itad_id, title: it.title, source: it.source,
             best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
-            alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value
+            alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value,
+            low1y: now.low1y, low3m: now.low3m, verdict: dealVerdict(now)
         };
     });
     rows.sort((a, b) => b.discount - a.discount || a.title.localeCompare(b.title));
@@ -46,13 +47,18 @@ export async function viewRows(db, itad, user) {
 export function exportJson(db, userId) {
     const data = db.exportUser(userId);
     if (!data) return null;
-    const { user, items } = data;
+    const { user, items, library, alerts } = data;
     return JSON.stringify({
         note: "Everything Steam Value Checker stores about you.",
         settings: {
             region: user.region, stores: user.stores, delivery: user.delivery, paused: Boolean(user.paused),
-            steam_id: user.steam_id, server_id: user.guild_id
+            steam_id: user.steam_id, server_id: user.guild_id,
+            quiet_hours: user.quiet_start === null || user.quiet_start === undefined ? null : { start_minutes: user.quiet_start, end_minutes: user.quiet_end },
+            time_zone: user.tz, weekly_digest: Boolean(user.digest), digest_day: user.digest_day,
+            bundle_alerts: user.bundles !== 0, shared_with_server: Boolean(user.share)
         },
+        library: (library ?? []).map(l => ({ title: l.title, itad_id: l.itad_id, paid: l.paid })),
+        alert_history: (alerts ?? []).map(a => ({ at: new Date(a.at).toISOString(), kind: a.kind, title: a.title, price: a.price, shop: a.shop, via: a.via })),
         wishlist: items.map(i => ({
             title: i.title, itad_id: i.itad_id, source: i.source,
             alert: describeTrigger(i), last_alert_price: i.last_alert_price

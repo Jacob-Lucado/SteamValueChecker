@@ -214,5 +214,83 @@ export function createItad({
         return v;
     }
 
-    return { lookupTitles, getPrices, lookupShopIds, getTitle, _cache: cache };
+    const isoOrNull = v => { const t = Date.parse(v); return Number.isFinite(t) ? t : null; };
+
+    /**
+     * Active bundles that contain each game. One batch call per 200 games.
+     * Returns Map(itadId -> [{ id, title, shop, url, expiry, price, currency }]), cheapest tier price that includes the game.
+     */
+    async function getBundles(ids, country = "US") {
+        const out = new Map();
+        const need = [];
+        for (const id of ids) {
+            const hit = getCached(`bun:${country}:${id}`);
+            if (hit !== undefined) out.set(id, hit); else need.push(id);
+        }
+        for (const part of chunk(need, 200)) {
+            const data = await call("POST", "/games/overview/v2", { country, vouchers: "false" }, part);
+            const wanted = new Set(part);
+            const found = new Map(part.map(id => [id, []]));
+            for (const b of Array.isArray(data?.bundles) ? data.bundles : []) {
+                const expiry = isoOrNull(b?.expiry);
+                if (expiry !== null && expiry < now()) continue;
+                const perGame = new Map();
+                for (const tier of Array.isArray(b?.tiers) ? b.tiers : []) {
+                    const amount = Number(tier?.price?.amount);
+                    for (const g of Array.isArray(tier?.games) ? tier.games : []) {
+                        if (!wanted.has(g?.id) || !Number.isFinite(amount)) continue;
+                        const prev = perGame.get(g.id);
+                        if (!prev || amount < prev.price) perGame.set(g.id, { price: amount, currency: tier.price.currency ?? null });
+                    }
+                }
+                for (const [gid, tier] of perGame) {
+                    found.get(gid).push({
+                        id: String(b.id ?? b.title), title: String(b.title ?? "Bundle"), shop: b.page?.name ?? null,
+                        url: typeof b.url === "string" ? b.url : null, expiry, price: tier.price, currency: tier.currency
+                    });
+                }
+            }
+            for (const [id, list] of found) { setCached(`bun:${country}:${id}`, list); out.set(id, list); }
+        }
+        return out;
+    }
+
+    /** Active giveaways, as Map(itadId -> [{ id, title, shop, url, expiry }]). One call, cached. */
+    async function getGiveaways() {
+        const hit = getCached("giveaways");
+        if (hit !== undefined) return hit;
+        const data = await call("GET", "/giveaways/v1", { limit: 50 });
+        const out = new Map();
+        for (const g of Array.isArray(data) ? data : []) {
+            const expiry = isoOrNull(g?.expiry);
+            if (expiry !== null && expiry < now()) continue;
+            for (const game of Array.isArray(g?.games) ? g.games : []) {
+                if (!game?.id) continue;
+                if (!out.has(game.id)) out.set(game.id, []);
+                out.get(game.id).push({
+                    id: String(g.id ?? g.title), title: String(g.title ?? "Giveaway"), shop: g.shop?.name ?? null,
+                    url: typeof g.url === "string" ? g.url : null, expiry
+                });
+            }
+        }
+        setCached("giveaways", out);
+        return out;
+    }
+
+    /** Price history points for one game: [{ t, price, regular, shop }] oldest first. Defaults to the last year. */
+    async function getHistory(id, country = "US", sinceMs = now() - 365 * 86400_000) {
+        const since = new Date(sinceMs).toISOString().slice(0, 10);
+        const key = `hist:${country}:${id}:${since}`;
+        const hit = getCached(key);
+        if (hit !== undefined) return hit;
+        const data = await call("GET", "/games/history/v2", { id, country, since: `${since}T00:00:00Z` });
+        const points = (Array.isArray(data) ? data : [])
+            .map(e => ({ t: isoOrNull(e?.timestamp), price: Number(e?.deal?.price?.amount), regular: Number(e?.deal?.regular?.amount), shop: e?.shop?.name ?? null }))
+            .filter(p => p.t !== null && Number.isFinite(p.price))
+            .sort((a, b) => a.t - b.t);
+        setCached(key, points);
+        return points;
+    }
+
+    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getGiveaways, getHistory, _cache: cache };
 }

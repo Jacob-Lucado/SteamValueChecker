@@ -116,7 +116,7 @@ const GREEN = 0x57f287;
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 
 /** One sale alert. `now` comes from alerts.current(). */
-export function alertEmbed(item, now, { trigger, lower = false } = {}) {
+export function alertEmbed(item, now, { trigger, lower = false, verdict = null } = {}) {
     const c = now.currency ?? "USD";
     const fields = [
         { name: "Price now", value: money(now.price, c), inline: true },
@@ -125,6 +125,7 @@ export function alertEmbed(item, now, { trigger, lower = false } = {}) {
         { name: "Store", value: now.shop ?? "-", inline: true }
     ];
     if (now.atl !== null) fields.push({ name: "All-time low", value: money(now.atl, c), inline: true });
+    if (verdict) fields.push({ name: "Deal check", value: verdict.text, inline: true });
     return {
         color: GREEN,
         title: lower ? `${item.title}: price dropped again` : `${item.title} is on sale`,
@@ -150,4 +151,118 @@ export function wishlistEmbed(rows, page, currency) {
         description: fence([head, ...body]),
         footer: { text: `Page ${page + 1}/${pages}  •  ${rows.length} games  •  Prices by IsThereAnyDeal` }
     };
+}
+
+const PURPLE = 0x8b7bff;
+const stamp = ms => `<t:${Math.floor(ms / 1000)}:R>`;
+
+/** A watched game appeared in a bundle. `hit` is { item, bundle }. */
+export function bundleEmbed({ item, bundle }) {
+    const fields = [{ name: "Bundle", value: bundle.title.slice(0, 200), inline: true }];
+    if (bundle.shop) fields.push({ name: "Store", value: bundle.shop, inline: true });
+    if (bundle.price !== undefined) fields.push({ name: "From", value: money(bundle.price, bundle.currency ?? "USD"), inline: true });
+    if (bundle.expiry) fields.push({ name: "Ends", value: stamp(bundle.expiry), inline: true });
+    return { color: PURPLE, title: `${item.title} is in a bundle`, url: safeUrl(bundle.url), fields, footer: { text: "Bundle alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
+}
+
+/** A watched game is being given away. */
+export function giveawayEmbed({ item, giveaway }) {
+    const fields = [{ name: "Giveaway", value: giveaway.title.slice(0, 200), inline: true }];
+    if (giveaway.shop) fields.push({ name: "Where", value: giveaway.shop, inline: true });
+    if (giveaway.expiry) fields.push({ name: "Ends", value: stamp(giveaway.expiry), inline: true });
+    return { color: GREEN, title: `${item.title} is free right now`, url: safeUrl(giveaway.url), fields, footer: { text: "Giveaway alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
+}
+
+/** Weekly digest: best sales on the wishlist. Returns null when nothing is on sale. */
+export function digestEmbed(rows, currency, { limit = 10 } = {}) {
+    const onSale = rows.filter(r => r.discount > 0 && r.best).sort((a, b) => b.discount - a.discount);
+    if (!onSale.length) return null;
+    const lines = onSale.slice(0, limit).map(r => {
+        const tag = r.verdict && r.verdict.level === "great" ? " (all-time low)" : "";
+        return `**${r.title}**: ${money(r.best.price, currency)} (-${Math.round(r.discount * 100)}%) at ${r.best.shop}${tag}`;
+    });
+    if (onSale.length > limit) lines.push(`…and ${onSale.length - limit} more. Open /wishlist view for the full list.`);
+    return { color: COLOR, title: "Your weekly wishlist digest", description: `${onSale.length} of ${rows.length} games are on sale.\n\n${lines.join("\n")}`.slice(0, 4000), footer: { text: "Turn off with /alerts digest  •  Prices by IsThereAnyDeal" } };
+}
+
+/** Library overview for Discord. */
+export function libraryEmbed(view, currency) {
+    const t = view.totals;
+    const lines = [
+        `${"Games".padEnd(16)} ${left(String(t.games), 11)}`,
+        `${"You paid".padEnd(16)} ${left(money(t.paid, currency), 11)}${t.paidGames < t.games ? `  (${t.paidGames} with a price)` : ""}`,
+        `${"MSRP (all)".padEnd(16)} ${left(money(t.msrp, currency), 11)}`,
+        `${"Cheapest now".padEnd(16)} ${left(money(t.cheapest, currency), 11)}`,
+        `${"Saved vs MSRP".padEnd(16)} ${left(money(t.saved, currency), 11)}${t.msrpPaid > 0 ? `  (${Math.round(t.savedPct)}%)` : ""}`
+    ];
+    const top = [...view.rows].filter(r => r.saved !== null).sort((a, b) => b.saved - a.saved).slice(0, 5)
+        .map(r => `**${r.title}**: paid ${money(r.paid, currency)}, MSRP ${money(r.msrp, currency)}`).join("\n");
+    const fields = [{ name: "Your library", value: fence(lines) }];
+    if (top) fields.push({ name: "Best deals", value: top.slice(0, 1000) });
+    return { color: COLOR, title: "Library value", fields, footer: { text: "Prices by IsThereAnyDeal" } };
+}
+
+/** Several members of a server are watching the same game and it just hit their alert. */
+export function groupEmbed(title, count, now) {
+    const c = now.currency ?? "USD";
+    const off = now.discount > 0 ? ` (-${Math.round(now.discount * 100)}%)` : "";
+    return {
+        color: GREEN,
+        title: `${count} members are watching ${title}`,
+        url: safeUrl(now.url),
+        description: `It just dropped to **${money(now.price, c)}**${off}${now.shop ? ` at ${now.shop}` : ""}.`,
+        footer: { text: "Only members who opted in are counted  •  /alerts share to join or leave" }
+    };
+}
+
+/** One game's price and lows, for /wishlist check. */
+export function checkEmbed(title, now, verdict) {
+    const c = now.currency ?? "USD";
+    const fields = [
+        { name: "Price now", value: money(now.price, c), inline: true },
+        { name: "Regular", value: money(now.regular, c), inline: true },
+        { name: "Store", value: now.shop ?? "-", inline: true },
+        { name: "3-month low", value: money(now.low3m, c), inline: true },
+        { name: "1-year low", value: money(now.low1y, c), inline: true },
+        { name: "All-time low", value: money(now.atl, c), inline: true }
+    ];
+    return {
+        color: verdict && verdict.level === "great" ? GREEN : COLOR,
+        title, url: safeUrl(now.url), fields,
+        description: verdict ? `**${verdict.text}**` : undefined,
+        footer: { text: "Prices by IsThereAnyDeal" }
+    };
+}
+
+/** The server's shared list with votes and prices. */
+export function serverListEmbed(rows, currency, limit = 15) {
+    if (!rows.length) return { color: COLOR, title: "Server wishlist", description: "Nothing here yet. Add a game with `/serverlist add`." };
+    const lines = rows.slice(0, limit).map(r => {
+        const price = r.best ? `${money(r.best.price, currency)}${r.discount > 0 ? ` (-${Math.round(r.discount * 100)}%)` : ""}` : "no price";
+        return `**${r.votes}** ${r.votes === 1 ? "vote" : "votes"}  •  **${r.title}**: ${price}${r.verdict && r.verdict.level === "great" ? " (all-time low)" : ""}`;
+    });
+    if (rows.length > limit) lines.push(`…and ${rows.length - limit} more.`);
+    return { color: COLOR, title: "Server wishlist", description: lines.join("\n").slice(0, 4000), footer: { text: "Vote with /serverlist vote  •  Prices by IsThereAnyDeal" } };
+}
+
+/** Opt-in leaderboard. Members are mentioned, which shows their name without pinging anyone. */
+export function leaderboardEmbed(entries) {
+    if (!entries.length) {
+        return { color: COLOR, title: "Savings leaderboard", description: "Nobody has joined yet. Members can opt in with `/alerts share`, then add games with prices using `/library`." };
+    }
+    const medal = ["1.", "2.", "3."];
+    const lines = entries.map((e, i) => `${medal[i] ?? `${i + 1}.`} <@${e.discord_id}>: **${e.savedPct.toFixed(0)}%** saved across ${e.games} games`);
+    return { color: COLOR, title: "Savings leaderboard", description: lines.join("\n"), footer: { text: "Only members who opted in. Ranked by percent saved vs MSRP." } };
+}
+
+/** The member's recent alerts. */
+export function alertHistoryEmbed(entries) {
+    if (!entries.length) return { color: COLOR, title: "Recent alerts", description: "No alerts yet." };
+    const label = { sale: "sale", bundle: "bundle", giveaway: "free", digest: "digest", group: "group" };
+    const lines = entries.slice(0, 15).map(e => {
+        const when = `<t:${Math.floor(e.at / 1000)}:d>`;
+        const price = Number.isFinite(e.price) ? ` at ${e.price.toFixed(2)}` : "";
+        return `${when}  ${label[e.kind] ?? e.kind}  **${e.title}**${price}${e.shop ? ` (${e.shop})` : ""}`;
+    });
+    return { color: COLOR, title: "Recent alerts", description: lines.join("\n").slice(0, 4000) };
 }

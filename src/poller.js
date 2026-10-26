@@ -1,23 +1,29 @@
-// Checks every watched game's price and sends alerts. One price lookup per game and region,
-// no matter how many people watch it, in batches of 50 through the ITAD client.
+// Scheduled work: price alerts, bundle and giveaway alerts, weekly digests, library snapshots.
+// One price lookup per game and region, no matter how many people watch it.
 
 import { summarize } from "./report.js";
-import { evaluate, describeTrigger } from "./alerts.js";
-import { alertEmbed } from "./render.js";
+import { evaluate, describeTrigger, dealVerdict } from "./alerts.js";
+import { alertEmbed, bundleEmbed, giveawayEmbed, digestEmbed, groupEmbed } from "./render.js";
+import { isQuiet, digestDue } from "./timeutil.js";
+import { viewRows } from "./wishlist.js";
+import { libraryView } from "./library.js";
 
 const MAX_EMBEDS = 10; // Discord's limit per message
+const EPS = 0.005;
+const GROUP_REPING_MS = 14 * 86400_000;
+
+const chunked = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
 /**
- * Runs one check. Returns { checked, alerts, delivered, failed }.
- * Items are only marked as alerted after the message was actually delivered, so a failed
- * delivery is retried on the next run instead of being lost.
+ * Price alerts. Items are only marked as alerted after the message was delivered, so a failed
+ * delivery or a quiet-hours deferral is retried on the next run instead of being lost.
+ * Returns { checked, alerts, delivered, failed, deferred, priceErrors, groupPosts }.
  */
-export async function runCycle({ db, itad, notifier, log = () => {} }) {
+export async function runCycle({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
     const items = db.activeItems();
-    const stats = { checked: items.length, alerts: 0, delivered: 0, failed: 0 };
+    const stats = { checked: items.length, alerts: 0, delivered: 0, failed: 0, deferred: 0, priceErrors: 0, groupPosts: 0 };
     if (!items.length) return stats;
 
-    // one lookup per region
     const byRegion = new Map();
     for (const it of items) {
         if (!byRegion.has(it.region)) byRegion.set(it.region, new Set());
@@ -28,44 +34,173 @@ export async function runCycle({ db, itad, notifier, log = () => {} }) {
         try {
             prices.set(region, await itad.getPrices([...ids], region));
         } catch (err) {
+            stats.priceErrors++;
+            stats.lastErrorCode = err.code ?? err.name;
             log(`price lookup failed for ${region}: ${err.code ?? err.name}`);
         }
     }
 
-    // evaluate, grouped by user
     const perUser = new Map();
+    const eligible = [];
     for (const it of items) {
         const entry = prices.get(it.region)?.get(it.itad_id);
-        if (entry === undefined) continue; // lookup failed for this region; try again next run
-        const summary = summarize(entry, { majorOnly: it.stores === "major" });
-        const result = evaluate(it, summary);
+        if (entry === undefined) continue;
+        const result = evaluate(it, summarize(entry, { majorOnly: it.stores === "major" }));
         if (result.action === "reset") db.clearAlerted(it.id);
         if (result.action !== "alert") continue;
+        const hit = { item: it, now: result.now, reason: result.reason };
+        eligible.push(hit);
         if (!perUser.has(it.discord_id)) perUser.set(it.discord_id, []);
-        perUser.get(it.discord_id).push({ item: it, now: result.now, reason: result.reason });
+        perUser.get(it.discord_id).push(hit);
     }
 
     for (const [userId, list] of perUser) {
         stats.alerts += list.length;
         const user = db.getUser(userId);
         if (!user) continue;
-        for (let i = 0; i < list.length; i += MAX_EMBEDS) {
-            const part = list.slice(i, i + MAX_EMBEDS);
+        if (isQuiet(user, now())) { stats.deferred += list.length; continue; }
+        for (const part of chunked(list, MAX_EMBEDS)) {
             const payload = {
                 content: part.length > 1 ? `${part.length} games on your wishlist hit your alert.` : undefined,
-                embeds: part.map(a => alertEmbed(a.item, a.now, { trigger: describeTrigger(a.item), lower: a.reason === "lower" }))
+                embeds: part.map(a => alertEmbed(a.item, a.now, { trigger: describeTrigger(a.item), lower: a.reason === "lower", verdict: dealVerdict(a.now) }))
             };
             const res = await notifier.deliver(user, payload);
             if (res.ok) {
                 stats.delivered += part.length;
-                for (const a of part) db.markAlerted(a.item.id, a.now.price);
+                for (const a of part) {
+                    db.markAlerted(a.item.id, a.now.price);
+                    db.logAlert({ discord_id: userId, itad_id: a.item.itad_id, title: a.item.title, kind: "sale", price: a.now.price, regular: a.now.regular, shop: a.now.shop, via: res.via });
+                }
             } else {
                 stats.failed += part.length;
                 log(`delivery failed (${res.reason})`);
             }
         }
     }
+
+    stats.groupPosts = await groupPings({ db, notifier, eligible, now });
     return stats;
+}
+
+/** "N members are watching X and it just hit their alert", for servers that turned it on. Counts opted-in members only. */
+async function groupPings({ db, notifier, eligible, now }) {
+    let posts = 0;
+    for (const guild of db.guildsWithGroupPings()) {
+        const byGame = new Map();
+        for (const h of eligible) {
+            if (h.item.share !== 1 || h.item.guild_id !== guild.guild_id) continue;
+            if (!byGame.has(h.item.itad_id)) byGame.set(h.item.itad_id, []);
+            byGame.get(h.item.itad_id).push(h);
+        }
+        for (const [itadId, hits] of byGame) {
+            if (hits.length < guild.group_min) continue;
+            const best = hits.reduce((m, h) => (h.now.price < m.now.price ? h : m));
+            const deal = db.getGuildDeal(guild.guild_id, itadId);
+            const fresh = !deal || best.now.price < deal.last_price - EPS || now() - deal.at > GROUP_REPING_MS;
+            if (!fresh) continue;
+            if (await notifier.postGuild(guild.guild_id, { embeds: [groupEmbed(best.item.title, hits.length, best.now)] })) {
+                db.setGuildDeal(guild.guild_id, itadId, best.now.price);
+                posts++;
+            }
+        }
+    }
+    return posts;
+}
+
+/** Bundles and giveaways that include a watched game. Each is announced once per member. */
+export async function runExtras({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+    const stats = { found: 0, delivered: 0, failed: 0, deferred: 0 };
+    const items = db.activeItems().filter(i => i.bundles);
+    if (!items.length) return stats;
+
+    const regions = new Map();
+    for (const it of items) {
+        if (!regions.has(it.region)) regions.set(it.region, new Set());
+        regions.get(it.region).add(it.itad_id);
+    }
+    const bundlesBy = new Map();
+    for (const [region, ids] of regions) {
+        try { bundlesBy.set(region, await itad.getBundles([...ids], region)); }
+        catch (err) { log(`bundle lookup failed for ${region}: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; }
+    }
+    let giveaways = new Map();
+    try { giveaways = await itad.getGiveaways(); }
+    catch (err) { log(`giveaway lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; }
+
+    const perUser = new Map();
+    for (const it of items) {
+        const hits = [];
+        for (const b of bundlesBy.get(it.region)?.get(it.itad_id) ?? []) {
+            const key = `bundle:${b.id}:${it.itad_id}`;
+            if (!db.hasSeen(it.discord_id, key)) hits.push({ kind: "bundle", key, item: it, bundle: b });
+        }
+        for (const g of giveaways.get(it.itad_id) ?? []) {
+            const key = `giveaway:${g.id}:${it.itad_id}`;
+            if (!db.hasSeen(it.discord_id, key)) hits.push({ kind: "giveaway", key, item: it, giveaway: g });
+        }
+        if (hits.length) {
+            if (!perUser.has(it.discord_id)) perUser.set(it.discord_id, []);
+            perUser.get(it.discord_id).push(...hits);
+        }
+    }
+
+    for (const [userId, hits] of perUser) {
+        stats.found += hits.length;
+        const user = db.getUser(userId);
+        if (!user) continue;
+        if (isQuiet(user, now())) { stats.deferred += hits.length; continue; }
+        for (const part of chunked(hits, MAX_EMBEDS)) {
+            const payload = { embeds: part.map(h => (h.kind === "bundle" ? bundleEmbed(h) : giveawayEmbed(h))) };
+            const res = await notifier.deliver(user, payload);
+            if (!res.ok) { stats.failed += part.length; continue; }
+            stats.delivered += part.length;
+            for (const h of part) {
+                db.markSeen(userId, h.key);
+                db.logAlert({
+                    discord_id: userId, itad_id: h.item.itad_id, title: h.item.title, kind: h.kind,
+                    price: h.kind === "bundle" ? h.bundle.price : 0, shop: (h.bundle ?? h.giveaway).shop, via: res.via
+                });
+            }
+        }
+    }
+    return stats;
+}
+
+/** Weekly digest for members who turned it on. Sent once on their chosen day, from 9:00 local time. */
+export async function runDigests({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+    const stats = { due: 0, sent: 0, skipped: 0, failed: 0 };
+    for (const user of db.digestUsers()) {
+        if (!digestDue(user, now())) continue;
+        stats.due++;
+        try {
+            const { rows, currency } = await viewRows(db, itad, user);
+            const embed = digestEmbed(rows, currency);
+            if (!embed) { db.updateUser(user.discord_id, { last_digest_at: now() }); stats.skipped++; continue; }
+            const res = await notifier.deliver(user, { embeds: [embed] });
+            if (res.ok) {
+                db.updateUser(user.discord_id, { last_digest_at: now() });
+                db.logAlert({ discord_id: user.discord_id, title: "Weekly digest", kind: "digest", via: res.via });
+                stats.sent++;
+            } else stats.failed++;
+        } catch (err) {
+            stats.failed++;
+            log(`digest failed: ${err.code ?? err.name}`);
+        }
+    }
+    return stats;
+}
+
+/** One library snapshot per member per day, for the value-over-time chart. */
+export async function runSnapshots({ db, itad, log = () => {} }) {
+    let made = 0;
+    for (const id of db.usersWithLibrary()) {
+        if (db.hasSnapshotToday(id)) continue;
+        const user = db.getUser(id);
+        if (!user) continue;
+        try { await libraryView(db, itad, user); made++; }
+        catch (err) { log(`snapshot failed: ${err.code ?? err.name}`); }
+    }
+    return made;
 }
 
 /** Runs `fn` now and then every `everyMs`, never overlapping itself. Returns a stop function. */

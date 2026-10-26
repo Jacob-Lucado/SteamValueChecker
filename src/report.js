@@ -27,6 +27,8 @@ export function summarize(entry, { majorOnly = false } = {}) {
         cut: steam?.cut ?? 0,
         best: best ? { price: best.price.amount, shop: best.shop?.name ?? "?", url: typeof best.url === "string" ? best.url : null } : null,
         atl: num(entry?.historyLow?.all?.amount),
+        low1y: num(entry?.historyLow?.y1?.amount),
+        low3m: num(entry?.historyLow?.m3?.amount),
         hasPrices: deals.length > 0
     };
 }

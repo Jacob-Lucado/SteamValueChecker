@@ -21,6 +21,10 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
             port: Number(env.DASHBOARD_PORT) || 3000,
             host: env.DASHBOARD_HOST || "127.0.0.1"
         } : null,
+        ownerId: env.OWNER_DISCORD_ID || null,
+        backupDir: env.BACKUP_DIR || "data/backups",
+        backupKeep: Math.max(1, Number(env.BACKUP_KEEP) || 7),
+        trustProxy: env.DASHBOARD_TRUST_PROXY === "1",
         checkEveryMinutes: Math.max(30, Number(env.CHECK_INTERVAL_MINUTES) || 60)
     };
 }

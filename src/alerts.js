@@ -9,7 +9,7 @@ export function current(summary) {
     const price = summary?.best?.price ?? null;
     const regular = summary?.msrp ?? null;
     const discount = price !== null && regular ? Math.max(0, 1 - price / regular) : 0;
-    return { price, regular, discount, shop: summary?.best?.shop ?? null, url: summary?.best?.url ?? null, atl: summary?.atl ?? null, currency: summary?.currency ?? null };
+    return { price, regular, discount, shop: summary?.best?.shop ?? null, url: summary?.best?.url ?? null, atl: summary?.atl ?? null, low1y: summary?.low1y ?? null, low3m: summary?.low3m ?? null, currency: summary?.currency ?? null };
 }
 
 /** Does the price meet the user's trigger for this game? */
@@ -63,4 +63,22 @@ export function parseTrigger(type, value) {
         return { type: t, value };
     }
     return { type: t, value: null };
+}
+
+/**
+ * Plain-language read on a price, using the lows ITAD reports. Returns { level, text } or null.
+ * level: "great" (at the all-time low), "good" (close to a recent low), "wait" (it has been cheaper), "info".
+ */
+export function dealVerdict(now) {
+    const p = now?.price;
+    if (p === null || p === undefined) return null;
+    const near = (low, pct) => low !== null && low !== undefined && p <= low * (1 + pct) + EPS;
+    if (now.atl != null && p <= now.atl + EPS) return { level: "great", text: "All-time low" };
+    if (near(now.low1y, 0.05)) return { level: "good", text: "At its 1-year low" };
+    if (near(now.atl, 0.1)) return { level: "good", text: "Within 10% of its all-time low" };
+    if (near(now.low3m, 0.05)) return { level: "good", text: "At its 3-month low" };
+    if (now.atl != null && now.atl > 0) {
+        return { level: now.discount > 0 ? "wait" : "info", text: `Has been cheaper (low ${now.atl.toFixed(2)})` };
+    }
+    return null;
 }

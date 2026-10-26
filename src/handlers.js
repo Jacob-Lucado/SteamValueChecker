@@ -8,12 +8,20 @@ import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed } from "./render.js";
+import { summarize } from "./report.js";
+import { current, dealVerdict } from "./alerts.js";
+import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
+import { importLibrary, libraryView, leaderboard, LibraryError } from "./library.js";
+import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
+import { readUpload } from "./upload.js";
+import { sanitize } from "./parse.js";
 
-export class UserError extends Error {}
+import { UserError } from "./errors.js";
+export { UserError };
 
 const PAGE_TIMEOUT_MS = 10 * 60_000;
-const COOLDOWNS = { import: 60_000, view: 10_000, add: 3_000 };
+const COOLDOWNS = { import: 60_000, view: 10_000, add: 3_000, lib: 10_000 };
 const lastRun = new Map();
 
 const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
@@ -28,8 +36,8 @@ function cooldown(i, key) {
 
 /** Turns known errors into a message for the user and logs anything else without user input. */
 async function failed(i, tag, err) {
-    const known = err instanceof UserError || err instanceof WishlistError || err instanceof ItadError || err instanceof SteamError;
-    if (!(err instanceof UserError || err instanceof WishlistError)) console.error(`[${tag}] ${err.name}: ${err.message}`);
+    const known = err instanceof UserError || err instanceof WishlistError || err instanceof LibraryError || err instanceof ItadError || err instanceof SteamError;
+    if (!(err instanceof UserError || err instanceof WishlistError || err instanceof LibraryError)) console.error(`[${tag}] ${err.name}: ${err.message}`);
     const content = known ? err.message : "Something went wrong. Try again in a moment.";
     if (i.deferred || i.replied) await i.editReply({ content, embeds: [], components: [] }).catch(() => {});
     else await eph(i, content).catch(() => {});
@@ -116,6 +124,23 @@ export function createHandlers({ db, itad }) {
         }
     }
 
+    async function wishlistCheck(i, user) {
+        cooldown(i, "view");
+        const found = findItem(db.listItems(i.user.id), i.options.getString("game", true));
+        if (found.ambiguous) return eph(i, `More than one match: ${found.ambiguous.map(t => `**${t}**`).join(", ")}. Be more specific.`);
+        if (!found.item) return eph(i, "That game is not on your list.");
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+            const prices = await itad.getPrices([found.item.itad_id], user.region);
+            const s = summarize(prices.get(found.item.itad_id), { majorOnly: user.stores === "major" });
+            const now = { ...current(s), currency: s.currency };
+            if (now.price === null) throw new UserError("No current price found for that game.");
+            await i.editReply({ embeds: [checkEmbed(found.item.title, now, dealVerdict(now))] });
+        } catch (err) {
+            await failed(i, "wishlist check", err);
+        }
+    }
+
     async function wishlistAlert(i) {
         let trig;
         try { trig = parseTrigger(i.options.getString("type", true), i.options.getNumber("value")); }
@@ -143,6 +168,7 @@ export function createHandlers({ db, itad }) {
                 case "remove": return await wishlistRemove(i);
                 case "view": return await wishlistView(i, user);
                 case "alert": return await wishlistAlert(i);
+                case "check": return await wishlistCheck(i, user);
             }
         } catch (err) {
             await failed(i, "wishlist", err);
@@ -167,7 +193,11 @@ export function createHandlers({ db, itad }) {
                             { name: "Delivery", value: deliveryText(user), inline: true },
                             { name: "Region", value: user.region, inline: true },
                             { name: "Stores", value: user.stores === "major" ? "Major stores" : "All tracked stores", inline: true },
-                            { name: "Server alert channel", value: guild ? `<#${guild.channel_id}>` : "Not set (DMs only)", inline: true }
+                            { name: "Server alert channel", value: guild ? `<#${guild.channel_id}>` : "Not set (DMs only)", inline: true },
+                            { name: "Quiet hours", value: describeQuiet(user), inline: true },
+                            { name: "Weekly digest", value: describeDigest(user), inline: true },
+                            { name: "Bundle and giveaway alerts", value: user.bundles === 0 ? "Off" : "On", inline: true },
+                            { name: "Server group alerts and leaderboard", value: user.share ? "Opted in" : "Not shared", inline: true }
                         ]
                     }]
                 });
@@ -194,6 +224,46 @@ export function createHandlers({ db, itad }) {
             case "stores":
                 db.updateUser(user.discord_id, { stores: i.options.getString("stores", true) });
                 return eph(i, "Store setting updated.");
+            case "quiethours": {
+                try {
+                    const off = i.options.getBoolean("off");
+                    const input = off ? { quiet_start: null, quiet_end: null } : {
+                        quiet_start: i.options.getString("start") ?? undefined,
+                        quiet_end: i.options.getString("end") ?? undefined,
+                        tz: i.options.getString("timezone") ?? undefined
+                    };
+                    for (const k of Object.keys(input)) if (input[k] === undefined) delete input[k];
+                    if (!Object.keys(input).length) return eph(i, `Quiet hours: ${describeQuiet(user)}. Set them with \`start\`, \`end\` and \`timezone\`, or use \`off\`.`);
+                    db.updateUser(user.discord_id, prefsPatch(input, user));
+                    const u = db.getUser(user.discord_id);
+                    return eph(i, u.quiet_start === null ? "Quiet hours are off." : `Quiet hours: ${describeQuiet(u)}. Alerts that come in then are held and sent afterwards.`);
+                } catch (err) { return failed(i, "alerts quiethours", err); }
+            }
+            case "digest": {
+                try {
+                    const input = { digest: i.options.getBoolean("enabled", true) };
+                    const day = i.options.getInteger("day");
+                    if (day !== null) input.digest_day = day;
+                    db.updateUser(user.discord_id, prefsPatch(input, user));
+                    const u = db.getUser(user.discord_id);
+                    return eph(i, u.digest ? `Weekly digest on. You will get it ${describeDigest(u).replace("Weekly, ", "")} from 9:00 in your time zone (${u.tz}). Set your time zone with \`/alerts quiethours\`.` : "Weekly digest off.");
+                } catch (err) { return failed(i, "alerts digest", err); }
+            }
+            case "bundles": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { bundles: on ? 1 : 0 });
+                return eph(i, on ? "You will be told when a wishlist game is in a bundle or being given away." : "Bundle and giveaway alerts are off.");
+            }
+            case "share": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { share: on ? 1 : 0 });
+                return eph(i, on
+                    ? "You are in. Your server may now see your name in group alerts (\"N members are watching…\") and on `/leaderboard`. Only your name, the number of games and your percent saved are shown. Turn this off any time."
+                    : "You are out of group alerts and the leaderboard.");
+            }
+            case "history": {
+                return i.reply({ embeds: [alertHistoryEmbed(db.listAlerts(user.discord_id, 15))], flags: MessageFlags.Ephemeral });
+            }
         }
     }
 
@@ -223,11 +293,89 @@ export function createHandlers({ db, itad }) {
             }
             case "clear":
                 return eph(i, db.clearGuildChannel(i.guildId) ? "Alert channel removed. Alerts will be DMs only." : "No alert channel was set.");
+            case "group": {
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                const n = i.options.getInteger("minimum", true);
+                if (n === 1) return eph(i, "Use 2 or more, or 0 to turn it off.");
+                db.setGroupMin(i.guildId, n);
+                return eph(i, n ? `Group alerts on. When ${n} or more members who opted in (\`/alerts share\`) have a game on their wishlist and it hits their alert, the channel gets one post.` : "Group alerts are off.");
+            }
             case "show": {
                 const g = db.getGuild(i.guildId);
                 return eph(i, g ? `Alert channel: <#${g.channel_id}>` : "No alert channel is set. Use `/alertchannel set`.");
             }
         }
+    }
+
+    // ---------- /library ----------
+    async function handleLibrary(i) {
+        const user = db.ensureUser(i.user.id, i.guildId);
+        const sub = i.options.getSubcommand();
+        try {
+            if (sub === "remove") {
+                const found = findItem(db.listLibrary(i.user.id), i.options.getString("game", true));
+                if (found.ambiguous) return eph(i, `More than one match: ${found.ambiguous.map(t => `**${t}**`).join(", ")}. Be more specific.`);
+                if (!found.item) return eph(i, "That game is not in your library.");
+                db.removeLibrary(i.user.id, found.item.itad_id);
+                return eph(i, `Removed **${found.item.title}** from your library.`);
+            }
+            cooldown(i, "lib");
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            if (sub === "add") {
+                const paid = i.options.getNumber("paid");
+                const r = await importLibrary(db, itad, i.user.id, [{ title: i.options.getString("title", true), paid }]);
+                if (r.notFound.length) throw new UserError(`I could not find a game called ${r.notFound[0]}.`);
+                if (r.skippedForLimit) throw new UserError("Your library is full (500 games).");
+                return void await i.editReply(r.updated ? "Updated that game in your library." : "Added to your library.");
+            }
+            if (sub === "import") {
+                const entries = sanitize(await readUpload(i.options.getAttachment("file", true)), { max: 500 }).entries;
+                const r = await importLibrary(db, itad, i.user.id, entries);
+                const lines = [`Added **${r.added}**, updated **${r.updated}**.`];
+                if (r.notFound.length) lines.push(`${r.notFound.length} could not be matched and were skipped.`);
+                if (r.skippedForLimit) lines.push(`Your library is full (500 games), so ${r.skippedForLimit} were skipped.`);
+                if (entries.some(e => e.paid === null)) lines.push("Games without a Paid column are counted in value but not in savings.");
+                return void await i.editReply(lines.join("\n"));
+            }
+            const view = await libraryView(db, itad, user);
+            if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
+            return void await i.editReply({ embeds: [libraryEmbed(view, view.currency)] });
+        } catch (err) {
+            await failed(i, "library", err);
+        }
+    }
+
+    // ---------- /serverlist and /leaderboard ----------
+    const canManage = i => Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+
+    async function handleServerList(i) {
+        const user = db.ensureUser(i.user.id, i.guildId);
+        const sub = i.options.getSubcommand();
+        try {
+            if (sub === "vote") {
+                const r = vote(db, i.guildId, i.user.id, i.options.getString("game", true));
+                return void await eph(i, r.voted ? `Voted for **${r.title}** (${r.votes} now).` : `Took back your vote on **${r.title}** (${r.votes} now).`);
+            }
+            if (sub === "remove") {
+                const r = removeFromServerList(db, i.guildId, i.user.id, i.options.getString("game", true), canManage(i));
+                return void await eph(i, `Removed **${r.title}** from the server list.`);
+            }
+            cooldown(i, "view");
+            // Visible to the channel: the list is shared on purpose.
+            await i.deferReply();
+            if (sub === "add") {
+                const r = await addToServerList(db, itad, i.guildId, i.user.id, i.options.getString("title", true));
+                return void await i.editReply({ content: `<@${i.user.id}> added **${r.name}** to the server wishlist.`, allowedMentions: { parse: [] } });
+            }
+            const view = await serverListView(db, itad, i.guildId, user);
+            return void await i.editReply({ embeds: [serverListEmbed(view.rows, view.currency)] });
+        } catch (err) {
+            await failed(i, "serverlist", err);
+        }
+    }
+
+    async function handleLeaderboard(i) {
+        await i.reply({ embeds: [leaderboardEmbed(leaderboard(db, i.guildId))], allowedMentions: { parse: [] } });
     }
 
     // ---------- /mydata ----------
@@ -272,8 +420,13 @@ export function createHandlers({ db, itad }) {
     async function handleAutocomplete(i) {
         const focused = i.options.getFocused(true);
         if (focused.name !== "game") return i.respond([]);
+        if (i.commandName === "library") return i.respond(suggest(db.listLibrary(i.user.id), focused.value));
+        if (i.commandName === "serverlist") {
+            if (!i.guildId) return i.respond([]);
+            return i.respond(suggest(db.listServerGames(i.guildId, i.user.id), focused.value));
+        }
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleMyData, handleAutocomplete };
 }

@@ -62,7 +62,13 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/wishlist remove game:` | Removes a game (autocompletes from your list) |
 | `/wishlist view` | Your list with current prices, sales first |
 | `/wishlist alert type:` | Sets when you are alerted, for one game or all: any sale, a % off or more, a price or lower, or an all-time low |
+| `/wishlist check game:` | Is it a good deal right now? Price, 3-month, 1-year and all-time lows, and a plain verdict |
 | `/alerts delivery` | DM (default) or the server alert channel |
+| `/alerts quiethours`, `digest`, `bundles`, `share`, `history` | Hold alerts overnight (with your time zone), a weekly sales digest, bundle and giveaway alerts, opt in to server group alerts and the leaderboard, and your recent alerts |
+| `/library add\|import\|view\|remove` | Games you own and what you paid. Shows what they are worth, what you saved against MSRP, and a value-over-time chart on the dashboard |
+| `/serverlist add\|view\|vote\|remove` | A wishlist the whole server shares, with votes and current prices |
+| `/leaderboard` | Who in the server has saved the most (percent of MSRP), for members who opted in |
+| `/alertchannel group minimum:` | Post once when that many opted-in members watch the same game and it hits their alert |
 | `/alerts pause`, `resume`, `region`, `stores`, `status` | Your alert settings |
 | `/alertchannel set\|clear\|show` | Server admins (Manage Server): the channel used when a DM fails, or when a member opts out of DMs |
 | `/mydata export\|delete` | Download or delete everything stored about you |
@@ -85,7 +91,7 @@ Usage notes, credits and a plain-language privacy summary.
 
 ## Web dashboard
 
-Everything the slash commands do is also in a browser: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a modern look with a light and dark theme (it follows your system setting, and a button in the header switches it) and links to [FanaticalGrabber](https://github.com/Jacob-Lucado/FanaticalGrabber).
+Everything the slash commands do is also in a browser, plus price-history charts, bulk actions on the wishlist, an alert history table, and an Admin page for the bot owner: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a modern look with a light and dark theme (it follows your system setting, and a button in the header switches it) and links to [FanaticalGrabber](https://github.com/Jacob-Lucado/FanaticalGrabber).
 
 It is off unless you turn it on. To enable it:
 
@@ -160,7 +166,9 @@ src/
   notify.js     DM delivery with the server-channel fallback
   poller.js     The scheduled price check
   wishlist.js   Finding games and building the wishlist view
-  handlers.js   Discord handlers for the wishlist commands
+  handlers.js   Discord handlers for the wishlist, library, server list and alert commands
+  library.js, serverlist.js, prefs.js, timeutil.js   Library tracker, shared server list, settings validation, time zones
+  ops.js, backup.js, ratelimit.js   Owner alerts and health, daily database backups, dashboard rate limiting
   value.js      The /value pipeline, shared with the dashboard
   constants.js  Regions, alert types and links shared by the bot and dashboard
   dashboard/    Web dashboard: server.js (API and Discord sign-in), discord.js (REST calls)
@@ -172,7 +180,7 @@ branding/       Logo and banner
 
 ## Privacy
 
-`/value` stores nothing. If you use wishlist alerts, the bot stores your Discord ID, wishlist, alert rules, settings and (if you import) your public Steam ID, and you can export or delete it with `/mydata`. Game titles and IDs are sent to IsThereAnyDeal for prices, and user input is never written to logs. See [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md).
+`/value` stores nothing. If you use wishlist alerts, the bot stores your Discord ID, wishlist, alert rules, settings, your library and what you paid (if you use it), 90 days of alert history, server list votes and (if you import) your public Steam ID, and you can export or delete it with `/mydata`. Game titles and IDs are sent to IsThereAnyDeal for prices, and user input is never written to logs. See [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md).
 
 ## Known limits
 
@@ -182,6 +190,8 @@ branding/       Logo and banner
 - **Unmatched games are left out of the totals,** while `paid` covers everything you entered. The bot notes this when it happens.
 - **Steam wishlist import is untested against live Steam.** It uses Steam's `IWishlistService/GetWishlist` endpoint, which needs only a public profile. If Steam changes it, import fails with an error and manual `/wishlist add` still works.
 - Alerts are best effort and run on a schedule, so a short sale can be missed.
+- **Bundle, giveaway and price-history features use ITAD endpoints that have only been tested against fake responses**, like the rest of the live API calls. If ITAD changes a response, those features fail quietly and the rest keeps working.
+- The leaderboard ranks by percent saved, because members shop in different currencies.
 - The ITAD endpoints and field names follow ITAD's public documentation. If ITAD changes its API, the table shows `-` for fields it can't find.
 
 ## Credits

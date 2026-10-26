@@ -10,7 +10,7 @@ const MANAGE = String(0x20);
 
 const deal = (amount, regular) => ({ shop: { name: "GOG" }, price: { amount, currency: "USD" }, regular: { amount: regular, currency: "USD" }, cut: 0, url: "https://deal.example/x" });
 
-async function setup({ sendFails = false, guildsOf } = {}) {
+async function setup({ sendFails = false, guildsOf, config = {} } = {}) {
     const db = openDb(":memory:");
     let clock = 1_000_000;
     const sent = [];
@@ -30,13 +30,15 @@ async function setup({ sendFails = false, guildsOf } = {}) {
             if (id === "g-nobot") throw new DiscordApiError(404, "no");
             return [{ id: "c1", name: "alerts" }, { id: "c2", name: "general" }];
         },
-        sendMessage: async (id, p) => { if (sendFails) throw new DiscordApiError(403, "no"); sent.push({ id, p }); }
+        sendMessage: async (id, p) => { if (sendFails) throw new DiscordApiError(403, "no"); sent.push({ id, p }); },
+        memberName: async (g, id) => (id === "u1" ? "Jacob" : null)
     };
     const itad = {
         lookupTitles: async titles => titles.map(t => (/^zzz/i.test(t) ? { title: t, id: null } : { title: t, id: "id-" + t.toLowerCase().replace(/\W+/g, ""), approx: false, matched: t })),
-        getPrices: async ids => new Map(ids.map(id => [id, { deals: [deal(10, 20)], historyLow: { all: { amount: 5 } } }]))
+        getPrices: async ids => new Map(ids.map(id => [id, { deals: [deal(10, 20)], historyLow: { all: { amount: 5 } } }])),
+        getHistory: async () => Array.from({ length: 400 }, (_, i) => ({ t: 1_700_000_000_000 + i * 86400_000, price: 10 + (i % 7), regular: 20, shop: "GOG" }))
     };
-    const dash = createDashboard({ db, itad, rest, config: { publicUrl: ORIGIN, port: 0, host: "127.0.0.1", clientId: "123" }, now: () => clock });
+    const dash = createDashboard({ db, itad, rest, config: { publicUrl: ORIGIN, port: 0, host: "127.0.0.1", clientId: "123", ...config }, now: () => clock });
     const addr = await dash.listen(0, "127.0.0.1");
     const base = `http://127.0.0.1:${addr.port}`;
     let cookie = "";
@@ -121,7 +123,7 @@ test("discord login: state is checked, the session cookie is locked down, logout
     const me = await t.request("/api/me");
     assert.equal(me.status, 200);
     assert.equal(me.data.user.username, "Jacob");
-    assert.deepEqual(me.data.servers.map(s => [s.id, s.manageable]), [["g-admin", true]]); // a server you only belong to, with no channel set, is not listed
+    assert.deepEqual(me.data.servers.map(s => [s.id, s.manageable]), [["g-admin", true], ["g-member", false]]); // servers you only belong to are listed too, for the shared list and leaderboard
     void state;
 
     assert.match((await t.request(`/auth/callback?code=good&state=${s2}`)).headers.get("location"), /error=login/);
@@ -338,4 +340,145 @@ test("applySteamImport stores games, prunes only on a complete import", () => {
     assert.equal(db.getUser("u").steam_id, "7656119800000000");
 
     assert.throws(() => applySteamImport(db, "u", { games: [], steamid: "1" }), WishlistError);
+});
+
+// ---------- newer features ----------
+const signedIn = async (opts) => { const t = await setup(opts); await t.signIn(); return t; };
+
+test("settings: quiet hours, digest and sharing are validated and saved", async () => {
+    const t = await signedIn();
+    const ok = await t.request("/api/settings", { method: "POST", body: { quiet_start: "22:00", quiet_end: "07:00", tz: "Europe/London", digest: true, digest_day: 5, bundles: false, share: true } });
+    assert.equal(ok.status, 200);
+    assert.deepEqual([ok.data.settings.quiet_start, ok.data.settings.quiet_end, ok.data.settings.tz, ok.data.settings.digest, ok.data.settings.digest_day, ok.data.settings.bundles, ok.data.settings.share],
+        ["22:00", "07:00", "Europe/London", true, 5, false, true]);
+    assert.equal((await t.request("/api/settings", { method: "POST", body: { tz: "Nowhere/Land" } })).status, 400);
+    assert.equal((await t.request("/api/settings", { method: "POST", body: { quiet_start: "22:00", quiet_end: "22:00" } })).status, 400);
+    const off = await t.request("/api/settings", { method: "POST", body: { quiet_start: null, quiet_end: null } });
+    assert.equal(off.data.settings.quiet_start, null);
+    await t.close();
+});
+
+test("library: add, import entries, view totals, remove", async () => {
+    const t = await signedIn();
+    assert.equal((await t.request("/api/library/add", { method: "POST", body: { title: "Hades", paid: 5 } })).status, 200);
+    assert.equal((await t.request("/api/library/add", { method: "POST", body: { title: "zzz none" } })).status, 429); // add cooldown shared with imports
+    t.advance(5000);
+    assert.equal((await t.request("/api/library/add", { method: "POST", body: { title: "zzz none" } })).status, 400);
+    t.advance(5000);
+    const imp = await t.request("/api/library/import", { method: "POST", body: { entries: [{ title: "Celeste", paid: null }, { title: "Hollow Knight", paid: 8 }] } });
+    assert.equal(imp.data.added, 2);
+    const view = await t.request("/api/library");
+    assert.equal(view.data.totals.games, 3);
+    assert.equal(view.data.totals.paidGames, 2);
+    const rm = await t.request("/api/library/remove", { method: "POST", body: { itad_id: "id-hades" } });
+    assert.equal(rm.data.removed, "Hades");
+    assert.equal((await t.request("/api/library/remove", { method: "POST", body: { itad_id: "id-hades" } })).status, 404);
+    const me = await t.request("/api/me");
+    assert.equal(me.data.library, 2);
+    await t.close();
+});
+
+test("price history needs a game you own, and is thinned for the chart", async () => {
+    const t = await signedIn();
+    await t.request("/api/wishlist/add", { method: "POST", body: { title: "Hades", type: "any" } });
+    assert.equal((await t.request("/api/wishlist/history?itad_id=id-other")).status, 404);
+    const h = await t.request("/api/wishlist/history?itad_id=id-hades");
+    assert.equal(h.status, 200);
+    assert.ok(h.data.points.length <= 200 && h.data.points.length > 50);
+    assert.equal(h.data.title, "Hades");
+    assert.equal((await t.request("/api/wishlist/history?itad_id=id-hades")).status, 429);
+    await t.close();
+});
+
+test("bulk actions only touch the member's own games", async () => {
+    const t = await signedIn();
+    for (const title of ["Hades", "Celeste", "Hollow Knight"]) { await t.request("/api/wishlist/add", { method: "POST", body: { title, type: "any" } }); t.advance(4000); }
+    const a = await t.request("/api/wishlist/bulk", { method: "POST", body: { action: "alert", itad_ids: ["id-hades", "id-celeste", "someone-elses"], type: "percent", value: 50 } });
+    assert.equal(a.data.updated, 2);
+    const rows = (await t.request("/api/wishlist")).data.rows;
+    assert.equal(rows.find(r => r.itad_id === "id-hades").trigger_type, "percent");
+    assert.equal(rows.find(r => r.itad_id === "id-hollowknight").trigger_type, "any");
+    assert.ok(rows[0].verdict);
+    const r = await t.request("/api/wishlist/bulk", { method: "POST", body: { action: "remove", itad_ids: ["id-hades", "id-celeste"] } });
+    assert.equal(r.data.removed, 2);
+    assert.equal((await t.request("/api/wishlist/bulk", { method: "POST", body: { action: "remove", itad_ids: [] } })).status, 400);
+    assert.equal((await t.request("/api/wishlist/bulk", { method: "POST", body: { action: "explode", itad_ids: ["id-hollowknight"] } })).status, 400);
+    await t.close();
+});
+
+test("shared server list and leaderboard are limited to servers the member is in", async () => {
+    const t = await signedIn();
+    const add = await t.request("/api/servers/list/add", { method: "POST", body: { guild_id: "g-member", title: "Hades" } });
+    assert.equal(add.status, 200);
+    assert.equal((await t.request("/api/servers/list/add", { method: "POST", body: { guild_id: "g-stranger", title: "Hades" } })).status, 403);
+    assert.equal((await t.request("/api/servers/list?guild=g-stranger")).status, 403);
+    const list = await t.request("/api/servers/list?guild=g-member");
+    assert.equal(list.data.rows[0].votes, 1);
+    const v = await t.request("/api/servers/list/vote", { method: "POST", body: { guild_id: "g-member", itad_id: "id-hades" } });
+    assert.deepEqual([v.data.voted, v.data.votes], [false, 0]);
+
+    t.db.updateUser("u1", { share: 1 });
+    t.db.upsertSnapshot("u1", { games: 4, paid: 20, msrp: 100, msrp_paid: 100, cheapest: 50 });
+    t.db.updateUser("u1", { guild_id: "g-member" });
+    const board = await t.request("/api/servers/leaderboard?guild=g-member");
+    assert.equal(board.data.entries[0].name, "Jacob");
+    assert.equal(Math.round(board.data.entries[0].savedPct), 80);
+    assert.equal((await t.request("/api/servers/leaderboard?guild=g-stranger")).status, 403);
+    await t.close();
+});
+
+test("group alert minimum: managers only, needs an alert channel, 1 is not allowed", async () => {
+    const t = await signedIn();
+    const body = n => ({ method: "POST", body: { guild_id: "g-admin", minimum: n } });
+    assert.equal((await t.request("/api/servers/group", body(3))).status, 400); // no alert channel yet
+    t.db.setGuildChannel("g-admin", "c1", "u1");
+    assert.equal((await t.request("/api/servers/group", body(3))).data.groupMin, 3);
+    assert.equal((await t.request("/api/servers/group", body(1))).status, 400);
+    assert.equal((await t.request("/api/servers/group", { method: "POST", body: { guild_id: "g-member", minimum: 3 } })).status, 403);
+    await t.close();
+});
+
+test("alert history lists the member's own alerts", async () => {
+    const t = await signedIn();
+    t.db.ensureUser("u1"); t.db.ensureUser("other");
+    t.db.logAlert({ discord_id: "u1", title: "Hades", kind: "sale", price: 9.99, shop: "GOG", via: "dm" });
+    t.db.logAlert({ discord_id: "other", title: "Secret", kind: "sale", price: 1 });
+    const r = await t.request("/api/alerts/history");
+    assert.deepEqual(r.data.alerts.map(a => a.title), ["Hades"]);
+    await t.close();
+});
+
+test("admin page: owner only", async () => {
+    const t = await signedIn();
+    assert.equal((await t.request("/api/admin/stats")).status, 403);
+    assert.equal((await t.request("/api/me")).data.isOwner, false);
+    await t.close();
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const r = await o.request("/api/admin/stats");
+    assert.equal(r.status, 200);
+    assert.equal(typeof r.data.stats.users, "number");
+    assert.equal((await o.request("/api/me")).data.isOwner, true);
+    await o.close();
+});
+
+test("the dashboard rate limits a session that hammers the API", async () => {
+    const t = await signedIn({ config: { apiPerMinute: 5 } });
+    const codes = [];
+    for (let i = 0; i < 8; i++) codes.push((await t.request("/api/me")).status);
+    assert.ok(codes.includes(429));
+    assert.equal(codes[0], 200);
+    await t.close();
+});
+
+test("export includes library and alert history", async () => {
+    const t = await signedIn();
+    t.db.ensureUser("u1");
+    t.db.upsertLibrary("u1", [{ itad_id: "a", title: "Hades", paid: 5 }]);
+    t.db.logAlert({ discord_id: "u1", title: "Hades", kind: "sale", price: 5 });
+    const r = await t.request("/api/mydata/download");
+    const data = JSON.parse(r.text);
+    assert.equal(data.library[0].paid, 5);
+    assert.equal(data.alert_history[0].title, "Hades");
+    assert.ok("quiet_hours" in data.settings);
+    await t.close();
 });

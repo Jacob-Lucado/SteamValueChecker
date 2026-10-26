@@ -5,23 +5,24 @@ import {
 } from "discord.js";
 import { loadConfig } from "./config.js";
 import { createItad, ItadError } from "./itad.js";
-import { parseUpload, parseTyped, sanitize } from "./parse.js";
+import { parseTyped, sanitize } from "./parse.js";
+import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { pageCount, tableEmbed, summaryEmbed, toCsv } from "./render.js";
 import { HELP, ABOUT, PRIVACY } from "./text.js";
 import { openDb } from "./db.js";
-import { createHandlers, UserError } from "./handlers.js";
+import { createHandlers } from "./handlers.js";
+import { UserError } from "./errors.js";
 import { createNotifier } from "./notify.js";
-import { runCycle, schedule } from "./poller.js";
+import { runCycle, runExtras, runDigests, runSnapshots, schedule } from "./poller.js";
+import { createOps } from "./ops.js";
+import { runBackup } from "./backup.js";
 import { createDashboard } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
 
 const MAX_TITLES = 100;
-const MAX_FILE_BYTES = 200_000;
 const COOLDOWN_MS = 15_000;
 const PAGE_TIMEOUT_MS = 10 * 60_000;
-const FILE_TYPES = [".csv", ".json", ".txt", ".md"];
-const ALLOWED_HOSTS = [/(^|\.)discordapp\.com$/i, /(^|\.)discordapp\.net$/i, /(^|\.)discord\.com$/i];
 
 const cfg = loadConfig();
 const itad = createItad({ apiKey: cfg.itadKey });
@@ -44,15 +45,40 @@ const discord = {
 };
 const notifier = createNotifier({ db, discord });
 
+// Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
+const ops = createOps({
+    sendOwner: async message => { if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { content: message }); }
+});
+
 client.once(Events.ClientReady, c => {
     console.log(`Logged in as ${c.user.tag}`);
+
+    // Price alerts
     schedule(
         async () => {
             const s = await runCycle({ db, itad, notifier, log: m => console.log(`[alerts] ${m}`) });
-            console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed`);
+            console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed, ${s.deferred} held for quiet hours`);
+            await ops.cycleDone(s);
         },
         cfg.checkEveryMinutes * 60_000,
-        { onError: err => console.error(`[alerts] ${err.name}: ${err.message}`) }
+        { onError: err => { console.error(`[alerts] ${err.name}: ${err.message}`); ops.cycleThrew(err); } }
+    );
+
+    // Bundles, giveaways, weekly digests, library snapshots, cleanup and the daily backup
+    schedule(
+        async () => {
+            const log = m => console.log(`[maintenance] ${m}`);
+            const result = {};
+            try { result.extras = await runExtras({ db, itad, notifier, log }); } catch (err) { ops.error("extras", err); }
+            try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
+            try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
+            try { db.pruneAlertLog(); db.pruneSeen(); } catch (err) { ops.error("cleanup", err); }
+            ops.maintenanceDone(result);
+            try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }
+            catch (err) { await ops.backupDone(null, err); }
+        },
+        60 * 60_000,
+        { onError: err => { console.error(`[maintenance] ${err.name}: ${err.message}`); ops.error("maintenance", err); } }
     );
 });
 
@@ -62,23 +88,6 @@ client.on(Events.GuildDelete, guild => { if (guild.available !== false) db.clear
 const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
 const embedReply = (i, description) =>
     i.reply({ embeds: [{ color: 0xff9800, description }], flags: MessageFlags.Ephemeral });
-
-async function readUpload(file) {
-    const name = file.name.toLowerCase();
-    if (!FILE_TYPES.some(ext => name.endsWith(ext))) {
-        throw new UserError(`Unsupported file type. Upload a ${FILE_TYPES.join(", ")} export.`);
-    }
-    if (file.size > MAX_FILE_BYTES) throw new UserError("That file is too large (200 KB max).");
-    const host = new URL(file.url).hostname;
-    if (!ALLOWED_HOSTS.some(re => re.test(host))) throw new UserError("That attachment could not be read.");
-
-    const res = await fetch(file.url, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) throw new UserError("Discord would not let the bot download that file.");
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > MAX_FILE_BYTES) throw new UserError("That file is too large (200 KB max).");
-    return parseUpload(new TextDecoder("utf-8").decode(buf), name);
-}
-
 
 function pageButtons(page, pages) {
     return new ActionRowBuilder().addComponents(
@@ -175,6 +184,9 @@ client.on(Events.InteractionCreate, async i => {
             case "wishlist": return await handlers.handleWishlist(i);
             case "alerts": return await handlers.handleAlerts(i);
             case "alertchannel": return await handlers.handleAlertChannel(i);
+            case "library": return await handlers.handleLibrary(i);
+            case "serverlist": return await handlers.handleServerList(i);
+            case "leaderboard": return await handlers.handleLeaderboard(i);
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
             case "about": return await embedReply(i, ABOUT);
@@ -190,7 +202,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, config: { ...d, clientId: cfg.clientId }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, config: { ...d, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

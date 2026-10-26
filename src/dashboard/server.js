@@ -14,6 +14,12 @@ import { ItadError } from "../itad.js";
 import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
+import { UserError } from "../errors.js";
+import { parseUpload, sanitize } from "../parse.js";
+import { prefsPatch, prefsView } from "../prefs.js";
+import { importLibrary, libraryView, leaderboard } from "../library.js";
+import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
+import { createLimiter } from "../ratelimit.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 const FILES = {
@@ -28,7 +34,8 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000 };
+const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
 
@@ -47,13 +54,16 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
     const states = new Map();
     const lastRun = new Map();
     const cache = new Map();
+    const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
+    const authLimit = createLimiter({ windowMs: 60_000, max: config.authPerMinute ?? 20, now });
+    const names = new Map(); // "guild:user" -> { name, until }
 
     // ---------- helpers ----------
     const cookies = req => Object.fromEntries(String(req.headers.cookie ?? "").split(";").map(c => {
@@ -124,20 +134,34 @@ export function createDashboard({ db, itad, rest, config, now = () => Date.now()
         return () => lastRun.delete(k);
     }
 
+    const clientIp = req => {
+        const fwd = String(req.headers["x-forwarded-for"] ?? "").split(",").map(x => x.trim()).filter(Boolean);
+        // Behind a trusted proxy the last entry is the one the proxy added; otherwise ignore the header.
+        return (config.trustProxy && fwd.length ? fwd[fwd.length - 1] : req.socket.remoteAddress) ?? "unknown";
+    };
+
+    const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId;
+
+    function guildFor(s, id) {
+        const g = s.guilds.find(x => x.id === id);
+        if (!g) throw new HttpError(403, "You are not in that server.");
+        return g;
+    }
+
     const num = v => (v === null || v === undefined || v === "" ? null : Number(v));
     const userRow = s => db.ensureUser(s.userId);
 
     function publicSettings(u) {
-        return { region: u.region, stores: u.stores, delivery: u.delivery, paused: Boolean(u.paused), guild_id: u.guild_id, steam_id: u.steam_id };
+        return { region: u.region, stores: u.stores, delivery: u.delivery, paused: Boolean(u.paused), guild_id: u.guild_id, steam_id: u.steam_id, ...prefsView(u) };
     }
 
     function serversFor(s, u) {
         return s.guilds
             .map(g => ({
                 id: g.id, name: g.name, icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
-                manageable: isManager(g), alertChannel: db.getGuild(g.id)?.channel_id ?? null
+                manageable: isManager(g), alertChannel: db.getGuild(g.id)?.channel_id ?? null,
+                groupMin: db.getGuild(g.id)?.group_min ?? 0
             }))
-            .filter(g => g.manageable || g.alertChannel)
             .sort((a, b) => Number(b.manageable) - Number(a.manageable) || a.name.localeCompare(b.name));
     }
 
@@ -159,7 +183,9 @@ export function createDashboard({ db, itad, rest, config, now = () => Date.now()
                 user: { id: s.userId, username: s.username, avatar: s.avatar },
                 settings: publicSettings(u),
                 games: db.countItems(s.userId),
-                servers: serversFor(s, u)
+                servers: serversFor(s, u),
+                isOwner: isOwner(s),
+                library: db.countLibrary(s.userId)
             };
         },
 
@@ -255,6 +281,8 @@ export function createDashboard({ db, itad, rest, config, now = () => Date.now()
                 throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
             }
             patch.delivery = nextDelivery;
+            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+            Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };
         },
@@ -297,6 +325,160 @@ export function createDashboard({ db, itad, rest, config, now = () => Date.now()
             }
             db.setGuildChannel(g.id, channel.id, s.userId);
             return { channel };
+        },
+
+        // ----- price history, bulk actions, alert history -----
+        "GET /api/wishlist/history": async (req, _b, url) => {
+            const s = session(req);
+            const id = String(url.searchParams.get("itad_id") ?? "");
+            const own = db.listItems(s.userId).find(i => i.itad_id === id) ?? db.listLibrary(s.userId).find(i => i.itad_id === id);
+            if (!own) throw new HttpError(404, "That game is not on your wishlist or in your library.");
+            cooldown(s.userId, "hist");
+            const u = userRow(s);
+            const all = await itad.getHistory(id, u.region);
+            const step = Math.max(1, Math.ceil(all.length / MAX_HISTORY_POINTS));
+            const points = all.filter((_, i) => i % step === 0 || i === all.length - 1).map(p => ({ t: p.t, price: p.price, shop: p.shop }));
+            return { title: own.title, points };
+        },
+
+        "POST /api/wishlist/bulk": async (req, body) => {
+            const s = session(req);
+            const ids = Array.isArray(body.itad_ids) ? [...new Set(body.itad_ids.map(String))].slice(0, 200) : [];
+            if (!ids.length) throw new HttpError(400, "Select at least one game.");
+            const mine = new Set(db.listItems(s.userId).map(i => i.itad_id));
+            const targets = ids.filter(id => mine.has(id));
+            if (body.action === "remove") {
+                for (const id of targets) db.removeItem(s.userId, id);
+                return { removed: targets.length };
+            }
+            if (body.action === "alert") {
+                let trig;
+                try { trig = parseTrigger(body.type, num(body.value)); } catch (e) { throw new HttpError(400, e.message); }
+                for (const id of targets) db.setTrigger(s.userId, trig.type, trig.value, id);
+                return { updated: targets.length, label: describeTrigger({ trigger_type: trig.type, trigger_value: trig.value }) };
+            }
+            throw new HttpError(400, "Unknown action.");
+        },
+
+        "GET /api/alerts/history": async (req) => {
+            const s = session(req);
+            return { alerts: db.listAlerts(s.userId, 100).map(a => ({ at: a.at, kind: a.kind, title: a.title, price: a.price, regular: a.regular, shop: a.shop, via: a.via })) };
+        },
+
+        // ----- library -----
+        "GET /api/library": async (req) => {
+            const s = session(req);
+            const u = userRow(s);
+            return await libraryView(db, itad, u);
+        },
+
+        "POST /api/library/add": async (req, body) => {
+            const s = session(req);
+            cooldown(s.userId, "lib");
+            userRow(s);
+            const paid = num(body.paid);
+            if (paid !== null && !(Number.isFinite(paid) && paid >= 0 && paid <= 10_000)) throw new HttpError(400, "Paid must be a number from 0 to 10,000.");
+            const r = await importLibrary(db, itad, s.userId, [{ title: String(body.title ?? ""), paid }]);
+            if (r.notFound.length) throw new HttpError(400, `I could not find a game called ${r.notFound[0]}.`);
+            if (r.skippedForLimit) throw new HttpError(400, "Your library is full (500 games).");
+            return r;
+        },
+
+        "POST /api/library/import": async (req, body) => {
+            const s = session(req);
+            cooldown(s.userId, "lib");
+            userRow(s);
+            let entries = [];
+            if (body.file && typeof body.file === "object") {
+                const name = String(body.file.name ?? "");
+                if (!/\.(csv|json|txt|md)$/i.test(name)) throw new HttpError(400, "Unsupported file type. Use a .csv, .json, .txt or .md export.");
+                const text = String(body.file.text ?? "");
+                if (text.length > MAX_UPLOAD_CHARS) throw new HttpError(400, "That file is too large (200 KB max).");
+                entries = parseUpload(text, name.toLowerCase());
+            } else if (Array.isArray(body.entries)) {
+                entries = body.entries.slice(0, 500).map(e => ({ title: String(e?.title ?? ""), paid: Number.isFinite(Number(e?.paid)) && e?.paid !== null && e?.paid !== "" ? Number(e.paid) : null }));
+            }
+            const clean = sanitize(entries, { max: 500 }).entries;
+            if (!clean.length) throw new HttpError(400, "I need game titles, not keys.");
+            return await importLibrary(db, itad, s.userId, clean);
+        },
+
+        "POST /api/library/remove": async (req, body) => {
+            const s = session(req);
+            const item = db.listLibrary(s.userId).find(i => i.itad_id === body.itad_id);
+            if (!item) throw new HttpError(404, "That game is not in your library.");
+            db.removeLibrary(s.userId, item.itad_id);
+            return { removed: item.title };
+        },
+
+        // ----- shared server list, leaderboard, group alerts -----
+        "GET /api/servers/list": async (req, _b, url) => {
+            const s = session(req);
+            const g = guildFor(s, url.searchParams.get("guild"));
+            const u = userRow(s);
+            return { ...(await serverListView(db, itad, g.id, u)), manager: isManager(g) };
+        },
+
+        "POST /api/servers/list/add": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            cooldown(s.userId, "add");
+            userRow(s);
+            return await addToServerList(db, itad, g.id, s.userId, body.title);
+        },
+
+        "POST /api/servers/list/vote": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            const game = db.listServerGames(g.id, s.userId).find(x => x.itad_id === body.itad_id);
+            if (!game) throw new HttpError(404, "That game is not on the server list.");
+            const voted = db.toggleVote(game.id, s.userId);
+            return { voted, votes: game.votes + (voted ? 1 : -1) };
+        },
+
+        "POST /api/servers/list/remove": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            const game = db.listServerGames(g.id, s.userId).find(x => x.itad_id === body.itad_id);
+            if (!game) throw new HttpError(404, "That game is not on the server list.");
+            return removeFromServerList(db, g.id, s.userId, game.title, isManager(g));
+        },
+
+        "GET /api/servers/leaderboard": async (req, _b, url) => {
+            const s = session(req);
+            const g = guildFor(s, url.searchParams.get("guild"));
+            const entries = leaderboard(db, g.id);
+            const t = now();
+            const out = [];
+            for (const e of entries) {
+                const key = `${g.id}:${e.discord_id}`;
+                let hit = names.get(key);
+                if (!hit || hit.until < t) {
+                    hit = { name: await rest.memberName(g.id, e.discord_id).catch(() => null), until: t + 10 * 60_000 };
+                    names.set(key, hit);
+                    if (names.size > 2000) names.delete(names.keys().next().value);
+                }
+                out.push({ name: hit.name ?? "A member", savedPct: e.savedPct, games: e.games, you: e.discord_id === s.userId });
+            }
+            return { entries: out, joined: Boolean(userRow(s).share) };
+        },
+
+        "POST /api/servers/group": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
+            const n = Number(body.minimum);
+            if (!Number.isInteger(n) || n < 0 || n === 1 || n > 20) throw new HttpError(400, "Use 2 to 20, or 0 to turn it off.");
+            db.setGroupMin(g.id, n);
+            return { groupMin: n };
+        },
+
+        // ----- owner -----
+        "GET /api/admin/stats": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            return { stats: db.stats(), health: ops ? ops.snapshot() : null };
         },
 
         "POST /api/mydata/delete": async (req, body) => {
@@ -361,7 +543,7 @@ export function createDashboard({ db, itad, rest, config, now = () => Date.now()
     // ---------- server ----------
     function toHttp(err) {
         if (err instanceof HttpError) return err;
-        if (err instanceof ValueError || err instanceof WishlistError) return new HttpError(400, err.message);
+        if (err instanceof ValueError || err instanceof WishlistError || err instanceof UserError) return new HttpError(400, err.message);
         if (err instanceof SteamError) return new HttpError(err.code === "rate_limited" || err.code === "network" ? 503 : 400, err.message);
         if (err instanceof ItadError) return new HttpError(503, err.message);
         log(`${err.name}: ${err.message}`); // never log request bodies
@@ -374,6 +556,14 @@ export function createDashboard({ db, itad, rest, config, now = () => Date.now()
             const key = `${req.method} ${url.pathname}`;
 
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
+            if (url.pathname.startsWith("/auth/")) {
+                const r = authLimit.hit(clientIp(req));
+                if (!r.ok) throw new HttpError(429, `Too many requests. Try again in ${r.retryAfterS}s.`);
+            } else if (url.pathname.startsWith("/api/")) {
+                const sid = cookies(req)[COOKIE];
+                const r = apiLimit.hit(sessions.has(sid) ? `s:${sid}` : `ip:${clientIp(req)}`);
+                if (!r.ok) throw new HttpError(429, `Too many requests. Try again in ${r.retryAfterS}s.`);
+            }
             if (key === "GET /auth/login") return await login(req, res);
             if (key === "GET /auth/callback") return await callback(req, res, url);
             if (key === "POST /auth/logout") { checkWrite(req); return logout(req, res); }

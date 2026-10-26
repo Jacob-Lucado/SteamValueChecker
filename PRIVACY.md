@@ -33,9 +33,21 @@ Steam Value Checker is a Discord bot that prices a list of games and, if you cho
 - The ID of the server where you last used a wishlist command (so the bot knows which server's alert channel to use).
 - Your wishlist: game titles, price-service game IDs, whether each came from Steam or was added by hand, your alert rule for each game, and the last price the bot alerted you about (to avoid repeat alerts).
 - Your Steam profile ID (SteamID64), only if you imported a Steam wishlist. It is a public identifier.
-- Your settings: region, store filter, delivery choice (DM or channel), whether alerts are paused, and a count of failed DM attempts.
+- Your settings: region, store filter, delivery choice (DM or channel), whether alerts are paused, a count of failed DM attempts, quiet hours and time zone, weekly digest choice, bundle alert choice, and whether you opted in to sharing with your server.
+- If you use the library: the games you add, what you paid for each (only if you enter it), and one daily snapshot of the totals (number of games, total paid, total MSRP, cheapest price) used for the value chart and leaderboard.
+- Your alert history: what was sent, when, the price and how (DM or channel). It is deleted after 90 days.
+- If you use a server's shared list: the games you suggested and your votes.
+- A note of which bundles and giveaways you were already told about, so you are not told twice (deleted after 120 days).
 
 For server admins: the alert channel ID you set with `/alertchannel`, and the ID of the admin who set it.
+
+**Server sharing is off by default.** If you opt in with `/alerts share` (or on the dashboard), other members of the server may see your name in a group alert (\"3 members are watching...\") and on the leaderboard, with your number of games and the percent you saved against MSRP. They never see your wishlist, what you paid or any prices you entered. Opt out at any time.
+
+**Server shared list:** games added to `/serverlist` and the votes on them are visible to everyone in that server.
+
+**Backups:** the bot owner may keep daily copies of the database (the last 7 by default). They hold the same data as above, so deleted data can remain in a backup until it rotates out, up to 7 days.
+
+**Owner statistics:** the bot owner can see totals (how many members, how many games, how many alerts) but not who watches what.
 
 Your data is kept until you delete it with `/mydata delete`. Removing the bot from a server clears that server's alert channel. `/mydata export` gives you a copy of everything stored about you.
 
