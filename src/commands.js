@@ -3,6 +3,15 @@ import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandB
 import { REGIONS, ALERT_TYPES } from "./constants.js";
 export { REGIONS };
 
+const alertType = o => o.setName("type").setDescription("When to alert you").addChoices(...ALERT_TYPES);
+const alertValue = o => o
+    .setName("value")
+    .setDescription("The percentage (for a percentage alert) or the price (for a price alert)")
+    .setMinValue(0.01)
+    .setMaxValue(100000);
+const gameOption = (o, required = false) => o
+    .setName("game").setDescription("A game on your wishlist").setAutocomplete(true).setRequired(required);
+
 const value = new SlashCommandBuilder()
     .setName("value")
     .setDescription("Price a list of games: MSRP, Steam price, cheapest price now, and what you saved")
@@ -107,15 +116,6 @@ const giveaway = new SlashCommandBuilder()
 const help = new SlashCommandBuilder().setName("help").setDescription("How to use Steam Value Checker");
 const about = new SlashCommandBuilder().setName("about").setDescription("About this bot and its price data");
 const privacy = new SlashCommandBuilder().setName("privacy").setDescription("What the bot does and does not do with your data");
-
-const alertType = o => o.setName("type").setDescription("When to alert you").addChoices(...ALERT_TYPES);
-const alertValue = o => o
-    .setName("value")
-    .setDescription("The percentage (for a percentage alert) or the price (for a price alert)")
-    .setMinValue(0.01)
-    .setMaxValue(100000);
-const gameOption = (o, required = false) => o
-    .setName("game").setDescription("A game on your wishlist").setAutocomplete(true).setRequired(required);
 
 const wishlist = new SlashCommandBuilder()
     .setName("wishlist")
