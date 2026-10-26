@@ -8,7 +8,7 @@ import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
@@ -385,6 +385,27 @@ export function createHandlers({ db, itad }) {
         await i.reply({ embeds: [leaderboardEmbed(leaderboard(db, i.guildId))], allowedMentions: { parse: [] } });
     }
 
+    // ---------- /freegames ----------
+    const MAX_FREE_PLATFORMS = 6;
+    async function handleFreeGames(i) {
+        const store = (i.options.getString("store") ?? "").trim().toLowerCase();
+        const share = i.options.getBoolean("public") === true;
+        await i.deferReply(share ? {} : { flags: MessageFlags.Ephemeral });
+        try {
+            const list = (await itad.getGiveawayList()).filter(g => /^https:\/\//i.test(g.url ?? "") && (!store || String(g.shop ?? "").toLowerCase().includes(store)));
+            if (!list.length) {
+                return await i.editReply({ content: store ? `No free games found on a store matching "${store.slice(0, 40)}" right now.` : "No free games to claim right now. Turn on `/alerts freegames` and the bot will tell you when one appears." });
+            }
+            const byShop = new Map();
+            for (const g of list) { if (!byShop.has(g.shop)) byShop.set(g.shop, []); byShop.get(g.shop).push(g); }
+            const payloads = [...byShop].map(([shop, games]) => freeGamesPayload(shop, games)).filter(Boolean);
+            const shown = payloads.slice(0, MAX_FREE_PLATFORMS);
+            if (payloads.length > shown.length) shown[shown.length - 1].content += `\n(${payloads.length - shown.length} more stores not shown. Use the store option to pick one.)`;
+            await i.editReply(shown[0]);
+            for (const p of shown.slice(1)) await i.followUp(share ? p : { ...p, flags: MessageFlags.Ephemeral });
+        } catch (err) { await failed(i, "freegames", err); }
+    }
+
     // ---------- /mydata ----------
     async function handleMyData(i) {
         if (i.options.getSubcommand() === "export") {
@@ -435,5 +456,5 @@ export function createHandlers({ db, itad }) {
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleMyData, handleAutocomplete };
 }

@@ -261,6 +261,7 @@ client.on(Events.InteractionCreate, async i => {
             case "library": return await handlers.handleLibrary(i);
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
+            case "freegames": return await handlers.handleFreeGames(i);
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
             case "about": return await embedReply(i, ABOUT);

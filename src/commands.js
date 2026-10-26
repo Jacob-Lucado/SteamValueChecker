@@ -113,6 +113,12 @@ const giveaway = new SlashCommandBuilder()
         .addRoleOption(o => o.setName("managerrole").setDescription("Members with this role can run giveaways"))
         .addBooleanOption(o => o.setName("clear").setDescription("Reset both settings")));
 
+const freegames = new SlashCommandBuilder()
+    .setName("freegames")
+    .setDescription("Games that are free to claim right now on Steam, Epic, GOG and others")
+    .addStringOption(o => o.setName("store").setDescription("Only this store, e.g. steam, epic, gog").setMaxLength(40))
+    .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so everyone can see (default: only you)"));
+
 const help = new SlashCommandBuilder().setName("help").setDescription("How to use Steam Value Checker");
 const about = new SlashCommandBuilder().setName("about").setDescription("About this bot and its price data");
 const privacy = new SlashCommandBuilder().setName("privacy").setDescription("What the bot does and does not do with your data");
@@ -192,4 +198,4 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
-export const commands = [value, wishlist, alerts, alertchannel, library, serverlist, leaderboard, giveaway, mydata, help, about, privacy].map(c => c.toJSON());
+export const commands = [value, wishlist, alerts, alertchannel, library, serverlist, leaderboard, giveaway, freegames, mydata, help, about, privacy].map(c => c.toJSON());

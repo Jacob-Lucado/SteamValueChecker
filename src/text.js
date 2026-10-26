@@ -25,6 +25,7 @@ export const HELP = [
     "• `/serverlist` is a wishlist your server shares, with votes. `/leaderboard` ranks members who opted in with `/alerts share`.",
     "• Server admins can use `/alertchannel group` to post when several opted-in members watch the same game and it goes on sale.",
     "• Server managers can run key giveaways with `/giveaway create`. Winners claim with a button, confirm it worked, and a vouch is posted.",
+    "• `/freegames` lists what is free to claim right now on Steam, Epic, GOG and others. `/alerts freegames` tells you when new ones appear.",
     "• `/mydata` exports or deletes everything stored about you.",
     "",
     "Replies are private to you. Never post game keys in chat. The bot ignores anything that looks like a key, except keys a server manager enters in the private giveaway form."

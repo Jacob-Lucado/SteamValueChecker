@@ -86,6 +86,10 @@ The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, min
 
 > Steam only shares wishlists that are **public**. Set *Game details* to Public under Profile > Edit Profile > Privacy Settings, then import.
 
+### `/freegames`
+
+Lists the games that are free to claim right now on Steam, Epic, GOG and other stores, with Claim buttons. Optional `store` filters to one store (e.g. `steam`) and `public` posts it for the whole channel. `/alerts freegames` pings you when new ones appear.
+
 ### Giveaways (`/giveaway`)
 
 Server owners (Manage Server, or a role set with `/giveaway setup`) can give away game keys.

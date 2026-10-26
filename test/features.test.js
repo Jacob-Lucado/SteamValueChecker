@@ -372,7 +372,7 @@ test("every slash command has a dashboard counterpart", async () => {
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
-        "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
+        "freegames": "GET /api/free", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
         help: "cfg.help", about: "cfg.about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
