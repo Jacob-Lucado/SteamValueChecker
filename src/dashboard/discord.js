@@ -76,6 +76,10 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
             } catch { return null; }
         },
 
+        async createChannel(guildId, body) {
+            return call(`/guilds/${encodeURIComponent(guildId)}/channels`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        },
+
         async sendMessage(channelId, payload) {
             return call(`/channels/${encodeURIComponent(channelId)}/messages`, {
                 method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload)

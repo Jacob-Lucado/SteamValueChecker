@@ -161,7 +161,7 @@ client.on(Events.GuildCreate, async guild => {
         db.setMeta(`welcomed:${guild.id}`, "1");
         const link = publicBase ? `${publicBase}/#/setup/${guild.id}` : null;
         const embed = { color: 0xff9800, title: `Thanks for adding Steam Value Checker to ${guild.name}`,
-            description: ["It takes about a minute to set up:", "1. In your server, run **`/setup`** and pick the channels from the menus.", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/wishlist import`, `/value` and `/support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };
+            description: ["It takes about a minute to set up:", "1. In your server, run **`/setup`** and press **Create the channels for me** (or pick existing channels from the menus).", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/wishlist import`, `/value` and `/support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };
         const components = link ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open setup page", url: link }] }] : [];
         await discord.sendDm(guild.ownerId, { embeds: [embed], components }).catch(async () => {
             // DMs closed: leave a short note where managers will see it

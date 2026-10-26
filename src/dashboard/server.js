@@ -2,7 +2,7 @@
 // Login is Discord OAuth2 (identify + guilds). Sessions live in memory, so a restart logs everyone out.
 
 import http from "node:http";
-import { setupStatus } from "../setup.js";
+import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -225,7 +225,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&integration_type=1&scope=applications.commands`
                 : null,
             inviteUrl: config.clientId
-                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=19456`
+                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=19472`
                 : null
         }),
 
@@ -597,6 +597,16 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req);
             const g = managerGuild(s, url.searchParams.get("guild"));
             return { ...setupStatus(db, g.id), staffRole: db.getTicketSettings(g.id).staff_role_id, bot: botGuilds ? Boolean(botGuilds(g.id)) : null };
+        },
+
+        "POST /api/servers/setup/auto": async (req, body) => {
+            const s = session(req);
+            const g = managerGuild(s, String(body.guild_id));
+            if (botGuilds && !botGuilds(g.id)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+            const roles = body.staff_role_id ? await rest.listRoles(g.id).catch(() => []) : [];
+            const staffRoleId = body.staff_role_id && roles.some(r => r.id === body.staff_role_id) ? body.staff_role_id : null;
+            try { return { ...(await autoSetup({ api: rest, db, guildId: g.id, botId: config.clientId, userId: s.userId, staffRoleId })), status: setupStatus(db, g.id) }; }
+            catch (e) { if (e.userFacing) throw new HttpError(400, e.message); if (e instanceof DiscordApiError && e.status === 403) throw new HttpError(400, "I need the Manage Channels permission to create channels."); throw e; }
         },
 
         "GET /api/servers/stats": async (req, _b, url) => {
