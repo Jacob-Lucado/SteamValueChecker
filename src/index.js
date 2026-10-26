@@ -9,6 +9,10 @@ import { parseUpload, parseTyped, sanitize } from "./parse.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { pageCount, tableEmbed, summaryEmbed, toCsv } from "./render.js";
 import { HELP, ABOUT, PRIVACY } from "./text.js";
+import { openDb } from "./db.js";
+import { createHandlers, UserError } from "./handlers.js";
+import { createNotifier } from "./notify.js";
+import { runCycle, schedule } from "./poller.js";
 
 const MAX_TITLES = 100;
 const MAX_FILE_BYTES = 200_000;
@@ -21,8 +25,37 @@ const cfg = loadConfig();
 const itad = createItad({ apiKey: cfg.itadKey });
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const lastRun = new Map();
+const db = openDb(cfg.dbPath);
+const handlers = createHandlers({ db, itad });
 
-client.once(Events.ClientReady, c => console.log(`Logged in as ${c.user.tag}`));
+// DMs and channel posts go through here, so notify.js can be tested without Discord.
+const discord = {
+    async sendDm(userId, payload) {
+        const user = await client.users.fetch(userId);
+        await user.send(payload);
+    },
+    async sendChannel(channelId, payload) {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel?.isTextBased()) throw new Error("Not a text channel");
+        await channel.send(payload);
+    }
+};
+const notifier = createNotifier({ db, discord });
+
+client.once(Events.ClientReady, c => {
+    console.log(`Logged in as ${c.user.tag}`);
+    schedule(
+        async () => {
+            const s = await runCycle({ db, itad, notifier, log: m => console.log(`[alerts] ${m}`) });
+            console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed`);
+        },
+        cfg.checkEveryMinutes * 60_000,
+        { onError: err => console.error(`[alerts] ${err.name}: ${err.message}`) }
+    );
+});
+
+// If the bot is removed from a server, forget that server's alert channel.
+client.on(Events.GuildDelete, guild => { if (guild.available !== false) db.clearGuildChannel(guild.id); });
 
 const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
 const embedReply = (i, description) =>
@@ -44,7 +77,6 @@ async function readUpload(file) {
     return parseUpload(new TextDecoder("utf-8").decode(buf), name);
 }
 
-class UserError extends Error {}
 
 function pageButtons(page, pages) {
     return new ActionRowBuilder().addComponents(
@@ -130,10 +162,18 @@ async function handleValue(i) {
 }
 
 client.on(Events.InteractionCreate, async i => {
+    if (i.isAutocomplete()) {
+        try { await handlers.handleAutocomplete(i); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
+        return;
+    }
     if (!i.isChatInputCommand()) return;
     try {
         switch (i.commandName) {
             case "value": return await handleValue(i);
+            case "wishlist": return await handlers.handleWishlist(i);
+            case "alerts": return await handlers.handleAlerts(i);
+            case "alertchannel": return await handlers.handleAlertChannel(i);
+            case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
             case "about": return await embedReply(i, ABOUT);
             case "privacy": return await embedReply(i, PRIVACY);

@@ -6,7 +6,7 @@
 
 **See what your game library is worth, and what you saved.**
 
-![Node](https://img.shields.io/badge/node-%E2%89%A518.17-107c41)
+![Node](https://img.shields.io/badge/node-%E2%89%A522.13-107c41)
 ![discord.js](https://img.shields.io/badge/discord.js-v14-5865f2)
 ![Tests](https://github.com/Jacob-Lucado/SteamValueChecker/actions/workflows/test.yml/badge.svg)
 
@@ -51,6 +51,34 @@ Examples:
 /value file:FanaticalGrabber_2026-10-26.csv paid:25 region:GB
 ```
 
+### Wishlist and sale alerts
+
+Import your Steam wishlist (or add games by hand) and the bot tells you when something goes on sale.
+
+| Command | What it does |
+| --- | --- |
+| `/wishlist import profile:` | Reads your **public** Steam wishlist from a profile link, custom name or SteamID64. No login. Run it again to sync new games (and drop ones you removed on Steam) |
+| `/wishlist add title:` | Adds one game by title, with an optional alert rule |
+| `/wishlist remove game:` | Removes a game (autocompletes from your list) |
+| `/wishlist view` | Your list with current prices, sales first |
+| `/wishlist alert type:` | Sets when you are alerted, for one game or all: any sale, a % off or more, a price or lower, or an all-time low |
+| `/alerts delivery` | DM (default) or the server alert channel |
+| `/alerts pause`, `resume`, `region`, `stores`, `status` | Your alert settings |
+| `/alertchannel set\|clear\|show` | Server admins (Manage Server): the channel used when a DM fails, or when a member opts out of DMs |
+| `/mydata export\|delete` | Download or delete everything stored about you |
+
+**How alerts are delivered**
+
+1. **DM first.** Alerts are sent to you directly.
+2. **Channel fallback.** If the DM cannot be delivered (DMs closed), the alert is posted in the server's alert channel and mentions you. If no channel is set, the alert is retried on the next check.
+3. **Channel by choice.** Members who run `/alerts delivery mode:channel` skip DMs and are mentioned in the channel instead. Everyone who can see that channel can see the game name.
+
+**How alerts avoid spam:** you are alerted once per sale. You are alerted again only if the price drops further, or after the sale ends and a new one starts. Several alerts for one person are grouped into one message.
+
+The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, minimum 30, because prices are cached for 30 minutes). Each game is looked up once per region however many people watch it. Lists hold up to 200 games, and an import reads up to 150.
+
+> Steam only shares wishlists that are **public**. Set *Game details* to Public under Profile > Edit Profile > Privacy Settings, then import.
+
 ### `/help`, `/about`, `/privacy`
 
 Usage notes, credits and a plain-language privacy summary.
@@ -75,7 +103,7 @@ A bundle price works as a single `paid` total. For per-game amounts, add a `Paid
 
 ## Setup
 
-You need Node 18.17 or newer, a Discord application, and an IsThereAnyDeal API key.
+You need Node 22.13 or newer (the bot uses Node's built-in SQLite), a Discord application, and an IsThereAnyDeal API key.
 
 1. **Create the Discord app** at the [Developer Portal](https://discord.com/developers/applications). Add a Bot, copy its token, and leave every Privileged Gateway Intent off. The bot only uses slash commands.
 2. **Get an ITAD key** at [isthereanydeal.com/apps/my](https://isthereanydeal.com/apps/my/).
@@ -85,7 +113,7 @@ You need Node 18.17 or newer, a Discord application, and an IsThereAnyDeal API k
    cd SteamValueChecker
    npm install
    ```
-4. **Configure:** copy `.env.example` to `.env` and fill in `DISCORD_TOKEN`, `CLIENT_ID`, `ITAD_API_KEY`, and optionally `GUILD_ID` for instant command updates on a test server.
+4. **Configure:** copy `.env.example` to `.env` and fill in `DISCORD_TOKEN`, `CLIENT_ID`, `ITAD_API_KEY`, and optionally `GUILD_ID` for instant command updates on a test server. `DATABASE_PATH` and `CHECK_INTERVAL_MINUTES` are optional.
 5. **Invite the bot** using the link on the app's **Installation** tab, with the scopes `bot` and `applications.commands` and no extra permissions.
 6. **Register the commands and start:**
    ```bash
@@ -93,7 +121,7 @@ You need Node 18.17 or newer, a Discord application, and an IsThereAnyDeal API k
    npm start
    ```
 
-The bot has to keep running to answer. A small VPS, Railway, Fly.io or a spare PC works. There is no database to set up.
+The bot has to keep running to answer and to send alerts. A small VPS, Railway, Fly.io or a spare PC works. Wishlist data lives in one SQLite file (`data/steamvaluechecker.db` by default), so on a host with a temporary disk, mount a persistent volume and point `DATABASE_PATH` at it, and back the file up. There is nothing else to set up.
 
 ### Development
 
@@ -101,7 +129,7 @@ The bot has to keep running to answer. A small VPS, Railway, Fly.io or a spare P
 npm test
 ```
 
-The tests cover input parsing, price summarising, the savings math, rendering limits and the ITAD client (with a fake `fetch`), and need no Discord token or API key.
+The tests cover input parsing, price summarising, the savings math, rendering limits, the ITAD and Steam clients (with a fake `fetch`), the database, alert rules and the delivery fallback (with fake Discord senders), and need no Discord token or API key.
 
 ```
 src/
@@ -112,6 +140,13 @@ src/
   itad.js       IsThereAnyDeal client: lookup, fuzzy matching, prices, cache, retries
   report.js     Rows, totals and the paid-vs-value comparison
   render.js     Embeds and the CSV download
+  db.js         SQLite storage for wishlists, settings and alert channels
+  steam.js      Reads a public Steam wishlist
+  alerts.js     Alert rules and the anti-spam logic
+  notify.js     DM delivery with the server-channel fallback
+  poller.js     The scheduled price check
+  wishlist.js   Finding games and building the wishlist view
+  handlers.js   Discord handlers for the wishlist commands
   text.js       /help, /about and /privacy copy
 test/           node:test suites
 branding/       Logo and banner
@@ -119,7 +154,7 @@ branding/       Logo and banner
 
 ## Privacy
 
-Nothing is stored. Game titles are sent to IsThereAnyDeal to get prices, prices are cached in memory for 30 minutes, and user input is never written to logs. See [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md).
+`/value` stores nothing. If you use wishlist alerts, the bot stores your Discord ID, wishlist, alert rules, settings and (if you import) your public Steam ID, and you can export or delete it with `/mydata`. Game titles and IDs are sent to IsThereAnyDeal for prices, and user input is never written to logs. See [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md).
 
 ## Known limits
 
@@ -127,6 +162,8 @@ Nothing is stored. Game titles are sent to IsThereAnyDeal to get prices, prices 
 - **"Cheapest now" can come from key-reseller sites.** Use `stores:major` to limit it to major stores.
 - **Title matching can be wrong.** Fuzzy matches are marked with `~`. Check them before trusting the totals.
 - **Unmatched games are left out of the totals,** while `paid` covers everything you entered. The bot notes this when it happens.
+- **Steam wishlist import is untested against live Steam.** It uses Steam's `IWishlistService/GetWishlist` endpoint, which needs only a public profile. If Steam changes it, import fails with an error and manual `/wishlist add` still works.
+- Alerts are best effort and run on a schedule, so a short sale can be missed.
 - The ITAD endpoints and field names follow ITAD's public documentation. If ITAD changes its API, the table shows `-` for fields it can't find.
 
 ## Credits

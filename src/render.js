@@ -111,3 +111,43 @@ export function toCsv(rows, currency) {
     ].map(csvCell).join(","));
     return "﻿" + [head.map(csvCell).join(","), ...lines].join("\r\n") + "\r\n";
 }
+
+const GREEN = 0x57f287;
+const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
+
+/** One sale alert. `now` comes from alerts.current(). */
+export function alertEmbed(item, now, { trigger, lower = false } = {}) {
+    const c = now.currency ?? "USD";
+    const fields = [
+        { name: "Price now", value: money(now.price, c), inline: true },
+        { name: "Regular", value: money(now.regular, c), inline: true },
+        { name: "Discount", value: now.discount > 0 ? `${Math.round(now.discount * 100)}% off` : "-", inline: true },
+        { name: "Store", value: now.shop ?? "-", inline: true }
+    ];
+    if (now.atl !== null) fields.push({ name: "All-time low", value: money(now.atl, c), inline: true });
+    return {
+        color: GREEN,
+        title: lower ? `${item.title}: price dropped again` : `${item.title} is on sale`,
+        url: safeUrl(now.url),
+        fields,
+        footer: { text: `Your alert: ${trigger}  •  /alerts pause to stop  •  Prices by IsThereAnyDeal` }
+    };
+}
+
+export const WISHLIST_PER_PAGE = 15;
+
+/** Wishlist overview table: one line per game with current price and discount. */
+export function wishlistEmbed(rows, page, currency) {
+    const pages = Math.max(1, Math.ceil(rows.length / WISHLIST_PER_PAGE));
+    const head = `${fit("Game", 26)} ${left("Now", 9)} ${left("Off", 5)} ${fit("Store", 11)} Alert`;
+    const body = rows.slice(page * WISHLIST_PER_PAGE, (page + 1) * WISHLIST_PER_PAGE).map(r => {
+        const price = r.best?.price ?? null;
+        const off = r.discount > 0 ? `${Math.round(r.discount * 100)}%` : "-";
+        return `${fit(r.title, 26)} ${left(money(price, currency), 9)} ${left(off, 5)} ${fit(r.best?.shop ?? "-", 11)} ${r.alert}`;
+    });
+    return {
+        color: COLOR,
+        description: fence([head, ...body]),
+        footer: { text: `Page ${page + 1}/${pages}  •  ${rows.length} games  •  Prices by IsThereAnyDeal` }
+    };
+}

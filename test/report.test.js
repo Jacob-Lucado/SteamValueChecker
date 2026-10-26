@@ -13,14 +13,14 @@ test("summarize picks Steam price, MSRP and the cheapest store", () => {
     assert.equal(s.msrp, 24.99);
     assert.equal(s.steam, 14.99);
     assert.equal(s.cut, 40);
-    assert.deepEqual(s.best, { price: 9.5, shop: "Some Key Site" });
+    assert.deepEqual(s.best, { price: 9.5, shop: "Some Key Site", url: null });
     assert.equal(s.atl, 8);
     assert.equal(s.currency, "USD");
 });
 
 test("majorOnly ignores unknown key sites", () => {
     const e = entry([deal("Steam", 14.99, 24.99), deal("Some Key Site", 9.5, 24.99), deal("GOG", 12, 24.99)]);
-    assert.deepEqual(summarize(e, { majorOnly: true }).best, { price: 12, shop: "GOG" });
+    assert.deepEqual(summarize(e, { majorOnly: true }).best, { price: 12, shop: "GOG", url: null });
     assert.equal(isMajorStore("Green Man Gaming"), true);
     assert.equal(isMajorStore("Some Key Site"), false);
 });

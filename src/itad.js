@@ -178,5 +178,41 @@ export function createItad({
         return out;
     }
 
-    return { lookupTitles, getPrices, _cache: cache };
+    /** Maps a shop's own ids (e.g. "app/220" on Steam, shop 61) to ITAD ids. Returns Map(shopId -> itadId|null). */
+    async function lookupShopIds(shopId, shopGameIds) {
+        const out = new Map();
+        const need = [];
+        for (const sid of shopGameIds) {
+            const hit = getCached(`shop:${shopId}:${sid}`);
+            if (hit !== undefined) out.set(sid, hit);
+            else need.push(sid);
+        }
+        for (const part of chunk(need, LOOKUP_CHUNK)) {
+            const data = await call("POST", `/lookup/id/shop/${shopId}/v1`, {}, part);
+            for (const sid of part) {
+                const id = data?.[sid] ?? null;
+                setCached(`shop:${shopId}:${sid}`, id);
+                out.set(sid, id);
+            }
+        }
+        return out;
+    }
+
+    /** Title (and Steam app id) for one ITAD id, or null when unknown. */
+    async function getTitle(id) {
+        const hit = getCached(`title:${id}`);
+        if (hit !== undefined) return hit;
+        let info = null;
+        try {
+            info = await call("GET", "/games/info/v2", { id });
+        } catch (err) {
+            if (err.code === "http") return null; // 404 and similar: this game has no info, not a bot failure
+            throw err;
+        }
+        const v = info?.title ? { title: String(info.title), appid: info.appid ?? null } : null;
+        setCached(`title:${id}`, v);
+        return v;
+    }
+
+    return { lookupTitles, getPrices, lookupShopIds, getTitle, _cache: cache };
 }

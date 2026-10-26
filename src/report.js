@@ -25,7 +25,7 @@ export function summarize(entry, { majorOnly = false } = {}) {
         msrp: num(steam?.regular?.amount) ?? anyRegular,
         steam: num(steam?.price?.amount),
         cut: steam?.cut ?? 0,
-        best: best ? { price: best.price.amount, shop: best.shop?.name ?? "?" } : null,
+        best: best ? { price: best.price.amount, shop: best.shop?.name ?? "?", url: typeof best.url === "string" ? best.url : null } : null,
         atl: num(entry?.historyLow?.all?.amount),
         hasPrices: deals.length > 0
     };

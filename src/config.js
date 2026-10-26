@@ -11,6 +11,9 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
         token: env.DISCORD_TOKEN,
         clientId: env.CLIENT_ID,
         guildId: env.GUILD_ID || null,
-        itadKey: env.ITAD_API_KEY
+        itadKey: env.ITAD_API_KEY,
+        dbPath: env.DATABASE_PATH || "data/steamvaluechecker.db",
+        // Prices are cached for 30 minutes, so checking more often than that gains nothing.
+        checkEveryMinutes: Math.max(30, Number(env.CHECK_INTERVAL_MINUTES) || 60)
     };
 }
