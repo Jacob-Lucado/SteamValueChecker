@@ -16,7 +16,7 @@
 
 ## What it does
 
-Send the bot a list of game titles, or upload an export from the [FanaticalGrabber](https://github.com/Jacob-Lucado/FanaticalGrabber) browser extension, and it replies with:
+Send the bot a list of game titles, or upload an export from the [FanaticalGrabber](https://jacob-lucado.github.io/FanaticalGrabber/) browser extension, and it replies with:
 
 | Column | Meaning |
 | --- | --- |
@@ -109,7 +109,7 @@ Usage notes and a plain-language privacy summary. `/about` is a card with the cr
 
 ## Web dashboard
 
-Everything the slash commands do is also in a browser, plus price-history charts, bulk actions on the wishlist, an alert history table, and an Admin page for the bot owner: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a modern look with a light and dark theme (it follows your system setting, and a button in the header switches it) and links to [FanaticalGrabber](https://github.com/Jacob-Lucado/FanaticalGrabber).
+Everything the slash commands do is also in a browser, plus price-history charts, bulk actions on the wishlist, an alert history table, and an Admin page for the bot owner: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a modern look with a light and dark theme (it follows your system setting, and a button in the header switches it) and links to [FanaticalGrabber](https://jacob-lucado.github.io/FanaticalGrabber/).
 
 It is off unless you turn it on. To enable it:
 

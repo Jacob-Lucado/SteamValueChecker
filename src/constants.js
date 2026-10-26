@@ -15,5 +15,5 @@ export const ALERT_TYPES = [
     { name: "All-time low", value: "atl" }
 ];
 
-export const FANATICAL_GRABBER_URL = "https://github.com/Jacob-Lucado/FanaticalGrabber";
+export const FANATICAL_GRABBER_URL = "https://jacob-lucado.github.io/FanaticalGrabber/";
 export const REPO_URL = "https://github.com/Jacob-Lucado/SteamValueChecker";

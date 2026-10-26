@@ -101,7 +101,7 @@ test("the app asks for sign-in, and the config carries the FanaticalGrabber link
     assert.equal((await t.request("/api/me")).status, 401);
     assert.equal((await t.request("/api/wishlist")).status, 401);
     const c = await t.request("/api/config");
-    assert.equal(c.data.fanaticalUrl, "https://github.com/Jacob-Lucado/FanaticalGrabber");
+    assert.equal(c.data.fanaticalUrl, "https://jacob-lucado.github.io/FanaticalGrabber/");
     assert.match(c.data.inviteUrl, /client_id=123/);
     assert.ok(c.data.regions.length >= 6);
     await t.close();
