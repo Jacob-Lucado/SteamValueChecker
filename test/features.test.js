@@ -393,3 +393,18 @@ test("every slash command has a dashboard counterpart", async () => {
         else assert.ok(server.includes(`"${target}"`) || server.includes(`key === "${target}"`), `dashboard route missing: ${target}`);
     }
 });
+
+test("wishlist import keeps partial progress when ITAD rate limits, and does not prune", async () => {
+    const { importWishlist } = await import("../src/steam.js");
+    const { ItadError } = await import("../src/itad.js");
+    const fetchImpl = async url => ({ ok: true, status: 200, json: async () => ({ response: { items: [{ appid: 1 }, { appid: 2 }, { appid: 3 }] } }) });
+    let calls = 0;
+    const itad = {
+        lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, "id-" + i])),
+        getTitle: async id => { if (++calls > 2) throw new ItadError("rate_limited", "slow"); return { title: "Game " + id }; }
+    };
+    const r = await importWishlist("76561198000000000", itad, { fetchImpl });
+    assert.equal(r.rateLimited, true);
+    assert.equal(r.complete, false);
+    assert.ok(r.games.length >= 1 && r.games.length < 3);
+});

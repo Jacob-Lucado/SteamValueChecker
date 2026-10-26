@@ -67,6 +67,7 @@ export function createHandlers({ db, itad }) {
             if (pruned) lines.push(`Removed ${pruned} game${pruned === 1 ? "" : "s"} that left your Steam wishlist.`);
             if (r.unmatched) lines.push(`${r.unmatched} could not be matched to price data and were skipped.`);
             if (r.truncated) lines.push(`Only the first ${MAX_IMPORT} of ${r.total} games were imported.`);
+            if (r.rateLimited) lines.push("IsThereAnyDeal asked the bot to slow down, so only part of the wishlist was added. Run the import again in a minute to add the rest.");
             if (res.skippedForLimit) lines.push(`Your list is full (200 games), so ${res.skippedForLimit} were skipped.`);
             lines.push("", `Alerts: **any sale**, delivered by **${deliveryText(db.getUser(i.user.id))}**.`);
             lines.push("Use `/wishlist alert` to change when you get alerted, and `/wishlist view` to see prices. Run `/wishlist import` again any time to sync.");

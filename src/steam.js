@@ -83,11 +83,17 @@ export async function importWishlist(input, itad, { fetchImpl = globalThis.fetch
 
     const games = [];
     let next = 0;
+    let rateLimited = false;
     const worker = async () => {
-        while (next < unique.length) {
+        while (next < unique.length && !rateLimited) {
             const id = unique[next++];
-            const info = await itad.getTitle(id);
-            if (info) games.push({ itad_id: id, title: info.title });
+            try {
+                const info = await itad.getTitle(id);
+                if (info) games.push({ itad_id: id, title: info.title });
+            } catch (err) {
+                // Keep what we already have; titles looked up so far are cached, so running the import again finishes the rest.
+                if (err?.code === "rate_limited" && games.length) { rateLimited = true; next--; } else throw err;
+            }
         }
     };
     await Promise.all(Array.from({ length: Math.min(4, unique.length) }, worker));
@@ -99,6 +105,7 @@ export async function importWishlist(input, itad, { fetchImpl = globalThis.fetch
         total: appIds.length,
         truncated: appIds.length > take.length,
         complete: appIds.length <= take.length && take.length === matched.length && games.length === unique.length,
-        unmatched: take.length - matched.length
+        unmatched: take.length - matched.length,
+        rateLimited
     };
 }

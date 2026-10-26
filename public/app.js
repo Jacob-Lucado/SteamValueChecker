@@ -340,6 +340,7 @@
       if (r.pruned) parts.push(`Removed ${r.pruned} that left your Steam wishlist.`);
       if (r.unmatched) parts.push(`${r.unmatched} could not be matched.`);
       if (r.truncated) parts.push("Only the first 150 games were read.");
+      if (r.rateLimited) parts.push("IsThereAnyDeal asked the bot to slow down, so only part was added. Import again in a minute to add the rest.");
       if (r.skippedForLimit) parts.push(`List is full, ${r.skippedForLimit} skipped.`);
       toast(parts.join(" "), "ok");
       state.me.games += r.added;

@@ -91,5 +91,5 @@ export function applySteamImport(db, userId, r) {
     const res = db.addItems(userId, r.games, { source: "steam" });
     db.updateUser(userId, { steam_id: r.steamid });
     const pruned = r.complete ? db.removeSteamNotIn(userId, r.games.map(g => g.itad_id)) : 0;
-    return { ...res, pruned, unmatched: r.unmatched, truncated: r.truncated, total: r.total };
+    return { ...res, pruned, unmatched: r.unmatched, truncated: r.truncated, total: r.total, rateLimited: Boolean(r.rateLimited) };
 }

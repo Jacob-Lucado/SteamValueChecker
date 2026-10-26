@@ -68,7 +68,8 @@ export function createItad({
     ttlMs = TTL_MS,
     timeoutMs = 15000,
     sleep = ms => new Promise(r => setTimeout(r, ms)),
-    now = () => Date.now()
+    now = () => Date.now(),
+    minGapMs = 250
 } = {}) {
     if (!apiKey) throw new Error("createItad needs an apiKey");
     const cache = new Map();
@@ -85,7 +86,16 @@ export function createItad({
     };
 
     // Error messages never include the URL, because the URL carries the API key.
+    // Requests start at least minGapMs apart, so a big import trickles through instead of tripping ITAD's rate limit.
+    let gate = Promise.resolve();
+    const pace = () => {
+        const turn = gate.then(() => sleep(minGapMs));
+        gate = turn.catch(() => {});
+        return turn;
+    };
+
     async function call(method, path, params = {}, body, attempt = 0) {
+        if (minGapMs > 0) await pace();
         const url = new URL(BASE + path);
         url.searchParams.set("key", apiKey);
         for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
@@ -103,8 +113,8 @@ export function createItad({
         }
 
         if (res.status === 429) {
-            if (attempt < 1) {
-                const wait = Math.min(Number(res.headers?.get?.("retry-after")) || 2, 10);
+            if (attempt < 4) {
+                const wait = Math.min(Number(res.headers?.get?.("retry-after")) || 2 * 2 ** attempt, 20);
                 await sleep(wait * 1000);
                 return call(method, path, params, body, attempt + 1);
             }

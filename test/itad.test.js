@@ -85,16 +85,16 @@ test("cache entries expire", async () => {
     assert.equal(log.length, 2);
 });
 
-test("429 retries once then gives up with a friendly error", async () => {
+test("429 retries a few times then gives up with a friendly error", async () => {
     let calls = 0;
     const slept = [];
     const itad = createItad({
-        apiKey: "k", sleep: async ms => slept.push(ms),
+        apiKey: "k", minGapMs: 0, sleep: async ms => slept.push(ms),
         fetchImpl: async () => { calls++; return json({}, 429, { "retry-after": "3" }); }
     });
     await assert.rejects(() => itad.getPrices(["a"]), e => e instanceof ItadError && e.code === "rate_limited");
-    assert.equal(calls, 2);
-    assert.deepEqual(slept, [3000]);
+    assert.equal(calls, 5);
+    assert.deepEqual(slept, [3000, 3000, 3000, 3000]);
 });
 
 test("auth and server errors are clear, and never leak the API key", async () => {
