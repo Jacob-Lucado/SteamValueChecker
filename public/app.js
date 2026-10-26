@@ -109,7 +109,7 @@
   }
 
   // ---------- chrome ----------
-  const NAV = [["home", "Home"], ["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["about", "About"], ["admin", "Admin"]];
+  const NAV = [["home", "Home"], ["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["support", "Support"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["about", "About"], ["admin", "Admin"]];
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[0];
   const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
 
@@ -1218,7 +1218,109 @@
   }
 
   // ---------- routing ----------
-  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  // ---------- support tickets ----------
+  const STATUS_ICON = { open: "🟢", waiting: "🟡", resolved: "✅", closed: "⚫" };
+  const STATUS_CHIP = { open: "ok", waiting: "warn", resolved: "", closed: "dim" };
+
+  async function supportView() {
+    const id = currentParam();
+    if (id) return ticketThread(id);
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Support", "Ask for help, follow your tickets, and (for server managers) answer them. Replies show up here and in Discord."), holder);
+    let filter = { q: "", status: "active" };
+    async function load() {
+      const d = await api("/api/tickets?status=" + encodeURIComponent(filter.status === "all" ? "" : filter.status) + "&q=" + encodeURIComponent(filter.q));
+      const row = (t, who) => h("a", { class: "card-link", href: "#/support/" + t.id },
+        h("span", { class: "icon", text: STATUS_ICON[t.status] }),
+        h("span", {}, h("strong", { text: `#${t.id} ${t.subject}` }),
+          h("span", { class: "muted", text: `${t.status} · ${new Date(t.updated_at).toLocaleString()}${who && t.user_name ? " · " + t.user_name : ""}${t.assignee_id ? " · assigned" : ""}${t.tags.length ? " · " + t.tags.join(", ") : ""}` })));
+      const subject = h("input", { type: "text", maxlength: "100", placeholder: "What is this about?" });
+      const body = h("textarea", { maxlength: "1500", placeholder: "Tell us what happened" });
+      const guildSel = select([["", "The bot's team"], ...(state.me.servers || []).map(g => [g.id, g.name])], "");
+      const send = h("button", { class: "btn green", text: "Open ticket", onclick: () => busy(send, async () => {
+        const r = await api("/api/tickets", { subject: subject.value, body: body.value, guild_id: guildSel.value || null });
+        toast(`Ticket #${r.id} opened.`); location.hash = "#/support/" + r.id;
+      }) });
+      const q = h("input", { type: "search", placeholder: "Search subject, tag or #id", value: filter.q });
+      const st = select([["active", "Active"], ["all", "All"], ["open", "Open"], ["waiting", "Waiting on user"], ["resolved", "Resolved"], ["closed", "Closed"]], filter.status);
+      const apply = () => { filter = { q: q.value.trim(), status: st.value }; load().catch(e => toast(e.message, "error")); };
+      q.addEventListener("change", apply); st.addEventListener("change", apply);
+      holder.className = "";
+      holder.replaceChildren(...[
+        h("div", { class: "panel" }, h("h3", { text: "Open a ticket" }),
+          h("div", { class: "row" }, field("Subject", subject), field("Send to", guildSel)), field("Details", body),
+          h("p", { class: "muted small", text: "Never include a game key here. Server staff cannot see keys." }), send),
+        h("div", { class: "panel" }, h("h3", { text: "Your tickets" }),
+          d.mine.length ? h("div", { class: "cards" }, ...d.mine.map(t => row(t, false))) : h("p", { class: "muted", text: "No tickets yet." })),
+        d.staff && h("div", { class: "panel" }, h("h3", { text: d.owner ? "Inbox (all tickets)" : "Inbox (your servers)" }),
+          h("div", { class: "row" }, field("Search", q), field("Show", st)),
+          d.inbox.length ? h("div", { class: "cards" }, ...d.inbox.map(t => row(t, true))) : h("p", { class: "muted", text: "Nothing here." })),
+        d.staff && ticketSettingsPanel(d)
+      ].filter(Boolean));
+    }
+    load().catch(e => holder.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+  }
+
+  function ticketSettingsPanel(d) {
+    const scopes = [...(d.ownerSettings ? [{ id: "*", name: "Tickets with no server queue (you, the owner)", ...d.ownerSettings }] : []), ...d.guilds];
+    const sel = select(scopes.map(s => [s.id, s.name]), scopes[0]?.id);
+    const ch = h("input", { type: "text", placeholder: "Channel ID" }), role = h("input", { type: "text", placeholder: "Staff role ID (optional)" });
+    const cannedBox = h("div"), cTitle = h("input", { type: "text", maxlength: "60", placeholder: "Title, e.g. Try a new key" }), cBody = h("textarea", { maxlength: "1500", placeholder: "Reply text" });
+    const cur = () => scopes.find(s => s.id === sel.value);
+    function paint() {
+      const s = cur(); if (!s) return;
+      ch.value = s.channel_id || ""; role.value = s.staff_role_id || "";
+      cannedBox.replaceChildren(...s.canned.map(c => h("div", { class: "kv" }, h("span", {}, h("b", { text: c.title + " " }), h("span", { class: "muted", text: c.body.slice(0, 80) })),
+        h("button", { class: "btn red small", text: "Remove", onclick: async e => busy(e.currentTarget, async () => { const r = await api("/api/tickets/canned", { guild_id: s.id, remove: c.id }); s.canned = r.canned; paint(); }) }))));
+    }
+    sel.addEventListener("change", paint); paint();
+    const save = h("button", { class: "btn blue", text: "Save", onclick: () => busy(save, async () => { const r = await api("/api/tickets/setup", { guild_id: sel.value, channel_id: ch.value, staff_role_id: role.value }); Object.assign(cur(), r); toast("Saved."); }) });
+    const add = h("button", { class: "btn gray", text: "Add canned reply", onclick: () => busy(add, async () => { const r = await api("/api/tickets/canned", { guild_id: sel.value, title: cTitle.value, body: cBody.value }); cur().canned = r.canned; cTitle.value = ""; cBody.value = ""; paint(); }) });
+    return h("div", { class: "panel" }, h("h3", { text: "Ticket settings" }),
+      h("p", { class: "muted small", text: "With a channel set, new tickets are posted there with Reply, Assign and Resolve buttons. Without one they go to the bot owner. Same as /support setup." }),
+      field("Queue", sel), h("div", { class: "row" }, field("Channel ID", ch), field("Staff role ID", role)), save,
+      h("h4", { text: "Canned replies" }), cannedBox, h("div", { class: "row" }, field("Title", cTitle)), field("Text", cBody), add);
+  }
+
+  async function ticketThread(id) {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Ticket #" + id, ""), holder);
+    async function load() {
+      const d = await api("/api/tickets/one?id=" + encodeURIComponent(id)), t = d.ticket;
+      const who = m => (m.role === "system" ? "System" : m.role === "staff" ? "Staff" : t.user_name || "User");
+      const thread = h("div", { class: "thread" }, ...d.messages.map(m => h("div", { class: "msg " + m.role },
+        h("div", { class: "muted small", text: `${who(m)} · ${new Date(m.at).toLocaleString()}` }), h("div", { text: m.body }))));
+      const box = h("textarea", { maxlength: "1500", placeholder: d.staff ? "Reply to the user" : "Write a message" });
+      const send = h("button", { class: "btn green", text: "Send", onclick: () => busy(send, async () => { await api("/api/tickets/reply", { id: t.id, body: box.value }); await load(); }) });
+      const canned = d.staff && d.canned.length ? select([["", "Insert canned reply…"], ...d.canned.map(c => [String(c.id), c.title])], "") : null;
+      if (canned) canned.addEventListener("change", () => { const c = d.canned.find(x => String(x.id) === canned.value); if (c) box.value = c.body; canned.value = ""; });
+      const act = (label, cls, path, extra) => { const b = h("button", { class: "btn small " + cls, text: label, onclick: () => busy(b, async () => { await api(path, { id: t.id, ...extra }); await load(); }) }); return b; };
+      const tags = h("input", { type: "text", value: t.tags.join(", "), placeholder: "tags, comma separated" });
+      const dl = h("button", { class: "btn gray small", text: "Download transcript", onclick: () => busy(dl, async () => {
+        const r = await api("/api/tickets/transcript?id=" + t.id);
+        const a = h("a", { href: URL.createObjectURL(new Blob([r.text], { type: "text/plain" })), download: r.name }); document.body.append(a); a.click(); a.remove();
+      }) });
+      const stars = t.status === "resolved" || t.status === "closed" ? h("div", { class: "row" }, h("span", { class: "muted", text: t.rating ? `Rated ${"⭐".repeat(t.rating)}` : "Was this helpful?" }),
+        ...(!t.rating && !d.staff ? [1, 2, 3, 4, 5].map(n => { const b = h("button", { class: "btn gray small shrink", text: "⭐".repeat(n), onclick: () => busy(b, async () => { await api("/api/tickets/rate", { id: t.id, rating: n }); await load(); }) }); return b; }) : [])) : null;
+      app.replaceChildren(
+        pageHead(`#${t.id} ${t.subject}`, `${STATUS_ICON[t.status]} ${t.status}${t.tags.length ? " · " + t.tags.join(", ") : ""}`),
+        h("p", {}, h("a", { href: "#/support", text: "← All tickets" })),
+        h("div", { class: "panel" }, thread),
+        t.status !== "closed" && h("div", { class: "panel" }, canned, box, h("div", { class: "row" }, send,
+          d.staff && act("Resolve", "blue", "/api/tickets/status", { status: "resolved" }),
+          d.staff && act(t.assignee_id ? "Unassign" : "Assign to me", "gray", "/api/tickets/assign", { assignee: t.assignee_id ? null : "me" }),
+          act("Close", "red", "/api/tickets/status", { status: "closed" }))),
+        d.staff && h("div", { class: "panel" }, field("Tags", tags), h("div", { class: "row" },
+          (() => { const b = h("button", { class: "btn gray small", text: "Save tags", onclick: () => busy(b, async () => { await api("/api/tickets/tags", { id: t.id, tags: tags.value.split(",") }); await load(); }) }); return b; })())),
+        stars && h("div", { class: "panel" }, stars),
+        d.errors && h("div", { class: "panel" }, h("h4", { text: "Recent bot errors (owner only)" }), h("pre", { class: "logs", text: d.errors.map(l => typeof l === "string" ? l : `${l.time ?? ""} ${l.text ?? l.message ?? ""}`).join("\n") || "None." })),
+        h("div", { class: "panel" }, dl)
+      );
+    }
+    load().catch(e => holder.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+  }
+
+  const VIEWS = { support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();

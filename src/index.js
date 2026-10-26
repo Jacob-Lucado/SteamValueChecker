@@ -30,6 +30,8 @@ import { createDashboard } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
 import { createVault } from "./vault.js";
 import { createGiveawayService } from "./giveaway.js";
+import { createTicketService } from "./tickets.js";
+import { createTicketHandlers } from "./tickethandlers.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
 
 const MAX_TITLES = 100;
@@ -88,8 +90,11 @@ const gwDiscord = {
         } catch { return null; }
     }
 };
+const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
+const tickets = createTicketService({ db, discord: gwDiscord, ownerId: cfg.ownerId, publicUrl: publicBase, log: m => console.log(`[tickets] ${m}`) });
+const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
 const giveaways = cfg.keySecret
-    ? createGiveawayService({ db, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
+    ? createGiveawayService({ db, tickets, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
     : null;
 const gw = createGiveawayHandlers({ db, giveaways });
 
@@ -121,6 +126,9 @@ client.once(Events.ClientReady, c => {
             { onError: err => { console.error(`[giveaway] ${err.name}: ${err.message}`); ops.error("giveaways", err); } }
         );
     } else console.log("Giveaways are off (set KEY_ENCRYPTION_SECRET to turn them on).");
+
+    // Support tickets: quiet ones resolve and close on their own
+    schedule(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
 
     // Bundles, giveaways, weekly digests, library snapshots, cleanup and the daily backup
     schedule(
@@ -264,6 +272,8 @@ client.on(Events.InteractionCreate, async i => {
         try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
     }
+    if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
+    if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("gw_")) return gw.handleModal(i);
     if (i.isButton() && i.customId.startsWith(`${STOP_ID}:`)) {
@@ -301,6 +311,7 @@ client.on(Events.InteractionCreate, async i => {
             case "leaderboard": return await handlers.handleLeaderboard(i);
             case "freegames": return await handlers.handleFreeGames(i);
             case "status": return await handlers.handleStatus(i);
+            case "support": return await ticketUi.handleCommand(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
             case "serverstats": return await handlers.handleServerStats(i);
@@ -323,7 +334,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), config: { ...d, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), config: { ...d, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

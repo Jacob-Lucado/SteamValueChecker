@@ -380,3 +380,11 @@ textarea[autocomplete="off"] { font-family: ui-monospace, Menlo, Consolas, monos
 .st-bar { border-radius: 3px; background: var(--line); }
 .st-bar.good { background: var(--good); } .st-bar.warn { background: var(--warn); } .st-bar.bad { background: #ed4245; }
 .st-axis { display: flex; justify-content: space-between; margin-top: 8px; }
+
+/* support */
+.thread { display: grid; gap: 10px; }
+.msg { padding: 10px 14px; border-radius: 12px; background: var(--soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.staff { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.msg.system { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+.cards { display: grid; gap: 10px; }
+pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-wrap; }

@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { giveawaySchema, giveawayStore } from "./gwstore.js";
+import { ticketSchema, ticketStore } from "./ticketstore.js";
 
 export const MAX_ITEMS_PER_USER = 200;
 export const MAX_LIBRARY_PER_USER = 500;
@@ -118,7 +119,8 @@ CREATE TABLE IF NOT EXISTS status_meta (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
-${giveawaySchema}`;
+${giveawaySchema}
+${ticketSchema}`;
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -158,6 +160,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const all = (sql, ...p) => db.prepare(sql).all(...p);
     const clean = o => (o ? { ...o } : o); // node:sqlite rows have a null prototype
     const giveaways = giveawayStore({ db, run, get, all, clean, now });
+    const tickets = ticketStore({ run, get, all, clean, now });
 
     function ensureUser(discordId, guildId = null) {
         run("INSERT OR IGNORE INTO users (discord_id, guild_id, created_at) VALUES (?, ?, ?)", discordId, guildId, now());
@@ -389,7 +392,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     function exportUser(discordId) {
         const u = getUser(discordId);
         if (!u) return null;
-        return { user: u, items: listItems(discordId), library: listLibrary(discordId), alerts: listAlerts(discordId, 500) };
+        const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
+        return { user: u, items: listItems(discordId), library: listLibrary(discordId), alerts: listAlerts(discordId, 500), support_tickets: support };
     }
 
     function deleteUser(discordId) {
@@ -398,6 +402,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             for (const t of ["items", "library", "library_snapshots", "alert_log", "seen"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
+            tickets.deleteUserTickets(discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");
@@ -427,6 +432,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         setGroupMin, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, backupTo, exportUser, deleteUser, ...giveaways, close: () => db.close()
+        stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, close: () => db.close()
     };
 }

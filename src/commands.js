@@ -238,7 +238,17 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
+const support = new SlashCommandBuilder()
+    .setName("support")
+    .setDescription("Get help from the bot's team")
+    .addSubcommand(s => s.setName("open").setDescription("Open a support ticket"))
+    .addSubcommand(s => s.setName("mine").setDescription("See your tickets"))
+    .addSubcommand(s => s.setName("setup").setDescription("Staff: choose the channel where tickets are posted")
+        .addChannelOption(o => o.setName("channel").setDescription("Text channel").setRequired(true).addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addRoleOption(o => o.setName("staffrole").setDescription("Role that may answer tickets (Manage Server always can)"))
+        .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
+
 export const commands = [
-    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, support, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, serverlist, leaderboard, serverstats, giveaway].map(serverOnly)
 ].map(c => c.toJSON());

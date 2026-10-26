@@ -78,7 +78,7 @@ function pickOne(pool, rand) {
     return pool.pop();
 }
 
-export function createGiveawayService({ db, vault, discord, itad = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
+export function createGiveawayService({ db, tickets = null, vault, discord, itad = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
     const must = id => {
         const g = db.getGiveaway(Number(id));
         if (!g) throw new UserError("I can't find that giveaway.");
@@ -357,6 +357,11 @@ export function createGiveawayService({ db, vault, discord, itad = null, multiBa
         const g = must(k.giveaway_id);
         db.markProblem(k.id);
         await refresh(g.id);
+        // Also opens a support ticket (the key itself is never copied into it)
+        if (tickets) {
+            try { await tickets.open({ userId, guildId: g.guild_id, subject: `Key problem: ${k.label} (giveaway #${g.id})`, body: `The key for ${k.label} did not work. Giveaway #${g.id}.`, giveawayId: g.id }); }
+            catch (e) { log(`could not open a ticket for a key problem: ${e?.message}`); }
+        }
         const told = await dmHost(g, hostNote(g, `<@${userId}> says the key for **${k.label}** did not work.\nSend a new one with the replace command: choose giveaway #${g.id} and the winner.`));
         return { hostTold: told };
     }
