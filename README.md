@@ -218,3 +218,17 @@ branding/       Logo and banner
 Price data by [IsThereAnyDeal](https://isthereanydeal.com). Not affiliated with or endorsed by Valve, Steam, Fanatical or IsThereAnyDeal. Steam is a trademark of Valve Corporation.
 
 Made by [Jacob Lucado](https://x.com/twit_user69).
+
+## Deploy on Fly.io
+
+```bash
+fly launch --no-deploy --copy-config      # pick your app name; say no to a database
+fly volumes create svc_data --size 1 --region iad
+fly scale count 1                         # SQLite and dashboard sessions need exactly one machine
+fly secrets set DISCORD_TOKEN=... CLIENT_ID=... ITAD_API_KEY=... KEY_ENCRYPTION_SECRET=... \
+  DISCORD_CLIENT_SECRET=... DASHBOARD_URL=https://YOUR-APP.fly.dev OWNER_DISCORD_ID=...
+fly deploy
+npm run register                          # once, from your own computer with a .env, or use GUILD_ID for a test server
+```
+
+Add `https://YOUR-APP.fly.dev/auth/callback` as a redirect under OAuth2 in the Discord Developer Portal.
