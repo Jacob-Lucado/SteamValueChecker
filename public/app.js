@@ -109,14 +109,14 @@
   }
 
   // ---------- chrome ----------
-  const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["mydata", "My Data"], ["help", "Help"], ["about", "About"], ["admin", "Admin"]];
+  const NAV = [["home", "Home"], ["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["mydata", "My Data"], ["help", "Help"], ["about", "About"], ["admin", "Admin"]];
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0];
 
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
     nav.replaceChildren(...NAV
-      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : id === "giveaways" ? state.me && state.me.giveaways && state.me.servers.some(g => g.manageable) : state.me || id === "help" || id === "about"))
+      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : id === "giveaways" ? state.me && state.me.giveaways && state.me.servers.some(g => g.manageable) : state.me || id === "help" || id === "about" || id === "home"))
       .map(([id, text]) => h("a", { href: "#/" + id, class: view === id ? "active" : "", text })));
 
     const acct = document.getElementById("account");
@@ -139,17 +139,84 @@
   // ---------- landing ----------
   function landing() {
     const failed = new URLSearchParams(location.search).get("error");
-    app.replaceChildren(
-      h("section", { class: "hero" },
-        h("h1", { text: "What is your game library worth?" }),
-        h("p", { text: "Price a list of games, keep a wishlist, and get told when something goes on sale. Everything the Discord bot does, in your browser." }),
-        failed && h("div", { class: "notice warn", text: "Sign-in did not work. Please try again." }),
-        h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })),
-      h("div", { class: "grid two" },
-        h("div", { class: "panel" }, h("h3", { text: "Value Checker" }), h("p", { text: "MSRP, the current Steam price, the cheapest price right now across stores, and what you saved against what you paid." })),
-        h("div", { class: "panel" }, h("h3", { text: "Wishlist and alerts" }), h("p", { text: "Import your public Steam wishlist and choose when to be alerted: any sale, a percentage off, a price, or an all-time low." }))),
+    const ab = state.about;
+    const n = v => (v === null || v === undefined ? null : Number(v).toLocaleString());
+    const invite = state.cfg && state.cfg.inviteUrl;
+    const cta = (extra = "") => h("div", { class: "lp-cta " + extra },
+      invite && ext(invite, "Add to Discord", "btn green big"),
+      state.me ? h("a", { class: "btn blue big", href: "#/value", text: "Open the dashboard" }) : h("a", { class: "btn blue big", href: "/auth/login", text: "Sign in with Discord" }));
+
+    // A small mock of what a sale alert looks like in Discord.
+    const mock = h("div", { class: "dc-card", "aria-hidden": "true" },
+      h("div", { class: "dc-bot" }, h("img", { src: "/logo.png", alt: "", width: "36", height: "36" }), h("b", { text: "Steam Value Checker" }), h("span", { class: "dc-tag", text: "APP" })),
+      h("div", { class: "dc-embed" },
+        h("div", { class: "dc-title", text: "Wanderstop is 61% off" }),
+        h("div", { class: "dc-line", text: "🏆 All-time low" }),
+        h("div", { class: "dc-line", text: "$9.87 at Fanatical (you save $15.12)" }),
+        h("div", { class: "dc-fields" }, h("span", {}, h("b", { text: "Regular" }), "$24.99"), h("span", {}, h("b", { text: "Discount" }), "61% off"), h("span", {}, h("b", { text: "All-time low" }), "$9.83")),
+        h("div", { class: "dc-art", text: "game art" })),
+      h("div", { class: "dc-buttons" }, h("span", { class: "dc-btn link", text: "View deal at Fanatical" }), h("span", { class: "dc-btn link", text: "Steam page" }), h("span", { class: "dc-btn link", text: "Price history" }), h("span", { class: "dc-btn", text: "Stop watching" })));
+
+    const feature = (icon, title, text) => h("div", { class: "lp-feature" }, h("div", { class: "lp-icon", text: icon }), h("h3", { text: title }), h("p", { text }));
+    const step = (num, title, text) => h("div", { class: "lp-step" }, h("div", { class: "lp-num", text: num }), h("h3", { text: title }), h("p", { text }));
+    const stat = (label, value) => value && h("div", { class: "lp-stat" }, h("div", { class: "v", text: value }), h("div", { class: "k", text: label }));
+
+    app.replaceChildren(...[
+      h("section", { class: "lp-hero" },
+        h("div", { class: "lp-hero-text" },
+          failed && h("div", { class: "notice warn", text: "Sign-in did not work. Please try again." }),
+          h("div", { class: "lp-kicker", text: "Free Discord bot for PC gamers" }),
+          h("h1", { text: "Know what your games are worth. Never miss a sale." }),
+          h("p", { class: "lp-sub", text: "Price your whole library, watch your wishlist for deals, get told when games are free, and run key giveaways in your server. All from Discord, with a dashboard that does it all too." }),
+          cta(),
+          h("p", { class: "muted small", text: "No passwords, no game keys, no charge. Sign-in shares only your name, avatar and server list." })),
+        h("div", { class: "lp-hero-art" }, mock)),
+
+      ab && (n(ab.servers) || n(ab.gamesWatched)) ? h("section", { class: "lp-stats" },
+        stat("Servers", n(ab.servers)), stat("Games watched", n(ab.gamesWatched)), stat("Alerts in the last 24h", n(ab.alerts24h)), stat("Giveaway keys redeemed", n(ab.redeemed))) : null,
+
+      h("section", { class: "lp-section" },
+        h("h2", { text: "Everything a game buyer needs" }),
+        h("div", { class: "lp-grid" },
+          feature("💸", "Library value", "MSRP, the current Steam price, the cheapest price right now across stores, and how much you really saved against what you paid."),
+          feature("🔔", "Wishlist sale alerts", "Import your public Steam wishlist. Choose any sale, a percent off, a price, or an all-time low. Alerts come with game art and a deal verdict."),
+          feature("🎁", "Free game alerts", "Hear when a game is free on Steam, Epic, GOG and more, with one-click Claim buttons. Or run /freegames any time."),
+          feature("🏆", "Key giveaways", "Server owners run giveaways with many keys, custom art, GIFs or video. Winners claim by button, confirm it worked, and a vouch is posted."),
+          feature("👥", "Server tools", "A shared server wishlist with votes, an opt-in savings leaderboard, and group pings when several members want the same deal."),
+          feature("📊", "A full dashboard", "Everything the commands do, in your browser: charts, price history, bulk actions and giveaway management."))),
+
+      h("section", { class: "lp-section" },
+        h("h2", { text: "Up and running in a minute" }),
+        h("div", { class: "lp-grid three" },
+          step("1", "Add the bot", "Invite it to your server. It only asks for permission to read, send messages and embed links."),
+          step("2", "Bring your games", "Import your Steam wishlist, upload a FanaticalGrabber export, or add games by name."),
+          step("3", "Get the good stuff", "Sale alerts in your DMs or a server channel, free game alerts, and giveaways your community will love."))),
+
+      h("section", { class: "lp-section lp-split" },
+        h("div", {},
+          h("h2", { text: "Giveaways people trust" }),
+          h("p", { class: "lp-sub", text: "Prize keys are encrypted the moment they are saved and sent only to the winner. When the winner confirms the key worked, it is wiped and a public vouch goes up automatically." }),
+          h("ul", { class: "lp-list" },
+            h("li", { text: "Add many keys to one giveaway, grouped neatly on the post" }),
+            h("li", { text: "Winner presses Claim key. If DMs are closed, they get the key privately in the channel" }),
+            h("li", { text: "Unclaimed prizes are redrawn. Unused keys come back to you" }),
+            h("li", { text: "Custom art, GIFs or video, role requirements, bonus entries and more" }))),
+        h("div", { class: "lp-flow" },
+          ...[["🎉", "Giveaway ends", "Winners are drawn and announced"], ["🔑", "Claim key", "The key arrives by DM"], ["✅", "Confirm it worked", "One button for the winner"], ["📣", "Vouch posted", "Automatic, in your vouches channel"]]
+            .map(([i, t, s]) => h("div", { class: "lp-flow-step" }, h("span", { class: "lp-flow-icon", text: i }), h("div", {}, h("b", { text: t }), h("div", { class: "muted small", text: s })))))),
+
       fanaticalCard(),
-      h("p", { class: "muted small", text: "Signing in with Discord shares only your name, avatar and server list with this dashboard. No passwords and no game keys are ever requested." }));
+
+      h("section", { class: "lp-section lp-trust" },
+        h("h2", { text: "Built to respect your data" }),
+        h("div", { class: "lp-grid three" },
+          feature("🔒", "No logins, ever", "The bot never asks for Steam, Fanatical or store passwords, and ignores anything that looks like a key in chat."),
+          feature("🧾", "Only what it needs", "Game titles go to IsThereAnyDeal for prices. Nothing else leaves the bot."),
+          feature("🗑️", "Yours to delete", "Export or delete everything stored about you with /mydata, or from the dashboard."))),
+
+      h("section", { class: "lp-final" },
+        h("h2", { text: "Ready to find your next deal?" }),
+        cta("center"))].filter(Boolean));
   }
 
   // ---------- value checker ----------
@@ -890,12 +957,12 @@
   }
 
   // ---------- routing ----------
-  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, admin: adminView };
+  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();
     const view = currentView();
-    if (!state.me && view !== "help" && view !== "about") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home") return landing();
     (VIEWS[view] || (state.me ? valueView : landing))();
     window.scrollTo(0, 0);
   }
