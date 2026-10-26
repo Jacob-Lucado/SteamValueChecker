@@ -63,3 +63,33 @@ test("import is capped and says so", async () => {
     assert.equal(r.truncated, true);
     assert.equal(r.complete, false);
 });
+
+test("import takes titles from Steam in bulk and only asks ITAD for the ones Steam did not name", async () => {
+    const urls = [];
+    const fetchImpl = async url => {
+        urls.push(String(url));
+        const body = String(url).includes("IStoreBrowseService")
+            ? { response: { store_items: [{ appid: 1, name: "Alpha" }, { appid: 2, name: "Beta" }] } }
+            : { response: { items: [{ appid: 1 }, { appid: 2 }, { appid: 3 }] } };
+        return { ok: true, status: 200, json: async () => body };
+    };
+    const asked = [];
+    const itad = {
+        lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, "id-" + i.split("/")[1]])),
+        getTitle: async id => { asked.push(id); return { title: "From ITAD " + id }; }
+    };
+    const r = await importWishlist("76561198000000000", itad, { fetchImpl });
+    assert.deepEqual(r.games.map(g => g.title), ["Alpha", "Beta", "From ITAD id-3"]);
+    assert.deepEqual(asked, ["id-3"]);
+    assert.equal(r.complete, true);
+    assert.equal(urls.filter(u => u.includes("IStoreBrowseService")).length, 1);
+});
+
+test("if Steam's name lookup fails, import falls back to ITAD for every title", async () => {
+    const fetchImpl = async url => String(url).includes("IStoreBrowseService")
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => ({ response: { items: [{ appid: 1 }] } }) };
+    const itad = { lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, "id-1"])), getTitle: async () => ({ title: "Fallback" }) };
+    const r = await importWishlist("76561198000000000", itad, { fetchImpl });
+    assert.deepEqual(r.games.map(g => g.title), ["Fallback"]);
+});

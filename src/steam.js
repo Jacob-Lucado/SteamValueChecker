@@ -62,12 +62,35 @@ export async function fetchWishlistAppIds(steamid, fetchImpl = globalThis.fetch)
     return ids;
 }
 
+/**
+ * Game names for Steam app ids, in batches, straight from Steam's store. Returns Map(appid -> name).
+ * Best effort: any failure just returns what was found, and the caller falls back to IsThereAnyDeal for the rest.
+ */
+export async function fetchSteamNames(appIds, fetchImpl = globalThis.fetch, { batch = 100 } = {}) {
+    const names = new Map();
+    for (let i = 0; i < appIds.length; i += batch) {
+        const ids = appIds.slice(i, i + batch).map(appid => ({ appid }));
+        const input = encodeURIComponent(JSON.stringify({ ids, context: { language: "english", country_code: "US" }, data_request: {} }));
+        try {
+            const res = await get(fetchImpl, `https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${input}`);
+            if (!res.ok) continue;
+            const data = await res.json();
+            for (const it of data?.response?.store_items ?? []) {
+                const appid = Number(it?.appid ?? it?.id);
+                if (Number.isInteger(appid) && typeof it?.name === "string" && it.name.trim()) names.set(appid, it.name.trim());
+            }
+        } catch { /* fall back to the other source */ }
+    }
+    return names;
+}
+
 const PRIVATE_MSG =
     "That wishlist is empty or not public. In Steam, open Profile > Edit Profile > Privacy Settings and set **Game details** to Public, then try again.";
 
 /**
  * Wishlist -> ITAD games ready to store. `itad` needs lookupShopIds and getTitle.
- * Titles are fetched one at a time by ITAD's API, so the import is capped at MAX_IMPORT games.
+ * Titles come from Steam in bulk. Only games Steam did not name are looked up one at a time on ITAD,
+ * so the import is capped at MAX_IMPORT games.
  */
 export async function importWishlist(input, itad, { fetchImpl = globalThis.fetch, max = MAX_IMPORT, onlyIds = null } = {}) {
     const parsed = parseProfileInput(input);
@@ -82,11 +105,20 @@ export async function importWishlist(input, itad, { fetchImpl = globalThis.fetch
     const unique = [...new Set(matched)];
 
     const games = [];
+    // Steam names first (a few requests for the whole list), then ITAD only for the ones Steam did not name.
+    const steamNames = await fetchSteamNames(take, fetchImpl);
+    const itadByApp = new Map(take.map(a => [a, map.get(`app/${a}`)]));
+    const named = new Set();
+    for (const [appid, itadId] of itadByApp) {
+        const name = steamNames.get(appid);
+        if (itadId && name && !named.has(itadId)) { named.add(itadId); games.push({ itad_id: itadId, title: name }); }
+    }
+    const rest = unique.filter(id => !named.has(id));
     let next = 0;
     let rateLimited = false;
     const worker = async () => {
-        while (next < unique.length && !rateLimited) {
-            const id = unique[next++];
+        while (next < rest.length && !rateLimited) {
+            const id = rest[next++];
             try {
                 const info = await itad.getTitle(id);
                 if (info) games.push({ itad_id: id, title: info.title });
@@ -96,7 +128,7 @@ export async function importWishlist(input, itad, { fetchImpl = globalThis.fetch
             }
         }
     };
-    await Promise.all(Array.from({ length: Math.min(4, unique.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(4, rest.length) }, worker));
     games.sort((a, b) => a.title.localeCompare(b.title));
 
     return {
