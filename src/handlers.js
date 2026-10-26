@@ -7,7 +7,7 @@ import {
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
-import { findItem, suggest, viewRows, exportJson } from "./wishlist.js";
+import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { wishlistEmbed, WISHLIST_PER_PAGE } from "./render.js";
 
 export class UserError extends Error {}
@@ -28,8 +28,8 @@ function cooldown(i, key) {
 
 /** Turns known errors into a message for the user and logs anything else without user input. */
 async function failed(i, tag, err) {
-    const known = err instanceof UserError || err instanceof ItadError || err instanceof SteamError;
-    if (!(err instanceof UserError)) console.error(`[${tag}] ${err.name}: ${err.message}`);
+    const known = err instanceof UserError || err instanceof WishlistError || err instanceof ItadError || err instanceof SteamError;
+    if (!(err instanceof UserError || err instanceof WishlistError)) console.error(`[${tag}] ${err.name}: ${err.message}`);
     const content = known ? err.message : "Something went wrong. Try again in a moment.";
     if (i.deferred || i.replied) await i.editReply({ content, embeds: [], components: [] }).catch(() => {});
     else await eph(i, content).catch(() => {});
@@ -52,11 +52,8 @@ export function createHandlers({ db, itad }) {
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         try {
             const r = await importWishlist(i.options.getString("profile", true), itad);
-            if (!r.games.length) throw new UserError("I read the wishlist, but none of those games could be matched to price data.");
-
-            const res = db.addItems(i.user.id, r.games, { source: "steam" });
-            db.updateUser(i.user.id, { steam_id: r.steamid });
-            const pruned = r.complete ? db.removeSteamNotIn(i.user.id, r.games.map(g => g.itad_id)) : 0;
+            const res = applySteamImport(db, i.user.id, r);
+            const pruned = res.pruned;
 
             const lines = [`Imported **${res.added}** new game${res.added === 1 ? "" : "s"} from your Steam wishlist (${res.existing} already on your list).`];
             if (pruned) lines.push(`Removed ${pruned} game${pruned === 1 ? "" : "s"} that left your Steam wishlist.`);
@@ -77,19 +74,10 @@ export function createHandlers({ db, itad }) {
         cooldown(i, "add");
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         try {
-            let trig;
-            try { trig = parseTrigger(i.options.getString("type"), i.options.getNumber("value")); }
-            catch (e) { throw new UserError(e.message); }
-
-            const title = i.options.getString("title", true).trim();
-            const [hit] = await itad.lookupTitles([title]);
-            if (!hit?.id) throw new UserError(`I could not find a game called **${title}**. Check the spelling or try the full title.`);
-
-            const name = hit.approx ? hit.matched : title;
-            const res = db.addItems(i.user.id, [{ itad_id: hit.id, title: name }], { trigger: trig.type, value: trig.value });
-            if (res.skippedForLimit) throw new UserError("Your list is full (200 games). Remove one first.");
-            if (res.existing) throw new UserError(`**${name}** is already on your list.`);
-            await i.editReply(`Added **${name}**${hit.approx ? " (closest match)" : ""}. Alert: ${describeTrigger({ trigger_type: trig.type, trigger_value: trig.value })}.`);
+            const out = await addGameByTitle(
+                db, itad, i.user.id, i.options.getString("title", true), i.options.getString("type"), i.options.getNumber("value")
+            );
+            await i.editReply(`Added **${out.name}**${out.approx ? " (closest match)" : ""}. Alert: ${out.trigger}.`);
         } catch (err) {
             await failed(i, "wishlist add", err);
         }

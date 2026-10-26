@@ -42,6 +42,15 @@ Your data is kept until you delete it with `/mydata delete`. Removing the bot fr
 User input and results are never written to logs. Error logs contain only technical error messages.
 Discord keeps your messages and the bot's replies according to Discord's own policies.
 
+## The web dashboard
+
+If the bot's owner turns on the dashboard, you can sign in with Discord instead of using commands.
+
+- **What Discord shares:** the `identify` and `guilds` scopes, which give the dashboard your Discord ID, name, avatar and the list of servers you are in (with your permissions there, to know where you can set an alert channel). No email, no messages, no passwords.
+- **What is kept:** your name, avatar link and server list are held **in memory only** for your session (7 days at most) and are lost when the bot restarts. Discord's access token is used once at sign-in and then discarded. The wishlist and settings you create are stored exactly as described under Storage.
+- **Cookies:** one strictly necessary cookie that keeps you signed in, and a short-lived one used during sign-in. There is no tracking or analytics.
+- **Alert channels:** when a server admin chooses an alert channel on the dashboard, the bot posts a short confirmation there.
+
 ## How alerts reach you
 
 - **Direct message by default.** If you use wishlist alerts, the bot will message you without being asked each time. Pause them with `/alerts pause`, or delete your data with `/mydata delete`.

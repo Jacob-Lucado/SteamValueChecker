@@ -13,6 +13,8 @@ import { openDb } from "./db.js";
 import { createHandlers, UserError } from "./handlers.js";
 import { createNotifier } from "./notify.js";
 import { runCycle, schedule } from "./poller.js";
+import { createDashboard } from "./dashboard/server.js";
+import { createDiscordRest } from "./dashboard/discord.js";
 
 const MAX_TITLES = 100;
 const MAX_FILE_BYTES = 200_000;
@@ -182,6 +184,18 @@ client.on(Events.InteractionCreate, async i => {
         console.error(`[${i.commandName}] ${err.name}: ${err.message}`);
     }
 });
+
+if (cfg.dashboard) {
+    const d = cfg.dashboard;
+    const rest = createDiscordRest({
+        clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
+    });
+    const dashboard = createDashboard({ db, itad, rest, config: { ...d, clientId: cfg.clientId }, log: m => console.error(`[dashboard] ${m}`) });
+    dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
+        .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
+} else {
+    console.log("Dashboard is off (set DASHBOARD_URL and DISCORD_CLIENT_SECRET to turn it on).");
+}
 
 process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.message ?? err}`));
 

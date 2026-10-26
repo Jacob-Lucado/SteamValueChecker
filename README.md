@@ -83,6 +83,20 @@ The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, min
 
 Usage notes, credits and a plain-language privacy summary.
 
+## Web dashboard
+
+Everything the slash commands do is also in a browser: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a Steam-style look and links to [FanaticalGrabber](https://github.com/Jacob-Lucado/FanaticalGrabber).
+
+It is off unless you turn it on. To enable it:
+
+1. In the [Developer Portal](https://discord.com/developers/applications) open **OAuth2**, copy the **Client Secret**, and under **Redirects** add `<DASHBOARD_URL>/auth/callback` (for a local test, `http://localhost:3000/auth/callback`).
+2. Set `DISCORD_CLIENT_SECRET` and `DASHBOARD_URL` in `.env` (and optionally `DASHBOARD_PORT`, default 3000, and `DASHBOARD_HOST`, default `127.0.0.1`).
+3. Run `npm start` and open the address.
+
+For a public site, put a reverse proxy with HTTPS (Caddy, nginx, a Cloudflare tunnel) in front and use that `https://` address as `DASHBOARD_URL`. Cookies are marked `Secure` when the address is HTTPS. Sign-in uses the `identify` and `guilds` scopes only, and sessions are kept in memory, so a restart signs everyone out.
+
+The dashboard runs inside the bot process and shares its database and price cache. Setting an alert channel there posts a short confirmation message, which also confirms the bot can post in that channel.
+
 ## Paid vs value
 
 When you give an amount the bot adds:
@@ -113,7 +127,7 @@ You need Node 22.13 or newer (the bot uses Node's built-in SQLite), a Discord ap
    cd SteamValueChecker
    npm install
    ```
-4. **Configure:** copy `.env.example` to `.env` and fill in `DISCORD_TOKEN`, `CLIENT_ID`, `ITAD_API_KEY`, and optionally `GUILD_ID` for instant command updates on a test server. `DATABASE_PATH` and `CHECK_INTERVAL_MINUTES` are optional.
+4. **Configure:** copy `.env.example` to `.env` and fill in `DISCORD_TOKEN`, `CLIENT_ID`, `ITAD_API_KEY`, and optionally `GUILD_ID` for instant command updates on a test server. `DATABASE_PATH`, `CHECK_INTERVAL_MINUTES` and the dashboard settings (see Web dashboard) are optional.
 5. **Invite the bot** using the link on the app's **Installation** tab, with the scopes `bot` and `applications.commands` and no extra permissions.
 6. **Register the commands and start:**
    ```bash
@@ -147,6 +161,10 @@ src/
   poller.js     The scheduled price check
   wishlist.js   Finding games and building the wishlist view
   handlers.js   Discord handlers for the wishlist commands
+  value.js      The /value pipeline, shared with the dashboard
+  constants.js  Regions, alert types and links shared by the bot and dashboard
+  dashboard/    Web dashboard: server.js (API and Discord sign-in), discord.js (REST calls)
+public/         Dashboard pages: index.html, style.css, app.js
   text.js       /help, /about and /privacy copy
 test/           node:test suites
 branding/       Logo and banner

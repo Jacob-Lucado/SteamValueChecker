@@ -1,13 +1,7 @@
 import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 
-export const REGIONS = [
-    { name: "United States (USD)", value: "US" },
-    { name: "United Kingdom (GBP)", value: "GB" },
-    { name: "Europe - Germany (EUR)", value: "DE" },
-    { name: "Canada (CAD)", value: "CA" },
-    { name: "Australia (AUD)", value: "AU" },
-    { name: "Brazil (BRL)", value: "BR" }
-];
+import { REGIONS, ALERT_TYPES } from "./constants.js";
+export { REGIONS };
 
 const value = new SlashCommandBuilder()
     .setName("value")
@@ -48,12 +42,6 @@ const help = new SlashCommandBuilder().setName("help").setDescription("How to us
 const about = new SlashCommandBuilder().setName("about").setDescription("About this bot and its price data");
 const privacy = new SlashCommandBuilder().setName("privacy").setDescription("What the bot does and does not do with your data");
 
-const ALERT_TYPES = [
-    { name: "Any sale", value: "any" },
-    { name: "A percentage off or more", value: "percent" },
-    { name: "A price or lower", value: "price" },
-    { name: "All-time low", value: "atl" }
-];
 const alertType = o => o.setName("type").setDescription("When to alert you").addChoices(...ALERT_TYPES);
 const alertValue = o => o
     .setName("value")

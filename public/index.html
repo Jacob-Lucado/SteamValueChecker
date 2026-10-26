@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steam Value Checker Dashboard</title>
+<meta name="description" content="Price your game library, manage your wishlist and sale alerts.">
+<meta name="theme-color" content="#171a21">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/"><img src="/logo.png" alt="" width="34" height="34"><span>STEAM VALUE CHECKER</span></a>
+    <nav id="nav" aria-label="Main"></nav>
+    <div id="account" class="account"></div>
+  </div>
+</header>
+<main id="app" class="page"><p class="muted">Loading…</p></main>
+<footer class="footer">
+  <div class="footer-inner">
+    <span>Prices by <a href="https://isthereanydeal.com" target="_blank" rel="noopener noreferrer">IsThereAnyDeal</a>. Not affiliated with Valve, Steam, Fanatical or IsThereAnyDeal.</span>
+    <span id="footer-links"></span>
+  </div>
+</footer>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<noscript><p class="page">This dashboard needs JavaScript.</p></noscript>
+<script src="/app.js" defer></script>
+</body>
+</html>

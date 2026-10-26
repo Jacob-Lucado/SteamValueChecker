@@ -14,6 +14,13 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
         itadKey: env.ITAD_API_KEY,
         dbPath: env.DATABASE_PATH || "data/steamvaluechecker.db",
         // Prices are cached for 30 minutes, so checking more often than that gains nothing.
+        // The web dashboard starts only when these are set. DASHBOARD_URL is the public address, e.g. https://bot.example.com
+        dashboard: env.DASHBOARD_URL && env.DISCORD_CLIENT_SECRET ? {
+            publicUrl: env.DASHBOARD_URL.replace(/\/+$/, ""),
+            clientSecret: env.DISCORD_CLIENT_SECRET,
+            port: Number(env.DASHBOARD_PORT) || 3000,
+            host: env.DASHBOARD_HOST || "127.0.0.1"
+        } : null,
         checkEveryMinutes: Math.max(30, Number(env.CHECK_INTERVAL_MINUTES) || 60)
     };
 }

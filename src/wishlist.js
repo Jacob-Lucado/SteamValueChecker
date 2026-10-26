@@ -1,7 +1,7 @@
 // Wishlist logic that does not depend on Discord: finding games, building the overview rows.
 
 import { summarize } from "./report.js";
-import { current, describeTrigger } from "./alerts.js";
+import { current, describeTrigger, parseTrigger } from "./alerts.js";
 
 /** Finds one of the user's games by title. Returns { item } | { ambiguous: [titles] } | { none: true }. */
 export function findItem(items, query) {
@@ -32,7 +32,11 @@ export async function viewRows(db, itad, user) {
     const rows = items.map(it => {
         const s = summarize(prices.get(it.itad_id), { majorOnly: user.stores === "major" });
         const now = current(s);
-        return { title: it.title, best: s.best, discount: now.discount, alert: describeTrigger(it), currency: s.currency };
+        return {
+            itad_id: it.itad_id, title: it.title, source: it.source,
+            best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
+            alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value
+        };
     });
     rows.sort((a, b) => b.discount - a.discount || a.title.localeCompare(b.title));
     return { rows, currency: rows.find(r => r.currency)?.currency ?? "USD" };
@@ -54,4 +58,32 @@ export function exportJson(db, userId) {
             alert: describeTrigger(i), last_alert_price: i.last_alert_price
         }))
     }, null, 2);
+}
+
+export class WishlistError extends Error {}
+
+/** Looks a title up and adds it with an alert rule. Shared by the Discord command and the dashboard. */
+export async function addGameByTitle(db, itad, userId, rawTitle, type, value) {
+    let trig;
+    try { trig = parseTrigger(type, value); } catch (e) { throw new WishlistError(e.message); }
+    const title = String(rawTitle ?? "").trim().slice(0, 100);
+    if (!title) throw new WishlistError("Type a game title.");
+
+    const [hit] = await itad.lookupTitles([title]);
+    if (!hit?.id) throw new WishlistError(`I could not find a game called ${title}. Check the spelling or try the full title.`);
+
+    const name = hit.approx ? hit.matched : title;
+    const res = db.addItems(userId, [{ itad_id: hit.id, title: name }], { trigger: trig.type, value: trig.value });
+    if (res.skippedForLimit) throw new WishlistError("Your list is full (200 games). Remove one first.");
+    if (res.existing) throw new WishlistError(`${name} is already on your list.`);
+    return { name, approx: hit.approx, trigger: describeTrigger({ trigger_type: trig.type, trigger_value: trig.value }) };
+}
+
+/** Stores the result of steam.importWishlist(). Shared by the Discord command and the dashboard. */
+export function applySteamImport(db, userId, r) {
+    if (!r.games.length) throw new WishlistError("I read the wishlist, but none of those games could be matched to price data.");
+    const res = db.addItems(userId, r.games, { source: "steam" });
+    db.updateUser(userId, { steam_id: r.steamid });
+    const pruned = r.complete ? db.removeSteamNotIn(userId, r.games.map(g => g.itad_id)) : 0;
+    return { ...res, pruned, unmatched: r.unmatched, truncated: r.truncated, total: r.total };
 }
