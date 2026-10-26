@@ -12,7 +12,7 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
         clientId: env.CLIENT_ID,
         guildId: env.GUILD_ID || null,
         // 1 = register commands globally (needed for installs on a person's account) even if GUILD_ID is set
-        globalCommands: env.GLOBAL_COMMANDS === "1",
+        globalCommands: env.GLOBAL_COMMANDS === "1" || Boolean(env.FLY_APP_NAME), // on Fly this is the live bot, so commands must be global (DMs, user installs)
         itadKey: env.ITAD_API_KEY,
         dbPath: env.DATABASE_PATH || "data/steamvaluechecker.db",
         // Prices are cached for 30 minutes, so checking more often than that gains nothing.
