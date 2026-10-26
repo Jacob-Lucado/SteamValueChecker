@@ -1,6 +1,6 @@
-# fly.toml app configuration file generated for steamvaluechecker on 2026-10-26T08:06:37Z
+# fly.toml app configuration file generated for steamvaluechecker on 2026-10-26T19:44:46Z
 #
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+# See https://docs.fly.io/reference/configuration for information about how to use this file.
 #
 
 app = 'steamvaluechecker'
@@ -30,6 +30,5 @@ primary_region = 'iad'
   size = 'shared-cpu-1x'
   memory = '512mb'
 
-# A Discord bot must always be running: restart it whenever it stops, whatever the exit code.
 [[restart]]
   policy = 'always'
