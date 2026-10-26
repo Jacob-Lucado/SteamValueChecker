@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS items (
     UNIQUE (discord_id, itad_id)
 );
 CREATE INDEX IF NOT EXISTS items_user ON items(discord_id);
+CREATE TABLE IF NOT EXISTS site_visits (
+    site     TEXT PRIMARY KEY,
+    views    INTEGER NOT NULL DEFAULT 0,
+    visitors INTEGER NOT NULL DEFAULT 0,
+    since    INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS notifications (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
@@ -261,6 +267,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         now()
     ).map(clean);
 
+    // Plain visit counters for the companion web page. Only totals are kept: no addresses, no per-visit rows.
+    const siteHit = (site, newVisitor) => {
+        run("INSERT INTO site_visits (site, views, visitors, since) VALUES (?, 1, ?, ?) ON CONFLICT(site) DO UPDATE SET views = views + 1, visitors = visitors + excluded.visitors", site, newVisitor ? 1 : 0, now());
+        return siteCounts(site);
+    };
+    const siteCounts = site => clean(get("SELECT views, visitors, since FROM site_visits WHERE site = ?", site)) ?? { views: 0, visitors: 0, since: null };
     const snoozeItem = (itemId, until) => run("UPDATE items SET snooze_until = ? WHERE id = ?", until, itemId).changes;
 
     // Notification center: a copy of what the bot told this person, so it can be read later even if a DM was missed.
@@ -458,7 +470,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
-        snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
+        siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,

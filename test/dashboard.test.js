@@ -579,3 +579,22 @@ test("the page has share-preview tags with the real address, plus robots and sit
     assert.match(await (await t.request("/sitemap.xml", { raw: true })).text(), /<loc>/);
     await t.close();
 });
+
+test("visit counter for the FanaticalGrabber page: only that origin counts, one new visitor per address, totals only", async () => {
+    const t = await setup();
+    const SITE = "https://jacob-lucado.github.io";
+    try {
+        let r = await t.request("/api/visits/fanaticalgrabber");
+        assert.equal(r.data.views, 0);
+        assert.equal(r.headers.get("access-control-allow-origin"), SITE);
+        r = await t.request("/api/visits/fanaticalgrabber?new=1", { method: "POST", headers: { Origin: SITE } });
+        assert.deepEqual([r.data.views, r.data.visitors], [1, 1]);
+        r = await t.request("/api/visits/fanaticalgrabber?new=1", { method: "POST", headers: { Origin: SITE } });
+        assert.deepEqual([r.data.views, r.data.visitors], [2, 1], "same address is not a new visitor twice");
+        r = await t.request("/api/visits/fanaticalgrabber", { method: "POST", headers: { Origin: "https://evil.example" } });
+        assert.equal(r.data.views, 2, "other origins are ignored");
+        assert.equal((await t.request("/api/visits/unknown")).status, 404);
+        const pre = await t.request("/api/visits/fanaticalgrabber", { method: "OPTIONS", headers: { Origin: SITE } });
+        assert.equal(pre.status, 204);
+    } finally { await t.close(); }
+});

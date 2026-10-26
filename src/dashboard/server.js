@@ -963,10 +963,33 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         return new HttpError(500, "Something went wrong. Try again in a moment.");
     }
 
+    // Visit counter for the FanaticalGrabber web page (GitHub Pages). Public, tiny, totals only, and only that site may call it.
+    const VISIT_SITES = { fanaticalgrabber: "https://jacob-lucado.github.io" };
+    const seenVisitors = new Map(); // ip -> time, in memory only, so one address counts as a new visitor once a day
+    const visitLimit = createLimiter({ windowMs: 3600_000, max: 40, now });
+    function visits(req, res, url) {
+        const site = url.pathname.slice("/api/visits/".length);
+        const allowed = VISIT_SITES[site];
+        if (!allowed) throw new HttpError(404, "Not found.");
+        const cors = { "Access-Control-Allow-Origin": allowed, "Vary": "Origin", "Cross-Origin-Resource-Policy": "cross-origin" };
+        if (req.method === "OPTIONS") return send(res, 204, "", { ...cors, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Max-Age": "86400" });
+        if (req.method === "GET") return json(res, 200, db.siteCounts(site), { ...cors, "Cache-Control": "public, max-age=60" });
+        if (req.method !== "POST") throw new HttpError(405, "Not allowed.");
+        const ip = clientIp(req);
+        if (req.headers.origin !== allowed) return json(res, 200, db.siteCounts(site), cors); // ignore other origins quietly
+        if (!visitLimit.hit(ip).ok) return json(res, 200, db.siteCounts(site), cors);
+        const t = now();
+        for (const [k, at] of seenVisitors) if (t - at > 86400_000) seenVisitors.delete(k);
+        const fresh = url.searchParams.get("new") === "1" && !seenVisitors.has(ip);
+        if (fresh) seenVisitors.set(ip, t);
+        return json(res, 200, db.siteHit(site, fresh), cors);
+    }
+
     const server = http.createServer(async (req, res) => {
         try {
             const url = new URL(req.url, origin);
             const key = `${req.method} ${url.pathname}`;
+            if (url.pathname.startsWith("/api/visits/")) return visits(req, res, url);
 
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
