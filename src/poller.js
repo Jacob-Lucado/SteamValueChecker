@@ -3,12 +3,13 @@
 
 import { summarize } from "./report.js";
 import { evaluate, describeTrigger, dealVerdict } from "./alerts.js";
-import { alertEmbed, bundleEmbed, giveawayEmbed, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
+import { alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
 import { libraryView } from "./library.js";
 
 const MAX_EMBEDS = 10; // Discord's limit per message
+const MAX_CARDS = 5; // alerts with their own button row: Discord allows 5 rows per message
 const EPS = 0.005;
 const GROUP_REPING_MS = 14 * 86400_000;
 
@@ -59,11 +60,8 @@ export async function runCycle({ db, itad, notifier, now = () => Date.now(), log
         const user = db.getUser(userId);
         if (!user) continue;
         if (isQuiet(user, now())) { stats.deferred += list.length; continue; }
-        for (const part of chunked(list, MAX_EMBEDS)) {
-            const payload = {
-                content: part.length > 1 ? `${part.length} games on your wishlist hit your alert.` : undefined,
-                embeds: part.map(a => alertEmbed(a.item, a.now, { trigger: describeTrigger(a.item), lower: a.reason === "lower", verdict: dealVerdict(a.now) }))
-            };
+        for (const part of chunked(list, MAX_CARDS)) {
+            const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict });
             const res = await notifier.deliver(user, payload);
             if (res.ok) {
                 stats.delivered += part.length;
@@ -149,8 +147,8 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
         const user = db.getUser(userId);
         if (!user) continue;
         if (isQuiet(user, now())) { stats.deferred += hits.length; continue; }
-        for (const part of chunked(hits, MAX_EMBEDS)) {
-            const payload = { embeds: part.map(h => (h.kind === "bundle" ? bundleEmbed(h) : giveawayEmbed(h))) };
+        for (const part of chunked(hits, MAX_CARDS)) {
+            const payload = { embeds: part.map(h => (h.kind === "bundle" ? bundleEmbed(h) : giveawayEmbed(h))), components: extrasButtons(part) };
             const res = await notifier.deliver(user, payload);
             if (!res.ok) { stats.failed += part.length; continue; }
             stats.delivered += part.length;

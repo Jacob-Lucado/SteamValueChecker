@@ -9,7 +9,7 @@ export function current(summary) {
     const price = summary?.best?.price ?? null;
     const regular = summary?.msrp ?? null;
     const discount = price !== null && regular ? Math.max(0, 1 - price / regular) : 0;
-    return { price, regular, discount, shop: summary?.best?.shop ?? null, url: summary?.best?.url ?? null, atl: summary?.atl ?? null, low1y: summary?.low1y ?? null, low3m: summary?.low3m ?? null, currency: summary?.currency ?? null };
+    return { price, regular, discount, shop: summary?.best?.shop ?? null, url: summary?.best?.url ?? null, atl: summary?.atl ?? null, low1y: summary?.low1y ?? null, low3m: summary?.low3m ?? null, currency: summary?.currency ?? null, slug: summary?.slug ?? null };
 }
 
 /** Does the price meet the user's trigger for this game? */

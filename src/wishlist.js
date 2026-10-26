@@ -89,6 +89,7 @@ export async function addGameByTitle(db, itad, userId, rawTitle, type, value) {
 export function applySteamImport(db, userId, r) {
     if (!r.games.length) throw new WishlistError("I read the wishlist, but none of those games could be matched to price data.");
     const res = db.addItems(userId, r.games, { source: "steam" });
+    for (const g of r.games) if (Number.isInteger(g.appid)) db.setAppId(userId, g.itad_id, g.appid);
     db.updateUser(userId, { steam_id: r.steamid });
     const pruned = r.complete ? db.removeSteamNotIn(userId, r.games.map(g => g.itad_id)) : 0;
     return { ...res, pruned, unmatched: r.unmatched, truncated: r.truncated, total: r.total, rateLimited: Boolean(r.rateLimited) };

@@ -115,23 +115,69 @@ export function toCsv(rows, currency) {
 const GREEN = 0x57f287;
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 
-/** One sale alert. `now` comes from alerts.current(). */
-export function alertEmbed(item, now, { trigger, lower = false, verdict = null } = {}) {
+export const STOP_ID = "alert_stop";
+export const steamArt = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
+export const itadArt = id => `https://assets.isthereanydeal.com/${encodeURIComponent(id)}/banner400.jpg`;
+/** Game art for an alert: Steam's header when the Steam id is known, otherwise IsThereAnyDeal's banner. */
+export const artUrl = item => (Number.isInteger(item?.appid) ? steamArt(item.appid) : item?.itad_id ? itadArt(item.itad_id) : undefined);
+
+const LEVEL = {
+    great: { color: 0xfee75c, icon: "🏆" },
+    good: { color: GREEN, icon: "👍" },
+    wait: { color: 0xf0883e, icon: "⏳" },
+    info: { color: GREEN, icon: "💸" }
+};
+
+/**
+ * One sale alert. `now` comes from alerts.current(). `art` is "image" (large, for a single alert),
+ * "thumbnail" (small, when several alerts share a message) or null.
+ */
+export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null } = {}) {
     const c = now.currency ?? "USD";
+    const pct = Math.round((now.discount ?? 0) * 100);
+    const lvl = LEVEL[verdict?.level] ?? LEVEL.info;
+    const saves = now.regular != null && now.price != null && now.regular > now.price ? ` (you save ${money(now.regular - now.price, c)})` : "";
+    const lines = [`**${money(now.price, c)}**${now.shop ? ` at **${now.shop}**` : ""}${saves}`];
+    if (verdict) lines.unshift(`${lvl.icon} **${verdict.text}**`);
     const fields = [
-        { name: "Price now", value: money(now.price, c), inline: true },
         { name: "Regular", value: money(now.regular, c), inline: true },
-        { name: "Discount", value: now.discount > 0 ? `${Math.round(now.discount * 100)}% off` : "-", inline: true },
-        { name: "Store", value: now.shop ?? "-", inline: true }
+        { name: "Discount", value: pct > 0 ? `${pct}% off` : "-", inline: true }
     ];
     if (now.atl !== null) fields.push({ name: "All-time low", value: money(now.atl, c), inline: true });
-    if (verdict) fields.push({ name: "Deal check", value: verdict.text, inline: true });
+    const art_ = art ? artUrl(item) : undefined;
     return {
-        color: GREEN,
-        title: lower ? `${item.title}: price dropped again` : `${item.title} is on sale`,
+        color: lvl.color,
+        title: lower ? `${item.title}: price dropped again` : pct > 0 ? `${item.title} is ${pct}% off` : `${item.title} is on sale`,
         url: safeUrl(now.url),
+        description: lines.join("\n"),
         fields,
+        image: art === "image" && art_ ? { url: art_ } : undefined,
+        thumbnail: art === "thumbnail" && art_ ? { url: art_ } : undefined,
         footer: { text: `Your alert: ${trigger}  •  /alerts pause to stop  •  Prices by IsThereAnyDeal` }
+    };
+}
+
+const linkButton = (label, url) => ({ type: 2, style: 5, label: String(label).slice(0, 80), url });
+const short = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+
+/** The button row under one alert: view the deal, Steam page, price history, stop watching. */
+export function alertButtons(item, now, { single = true } = {}) {
+    const row = [];
+    const deal = safeUrl(now.url);
+    if (deal) row.push(linkButton(single ? `View deal${now.shop ? " at " + short(now.shop, 30) : ""}` : `Deal: ${short(item.title, 30)}`, deal));
+    if (single && Number.isInteger(item.appid)) row.push(linkButton("Steam page", `https://store.steampowered.com/app/${item.appid}/`));
+    if (single && now.slug) row.push(linkButton("Price history", `https://isthereanydeal.com/game/${encodeURIComponent(now.slug)}/info/`));
+    if (item.id != null) row.push({ type: 2, style: 2, label: single ? "Stop watching" : `Stop: ${short(item.title, 30)}`, custom_id: `${STOP_ID}:${item.id}` });
+    return row.length ? { type: 1, components: row } : null;
+}
+
+/** A whole alert message for one member: up to 5 games, each with its art and its own buttons. */
+export function alertPayload(hits, { trigger, verdict }) {
+    const single = hits.length === 1;
+    return {
+        content: single ? undefined : `${hits.length} games on your wishlist hit your alert.`,
+        embeds: hits.map(h => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: single ? "image" : "thumbnail" })),
+        components: hits.map(h => alertButtons(h.item, h.now, { single })).filter(Boolean)
     };
 }
 
@@ -162,7 +208,7 @@ export function bundleEmbed({ item, bundle }) {
     if (bundle.shop) fields.push({ name: "Store", value: bundle.shop, inline: true });
     if (bundle.price !== undefined) fields.push({ name: "From", value: money(bundle.price, bundle.currency ?? "USD"), inline: true });
     if (bundle.expiry) fields.push({ name: "Ends", value: stamp(bundle.expiry), inline: true });
-    return { color: PURPLE, title: `${item.title} is in a bundle`, url: safeUrl(bundle.url), fields, footer: { text: "Bundle alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
+    return { color: PURPLE, title: `${item.title} is in a bundle`, url: safeUrl(bundle.url), thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields, footer: { text: "Bundle alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
 }
 
 /** A watched game is being given away. */
@@ -170,7 +216,7 @@ export function giveawayEmbed({ item, giveaway }) {
     const fields = [{ name: "Giveaway", value: giveaway.title.slice(0, 200), inline: true }];
     if (giveaway.shop) fields.push({ name: "Where", value: giveaway.shop, inline: true });
     if (giveaway.expiry) fields.push({ name: "Ends", value: stamp(giveaway.expiry), inline: true });
-    return { color: GREEN, title: `${item.title} is free right now`, url: safeUrl(giveaway.url), fields, footer: { text: "Giveaway alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
+    return { color: GREEN, title: `${item.title} is free right now`, url: safeUrl(giveaway.url), thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields, footer: { text: "Giveaway alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
 }
 
 /** Weekly digest: best sales on the wishlist. Returns null when nothing is on sale. */
@@ -290,4 +336,14 @@ export function freeGamesPayload(shop, games) {
         content: list.length === 1 ? `Free game on ${shop}` : `${list.length} free games on ${shop}`,
         embeds, components: [{ type: 1, components: row }]
     };
+}
+
+/** Link buttons under bundle and giveaway alerts, one per card. */
+export function extrasButtons(hits) {
+    return hits.map(h => {
+        const url = safeUrl((h.bundle ?? h.giveaway)?.url);
+        if (!url) return null;
+        const label = h.kind === "bundle" ? "View bundle" : "Claim it";
+        return { type: 1, components: [linkButton(hits.length > 1 ? `${label}: ${short(h.item.title, 28)}` : label, url)] };
+    }).filter(Boolean);
 }

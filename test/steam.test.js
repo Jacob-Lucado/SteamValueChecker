@@ -46,7 +46,7 @@ test("import maps app ids to ITAD games and reports what was left out", async ()
         getTitle: async id => ({ i220: { title: "Half-Life 2" }, i440: { title: "Team Fortress 2" } })[id] ?? null
     };
     const r = await importWishlist("76561198000000000", itad, { fetchImpl: f });
-    assert.deepEqual(r.games, [{ itad_id: "i220", title: "Half-Life 2" }, { itad_id: "i440", title: "Team Fortress 2" }]);
+    assert.deepEqual(r.games, [{ itad_id: "i220", title: "Half-Life 2", appid: 220 }, { itad_id: "i440", title: "Team Fortress 2", appid: 440 }]);
     assert.equal(r.unmatched, 1);
     assert.equal(r.truncated, false);
     assert.equal(r.complete, false); // one game could not be matched, so the bot will not prune anything

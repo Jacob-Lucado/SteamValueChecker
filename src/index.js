@@ -8,7 +8,7 @@ import { createItad, ItadError } from "./itad.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
-import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID } from "./render.js";
+import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID } from "./render.js";
 import { HELP, ABOUT, PRIVACY } from "./text.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
@@ -229,6 +229,19 @@ client.on(Events.InteractionCreate, async i => {
     }
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("gw_")) return gw.handleModal(i);
+    if (i.isButton() && i.customId.startsWith(`${STOP_ID}:`)) {
+        // "Stop watching" under a sale alert. Only the person the alert was sent to can use it.
+        try {
+            const item = db.getItemById(Number(i.customId.split(":")[1]));
+            if (!item || item.discord_id !== i.user.id) {
+                await i.reply({ content: "That game is no longer on your wishlist, or this alert is not yours.", flags: MessageFlags.Ephemeral });
+            } else {
+                db.removeItem(item.discord_id, item.itad_id);
+                await i.reply({ content: `Stopped watching **${item.title}**. You can add it again any time with /wishlist add.`, flags: MessageFlags.Ephemeral });
+            }
+        } catch (err) { console.error(`[stop] ${err.stack ?? err.message}`); }
+        return;
+    }
     if (i.isButton() && i.customId === FREE_CLAIM_ALL_ID) {
         // Every link is read from the message the bot itself sent, so nothing is stored or taken from the user.
         const links = (i.message.embeds ?? []).filter(e => /^https:\/\//i.test(e.url ?? "")).map(e => `• [${String(e.title).slice(0, 80)}](${e.url})`);

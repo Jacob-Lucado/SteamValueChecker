@@ -29,7 +29,7 @@ test("DM is the default, and the alert is remembered so it is not repeated", asy
     const s1 = await runCycle(t);
     assert.deepEqual([s1.alerts, s1.delivered, s1.failed], [1, 1, 0]);
     assert.equal(t.sent[0].via, "dm");
-    assert.equal(t.sent[0].p.embeds[0].title, "Title a is on sale");
+    assert.equal(t.sent[0].p.embeds[0].title, "Title a is 50% off");
     const s2 = await runCycle(t);
     assert.equal(s2.alerts, 0);
     assert.equal(t.sent.length, 1);
@@ -110,7 +110,7 @@ test("many alerts for one person are grouped into few messages", async () => {
     const t = setup({ prices });
     on(t.db, "u1", ids);
     await runCycle(t);
-    assert.deepEqual(t.sent.map(x => x.p.embeds.length), [10, 2]);
+    assert.deepEqual(t.sent.map(x => x.p.embeds.length), [5, 5, 2]);
 });
 
 test("a failed price lookup leaves alerts for the next run", async () => {

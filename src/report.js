@@ -29,6 +29,7 @@ export function summarize(entry, { majorOnly = false } = {}) {
         atl: num(entry?.historyLow?.all?.amount),
         low1y: num(entry?.historyLow?.y1?.amount),
         low3m: num(entry?.historyLow?.m3?.amount),
+        slug: typeof entry?.slug === "string" ? entry.slug : null,
         hasPrices: deals.length > 0
     };
 }

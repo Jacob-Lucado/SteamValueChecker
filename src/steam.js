@@ -108,10 +108,11 @@ export async function importWishlist(input, itad, { fetchImpl = globalThis.fetch
     // Steam names first (a few requests for the whole list), then ITAD only for the ones Steam did not name.
     const steamNames = await fetchSteamNames(take, fetchImpl);
     const itadByApp = new Map(take.map(a => [a, map.get(`app/${a}`)]));
+    const appOf = new Map([...itadByApp].filter(([, id]) => id).map(([a, id]) => [id, a]));
     const named = new Set();
     for (const [appid, itadId] of itadByApp) {
         const name = steamNames.get(appid);
-        if (itadId && name && !named.has(itadId)) { named.add(itadId); games.push({ itad_id: itadId, title: name }); }
+        if (itadId && name && !named.has(itadId)) { named.add(itadId); games.push({ itad_id: itadId, title: name, appid }); }
     }
     const rest = unique.filter(id => !named.has(id));
     let next = 0;
@@ -121,7 +122,7 @@ export async function importWishlist(input, itad, { fetchImpl = globalThis.fetch
             const id = rest[next++];
             try {
                 const info = await itad.getTitle(id);
-                if (info) games.push({ itad_id: id, title: info.title });
+                if (info) games.push({ itad_id: id, title: info.title, appid: appOf.get(id) ?? info.appid ?? null });
             } catch (err) {
                 // Keep what we already have; titles looked up so far are cached, so running the import again finishes the rest.
                 if (err?.code === "rate_limited" && games.length) { rateLimited = true; next--; } else throw err;

@@ -122,6 +122,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "bundles", "INTEGER NOT NULL DEFAULT 1");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("items", "appid", "INTEGER");
     addColumn("library_snapshots", "msrp_paid", "REAL NOT NULL DEFAULT 0");
     addColumn("guilds", "group_min", "INTEGER NOT NULL DEFAULT 0");
 
@@ -162,8 +163,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
                 if (get("SELECT 1 AS x FROM items WHERE discord_id = ? AND itad_id = ?", discordId, g.itad_id)) { existing++; continue; }
                 if (n >= MAX_ITEMS_PER_USER) { skippedForLimit++; continue; }
                 run(
-                    "INSERT INTO items (discord_id, itad_id, title, source, trigger_type, trigger_value, added_at) VALUES (?,?,?,?,?,?,?)",
-                    discordId, g.itad_id, g.title, source, trigger, value, now()
+                    "INSERT INTO items (discord_id, itad_id, title, source, trigger_type, trigger_value, added_at, appid) VALUES (?,?,?,?,?,?,?,?)",
+                    discordId, g.itad_id, g.title, source, trigger, value, now(), Number.isInteger(g.appid) ? g.appid : null
                 );
                 n++; added++;
             }
@@ -174,6 +175,10 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         }
         return { added, existing, skippedForLimit };
     }
+
+    const getItemById = id => clean(get("SELECT * FROM items WHERE id = ?", id));
+    /** Existing games get their Steam id filled in when a later import sees it (used for artwork and links). */
+    const setAppId = (discordId, itadId, appid) => run("UPDATE items SET appid = ? WHERE discord_id = ? AND itad_id = ? AND appid IS NULL", appid, discordId, itadId);
 
     const removeItem = (discordId, itadId) =>
         run("DELETE FROM items WHERE discord_id = ? AND itad_id = ?", discordId, itadId).changes > 0;
@@ -353,7 +358,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
 
     return {
-        ensureUser, getUser, updateUser, countItems, listItems, addItems, removeItem, removeSteamNotIn, setTrigger,
+        ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,

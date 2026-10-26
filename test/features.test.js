@@ -408,3 +408,38 @@ test("wishlist import keeps partial progress when ITAD rate limits, and does not
     assert.equal(r.complete, false);
     assert.ok(r.games.length >= 1 && r.games.length < 3);
 });
+
+test("sale alerts carry game art, a verdict color and buttons", async () => {
+    const { alertPayload, STOP_ID } = await import("../src/render.js");
+    const now = { price: 9.87, regular: 24.99, discount: 0.61, shop: "Fanatical", url: "https://shop.example/deal", atl: 9.83, currency: "USD", slug: "wanderstop" };
+    const hit = { item: { id: 7, title: "Wanderstop", itad_id: "abc", appid: 1823510 }, now, reason: "new" };
+    const one = alertPayload([hit], { trigger: () => "any sale", verdict: () => ({ level: "good", text: "At its 1-year low" }) });
+    assert.equal(one.embeds[0].image.url, "https://cdn.akamai.steamstatic.com/steam/apps/1823510/header.jpg");
+    assert.equal(one.embeds[0].title, "Wanderstop is 61% off");
+    const labels = one.components[0].components.map(c => c.label);
+    assert.deepEqual(labels, ["View deal at Fanatical", "Steam page", "Price history", "Stop watching"]);
+    assert.equal(one.components[0].components[3].custom_id, `${STOP_ID}:7`);
+    assert.equal(one.components[0].components[2].url, "https://isthereanydeal.com/game/wanderstop/info/");
+
+    // several in one message: a small thumbnail and one row each
+    const many = alertPayload([hit, { ...hit, item: { ...hit.item, id: 8, appid: null, itad_id: "xyz" } }], { trigger: () => "any sale", verdict: () => null });
+    assert.equal(many.components.length, 2);
+    assert.equal(many.embeds[0].image, undefined);
+    assert.ok(many.embeds[1].thumbnail.url.includes("assets.isthereanydeal.com/xyz/"));
+    // no deal link -> no broken button
+    const bare = alertPayload([{ ...hit, now: { ...now, url: null, slug: null }, item: { id: 9, title: "X", itad_id: "q" } }], { trigger: () => "any sale", verdict: () => null });
+    assert.deepEqual(bare.components[0].components.map(c => c.label), ["Stop watching"]);
+});
+
+test("steam import remembers the Steam id, and a later import fills it in for older games", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "svc-"));
+    const db = openDb(join(dir, "t.db"));
+    db.ensureUser("u1", "g1");
+    db.addItems("u1", [{ itad_id: "a", title: "A" }], { source: "steam" });
+    assert.equal(db.listItems("u1")[0].appid, null);
+    db.setAppId("u1", "a", 123);
+    assert.equal(db.listItems("u1")[0].appid, 123);
+    db.setAppId("u1", "a", 999); // never overwrites
+    assert.equal(db.listItems("u1")[0].appid, 123);
+    assert.equal(db.getItemById(db.listItems("u1")[0].id).title, "A");
+});
