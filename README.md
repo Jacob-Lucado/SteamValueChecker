@@ -270,3 +270,7 @@ Sale alerts now carry a 12 month price sparkline with a buy-now-or-wait note, an
 ### Giveaway scheduling
 
 `/giveaway create` can start later (`startin:2h`), repeat as a series (`rounds:4 repeatevery:7d`, prizes are split across the rounds and all rounds are scheduled up front), and be limited to server boosters (`boosters:true`). The dashboard form has the same fields.
+
+## FanaticalGrabber visitor counter
+
+The web dashboard also serves a small public counter for the FanaticalGrabber page (`GET/POST /api/visits/fanaticalgrabber`, CORS-limited to `https://jacob-lucado.github.io`). It needs nothing beyond the dashboard running (`DASHBOARD_URL` + `DISCORD_CLIENT_SECRET`). Check it after a deploy: `https://<your-app>.fly.dev/api/visits/fanaticalgrabber` should return JSON like `{"views":0,"visitors":0,"since":null,"online":0}`.
