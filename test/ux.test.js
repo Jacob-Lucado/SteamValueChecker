@@ -92,6 +92,7 @@ test("setup checklist: tracks channels from every part of the bot and renders th
     db.setTicketSettings("g1", { channelId: "222", staffRoleId: null });
     db.setGiveawaySettings("g1", { vouch_channel_id: "333" });
     db.setFreeFeed("g1", true);
+    db.setGameNight("g1", true);
     st = setupStatus(db, "g1");
     assert.equal(st.complete, true);
     assert.ok(st.steps.every(x => x.done));
@@ -99,7 +100,7 @@ test("setup checklist: tracks channels from every part of the bot and renders th
     assert.match(e.description, /<#111>/);
     assert.match(e.description, /x\.test\/#\/setup\/g1/);
     const ids = setupComponents(st).flatMap(r => r.components).map(c => c.custom_id);
-    assert.deepEqual(ids, [SU.alert, SU.support, SU.vouch, SU.auto, SU.feed, SU.refresh]);
+    assert.deepEqual(ids, [SU.alert, SU.support, SU.vouch, SU.auto, SU.gn, SU.feed, SU.refresh]);
 });
 
 test("auto setup: creates the category and channels, keeps support private, skips what exists, explains a missing permission", async () => {
@@ -121,4 +122,35 @@ test("auto setup: creates the category and channels, keeps support private, skip
     assert.equal(made.length, 0);
     const denied = { createChannel: async () => { throw Object.assign(new Error("x"), { status: 403 }); }, sendMessage: async () => ({}) };
     await assert.rejects(autoSetup({ api: denied, db: openDb(":memory:"), guildId: "g2", botId: "b", userId: "u" }), /Manage Channels/);
+});
+
+test("game night: shared games, almost-shared games and a group buy, only for opted-in members", async () => {
+    const { gameNight, gameNightEmbed, pickGame, voiceGroups } = await import("../src/gamenight.js");
+    const db = openDb(":memory:");
+    for (const id of ["a", "b", "c", "d"]) db.ensureUser(id, "g1");
+    for (const id of ["a", "b", "c"]) db.updateUser(id, { share: 1 });
+    // library rows through the same call the library import uses
+    const addLib = (id, g) => db.upsertLibrary(id, [{ itad_id: g, title: g.toUpperCase(), paid: null }]);
+    for (const id of ["a", "b", "c"]) addLib(id, "hades");
+    addLib("a", "celeste"); addLib("b", "celeste");
+    db.addItems("a", [{ itad_id: "hollow", title: "HOLLOW" }], "manual");
+    db.addItems("b", [{ itad_id: "hollow", title: "HOLLOW" }], "manual");
+    const itad = { getPrices: async ids => new Map(ids.map(i => [i, { price: 4.99 }])) };
+    const r = await gameNight({ db, itad, userIds: ["a", "b", "c", "d"] });
+    assert.equal(r.hidden, 1);
+    assert.deepEqual(r.allOwn.map(g => g.title), ["HADES"]);
+    assert.deepEqual(r.almost.map(g => [g.title, g.missing]), [["CELESTE", ["c"]]]);
+    assert.deepEqual(r.buy.map(b => [b.title, b.wanters.sort()]), [["HOLLOW", ["a", "b"]]]);
+    assert.equal(pickGame(r, () => 0).title, "HADES");
+    assert.match(gameNightEmbed(r).fields.map(f => f.name).join("|"), /Worth buying together/);
+    await assert.rejects(gameNight({ db, itad, userIds: ["a", "d"] }), /at least 2/);
+
+    // voice nudge: two opted-in members in one channel both have the same alert, and the server switched it on
+    db.setGameNight("g1", true);
+    const hit = id => ({ item: { discord_id: id, share: 1, itad_id: "hollow", title: "HOLLOW" }, now: { price: 4.99, currency: "USD", discount: 0.5, shop: "Fanatical" } });
+    const groups = voiceGroups({ db, eligible: [hit("a"), hit("b"), hit("c")], voiceMap: () => new Map([["vc1", ["a", "b", "x"]], ["vc2", ["c"]]]) });
+    assert.equal(groups.length, 1);
+    assert.deepEqual(groups[0].users.sort(), ["a", "b"]);
+    db.setGameNight("g1", false);
+    assert.equal(voiceGroups({ db, eligible: [hit("a"), hit("b")], voiceMap: () => new Map([["vc1", ["a", "b"]]]) }).length, 0);
 });

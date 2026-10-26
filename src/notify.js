@@ -69,5 +69,10 @@ export function createNotifier({ db, discord }) {
         }
     }
 
-    return { deliver, postGuild };
+    /** Posts to one channel (such as a voice channel's text chat) without mentioning anyone. */
+    async function postChannel(channelId, payload) {
+        try { await discord.sendChannel(channelId, { ...payload, allowedMentions: { parse: [] } }); return true; } catch { return false; }
+    }
+
+    return { deliver, postGuild, postChannel };
 }

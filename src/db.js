@@ -362,6 +362,11 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     // ---------- server settings: group pings ----------
     const setGroupMin = (guildId, min) => run("UPDATE guilds SET group_min = ? WHERE guild_id = ?", min, guildId).changes > 0;
+    // Game night nudges in voice channels (a per-server switch; kept in the small key/value table).
+    const sharingMembers = guildId => all("SELECT discord_id FROM users WHERE share = 1 AND guild_id = ?", guildId).map(r => r.discord_id);
+    const setGameNight = (guildId, on) => (on ? run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = '1'", `gamenight:${guildId}`) : run("DELETE FROM status_meta WHERE key = ?", `gamenight:${guildId}`));
+    const gameNightOn = guildId => getMeta(`gamenight:${guildId}`) === "1";
+    const guildsWithGameNight = () => all("SELECT key FROM status_meta WHERE key LIKE 'gamenight:%'").map(r => ({ guild_id: r.key.slice(10) }));
     const guildsWithGroupPings = () => all("SELECT * FROM guilds WHERE group_min > 0").map(clean);
     const getGuildDeal = (guildId, itadId) => clean(get("SELECT * FROM guild_deals WHERE guild_id = ? AND itad_id = ?", guildId, itadId));
     const setGuildDeal = (guildId, itadId, price) => run(
@@ -457,7 +462,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
-        setGroupMin, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
+        sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, close: () => db.close()
     };

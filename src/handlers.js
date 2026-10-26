@@ -9,6 +9,7 @@ import { salesEmbed, upcomingSales } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
+import { gameNight, gameNightEmbed, gameNightButtons, pickGame } from "./gamenight.js";
 import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { CHANGELOG, LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
@@ -186,6 +187,35 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 return await eph(i, `**${item.title}** will alert you only at ${value.toFixed(2)} or less.`);
             }
         } catch (e) { return eph(i, e.message); }
+    }
+
+    /** Ids of the people in a voice channel right now (bots left out). Needs the GuildVoiceStates intent. */
+    const inVoice = (guild, channelId) => [...guild.voiceStates.cache.values()].filter(v => v.channelId === channelId && !v.member?.user?.bot).map(v => v.id);
+
+    async function handleGameNight(i) {
+        if (!i.inGuild()) return eph(i, "Use this in a server, from a voice channel.");
+        const channel = i.options.getChannel("channel");
+        const channelId = channel?.id ?? i.member?.voice?.channelId;
+        if (!channelId) return eph(i, "Join a voice channel first, or choose one with the `channel` option.");
+        await i.deferReply({ flags: i.options.getBoolean("post") ? undefined : MessageFlags.Ephemeral });
+        try {
+            const user = db.ensureUser(i.user.id, i.guildId);
+            const r = await gameNight({ db, itad, userIds: inVoice(i.guild, channelId), region: user.region });
+            await i.editReply({ embeds: [gameNightEmbed(r)], components: gameNightButtons(channelId) });
+        } catch (err) {
+            await i.editReply({ content: err instanceof UserError ? err.message : "I could not work that out. Try again in a moment." });
+            if (!(err instanceof UserError)) console.error(`[gamenight] ${err.name}: ${err.message}`);
+        }
+    }
+
+    async function handleGameNightButton(i) {
+        const channelId = i.customId.split(":")[1];
+        try {
+            const user = db.ensureUser(i.user.id, i.guildId);
+            const r = await gameNight({ db, itad, userIds: inVoice(i.guild, channelId), region: user.region });
+            const g = pickGame(r);
+            return await i.reply({ content: g ? `🎲 Tonight: **${g.title}**${g.missing ? ` (missing: ${g.missing.map(m => `<@${m}>`).join(", ")})` : ""}` : "There is nothing everyone owns yet. See the buy list.", allowedMentions: { parse: [] } });
+        } catch (err) { return eph(i, err instanceof UserError ? err.message : "I could not pick one. Try again."); }
     }
 
     async function handleChangelog(i) {
@@ -575,5 +605,5 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

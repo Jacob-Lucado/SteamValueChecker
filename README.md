@@ -110,6 +110,9 @@ Server owners (Manage Server, or a role set with `/giveaway setup`) can give awa
 
 Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in any public message or dashboard response, and are deleted on confirmation, cancellation or after a retention period. Set the secret in `.env` to enable giveaways; if you lose it, stored keys can't be read. Backups only contain encrypted keys.
 
+### Game night (`/gamenight`)
+Run it in (or point it at) a voice channel. It looks at who is in the channel and, among members who opted in with `/alerts share`, lists games everyone owns, games almost everyone owns (and who is missing), and games at least two of them want but do not own, with the current price ("worth buying together"). A button picks one game at random. The dashboard's **Game night** page does the same for any opted-in members you pick. With **Game night nudges** on (`/setup`), the bot also posts once in a voice channel's text chat when two or more opted-in people sitting in it have the same game hit their alert. Needs the voice-state intent (non-privileged); nothing about voice is stored.
+
 ### Server setup (`/setup`)
 When the bot joins, the server owner gets a DM (or a note in the system channel) pointing to `/setup`: an ephemeral panel with channel pickers for the alert channel, support ticket channel and giveaway vouches, a free-games feed toggle and a live checklist. **Create the channels for me** (also on the dashboard) makes a Steam Value Checker category with `#deal-alerts`, a private `#support-tickets` (only you, the bot and an optional staff role) and `#vouches`, and connects them. It needs the Manage Channels permission; the invite link now asks for it (19472), and existing servers can grant it to the bot's role. The dashboard's **Setup** page (Servers menu) does the same, including inviting the bot if it is not in the server yet. The dashboard menu is grouped into Games, Servers, Account and Help dropdowns.
 

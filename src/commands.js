@@ -244,6 +244,11 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
+const gamenight = new SlashCommandBuilder().setName("gamenight")
+    .setDescription("What can everyone in your voice channel play together, and what is worth buying together?")
+    .addChannelOption(o => o.setName("channel").setDescription("A voice channel (default: the one you are in)").addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice))
+    .addBooleanOption(o => o.setName("post").setDescription("Show it to everyone in this channel (default: only you)"));
+
 const setup = new SlashCommandBuilder().setName("setup").setDescription("Server managers: guided setup for alerts, support tickets and giveaways")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
@@ -261,5 +266,5 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, support, changelog, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, serverlist, leaderboard, serverstats, giveaway, setup].map(serverOnly)
+    ...[alertchannel, serverlist, leaderboard, serverstats, giveaway, setup, gamenight].map(serverOnly)
 ].map(c => c.toJSON());

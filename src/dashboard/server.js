@@ -2,6 +2,7 @@
 // Login is Discord OAuth2 (identify + guilds). Sessions live in memory, so a restart logs everyone out.
 
 import http from "node:http";
+import { gameNight } from "../gamenight.js";
 import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes } from "node:crypto";
@@ -596,7 +597,29 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/servers/setup": async (req, _b, url) => {
             const s = session(req);
             const g = managerGuild(s, url.searchParams.get("guild"));
-            return { ...setupStatus(db, g.id), staffRole: db.getTicketSettings(g.id).staff_role_id, bot: botGuilds ? Boolean(botGuilds(g.id)) : null };
+            return { ...setupStatus(db, g.id), gameNightOn: db.gameNightOn(g.id), staffRole: db.getTicketSettings(g.id).staff_role_id, bot: botGuilds ? Boolean(botGuilds(g.id)) : null };
+        },
+
+        "POST /api/servers/gamenight": async (req, body) => {
+            const g = managerGuild(session(req), String(body.guild_id));
+            db.setGameNight(g.id, Boolean(body.enabled));
+            return { gameNight: Boolean(body.enabled) };
+        },
+        // Game night on the dashboard: pick opted-in members of a server and see what they can play and buy together.
+        "GET /api/gamenight/members": async (req, _b, url) => {
+            const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
+            const ids = db.sharingMembers(g.id).slice(0, 60);
+            return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
+        },
+        "POST /api/gamenight": async (req, body) => {
+            const s = session(req); const g = guildFor(s, String(body.guild_id));
+            const allowed = new Set(db.sharingMembers(g.id));
+            const ids = (Array.isArray(body.user_ids) ? body.user_ids : []).map(String).filter(id => allowed.has(id));
+            const r = await gameNight({ db, itad, userIds: ids, region: userRow(s).region }).catch(e => { if (e.constructor?.name === "UserError") throw new HttpError(400, e.message); throw e; });
+            const names = Object.fromEntries(await Promise.all(r.people.map(async id => [id, (await rest.memberName(g.id, id)) || "Member " + id.slice(-4)])));
+            const n = id => names[id] ?? id;
+            return { people: r.people.map(n), hidden: r.hidden, allOwn: r.allOwn.map(x => x.title), almost: r.almost.map(x => ({ title: x.title, missing: x.missing.map(n) })),
+                buy: r.buy.map(b => ({ title: b.title, wanters: b.wanters.map(n), price: b.now?.price ?? null, currency: b.now?.currency ?? "USD", shop: b.now?.shop ?? null, discount: b.now?.discount ?? 0 })) };
         },
 
         "POST /api/servers/setup/auto": async (req, body) => {

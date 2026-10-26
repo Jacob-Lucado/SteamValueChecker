@@ -32,6 +32,7 @@ export const HELP = [
     "• `/library status` marks a game as backlog, playing, finished or dropped. `/library backlog` shows what you have not played, what it cost and what to play next.",
     "• `/publicpage` turns on a shareable page of your wishlist and best prices, handy for gifts. `/freegames` has Games and DLC tabs; `/alerts freegames dlc:false` hides DLC.",
     "• `/serverstats` shows a server's numbers. `/alertchannel feed` posts new free games in the channel. `/status` shows whether the bot is healthy.",
+    "• `/gamenight` (in a voice channel) shows what everyone there owns, who is missing a game, and what is worth buying together. Only members who opted in with `/alerts share` count. Managers can turn on nudges in `/setup`.",
     "• Server managers: `/setup` is a guided setup with channel pickers for alerts, support tickets and giveaway vouches. The dashboard has the same on its Setup page.",
     "• `/support open` asks the team for help; `/support mine` lists your tickets. Server managers set a ticket channel with `/support setup`. A giveaway key that did not work opens one for you.",
     "• `/alerts mute` stops DMs for one kind of alert (kept on the dashboard's Notifications page). `/alerts language` switches buttons to Spanish or French. `/changelog` shows what is new.",

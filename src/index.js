@@ -46,7 +46,7 @@ const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../packag
 const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret] });
 logs.capture();
 const itad = createItad({ apiKey: cfg.itadKey });
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
@@ -64,6 +64,18 @@ const discord = {
     }
 };
 const notifier = createNotifier({ db, discord });
+// Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).
+const voiceMap = guildId => {
+    const g = client.guilds.cache.get(guildId);
+    if (!g) return null;
+    const m = new Map();
+    for (const v of g.voiceStates.cache.values()) {
+        if (!v.channelId || v.member?.user?.bot) continue;
+        if (!m.has(v.channelId)) m.set(v.channelId, []);
+        m.get(v.channelId).push(v.id);
+    }
+    return m;
+};
 
 // Giveaways keep prize keys, so they only run when KEY_ENCRYPTION_SECRET is set.
 const gwDiscord = {
@@ -111,7 +123,7 @@ client.once(Events.ClientReady, c => {
     // Price alerts
     schedule(
         async () => {
-            const s = await runCycle({ db, itad, notifier, log: m => console.log(`[alerts] ${m}`) });
+            const s = await runCycle({ db, itad, notifier, voiceMap, log: m => console.log(`[alerts] ${m}`) });
             console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed, ${s.deferred} held for quiet hours`);
             beat.alerts = Date.now();
             await ops.cycleDone(s);
@@ -292,6 +304,7 @@ client.on(Events.InteractionCreate, async i => {
         return;
     }
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
+    if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
@@ -333,6 +346,7 @@ client.on(Events.InteractionCreate, async i => {
             case "freegames": return await handlers.handleFreeGames(i);
             case "status": return await handlers.handleStatus(i);
             case "support": return await ticketUi.handleCommand(i);
+            case "gamenight": return await handlers.handleGameNight(i);
             case "setup": return await setupUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);

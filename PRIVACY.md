@@ -106,3 +106,4 @@ If this policy changes, the date above will be updated.
 - **Tickets:** what you write in a ticket and the replies are stored with your Discord ID and name. They are visible to you, to the bot owner, and, if you picked a server that set up a ticket channel, to that server's staff. Never put a game key in a ticket; staff cannot see giveaway keys. Closed tickets are deleted after 6 months, and `/mydata delete` removes yours. `/mydata export` includes them.
 - **Notification center:** a copy of the title and short text of each alert sent to you, kept 60 days, only visible to you.
 - **Settings:** muted alert types, language and the last "what's new" you saw.
+- **Voice channels:** for `/gamenight` and the optional game night nudges the bot checks who is in a voice channel at that moment. It never records voice, audio or how long anyone was there, and only members who opted in with `/alerts share` are used.

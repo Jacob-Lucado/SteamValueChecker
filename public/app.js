@@ -113,7 +113,7 @@
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
     { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
@@ -123,6 +123,7 @@
     const me = state.me;
     if (id === "admin") return Boolean(me && me.isOwner);
     if (id === "giveaways") return Boolean(me && me.giveaways && me.servers.some(g => g.manageable));
+    if (id === "gamenight") return Boolean(me && me.servers.some(g => g.bot !== false));
     if (id === "setup") return Boolean(me && me.servers.some(g => g.manageable));
     return Boolean(me) || PUBLIC_PAGES.has(id);
   }
@@ -1499,6 +1500,36 @@
     if (e.key === "g") { gPending = true; setTimeout(() => { gPending = false; }, 1200); }
   });
 
+  // ---------- game night ----------
+  async function gameNightView() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const out = h("div");
+    const guild = select(servers.map(g => [g.id, g.name]), servers[0] && servers[0].id);
+    const people = h("div", { class: "chips" });
+    app.replaceChildren(pageHead("Game night", "Pick who is playing. See what everyone owns, who is missing a game, and what is worth buying together. Only members who opted in with /alerts share are listed."),
+      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, people, out));
+    const picked = new Set();
+    async function loadMembers() {
+      picked.clear(); out.replaceChildren(); people.replaceChildren(h("span", { class: "muted", text: "Loading…" }));
+      try {
+        const d = await api("/api/gamenight/members?guild=" + encodeURIComponent(guild.value));
+        if (!d.members.length) { people.replaceChildren(h("p", { class: "muted", text: "Nobody here has opted in yet. Members turn it on with /alerts share (or on the Alerts page)." })); return; }
+        people.replaceChildren(...d.members.map(m => { const b = h("button", { type: "button", class: "tab small", text: m.name }); b.addEventListener("click", () => { picked.has(m.id) ? picked.delete(m.id) : picked.add(m.id); b.classList.toggle("active", picked.has(m.id)); }); return b; }),
+          (() => { const go = h("button", { class: "btn green small", text: "Work it out" }); go.addEventListener("click", () => busy(go, async () => show(await api("/api/gamenight", { guild_id: guild.value, user_ids: [...picked] })))); return go; })());
+      } catch (e) { people.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    function show(r) {
+      const list = (title, rows) => h("div", { class: "subpanel" }, h("h4", { text: title }), rows.length ? h("ul", {}, ...rows.map(x => h("li", { text: x }))) : h("p", { class: "muted", text: "None." }));
+      out.replaceChildren(
+        list(`Everyone owns (${r.allOwn.length})`, r.allOwn),
+        list("Almost everyone owns", r.almost.map(a => `${a.title} (missing: ${a.missing.join(", ")})`)),
+        list("Worth buying together", r.buy.map(b => `${b.title}, wanted by ${b.wanters.join(", ")}${b.price !== null ? ` at ${b.price.toFixed(2)} ${b.currency}${b.shop ? " at " + b.shop : ""}` : ""}`)),
+        r.allOwn.length ? (() => { const b = h("button", { class: "btn gray small", text: "Pick a game for us" }); b.addEventListener("click", () => toast("Tonight: " + r.allOwn[Math.floor(Math.random() * r.allOwn.length)], "ok")); return b; })() : null);
+    }
+    guild.addEventListener("change", loadMembers);
+    loadMembers();
+  }
+
   // ---------- guided server setup (same checklist as /setup in Discord) ----------
   async function setupView() {
     const servers = state.me.servers.filter(g => g.manageable);
@@ -1535,6 +1566,8 @@
           row(sAlert, "Alert channel", "Where alerts go when a member's DM fails, and where the free-games feed posts. The bot posts a short note there to check it can.",
             h("div", { class: "row" }, alertSel, save("Save", () => (alertSel.value ? api("/api/servers/channel", { guild_id: guild.value, channel_id: alertSel.value }) : api("/api/servers/channel", { guild_id: guild.value, clear: true }))))),
           row(sFeed, "Free-games feed", "Posts new free games (not DLC) in the alert channel for everyone.", st.alertChannel ? feedBtn : h("span", { class: "muted small", text: "Choose an alert channel first." })),
+          row(st.steps.find(x => x.id === "gamenight"), "Game night nudges", "When 2 or more opted-in members in a voice channel all have the same game hit their alert, the bot posts once in that channel's text chat. Members join with /alerts share.",
+            (() => { const b = h("button", { class: "btn small " + (st.gameNight ? "red" : "green"), text: st.gameNight ? "Turn off" : "Turn on" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/gamenight", { guild_id: guild.value, enabled: !st.gameNight }); load(); })); return b; })()),
           row(sSupport, "Support tickets", "Members use /support open. Tickets appear here with Reply, Assign and Resolve buttons, and in the Support page.",
             h("div", { class: "row" }, supportSel, staffSel, save("Save", () => api("/api/tickets/setup", { guild_id: guild.value, channel_id: supportSel.value, staff_role_id: staffSel.value })))),
           state.me.giveaways ? row(sVouch, "Giveaway vouches", "Winners' confirmations are posted here. Without one the bot looks for a channel named #vouches.",
@@ -1548,7 +1581,7 @@
     load();
   }
 
-  const VIEWS = { setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();

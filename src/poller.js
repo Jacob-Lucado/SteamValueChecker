@@ -6,6 +6,7 @@ import { evaluate, describeTrigger, dealVerdict } from "./alerts.js";
 import { protonTier } from "./proton.js";
 import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
+import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
@@ -23,7 +24,7 @@ const chunked = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_
  * delivery or a quiet-hours deferral is retried on the next run instead of being lost.
  * Returns { checked, alerts, delivered, failed, deferred, priceErrors, groupPosts }.
  */
-export async function runCycle({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+export async function runCycle({ db, itad, notifier, voiceMap = null, now = () => Date.now(), log = () => {} }) {
     const items = db.activeItems();
     const stats = { checked: items.length, alerts: 0, delivered: 0, failed: 0, deferred: 0, priceErrors: 0, groupPosts: 0 };
     if (!items.length) return stats;
@@ -87,6 +88,15 @@ export async function runCycle({ db, itad, notifier, now = () => Date.now(), log
     }
 
     stats.groupPosts = await groupPings({ db, notifier, eligible, now });
+    if (voiceMap) {
+        try {
+            for (const g of voiceGroups({ db, eligible, voiceMap })) {
+                const key = `vc:${g.itadId}`, deal = db.getGuildDeal(g.guildId, key);
+                if (deal && !(g.now.price < deal.last_price - EPS || now() - deal.at > GROUP_REPING_MS)) continue;
+                if (await notifier.postChannel(g.channelId, { embeds: [voiceBuyEmbed(g)] })) { db.setGuildDeal(g.guildId, key, g.now.price); stats.groupPosts++; }
+            }
+        } catch (err) { log(`voice nudges failed: ${err.name}`); }
+    }
     return stats;
 }
 

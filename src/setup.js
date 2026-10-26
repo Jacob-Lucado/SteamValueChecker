@@ -3,16 +3,17 @@
 const EPHEMERAL = 64;
 const PermissionFlagsBits = { ManageGuild: 1n << 5n, ViewChannel: 1n << 10n, SendMessages: 1n << 11n, EmbedLinks: 1n << 14n };
 
-export const SU = { alert: "su_alert", support: "su_support", vouch: "su_vouch", feed: "su_feed", refresh: "su_refresh", auto: "su_auto" };
+export const SU = { alert: "su_alert", support: "su_support", vouch: "su_vouch", feed: "su_feed", gn: "su_gn", refresh: "su_refresh", auto: "su_auto" };
 
 /** Where a server stands. Used by both sides so they always agree. */
 export function setupStatus(db, guildId) {
     const g = db.getGuild(guildId), t = db.getTicketSettings(guildId), gw = db.getGiveawaySettings(guildId);
-    const s = { alertChannel: g?.channel_id ?? null, feed: Boolean(g?.free_feed), supportChannel: t.channel_id ?? null, staffRole: t.staff_role_id ?? null, vouchChannel: gw.vouch_channel_id ?? null };
+    const s = { alertChannel: g?.channel_id ?? null, feed: Boolean(g?.free_feed), supportChannel: t.channel_id ?? null, staffRole: t.staff_role_id ?? null, vouchChannel: gw.vouch_channel_id ?? null, gameNight: db.gameNightOn(guildId) };
     const steps = [
         { id: "alert", text: "Alert channel (used when a DM fails, and for the free-games feed)", done: Boolean(s.alertChannel) },
         { id: "feed", text: "Post new free games for everyone (optional)", done: s.feed, optional: true },
         { id: "support", text: "Support ticket channel for your members", done: Boolean(s.supportChannel) },
+        { id: "gamenight", text: "Game night: nudge voice channels when a game they all want goes on sale (optional)", done: s.gameNight, optional: true },
         { id: "vouch", text: "Vouches channel for giveaways (optional)", done: Boolean(s.vouchChannel), optional: true }
     ];
     return { ...s, steps, complete: steps.filter(x => !x.optional).every(x => x.done) };
@@ -33,6 +34,7 @@ export function setupComponents(st) {
     return [picker(SU.alert, "Choose the alert channel"), picker(SU.support, "Choose the support ticket channel"), picker(SU.vouch, "Choose the giveaway vouches channel"),
         { type: 1, components: [
             { type: 2, style: 3, label: "Create the channels for me", custom_id: SU.auto },
+            { type: 2, style: st.gameNight ? 4 : 2, label: st.gameNight ? "Stop game night nudges" : "Game night nudges", custom_id: SU.gn },
             { type: 2, style: st.feed ? 4 : 2, label: st.feed ? "Stop free-games feed" : "Free-games feed", custom_id: SU.feed },
             { type: 2, style: 2, label: "Refresh", custom_id: SU.refresh }] }];
 }
@@ -61,6 +63,7 @@ export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId =
         }
     };
     const say = (id, content) => api.sendMessage(id, { content, allowed_mentions: { parse: [] } }).catch(() => {});
+    db.setGameNight(guildId, true);
     const cat = await make({ name: "Steam Value Checker", type: 4 });
     if (need.alert) {
         const c = await make({ name: "deal-alerts", type: 0, parent_id: cat.id, topic: "Sale alerts and free games from Steam Value Checker", permission_overwrites: readOnly });
@@ -119,6 +122,8 @@ export function createSetupHandlers({ db, publicUrl = null }) {
             } catch (e) { note = e.userFacing ? e.message : "I could not create the channels. Check my permissions and try again, or pick channels from the menus."; }
             const st = setupStatus(db, i.guildId);
             return i.editReply({ embeds: [setupEmbed(st, publicUrl, i.guildId, note)], components: setupComponents(st) });
+        } else if (i.customId === SU.gn) {
+            db.setGameNight(i.guildId, !db.gameNightOn(i.guildId));
         } else if (i.customId === SU.feed) {
             if (!db.getGuild(i.guildId)) return eph(i, "Choose an alert channel first. The free-games feed posts there.");
             db.setFreeFeed(i.guildId, !db.getGuild(i.guildId).free_feed);
