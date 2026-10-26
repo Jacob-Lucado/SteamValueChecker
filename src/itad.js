@@ -94,7 +94,15 @@ export function createItad({
         return turn;
     };
 
+    const health = { lastOkAt: null, lastErrorAt: null, lastError: null };
     async function call(method, path, params = {}, body, attempt = 0) {
+        try {
+            const out = await callInner(method, path, params, body, attempt);
+            health.lastOkAt = now();
+            return out;
+        } catch (err) { health.lastErrorAt = now(); health.lastError = err?.code ?? err?.name ?? "error"; throw err; }
+    }
+    async function callInner(method, path, params = {}, body, attempt = 0) {
         if (minGapMs > 0) await pace();
         const url = new URL(BASE + path);
         url.searchParams.set("key", apiKey);
@@ -116,7 +124,7 @@ export function createItad({
             if (attempt < 4) {
                 const wait = Math.min(Number(res.headers?.get?.("retry-after")) || 2 * 2 ** attempt, 20);
                 await sleep(wait * 1000);
-                return call(method, path, params, body, attempt + 1);
+                return callInner(method, path, params, body, attempt + 1);
             }
             throw new ItadError("rate_limited", "IsThereAnyDeal is rate limiting the bot. Try again in a minute.");
         }
@@ -312,5 +320,5 @@ export function createItad({
         return points;
     }
 
-    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getGiveaways, getGiveawayList, getHistory, _cache: cache };
+    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getGiveaways, getGiveawayList, getHistory, health, _cache: cache };
 }

@@ -1,7 +1,8 @@
 import "dotenv/config";
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType,
-    Events, GatewayIntentBits, MessageFlags
+    Events, GatewayIntentBits, MessageFlags,
+    version as DJS_VERSION
 } from "discord.js";
 import { loadConfig } from "./config.js";
 import { createItad, ItadError } from "./itad.js";
@@ -18,6 +19,7 @@ import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
 import { registerCommands } from "./registercmds.js";
 import { createLogBuffer } from "./logbuffer.js";
+import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
 import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, schedule } from "./poller.js";
@@ -103,6 +105,7 @@ client.once(Events.ClientReady, c => {
         async () => {
             const s = await runCycle({ db, itad, notifier, log: m => console.log(`[alerts] ${m}`) });
             console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed, ${s.deferred} held for quiet hours`);
+            beat.alerts = Date.now();
             await ops.cycleDone(s);
         },
         cfg.checkEveryMinutes * 60_000,
@@ -112,7 +115,7 @@ client.once(Events.ClientReady, c => {
     // Giveaways: ends them on time, passes unclaimed prizes on, sends "did it work?" follow-ups, deletes old keys
     if (giveaways) {
         schedule(
-            async () => { await giveaways.tick(); },
+            async () => { await giveaways.tick(); beat.giveaways = Date.now(); },
             60_000,
             { onError: err => { console.error(`[giveaway] ${err.name}: ${err.message}`); ops.error("giveaways", err); } }
         );
@@ -141,6 +144,31 @@ client.once(Events.ClientReady, c => {
 client.on(Events.GuildDelete, guild => { if (guild.available !== false) db.clearGuildChannel(guild.id); });
 
 const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
+const beat = { alerts: null, giveaways: null }; // when each background job last finished, for the status page
+const staleAfter = (at, everyMs) => (at === null ? Date.now() - STARTED_AT > everyMs * 3 : Date.now() - at > everyMs * 3);
+const status = createStatusMonitor({
+    db, log: m => console.error(`[status] ${m}`),
+    probes: {
+        gateway: { name: "Discord gateway and bot", desc: "Connection to Discord and slash command handling", critical: true, check: () => {
+            if (!client.isReady() || client.ws.status !== 0) return { state: "down", detail: "Not connected to Discord" };
+            const ping = client.ws.ping;
+            return { state: ping > 1000 ? "degraded" : "operational", detail: Number.isFinite(ping) && ping >= 0 ? `${Math.round(ping)} ms` : null };
+        } },
+        database: { name: "Database", desc: "Wishlists, libraries, settings and giveaways", critical: true, check: () => { db.getMeta("last_run"); return { state: "operational" }; } },
+        prices: { name: "Price data", desc: "IsThereAnyDeal lookups for prices, bundles and free games", critical: false, check: () => {
+            const h = itad.health;
+            if (!h?.lastErrorAt) return { state: "operational" };
+            const recentErr = Date.now() - h.lastErrorAt < 15 * 60_000 && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt);
+            return recentErr ? { state: "degraded", detail: `Lookups failing (${h.lastError})` } : { state: "operational" };
+        } },
+        alerts: { name: "Deal and free game alerts", desc: "Hourly checks of every wishlist, free games and bundles", critical: false, check: () =>
+            staleAfter(beat.alerts, cfg.checkEveryMinutes * 60_000) ? { state: "degraded", detail: "The last check is overdue" } : { state: "operational" } },
+        ...(giveaways ? { giveaways: { name: "Giveaway engine", desc: "Ends giveaways on time and delivers prize keys", critical: false, check: () =>
+            staleAfter(beat.giveaways, 60_000) ? { state: "degraded", detail: "The last run is overdue" } : { state: "operational" } } } : {}),
+        dashboard: { name: "Web dashboard", desc: "This website and its API", critical: false, check: () => ({ state: "operational" }) }
+    }
+});
+client.once(Events.ClientReady, () => { status.start(); });
 const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
 const embedReply = (i, description) =>
     i.reply({ embeds: [{ color: 0xff9800, description }], flags: MessageFlags.Ephemeral });
@@ -287,7 +315,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, logs, botInfo: aboutInfo, botGuilds: id => client.guilds.cache.has(id), config: { ...d, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), config: { ...d, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

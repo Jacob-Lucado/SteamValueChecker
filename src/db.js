@@ -102,6 +102,22 @@ CREATE TABLE IF NOT EXISTS guilds (
     set_by     TEXT,
     updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS uptime_days (
+    day   TEXT PRIMARY KEY,
+    up    INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS status_events (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    at        INTEGER NOT NULL,
+    component TEXT NOT NULL,
+    state     TEXT NOT NULL,
+    note      TEXT
+);
+CREATE TABLE IF NOT EXISTS status_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
 ${giveawaySchema}`;
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
@@ -359,7 +375,19 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         }
     }
 
+    // Status page history: per-day up/total minutes, a log of state changes, and the last time the monitor ran.
+    const uptimeAdd = (day, up, total) => run("INSERT INTO uptime_days (day, up, total) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET up = up + excluded.up, total = total + excluded.total", day, up, total);
+    const uptimeDays = since => all("SELECT day, up, total FROM uptime_days WHERE day >= ? ORDER BY day", since).map(clean);
+    const addStatusEvent = (at, component, state, note = null) => {
+        run("INSERT INTO status_events (at, component, state, note) VALUES (?, ?, ?, ?)", at, component, state, note);
+        run("DELETE FROM status_events WHERE id NOT IN (SELECT id FROM status_events ORDER BY id DESC LIMIT 200)");
+    };
+    const statusEvents = (limit = 20) => all("SELECT at, component, state, note FROM status_events ORDER BY id DESC LIMIT ?", limit).map(clean);
+    const getMeta = key => get("SELECT value FROM status_meta WHERE key = ?", key)?.value ?? null;
+    const setMeta = (key, value) => run("INSERT INTO status_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, String(value));
+
     return {
+        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
         ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen,

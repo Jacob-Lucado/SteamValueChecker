@@ -63,7 +63,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, logs = null, botInfo = null, botGuilds = null, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -503,6 +503,20 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         // ----- free games right now, grouped by platform -----
         // Live numbers for the About panel. Aggregate only, so it is open to everyone like the Help page.
         "GET /api/about": async () => ({ about: botInfo ? botInfo() : null, creator: config.creator ?? null }),
+
+        // Public, like /about: aggregate health only, nothing about any person.
+        "GET /api/status": async () => {
+            if (!status) throw new HttpError(404, "Status is not available.");
+            const info = botInfo ? botInfo() : null, mem = process.memoryUsage();
+            return {
+                ...status.snapshot(),
+                telemetry: {
+                    version: info?.version ?? null, node: process.version, discordjs: djsVersion, uptime: info?.uptime ?? null, pingMs: info?.pingMs ?? null,
+                    heapMb: Math.round(mem.heapUsed / 1048576), rssMb: Math.round(mem.rss / 1048576), region: process.env.FLY_REGION ?? null
+                },
+                stats: info ? { servers: info.servers, members: info.members, gamesWatched: info.gamesWatched, alerts24h: info.alerts24h } : null
+            };
+        },
 
         "GET /api/free": async (req) => {
             const s = session(req);

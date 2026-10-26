@@ -359,3 +359,24 @@ textarea[autocomplete="off"] { font-family: ui-monospace, Menlo, Consolas, monos
 .free-card img, .free-noart { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; background: var(--panel); display: grid; place-items: center; font-size: 34px; }
 .free-info { padding: 14px; display: grid; gap: 8px; justify-items: start; }
 .tab.small.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+/* ---------- status page ---------- */
+.status-page { display: grid; gap: 20px; }
+.st-banner { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 26px 28px; border-radius: 18px; border: 1px solid var(--line); background: var(--panel); }
+.st-banner strong { font-size: 24px; color: var(--white); margin-left: 12px; }
+.st-banner.operational { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); background: color-mix(in srgb, var(--good) 9%, var(--panel)); }
+.st-banner.degraded { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+.st-banner.down { border-color: #ed4245; }
+.st-meta { display: flex; align-items: center; gap: 14px; }
+.st-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); vertical-align: middle; }
+.st-dot.operational { background: var(--good); box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 25%, transparent); }
+.st-dot.degraded { background: var(--warn); } .st-dot.down { background: #ed4245; }
+.st-list { display: grid; }
+.st-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.st-row:first-child { border-top: 0; }
+.st-when { display: grid; justify-items: end; gap: 4px; }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.st-bars { display: grid; grid-template-columns: repeat(90, 1fr); gap: 2px; height: 44px; }
+.st-bar { border-radius: 3px; background: var(--line); }
+.st-bar.good { background: var(--good); } .st-bar.warn { background: var(--warn); } .st-bar.bad { background: #ed4245; }
+.st-axis { display: flex; justify-content: space-between; margin-top: 8px; }
