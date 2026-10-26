@@ -1,0 +1,20 @@
+{
+  "name": "steam-value-checker",
+  "version": "1.0.0",
+  "description": "Discord bot that prices a game library: MSRP, Steam price, cheapest price now, and what you saved. Works with FanaticalGrabber exports.",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/register.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "discord.js": "^14.17.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}
