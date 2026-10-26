@@ -13,6 +13,7 @@ import { HELP, ABOUT, PRIVACY } from "./text.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
+import { registerCommands } from "./registercmds.js";
 import { createNotifier } from "./notify.js";
 import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
@@ -264,5 +265,10 @@ if (cfg.dashboard) {
 }
 
 process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.message ?? err}`));
+
+// Commands are pushed to Discord at startup, but only when they changed since last time.
+registerCommands(cfg, { onlyIfChanged: true })
+    .then(r => console.log(r.skipped ? `Slash commands already up to date (${r.count}).` : `Registered ${r.count} slash commands${r.guild ? " to your test server" : " globally (global commands can take up to an hour to appear)"}.`))
+    .catch(err => console.error(`[register] could not register commands: ${err.message}`));
 
 client.login(cfg.token);

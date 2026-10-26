@@ -228,7 +228,6 @@ fly scale count 1                         # SQLite and dashboard sessions need e
 fly secrets set DISCORD_TOKEN=... CLIENT_ID=... ITAD_API_KEY=... KEY_ENCRYPTION_SECRET=... \
   DISCORD_CLIENT_SECRET=... DASHBOARD_URL=https://YOUR-APP.fly.dev OWNER_DISCORD_ID=...
 fly deploy
-npm run register                          # once, from your own computer with a .env, or use GUILD_ID for a test server
 ```
 
 Add `https://YOUR-APP.fly.dev/auth/callback` as a redirect under OAuth2 in the Discord Developer Portal.
