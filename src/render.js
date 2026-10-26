@@ -266,3 +266,28 @@ export function alertHistoryEmbed(entries) {
     });
     return { color: COLOR, title: "Recent alerts", description: lines.join("\n").slice(0, 4000) };
 }
+
+export const FREE_CLAIM_ALL_ID = "free_claim_all";
+const MAX_FREE_PER_MESSAGE = 10;
+
+/**
+ * Free games on one platform, as one message. Each game has a link embed. One game gets a "Claim game" link button;
+ * several get "Claim all" (which replies with every link) plus link buttons for the first few.
+ */
+export function freeGamesPayload(shop, games) {
+    const list = games.filter(g => safeUrl(g.url)).slice(0, MAX_FREE_PER_MESSAGE);
+    if (!list.length) return null;
+    const embeds = list.map(g => ({
+        color: GREEN, title: g.title, url: safeUrl(g.url),
+        description: `Free on **${shop}**${g.expiry ? `, ends ${stamp(g.expiry)}` : ""}`,
+        footer: { text: "Claiming needs you to be signed in to the store  •  Data by IsThereAnyDeal" }
+    }));
+    const link = (label, url) => ({ type: 2, style: 5, label: label.slice(0, 80), url: safeUrl(url) });
+    const row = list.length === 1
+        ? [link("Claim game", list[0].url)]
+        : [{ type: 2, style: 1, label: `Claim all (${list.length})`, custom_id: FREE_CLAIM_ALL_ID }, ...list.slice(0, 4).map(g => link(`Claim ${g.title}`, g.url))];
+    return {
+        content: list.length === 1 ? `Free game on ${shop}` : `${list.length} free games on ${shop}`,
+        embeds, components: [{ type: 1, components: row }]
+    };
+}

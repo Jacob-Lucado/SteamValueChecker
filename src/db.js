@@ -119,6 +119,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "digest_day", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "last_digest_at", "INTEGER");
     addColumn("users", "bundles", "INTEGER NOT NULL DEFAULT 1");
+    addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     addColumn("library_snapshots", "msrp_paid", "REAL NOT NULL DEFAULT 0");
     addColumn("guilds", "group_min", "INTEGER NOT NULL DEFAULT 0");
@@ -137,7 +138,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set([
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -196,6 +197,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         run("UPDATE items SET last_alert_price = ?, last_alert_at = ? WHERE id = ?", price, now(), itemId);
     const clearAlerted = itemId => run("UPDATE items SET last_alert_price = NULL WHERE id = ?", itemId);
 
+    const freeUsers = () => all("SELECT * FROM users WHERE free = 1 AND paused = 0").map(clean);
     const digestUsers = () => all("SELECT * FROM users WHERE digest = 1 AND paused = 0").map(clean);
 
     /** Everything the poller needs: items of users who have not paused alerts. */
@@ -349,7 +351,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     return {
         ensureUser, getUser, updateUser, countItems, listItems, addItems, removeItem, removeSteamNotIn, setTrigger,
-        markAlerted, clearAlerted, activeItems, digestUsers, setGuildChannel, getGuild, clearGuildChannel,
+        markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         setGroupMin, guildsWithGroupPings, getGuildDeal, setGuildDeal,

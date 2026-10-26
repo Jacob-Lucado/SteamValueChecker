@@ -255,25 +255,34 @@ export function createItad({
         return out;
     }
 
-    /** Active giveaways, as Map(itadId -> [{ id, title, shop, url, expiry }]). One call, cached. */
-    async function getGiveaways() {
-        const hit = getCached("giveaways");
+    /** Every active giveaway: [{ id, title, shop, url, expiry, gameIds }]. One call, cached. */
+    async function getGiveawayList() {
+        const hit = getCached("giveaway-list");
         if (hit !== undefined) return hit;
         const data = await call("GET", "/giveaways/v1", { limit: 50 });
-        const out = new Map();
+        const out = [];
         for (const g of Array.isArray(data) ? data : []) {
             const expiry = isoOrNull(g?.expiry);
             if (expiry !== null && expiry < now()) continue;
-            for (const game of Array.isArray(g?.games) ? g.games : []) {
-                if (!game?.id) continue;
-                if (!out.has(game.id)) out.set(game.id, []);
-                out.get(game.id).push({
-                    id: String(g.id ?? g.title), title: String(g.title ?? "Giveaway"), shop: g.shop?.name ?? null,
-                    url: typeof g.url === "string" ? g.url : null, expiry
-                });
+            out.push({
+                id: String(g.id ?? g.title), title: String(g.title ?? "Giveaway"), shop: g.shop?.name ?? g.page?.name ?? "Other",
+                url: typeof g.url === "string" ? g.url : null, expiry,
+                gameIds: (Array.isArray(g.games) ? g.games : []).map(x => x?.id).filter(Boolean)
+            });
+        }
+        setCached("giveaway-list", out);
+        return out;
+    }
+
+    /** Active giveaways by game, as Map(itadId -> [{ id, title, shop, url, expiry }]). */
+    async function getGiveaways() {
+        const out = new Map();
+        for (const g of await getGiveawayList()) {
+            for (const id of g.gameIds) {
+                if (!out.has(id)) out.set(id, []);
+                out.get(id).push({ id: g.id, title: g.title, shop: g.shop, url: g.url, expiry: g.expiry });
             }
         }
-        setCached("giveaways", out);
         return out;
     }
 
@@ -292,5 +301,5 @@ export function createItad({
         return points;
     }
 
-    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getGiveaways, getHistory, _cache: cache };
+    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getGiveaways, getGiveawayList, getHistory, _cache: cache };
 }

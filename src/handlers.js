@@ -197,6 +197,7 @@ export function createHandlers({ db, itad }) {
                             { name: "Quiet hours", value: describeQuiet(user), inline: true },
                             { name: "Weekly digest", value: describeDigest(user), inline: true },
                             { name: "Bundle and giveaway alerts", value: user.bundles === 0 ? "Off" : "On", inline: true },
+                            { name: "Free game alerts", value: user.free ? "On" : "Off", inline: true },
                             { name: "Server group alerts and leaderboard", value: user.share ? "Opted in" : "Not shared", inline: true }
                         ]
                     }]
@@ -253,6 +254,11 @@ export function createHandlers({ db, itad }) {
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { bundles: on ? 1 : 0 });
                 return eph(i, on ? "You will be told when a wishlist game is in a bundle or being given away." : "Bundle and giveaway alerts are off.");
+            }
+            case "freegames": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { free: on ? 1 : 0 });
+                return eph(i, on ? "You will be told when a game is free to claim. Several free games from one store come in one message with a Claim all button." : "Free game alerts are off.");
             }
             case "share": {
                 const on = i.options.getBoolean("enabled", true);

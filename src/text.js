@@ -18,7 +18,7 @@ export const HELP = [
     "• `/wishlist view` shows current prices. `/wishlist alert` sets when you are alerted: any sale, a % off, a price, or an all-time low.",
     "• Alerts come by **DM**. If a DM fails, or you pick channel delivery with `/alerts delivery`, they go to the server's alert channel and mention you. Server admins set it with `/alertchannel set`.",
     "• `/wishlist check` tells you if a game is a good deal now. Alerts show a verdict (all-time low, 1-year low, and so on).",
-    "• `/alerts` has pause, region and store settings, plus `quiethours` (alerts are held overnight), `digest` (weekly summary), `bundles` (bundle and giveaway alerts), `history`, and `share`.",
+    "• `/alerts` has pause, region and store settings, plus `quiethours` (alerts are held overnight), `digest` (weekly summary), `bundles` (bundle and giveaway alerts), `freegames` (free to claim on any store, with Claim buttons), `history`, and `share`.",
     "",
     "**Library and servers**",
     "• `/library add`, `import`, `view`, `remove`: games you own and what you paid, with what you saved against MSRP.",

@@ -36,6 +36,7 @@ async function setup({ sendFails = false, guildsOf, config = {} } = {}) {
     const itad = {
         lookupTitles: async titles => titles.map(t => (/^zzz/i.test(t) ? { title: t, id: null } : { title: t, id: "id-" + t.toLowerCase().replace(/\W+/g, ""), approx: false, matched: t })),
         getPrices: async ids => new Map(ids.map(id => [id, { deals: [deal(10, 20)], historyLow: { all: { amount: 5 } } }])),
+        getGiveawayList: async () => [{ id: "1", title: "Alpha", shop: "Epic", url: "https://e.example/a", expiry: null }, { id: "2", title: "Beta", shop: "Epic", url: "https://e.example/b", expiry: null }, { id: "3", title: "Evil", shop: "Steam", url: "javascript:alert(1)", expiry: null }],
         getHistory: async () => Array.from({ length: 400 }, (_, i) => ({ t: 1_700_000_000_000 + i * 86400_000, price: 10 + (i % 7), regular: 20, shop: "GOG" }))
     };
     const dash = createDashboard({ db, itad, rest, config: { publicUrl: ORIGIN, port: 0, host: "127.0.0.1", clientId: "123", ...config }, now: () => clock });
@@ -480,5 +481,16 @@ test("export includes library and alert history", async () => {
     assert.equal(data.library[0].paid, 5);
     assert.equal(data.alert_history[0].title, "Hades");
     assert.ok("quiet_hours" in data.settings);
+    await t.close();
+});
+
+test("free games list is grouped by platform, needs sign-in, and the setting saves", async () => {
+    const t = await setup();
+    assert.equal((await t.request("/api/free")).status, 401);
+    await t.signIn();
+    const r = await t.request("/api/free");
+    assert.deepEqual(r.data.platforms.map(p => [p.shop, p.games.length]), [["Epic", 2]]); // the non-https link is dropped
+    const s = await t.request("/api/settings", { method: "POST", body: { free: true } });
+    assert.equal(s.data.settings.free, true);
     await t.close();
 });

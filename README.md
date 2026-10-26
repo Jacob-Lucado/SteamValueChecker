@@ -64,7 +64,8 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/wishlist alert type:` | Sets when you are alerted, for one game or all: any sale, a % off or more, a price or lower, or an all-time low |
 | `/wishlist check game:` | Is it a good deal right now? Price, 3-month, 1-year and all-time lows, and a plain verdict |
 | `/alerts delivery` | DM (default) or the server alert channel |
-| `/alerts quiethours`, `digest`, `bundles`, `share`, `history` | Hold alerts overnight (with your time zone), a weekly sales digest, bundle and giveaway alerts, opt in to server group alerts and the leaderboard, and your recent alerts |
+| `/alerts quiethours`, `digest`, `bundles`, `freegames`, `share`, `history` | Hold alerts overnight (with your time zone), a weekly sales digest, bundle and giveaway alerts, opt in to server group alerts and the leaderboard, and your recent alerts |
+| `/alerts freegames enabled:` | Get told when any game is free to claim. One message per store; several free games from the same store come with a **Claim all** button, a single game with **Claim game** |
 | `/library add\|import\|view\|remove` | Games you own and what you paid. Shows what they are worth, what you saved against MSRP, and a value-over-time chart on the dashboard |
 | `/serverlist add\|view\|vote\|remove` | A wishlist the whole server shares, with votes and current prices |
 | `/leaderboard` | Who in the server has saved the most (percent of MSRP), for members who opted in |
@@ -191,8 +192,13 @@ branding/       Logo and banner
 - **Steam wishlist import is untested against live Steam.** It uses Steam's `IWishlistService/GetWishlist` endpoint, which needs only a public profile. If Steam changes it, import fails with an error and manual `/wishlist add` still works.
 - Alerts are best effort and run on a schedule, so a short sale can be missed.
 - **Bundle, giveaway and price-history features use ITAD endpoints that have only been tested against fake responses**, like the rest of the live API calls. If ITAD changes a response, those features fail quietly and the rest keeps working.
+- **Free game alerts show whatever IsThereAnyDeal lists as a giveaway.** Whether that includes every Steam free-to-keep promotion is unverified. The buttons open the store page: the bot cannot claim for you, because that needs your store login.
 - The leaderboard ranks by percent saved, because members shop in different currencies.
 - The ITAD endpoints and field names follow ITAD's public documentation. If ITAD changes its API, the table shows `-` for fields it can't find.
+
+## License
+
+[MIT](LICENSE).
 
 ## Credits
 

@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/db.js";
 import { createNotifier } from "../src/notify.js";
-import { runCycle, runExtras, runDigests, runSnapshots } from "../src/poller.js";
+import { freeGamesPayload } from "../src/render.js";
+import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames } from "../src/poller.js";
 import { validTimezone, localParts, parseClock, formatClock, isQuiet, digestDue } from "../src/timeutil.js";
 import { prefsPatch } from "../src/prefs.js";
 import { dealVerdict } from "../src/alerts.js";
@@ -20,7 +21,7 @@ import { UserError } from "../src/errors.js";
 const deal = (amount, regular, shop = "GOG") => ({ shop: { name: shop }, price: { amount, currency: "USD" }, regular: { amount: regular, currency: "USD" }, cut: 0, url: "https://deal.example/x" });
 const HOUR = 3600_000;
 
-function rig({ prices = {}, bundles = new Map(), giveaways = new Map() } = {}) {
+function rig({ prices = {}, bundles = new Map(), giveaways = new Map(), freeList = [] } = {}) {
     const db = openDb(":memory:");
     const sent = [], posts = [];
     const discord = {
@@ -31,7 +32,8 @@ function rig({ prices = {}, bundles = new Map(), giveaways = new Map() } = {}) {
         getPrices: async ids => new Map(ids.map(id => [id, prices[id] ?? { deals: [] }])),
         lookupTitles: async titles => titles.map(t => (/^zzz/i.test(t) ? { title: t, id: null } : { title: t, id: "id-" + t.toLowerCase().replace(/\W+/g, ""), approx: false, matched: t })),
         getBundles: async ids => new Map(ids.map(id => [id, bundles.get(id) ?? []])),
-        getGiveaways: async () => giveaways
+        getGiveaways: async () => giveaways,
+        getGiveawayList: async () => freeList
     };
     return { db, sent, posts, itad, notifier: createNotifier({ db, discord }) };
 }
@@ -309,4 +311,43 @@ test("ITAD client reads bundles, giveaways and history defensively", async () =>
     assert.deepEqual([...g.keys()], ["a"]); // the expired one is dropped
     const hist = await itad.getHistory("a", "US");
     assert.deepEqual(hist.map(p => p.price), [10, 9]); // sorted, bad row dropped
+});
+
+const free = (id, title, shop, url = "https://store.example/" + id) => ({ id, title, shop, url, expiry: null, gameIds: [] });
+
+test("free games: one message per platform, Claim all for several, once per member, opt-in only", async () => {
+    const t = rig({ freeList: [free("1", "Alpha", "Epic Game Store"), free("2", "Beta", "Epic Game Store"), free("3", "Gamma", "Steam"), free("4", "Bad", "GOG", "javascript:alert(1)")] });
+    t.db.ensureUser("u1", "g1"); t.db.ensureUser("u2", "g1");
+    t.db.updateUser("u1", { free: 1 });
+    const s1 = await runFreeGames(t);
+    assert.equal(t.sent.length, 2); // Epic and Steam, each one message; u2 did not opt in
+    assert.ok(t.sent.every(m => m.id === "u1"));
+    const epic = t.sent.find(m => /Epic/.test(m.p.content)).p;
+    assert.equal(epic.embeds.length, 2);
+    assert.equal(epic.components[0].components[0].label, "Claim all (2)");
+    assert.equal(epic.components[0].components[0].custom_id, "free_claim_all");
+    const steam = t.sent.find(m => /Steam/.test(m.p.content)).p;
+    assert.deepEqual([steam.components[0].components[0].label, steam.components[0].components[0].style], ["Claim game", 5]);
+    assert.equal(s1.delivered, 3);
+    assert.equal((await runFreeGames(t)).found, 0); // already told
+    assert.deepEqual(t.db.listAlerts("u1").map(a => a.kind), ["free", "free", "free"]);
+});
+
+test("free games respect quiet hours and are sent afterwards", async () => {
+    const t = rig({ freeList: [free("1", "Alpha", "Steam")] });
+    t.db.ensureUser("u1", "g1");
+    t.db.updateUser("u1", { free: 1, quiet_start: 22 * 60, quiet_end: 7 * 60, tz: "UTC" });
+    assert.equal((await runFreeGames({ ...t, now: () => Date.UTC(2026, 0, 5, 23) })).deferred, 1);
+    assert.equal(t.sent.length, 0);
+    assert.equal((await runFreeGames({ ...t, now: () => Date.UTC(2026, 0, 6, 9) })).delivered, 1);
+});
+
+test("free game messages only link https pages", () => {
+    assert.equal(freeGamesPayload("GOG", [free("4", "Bad", "GOG", "http://x.example")]), null);
+    assert.equal(freeGamesPayload("GOG", []), null);
+});
+
+test("the free games setting is validated like the others", () => {
+    assert.deepEqual(prefsPatch({ free: true }, {}), { free: 1 });
+    assert.deepEqual(prefsPatch({ free: false }, {}), { free: 0 });
 });

@@ -8,13 +8,13 @@ import { createItad, ItadError } from "./itad.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
-import { pageCount, tableEmbed, summaryEmbed, toCsv } from "./render.js";
+import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID } from "./render.js";
 import { HELP, ABOUT, PRIVACY } from "./text.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
 import { createNotifier } from "./notify.js";
-import { runCycle, runExtras, runDigests, runSnapshots, schedule } from "./poller.js";
+import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createDashboard } from "./dashboard/server.js";
@@ -70,6 +70,7 @@ client.once(Events.ClientReady, c => {
             const log = m => console.log(`[maintenance] ${m}`);
             const result = {};
             try { result.extras = await runExtras({ db, itad, notifier, log }); } catch (err) { ops.error("extras", err); }
+            try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
             try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
             try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
             try { db.pruneAlertLog(); db.pruneSeen(); } catch (err) { ops.error("cleanup", err); }
@@ -175,6 +176,13 @@ async function handleValue(i) {
 client.on(Events.InteractionCreate, async i => {
     if (i.isAutocomplete()) {
         try { await handlers.handleAutocomplete(i); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
+        return;
+    }
+    if (i.isButton() && i.customId === FREE_CLAIM_ALL_ID) {
+        // Every link is read from the message the bot itself sent, so nothing is stored or taken from the user.
+        const links = (i.message.embeds ?? []).filter(e => /^https:\/\//i.test(e.url ?? "")).map(e => `• [${String(e.title).slice(0, 80)}](${e.url})`);
+        try { await i.reply({ content: links.length ? `Open each link and claim it:\n${links.join("\n")}` : "Those links are no longer available.", flags: MessageFlags.Ephemeral }); }
+        catch (err) { console.error(`[claim] ${err.name}: ${err.message}`); }
         return;
     }
     if (!i.isChatInputCommand()) return;

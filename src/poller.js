@@ -3,7 +3,7 @@
 
 import { summarize } from "./report.js";
 import { evaluate, describeTrigger, dealVerdict } from "./alerts.js";
-import { alertEmbed, bundleEmbed, giveawayEmbed, digestEmbed, groupEmbed } from "./render.js";
+import { alertEmbed, bundleEmbed, giveawayEmbed, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
 import { libraryView } from "./library.js";
@@ -160,6 +160,43 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
                     discord_id: userId, itad_id: h.item.itad_id, title: h.item.title, kind: h.kind,
                     price: h.kind === "bundle" ? h.bundle.price : 0, shop: (h.bundle ?? h.giveaway).shop, via: res.via
                 });
+            }
+        }
+    }
+    return stats;
+}
+
+/**
+ * Free games on any platform (Steam, Epic, GOG and so on, whatever IsThereAnyDeal lists) for members who turned it on.
+ * One message per platform, so several free games from one store are grouped with a "Claim all" button.
+ * Each giveaway is announced once per member.
+ */
+export async function runFreeGames({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+    const stats = { found: 0, delivered: 0, failed: 0, deferred: 0 };
+    const users = db.freeUsers();
+    if (!users.length) return stats;
+    let list;
+    try { list = await itad.getGiveawayList(); }
+    catch (err) { log(`free game lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; return stats; }
+
+    for (const user of users) {
+        const fresh = list.filter(g => g.url && !db.hasSeen(user.discord_id, `free:${g.id}`));
+        if (!fresh.length) continue;
+        stats.found += fresh.length;
+        if (isQuiet(user, now())) { stats.deferred += fresh.length; continue; }
+        const byShop = new Map();
+        for (const g of fresh) { if (!byShop.has(g.shop)) byShop.set(g.shop, []); byShop.get(g.shop).push(g); }
+        for (const [shop, games] of byShop) {
+            for (const part of chunked(games, 10)) {
+                const payload = freeGamesPayload(shop, part);
+                if (!payload) { for (const g of part) db.markSeen(user.discord_id, `free:${g.id}`); continue; }
+                const res = await notifier.deliver(user, payload);
+                if (!res.ok) { stats.failed += part.length; continue; }
+                stats.delivered += part.length;
+                for (const g of part) {
+                    db.markSeen(user.discord_id, `free:${g.id}`);
+                    db.logAlert({ discord_id: user.discord_id, title: g.title, kind: "free", price: 0, shop, via: res.via });
+                }
             }
         }
     }

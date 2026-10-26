@@ -281,7 +281,7 @@ export function createDashboard({ db, itad, rest, ops = null, config, now = () =
                 throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
             }
             patch.delivery = nextDelivery;
-            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
             Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };
@@ -472,6 +472,18 @@ export function createDashboard({ db, itad, rest, ops = null, config, now = () =
             if (!Number.isInteger(n) || n < 0 || n === 1 || n > 20) throw new HttpError(400, "Use 2 to 20, or 0 to turn it off.");
             db.setGroupMin(g.id, n);
             return { groupMin: n };
+        },
+
+        // ----- free games right now, grouped by platform -----
+        "GET /api/free": async (req) => {
+            session(req);
+            const groups = new Map();
+            for (const g of await itad.getGiveawayList()) {
+                if (!/^https:\/\//i.test(g.url ?? "")) continue;
+                if (!groups.has(g.shop)) groups.set(g.shop, []);
+                groups.get(g.shop).push({ id: g.id, title: g.title, url: g.url, expiry: g.expiry });
+            }
+            return { platforms: [...groups].map(([shop, games]) => ({ shop, games })) };
         },
 
         // ----- owner -----

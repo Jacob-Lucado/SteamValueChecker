@@ -240,3 +240,4 @@ td.now { color: var(--accent); }
 
 .rule.inline .check input, .wish .rule .check input { width: auto; margin: 0 6px 0 0; }
 input[type="time"] { width: 100%; font: inherit; }
+.freelist { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }

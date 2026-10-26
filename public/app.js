@@ -459,6 +459,9 @@
     const digestDay = select(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => [String(i), d]), String(s.digest_day));
     const bundles = h("input", { type: "checkbox", checked: s.bundles });
     const share = h("input", { type: "checkbox", checked: s.share });
+    const free = h("input", { type: "checkbox", checked: s.free });
+    const freeNow = h("div", { class: "panel" }, h("h3", { text: "Free right now" }), h("p", { class: "muted", text: "Loading…" }));
+    loadFree(freeNow);
     const history = h("div", { class: "panel" }, h("h3", { text: "Recent alerts" }), h("p", { class: "muted", text: "Loading…" }));
     api("/api/alerts/history").then(d => {
       const kinds = { sale: "Sale", bundle: "Bundle", giveaway: "Free", group: "Group", digest: "Digest" };
@@ -472,7 +475,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked
+        bundles: bundles.checked, share: share.checked, free: free.checked
       });
       state.me.settings = r.settings;
       toast("Settings saved.", "ok");
@@ -493,12 +496,25 @@
         h("p", { class: "muted small", text: "Alerts that arrive during quiet hours are held and sent afterwards. Leave both empty to turn quiet hours off." }),
         h("div", { class: "row" }, field("Quiet from", qs), field("Until", qe), field("Your time zone", tz)),
         h("label", { class: "check" }, digest, "Weekly digest of your wishlist sales, sent from 9:00 in your time zone on"), field("Day", digestDay),
-        h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away")),
+        h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away"),
+        h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button.")),
+      freeNow,
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
         h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
       h("p", { class: "muted", text: `Watching ${state.me.games} game${state.me.games === 1 ? "" : "s"}. Prices are checked about once an hour.` }),
       save, history);
+  }
+
+  async function loadFree(panel) {
+    try {
+      const d = await api("/api/free");
+      panel.replaceChildren(h("h3", { text: "Free right now" }), d.platforms.length
+        ? d.platforms.map(p => h("div", { class: "subpanel" }, h("h4", { text: p.shop + (p.games.length > 1 ? ` (${p.games.length})` : "") }),
+            h("ul", { class: "freelist" }, p.games.map(g => h("li", {}, ext(g.url, "Claim " + g.title, "btn green small"))))))
+        : h("div", { class: "empty", text: "Nothing is being given away right now." }),
+        h("p", { class: "muted small", text: "Claiming happens on the store's site, where you need to be signed in." }));
+    } catch (e) { panel.replaceChildren(h("h3", { text: "Free right now" }), h("div", { class: "notice warn", text: e.message })); }
   }
 
   // ---------- servers ----------
