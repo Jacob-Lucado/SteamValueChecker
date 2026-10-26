@@ -232,6 +232,7 @@ client.on(Events.InteractionCreate, async i => {
         return;
     }
     if (!i.isChatInputCommand()) return;
+    console.log(`[command] /${i.commandName}${i.options?.getSubcommand?.(false) ? " " + i.options.getSubcommand(false) : ""}`);
     try {
         switch (i.commandName) {
             case "value": return await handleValue(i);
@@ -248,7 +249,10 @@ client.on(Events.InteractionCreate, async i => {
             case "privacy": return await embedReply(i, PRIVACY);
         }
     } catch (err) {
-        console.error(`[${i.commandName}] ${err.name}: ${err.message}`);
+        console.error(`[${i.commandName}] ${err.stack ?? `${err.name}: ${err.message}`}`);
+        // Never leave the person staring at "The application did not respond".
+        const msg = { content: "Something went wrong on the bot's side. Please try again in a moment.", flags: MessageFlags.Ephemeral };
+        try { if (i.deferred || i.replied) await i.followUp(msg); else await i.reply(msg); } catch { /* the interaction may already be gone */ }
     }
 });
 
