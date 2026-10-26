@@ -97,3 +97,14 @@ export function playNext(rows, { rand = Math.random } = {}) {
     const pick = top[Math.floor(rand() * top.length)];
     return { pick, others: open.filter(r => r !== pick).slice(0, 2), why: pick.paid ? `You paid ${pick.paid.toFixed(2)} for it and have not started it, the biggest unplayed spend in your library.` : "It has been waiting in your backlog." };
 }
+
+/** Aggregate server numbers for members who opted in. Counts and totals only. */
+export function serverStats(db, guildId) {
+    const base = db.guildStats(guildId);
+    const snaps = db.sharedLeaderboard(guildId);
+    const games = snaps.reduce((t, r) => t + r.games, 0);
+    const saved = snaps.reduce((t, r) => t + Math.max(0, (r.msrp_paid ?? 0) - (r.paid ?? 0)), 0);
+    const top = leaderboard(db, guildId, { limit: 3 });
+    const shared = db.listServerGames(guildId).slice(0, 3);
+    return { ...base, games, saved, top, sharedList: shared.map(g => ({ title: g.title, votes: g.votes ?? 0 })) };
+}

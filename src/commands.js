@@ -215,8 +215,14 @@ const alertchannel = new SlashCommandBuilder()
             .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
     .addSubcommand(s => s.setName("clear").setDescription("Remove the alert channel"))
     .addSubcommand(s => s.setName("show").setDescription("Show the current alert channel"))
+    .addSubcommand(s => s.setName("feed").setDescription("Post new free games in the alert channel for everyone (games only, no DLC)")
+        .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("group").setDescription("Post when several opted-in members watch the same game and it hits their alert")
         .addIntegerOption(o => o.setName("minimum").setDescription("How many members (2 to 20). 0 turns it off").setRequired(true).setMinValue(0).setMaxValue(20)));
+
+const serverstats = new SlashCommandBuilder()
+    .setName("serverstats")
+    .setDescription("This server's numbers: most wanted games, savings and top savers (members who opted in)");
 
 const mydata = new SlashCommandBuilder()
     .setName("mydata")
@@ -226,5 +232,5 @@ const mydata = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, watch, sales, publicpage, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, serverlist, leaderboard, giveaway].map(serverOnly)
+    ...[alertchannel, serverlist, leaderboard, serverstats, giveaway].map(serverOnly)
 ].map(c => c.toJSON());

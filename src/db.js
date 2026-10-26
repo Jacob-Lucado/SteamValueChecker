@@ -140,6 +140,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "gallery", "TEXT");
     addColumn("users", "free_dlc", "INTEGER NOT NULL DEFAULT 1");
+    addColumn("guilds", "free_feed", "INTEGER NOT NULL DEFAULT 0");
+    db.exec("CREATE TABLE IF NOT EXISTS guild_seen (guild_id TEXT NOT NULL, key TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (guild_id, key))");
     addColumn("users", "profile_slug", "TEXT");
     addColumn("users", "profile_public", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_profile_slug ON users(profile_slug) WHERE profile_slug IS NOT NULL");
@@ -309,6 +311,22 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
           WHERE u.share = 1 AND u.guild_id = ?
             AND s.day = (SELECT MAX(day) FROM library_snapshots WHERE discord_id = u.discord_id)`, guildId).map(clean);
 
+    // ---------- server settings: free game feed and stats ----------
+    const setFreeFeed = (guildId, on) => run("UPDATE guilds SET free_feed = ? WHERE guild_id = ?", on ? 1 : 0, guildId).changes > 0;
+    const guildsWithFreeFeed = () => all("SELECT * FROM guilds WHERE free_feed = 1").map(clean);
+    const guildHasSeen = (guildId, key) => Boolean(get("SELECT 1 AS x FROM guild_seen WHERE guild_id = ? AND key = ?", guildId, key));
+    const guildMarkSeen = (guildId, key) => run("INSERT OR IGNORE INTO guild_seen (guild_id, key, at) VALUES (?,?,?)", guildId, key, now());
+    const pruneGuildSeen = (olderThanMs = 120 * 86400_000) => run("DELETE FROM guild_seen WHERE at < ?", now() - olderThanMs).changes;
+    /** Aggregate numbers for members who opted in to sharing in this server. Counts only, never who wants what. */
+    const guildStats = guildId => ({
+        members: get("SELECT COUNT(*) AS n FROM users WHERE share = 1 AND guild_id = ?", guildId).n,
+        mostWanted: all(`SELECT i.title AS title, COUNT(*) AS watchers FROM items i JOIN users u ON u.discord_id = i.discord_id
+                          WHERE u.share = 1 AND u.guild_id = ? AND i.source != 'watch'
+                          GROUP BY i.itad_id ORDER BY watchers DESC, i.title LIMIT 5`, guildId).map(clean),
+        alerts30d: get(`SELECT COUNT(*) AS n FROM alert_log a JOIN users u ON u.discord_id = a.discord_id
+                         WHERE u.share = 1 AND u.guild_id = ? AND a.at > ? AND a.kind = 'sale'`, guildId, now() - 30 * 86400_000).n
+    });
+
     // ---------- server settings: group pings ----------
     const setGroupMin = (guildId, min) => run("UPDATE guilds SET group_min = ? WHERE guild_id = ?", min, guildId).changes > 0;
     const guildsWithGroupPings = () => all("SELECT * FROM guilds WHERE group_min > 0").map(clean);
@@ -404,7 +422,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
-        setGroupMin, guildsWithGroupPings, getGuildDeal, setGuildDeal,
+        setGroupMin, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, backupTo, exportUser, deleteUser, ...giveaways, close: () => db.close()
     };

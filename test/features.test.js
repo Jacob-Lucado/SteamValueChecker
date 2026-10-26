@@ -366,7 +366,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",
         "alerts/freegames": "POST /api/settings", "alerts/share": "POST /api/settings",
         "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
-        "alertchannel/group": "POST /api/servers/group",
+        "alertchannel/group": "POST /api/servers/group", "alertchannel/feed": "POST /api/servers/feed", "serverstats": "GET /api/servers/stats",
         "library/add": "POST /api/library/add", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/remove": "POST /api/library/remove", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
         "serverlist/add": "POST /api/servers/list/add", "serverlist/view": "GET /api/servers/list", "serverlist/vote": "POST /api/servers/list/vote", "serverlist/remove": "POST /api/servers/list/remove",
         leaderboard: "GET /api/servers/leaderboard",
@@ -481,7 +481,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "freegames", "help", "library", "mydata", "privacy", "publicpage", "sales", "value", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist", "serverstats"]);
     assert.match(src, /UserInstall/);
     assert.match(src, /BotDM/);
 });
@@ -645,4 +645,29 @@ test("public wishlist page: off by default, unique names, shows only games and p
     assert.equal(JSON.stringify(page).includes("p1"), false);
     setProfile(t.db, "p1", { enabled: false });
     assert.equal(await publicWishlist(t.db, itad, "jacob"), null);
+});
+
+test("server free feed posts games once per server, never DLC; stats are counts only", async () => {
+    const { runGuildFeeds } = await import("../src/poller.js");
+    const { serverStats } = await import("../src/library.js");
+    const { serverStatsEmbed } = await import("../src/render.js");
+    const t = rig({});
+    t.db.setGuildChannel("g1", "c1", "u1");
+    t.db.setFreeFeed("g1", true);
+    const posts = [];
+    const notifier = { postGuild: async (gid, p) => { posts.push([gid, p]); return true; } };
+    const itad = { getGiveawayList: async () => [free("1", "Alpha", "Steam"), { ...free("2", "Beta Pack", "Steam"), type: "dlc" }] };
+    let r = await runGuildFeeds({ db: t.db, itad, notifier });
+    assert.equal(r.posted, 1);
+    assert.equal(posts[0][1].embeds.length, 1);
+    r = await runGuildFeeds({ db: t.db, itad, notifier });
+    assert.equal(r.posted, 0);
+    t.db.ensureUser("s1", "g1"); t.db.updateUser("s1", { share: 1 });
+    t.db.addItems("s1", [{ itad_id: "a", title: "Hades" }]);
+    const st = serverStats(t.db, "g1");
+    assert.equal(st.members, 1);
+    assert.deepEqual(st.mostWanted.map(x => [x.title, x.watchers]), [["Hades", 1]]);
+    assert.equal(JSON.stringify(st).includes("s1"), false);
+    assert.match(serverStatsEmbed(st).fields.find(f => f.name === "Most wanted").value, /Hades/);
+    assert.match(serverStatsEmbed(serverStats(t.db, "nobody")).description, /opted in/);
 });

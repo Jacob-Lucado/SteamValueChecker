@@ -17,7 +17,7 @@ import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
-import { importLibrary, libraryView, leaderboard } from "../library.js";
+import { importLibrary, libraryView, leaderboard, serverStats } from "../library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
@@ -183,7 +183,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         return s.guilds
             .map(g => ({
                 id: g.id, name: g.name, icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
-                manageable: isManager(g), bot: botGuilds ? Boolean(botGuilds(g.id)) : null, alertChannel: db.getGuild(g.id)?.channel_id ?? null,
+                manageable: isManager(g), bot: botGuilds ? Boolean(botGuilds(g.id)) : null, freeFeed: Boolean(db.getGuild(g.id)?.free_feed), alertChannel: db.getGuild(g.id)?.channel_id ?? null,
                 groupMin: db.getGuild(g.id)?.group_min ?? 0
             }))
             .sort((a, b) => Number(b.manageable) - Number(a.manageable) || a.name.localeCompare(b.name));
@@ -516,6 +516,21 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!Number.isInteger(n) || n < 0 || n === 1 || n > 20) throw new HttpError(400, "Use 2 to 20, or 0 to turn it off.");
             db.setGroupMin(g.id, n);
             return { groupMin: n };
+        },
+
+        "POST /api/servers/feed": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
+            db.setFreeFeed(g.id, Boolean(body.enabled));
+            return { freeFeed: Boolean(body.enabled) };
+        },
+
+        "GET /api/servers/stats": async (req, _b, url) => {
+            const s = session(req);
+            const g = guildFor(s, url.searchParams.get("guild"));
+            return serverStats(db, g.id);
         },
 
         // ----- free games right now, grouped by platform -----

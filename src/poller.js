@@ -261,3 +261,34 @@ export function schedule(fn, everyMs, { onError = () => {}, setIntervalImpl = se
     tick();
     return () => clearIntervalImpl(handle);
 }
+
+
+/**
+ * Servers that turned on the free game feed get new free games posted in their alert channel, once each.
+ * Games only (no DLC), so the channel is not flooded; members who want DLC use /freegames.
+ */
+export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
+    const stats = { guilds: 0, posted: 0 };
+    const guilds = db.guildsWithFreeFeed();
+    if (!guilds.length) return stats;
+    let list;
+    try { list = (await itad.getGiveawayList()).filter(g => g.url && !isDlc(g)); }
+    catch (err) { log(`feed lookup failed: ${err.code ?? err.name}`); return stats; }
+    for (const guild of guilds) {
+        const fresh = list.filter(g => !db.guildHasSeen(guild.guild_id, `free:${g.id}`));
+        if (!fresh.length) continue;
+        stats.guilds++;
+        const byShop = new Map();
+        for (const g of fresh) { if (!byShop.has(g.shop)) byShop.set(g.shop, []); byShop.get(g.shop).push(g); }
+        for (const [shop, games] of byShop) {
+            for (const part of chunked(games, 4)) {
+                const payload = freeGamesPayload(shop, part);
+                const ok = payload ? await notifier.postGuild(guild.guild_id, payload) : true;
+                if (!ok) { log(`feed post failed for a server`); continue; }
+                for (const g of part) db.guildMarkSeen(guild.guild_id, `free:${g.id}`);
+                stats.posted += part.length;
+            }
+        }
+    }
+    return stats;
+}

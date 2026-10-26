@@ -251,6 +251,20 @@ export function libraryEmbed(view, currency) {
     return { color: COLOR, title: "Library value", fields, footer: { text: "Prices by IsThereAnyDeal" } };
 }
 
+/** The /serverstats card. Opted-in members only, and only counts: nobody is named for what they want. */
+export function serverStatsEmbed(s) {
+    if (!s.members) return { color: COLOR, title: "Server stats", description: "Nobody here has opted in yet. Members turn it on with `/alerts share`, then the numbers appear." };
+    const fields = [
+        { name: "Members counted", value: String(s.members), inline: true },
+        { name: "Games in libraries", value: String(s.games), inline: true },
+        { name: "Saved vs MSRP", value: s.saved > 0 ? money(s.saved, "USD") : "-", inline: true }
+    ];
+    if (s.mostWanted.length) fields.push({ name: "Most wanted", value: s.mostWanted.map((g, n) => `${n + 1}. **${g.title}** (${g.watchers})`).join("\n").slice(0, 1000) });
+    if (s.sharedList.length) fields.push({ name: "Top of the server list", value: s.sharedList.map(g => `**${g.title}** (${g.votes} votes)`).join("\n").slice(0, 1000) });
+    fields.push({ name: "Sale alerts, last 30 days", value: String(s.alerts30d), inline: true });
+    return { color: COLOR, title: "Server stats", description: "Members who opted in with `/alerts share`.", fields, footer: { text: "Counts only. Nobody is named for what they want." } };
+}
+
 /** The backlog card: how much sits unplayed and what to play next. */
 export function backlogEmbed(view, next) {
     const t = view.totals, c = view.currency;

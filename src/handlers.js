@@ -11,11 +11,11 @@ import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, serverStatsEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
-import { importLibrary, libraryView, leaderboard, LibraryError, playNext } from "./library.js";
+import { importLibrary, libraryView, leaderboard, LibraryError, playNext, serverStats } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
@@ -307,6 +307,12 @@ export function createHandlers({ db, itad, publicUrl = null }) {
             }
             case "clear":
                 return eph(i, db.clearGuildChannel(i.guildId) ? "Alert channel removed. Alerts will be DMs only." : "No alert channel was set.");
+            case "feed": {
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                const on = i.options.getBoolean("enabled", true);
+                db.setFreeFeed(i.guildId, on);
+                return eph(i, on ? "Free game feed on. New free games (not DLC) are posted in the alert channel, once each." : "Free game feed off.");
+            }
             case "group": {
                 if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
                 const n = i.options.getInteger("minimum", true);
@@ -435,6 +441,14 @@ export function createHandlers({ db, itad, publicUrl = null }) {
         } catch (err) { await failed(i, "freegames", err); }
     }
 
+    // ---------- /serverstats ----------
+    async function handleServerStats(i) {
+        try {
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            await i.editReply({ embeds: [serverStatsEmbed(serverStats(db, i.guildId))] });
+        } catch (err) { await failed(i, "serverstats", err); }
+    }
+
     // ---------- /publicpage ----------
     async function handlePublicPage(i) {
         try {
@@ -511,5 +525,5 @@ export function createHandlers({ db, itad, publicUrl = null }) {
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleMyData, handleAutocomplete };
 }

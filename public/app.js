@@ -705,12 +705,29 @@
       grid);
   }
 
+  async function statsPanel(g, into) {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    into.replaceChildren(holder);
+    try {
+      const s = await api("/api/servers/stats?guild=" + encodeURIComponent(g.id));
+      if (!s.members) { holder.className = ""; holder.replaceChildren(h("div", { class: "empty", text: "Nobody here has opted in yet. Members turn it on with /alerts share (or on their Alerts page)." })); return; }
+      const tile = (k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }));
+      holder.className = "";
+      holder.replaceChildren(
+        h("div", { class: "grid four" }, tile("Members counted", s.members), tile("Games in libraries", s.games), tile("Saved vs MSRP", s.saved > 0 ? s.saved.toFixed(2) : "-"), tile("Sale alerts, 30 days", s.alerts30d)),
+        h("div", { class: "grid two" },
+          h("div", { class: "panel" }, h("h3", { text: "Most wanted" }), s.mostWanted.length ? h("ol", {}, s.mostWanted.map(x => h("li", { text: `${x.title} (${x.watchers})` }))) : h("p", { class: "muted", text: "Nothing yet." })),
+          h("div", { class: "panel" }, h("h3", { text: "Top of the server list" }), s.sharedList.length ? h("ol", {}, s.sharedList.map(x => h("li", { text: `${x.title} (${x.votes} votes)` }))) : h("p", { class: "muted", text: "The server list is empty." }))),
+        h("p", { class: "muted small", text: "Members who opted in only. Counts only: nobody is named for what they want." }));
+    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
   function serverDetail(id) {
     const g = state.me.servers.find(x => x.id === id);
     if (!g) { location.hash = "#/servers"; return; }
     const canUse = g.bot !== false;
     const body = h("div", { class: "sv-body" });
-    const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Alert channel", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["giveaways", "Giveaways", true]] : [])]
+    const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Alert channel", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["stats", "Server stats"], ["giveaways", "Giveaways", true]] : [])]
       .filter(([, , managerOnly]) => !managerOnly || g.manageable);
     let current = "overview";
     const tabs = h("div", { class: "tabs" }, sections.map(([key, label]) => h("button", { class: "tab" + (key === current ? " active" : ""), text: label, onclick: ev => {
@@ -753,6 +770,12 @@
           clear.addEventListener("click", () => busy(clear, async () => {
             await api("/api/servers/channel", { guild_id: g.id, clear: true }); g.alertChannel = null; status.textContent = "No alert channel yet. Alerts go by DM only."; toast("Alert channel removed.", "ok");
           }));
+          const feedOn = h("input", { type: "checkbox", checked: Boolean(g.freeFeed) });
+          const feedLabel = h("label", { text: "Post free games to this server's alert channel" });
+          feedOn.addEventListener("change", async () => {
+            try { const r = await api("/api/servers/feed", { guild_id: g.id, enabled: feedOn.checked }); g.freeFeed = r.freeFeed; toast(r.freeFeed ? "Free game feed on." : "Free game feed off.", "ok"); }
+            catch (e) { feedOn.checked = !feedOn.checked; toast(e.message, "error"); }
+          });
           const min = h("input", { type: "number", min: "0", max: "20", value: String(g.groupMin || 0) });
           const setMin = h("button", { class: "btn gray", text: "Save" });
           setMin.addEventListener("click", () => busy(setMin, async () => {
@@ -763,6 +786,9 @@
             h("div", { class: "panel" }, h("h3", { text: "Alert channel" }), status,
               h("div", { class: "rule inline" }, pick, set, g.alertChannel && clear),
               h("p", { class: "muted small", text: "Saving posts a short confirmation there, which also checks that the bot can post. If that fails, give the bot View Channel, Send Messages and Embed Links in the channel." })),
+            h("div", { class: "panel" }, h("h3", { text: "Free game feed" }),
+              h("p", { class: "muted", text: "Post new free games (not DLC) in the alert channel for everyone, once each. Needs an alert channel." }),
+              h("div", { class: "rule inline" }, feedOn, feedLabel)),
             h("div", { class: "panel" }, h("h3", { text: "Group alerts" }),
               h("p", { class: "muted", text: "Post in the channel when this many opted-in members watch the same game and it hits their alert. 0 turns it off. Needs an alert channel." }),
               h("div", { class: "rule inline" }, min, setMin)));
@@ -777,6 +803,7 @@
       else if (current === "alerts") body.append(...alertsPanel());
       else if (current === "list") { const into = h("div"); body.append(into); sharedList(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
       else if (current === "board") { const into = h("div"); body.append(into); board(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
+      else if (current === "stats") statsPanel(g, body);
       else if (current === "giveaways") { location.hash = "#/giveaways"; }
     }
     show();
