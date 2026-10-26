@@ -594,6 +594,14 @@ test("visit counter for the FanaticalGrabber page: only that origin counts, one 
         r = await t.request("/api/visits/fanaticalgrabber", { method: "POST", headers: { Origin: "https://evil.example" } });
         assert.equal(r.data.views, 2, "other origins are ignored");
         assert.equal((await t.request("/api/visits/unknown")).status, 404);
+        // viewing now: heartbeats from different tabs, expiring after 75 seconds
+        const ping = id => t.request(`/api/visits/fanaticalgrabber/ping?id=${id}`, { method: "POST", headers: { Origin: SITE } });
+        assert.equal((await ping("tabaaaaaaaa")).data.online, 1);
+        assert.equal((await ping("tabbbbbbbbb")).data.online, 2);
+        assert.equal((await ping("tabaaaaaaaa")).data.online, 2, "same tab is not counted twice");
+        assert.equal((await ping("x")).data.online, 2, "bad ids are ignored");
+        t.advance(80_000);
+        assert.equal((await t.request("/api/visits/fanaticalgrabber")).data.online, 0);
         const pre = await t.request("/api/visits/fanaticalgrabber", { method: "OPTIONS", headers: { Origin: SITE } });
         assert.equal(pre.status, 204);
     } finally { await t.close(); }
