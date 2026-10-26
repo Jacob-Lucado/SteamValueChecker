@@ -40,6 +40,7 @@ export function collectAbout({ client = null, db, cfg, startedAt, version = "1.0
         creator: { ...cfg.creator, logo: `${base}/creator.png` },
         logo: `${base}/logo.png`,
         banner: `${base}/banner.png`,
-        dashboardUrl: cfg.dashboard?.publicUrl ?? null
+        dashboardUrl: cfg.dashboard?.publicUrl ?? null,
+        userInstallUrl: cfg.clientId ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(cfg.clientId)}&integration_type=1&scope=applications.commands` : null
     };
 }

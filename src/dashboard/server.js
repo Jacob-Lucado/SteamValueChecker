@@ -189,6 +189,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             help: HELP, about: ABOUT,
             privacy: PRIVACY.split("\n").filter(l => !/github\.com/i.test(l)).join("\n"), maxUploadChars: MAX_UPLOAD_CHARS,
             // View Channel + Send Messages + Embed Links, the least the bot needs to post alerts
+            userInstallUrl: config.clientId
+                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&integration_type=1&scope=applications.commands`
+                : null,
             inviteUrl: config.clientId
                 ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=19456`
                 : null

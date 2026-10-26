@@ -107,6 +107,12 @@ Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in a
 
 Usage notes and a plain-language privacy summary. `/about` is a card with the creator credit (name linked to X, with a logo), live uptime, servers, members reached, latency and giveaway totals. The same card is on the dashboard Help page. Set `CREATOR_NAME` and `CREATOR_X_URL` to change the credit.
 
+## Install on a server or on your account
+
+Most commands (`/value`, `/wishlist`, `/alerts`, `/library`, `/freegames`, `/mydata`, `/help`, `/about`, `/privacy`) also work when a person adds the app to **their own account**: they can use it in DMs, group chats and any server, even ones without the bot. Server features (`/alertchannel`, `/serverlist`, `/leaderboard`, `/giveaway`) need the bot installed in the server.
+
+To allow it: in the Developer Portal open **Installation**, tick **User Install** under Installation Contexts, and add the `applications.commands` scope under Default Install Settings > User Install. Then register the commands globally by removing `GUILD_ID`, or set `GLOBAL_COMMANDS=1`. The dashboard and `/about` show an "Add to your account" link.
+
 ## Web dashboard
 
 Everything the slash commands do is also in a browser, plus price-history charts, bulk actions on the wishlist, an alert history table, and an Admin page for the bot owner: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a modern look with a light and dark theme (it follows your system setting, and a button in the header switches it) and links to [FanaticalGrabber](https://jacob-lucado.github.io/FanaticalGrabber/).

@@ -207,7 +207,9 @@ export function createHandlers({ db, itad }) {
             case "delivery": {
                 const mode = i.options.getString("mode", true);
                 if (mode === "channel" && !db.getGuild(user.guild_id)) {
-                    return eph(i, "This server has no alert channel yet. Ask a server admin to run `/alertchannel set`, then try again.");
+                    return eph(i, i.inGuild() || user.guild_id
+                        ? "This server has no alert channel yet. Ask a server admin to run `/alertchannel set`, then try again."
+                        : "Channel delivery needs a server where the bot is installed and has an alert channel. Run this in that server, or keep alerts by DM.");
                 }
                 db.updateUser(user.discord_id, { delivery: mode });
                 return eph(i, mode === "channel"

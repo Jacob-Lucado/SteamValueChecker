@@ -143,7 +143,8 @@
     const n = v => (v === null || v === undefined ? null : Number(v).toLocaleString());
     const invite = state.cfg && state.cfg.inviteUrl;
     const cta = (extra = "") => h("div", { class: "lp-cta " + extra },
-      invite && ext(invite, "Add to Discord", "btn green big"),
+      invite && ext(invite, "Add to a server", "btn green big"),
+      state.cfg && state.cfg.userInstallUrl && ext(state.cfg.userInstallUrl, "Add to your account", "btn blue big"),
       state.me ? h("a", { class: "btn blue big", href: "#/value", text: "Open the dashboard" }) : h("a", { class: "btn blue big", href: "/auth/login", text: "Sign in with Discord" }));
 
     // A small mock of what a sale alert looks like in Discord.

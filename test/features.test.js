@@ -473,3 +473,26 @@ test("about: duration format, live numbers and the embed", async () => {
     // without a Discord client (nothing connected yet) the numbers are blank, not wrong
     assert.equal(collectAbout({ client: null, db, cfg, startedAt: 0 }).servers, null);
 });
+
+test("commands: personal ones can be installed on an account, server ones stay in servers", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../src/commands.js", import.meta.url), "utf8");
+    const block = src.slice(src.indexOf("export const commands"));
+    const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
+    const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
+    assert.deepEqual(personal.sort(), ["about", "alerts", "freegames", "help", "library", "mydata", "privacy", "value", "wishlist"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist"]);
+    assert.match(src, /UserInstall/);
+    assert.match(src, /BotDM/);
+});
+
+test("the user-install link and global registration", async () => {
+    const { collectAbout } = await import("../src/about.js");
+    const db = openDb(join(mkdtempSync(join(tmpdir(), "svc-")), "t.db"));
+    const info = collectAbout({ client: null, db, cfg: { clientId: "123", creator: { name: "J", url: null } }, startedAt: 0 });
+    assert.equal(info.userInstallUrl, "https://discord.com/oauth2/authorize?client_id=123&integration_type=1&scope=applications.commands");
+    const { loadConfig } = await import("../src/config.js");
+    const env = { DISCORD_TOKEN: "t", CLIENT_ID: "1", ITAD_API_KEY: "k" };
+    assert.equal(loadConfig({ ...env }).globalCommands, false);
+    assert.equal(loadConfig({ ...env, GLOBAL_COMMANDS: "1" }).globalCommands, true);
+});

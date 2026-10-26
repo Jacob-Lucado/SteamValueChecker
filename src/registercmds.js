@@ -6,15 +6,18 @@ import { REST, Routes } from "discord.js";
 import { commands } from "./commands.js";
 
 export async function registerCommands(cfg, { onlyIfChanged = false, dbPath = cfg.dbPath } = {}) {
-    const route = cfg.guildId
-        ? Routes.applicationGuildCommands(cfg.clientId, cfg.guildId)
-        : Routes.applicationCommands(cfg.clientId);
-    const hash = createHash("sha256").update(JSON.stringify({ route, commands })).digest("hex");
+    // Commands that can be installed on a person's account must be global. GLOBAL_COMMANDS=1 registers globally
+    // and clears the test server's own copies so nothing shows twice.
+    const global = cfg.globalCommands || !cfg.guildId;
+    const route = global ? Routes.applicationCommands(cfg.clientId) : Routes.applicationGuildCommands(cfg.clientId, cfg.guildId);
+    const hash = createHash("sha256").update(JSON.stringify({ route, commands, clear: Boolean(global && cfg.guildId) })).digest("hex");
     const stamp = join(dirname(dbPath), "commands.hash");
     if (onlyIfChanged) {
         try { if (readFileSync(stamp, "utf8").trim() === hash) return { skipped: true, count: commands.length }; } catch { /* first run */ }
     }
-    await new REST({ version: "10" }).setToken(cfg.token).put(route, { body: commands });
+    const rest = new REST({ version: "10" }).setToken(cfg.token);
+    await rest.put(route, { body: commands });
+    if (global && cfg.guildId) await rest.put(Routes.applicationGuildCommands(cfg.clientId, cfg.guildId), { body: [] }).catch(() => {});
     try { mkdirSync(dirname(stamp), { recursive: true }); writeFileSync(stamp, hash); } catch { /* not fatal: it just re-registers next start */ }
-    return { skipped: false, count: commands.length, guild: Boolean(cfg.guildId) };
+    return { skipped: false, count: commands.length, guild: !global };
 }

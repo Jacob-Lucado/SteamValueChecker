@@ -1,7 +1,15 @@
-import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { ApplicationIntegrationType, ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 
 import { REGIONS, ALERT_TYPES } from "./constants.js";
 export { REGIONS };
+
+// Commands that work anywhere: installed on a server, or on a person's own account (DMs, group chats, any server).
+const everywhere = b => b
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel);
+// Commands about a server (alert channel, shared list, giveaways) stay in servers where the bot is installed.
+const serverOnly = b => b
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
 
 const alertType = o => o.setName("type").setDescription("When to alert you").addChoices(...ALERT_TYPES);
 const alertValue = o => o
@@ -62,7 +70,6 @@ const library = new SlashCommandBuilder()
 const serverlist = new SlashCommandBuilder()
     .setName("serverlist")
     .setDescription("A wishlist shared by this server, with votes")
-    .setContexts(InteractionContextType.Guild)
     .addSubcommand(s => s.setName("add").setDescription("Suggest a game for the server")
         .addStringOption(o => o.setName("title").setDescription("Game title").setRequired(true).setMaxLength(100)))
     .addSubcommand(s => s.setName("view").setDescription("The server's list, most votes first, with current prices"))
@@ -73,14 +80,12 @@ const serverlist = new SlashCommandBuilder()
 
 const leaderboard = new SlashCommandBuilder()
     .setName("leaderboard")
-    .setDescription("Who in this server has saved the most (members who opted in with /alerts share)")
-    .setContexts(InteractionContextType.Guild);
+    .setDescription("Who in this server has saved the most (members who opted in with /alerts share)");
 
 const giveawayOption = o => o.setName("giveaway").setDescription("Which giveaway").setRequired(true).setAutocomplete(true);
 const giveaway = new SlashCommandBuilder()
     .setName("giveaway")
     .setDescription("Run a giveaway of game keys in your server")
-    .setContexts(InteractionContextType.Guild)
     .addSubcommand(s => s.setName("create").setDescription("Start a giveaway. You will be asked for the prize keys in a private form")
         .addStringOption(o => o.setName("title").setDescription("Title shown on the giveaway").setRequired(true).setMaxLength(100))
         .addStringOption(o => o.setName("length").setDescription("How long it runs, e.g. 90m, 2h, 3d, 1w, 1d12h").setRequired(true).setMaxLength(20))
@@ -183,7 +188,6 @@ const alertchannel = new SlashCommandBuilder()
     .setName("alertchannel")
     .setDescription("Server admins: choose where alerts go when a DM fails or a member opts out of DMs")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .setContexts(InteractionContextType.Guild)
     .addSubcommand(s => s.setName("set").setDescription("Set the alert channel")
         .addChannelOption(o => o.setName("channel").setDescription("Text channel").setRequired(true)
             .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
@@ -198,4 +202,7 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
-export const commands = [value, wishlist, alerts, alertchannel, library, serverlist, leaderboard, giveaway, freegames, mydata, help, about, privacy].map(c => c.toJSON());
+export const commands = [
+    ...[value, wishlist, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
+    ...[alertchannel, serverlist, leaderboard, giveaway].map(serverOnly)
+].map(c => c.toJSON());

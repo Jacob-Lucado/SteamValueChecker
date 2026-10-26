@@ -378,6 +378,7 @@ export function aboutPayload(info, { about, fanaticalUrl = null } = {}) {
     const row = [];
     if (safeUrl(c.url)) row.push(linkButton(`Created by ${c.name}`, c.url));
     if (safeUrl(info.dashboardUrl)) row.push(linkButton("Dashboard", info.dashboardUrl));
+    if (safeUrl(info.userInstallUrl)) row.push(linkButton("Add to your account", info.userInstallUrl));
     if (safeUrl(fanaticalUrl)) row.push(linkButton("FanaticalGrabber", fanaticalUrl));
     return { embeds: [embed], components: row.length ? [{ type: 1, components: row }] : [] };
 }
