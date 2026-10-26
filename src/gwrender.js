@@ -6,6 +6,7 @@ const GREEN = 0x57f287;
 const GREY = 0x8b95a5;
 const RED = 0xed4245;
 import { isVideoLink } from "./gwparse.js";
+const GALLERY_URL = "https://store.steampowered.com/";
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 const ts = (ms, f = "R") => `<t:${Math.floor(ms / 1000)}:${f}>`;
 const role = id => `<@&${id}>`;
@@ -60,7 +61,15 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
         type: 2, style: 3, custom_id: `${ID.enter}:${g.id}`, disabled: state !== "active",
         label: state === "active" ? (g.button_label || "Enter giveaway") : state === "cancelled" ? "Cancelled" : "Ended"
     };
-    const payload = { embeds: [embed], components: [{ type: 1, components: [enter] }] };
+    // Embeds that share a url are shown by Discord as one picture gallery, so extra prize art rides in extra embeds.
+    const extra = [];
+    try { extra.push(...JSON.parse(g.gallery || "[]").filter(u => safeUrl(u) && !isVideoLink(u)).slice(0, 3)); } catch { /* ignore a bad value */ }
+    const embeds = [embed];
+    if (extra.length && embed.image) {
+        embed.url = GALLERY_URL;
+        for (const u of extra) embeds.push({ url: GALLERY_URL, image: { url: u } });
+    }
+    const payload = { embeds, components: [{ type: 1, components: [enter] }] };
     const ping = state === "active" && g.ping_role_id ? role(g.ping_role_id) : null;
     const content = [ping, video ? g.image_url : null].filter(Boolean).join("\n");
     if (content) payload.content = content;

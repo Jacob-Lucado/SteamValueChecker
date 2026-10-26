@@ -86,7 +86,7 @@ const gwDiscord = {
     }
 };
 const giveaways = cfg.keySecret
-    ? createGiveawayService({ db, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, log: m => console.log(`[giveaway] ${m}`) })
+    ? createGiveawayService({ db, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
     : null;
 const gw = createGiveawayHandlers({ db, giveaways });
 

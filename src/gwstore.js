@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS giveaway_settings (
 const GIVEAWAY_FIELDS = [
     "guild_id", "channel_id", "host_id", "title", "description", "game_title", "image_url", "thumbnail_url", "color", "button_label",
     "ping_role_id", "require_role_id", "bonus_role_id", "bonus_entries", "min_account_days", "min_member_days", "claim_hours",
-    "vouch_channel_id", "ends_at"
+    "vouch_channel_id", "ends_at", "gallery"
 ];
 
 export function giveawayStore({ db, run, get, all, clean, now }) {

@@ -76,7 +76,7 @@ function pickOne(pool, rand) {
     return pool.pop();
 }
 
-export function createGiveawayService({ db, vault, discord, itad = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
+export function createGiveawayService({ db, vault, discord, itad = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
     const must = id => {
         const g = db.getGiveaway(Number(id));
         if (!g) throw new UserError("I can't find that giveaway.");
@@ -104,14 +104,19 @@ export function createGiveawayService({ db, vault, discord, itad = null, now = (
         if (db.countActiveGiveaways(input.guild_id) >= MAX_ACTIVE_GIVEAWAYS) throw new UserError(`This server already has ${MAX_ACTIVE_GIVEAWAYS} running giveaways. End one first.`);
 
         let image = input.image_url ?? null, thumbnail = input.thumbnail_url ?? null, imageSource = image ? "custom" : "none";
+        let gallery = null;
         if (!image && input.auto_image !== false) {
-            const art = await autoImage(itad, cleanText(input.game_title, 100) ?? input.keys[0].label);
-            if (art) { image = art.image; thumbnail = thumbnail ?? art.thumbnail; imageSource = "auto"; }
+            const given = cleanText(input.game_title, 100);
+            const names = given ? [given] : [...new Set(input.keys.map(k => k.label))].slice(0, 4);
+            const found = (await Promise.all(names.map(n => autoImage(itad, n)))).filter(Boolean).map(a => a.image);
+            const unique = [...new Set(found)];
+            if (names.length > 1 && unique.length < 2 && multiBannerUrl) { image = multiBannerUrl; imageSource = "auto"; } // one picture can't stand for several games
+            else if (unique.length) { image = unique[0]; if (unique.length > 1) gallery = JSON.stringify(unique.slice(1)); imageSource = "auto"; }
         }
         const g = {
             guild_id: input.guild_id, channel_id: input.channel_id, host_id: input.host_id, title,
             description: cleanText(input.description, 1500), game_title: cleanText(input.game_title, 100),
-            image_url: image, thumbnail_url: thumbnail, color: input.color ?? null, button_label: cleanText(input.button_label, 40),
+            image_url: image, thumbnail_url: thumbnail, gallery, color: input.color ?? null, button_label: cleanText(input.button_label, 40),
             ping_role_id: input.ping_role_id ?? null, require_role_id: input.require_role_id ?? null, bonus_role_id: input.bonus_role_id ?? null,
             bonus_entries: clampInt(input.bonus_entries, 1, 10, 1), min_account_days: clampInt(input.min_account_days, 0, 3650, 0),
             min_member_days: clampInt(input.min_member_days, 0, 3650, 0), claim_hours: clampInt(input.claim_hours, 1, 168, 48),

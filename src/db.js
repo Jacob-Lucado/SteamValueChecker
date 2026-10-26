@@ -122,6 +122,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "bundles", "INTEGER NOT NULL DEFAULT 1");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("giveaways", "gallery", "TEXT");
     addColumn("items", "appid", "INTEGER");
     addColumn("library_snapshots", "msrp_paid", "REAL NOT NULL DEFAULT 0");
     addColumn("guilds", "group_min", "INTEGER NOT NULL DEFAULT 0");

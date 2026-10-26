@@ -33,6 +33,7 @@ const FILES = {
     "/logo.png": ["logo.png", "image/png"],
     "/creator.png": ["creator.png", "image/png"],
     "/banner.png": ["banner.png", "image/png"],
+    "/multikey.png": ["multikey.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
     "/favicon.png": ["favicon.png", "image/png"]
 };

@@ -511,3 +511,13 @@ test("giveaway artwork: Steam search first, cached, ITAD fallback; title comes f
     assert.equal(titleFromKeys([{ label: "Hades" }]), "Hades");
     assert.equal(titleFromKeys([{ label: "Hades" }, { label: "Celeste" }, { label: "Hades" }]), "Hades + 1 more");
 });
+
+test("multi-game giveaway embeds share a url so Discord shows a gallery", async () => {
+    const { giveawayPayload } = await import("../src/gwrender.js");
+    const g = { id: 1, title: "T", host_id: "1", ends_at: Date.now() + 1e6, image_url: "https://a.example/1.jpg", gallery: JSON.stringify(["https://a.example/2.jpg", "https://a.example/3.jpg"]) };
+    const p = giveawayPayload(g, [{ label: "A", status: "available" }, { label: "B", status: "available" }], 0, "active");
+    assert.equal(p.embeds.length, 3);
+    assert.ok(p.embeds.every(e => e.url === p.embeds[0].url));
+    assert.equal(p.embeds[2].image.url, "https://a.example/3.jpg");
+    assert.equal(giveawayPayload({ ...g, gallery: null }, [], 0, "active").embeds.length, 1);
+});
