@@ -1,4 +1,5 @@
 import "dotenv/config";
+import v8 from "node:v8";
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType,
     Events, GatewayIntentBits, MessageFlags,
@@ -321,6 +322,13 @@ if (cfg.dashboard) {
 } else {
     console.log("Dashboard is off (set DASHBOARD_URL and DISCORD_CLIENT_SECRET to turn it on).");
 }
+
+// Breadcrumbs for the Admin log, so a restart is never silent: why it stopped, and how much memory it was using.
+const memNote = () => { const m = process.memoryUsage(); return `rss ${Math.round(m.rss / 1048576)} MB, heap ${Math.round(m.heapUsed / 1048576)} MB`; };
+console.log(`[boot] started, ${memNote()}, heap limit ${Math.round(v8.getHeapStatistics().heap_size_limit / 1048576)} MB`);
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { console.error(`[shutdown] received ${sig} (the host stopped the bot, e.g. a deploy or restart), ${memNote()}`); setTimeout(() => process.exit(0), 300); });
+process.on("exit", code => { try { console.error(`[exit] code ${code}, ${memNote()}`); } catch { /* nothing left to do */ } });
+setInterval(() => { const m = process.memoryUsage(); if (m.rss > 380 * 1048576) console.error(`[memory] high usage: ${memNote()}`); }, 60_000).unref();
 
 process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.stack ?? err}`));
 process.on("uncaughtException", err => {
