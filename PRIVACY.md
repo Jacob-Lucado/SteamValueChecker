@@ -92,3 +92,12 @@ Questions: [Jacob Lucado on X](https://x.com/twit_user69).
 ## Changes
 
 If this policy changes, the date above will be updated.
+
+
+## Newer features
+
+- **Public wishlist page:** off by default. When you turn it on, anyone with the link can see your game names, artwork and today's best prices. Nothing else, and never your Discord account. Turn it off any time with `/publicpage enabled:false`.
+- **Backlog status:** the status you set on library games (backlog, playing, finished, dropped) is stored with your library and deleted with `/mydata delete`.
+- **One-off watches:** a game added with `/watch` is stored like a wishlist game and removed after its alert or after 30 days.
+- **Server stats:** numbers for members who opted in with `/alerts share`. Counts and totals only; nobody is named for what they want.
+- **Status history:** the bot stores per-day uptime counts and a short log of outages. Nothing about people.

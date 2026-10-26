@@ -66,6 +66,13 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/alerts delivery` | DM (default) or the server alert channel |
 | `/alerts quiethours`, `digest`, `bundles`, `freegames`, `share`, `history` | Hold alerts overnight (with your time zone), a weekly sales digest, bundle and giveaway alerts, opt in to server group alerts and the leaderboard, and your recent alerts |
 | `/alerts freegames enabled:` | Get told when any game is free to claim. One message per store; several free games from the same store come with a **Claim all** button, a single game with **Claim game** |
+| `/watch title:` | Watch one game for a price drop without adding it to your wishlist. Removed after the alert, or after 30 days |
+| `/sales` | Upcoming Steam sales and festivals with countdowns (dates in `src/salescal.js`, update when Valve announces new ones) |
+| `/publicpage enabled: name:` | A public, shareable page of your wishlist and best prices at `#/u/name`. Shows only game names, art and prices |
+| `/status` | Live health checks, uptime and incidents (the same data as the dashboard Status page) |
+| `/library status\|backlog` | Mark games backlog, playing, finished or dropped; see unplayed spend and what to play next |
+| `/serverstats` | A server's numbers for members who opted in: most wanted games, savings, top of the server list. Counts only |
+| `/alertchannel feed enabled:` | Post new free games (not DLC) in the alert channel for everyone |
 | `/library add\|import\|view\|remove` | Games you own and what you paid. Shows what they are worth, what you saved against MSRP, and a value-over-time chart on the dashboard |
 | `/serverlist add\|view\|vote\|remove` | A wishlist the whole server shares, with votes and current prices |
 | `/leaderboard` | Who in the server has saved the most (percent of MSRP), for members who opted in |
@@ -241,3 +248,12 @@ fly deploy
 ```
 
 Add `https://YOUR-APP.fly.dev/auth/callback` as a redirect under OAuth2 in the Discord Developer Portal.
+
+
+### Price insight, ProtonDB and the status page
+
+Sale alerts now carry a 12 month price sparkline with a buy-now-or-wait note, and a ProtonDB (Linux / Steam Deck) rating when the game's Steam id is known. The dashboard has a public **Status** page (`#/status`) with live checks, a 90 day uptime bar and an incident log. If a service stays degraded for a few minutes, or the bot was offline for five or more, the owner (`OWNER_DISCORD_ID`) gets a DM.
+
+### Giveaway scheduling
+
+`/giveaway create` can start later (`startin:2h`), repeat as a series (`rounds:4 repeatevery:7d`, prizes are split across the rounds and all rounds are scheduled up front), and be limited to server boosters (`boosters:true`). The dashboard form has the same fields.

@@ -46,7 +46,7 @@ const itad = createItad({ apiKey: cfg.itadKey });
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
-const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null });
+const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
 
 // DMs and channel posts go through here, so notify.js can be tested without Discord.
 const discord = {
@@ -150,6 +150,7 @@ const beat = { alerts: null, giveaways: null }; // when each background job last
 const staleAfter = (at, everyMs) => (at === null ? Date.now() - STARTED_AT > everyMs * 3 : Date.now() - at > everyMs * 3);
 const status = createStatusMonitor({
     db, log: m => console.error(`[status] ${m}`),
+    notify: text => (cfg.ownerId ? discord.sendDm(cfg.ownerId, { content: text }) : null),
     probes: {
         gateway: { name: "Discord gateway and bot", desc: "Connection to Discord and slash command handling", critical: true, check: () => {
             if (!client.isReady() || client.ws.status !== 0) return { state: "down", detail: "Not connected to Discord" };
@@ -299,6 +300,7 @@ client.on(Events.InteractionCreate, async i => {
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
             case "freegames": return await handlers.handleFreeGames(i);
+            case "status": return await handlers.handleStatus(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
             case "serverstats": return await handlers.handleServerStats(i);

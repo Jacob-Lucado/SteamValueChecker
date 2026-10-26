@@ -26,6 +26,12 @@ export const HELP = [
     "• Server admins can use `/alertchannel group` to post when several opted-in members watch the same game and it goes on sale.",
     "• Server managers can run key giveaways with `/giveaway create`. Winners claim with a button, confirm it worked, and a vouch is posted.",
     "• `/freegames` lists what is free to claim right now on Steam, Epic, GOG and others. `/alerts freegames` tells you when new ones appear.",
+    "",
+    "**More**",
+    "• `/watch` watches one game for a price drop without adding it to your wishlist (it is removed after the alert). `/sales` shows the Steam sale calendar.",
+    "• `/library status` marks a game as backlog, playing, finished or dropped. `/library backlog` shows what you have not played, what it cost and what to play next.",
+    "• `/publicpage` turns on a shareable page of your wishlist and best prices, handy for gifts. `/freegames` has Games and DLC tabs; `/alerts freegames dlc:false` hides DLC.",
+    "• `/serverstats` shows a server's numbers. `/alertchannel feed` posts new free games in the channel. `/status` shows whether the bot is healthy.",
     "• `/mydata` exports or deletes everything stored about you.",
     "",
     "Replies are private to you. Never post game keys in chat. The bot ignores anything that looks like a key, except keys a server manager enters in the private giveaway form."

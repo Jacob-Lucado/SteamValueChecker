@@ -11,7 +11,7 @@ import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, serverStatsEmbed } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
@@ -56,7 +56,7 @@ function pageButtons(page, pages) {
 
 const deliveryText = u => (u.delivery === "channel" ? "the server alert channel (you are mentioned)" : "direct message");
 
-export function createHandlers({ db, itad, publicUrl = null }) {
+export function createHandlers({ db, itad, publicUrl = null, getStatus = () => null, getAbout = () => null }) {
     // ---------- /wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");
@@ -441,6 +441,13 @@ export function createHandlers({ db, itad, publicUrl = null }) {
         } catch (err) { await failed(i, "freegames", err); }
     }
 
+    // ---------- /status ----------
+    async function handleStatus(i) {
+        const st = getStatus();
+        if (!st) return eph(i, "Status is not available right now.");
+        return i.reply({ embeds: [statusEmbed(st.snapshot(), getAbout(), publicUrl)], flags: MessageFlags.Ephemeral });
+    }
+
     // ---------- /serverstats ----------
     async function handleServerStats(i) {
         try {
@@ -525,5 +532,5 @@ export function createHandlers({ db, itad, publicUrl = null }) {
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

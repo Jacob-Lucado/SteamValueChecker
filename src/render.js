@@ -251,6 +251,20 @@ export function libraryEmbed(view, currency) {
     return { color: COLOR, title: "Library value", fields, footer: { text: "Prices by IsThereAnyDeal" } };
 }
 
+/** The /status card, the same data as the Status page. */
+export function statusEmbed(snap, about, publicUrl = null) {
+    const ICON = { operational: "🟢", degraded: "🟡", down: "🔴", unknown: "⚪" };
+    const HEAD = { operational: "All systems operational", degraded: "Some systems are degraded", down: "Major outage" };
+    const fields = snap.components.map(c => ({ name: `${ICON[c.state] ?? "⚪"} ${c.name}`, value: c.detail ? `${c.state}: ${c.detail}` : c.state, inline: true }));
+    const up = snap.uptime;
+    const bits = [up.pct90 !== null ? `**${up.pct90}%** uptime over 90 days` : null, about?.uptime ? `Running for **${about.uptime}**` : null, about?.pingMs != null ? `Latency **${about.pingMs} ms**` : null].filter(Boolean);
+    return {
+        color: snap.overall === "operational" ? GREEN : snap.overall === "degraded" ? 0xf2b84b : 0xed4245,
+        title: `${ICON[snap.overall] ?? "⚪"} ${HEAD[snap.overall] ?? "Checking"}`, description: bits.join("  •  ") || undefined, fields,
+        footer: { text: publicUrl ? `Full history: ${publicUrl}/#/status` : "Checked every minute" }
+    };
+}
+
 /** The /serverstats card. Opted-in members only, and only counts: nobody is named for what they want. */
 export function serverStatsEmbed(s) {
     if (!s.members) return { color: COLOR, title: "Server stats", description: "Nobody here has opted in yet. Members turn it on with `/alerts share`, then the numbers appear." };

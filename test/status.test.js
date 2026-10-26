@@ -30,3 +30,21 @@ test("status monitor: tallies uptime, logs changes, counts offline gaps as downt
     assert.equal(snap.uptime.days[0].pct, null);
     assert.ok(snap.uptime.pct90 > 0);
 });
+
+test("owner is told once when something stays broken, and once when it recovers", async () => {
+    const db = openDb(":memory:");
+    let t = Date.parse("2026-10-26T12:00:00Z"), state = "operational";
+    const told = [];
+    const m = createStatusMonitor({ db, now: () => t, notify: x => told.push(x), alertAfterTicks: 3,
+        probes: { prices: { name: "Price data", desc: "d", critical: false, check: () => ({ state, detail: state === "degraded" ? "rate_limited" : null }) } } });
+    await m.tick();
+    state = "degraded";
+    for (let n = 0; n < 5; n++) { t += MIN; await m.tick(); }
+    assert.equal(told.length, 1);
+    assert.match(told[0], /Price data has been degraded for 3 minutes: rate_limited/);
+    state = "operational"; t += MIN; await m.tick();
+    assert.equal(told.length, 2);
+    assert.match(told[1], /back to normal/);
+    t += 20 * MIN; await m.tick(); // the process was off
+    assert.match(told[2], /offline for about/);
+});

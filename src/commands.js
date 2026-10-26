@@ -155,6 +155,10 @@ const wishlist = new SlashCommandBuilder()
         .addNumberOption(alertValue)
         .addStringOption(o => gameOption(o).setDescription("One game. Leave empty to change every game")));
 
+const status = new SlashCommandBuilder()
+    .setName("status")
+    .setDescription("Is the bot healthy? Live checks, uptime and any recent incidents");
+
 const publicpage = new SlashCommandBuilder()
     .setName("publicpage")
     .setDescription("A public page of your wishlist and its best prices that you can share, for gifts")
@@ -235,6 +239,6 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
 export const commands = [
-    ...[value, wishlist, watch, sales, publicpage, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, serverlist, leaderboard, serverstats, giveaway].map(serverOnly)
 ].map(c => c.toJSON());

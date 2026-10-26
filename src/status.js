@@ -7,8 +7,9 @@ const dayKey = ms => new Date(ms).toISOString().slice(0, 10);
 const RANK = { operational: 0, degraded: 1, down: 2 };
 
 /** probes: { id: { name, desc, critical, check: () => { state, detail } | Promise } } */
-export function createStatusMonitor({ db, probes, now = () => Date.now(), intervalMs = 60_000, log = () => {} }) {
+export function createStatusMonitor({ db, probes, now = () => Date.now(), intervalMs = 60_000, log = () => {}, notify = null, alertAfterTicks = 3 }) {
     let current = new Map(); // id -> { state, detail }
+    const trouble = new Map(); // id -> { since, ticks, told } while a component is not operational
     let checkedAt = null;
     let timer = null;
 
@@ -21,6 +22,8 @@ export function createStatusMonitor({ db, probes, now = () => Date.now(), interv
         return out;
     }
 
+    const tell = text => { try { Promise.resolve(notify?.(text)).catch(() => {}); } catch { /* a failed notice must never stop monitoring */ } };
+
     async function tick() {
         const t = now();
         // Time the monitor was not running counts as down.
@@ -31,11 +34,25 @@ export function createStatusMonitor({ db, probes, now = () => Date.now(), interv
             for (let n = 1; n <= missing; n++) { const k = dayKey(last + n * intervalMs); perDay.set(k, (perDay.get(k) ?? 0) + 1); }
             for (const [k, mins] of perDay) db.uptimeAdd(k, 0, mins);
             db.addStatusEvent(t, "bot", "down", `Offline for about ${missing} minute${missing === 1 ? "" : "s"}`);
+            if (missing >= 5) tell(`The bot was offline for about ${missing} minutes and is back up now.`);
         }
         const next = await runProbes();
         for (const [id, r] of next) {
             const before = current.get(id)?.state;
             if (before !== undefined && before !== r.state) db.addStatusEvent(t, id, r.state, r.detail);
+        }
+        // Tell the owner once when something has stayed broken for a few checks in a row, and once when it recovers.
+        for (const [id, r] of next) {
+            const tr = trouble.get(id);
+            if (r.state === "operational") {
+                if (tr?.told) tell(`✅ ${probes[id].name} is back to normal after about ${Math.max(1, Math.round((t - tr.since) / 60_000))} minutes.`);
+                trouble.delete(id);
+            } else {
+                const cur = tr ?? { since: t, ticks: 0, told: false };
+                cur.ticks++;
+                if (!cur.told && cur.ticks >= alertAfterTicks) { cur.told = true; tell(`⚠️ ${probes[id].name} has been ${r.state === "down" ? "down" : "degraded"} for ${cur.ticks} minutes${r.detail ? `: ${r.detail}` : ""}.`); }
+                trouble.set(id, cur);
+            }
         }
         current = next;
         checkedAt = t;
