@@ -46,7 +46,7 @@ const itad = createItad({ apiKey: cfg.itadKey });
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
-const handlers = createHandlers({ db, itad });
+const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null });
 
 // DMs and channel posts go through here, so notify.js can be tested without Discord.
 const discord = {
@@ -300,6 +300,7 @@ client.on(Events.InteractionCreate, async i => {
             case "freegames": return await handlers.handleFreeGames(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
+            case "publicpage": return await handlers.handlePublicPage(i);
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));

@@ -573,12 +573,48 @@
         h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away"),
         h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /freegames and the list below show)")),
-      freeNow, salesPanel(),
+      freeNow, salesPanel(), publicPagePanel(),
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
         h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
       h("p", { class: "muted", text: `Watching ${state.me.games} game${state.me.games === 1 ? "" : "s"}. Prices are checked about once an hour.` }),
       save, history);
+  }
+
+  function publicPagePanel() {
+    const panel = h("div", { class: "panel" }, h("h3", { text: "Public wishlist page" }), h("p", { class: "muted", text: "Loading…" }));
+    api("/api/profile").then(p => {
+      const on = h("input", { type: "checkbox", checked: p.public });
+      const slug = h("input", { type: "text", value: p.slug || "", placeholder: "your-name", maxlength: "24" });
+      const link = h("div", { class: "muted small" });
+      const showLink = s => { link.replaceChildren(...(s && on.checked ? [h("a", { href: "#/u/" + s, text: location.origin + "/#/u/" + s })] : [])); };
+      const save = h("button", { class: "btn blue", text: "Save", onclick: () => busy(save, async () => {
+        const r = await api("/api/profile", { enabled: on.checked, slug: slug.value });
+        slug.value = r.slug || ""; showLink(r.slug); toast(r.public ? "Your page is on." : "Your page is off.", "ok");
+      }) });
+      showLink(p.slug);
+      panel.replaceChildren(h("h3", { text: "Public wishlist page" }),
+        h("p", { class: "muted", text: "Share a link to your wishlist and its best prices, handy for gifts. It shows only game names, art and prices. Never your Discord account or anything else." }),
+        h("label", { class: "check" }, on, "Turn my page on"), field("Page name", slug), link, h("p"), save);
+    }).catch(e => panel.replaceChildren(h("h3", { text: "Public wishlist page" }), h("div", { class: "notice warn", text: e.message })));
+    return panel;
+  }
+
+  async function publicWishlistView(slug) {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(holder);
+    try {
+      const d = await api("/api/public/wishlist?slug=" + encodeURIComponent(slug));
+      const money2 = (n, c) => (n === null || n === undefined ? "-" : new Intl.NumberFormat(undefined, { style: "currency", currency: c || "USD" }).format(n));
+      holder.className = "";
+      holder.replaceChildren(pageHead(d.slug + "'s wishlist", `${d.games.length} game${d.games.length === 1 ? "" : "s"} with today's best prices. Thinking of a gift?`),
+        d.games.length ? h("div", { class: "free-grid" }, d.games.map(g => h("div", { class: "free-card" },
+          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "🎮" }),
+          h("div", { class: "free-info" }, h("strong", { text: g.title }),
+            h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
+            h("b", { text: money2(g.price, g.currency) }),
+            g.url && ext(g.url, "View deal", "btn green small"))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
+    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
   function salesPanel() {
@@ -1154,7 +1190,8 @@
   function route() {
     renderChrome();
     const view = currentView();
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u") return landing();
+    if (view === "u" && currentParam()) { publicWishlistView(currentParam()); window.scrollTo(0, 0); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo(0, 0); return; }
     (VIEWS[view] || (state.me ? valueView : landing))();
     window.scrollTo(0, 0);

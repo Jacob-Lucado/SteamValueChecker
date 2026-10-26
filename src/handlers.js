@@ -4,6 +4,7 @@
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
+import { setProfile } from "./profile.js";
 import { salesEmbed, upcomingSales } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { ItadError } from "./itad.js";
@@ -55,7 +56,7 @@ function pageButtons(page, pages) {
 
 const deliveryText = u => (u.delivery === "channel" ? "the server alert channel (you are mentioned)" : "direct message");
 
-export function createHandlers({ db, itad }) {
+export function createHandlers({ db, itad, publicUrl = null }) {
     // ---------- /wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");
@@ -434,6 +435,17 @@ export function createHandlers({ db, itad }) {
         } catch (err) { await failed(i, "freegames", err); }
     }
 
+    // ---------- /publicpage ----------
+    async function handlePublicPage(i) {
+        try {
+            db.ensureUser(i.user.id, i.guildId);
+            const r = setProfile(db, i.user.id, { enabled: i.options.getBoolean("enabled", true), slug: i.options.getString("name") });
+            if (!r.public) return eph(i, "Your public page is off. Nobody can open it.");
+            const link = publicUrl ? `${publicUrl}/#/u/${r.slug}` : null;
+            return eph(i, `Your page is on${link ? `: ${link}` : `, as **${r.slug}**`}\nIt shows only game names, art and today's best prices. Never your Discord account.`);
+        } catch (err) { await failed(i, "publicpage", err); }
+    }
+
     // ---------- /sales and /watch ----------
     async function handleSales(i) {
         return i.reply({ embeds: [salesEmbed(upcomingSales(Date.now()), { watching: db.countItems(i.user.id) || null })], flags: MessageFlags.Ephemeral });
@@ -499,5 +511,5 @@ export function createHandlers({ db, itad }) {
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleMyData, handleAutocomplete };
 }

@@ -140,6 +140,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "gallery", "TEXT");
     addColumn("users", "free_dlc", "INTEGER NOT NULL DEFAULT 1");
+    addColumn("users", "profile_slug", "TEXT");
+    addColumn("users", "profile_public", "INTEGER NOT NULL DEFAULT 0");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_profile_slug ON users(profile_slug) WHERE profile_slug IS NOT NULL");
     addColumn("library", "status", "TEXT NOT NULL DEFAULT 'backlog'");
     addColumn("items", "appid", "INTEGER");
     addColumn("library_snapshots", "msrp_paid", "REAL NOT NULL DEFAULT 0");
@@ -282,6 +285,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         } catch (err) { db.exec("ROLLBACK"); throw err; }
         return { added, updated, skippedForLimit };
     }
+    const setProfile = (id, { slug, isPublic }) => run("UPDATE users SET profile_slug = ?, profile_public = ? WHERE discord_id = ?", slug, isPublic ? 1 : 0, id);
+    const getProfileBySlug = slug => clean(get("SELECT * FROM users WHERE profile_slug = ?", slug));
     const LIB_STATUSES = ["backlog", "playing", "finished", "dropped"];
     const setLibraryStatus = (discordId, itadId, status) => LIB_STATUSES.includes(status)
         ? run("UPDATE library SET status = ? WHERE discord_id = ? AND itad_id = ?", status, discordId, itadId).changes > 0 : false;
@@ -398,7 +403,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
-        countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
+        countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         setGroupMin, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, backupTo, exportUser, deleteUser, ...giveaways, close: () => db.close()

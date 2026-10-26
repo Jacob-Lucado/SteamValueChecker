@@ -151,6 +151,12 @@ const wishlist = new SlashCommandBuilder()
         .addNumberOption(alertValue)
         .addStringOption(o => gameOption(o).setDescription("One game. Leave empty to change every game")));
 
+const publicpage = new SlashCommandBuilder()
+    .setName("publicpage")
+    .setDescription("A public page of your wishlist and its best prices that you can share, for gifts")
+    .addBooleanOption(o => o.setName("enabled").setDescription("Turn the page on or off").setRequired(true))
+    .addStringOption(o => o.setName("name").setDescription("Page name, 3 to 24 letters, numbers, - or _").setMinLength(3).setMaxLength(24));
+
 const sales = new SlashCommandBuilder()
     .setName("sales")
     .setDescription("Upcoming Steam sales and festivals, with countdowns");
@@ -219,6 +225,6 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
 export const commands = [
-    ...[value, wishlist, watch, sales, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, sales, publicpage, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, serverlist, leaderboard, giveaway].map(serverOnly)
 ].map(c => c.toJSON());

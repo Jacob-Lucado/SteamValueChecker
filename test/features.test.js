@@ -372,7 +372,7 @@ test("every slash command has a dashboard counterpart", async () => {
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
-        "freegames": "GET /api/free", "sales": "GET /api/sales", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
+        "freegames": "GET /api/free", "sales": "GET /api/sales", "publicpage": "POST /api/profile", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
@@ -480,7 +480,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "freegames", "help", "library", "mydata", "privacy", "sales", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "freegames", "help", "library", "mydata", "privacy", "publicpage", "sales", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist"]);
     assert.match(src, /UserInstall/);
     assert.match(src, /BotDM/);
@@ -626,4 +626,23 @@ test("ProtonDB badge: cached lookup, silent on failure, shown on the alert", asy
     const { alertEmbed } = await import("../src/render.js");
     const e = alertEmbed({ title: "G" }, { price: 5, regular: 10, discount: 0.5, currency: "USD", atl: null }, { trigger: "any", proton: "platinum" });
     assert.match(e.description, /Platinum/);
+});
+
+test("public wishlist page: off by default, unique names, shows only games and prices", async () => {
+    const { setProfile, publicWishlist, cleanSlug } = await import("../src/profile.js");
+    const t = rig({});
+    t.db.ensureUser("p1", "g"); t.db.ensureUser("p2", "g");
+    t.db.addItems("p1", [{ itad_id: "a", title: "Hades", appid: 1145360 }]);
+    t.db.addItems("p1", [{ itad_id: "w", title: "Secret Watch" }], { source: "watch" });
+    const itad = { getPrices: async () => new Map() };
+    assert.equal(await publicWishlist(t.db, itad, "jacob"), null);
+    assert.throws(() => setProfile(t.db, "p1", { enabled: true }), /page name/);
+    assert.throws(() => cleanSlug("a!"), /3 to 24/);
+    assert.deepEqual(setProfile(t.db, "p1", { enabled: true, slug: "Jacob" }), { slug: "jacob", public: true });
+    assert.throws(() => setProfile(t.db, "p2", { enabled: true, slug: "jacob" }), /taken/);
+    const page = await publicWishlist(t.db, itad, "JACOB");
+    assert.deepEqual(page.games.map(g => g.title), ["Hades"]);
+    assert.equal(JSON.stringify(page).includes("p1"), false);
+    setProfile(t.db, "p1", { enabled: false });
+    assert.equal(await publicWishlist(t.db, itad, "jacob"), null);
 });

@@ -20,6 +20,7 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard } from "../library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
+import { setProfile, publicWishlist } from "../profile.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
 import { isDlc } from "../freemenu.js";
@@ -533,6 +534,15 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 },
                 stats: info ? { servers: info.servers, members: info.members, gamesWatched: info.gamesWatched, alerts24h: info.alerts24h } : null
             };
+        },
+
+        "GET /api/profile": async (req) => { const s = session(req); const u = userRow(s); return { slug: u.profile_slug ?? null, public: Boolean(u.profile_public) }; },
+        "POST /api/profile": async (req, body) => { const s = session(req); userRow(s); return setProfile(db, s.userId, { enabled: Boolean(body.enabled), slug: body.slug }); },
+        // Public on purpose (anyone with the link), but only for members who switched their page on.
+        "GET /api/public/wishlist": async (_req, _b, url) => {
+            const page = await publicWishlist(db, itad, url.searchParams.get("slug"));
+            if (!page) throw new HttpError(404, "That page does not exist or is private.");
+            return page;
         },
 
         "GET /api/sales": async (req) => { session(req); return { sales: upcomingSales(Date.now(), { limit: 8 }), updated: SALES_UPDATED }; },
