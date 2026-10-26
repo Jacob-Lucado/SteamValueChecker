@@ -210,6 +210,12 @@ alerts
     .addSubcommand(s => s.setName("freegames").setDescription("Get told when a game is free to claim on Steam, Epic, GOG and others")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true))
         .addBooleanOption(o => o.setName("dlc").setDescription("Also show free DLC and add-ons (default on)")))
+    .addSubcommand(s => s.setName("mute").setDescription("Stop DMs for one kind of alert (you can still read them on the dashboard's Notifications page)")
+        .addStringOption(o => o.setName("type").setDescription("Which alerts").setRequired(true).addChoices(
+            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "Weekly digest", value: "digest" }))
+        .addBooleanOption(o => o.setName("muted").setDescription("True to mute, false to get them again").setRequired(true)))
+    .addSubcommand(s => s.setName("language").setDescription("Language for the bot's buttons and messages")
+        .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices({ name: "English", value: "en" }, { name: "Español", value: "es" }, { name: "Français", value: "fr" })))
     .addSubcommand(s => s.setName("share").setDescription("Count you in server group alerts and the leaderboard (off by default)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("history").setDescription("Your recent alerts"));
@@ -238,6 +244,8 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
+const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
+
 const support = new SlashCommandBuilder()
     .setName("support")
     .setDescription("Get help from the bot's team")
@@ -249,6 +257,6 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, support, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, serverlist, leaderboard, serverstats, giveaway].map(serverOnly)
 ].map(c => c.toJSON());

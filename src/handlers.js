@@ -9,6 +9,8 @@ import { salesEmbed, upcomingSales } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
+import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
+import { CHANGELOG, LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
@@ -163,6 +165,35 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return eph(i, n ? `All ${n} games will now alert you on: ${label}.` : "Your wishlist is empty.");
     }
 
+    /** Snooze and "only below" buttons under a sale alert. The item must belong to the person pressing. */
+    async function handleAlertButton(i) {
+        const [kind, rest] = i.customId.split(":");
+        const item = db.getItemById(Number(rest));
+        try {
+            if (!item || item.discord_id !== i.user.id) return await eph(i, "That game is no longer on your wishlist, or this alert is not yours.");
+            if (kind === SNOOZE_ID) {
+                db.snoozeItem(item.id, Date.now() + 7 * 86400_000);
+                return await eph(i, `Okay. I will not alert you about **${item.title}** for 7 days.`);
+            }
+            if (kind === BELOW_ID) {
+                return await i.showModal({ custom_id: `${BELOW_MODAL_ID}:${item.id}`, title: "Only alert below a price", components: [
+                    { type: 1, components: [{ type: 4, custom_id: "price", label: "Alert me at this price or less", style: 1, required: true, max_length: 10, placeholder: "e.g. 9.99" }] }] });
+            }
+            if (kind === BELOW_MODAL_ID) {
+                const value = Number(String(i.fields.getTextInputValue("price")).replace(",", "."));
+                const trig = parseTrigger("price", value);
+                db.setTrigger(i.user.id, trig.type, trig.value, item.itad_id);
+                return await eph(i, `**${item.title}** will alert you only at ${value.toFixed(2)} or less.`);
+            }
+        } catch (e) { return eph(i, e.message); }
+    }
+
+    async function handleChangelog(i) {
+        db.ensureUser(i.user.id, i.guildId);
+        db.updateUser(i.user.id, { seen_version: LATEST });
+        return i.reply({ embeds: [changelogEmbed()], flags: MessageFlags.Ephemeral });
+    }
+
     async function handleWishlist(i) {
         const user = db.ensureUser(i.user.id, i.guildId);
         try {
@@ -267,6 +298,18 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.updateUser(user.discord_id, { free: on ? 1 : 0, ...(dlc === null ? {} : { free_dlc: dlc ? 1 : 0 }) });
                 const dlcNote = dlc === null ? "" : dlc ? " Free DLC is included." : " Free DLC is hidden.";
                 return eph(i, (on ? "You will be told when a game is free to claim. Several free games from one store come in one message with a Claim all button." : "Free game alerts are off.") + dlcNote);
+            }
+            case "mute": {
+                const type = i.options.getString("type", true), on = i.options.getBoolean("muted", true);
+                const list = new Set(String(user.muted ?? "").split(",").filter(Boolean));
+                on ? list.add(type) : list.delete(type);
+                db.updateUser(user.discord_id, { muted: [...list].join(",") });
+                return eph(i, on ? "Muted. Those alerts will not be sent to you, but you can still read them on the dashboard's Notifications page." : "Unmuted. You will get those alerts again.");
+            }
+            case "language": {
+                const lang = i.options.getString("language", true);
+                db.updateUser(user.discord_id, { lang });
+                return eph(i, lang === "es" ? "Listo. Los botones y mensajes clave ahora están en español." : lang === "fr" ? "C'est fait. Les boutons et messages clés sont maintenant en français." : "Done. Buttons and messages are in English.");
             }
             case "share": {
                 const on = i.options.getBoolean("enabled", true);
@@ -532,5 +575,5 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

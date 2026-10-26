@@ -110,6 +110,13 @@ Server owners (Manage Server, or a role set with `/giveaway setup`) can give awa
 
 Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in any public message or dashboard response, and are deleted on confirmation, cancellation or after a retention period. Set the secret in `.env` to enable giveaways; if you lose it, stored keys can't be read. Backups only contain encrypted keys.
 
+### Support tickets (`/support`)
+`/support open` opens a ticket (a form asks for a subject and details), `/support mine` lists yours. Replies reach you by DM with a Reply button and on the dashboard's **Support** page; both sides see the same thread.
+Tickets go to the server's queue only if a manager ran `/support setup channel:#help` there; otherwise they go to the bot owner (the owner sets that channel with `/support setup global:true`). Staff answer with the Reply, Assign me and Resolve buttons or from the dashboard inbox (search, status filter, tags, assignee, canned replies, transcript download, owner-only recent errors). Quiet tickets resolve after 7 days waiting and close 3 days later; closed tickets are purged after 6 months. A giveaway "key did not work" report opens a ticket automatically. Staff never see game keys.
+
+### Notifications, snooze and language
+Every delivered alert is copied to the dashboard's **Notifications** page (kept 60 days). `/alerts mute` stops DMs for one kind but still records it. Sale alerts have **Snooze 7 days** and **Only below a price** buttons. `/alerts language` switches the main buttons and dashboard menu to Spanish or French. `/changelog` and a dashboard banner show what is new. On the dashboard: press `/` to search, `g` then `w`, `l`, `a`, `s`, `n`, `h` to jump, and use the ◐ button for high contrast. The home page has a setup checklist, and a server owner gets a short setup DM when the bot joins.
+
 ### `/help`, `/about`, `/privacy`
 
 Usage notes and a plain-language privacy summary. `/about` is a card with the creator credit (name linked to X, with a logo), live uptime, servers, members reached, latency and giveaway totals. The same card is on the dashboard Help page. Set `CREATOR_NAME` and `CREATOR_X_URL` to change the credit.

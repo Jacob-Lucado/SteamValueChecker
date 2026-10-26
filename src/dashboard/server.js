@@ -2,6 +2,7 @@
 // Login is Discord OAuth2 (identify + guilds). Sessions live in memory, so a restart logs everyone out.
 
 import http from "node:http";
+import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -200,6 +201,18 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             .sort((a, b) => Number(b.manageable) - Number(a.manageable) || a.name.localeCompare(b.name));
     }
 
+    const PAGES = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["support", "Support"], ["notifications", "Notifications"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"]];
+    /** The first-run checklist on the dashboard home. */
+    function setupSteps(s, u) {
+        return [
+            { id: "wishlist", text: "Add games to your wishlist", done: db.countItems(s.userId) > 0, href: "#/wishlist" },
+            { id: "alerts", text: "Pick how you want alerts (DM or a server channel)", done: u.delivery === "channel" || u.quiet_start != null || Boolean(u.digest) || db.listAlerts(s.userId, 1).length > 0, href: "#/alerts" },
+            { id: "free", text: "Turn on free game alerts", done: Boolean(u.free), href: "#/alerts" },
+            { id: "library", text: "Add games you own to the library", done: db.countLibrary(s.userId) > 0, href: "#/library" },
+            { id: "server", text: "Add the bot to a server", done: s.guilds.some(g => (botGuilds ? botGuilds(g.id) : false)), href: "#/servers" }
+        ];
+    }
+
     // ---------- API ----------
     const routes = {
         "GET /api/config": async () => ({
@@ -225,8 +238,48 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 servers: serversFor(s, u),
                 isOwner: isOwner(s),
                 giveaways: Boolean(giveaways),
-                library: db.countLibrary(s.userId)
+                library: db.countLibrary(s.userId),
+                unread: db.unreadNotifications(s.userId),
+                news: u.seen_version === LATEST ? null : LATEST,
+                setup: setupSteps(s, u)
             };
+        },
+
+        "GET /api/notifications": async (req) => {
+            const s = session(req); userRow(s);
+            return { items: db.listNotifications(s.userId, 80), unread: db.unreadNotifications(s.userId) };
+        },
+        "POST /api/notifications/read": async (req) => { const s = session(req); userRow(s); db.readNotifications(s.userId); return { unread: 0 }; },
+
+        "GET /api/changelog": async (req) => {
+            const s = session(req); const u = userRow(s);
+            db.updateUser(s.userId, { seen_version: LATEST });
+            return { entries: CHANGELOG, wasNew: u.seen_version !== LATEST };
+        },
+        "POST /api/changelog/seen": async (req) => { const s = session(req); userRow(s); db.updateUser(s.userId, { seen_version: LATEST }); return { ok: true }; },
+
+        "POST /api/wishlist/snooze": async (req, body) => {
+            const s = session(req);
+            const item = db.listItems(s.userId).find(i => i.itad_id === body.itad_id);
+            if (!item) throw new HttpError(404, "That game is not on your list.");
+            const days = Math.min(90, Math.max(0, Math.trunc(Number(body.days ?? 7)) || 0));
+            db.snoozeItem(item.id, days ? now() + days * 86400_000 : null);
+            return { snoozed_until: days ? now() + days * 86400_000 : null };
+        },
+
+        // One box that finds your games, library, tickets, pages and (for managers) giveaways.
+        "GET /api/search": async (req, _b, url) => {
+            const s = session(req); userRow(s);
+            const q = String(url.searchParams.get("q") ?? "").trim().toLowerCase().slice(0, 60);
+            if (q.length < 2) return { results: [] };
+            const hit = t => String(t).toLowerCase().includes(q);
+            const out = [];
+            for (const i of db.listItems(s.userId)) if (hit(i.title)) out.push({ kind: "Wishlist", title: i.title, href: "#/wishlist" });
+            for (const l of db.listLibrary(s.userId)) if (hit(l.title)) out.push({ kind: "Library", title: l.title, href: "#/library" });
+            for (const t of db.listTickets({ userId: s.userId, limit: 50 })) if (hit(t.subject) || `#${t.id}` === q) out.push({ kind: "Ticket", title: `#${t.id} ${t.subject}`, href: `#/support/${t.id}` });
+            for (const g of s.guilds) if (hit(g.name)) out.push({ kind: "Server", title: g.name, href: `#/servers/${g.id}` });
+            for (const [id, name] of PAGES) if (hit(name)) out.push({ kind: "Page", title: name, href: "#/" + id });
+            return { results: out.slice(0, 25) };
         },
 
         "POST /api/value": async (req, body) => {
@@ -321,7 +374,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
             }
             patch.delivery = nextDelivery;
-            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
             Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };
@@ -596,6 +649,30 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 return { id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length };
             });
             return { giveaways: rows, settings: db.getGiveawaySettings(g.id), max: MAX_KEYS };
+        },
+
+        "GET /api/giveaways/templates": async (req, _b, url) => {
+            const s = session(req); needGiveaways();
+            const g = managerGuild(s, url.searchParams.get("guild"));
+            return { templates: db.listTemplates(g.id) };
+        },
+        "POST /api/giveaways/templates": async (req, body) => {
+            const s = session(req); needGiveaways();
+            const g = managerGuild(s, String(body.guild_id));
+            if (body.remove) { db.removeTemplate(g.id, Number(body.remove)); return { templates: db.listTemplates(g.id) }; }
+            const name = String(body.name ?? "").trim().slice(0, 40);
+            if (!name) throw new HttpError(400, "Give the template a name.");
+            if (db.listTemplates(g.id).length >= 25 && !db.listTemplates(g.id).some(t => t.name === name)) throw new HttpError(400, "You can keep up to 25 templates.");
+            // Only plain form values are kept: strings, numbers and booleans, never anything that looks like a prize list.
+            const data = {};
+            for (const [k, v] of Object.entries(body.data ?? {}).slice(0, 40)) if (/^[a-zA-Z]{1,24}$/.test(k) && k !== "keys" && ["string", "number", "boolean"].includes(typeof v)) data[k] = typeof v === "string" ? v.slice(0, 1500) : v;
+            db.saveTemplate(g.id, name, data);
+            return { templates: db.listTemplates(g.id) };
+        },
+        // The signed-in member's own prizes: where each one stands and when to claim it. Keys are never included.
+        "GET /api/claims": async (req) => {
+            const s = session(req); userRow(s);
+            return { prizes: db.prizesFor(s.userId).map(p => ({ ...p, link: p.message_id ? `https://discord.com/channels/${p.guild_id}/${p.channel_id}/${p.message_id}` : null })) };
         },
 
         "GET /api/giveaways/art": async (req, _b, url) => {

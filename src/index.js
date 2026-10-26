@@ -151,6 +151,22 @@ client.once(Events.ClientReady, c => {
 });
 
 // If the bot is removed from a server, forget that server's alert channel.
+// A short setup guide for whoever owns a server the bot just joined. Once per server; a closed DM is ignored.
+client.on(Events.GuildCreate, async guild => {
+    try {
+        if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
+        if (db.getMeta(`welcomed:${guild.id}`)) return;
+        db.setMeta(`welcomed:${guild.id}`, "1");
+        await discord.sendDm(guild.ownerId, { embeds: [{ color: 0xff9800, title: `Thanks for adding Steam Value Checker to ${guild.name}`,
+            description: ["**Quick setup (about two minutes)**",
+                "1. `/alertchannel set` picks where alerts go when a DM fails, and `/alertchannel feed` posts new free games for everyone.",
+                "2. `/support setup` picks a channel for help tickets from your members.",
+                "3. `/giveaway setup` sets up key giveaways and a vouches channel.",
+                "4. Members run `/wishlist import` to get sale alerts, or `/value` to price a library.",
+                "", publicBase ? `Everything is also on the dashboard: ${publicBase}` : "", "Type `/help` any time."].filter(x => x !== null).join("\n") }] });
+    } catch { /* the owner may have DMs closed */ }
+});
+
 client.on(Events.GuildDelete, guild => { if (guild.available !== false) db.clearGuildChannel(guild.id); });
 
 const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
@@ -272,6 +288,7 @@ client.on(Events.InteractionCreate, async i => {
         try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
     }
+    if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
@@ -312,6 +329,7 @@ client.on(Events.InteractionCreate, async i => {
             case "freegames": return await handlers.handleFreeGames(i);
             case "status": return await handlers.handleStatus(i);
             case "support": return await ticketUi.handleCommand(i);
+            case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
             case "serverstats": return await handlers.handleServerStats(i);

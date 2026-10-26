@@ -61,6 +61,13 @@ CREATE TABLE IF NOT EXISTS giveaway_keys (
     confirmed_at INTEGER,
     redraws      INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS giveaway_templates (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    name     TEXT NOT NULL,
+    data     TEXT NOT NULL,
+    UNIQUE (guild_id, name)
+);
 CREATE INDEX IF NOT EXISTS giveaway_keys_g ON giveaway_keys(giveaway_id);
 CREATE TABLE IF NOT EXISTS giveaway_excluded (
     key_id     INTEGER NOT NULL REFERENCES giveaway_keys(id) ON DELETE CASCADE,
@@ -192,7 +199,16 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     });
     const hasGiveawayData = userId => Boolean(get("SELECT 1 AS x FROM giveaway_entries WHERE discord_id = ? UNION SELECT 1 FROM giveaway_keys WHERE winner_id = ? UNION SELECT 1 FROM giveaways WHERE host_id = ?", userId, userId, userId));
 
+    // Saved form settings for a server (never prize keys).
+    const listTemplates = guildId => all("SELECT id, name, data FROM giveaway_templates WHERE guild_id = ? ORDER BY name COLLATE NOCASE", guildId).map(r => ({ id: r.id, name: r.name, data: JSON.parse(r.data) }));
+    const saveTemplate = (guildId, name, data) => run("INSERT INTO giveaway_templates (guild_id, name, data) VALUES (?,?,?) ON CONFLICT(guild_id, name) DO UPDATE SET data = excluded.data", guildId, name, JSON.stringify(data));
+    const removeTemplate = (guildId, id) => run("DELETE FROM giveaway_templates WHERE guild_id = ? AND id = ?", guildId, id).changes > 0;
+    /** Prizes a person won, for their claim center. Never includes the key. */
+    const prizesFor = userId => all(`SELECT k.id, k.label, k.status, k.deadline, k.delivered_at, g.id AS giveaway_id, g.title, g.guild_id, g.channel_id, g.message_id
+        FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id WHERE k.winner_id = ? ORDER BY k.assigned_at DESC LIMIT 50`, userId).map(clean);
+
     return {
+        listTemplates, saveTemplate, removeTemplate, prizesFor,
         getGiveaway, listGiveaways, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,
         listKeys, getKey, getKeyEnc, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,

@@ -38,6 +38,17 @@ CREATE TABLE IF NOT EXISTS items (
     UNIQUE (discord_id, itad_id)
 );
 CREATE INDEX IF NOT EXISTS items_user ON items(discord_id);
+CREATE TABLE IF NOT EXISTS notifications (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    type    TEXT NOT NULL,
+    title   TEXT NOT NULL,
+    body    TEXT,
+    url     TEXT,
+    at      INTEGER NOT NULL,
+    read    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, at);
 CREATE TABLE IF NOT EXISTS library (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
@@ -141,6 +152,11 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "gallery", "TEXT");
+    addColumn("items", "snooze_until", "INTEGER");
+    addColumn("users", "muted", "TEXT NOT NULL DEFAULT ''");
+    addColumn("users", "seen_version", "TEXT");
+    addColumn("users", "lang", "TEXT NOT NULL DEFAULT 'en'");
+    addColumn("users", "welcomed", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "free_dlc", "INTEGER NOT NULL DEFAULT 1");
     addColumn("giveaways", "require_boost", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "starts_at", "INTEGER");
@@ -169,7 +185,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
     const getUser = id => clean(get("SELECT * FROM users WHERE discord_id = ?", id));
 
-    const SETTABLE = new Set([
+    const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
         "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free", "free_dlc"
     ]);
@@ -241,8 +257,19 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const activeItems = () => all(
         `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.bundles, u.share
            FROM items i JOIN users u ON u.discord_id = i.discord_id
-          WHERE u.paused = 0`
+          WHERE u.paused = 0 AND (i.snooze_until IS NULL OR i.snooze_until < ?)`,
+        now()
     ).map(clean);
+
+    const snoozeItem = (itemId, until) => run("UPDATE items SET snooze_until = ? WHERE id = ?", until, itemId).changes;
+
+    // Notification center: a copy of what the bot told this person, so it can be read later even if a DM was missed.
+    const addNotification = (userId, { type, title, body = null, url = null }) =>
+        run("INSERT INTO notifications (user_id, type, title, body, url, at) VALUES (?,?,?,?,?,?)", userId, type, String(title).slice(0, 200), body ? String(body).slice(0, 600) : null, url, now()).lastInsertRowid;
+    const listNotifications = (userId, limit = 60) => all("SELECT * FROM notifications WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?", userId, limit).map(clean);
+    const unreadNotifications = userId => get("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read = 0", userId).n;
+    const readNotifications = userId => run("UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0", userId).changes;
+    const pruneNotifications = (olderThanMs = 60 * 86400_000) => run("DELETE FROM notifications WHERE at < ?", now() - olderThanMs).changes;
 
     const setGuildChannel = (guildId, channelId, setBy) => run(
         `INSERT INTO guilds (guild_id, channel_id, set_by, updated_at) VALUES (?,?,?,?)
@@ -426,7 +453,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
-        ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
+        snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,

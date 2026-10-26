@@ -1,6 +1,7 @@
 // Validation for the newer personal settings (quiet hours, digest, bundle alerts, sharing).
 // Used by both the Discord commands and the dashboard, so the rules are the same in both.
 import { UserError } from "./errors.js";
+import { LANGS } from "./i18n.js";
 import { parseClock, formatClock, validTimezone, WEEKDAYS } from "./timeutil.js";
 
 /**
@@ -46,14 +47,26 @@ export function prefsPatch(input, user) {
     if (has("share")) patch.share = input.share ? 1 : 0;
     if (has("free")) patch.free = input.free ? 1 : 0;
     if (has("free_dlc")) patch.free_dlc = input.free_dlc ? 1 : 0;
+    if (has("muted")) {
+        const list = (Array.isArray(input.muted) ? input.muted : String(input.muted ?? "").split(",")).map(x => String(x).trim()).filter(Boolean);
+        if (list.some(x => !MUTABLE.includes(x))) throw new UserError(`You can mute: ${MUTABLE.join(", ")}.`);
+        patch.muted = [...new Set(list)].join(",");
+    }
+    if (has("lang")) {
+        if (!LANGS[input.lang]) throw new UserError("Pick English, Spanish (es) or French (fr).");
+        patch.lang = input.lang;
+    }
     return patch;
 }
+
+export const MUTABLE = ["alert", "bundle", "free", "digest"];
 
 /** The new settings in a form that is safe to send to the browser. */
 export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? "UTC",
-        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0
+        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0,
+        muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
     };
 }
 

@@ -2,6 +2,7 @@
 // Embeds are plain API objects (no discord.js needed), which keeps this module testable.
 
 import { protonLabel } from "./proton.js";
+import { tr } from "./i18n.js";
 export const ROWS_PER_PAGE = 15;
 const COLOR = 0xff9800;
 
@@ -117,6 +118,7 @@ const GREEN = 0x57f287;
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 
 export const STOP_ID = "alert_stop";
+export const SNOOZE_ID = "alert_snooze", BELOW_ID = "alert_below", BELOW_MODAL_ID = "alert_m_below";
 export const steamArt = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
 export const itadArt = id => `https://assets.isthereanydeal.com/${encodeURIComponent(id)}/banner400.jpg`;
 /** Game art for an alert: Steam's header when the Steam id is known, otherwise IsThereAnyDeal's banner. */
@@ -164,23 +166,27 @@ const linkButton = (label, url) => ({ type: 2, style: 5, label: String(label).sl
 const short = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 
 /** The button row under one alert: view the deal, Steam page, price history, stop watching. */
-export function alertButtons(item, now, { single = true } = {}) {
+export function alertButtons(item, now, { single = true, lang = "en" } = {}) {
     const row = [];
+    const L = k => tr(lang, k);
     const deal = safeUrl(now.url);
-    if (deal) row.push(linkButton(single ? `View deal${now.shop ? " at " + short(now.shop, 30) : ""}` : `Deal: ${short(item.title, 30)}`, deal));
-    if (single && Number.isInteger(item.appid)) row.push(linkButton("Steam page", `https://store.steampowered.com/app/${item.appid}/`));
-    if (single && now.slug) row.push(linkButton("Price history", `https://isthereanydeal.com/game/${encodeURIComponent(now.slug)}/info/`));
-    if (item.id != null) row.push({ type: 2, style: 2, label: single ? "Stop watching" : `Stop: ${short(item.title, 30)}`, custom_id: `${STOP_ID}:${item.id}` });
+    if (deal) row.push(linkButton(single ? `${L("View deal")}${now.shop ? " at " + short(now.shop, 30) : ""}` : `Deal: ${short(item.title, 30)}`, deal));
+    if (single && Number.isInteger(item.appid)) row.push(linkButton(L("Steam page"), `https://store.steampowered.com/app/${item.appid}/`));
+    if (single && now.slug) row.push(linkButton(L("Price history"), `https://isthereanydeal.com/game/${encodeURIComponent(now.slug)}/info/`));
+    if (item.id != null) row.push({ type: 2, style: 2, label: single ? L("Stop watching") : `Stop: ${short(item.title, 30)}`, custom_id: `${STOP_ID}:${item.id}` });
     return row.length ? { type: 1, components: row } : null;
 }
 
 /** A whole alert message for one member: up to 5 games, each with its art and its own buttons. */
-export function alertPayload(hits, { trigger, verdict }) {
+export function alertPayload(hits, { trigger, verdict, lang = "en" }) {
     const single = hits.length === 1;
     return {
         content: single ? undefined : `${hits.length} games on your wishlist hit your alert.`,
         embeds: hits.map(h => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: single ? "image" : "thumbnail", insight: h.insight ?? null, proton: h.proton ?? null })),
-        components: hits.map(h => alertButtons(h.item, h.now, { single })).filter(Boolean)
+        components: [...hits.map(h => alertButtons(h.item, h.now, { single, lang })).filter(Boolean),
+            ...(single && hits[0].item.id != null ? [{ type: 1, components: [
+                { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${hits[0].item.id}` },
+                { type: 2, style: 2, label: tr(lang, "Only below a price…"), custom_id: `${BELOW_ID}:${hits[0].item.id}` }] }] : [])]
     };
 }
 

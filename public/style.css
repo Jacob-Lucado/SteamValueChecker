@@ -388,3 +388,24 @@ textarea[autocomplete="off"] { font-family: ui-monospace, Menlo, Consolas, monos
 .msg.system { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
 .cards { display: grid; gap: 10px; }
 pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+
+/* notifications, news, search, contrast */
+.badge-count { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; text-align: center; line-height: 18px; }
+.card-link.unread { border-color: var(--accent); }
+.notice.news { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.notice.news .btn { margin-left: auto; }
+.check { display: block; padding: 4px 0; }
+.progress { height: 8px; border-radius: 999px; background: var(--soft-2); margin: 6px 0 12px; overflow: hidden; }
+.progress > div { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.step-row { display: block; padding: 6px 0; color: var(--text); }
+.step-row.done { color: var(--muted); text-decoration: line-through; }
+.lp-setup { max-width: 760px; margin: 0 auto 18px; }
+.search-overlay { position: fixed; inset: 0; background: rgba(3, 8, 18, .6); z-index: 50; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.search-box { width: min(560px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); }
+.search-results { margin-top: 10px; display: grid; gap: 2px; max-height: 50vh; overflow: auto; }
+.search-results a { padding: 8px 10px; border-radius: 8px; color: var(--text); }
+.search-results a:hover, .search-results a:focus { background: var(--hover-row); outline: none; }
+:root[data-contrast] { --text: #ffffff; --muted: #d6e2f2; --line: rgba(255, 255, 255, .55); --accent: #7dc0ff; --panel: #000000; --panel-2: #0b0b0b; --bg: #000000; --bg-glow: #000000; --input-bg: #000000; --good: #5dffb0; --warn: #ffd166; --bad: #ff8a8a; }
+:root[data-contrast][data-theme="light"] { --text: #000000; --muted: #1b2a40; --line: rgba(0, 0, 0, .65); --accent: #0047b3; --panel: #ffffff; --panel-2: #ffffff; --bg: #ffffff; --bg-glow: #ffffff; --input-bg: #ffffff; --white: #000000; --good: #00573a; --warn: #7a4a00; --bad: #a40000; }
+:root[data-contrast] a { text-decoration: underline; }
+:root[data-contrast] :focus-visible { outline: 3px solid var(--warn); outline-offset: 2px; }

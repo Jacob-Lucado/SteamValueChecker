@@ -70,8 +70,8 @@ export async function runCycle({ db, itad, notifier, now = () => Date.now(), log
                 catch { h.insight = null; }
                 h.proton = await protonTier(h.item.appid).catch(() => null);
             }));
-            const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict });
-            const res = await notifier.deliver(user, payload);
+            const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict, lang: user.lang });
+            const res = await notifier.deliver(user, payload, "alert");
             if (res.ok) {
                 stats.delivered += part.length;
                 for (const a of part) {
@@ -159,7 +159,7 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
         if (isQuiet(user, now())) { stats.deferred += hits.length; continue; }
         for (const part of chunked(hits, MAX_CARDS)) {
             const payload = { embeds: part.map(h => (h.kind === "bundle" ? bundleEmbed(h) : giveawayEmbed(h))), components: extrasButtons(part) };
-            const res = await notifier.deliver(user, payload);
+            const res = await notifier.deliver(user, payload, "bundle");
             if (!res.ok) { stats.failed += part.length; continue; }
             stats.delivered += part.length;
             for (const h of part) {
@@ -198,7 +198,7 @@ export async function runFreeGames({ db, itad, notifier, now = () => Date.now(),
             for (const part of chunked(games, 10)) {
                 const payload = freeGamesPayload(shop, part);
                 if (!payload) { for (const g of part) db.markSeen(user.discord_id, `free:${g.id}`); continue; }
-                const res = await notifier.deliver(user, payload);
+                const res = await notifier.deliver(user, payload, "free");
                 if (!res.ok) { stats.failed += part.length; continue; }
                 stats.delivered += part.length;
                 for (const g of part) {
@@ -221,7 +221,7 @@ export async function runDigests({ db, itad, notifier, now = () => Date.now(), l
             const { rows, currency } = await viewRows(db, itad, user);
             const embed = digestEmbed(rows, currency);
             if (!embed) { db.updateUser(user.discord_id, { last_digest_at: now() }); stats.skipped++; continue; }
-            const res = await notifier.deliver(user, { embeds: [embed] });
+            const res = await notifier.deliver(user, { embeds: [embed] }, "digest");
             if (res.ok) {
                 db.updateUser(user.discord_id, { last_digest_at: now() });
                 db.logAlert({ discord_id: user.discord_id, title: "Weekly digest", kind: "digest", via: res.via });

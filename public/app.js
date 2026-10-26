@@ -109,16 +109,22 @@
   }
 
   // ---------- chrome ----------
-  const NAV = [["home", "Home"], ["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["support", "Support"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["about", "About"], ["admin", "Admin"]];
+  const NAV = [["home", "Home"], ["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["support", "Support"], ["notifications", "Notifications"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["about", "About"], ["admin", "Admin"]];
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[0];
   const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
+
+  const NAV_I18N = {
+    es: { wishlist: "Lista de deseos", library: "Biblioteca", alerts: "Alertas", support: "Soporte", notifications: "Avisos", servers: "Servidores", help: "Ayuda", mydata: "Mis datos" },
+    fr: { wishlist: "Liste de souhaits", library: "Bibliothèque", alerts: "Alertes", support: "Assistance", notifications: "Notifications", servers: "Serveurs", help: "Aide", mydata: "Mes données" }
+  };
+  const navText = (id, text) => (state.me && NAV_I18N[state.me.settings.lang] && NAV_I18N[state.me.settings.lang][id]) || text;
 
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
     nav.replaceChildren(...NAV
       .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : id === "giveaways" ? state.me && state.me.giveaways && state.me.servers.some(g => g.manageable) : state.me || id === "help" || id === "about" || id === "home" || id === "status"))
-      .map(([id, text]) => h("a", { href: "#/" + id, class: view === id ? "active" : "", text })));
+      .map(([id, text]) => h("a", { href: "#/" + id, class: view === id ? "active" : "", text: navText(id, text) }, id === "notifications" && state.me && state.me.unread ? h("span", { class: "badge-count", text: String(Math.min(99, state.me.unread)) }) : null)));
 
     const acct = document.getElementById("account");
     const links = [state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean);
@@ -126,7 +132,8 @@
       acct.replaceChildren(...[...links,
         state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
         h("span", { class: "who", text: state.me.user.username }),
-        themeButton(),
+        h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
+        contrastButton(), themeButton(),
         h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } })].filter(Boolean));
     } else {
       acct.replaceChildren(...[...links, themeButton(), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
@@ -164,6 +171,8 @@
     const stat = (label, value) => value && h("div", { class: "lp-stat" }, h("div", { class: "v", text: value }), h("div", { class: "k", text: label }));
 
     app.replaceChildren(...[
+      state.me && newsBanner(),
+      state.me && h("section", { class: "lp-setup" }, setupCard()),
       h("section", { class: "lp-hero" },
         h("div", { class: "lp-hero-text" },
           failed && h("div", { class: "notice warn", text: "Sign-in did not work. Please try again." }),
@@ -487,6 +496,8 @@
     const pct = Math.round(r.discount * 100);
     const remove = h("button", { class: "btn red small", text: "Remove" });
     remove.addEventListener("click", () => busy(remove, async () => { await api("/api/wishlist/remove", { itad_id: r.itad_id }); state.me.games--; reload(); }));
+    const snooze = h("button", { class: "btn gray small", text: "Snooze 7d", title: "No alerts for this game for 7 days" });
+    snooze.addEventListener("click", () => busy(snooze, async () => { await api("/api/wishlist/snooze", { itad_id: r.itad_id, days: 7 }); toast("Snoozed for 7 days.", "ok"); }));
     const chartHolder = h("div", { class: "wide" });
     const hist = h("button", { class: "btn gray small", text: "Price history" });
     hist.addEventListener("click", () => {
@@ -510,7 +521,7 @@
       h("div", { class: "rule" }, ...ruleControl({ type: r.trigger_type, value: r.trigger_value }, async (type, value) => {
         await api("/api/wishlist/alert", { itad_id: r.itad_id, type, value });
         toast("Rule saved.", "ok"); reload();
-      }), hist, remove), chartHolder);
+      }), snooze, hist, remove), chartHolder);
   }
 
   // ---------- alerts ----------
@@ -976,6 +987,15 @@
     const guild = select(servers.map(g => [g.id, g.name]), servers[0] && servers[0].id);
     const statusLabel = { active: "Running", scheduled: "Scheduled", ended: "Ended", cancelled: "Cancelled" };
 
+    // Entry counts tick up live while a giveaway runs, without touching the form.
+    const liveTimer = setInterval(async () => {
+      const cells = [...holder.querySelectorAll(".live-entries")];
+      if (!cells.length) { if (!document.body.contains(holder)) clearInterval(liveTimer); return; }
+      try {
+        const list = await api("/api/giveaways?guild=" + encodeURIComponent(guild.value));
+        for (const c of cells) { const g = list.giveaways.find(x => String(x.id) === c.dataset.gid); if (g) c.textContent = String(g.entries); }
+      } catch { /* try again next time */ }
+    }, 15000);
     async function load() {
       holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
       try {
@@ -1022,6 +1042,18 @@
       const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
       for (const el of [keys, game, image]) el.addEventListener("input", refreshPreview);
       auto.addEventListener("change", () => { previewKey = ""; refreshPreview(); });
+      // Templates keep everything except the prize keys.
+      const FIELDS = { title, length, game, desc, image, thumb, auto, color, label, claim, acct, memb, bonusN, reqRole, bonusRole, pingRole, vouchSel, boosters, startIn, rounds, repeatEvery, chSel };
+      const grab = () => Object.fromEntries(Object.entries(FIELDS).map(([k, el]) => [k, el.type === "checkbox" ? el.checked : el.value]));
+      const apply = data => { for (const [k, el] of Object.entries(FIELDS)) if (data[k] !== undefined) { if (el.type === "checkbox") el.checked = Boolean(data[k]); else el.value = data[k]; } previewKey = ""; refreshPreview(); };
+      let tpls = [];
+      const tplSel = select([["", "Load a template…"]], "");
+      const tplName = text("Template name", 40);
+      const paintTpls = () => { tplSel.replaceChildren(h("option", { value: "", text: "Load a template…" }), ...tpls.map(t => h("option", { value: String(t.id), text: t.name }))); };
+      api("/api/giveaways/templates?guild=" + encodeURIComponent(guild.value)).then(r => { tpls = r.templates; paintTpls(); }).catch(() => {});
+      tplSel.addEventListener("change", () => { const t = tpls.find(x => String(x.id) === tplSel.value); if (t) { apply(t.data); toast(`Loaded "${t.name}".`, "ok"); } });
+      const saveTpl = h("button", { type: "button", class: "btn gray small", text: "Save as template", onclick: () => busy(saveTpl, async () => { const r = await api("/api/giveaways/templates", { guild_id: guild.value, name: tplName.value, data: grab() }); tpls = r.templates; paintTpls(); toast("Template saved. Prize keys are never saved in it.", "ok"); }) });
+      const delTpl = h("button", { type: "button", class: "btn red small", text: "Delete", onclick: () => busy(delTpl, async () => { if (!tplSel.value) return; const r = await api("/api/giveaways/templates", { guild_id: guild.value, remove: Number(tplSel.value) }); tpls = r.templates; paintTpls(); }) });
       const create = h("button", { class: "btn green", text: "Start giveaway", onclick: () => busy(create, async () => {
         const num = el => (el.value === "" ? undefined : Number(el.value));
         const r = await api("/api/giveaways/create", {
@@ -1036,6 +1068,7 @@
         load();
       }) });
       return h("div", { class: "panel" }, h("h3", { text: "Start a giveaway" }),
+        h("div", { class: "row" }, field("Template", tplSel), field("Save these settings as", tplName), h("div", { class: "shrink" }, saveTpl, " ", delTpl)),
         field("Prize keys (paste them, one per line: Name | KEY)", keys),
         preview,
         h("div", { class: "row" }, field("Channel", chSel), field("Length", length)), presets,
@@ -1066,7 +1099,7 @@
         const details = h("button", { class: "btn gray small", text: "Details" });
         details.addEventListener("click", () => busy(details, () => showDetails(g, detail)));
         return h("tr", {}, h("td", { text: "#" + g.id }), h("td", { text: g.title }), h("td", { text: statusLabel[g.status] || g.status }),
-          h("td", { class: "num", text: String(g.entries) }), h("td", { class: "num", text: `${g.redeemed}/${g.prizes}` }),
+          h("td", { class: "num live-entries", "data-gid": String(g.id), text: String(g.entries) }), h("td", { class: "num", text: `${g.redeemed}/${g.prizes}` }),
           h("td", { text: g.status === "active" ? new Date(g.ends_at).toLocaleString() : g.status === "scheduled" ? "Starts " + new Date(g.starts_at).toLocaleString() : "" }),
           h("td", { class: "actions" }, details,
             g.status === "active" ? act("End now", "blue", "/api/giveaways/end", { id: g.id }, r => `Ended. ${r.winners} winner${r.winners === 1 ? "" : "s"} drawn.`) : null,
@@ -1320,7 +1353,109 @@
     load().catch(e => holder.replaceChildren(h("div", { class: "notice warn", text: e.message })));
   }
 
-  const VIEWS = { support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  // ---------- notifications, what's new, search, shortcuts, contrast ----------
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest" };
+  const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
+  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", status: "🛠️", giveaway: "🏆", ticket: "🎫" };
+
+  async function notificationsView() {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Notifications", "A copy of every alert the bot sends you, so a missed DM is never lost. Muted kinds are kept here but not sent to Discord."), holder);
+    try {
+      const d = await api("/api/notifications");
+      const prizes = (await api("/api/claims").catch(() => ({ prizes: [] }))).prizes;
+      const s = state.me.settings, muted = new Set(s.muted || []);
+      const toggles = Object.entries(TYPE_LABEL).map(([id, text]) => {
+        const box = h("input", { type: "checkbox", checked: !muted.has(id) });
+        box.addEventListener("change", async () => {
+          box.checked ? muted.delete(id) : muted.add(id);
+          try { const r = await api("/api/settings", { muted: [...muted] }); state.me.settings = r.settings; toast("Saved.", "ok"); } catch (e) { toast(e.message, "error"); box.checked = !box.checked; }
+        });
+        return h("label", { class: "check" }, box, " ", `Send ${text} to Discord`);
+      });
+      holder.className = "";
+      holder.replaceChildren(
+        prizes.length ? h("div", { class: "panel" }, h("h3", { text: "Your prizes" }),
+          h("p", { class: "muted small", text: "Press Claim key on the winners message in Discord. Keys are never shown here." }),
+          ...prizes.map(p => h("div", { class: "kv" }, h("span", {}, h("b", { text: p.label + " " }), h("span", { class: "muted", text: `${p.title} · ${PRIZE_STATUS[p.status] || p.status}${p.status === "assigned" && p.deadline ? " · claim by " + new Date(p.deadline).toLocaleString() : ""}` })),
+            p.link ? ext(p.link, "Open in Discord") : null))) : null,
+        h("div", { class: "panel" }, h("h3", { text: "What gets sent to Discord" }), ...toggles),
+        h("div", { class: "panel" }, h("h3", { text: "Recent" }),
+          d.items.length ? h("div", { class: "cards" }, ...d.items.map(n => h(n.url && /^https:\/\//.test(n.url) ? "a" : "div", { class: "card-link" + (n.read ? "" : " unread"), ...(n.url && /^https:\/\//.test(n.url) ? { href: n.url, target: "_blank", rel: "noopener noreferrer" } : {}) },
+            h("span", { class: "icon", text: TYPE_ICON[n.type] || "🔔" }),
+            h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${new Date(n.at).toLocaleString()}${n.body ? " · " + n.body.replace(/[*_`]/g, "").slice(0, 140) : ""}` }))))) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." })));
+      if (d.unread) { await api("/api/notifications/read", {}); state.me.unread = 0; renderChrome(); }
+    } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  async function changelogView() {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("What's new", ""), holder);
+    try {
+      const d = await api("/api/changelog");
+      state.me.news = null; renderChrome();
+      holder.className = "";
+      holder.replaceChildren(...d.entries.map(e => h("div", { class: "panel" }, h("h3", { text: e.title }), h("p", { class: "muted small", text: e.date }), h("ul", {}, ...e.items.map(x => h("li", {}, inline(x)))))));
+    } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  function newsBanner() {
+    if (!state.me || !state.me.news || currentView() === "changelog") return null;
+    return h("div", { class: "notice news" }, h("span", { text: "✨ New: support tickets, a notification center, snooze buttons and more. " }), h("a", { href: "#/changelog", text: "See what's new" }),
+      h("button", { class: "btn gray small", text: "Dismiss", onclick: async e => { try { await api("/api/changelog/seen", {}); } catch {} state.me.news = null; e.currentTarget.parentElement.remove(); } }));
+  }
+
+  function setupCard() {
+    const steps = state.me && state.me.setup;
+    if (!steps || steps.every(x => x.done)) return null;
+    const done = steps.filter(x => x.done).length;
+    return h("div", { class: "panel" }, h("h3", { text: `Get set up (${done} of ${steps.length})` }),
+      h("div", { class: "progress" }, h("div", { style: `width:${Math.round(done / steps.length * 100)}%` })),
+      ...steps.map(x => h("a", { class: "step-row" + (x.done ? " done" : ""), href: x.href }, h("span", { text: x.done ? "✅" : "⬜" }), " ", x.text)));
+  }
+
+  // High contrast is a per-device choice kept in localStorage; the page works without it.
+  function contrastOn() { try { return localStorage.getItem("svc_contrast") === "1"; } catch { return false; } }
+  function applyContrast(on) { document.documentElement.toggleAttribute("data-contrast", on); try { localStorage.setItem("svc_contrast", on ? "1" : "0"); } catch {} }
+  applyContrast(contrastOn());
+  function contrastButton() {
+    const b = h("button", { class: "theme-btn", type: "button", text: "◐", title: "High contrast", "aria-label": "Toggle high contrast" });
+    b.addEventListener("click", () => applyContrast(!contrastOn()));
+    return b;
+  }
+
+  // Search overlay: press / anywhere. Keyboard: g then w/l/a/s/n/h jumps to a page, ? lists the keys.
+  let searchEl = null;
+  function openSearch() {
+    if (!state.me || searchEl) return;
+    const input = h("input", { type: "search", placeholder: "Search games, tickets, servers, pages…", "aria-label": "Search" });
+    const list = h("div", { class: "search-results" });
+    searchEl = h("div", { class: "search-overlay", role: "dialog", "aria-label": "Search", onclick: e => { if (e.target === searchEl) closeSearch(); } }, h("div", { class: "search-box" }, input, list));
+    document.body.append(searchEl); input.focus();
+    let timer = null;
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          const d = await api("/api/search?q=" + encodeURIComponent(input.value));
+          list.replaceChildren(...(d.results.length ? d.results.map(r => h("a", { href: r.href, onclick: closeSearch }, h("span", { class: "chip dim", text: r.kind }), " ", r.title)) : [h("p", { class: "muted", text: input.value.trim().length < 2 ? "Type at least 2 letters." : "No matches." })]));
+        } catch (e) { list.replaceChildren(h("p", { class: "muted", text: e.message })); }
+      }, 200);
+    });
+  }
+  function closeSearch() { if (searchEl) { searchEl.remove(); searchEl = null; } }
+  let gPending = false;
+  document.addEventListener("keydown", e => {
+    const t = e.target, typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    if (e.key === "Escape") return closeSearch();
+    if (typing || e.ctrlKey || e.metaKey || e.altKey || !state.me) return;
+    if (e.key === "/") { e.preventDefault(); return openSearch(); }
+    if (e.key === "?") return toast("Keys: / search · g then w wishlist, l library, a alerts, s servers, n notifications, h help", "ok");
+    if (gPending) { gPending = false; const dest = { w: "wishlist", l: "library", a: "alerts", s: "servers", n: "notifications", h: "help", t: "support", v: "value" }[e.key]; if (dest) location.hash = "#/" + dest; return; }
+    if (e.key === "g") { gPending = true; setTimeout(() => { gPending = false; }, 1200); }
+  });
+
+  const VIEWS = { notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();
@@ -1329,6 +1464,8 @@
     if (view === "u" && currentParam()) { publicWishlistView(currentParam()); window.scrollTo(0, 0); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo(0, 0); return; }
     (VIEWS[view] || (state.me ? valueView : landing))();
+    const nb = newsBanner();
+    if (nb && view !== "home") app.prepend(nb);
     window.scrollTo(0, 0);
   }
 

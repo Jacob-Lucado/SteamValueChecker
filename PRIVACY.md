@@ -101,3 +101,8 @@ If this policy changes, the date above will be updated.
 - **One-off watches:** a game added with `/watch` is stored like a wishlist game and removed after its alert or after 30 days.
 - **Server stats:** numbers for members who opted in with `/alerts share`. Counts and totals only; nobody is named for what they want.
 - **Status history:** the bot stores per-day uptime counts and a short log of outages. Nothing about people.
+
+## Support tickets, notifications and language
+- **Tickets:** what you write in a ticket and the replies are stored with your Discord ID and name. They are visible to you, to the bot owner, and, if you picked a server that set up a ticket channel, to that server's staff. Never put a game key in a ticket; staff cannot see giveaway keys. Closed tickets are deleted after 6 months, and `/mydata delete` removes yours. `/mydata export` includes them.
+- **Notification center:** a copy of the title and short text of each alert sent to you, kept 60 days, only visible to you.
+- **Settings:** muted alert types, language and the last "what's new" you saw.

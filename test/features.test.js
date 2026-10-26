@@ -364,7 +364,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
         "alerts/delivery": "POST /api/settings", "alerts/pause": "POST /api/settings", "alerts/resume": "POST /api/settings", "alerts/region": "POST /api/settings",
         "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",
-        "alerts/freegames": "POST /api/settings", "alerts/share": "POST /api/settings",
+        "alerts/freegames": "POST /api/settings", "alerts/mute": "POST /api/settings", "alerts/language": "POST /api/settings", changelog: "GET /api/changelog", "alerts/share": "POST /api/settings",
         "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
         "alertchannel/group": "POST /api/servers/group", "alertchannel/feed": "POST /api/servers/feed", "serverstats": "GET /api/servers/stats",
         "library/add": "POST /api/library/add", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/remove": "POST /api/library/remove", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
@@ -481,7 +481,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "freegames", "help", "library", "mydata", "privacy", "publicpage", "sales", "status", "support", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "changelog", "freegames", "help", "library", "mydata", "privacy", "publicpage", "sales", "status", "support", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist", "serverstats"]);
     assert.match(src, /UserInstall/);
     assert.match(src, /BotDM/);
