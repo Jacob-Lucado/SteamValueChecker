@@ -56,7 +56,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, logs = null, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -586,6 +586,13 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             return { stats: db.stats(), health: ops ? ops.snapshot() : null };
+        },
+
+        "GET /api/admin/logs": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const level = ["error", "warn", "all"].includes(url.searchParams.get("level")) ? url.searchParams.get("level") : "error";
+            return { lines: logs ? logs.recent({ level, limit: 200 }) : [], available: Boolean(logs) };
         },
 
         "POST /api/mydata/delete": async (req, body) => {

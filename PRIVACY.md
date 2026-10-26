@@ -58,6 +58,8 @@ Discord keeps your messages and the bot's replies according to Discord's own pol
 
 If a server manager runs a giveaway, the bot stores: the giveaway settings, your Discord user ID if you enter, who won each prize and its status, and the prize keys the manager entered. Keys are **encrypted** and are deleted once the winner confirms, when the giveaway is cancelled or the key is returned to the host, or automatically after a retention period (delivered keys after 14 days, leftover keys 7 days after the giveaway ends). Keys are sent only to the winner by DM or in a reply only they can see. When a winner confirms, a vouch message naming the winner is posted in the server. Giveaway records are removed 90 days after they finish, and `/mydata delete` removes your entries.
 
+**Error log**: the bot keeps recent error and crash messages (with the time) in memory and in a small file next to the database, so the bot owner can read them on the dashboard's Admin page. Tokens and keys are masked. Error messages can occasionally mention a Discord ID or command name.
+
 ## The web dashboard
 
 If the bot's owner turns on the dashboard, you can sign in with Discord instead of using commands.

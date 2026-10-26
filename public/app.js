@@ -668,6 +668,29 @@
   }
 
   // ---------- owner ----------
+  // Recent bot logs (errors and crashes by default), owner only.
+  function logPanel() {
+    const out = h("pre", { class: "logbox", text: "Loading…" });
+    const level = select([["error", "Errors and crashes"], ["warn", "Errors and warnings"], ["all", "Everything"]], "error");
+    const fmt = l => `${new Date(l.at).toLocaleString()}  ${l.level.toUpperCase().padEnd(5)} ${l.earlier ? "(before restart) " : ""}${l.text}`;
+    let lastText = "";
+    async function load() {
+      out.textContent = "Loading…";
+      try {
+        const d = await api("/api/admin/logs?level=" + encodeURIComponent(level.value));
+        lastText = d.lines.map(fmt).join("\n\n");
+        out.textContent = d.available ? (lastText || "Nothing logged at this level. That is good news.") : "Logging is not turned on.";
+      } catch (e) { out.textContent = e.message; }
+    }
+    level.addEventListener("change", load);
+    const refresh = h("button", { class: "btn gray", text: "Refresh", onclick: load });
+    const copy = h("button", { class: "btn gray", text: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(lastText); toast("Copied.", "ok"); } catch { toast("Could not copy. Select the text instead.", "error"); } } });
+    load();
+    return h("div", { class: "panel" }, h("h3", { text: "Recent logs" }),
+      h("p", { class: "muted small", text: "Newest first. Errors and crashes are kept across restarts. Tokens and keys are hidden." }),
+      h("div", { class: "rule inline" }, level, refresh, copy), out);
+  }
+
   async function adminView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("Admin", "Only you, the bot owner, can see this."), holder);
@@ -686,7 +709,8 @@
         h("div", { class: "panel" }, h("h3", { text: "Health" }),
           h("p", { text: "Last price check: " + when(hl.cycle && hl.cycle.at) }),
           h("p", { text: "Last backup: " + (hl.backup ? `${when(hl.backup.at)} (${hl.backup.ok ? "ok" : "FAILED"})` : "none yet") }),
-          h("p", { class: "muted small", text: "Recent errors: " + ((hl.errors || []).slice(0, 5).map(e => `${e.where} (${when(e.at)})`).join(", ") || "none") })));
+          h("p", { class: "muted small", text: "Recent errors: " + ((hl.errors || []).slice(0, 5).map(e => `${e.where} (${when(e.at)})`).join(", ") || "none") })),
+        logPanel());
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 

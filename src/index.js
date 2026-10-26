@@ -14,6 +14,8 @@ import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
 import { registerCommands } from "./registercmds.js";
+import { createLogBuffer } from "./logbuffer.js";
+import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
 import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
@@ -29,6 +31,9 @@ const COOLDOWN_MS = 15_000;
 const PAGE_TIMEOUT_MS = 10 * 60_000;
 
 const cfg = loadConfig();
+// Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
+const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret] });
+logs.capture();
 const itad = createItad({ apiKey: cfg.itadKey });
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const lastRun = new Map();
@@ -261,14 +266,18 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, config: { ...d, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, logs, config: { ...d, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {
     console.log("Dashboard is off (set DASHBOARD_URL and DISCORD_CLIENT_SECRET to turn it on).");
 }
 
-process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.message ?? err}`));
+process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.stack ?? err}`));
+process.on("uncaughtException", err => {
+    console.error(`[crash] ${err?.stack ?? err}`);
+    setTimeout(() => process.exit(1), 200); // Fly restarts the bot; the crash is saved for the Admin page
+});
 
 // Commands are pushed to Discord at startup, but only when they changed since last time.
 registerCommands(cfg, { onlyIfChanged: true })
