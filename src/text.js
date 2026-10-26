@@ -39,6 +39,7 @@ export const HELP = [
     "• Sale alerts have **Snooze 7 days** and **Only below a price** buttons.",
     "• `/mydata` exports or deletes everything stored about you.",
     "",
+    "Most commands also work in a DM with the bot. `/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup` and `/gamenight` only work in a server.",
     "Replies are private to you. Never post game keys in chat or in a ticket. The bot ignores anything that looks like a key, except keys a server manager enters in the private giveaway form."
 ].join("\n");
 

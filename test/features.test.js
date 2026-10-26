@@ -482,7 +482,10 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "changelog", "freegames", "help", "library", "mydata", "privacy", "publicpage", "sales", "status", "support", "value", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "gamenight", "giveaway", "leaderboard", "serverlist", "serverstats", "setup"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "gamenight", "giveaway", "setup"]);
+    const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
+    assert.deepEqual(dmToo.sort(), ["leaderboard", "serverlist", "serverstats"]);
+    assert.match(src, /const serverOnly = b => b[\s\S]*?setContexts\(InteractionContextType\.Guild\);/, "server-only commands stay out of DMs");
     assert.match(src, /UserInstall/);
     assert.match(src, /BotDM/);
 });

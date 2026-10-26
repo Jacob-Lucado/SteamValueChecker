@@ -454,26 +454,40 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     // ---------- /serverlist and /leaderboard ----------
     const canManage = i => Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 
+    /**
+     * The server a server command is about. In a server it is that server. In a DM it is the server the person last used the bot in,
+     * and only if they are still a member (so nobody reads another server's list by leaving it).
+     */
+    async function homeGuild(i) {
+        if (i.guildId) return i.guildId;
+        const gid = db.getUser(i.user.id)?.guild_id;
+        if (!gid) throw new UserError("Use this once in a server first, so I know which server you mean.");
+        try { const g = await i.client.guilds.fetch(gid); await g.members.fetch(i.user.id); }
+        catch { throw new UserError("I can't see you in your server any more. Use the command in the server itself."); }
+        return gid;
+    }
+
     async function handleServerList(i) {
         const user = db.ensureUser(i.user.id, i.guildId);
         const sub = i.options.getSubcommand();
         try {
+            const gid = await homeGuild(i);
             if (sub === "vote") {
-                const r = vote(db, i.guildId, i.user.id, i.options.getString("game", true));
+                const r = vote(db, gid, i.user.id, i.options.getString("game", true));
                 return void await eph(i, r.voted ? `Voted for **${r.title}** (${r.votes} now).` : `Took back your vote on **${r.title}** (${r.votes} now).`);
             }
             if (sub === "remove") {
-                const r = removeFromServerList(db, i.guildId, i.user.id, i.options.getString("game", true), canManage(i));
+                const r = removeFromServerList(db, gid, i.user.id, i.options.getString("game", true), canManage(i));
                 return void await eph(i, `Removed **${r.title}** from the server list.`);
             }
             cooldown(i, "view");
             // Visible to the channel: the list is shared on purpose.
             await i.deferReply();
             if (sub === "add") {
-                const r = await addToServerList(db, itad, i.guildId, i.user.id, i.options.getString("title", true));
+                const r = await addToServerList(db, itad, gid, i.user.id, i.options.getString("title", true));
                 return void await i.editReply({ content: `<@${i.user.id}> added **${r.name}** to the server wishlist.`, allowedMentions: { parse: [] } });
             }
-            const view = await serverListView(db, itad, i.guildId, user);
+            const view = await serverListView(db, itad, gid, user);
             return void await i.editReply({ embeds: [serverListEmbed(view.rows, view.currency)] });
         } catch (err) {
             await failed(i, "serverlist", err);
@@ -481,7 +495,8 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     }
 
     async function handleLeaderboard(i) {
-        await i.reply({ embeds: [leaderboardEmbed(leaderboard(db, i.guildId))], allowedMentions: { parse: [] } });
+        try { await i.reply({ embeds: [leaderboardEmbed(leaderboard(db, await homeGuild(i)))], allowedMentions: { parse: [] } }); }
+        catch (err) { await eph(i, err instanceof UserError ? err.message : "Something went wrong. Try again in a moment."); }
     }
 
     // ---------- /freegames ----------
@@ -525,7 +540,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     async function handleServerStats(i) {
         try {
             await i.deferReply({ flags: MessageFlags.Ephemeral });
-            await i.editReply({ embeds: [serverStatsEmbed(serverStats(db, i.guildId))] });
+            await i.editReply({ embeds: [serverStatsEmbed(serverStats(db, await homeGuild(i)))] });
         } catch (err) { await failed(i, "serverstats", err); }
     }
 
@@ -599,8 +614,9 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         if (focused.name !== "game") return i.respond([]);
         if (i.commandName === "library") return i.respond(suggest(db.listLibrary(i.user.id), focused.value));
         if (i.commandName === "serverlist") {
-            if (!i.guildId) return i.respond([]);
-            return i.respond(suggest(db.listServerGames(i.guildId, i.user.id), focused.value));
+            const gid = i.guildId ?? db.getUser(i.user.id)?.guild_id;
+            if (!gid) return i.respond([]);
+            return i.respond(suggest(db.listServerGames(gid, i.user.id), focused.value));
         }
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }

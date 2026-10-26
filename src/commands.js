@@ -9,7 +9,12 @@ const everywhere = b => b
     .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel);
 // Commands about a server (alert channel, shared list, giveaways) stay in servers where the bot is installed.
 const serverOnly = b => b
-    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+    .setContexts(InteractionContextType.Guild);
+// Server lists, the leaderboard and server stats also work in a DM with the bot, about the server you last used it in.
+const serverOrDm = b => b
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM);
 
 const alertType = o => o.setName("type").setDescription("When to alert you").addChoices(...ALERT_TYPES);
 const alertValue = o => o
@@ -266,5 +271,6 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, support, changelog, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, serverlist, leaderboard, serverstats, giveaway, setup, gamenight].map(serverOnly)
+    ...[alertchannel, giveaway, setup, gamenight].map(serverOnly),
+    ...[serverlist, leaderboard, serverstats].map(serverOrDm)
 ].map(c => c.toJSON());

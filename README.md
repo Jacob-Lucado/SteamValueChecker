@@ -129,7 +129,7 @@ Usage notes and a plain-language privacy summary. `/about` is a card with the cr
 
 ## Install on a server or on your account
 
-Most commands (`/value`, `/wishlist`, `/alerts`, `/library`, `/freegames`, `/mydata`, `/help`, `/about`, `/privacy`) also work when a person adds the app to **their own account**: they can use it in DMs, group chats and any server, even ones without the bot. Server features (`/alertchannel`, `/serverlist`, `/leaderboard`, `/giveaway`) need the bot installed in the server.
+Most commands (`/value`, `/wishlist`, `/alerts`, `/library`, `/freegames`, `/mydata`, `/help`, `/about`, `/privacy`) also work when a person adds the app to **their own account**: they can use it in DMs, group chats and any server, even ones without the bot. `/serverlist`, `/leaderboard` and `/serverstats` also work in a DM with the bot, about the server you last used it in (you must still be a member). Server management and voice features (`/alertchannel`, `/giveaway`, `/setup`, `/gamenight`) need the bot installed in the server and are used there.
 
 To allow it: in the Developer Portal open **Installation**, tick **User Install** under Installation Contexts, and add the `applications.commands` scope under Default Install Settings > User Install. Then register the commands globally by removing `GUILD_ID`, or set `GLOBAL_COMMANDS=1`. The dashboard and `/about` show an "Add to your account" link.
 
