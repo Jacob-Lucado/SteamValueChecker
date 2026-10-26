@@ -109,14 +109,14 @@
   }
 
   // ---------- chrome ----------
-  const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["mydata", "My Data"], ["help", "Help"], ["admin", "Admin"]];
+  const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["mydata", "My Data"], ["help", "Help"], ["admin", "Admin"]];
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0];
 
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
     nav.replaceChildren(...NAV
-      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : state.me || id === "help"))
+      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : id === "giveaways" ? state.me && state.me.giveaways && state.me.servers.some(g => g.manageable) : state.me || id === "help"))
       .map(([id, text]) => h("a", { href: "#/" + id, class: view === id ? "active" : "", text })));
 
     const acct = document.getElementById("account");
@@ -689,6 +689,121 @@
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
+
+  // ---------- giveaways ----------
+  async function giveawaysView() {
+    const servers = state.me.servers.filter(g => g.manageable);
+    const holder = h("div");
+    const guild = select(servers.map(g => [g.id, g.name]), servers[0] && servers[0].id);
+    const statusLabel = { active: "Running", ended: "Ended", cancelled: "Cancelled" };
+
+    async function load() {
+      holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+      try {
+        const [list, ch, ro] = await Promise.all([
+          api("/api/giveaways?guild=" + encodeURIComponent(guild.value)),
+          api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })),
+          api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))
+        ]);
+        holder.replaceChildren(giveawayForm(ch.channels, ro.roles, list.settings), giveawayTable(list.giveaways), setupPanel(ch.channels, ro.roles, list.settings));
+      } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+
+    function giveawayForm(channels, roles, settings) {
+      const text = (ph, max, type = "text") => h("input", { type, placeholder: ph, maxlength: String(max) });
+      const chSel = select(channels.map(c => [c.id, "#" + c.name]), channels[0] && channels[0].id);
+      const roleSel = () => select([["", "None"], ...roles.map(r => [r.id, r.name])], "");
+      const vouchSel = select([["", "A channel named #vouches (or the server default)"], ...channels.map(c => [c.id, "#" + c.name])], "");
+      const title = text("Title", 100), length = text("2h, 3d, 1w, 1d12h", 20), game = text("Game name (used to find artwork)", 100);
+      const desc = h("textarea", { placeholder: "Extra text on the giveaway (optional)", maxlength: "1500" });
+      const image = text("Your own large image, https link (optional)", 500), thumb = text("Your own small image, https link (optional)", 500);
+      const auto = h("input", { type: "checkbox", checked: true });
+      const color = text("#5865F2", 8), label = text("Enter giveaway", 40);
+      const claim = text("48", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
+      const reqRole = roleSel(), bonusRole = roleSel(), pingRole = roleSel();
+      const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
+      const create = h("button", { class: "btn green", text: "Start giveaway", onclick: () => busy(create, async () => {
+        const num = el => (el.value === "" ? undefined : Number(el.value));
+        const r = await api("/api/giveaways/create", {
+          guild_id: guild.value, channel_id: chSel.value, title: title.value, length: length.value, game: game.value, description: desc.value,
+          image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
+          claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN),
+          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value
+        });
+        keys.value = "";
+        toast(`Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.`, "ok");
+        load();
+      }) });
+      return h("div", { class: "panel" }, h("h3", { text: "Start a giveaway" }),
+        h("div", { class: "row" }, field("Title", title), field("Length", length), field("Channel", chSel)),
+        field("Prize keys (one per line, Name | KEY)", keys),
+        h("p", { class: "muted small", text: "Keys are encrypted as soon as they are saved. Each is deleted once the winner confirms it worked, and unused keys are sent back to you by DM. One winner per prize." }),
+        h("details", { class: "more" }, h("summary", { text: "Look and rules (all optional)" }),
+          h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color", color)),
+          field("Description", desc),
+          h("div", { class: "row" }, field("Large image link", image), field("Small image link", thumb)),
+          h("label", { class: "check" }, auto, "Find artwork automatically when I don't give an image"),
+          h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN)),
+          h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),
+          h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb))),
+        h("p"), create);
+    }
+
+    function giveawayTable(rows) {
+      const detail = h("div");
+      const act = (text, cls, path, bodyExtra, done) => {
+        const b = h("button", { class: "btn small " + cls, text });
+        b.addEventListener("click", () => busy(b, async () => { const r = await api(path, { guild_id: guild.value, ...bodyExtra }); toast(done(r), "ok"); load(); }));
+        return b;
+      };
+      const body = rows.map(g => {
+        const details = h("button", { class: "btn gray small", text: "Details" });
+        details.addEventListener("click", () => busy(details, () => showDetails(g, detail)));
+        return h("tr", {}, h("td", { text: "#" + g.id }), h("td", { text: g.title }), h("td", { text: statusLabel[g.status] || g.status }),
+          h("td", { class: "num", text: String(g.entries) }), h("td", { class: "num", text: `${g.redeemed}/${g.prizes}` }),
+          h("td", { text: g.status === "active" ? new Date(g.ends_at).toLocaleString() : "" }),
+          h("td", { class: "actions" }, details,
+            g.status === "active" ? act("End now", "blue", "/api/giveaways/end", { id: g.id }, r => `Ended. ${r.winners} winner${r.winners === 1 ? "" : "s"} drawn.`) : null,
+            g.status === "active" ? act("Cancel", "red", "/api/giveaways/cancel", { id: g.id }, () => "Cancelled. Unused keys were sent to you by DM.") : null,
+            g.status === "ended" ? act("Draw for open prizes", "gray", "/api/giveaways/reroll", { id: g.id }, r => `Drew ${r.winners} new winner${r.winners === 1 ? "" : "s"}.`) : null));
+      });
+      return h("div", { class: "panel" }, h("h3", { text: "Giveaways" }),
+        rows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["", "Title", "Status", "Entries", "Redeemed", "Ends", ""].map((c, i) => h("th", { class: i === 3 || i === 4 ? "num" : "", text: c })))), h("tbody", {}, body)))
+          : h("div", { class: "empty", text: "No giveaways yet." }), detail);
+    }
+
+    async function showDetails(g, into) {
+      const d = await api(`/api/giveaways/info?guild=${encodeURIComponent(guild.value)}&id=${g.id}`);
+      const names = { assigned: "Waiting to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Reported a problem", available: "No winner", expired: "Expired", returned: "No winner (sent back to you)" };
+      const rows = d.keys.map(k => {
+        const key = h("input", { type: "text", placeholder: "New key", maxlength: "200", autocomplete: "off", spellcheck: "false" });
+        const rep = h("button", { class: "btn gray small", text: "Replace key" });
+        rep.addEventListener("click", () => busy(rep, async () => { await api("/api/giveaways/replace", { guild_id: guild.value, id: g.id, user_id: k.winner_id, key: key.value }); toast("Replaced. The winner was told to claim again.", "ok"); key.value = ""; showDetails(g, into); }));
+        const reroll = h("button", { class: "btn red small", text: "Take away and redraw" });
+        reroll.addEventListener("click", () => busy(reroll, async () => { await api("/api/giveaways/reroll", { guild_id: guild.value, id: g.id, user_id: k.winner_id }); toast("Drew a new winner.", "ok"); showDetails(g, into); }));
+        const canEdit = k.winner_id && g.status !== "active" && !["confirmed", "expired"].includes(k.status);
+        return h("tr", {}, h("td", { text: String(k.position) }), h("td", { text: k.label }), h("td", { text: k.winner_id ? "Winner ID " + k.winner_id : "–" }), h("td", { text: names[k.status] || k.status }),
+          h("td", { class: "actions" }, canEdit ? [key, rep, reroll] : null));
+      });
+      into.replaceChildren(h("div", { class: "subpanel" }, h("h4", { text: `#${d.id} ${d.title}: ${d.entries} entries` }),
+        h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["#", "Prize", "Winner", "Status", ""].map(c => h("th", { text: c })))), h("tbody", {}, rows))),
+        h("p", { class: "muted small", text: "Prize keys are never shown here." })));
+    }
+
+    function setupPanel(channels, roles, settings) {
+      const vouch = select([["", "A channel named #vouches"], ...channels.map(c => [c.id, "#" + c.name])], settings.vouch_channel_id || "");
+      const mgr = select([["", "Only people with Manage Server"], ...roles.map(r => [r.id, r.name])], settings.manager_role_id || "");
+      const save = h("button", { class: "btn gray", text: "Save", onclick: () => busy(save, async () => { await api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouch.value, manager_role_id: mgr.value }); toast("Saved.", "ok"); }) });
+      return h("div", { class: "panel" }, h("h3", { text: "Server settings" }),
+        h("div", { class: "row" }, field("Vouches channel (winners' confirmations are posted here)", vouch), field("Role that can run giveaways in Discord", mgr)), h("p"), save);
+    }
+
+    guild.addEventListener("change", load);
+    app.replaceChildren(pageHead("Giveaways", "Give away game keys to your server. Winners claim with a button, and confirm when it worked."),
+      ...(servers.length > 1 ? [h("div", { class: "panel" }, field("Server", guild))] : []), holder);
+    load();
+  }
+
   // ---------- my data ----------
   function myDataView() {
     const confirm = h("input", { type: "text", placeholder: "Type DELETE", autocomplete: "off" });
@@ -701,7 +816,7 @@
     app.replaceChildren(
       pageHead("My Data", "Everything the bot stores about you, and control over it."),
       h("div", { class: "panel" }, h("h3", { text: "Stored" }),
-        h("p", { text: "Your Discord ID, your wishlist and alert rules, your library and what you paid, your settings (including quiet hours and time zone), your last 90 days of alert history, the server you last used, and your public Steam ID if you imported a wishlist. Games you suggest or vote for on a server list are stored with that server. The Value Checker stores nothing." }),
+        h("p", { text: "Your Discord ID, your wishlist and alert rules, giveaway entries, your library and what you paid, your settings (including quiet hours and time zone), your last 90 days of alert history, the server you last used, and your public Steam ID if you imported a wishlist. Games you suggest or vote for on a server list are stored with that server. The Value Checker stores nothing." }),
         h("a", { class: "btn blue", href: "/api/mydata/download", text: "Download my data (JSON)" })),
       h("div", { class: "panel" }, h("h3", { text: "Delete" }),
         h("p", { text: "This deletes your wishlist, library, alert history and settings, your Steam profile ID, your votes and the games you added to server lists. It cannot be undone. Backups made before you delete are removed as they rotate out (7 days)." }),
@@ -719,7 +834,7 @@
   }
 
   // ---------- routing ----------
-  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, mydata: myDataView, help: helpView, admin: adminView };
+  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, admin: adminView };
 
   function route() {
     renderChrome();

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { createDashboard } from "../src/dashboard/server.js";
 import { DiscordApiError } from "../src/dashboard/discord.js";
 import { openDb } from "../src/db.js";
+import { createVault } from "../src/vault.js";
+import { createGiveawayService } from "../src/giveaway.js";
 import { applySteamImport, WishlistError } from "../src/wishlist.js";
 
 const ORIGIN = "http://localhost:3000";
@@ -10,7 +12,7 @@ const MANAGE = String(0x20);
 
 const deal = (amount, regular) => ({ shop: { name: "GOG" }, price: { amount, currency: "USD" }, regular: { amount: regular, currency: "USD" }, cut: 0, url: "https://deal.example/x" });
 
-async function setup({ sendFails = false, guildsOf, config = {} } = {}) {
+async function setup({ sendFails = false, guildsOf, config = {}, giveawayService = null } = {}) {
     const db = openDb(":memory:");
     let clock = 1_000_000;
     const sent = [];
@@ -31,7 +33,8 @@ async function setup({ sendFails = false, guildsOf, config = {} } = {}) {
             return [{ id: "c1", name: "alerts" }, { id: "c2", name: "general" }];
         },
         sendMessage: async (id, p) => { if (sendFails) throw new DiscordApiError(403, "no"); sent.push({ id, p }); },
-        memberName: async (g, id) => (id === "u1" ? "Jacob" : null)
+        memberName: async (g, id) => (id === "u1" ? "Jacob" : null),
+        listRoles: async () => [{ id: "r1", name: "Boosters" }]
     };
     const itad = {
         lookupTitles: async titles => titles.map(t => (/^zzz/i.test(t) ? { title: t, id: null } : { title: t, id: "id-" + t.toLowerCase().replace(/\W+/g, ""), approx: false, matched: t })),
@@ -39,7 +42,7 @@ async function setup({ sendFails = false, guildsOf, config = {} } = {}) {
         getGiveawayList: async () => [{ id: "1", title: "Alpha", shop: "Epic", url: "https://e.example/a", expiry: null }, { id: "2", title: "Beta", shop: "Epic", url: "https://e.example/b", expiry: null }, { id: "3", title: "Evil", shop: "Steam", url: "javascript:alert(1)", expiry: null }],
         getHistory: async () => Array.from({ length: 400 }, (_, i) => ({ t: 1_700_000_000_000 + i * 86400_000, price: 10 + (i % 7), regular: 20, shop: "GOG" }))
     };
-    const dash = createDashboard({ db, itad, rest, config: { publicUrl: ORIGIN, port: 0, host: "127.0.0.1", clientId: "123", ...config }, now: () => clock });
+    const dash = createDashboard({ db, itad, rest, giveaways: typeof giveawayService === "function" ? giveawayService(db) : giveawayService, config: { publicUrl: ORIGIN, port: 0, host: "127.0.0.1", clientId: "123", ...config }, now: () => clock });
     const addr = await dash.listen(0, "127.0.0.1");
     const base = `http://127.0.0.1:${addr.port}`;
     let cookie = "";
@@ -492,5 +495,57 @@ test("free games list is grouped by platform, needs sign-in, and the setting sav
     assert.deepEqual(r.data.platforms.map(p => [p.shop, p.games.length]), [["Epic", 2]]); // the non-https link is dropped
     const s = await t.request("/api/settings", { method: "POST", body: { free: true } });
     assert.equal(s.data.settings.free, true);
+    await t.close();
+});
+
+// ---------- giveaways ----------
+test("giveaways page: managers only, validated, and keys never come back", async () => {
+    const posts = [], dms = [];
+    const t = await setup({ giveawayService: db => createGiveawayService({
+        db, vault: createVault("dashboard-test-secret-123"),
+        discord: { post: async (c, p) => { posts.push({ c, p }); return { id: "m" + posts.length }; }, edit: async () => {}, dm: async (u, p) => { dms.push({ u, p }); }, memberOk: async () => true, findChannelByName: async () => null }
+    }) });
+    await t.signIn();
+
+    assert.equal((await t.request("/api/me")).data.giveaways, true);
+    assert.equal((await t.request("/api/giveaways?guild=g-member")).status, 403); // not a manager there
+    const body = { guild_id: "g-admin", channel_id: "c1", title: "Big one", length: "2h", keys: "Hades | AAAAA-BBBBB\nCeleste | CCCCC-DDDDD", game: "Hades", auto_image: false };
+    const post = b => t.request("/api/giveaways/create", { method: "POST", body: b });
+    assert.equal((await post({ ...body, channel_id: "nope" })).status, 400);
+    assert.equal((await post({ ...body, length: "soon" })).status, 400);
+    assert.equal((await post({ ...body, keys: "Hades KEY1 KEY2" })).status, 400);
+    assert.equal((await post({ ...body, image: "http://insecure.example/a.png" })).status, 400);
+    const made = await post(body);
+    assert.equal(made.status, 200);
+    assert.equal(made.data.prizes, 2);
+    assert.ok(!made.text.includes("AAAAA"));
+    assert.ok(!JSON.stringify(posts).includes("AAAAA")); // the public post carries no keys
+
+    const list = await t.request("/api/giveaways?guild=g-admin");
+    assert.equal(list.data.giveaways[0].prizes, 2);
+    assert.ok(!list.text.includes("AAAAA"));
+    const info = await t.request(`/api/giveaways/info?guild=g-admin&id=${made.data.id}`);
+    assert.deepEqual(info.data.keys.map(k => k.label), ["Hades", "Celeste"]);
+    assert.ok(!info.text.includes("AAAAA") && !info.text.includes("CCCCC"));
+    assert.equal((await t.request("/api/servers/roles?guild=g-admin")).data.roles[0].name, "Boosters");
+    assert.equal((await t.request("/api/servers/roles?guild=g-member")).status, 403);
+
+    const saved = await t.request("/api/giveaways/setup", { method: "POST", body: { guild_id: "g-admin", vouch_channel_id: "c2", manager_role_id: "r1" } });
+    assert.deepEqual([saved.data.settings.vouch_channel_id, saved.data.settings.manager_role_id], ["c2", "r1"]);
+    assert.equal((await t.request("/api/giveaways/setup", { method: "POST", body: { guild_id: "g-admin", vouch_channel_id: "zzz" } })).status, 400);
+
+    const cancel = await t.request("/api/giveaways/cancel", { method: "POST", body: { guild_id: "g-admin", id: made.data.id } });
+    assert.equal(cancel.data.unused, 2);
+    assert.match(JSON.stringify(dms), /AAAAA-BBBBB/); // unused keys go to the host's DMs, never to the dashboard
+    assert.equal((await t.request("/api/giveaways/end", { method: "POST", body: { guild_id: "g-admin", id: 9999 } })).status, 404);
+    await t.close();
+});
+
+test("giveaways are switched off cleanly without a key secret", async () => {
+    const t = await setup();
+    await t.signIn();
+    assert.equal((await t.request("/api/me")).data.giveaways, false);
+    const r = await t.request("/api/giveaways/create", { method: "POST", body: { guild_id: "g-admin", channel_id: "c1", title: "x", length: "1h", keys: "k" } });
+    assert.equal(r.status, 503);
     await t.close();
 });

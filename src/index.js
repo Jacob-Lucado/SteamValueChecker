@@ -19,6 +19,9 @@ import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createDashboard } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
+import { createVault } from "./vault.js";
+import { createGiveawayService } from "./giveaway.js";
+import { createGiveawayHandlers } from "./gwhandlers.js";
 
 const MAX_TITLES = 100;
 const COOLDOWN_MS = 15_000;
@@ -45,6 +48,37 @@ const discord = {
 };
 const notifier = createNotifier({ db, discord });
 
+// Giveaways keep prize keys, so they only run when KEY_ENCRYPTION_SECRET is set.
+const gwDiscord = {
+    async post(channelId, payload) {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel?.isTextBased()) throw new Error("Not a text channel");
+        const m = await channel.send(payload);
+        return { id: m.id };
+    },
+    async edit(channelId, messageId, payload) {
+        const channel = await client.channels.fetch(channelId);
+        const m = await channel.messages.fetch(messageId);
+        await m.edit(payload);
+    },
+    dm: (userId, payload) => discord.sendDm(userId, payload),
+    async memberOk(guildId, userId) {
+        try { const g = await client.guilds.fetch(guildId); await g.members.fetch(userId); return true; }
+        catch (e) { return !(e?.code === 10007 || e?.status === 404); } // false only for "Unknown Member"
+    },
+    async findChannelByName(guildId, name) {
+        try {
+            const g = await client.guilds.fetch(guildId);
+            const channels = await g.channels.fetch();
+            return channels.find(c => c?.isTextBased() && c.name.toLowerCase() === name)?.id ?? null;
+        } catch { return null; }
+    }
+};
+const giveaways = cfg.keySecret
+    ? createGiveawayService({ db, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, log: m => console.log(`[giveaway] ${m}`) })
+    : null;
+const gw = createGiveawayHandlers({ db, giveaways });
+
 // Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
 const ops = createOps({
     sendOwner: async message => { if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { content: message }); }
@@ -63,6 +97,15 @@ client.once(Events.ClientReady, c => {
         cfg.checkEveryMinutes * 60_000,
         { onError: err => { console.error(`[alerts] ${err.name}: ${err.message}`); ops.cycleThrew(err); } }
     );
+
+    // Giveaways: ends them on time, passes unclaimed prizes on, sends "did it work?" follow-ups, deletes old keys
+    if (giveaways) {
+        schedule(
+            async () => { await giveaways.tick(); },
+            60_000,
+            { onError: err => { console.error(`[giveaway] ${err.name}: ${err.message}`); ops.error("giveaways", err); } }
+        );
+    } else console.log("Giveaways are off (set KEY_ENCRYPTION_SECRET to turn them on).");
 
     // Bundles, giveaways, weekly digests, library snapshots, cleanup and the daily backup
     schedule(
@@ -175,9 +218,11 @@ async function handleValue(i) {
 
 client.on(Events.InteractionCreate, async i => {
     if (i.isAutocomplete()) {
-        try { await handlers.handleAutocomplete(i); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
+        try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
     }
+    if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
+    if (i.isModalSubmit() && i.customId.startsWith("gw_")) return gw.handleModal(i);
     if (i.isButton() && i.customId === FREE_CLAIM_ALL_ID) {
         // Every link is read from the message the bot itself sent, so nothing is stored or taken from the user.
         const links = (i.message.embeds ?? []).filter(e => /^https:\/\//i.test(e.url ?? "")).map(e => `• [${String(e.title).slice(0, 80)}](${e.url})`);
@@ -192,6 +237,7 @@ client.on(Events.InteractionCreate, async i => {
             case "wishlist": return await handlers.handleWishlist(i);
             case "alerts": return await handlers.handleAlerts(i);
             case "alertchannel": return await handlers.handleAlertChannel(i);
+            case "giveaway": return await gw.handleCommand(i);
             case "library": return await handlers.handleLibrary(i);
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
@@ -210,7 +256,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, config: { ...d, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, config: { ...d, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

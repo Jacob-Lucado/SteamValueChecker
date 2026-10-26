@@ -22,6 +22,8 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
             host: env.DASHBOARD_HOST || "127.0.0.1"
         } : null,
         ownerId: env.OWNER_DISCORD_ID || null,
+        // Giveaways store prize keys, so they stay off until there is a secret to encrypt them with.
+        keySecret: env.KEY_ENCRYPTION_SECRET || null,
         backupDir: env.BACKUP_DIR || "data/backups",
         backupKeep: Math.max(1, Number(env.BACKUP_KEEP) || 7),
         trustProxy: env.DASHBOARD_TRUST_PROXY === "1",

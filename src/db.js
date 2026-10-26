@@ -4,6 +4,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { giveawaySchema, giveawayStore } from "./gwstore.js";
 
 export const MAX_ITEMS_PER_USER = 200;
 export const MAX_LIBRARY_PER_USER = 500;
@@ -101,7 +102,7 @@ CREATE TABLE IF NOT EXISTS guilds (
     set_by     TEXT,
     updated_at INTEGER NOT NULL
 );
-`;
+${giveawaySchema}`;
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -128,6 +129,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const get = (sql, ...p) => db.prepare(sql).get(...p);
     const all = (sql, ...p) => db.prepare(sql).all(...p);
     const clean = o => (o ? { ...o } : o); // node:sqlite rows have a null prototype
+    const giveaways = giveawayStore({ db, run, get, all, clean, now });
 
     function ensureUser(discordId, guildId = null) {
         run("INSERT OR IGNORE INTO users (discord_id, guild_id, created_at) VALUES (?, ?, ?)", discordId, guildId, now());
@@ -339,6 +341,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         try {
             for (const t of ["items", "library", "library_snapshots", "alert_log", "seen"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
+            giveaways.forgetGiveawayUser(discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");
@@ -356,6 +359,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, removeLibrary, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         setGroupMin, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, backupTo, exportUser, deleteUser, close: () => db.close()
+        stats, backupTo, exportUser, deleteUser, ...giveaways, close: () => db.close()
     };
 }

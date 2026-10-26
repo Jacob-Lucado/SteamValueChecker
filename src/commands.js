@@ -67,6 +67,43 @@ const leaderboard = new SlashCommandBuilder()
     .setDescription("Who in this server has saved the most (members who opted in with /alerts share)")
     .setContexts(InteractionContextType.Guild);
 
+const giveawayOption = o => o.setName("giveaway").setDescription("Which giveaway").setRequired(true).setAutocomplete(true);
+const giveaway = new SlashCommandBuilder()
+    .setName("giveaway")
+    .setDescription("Run a giveaway of game keys in your server")
+    .setContexts(InteractionContextType.Guild)
+    .addSubcommand(s => s.setName("create").setDescription("Start a giveaway. You will be asked for the prize keys in a private form")
+        .addStringOption(o => o.setName("title").setDescription("Title shown on the giveaway").setRequired(true).setMaxLength(100))
+        .addStringOption(o => o.setName("length").setDescription("How long it runs, e.g. 90m, 2h, 3d, 1w, 1d12h").setRequired(true).setMaxLength(20))
+        .addChannelOption(o => o.setName("channel").setDescription("Where to post it (default: here)").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addStringOption(o => o.setName("game").setDescription("Game name, used to find artwork automatically").setMaxLength(100))
+        .addStringOption(o => o.setName("description").setDescription("Extra text on the giveaway").setMaxLength(1500))
+        .addStringOption(o => o.setName("image").setDescription("Your own large image (https link). Skips automatic artwork").setMaxLength(500))
+        .addStringOption(o => o.setName("thumbnail").setDescription("Your own small image (https link)").setMaxLength(500))
+        .addBooleanOption(o => o.setName("noautoimage").setDescription("Do not look up artwork automatically"))
+        .addStringOption(o => o.setName("color").setDescription("Embed color, like #5865F2").setMaxLength(8))
+        .addStringOption(o => o.setName("buttonlabel").setDescription("Text on the enter button").setMaxLength(40))
+        .addRoleOption(o => o.setName("requirerole").setDescription("Only members with this role can enter"))
+        .addRoleOption(o => o.setName("bonusrole").setDescription("Members with this role get extra entries"))
+        .addIntegerOption(o => o.setName("bonusentries").setDescription("Entries for the bonus role (2 to 10)").setMinValue(2).setMaxValue(10))
+        .addRoleOption(o => o.setName("pingrole").setDescription("Role to ping when it starts"))
+        .addIntegerOption(o => o.setName("claimhours").setDescription("Hours a winner has to claim (default 48)").setMinValue(1).setMaxValue(168))
+        .addIntegerOption(o => o.setName("accountage").setDescription("Minimum Discord account age in days").setMinValue(0).setMaxValue(3650))
+        .addIntegerOption(o => o.setName("memberage").setDescription("Minimum days in this server").setMinValue(0).setMaxValue(3650))
+        .addChannelOption(o => o.setName("vouchchannel").setDescription("Where to post the winner's confirmation (default: #vouches)").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
+    .addSubcommand(s => s.setName("list").setDescription("Giveaways in this server"))
+    .addSubcommand(s => s.setName("info").setDescription("Where each prize is (keys are never shown)").addStringOption(giveawayOption))
+    .addSubcommand(s => s.setName("end").setDescription("End a giveaway now and draw the winners").addStringOption(giveawayOption))
+    .addSubcommand(s => s.setName("cancel").setDescription("Cancel a giveaway. Unused keys are sent back to you").addStringOption(giveawayOption))
+    .addSubcommand(s => s.setName("reroll").setDescription("Draw again for prizes with no winner, or replace one winner")
+        .addStringOption(giveawayOption).addUserOption(o => o.setName("winner").setDescription("Replace this winner")))
+    .addSubcommand(s => s.setName("replace").setDescription("Give a winner a new key (for example if theirs did not work)")
+        .addStringOption(giveawayOption).addUserOption(o => o.setName("winner").setDescription("The winner").setRequired(true)))
+    .addSubcommand(s => s.setName("setup").setDescription("Vouches channel and who else can run giveaways")
+        .addChannelOption(o => o.setName("vouchchannel").setDescription("Where confirmations are posted").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addRoleOption(o => o.setName("managerrole").setDescription("Members with this role can run giveaways"))
+        .addBooleanOption(o => o.setName("clear").setDescription("Reset both settings")));
+
 const help = new SlashCommandBuilder().setName("help").setDescription("How to use Steam Value Checker");
 const about = new SlashCommandBuilder().setName("about").setDescription("About this bot and its price data");
 const privacy = new SlashCommandBuilder().setName("privacy").setDescription("What the bot does and does not do with your data");
@@ -155,4 +192,4 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
-export const commands = [value, wishlist, alerts, alertchannel, library, serverlist, leaderboard, mydata, help, about, privacy].map(c => c.toJSON());
+export const commands = [value, wishlist, alerts, alertchannel, library, serverlist, leaderboard, giveaway, mydata, help, about, privacy].map(c => c.toJSON());

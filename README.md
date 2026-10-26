@@ -86,6 +86,19 @@ The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, min
 
 > Steam only shares wishlists that are **public**. Set *Game details* to Public under Profile > Edit Profile > Privacy Settings, then import.
 
+### Giveaways (`/giveaway`)
+
+Server owners (Manage Server, or a role set with `/giveaway setup`) can give away game keys.
+
+- `/giveaway create title length [game] [image] [thumbnail] [color] [requirerole] [bonusrole] [pingrole] ...` opens a private form where you paste the prizes, one per line as `Name | KEY` (up to 50 keys in one giveaway). The post groups them neatly, e.g. `Hades ×2, Celeste`.
+- **Artwork:** the bot finds Steam art for `game` automatically, or use your own `image` / `thumbnail` (https links). `noautoimage` turns auto-art off.
+- **Customise:** description, color, button text, required role, bonus entries for a role, minimum account/server age, a role to ping, and how many hours winners have to claim.
+- When it ends, winners are announced with a **Claim key** button. The bot DMs the key; if DMs are closed it replies only to the winner with "Your DMs are closed, Here's your prize:".
+- After delivery the winner is asked to confirm it redeemed (or report a problem). A confirmed key is wiped and the bot posts a vouch in `#vouches` (or the channel set in `/giveaway setup`).
+- Unclaimed keys are redrawn to other entrants; unused keys are DMed back to the host. Also: `/giveaway end | cancel | reroll | replace | info | list`, plus a full Giveaways page on the dashboard.
+
+Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in any public message or dashboard response, and are deleted on confirmation, cancellation or after a retention period. Set the secret in `.env` to enable giveaways; if you lose it, stored keys can't be read. Backups only contain encrypted keys.
+
 ### `/help`, `/about`, `/privacy`
 
 Usage notes, credits and a plain-language privacy summary.
@@ -134,7 +147,7 @@ You need Node 22.13 or newer (the bot uses Node's built-in SQLite), a Discord ap
    cd SteamValueChecker
    npm install
    ```
-4. **Configure:** copy `.env.example` to `.env` and fill in `DISCORD_TOKEN`, `CLIENT_ID`, `ITAD_API_KEY`, and optionally `GUILD_ID` for instant command updates on a test server. `DATABASE_PATH`, `CHECK_INTERVAL_MINUTES` and the dashboard settings (see Web dashboard) are optional.
+4. **Configure:** copy `.env.example` to `.env` and fill in `DISCORD_TOKEN`, `CLIENT_ID`, `ITAD_API_KEY`, and optionally `GUILD_ID` for instant command updates on a test server. `KEY_ENCRYPTION_SECRET` (needed for giveaways), `DATABASE_PATH`, `CHECK_INTERVAL_MINUTES` and the dashboard settings (see Web dashboard) are optional.
 5. **Invite the bot** using the link on the app's **Installation** tab, with the scopes `bot` and `applications.commands` and no extra permissions.
 6. **Register the commands and start:**
    ```bash

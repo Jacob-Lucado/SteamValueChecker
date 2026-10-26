@@ -24,9 +24,10 @@ export const HELP = [
     "• `/library add`, `import`, `view`, `remove`: games you own and what you paid, with what you saved against MSRP.",
     "• `/serverlist` is a wishlist your server shares, with votes. `/leaderboard` ranks members who opted in with `/alerts share`.",
     "• Server admins can use `/alertchannel group` to post when several opted-in members watch the same game and it goes on sale.",
+    "• Server managers can run key giveaways with `/giveaway create`. Winners claim with a button, confirm it worked, and a vouch is posted.",
     "• `/mydata` exports or deletes everything stored about you.",
     "",
-    "Replies are private to you. Never post game keys in Discord. The bot ignores anything that looks like a key."
+    "Replies are private to you. Never post game keys in chat. The bot ignores anything that looks like a key, except keys a server manager enters in the private giveaway form."
 ].join("\n");
 
 export const ABOUT = [
@@ -39,7 +40,7 @@ export const ABOUT = [
 
 export const PRIVACY = [
     "**What the bot reads:** the game titles you type or upload, the region you pick, and the amount you enter for `paid`.",
-    "**What it never needs:** game keys, Steam or Fanatical logins, cookies or passwords. Anything that looks like a key is dropped before any lookup.",
+    "**What it never needs:** Steam or Fanatical logins, cookies or passwords. Anything that looks like a key is dropped before any lookup. The one exception is giveaways: a server manager can enter prize keys in a private form, and they are stored encrypted until the winner confirms (then deleted).",
     "**Where titles go:** game titles are sent to IsThereAnyDeal to get prices. Nothing else is sent.",
     "**Storage:** `/value` saves nothing. Prices are cached in memory for 30 minutes and results are not logged. Your reply is visible only to you.",
     "**Wishlist alerts and library:** if you use them, the bot stores your Discord ID, wishlist, alert rules, settings, library and what you paid, 90 days of alert history, server list votes and (if you import) your public Steam ID. Sharing with your server (group alerts, leaderboard) is off until you opt in. It sends alerts by DM, or in the server alert channel if a DM fails or you choose that, where the game name is visible to the channel and you are mentioned. `/mydata export` and `/mydata delete` give you control. If the web dashboard is on, signing in shares only your Discord name, avatar and server list, kept in memory for the session.",

@@ -14,7 +14,7 @@ Steam Value Checker is a Discord bot that prices a list of games and, if you cho
 
 ## What the bot does not want
 
-- **Game keys.** Anything that looks like a product key is discarded before any lookup. Please do not post keys.
+- **Game keys in chat.** Anything that looks like a product key is discarded before any lookup. Please do not post keys. (Giveaways are the one exception: see below.)
 - **Passwords, cookies or logins** for Steam, Fanatical or any other service. The bot never asks for them. Wishlist import reads only a **public** Steam wishlist.
 
 ## What it does with the data
@@ -53,6 +53,10 @@ Your data is kept until you delete it with `/mydata delete`. Removing the bot fr
 
 User input and results are never written to logs. Error logs contain only technical error messages.
 Discord keeps your messages and the bot's replies according to Discord's own policies.
+
+## Giveaways
+
+If a server manager runs a giveaway, the bot stores: the giveaway settings, your Discord user ID if you enter, who won each prize and its status, and the prize keys the manager entered. Keys are **encrypted** and are deleted once the winner confirms, when the giveaway is cancelled or the key is returned to the host, or automatically after a retention period (delivered keys after 14 days, leftover keys 7 days after the giveaway ends). Keys are sent only to the winner by DM or in a reply only they can see. When a winner confirms, a vouch message naming the winner is posted in the server. Giveaway records are removed 90 days after they finish, and `/mydata delete` removes your entries.
 
 ## The web dashboard
 

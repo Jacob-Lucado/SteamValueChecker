@@ -20,6 +20,8 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard } from "../library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
+import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
+import { MAX_KEYS } from "../gwstore.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 const FILES = {
@@ -54,7 +56,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -142,6 +144,18 @@ export function createDashboard({ db, itad, rest, ops = null, config, now = () =
 
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId;
 
+    function managerGuild(s, id) {
+        const g = guildFor(s, id);
+        if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+        return g;
+    }
+    const needGiveaways = () => { if (!giveaways) throw new HttpError(503, "Giveaways are not set up on this bot. The owner needs to set KEY_ENCRYPTION_SECRET."); };
+    function giveawayOf(g, id) {
+        const x = db.getGiveaway(Number(id));
+        if (!x || x.guild_id !== g.id) throw new HttpError(404, "I can't find that giveaway.");
+        return x;
+    }
+
     function guildFor(s, id) {
         const g = s.guilds.find(x => x.id === id);
         if (!g) throw new HttpError(403, "You are not in that server.");
@@ -185,6 +199,7 @@ export function createDashboard({ db, itad, rest, ops = null, config, now = () =
                 games: db.countItems(s.userId),
                 servers: serversFor(s, u),
                 isOwner: isOwner(s),
+                giveaways: Boolean(giveaways),
                 library: db.countLibrary(s.userId)
             };
         },
@@ -486,6 +501,86 @@ export function createDashboard({ db, itad, rest, ops = null, config, now = () =
             return { platforms: [...groups].map(([shop, games]) => ({ shop, games })) };
         },
 
+        // ----- giveaways (server managers) -----
+        "GET /api/giveaways": async (req, _b, url) => {
+            const s = session(req);
+            const g = managerGuild(s, url.searchParams.get("guild"));
+            const rows = db.listGiveaways(g.id, { limit: 50 }).map(x => {
+                const keys = db.listKeys(x.id);
+                return { id: x.id, title: x.title, status: x.status, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length };
+            });
+            return { giveaways: rows, settings: db.getGiveawaySettings(g.id), max: MAX_KEYS };
+        },
+
+        "GET /api/giveaways/info": async (req, _b, url) => {
+            const s = session(req);
+            const g = managerGuild(s, url.searchParams.get("guild"));
+            const x = giveawayOf(g, url.searchParams.get("id"));
+            // names only, never key values
+            return { id: x.id, title: x.title, status: x.status, entries: db.countEntries(x.id), keys: db.listKeys(x.id).map(k => ({ position: k.position, label: k.label, status: k.status, winner_id: k.winner_id })) };
+        },
+
+        "POST /api/giveaways/create": async (req, body) => {
+            const s = session(req);
+            const g = managerGuild(s, body.guild_id);
+            needGiveaways();
+            const undo = cooldown(s.userId, "add");
+            try {
+            const channels = await rest.listChannels(g.id).catch(err => {
+                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+                throw err;
+            });
+            if (!channels.some(c => c.id === body.channel_id)) throw new HttpError(400, "Pick a text channel from the list.");
+            const text = v => (v === null || v === undefined || v === "" ? null : String(v));
+            const int = v => (v === null || v === undefined || v === "" ? undefined : Number(v));
+            const { keys, duplicates } = parseKeys(String(body.keys ?? "").slice(0, 20_000), text(body.game) ?? String(body.title ?? "Prize"));
+            const r = await giveaways.create({
+                guild_id: g.id, channel_id: body.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(body.length),
+                game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
+                color: parseColor(body.color), button_label: text(body.button_label), ping_role_id: text(body.ping_role_id), require_role_id: text(body.require_role_id),
+                bonus_role_id: text(body.bonus_role_id), bonus_entries: int(body.bonus_entries), claim_hours: int(body.claim_hours),
+                min_account_days: int(body.min_account_days), min_member_days: int(body.min_member_days),
+                vouch_channel_id: channels.some(c => c.id === body.vouch_channel_id) ? body.vouch_channel_id : null,
+                auto_image: body.auto_image !== false, keys
+            });
+            return { ...r, duplicates };
+            } catch (err) { undo(); throw err; }
+        },
+
+        "POST /api/giveaways/end": async (req, body) => { const g = managerGuild(session(req), body.guild_id); needGiveaways(); const x = giveawayOf(g, body.id); const r = await giveaways.end(x.id); return { winners: r.winners.length, unused: r.unused }; },
+        "POST /api/giveaways/cancel": async (req, body) => { const g = managerGuild(session(req), body.guild_id); needGiveaways(); const x = giveawayOf(g, body.id); return await giveaways.cancel(x.id); },
+        "POST /api/giveaways/reroll": async (req, body) => { const g = managerGuild(session(req), body.guild_id); needGiveaways(); const x = giveawayOf(g, body.id); const r = await giveaways.reroll(x.id, { userId: body.user_id || null }); return { winners: r.winners.length }; },
+        "POST /api/giveaways/replace": async (req, body) => {
+            const g = managerGuild(session(req), body.guild_id); needGiveaways();
+            const x = giveawayOf(g, body.id);
+            return await giveaways.replaceKey(x.id, String(body.user_id ?? ""), body.key);
+        },
+
+        "POST /api/giveaways/setup": async (req, body) => {
+            const g = managerGuild(session(req), body.guild_id);
+            const ids = new Set([...(await rest.listChannels(g.id).catch(() => [])).map(c => c.id)]);
+            const patch = {};
+            if (body.vouch_channel_id !== undefined) {
+                if (body.vouch_channel_id && !ids.has(body.vouch_channel_id)) throw new HttpError(400, "Pick a text channel from the list.");
+                patch.vouch_channel_id = body.vouch_channel_id || null;
+            }
+            if (body.manager_role_id !== undefined) {
+                const roles = body.manager_role_id ? await rest.listRoles(g.id).catch(() => []) : [];
+                if (body.manager_role_id && !roles.some(r => r.id === body.manager_role_id)) throw new HttpError(400, "Pick a role from the list.");
+                patch.manager_role_id = body.manager_role_id || null;
+            }
+            return { settings: db.setGiveawaySettings(g.id, patch) };
+        },
+
+        "GET /api/servers/roles": async (req, _b, url) => {
+            const g = managerGuild(session(req), url.searchParams.get("guild"));
+            try { return { roles: await rest.listRoles(g.id) }; }
+            catch (err) {
+                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+                throw err;
+            }
+        },
+
         // ----- owner -----
         "GET /api/admin/stats": async (req) => {
             const s = session(req);
@@ -596,7 +691,7 @@ export function createDashboard({ db, itad, rest, ops = null, config, now = () =
             let body = {};
             if (req.method === "POST") {
                 checkWrite(req);
-                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : 20_000);
+                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : 20_000);
             }
             json(res, 200, await handler(req, body, url));
         } catch (err) {

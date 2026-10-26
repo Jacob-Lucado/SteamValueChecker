@@ -62,6 +62,12 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
                 .map(c => ({ id: c.id, name: c.name }));
         },
 
+        /** Roles people can be given (not @everyone, not bot-managed roles). */
+        async listRoles(guildId) {
+            const all = await call(`/guilds/${encodeURIComponent(guildId)}/roles`, { headers: bot });
+            return (Array.isArray(all) ? all : []).filter(r => r.id !== guildId && !r.managed).sort((a, b) => (b.position ?? 0) - (a.position ?? 0)).map(r => ({ id: r.id, name: r.name }));
+        },
+
         /** Display name of a member of a server the bot is in, or null when unknown. */
         async memberName(guildId, userId) {
             try {

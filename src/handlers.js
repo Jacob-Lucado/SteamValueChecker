@@ -396,13 +396,13 @@ export function createHandlers({ db, itad }) {
             });
         }
 
-        if (!db.getUser(i.user.id)) return eph(i, "Nothing is stored about you.");
+        if (!db.getUser(i.user.id) && !db.hasGiveawayData(i.user.id)) return eph(i, "Nothing is stored about you.");
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId("md_confirm").setLabel("Delete everything").setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId("md_cancel").setLabel("Cancel").setStyle(ButtonStyle.Secondary)
         );
         const message = await i.reply({
-            content: "This deletes your wishlist, alert settings and Steam profile ID from the bot. It cannot be undone.",
+            content: "This deletes your wishlist, library, alert settings, giveaway entries and Steam profile ID from the bot. Giveaways you host are cancelled and their keys wiped. It cannot be undone.",
             components: [row],
             flags: MessageFlags.Ephemeral,
             fetchReply: true
