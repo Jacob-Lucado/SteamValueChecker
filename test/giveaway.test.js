@@ -363,3 +363,54 @@ test("videos and GIFs: video links go in the message text, GIFs stay in the embe
     assert.equal(gif.embeds[0].image.url, "https://x.com/a.gif");
     assert.equal(gif.content, "<@&9>");
 });
+
+test("scheduled giveaway posts only when its time comes", async () => {
+    const t = rig();
+    const r = await t.make({ start_in_ms: 3 * HOUR });
+    assert.equal(r.scheduled, true);
+    assert.equal(t.posts.length, 0);
+    assert.equal(t.db.getGiveaway(r.id).status, "scheduled");
+    await t.svc.tick();
+    assert.equal(t.posts.length, 0);
+    t.advance(3 * HOUR + 1000);
+    const done = await t.svc.tick();
+    assert.equal(done.started, 1);
+    assert.equal(t.posts.length, 1);
+    const g = t.db.getGiveaway(r.id);
+    assert.equal(g.status, "active");
+    assert.equal(g.ends_at, t.now() + 2 * HOUR);
+    await t.svc.enter(r.id, { userId: "u1", roleIds: [] });
+});
+
+test("a scheduled giveaway can be cancelled and returns its keys", async () => {
+    const t = rig();
+    const r = await t.make({ start_in_ms: HOUR });
+    const out = await t.svc.cancel(r.id);
+    assert.equal(out.unused, 2);
+    assert.equal(t.db.getGiveaway(r.id).status, "cancelled");
+});
+
+test("a series splits the prizes across scheduled rounds", async () => {
+    const t = rig();
+    const keys = ["A", "B", "C", "D"].map(l => ({ label: l, key: `${l}${l}${l}${l}-${l}${l}${l}${l}` }));
+    await assert.rejects(() => t.make({ keys, rounds: 2, repeat_ms: HOUR }), /at least as long/);
+    const r = await t.make({ keys, rounds: 2, repeat_ms: 5 * HOUR });
+    assert.equal(r.ids.length, 2);
+    assert.equal(t.posts.length, 1); // round one starts now
+    const rows = r.ids.map(id => t.db.getGiveaway(id));
+    assert.deepEqual(rows.map(g => g.status), ["active", "scheduled"]);
+    assert.match(rows[1].title, /round 2 of 2/);
+    assert.equal(t.db.listKeys(r.ids[1]).length, 2);
+    t.advance(5 * HOUR + 1000);
+    await t.svc.tick();
+    assert.equal(t.db.getGiveaway(r.ids[1]).status, "active");
+});
+
+test("booster-only giveaways turn away everyone else", async () => {
+    const t = rig();
+    const r = await t.make({ require_boost: true });
+    await assert.rejects(() => t.svc.enter(r.id, { userId: "u1", roleIds: [] }), /boosters/);
+    const ok = await t.svc.enter(r.id, { userId: "u2", roleIds: [], boosting: true });
+    assert.equal(ok.status, "entered");
+    assert.match(giveawayPayload(t.db.getGiveaway(r.id), t.db.listKeys(r.id), 0, "active").embeds[0].fields.map(f => f.value).join(" "), /boosters only/);
+});

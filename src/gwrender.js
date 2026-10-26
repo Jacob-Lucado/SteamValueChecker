@@ -25,6 +25,7 @@ export function prizeSummary(keys) {
 
 function requirements(g) {
     const r = [];
+    if (g.require_boost) r.push("Server boosters only");
     if (g.require_role_id) r.push(`Must have ${role(g.require_role_id)}`);
     if (g.min_account_days) r.push(`Discord account at least ${g.min_account_days} days old`);
     if (g.min_member_days) r.push(`In this server at least ${g.min_member_days} days`);

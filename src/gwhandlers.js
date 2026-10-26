@@ -78,7 +78,9 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             bonus_entries: o.getInteger("bonusentries") ?? 2, ping_role_id: o.getRole("pingrole")?.id ?? null,
             claim_hours: o.getInteger("claimhours") ?? 48, min_account_days: o.getInteger("accountage") ?? 0, min_member_days: o.getInteger("memberage") ?? 0,
             vouch_channel_id: textChannel(o.getChannel("vouchchannel"), "vouches channel"),
-            auto_image: !o.getBoolean("noautoimage")
+            auto_image: !o.getBoolean("noautoimage"), require_boost: o.getBoolean("boosters") === true,
+            start_in_ms: o.getString("startin") ? parseDuration(o.getString("startin"), { min: 0 }) : 0,
+            rounds: o.getInteger("rounds") ?? 1, repeat_ms: o.getString("repeatevery") ? parseDuration(o.getString("repeatevery")) : null
         };
     }
 
@@ -103,7 +105,9 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             const r = await giveaways.create({ ...d.draft, keys });
             const art = { auto: "Artwork was found automatically.", custom: "Using your image.", none: "No artwork (none was found; you can recreate it with an `image:` link)." }[r.imageSource];
             await i.editReply([
-                `Giveaway **#${r.id}** is live in <#${d.draft.channel_id}> with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. It ends <t:${Math.floor(r.ends_at / 1000)}:R>.`,
+                r.rounds > 1 ? `Series created: **${r.rounds} rounds** scheduled in <#${d.draft.channel_id}>, the first starting <t:${Math.floor(r.starts_at / 1000)}:R> (giveaway #${r.ids.join(", #")}). Cancel any round with \`/giveaway cancel\`.`
+                  : r.scheduled ? `Giveaway **#${r.id}** is scheduled in <#${d.draft.channel_id}>. It starts <t:${Math.floor(r.starts_at / 1000)}:R> and runs until <t:${Math.floor(r.ends_at / 1000)}:R>.`
+                  : `Giveaway **#${r.id}** is live in <#${d.draft.channel_id}> with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. It ends <t:${Math.floor(r.ends_at / 1000)}:R>.`,
                 art, duplicates ? `${duplicates} duplicate key${duplicates === 1 ? " was" : "s were"} skipped.` : null,
                 "Your keys are encrypted. The bot deletes each one once the winner confirms, and sends back any that go unused."
             ].filter(Boolean).join("\n"));
@@ -200,7 +204,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         return {
             userId: i.user.id,
             roleIds: Array.isArray(roles) ? roles : [...(roles?.cache?.keys?.() ?? [])],
-            joinedAt: i.member?.joinedTimestamp ?? null, createdAt: i.user.createdTimestamp ?? null
+            boosting: Boolean(i.member?.premiumSinceTimestamp ?? i.member?.premiumSince), joinedAt: i.member?.joinedTimestamp ?? null, createdAt: i.user.createdTimestamp ?? null
         };
     }
 

@@ -31,7 +31,10 @@ CREATE TABLE IF NOT EXISTS giveaways (
     ends_at          INTEGER NOT NULL,
     created_at       INTEGER NOT NULL,
     ended_at         INTEGER,
-    leftover_notified INTEGER NOT NULL DEFAULT 0
+    leftover_notified INTEGER NOT NULL DEFAULT 0,
+    require_boost    INTEGER NOT NULL DEFAULT 0,
+    starts_at        INTEGER,
+    duration_ms      INTEGER
 );
 CREATE INDEX IF NOT EXISTS giveaways_guild ON giveaways(guild_id, status);
 CREATE TABLE IF NOT EXISTS giveaway_entries (
@@ -74,7 +77,7 @@ CREATE TABLE IF NOT EXISTS giveaway_settings (
 const GIVEAWAY_FIELDS = [
     "guild_id", "channel_id", "host_id", "title", "description", "game_title", "image_url", "thumbnail_url", "color", "button_label",
     "ping_role_id", "require_role_id", "bonus_role_id", "bonus_entries", "min_account_days", "min_member_days", "claim_hours",
-    "vouch_channel_id", "ends_at", "gallery"
+    "vouch_channel_id", "ends_at", "gallery", "require_boost", "starts_at", "duration_ms", "status"
 ];
 
 export function giveawayStore({ db, run, get, all, clean, now }) {
@@ -84,7 +87,9 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     const getGiveaway = id => clean(get("SELECT * FROM giveaways WHERE id = ?", id));
     const listGiveaways = (guildId, { limit = 25 } = {}) =>
         all("SELECT * FROM giveaways WHERE guild_id = ? ORDER BY (status = 'active') DESC, created_at DESC LIMIT ?", guildId, limit).map(clean);
-    const countActiveGiveaways = guildId => get("SELECT COUNT(*) AS n FROM giveaways WHERE guild_id = ? AND status = 'active'", guildId).n;
+    const countActiveGiveaways = guildId => get("SELECT COUNT(*) AS n FROM giveaways WHERE guild_id = ? AND status IN ('active','scheduled')", guildId).n;
+    const dueScheduled = ms => all("SELECT * FROM giveaways WHERE status = 'scheduled' AND starts_at <= ?", ms).map(clean);
+    const startGiveaway = (id, endsAt) => run("UPDATE giveaways SET status = 'active', ends_at = ? WHERE id = ? AND status = 'scheduled'", endsAt, id).changes > 0;
     const dueGiveaways = ms => all("SELECT * FROM giveaways WHERE status = 'active' AND ends_at <= ?", ms).map(clean);
     const giveawayByMessage = messageId => clean(get("SELECT * FROM giveaways WHERE message_id = ?", messageId));
 
@@ -95,7 +100,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
             const cols = GIVEAWAY_FIELDS;
             const r = run(
                 `INSERT INTO giveaways (${cols.join(", ")}, created_at) VALUES (${cols.map(() => "?").join(", ")}, ?)`,
-                ...cols.map(c => g[c] ?? (c === "bonus_entries" ? 1 : c === "claim_hours" ? 48 : c === "min_account_days" || c === "min_member_days" ? 0 : null)), now()
+                ...cols.map(c => g[c] ?? (c === "bonus_entries" ? 1 : c === "claim_hours" ? 48 : c === "min_account_days" || c === "min_member_days" || c === "require_boost" ? 0 : c === "status" ? "active" : null)), now()
             );
             const id = Number(r.lastInsertRowid);
             keys.forEach((k, i) => run("INSERT INTO giveaway_keys (giveaway_id, position, label, key_enc) VALUES (?,?,?,?)", id, i + 1, k.label, k.enc));
@@ -188,7 +193,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     const hasGiveawayData = userId => Boolean(get("SELECT 1 AS x FROM giveaway_entries WHERE discord_id = ? UNION SELECT 1 FROM giveaway_keys WHERE winner_id = ? UNION SELECT 1 FROM giveaways WHERE host_id = ?", userId, userId, userId));
 
     return {
-        getGiveaway, listGiveaways, countActiveGiveaways, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
+        getGiveaway, listGiveaways, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,
         listKeys, getKey, getKeyEnc, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,

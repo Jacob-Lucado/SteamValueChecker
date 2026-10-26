@@ -582,7 +582,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const g = managerGuild(s, url.searchParams.get("guild"));
             const rows = db.listGiveaways(g.id, { limit: 50 }).map(x => {
                 const keys = db.listKeys(x.id);
-                return { id: x.id, title: x.title, status: x.status, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length };
+                return { id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length };
             });
             return { giveaways: rows, settings: db.getGiveawaySettings(g.id), max: MAX_KEYS };
         },
@@ -624,7 +624,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 bonus_role_id: text(body.bonus_role_id), bonus_entries: int(body.bonus_entries), claim_hours: int(body.claim_hours),
                 min_account_days: int(body.min_account_days), min_member_days: int(body.min_member_days),
                 vouch_channel_id: channels.some(c => c.id === body.vouch_channel_id) ? body.vouch_channel_id : null,
-                auto_image: body.auto_image !== false, keys
+                auto_image: body.auto_image !== false, keys, require_boost: Boolean(body.boosters),
+                start_in_ms: text(body.start_in) ? parseDuration(text(body.start_in), { min: 0 }) : 0,
+                rounds: int(body.rounds) ?? 1, repeat_ms: text(body.repeat_every) ? parseDuration(text(body.repeat_every)) : null
             });
             return { ...r, duplicates };
             } catch (err) { undo(); throw err; }

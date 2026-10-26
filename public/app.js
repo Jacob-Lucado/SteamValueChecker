@@ -974,7 +974,7 @@
     const servers = state.me.servers.filter(g => g.manageable);
     const holder = h("div");
     const guild = select(servers.map(g => [g.id, g.name]), servers[0] && servers[0].id);
-    const statusLabel = { active: "Running", ended: "Ended", cancelled: "Cancelled" };
+    const statusLabel = { active: "Running", scheduled: "Scheduled", ended: "Ended", cancelled: "Cancelled" };
 
     async function load() {
       holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
@@ -1017,6 +1017,8 @@
       const color = text("#5865F2", 8), label = text("Enter giveaway", 40);
       const claim = text("48", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
       const reqRole = roleSel(), bonusRole = roleSel(), pingRole = roleSel();
+      const boosters = h("input", { type: "checkbox" });
+      const startIn = text("Start later, e.g. 2h or 1d (blank = now)", 20), rounds = text("1", 2, "number"), repeatEvery = text("e.g. 7d", 20);
       const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
       for (const el of [keys, game, image]) el.addEventListener("input", refreshPreview);
       auto.addEventListener("change", () => { previewKey = ""; refreshPreview(); });
@@ -1026,10 +1028,11 @@
           guild_id: guild.value, channel_id: chSel.value, title: title.value, length: length.value, game: game.value, description: desc.value,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
           claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN),
-          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value
+          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value,
+          boosters: boosters.checked, start_in: startIn.value, rounds: num(rounds), repeat_every: repeatEvery.value
         });
         keys.value = "";
-        toast(`Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.`, "ok");
+        toast(r.rounds > 1 ? `Series created: ${r.rounds} rounds scheduled.` : r.scheduled ? `Giveaway #${r.id} is scheduled.` : `Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.`, "ok");
         load();
       }) });
       return h("div", { class: "panel" }, h("h3", { text: "Start a giveaway" }),
@@ -1045,7 +1048,10 @@
           h("label", { class: "check" }, auto, "Find artwork automatically when I don't give an image"),
           h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN)),
           h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),
-          h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb))),
+          h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb)),
+          h("label", { class: "check" }, boosters, "Only server boosters can enter"),
+          h("h4", { text: "Schedule" }),
+          h("div", { class: "row" }, field("Start in", startIn), field("Rounds (prizes are split across them)", rounds), field("Repeat every", repeatEvery))),
         h("p"), create);
     }
 
@@ -1061,10 +1067,10 @@
         details.addEventListener("click", () => busy(details, () => showDetails(g, detail)));
         return h("tr", {}, h("td", { text: "#" + g.id }), h("td", { text: g.title }), h("td", { text: statusLabel[g.status] || g.status }),
           h("td", { class: "num", text: String(g.entries) }), h("td", { class: "num", text: `${g.redeemed}/${g.prizes}` }),
-          h("td", { text: g.status === "active" ? new Date(g.ends_at).toLocaleString() : "" }),
+          h("td", { text: g.status === "active" ? new Date(g.ends_at).toLocaleString() : g.status === "scheduled" ? "Starts " + new Date(g.starts_at).toLocaleString() : "" }),
           h("td", { class: "actions" }, details,
             g.status === "active" ? act("End now", "blue", "/api/giveaways/end", { id: g.id }, r => `Ended. ${r.winners} winner${r.winners === 1 ? "" : "s"} drawn.`) : null,
-            g.status === "active" ? act("Cancel", "red", "/api/giveaways/cancel", { id: g.id }, () => "Cancelled. Unused keys were sent to you by DM.") : null,
+            g.status === "active" || g.status === "scheduled" ? act("Cancel", "red", "/api/giveaways/cancel", { id: g.id }, () => "Cancelled. Unused keys were sent to you by DM.") : null,
             g.status === "ended" ? act("Draw for open prizes", "gray", "/api/giveaways/reroll", { id: g.id }, r => `Drew ${r.winners} new winner${r.winners === 1 ? "" : "s"}.`) : null));
       });
       return h("div", { class: "panel" }, h("h3", { text: "Giveaways" }),

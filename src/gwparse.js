@@ -32,14 +32,14 @@ export function parseKeys(text, defaultLabel) {
 }
 
 /** "90m", "2h", "3d", "1w", "1d12h" -> milliseconds, between 5 minutes and 30 days. */
-export function parseDuration(text) {
+export function parseDuration(text, { min = 5 * 60_000 } = {}) {
     const s = String(text ?? "").trim().toLowerCase().replace(/\s+/g, "");
     const re = /(\d+)(w|d|h|m)/g;
     const unit = { w: 7 * 86400_000, d: 86400_000, h: 3600_000, m: 60_000 };
     let total = 0, used = 0, m;
     while ((m = re.exec(s))) { total += Number(m[1]) * unit[m[2]]; used += m[0].length; }
     if (!total || used !== s.length) throw new UserError("I could not read that length. Use something like 90m, 2h, 3d, 1w or 1d12h.");
-    if (total < 5 * 60_000) throw new UserError("A giveaway must run for at least 5 minutes.");
+    if (total < min) throw new UserError("A giveaway must run for at least 5 minutes.");
     if (total > 30 * 86400_000) throw new UserError("A giveaway can run for 30 days at most.");
     return total;
 }

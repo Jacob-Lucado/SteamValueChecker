@@ -14,6 +14,8 @@ const CONFIRM_REMINDER_MS = 24 * 3600_000;
 const MAX_REDRAWS = 3;
 
 const closed = g => g.status !== "active";
+const cancellable = g => g.status === "active" || g.status === "scheduled";
+const MAX_ROUNDS = 12;
 
 /** The prize artwork Steam publishes for an app id. */
 export const steamHeader = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIComponent(appid)}/header.jpg`;
@@ -98,7 +100,30 @@ export function createGiveawayService({ db, vault, discord, itad = null, multiBa
     }
 
     // ---------- create ----------
+    /**
+     * Starts a giveaway now or later. `start_in_ms` delays the start; `rounds` with `repeat_ms` makes a weekly-style series:
+     * the prizes are split across the rounds, each one starts `repeat_ms` after the last, and all are scheduled up front.
+     */
     async function create(input) {
+        const rounds = Math.min(MAX_ROUNDS, Math.max(1, Math.trunc(Number(input.rounds)) || 1));
+        const first = Math.max(0, Number(input.start_in_ms) || 0);
+        if (rounds === 1) return createOne(input, first ? now() + first : null);
+        if (!input.repeat_ms || input.repeat_ms < input.duration_ms) throw new UserError("For repeating giveaways, the repeat gap must be at least as long as each giveaway runs.");
+        if (input.keys.length < rounds) throw new UserError(`You need at least one prize per round (${rounds} rounds).`);
+        const per = Math.ceil(input.keys.length / rounds);
+        const ids = [];
+        let firstResult = null;
+        for (let n = 0; n < rounds; n++) {
+            const chunk = input.keys.slice(n * per, (n + 1) * per);
+            if (!chunk.length) break;
+            const startAt = now() + first + n * input.repeat_ms;
+            const r = await createOne({ ...input, keys: chunk, title: `${cleanText(input.title, 80) ?? titleFromKeys(input.keys)} (round ${n + 1} of ${rounds})` }, first || n ? startAt : null);
+            ids.push(r.id); firstResult ??= r;
+        }
+        return { ...firstResult, ids, rounds: ids.length };
+    }
+
+    async function createOne(input, startAt = null) {
         if (!input.keys?.length) throw new UserError("Add at least one prize key.");
         const title = cleanText(input.title, 100) ?? titleFromKeys(input.keys);
         if (db.countActiveGiveaways(input.guild_id) >= MAX_ACTIVE_GIVEAWAYS) throw new UserError(`This server already has ${MAX_ACTIVE_GIVEAWAYS} running giveaways. End one first.`);
@@ -120,9 +145,11 @@ export function createGiveawayService({ db, vault, discord, itad = null, multiBa
             ping_role_id: input.ping_role_id ?? null, require_role_id: input.require_role_id ?? null, bonus_role_id: input.bonus_role_id ?? null,
             bonus_entries: clampInt(input.bonus_entries, 1, 10, 1), min_account_days: clampInt(input.min_account_days, 0, 3650, 0),
             min_member_days: clampInt(input.min_member_days, 0, 3650, 0), claim_hours: clampInt(input.claim_hours, 1, 168, 48),
-            vouch_channel_id: input.vouch_channel_id ?? null, ends_at: now() + input.duration_ms
+            vouch_channel_id: input.vouch_channel_id ?? null, require_boost: input.require_boost ? 1 : 0, duration_ms: input.duration_ms,
+            status: startAt ? "scheduled" : "active", starts_at: startAt, ends_at: (startAt ?? now()) + input.duration_ms
         };
         const id = db.createGiveaway(g, input.keys.map(k => ({ label: k.label, enc: vault.encrypt(k.key) })));
+        if (startAt) return { id, ends_at: g.ends_at, starts_at: startAt, prizes: input.keys.length, imageSource, scheduled: true };
         try {
             const row = db.getGiveaway(id);
             const msg = await discord.post(g.channel_id, giveawayPayload(row, db.listKeys(id), 0, "active"));
@@ -144,12 +171,31 @@ export function createGiveawayService({ db, vault, discord, itad = null, multiBa
             db.removeEntry(g.id, who.userId);
             return { status: "left", total: entryCount(g.id) };
         }
+        if (g.require_boost && !who.boosting) throw new UserError("This giveaway is for server boosters only.");
         if (g.require_role_id && !(who.roleIds ?? []).includes(g.require_role_id)) throw new UserError(`You need the <@&${g.require_role_id}> role to enter.`);
         if (g.min_account_days && who.createdAt && (now() - who.createdAt) / 86400_000 < g.min_account_days) throw new UserError(`Your Discord account must be at least ${g.min_account_days} days old to enter.`);
         if (g.min_member_days && who.joinedAt && (now() - who.joinedAt) / 86400_000 < g.min_member_days) throw new UserError(`You need to have been in this server for at least ${g.min_member_days} days to enter.`);
         const entries = g.bonus_role_id && (who.roleIds ?? []).includes(g.bonus_role_id) ? g.bonus_entries : 1;
         db.addEntry(g.id, who.userId, entries);
         return { status: "entered", entries, total: entryCount(g.id) };
+    }
+
+    /** Posts a scheduled giveaway when its time comes. If the channel can't be used it is cancelled and the host gets the keys back. */
+    async function launch(id) {
+        const g = must(id);
+        if (g.status !== "scheduled") return false;
+        if (!db.startGiveaway(g.id, now() + (g.duration_ms ?? 24 * 3600_000))) return false;
+        try {
+            const row = db.getGiveaway(g.id);
+            const msg = await discord.post(row.channel_id, giveawayPayload(row, db.listKeys(g.id), 0, "active"));
+            db.setGiveawayMessage(g.id, msg.id);
+            return true;
+        } catch {
+            db.setGiveawayStatus(g.id, "cancelled");
+            await returnUnused(g, ["available"], "It could not be posted in the channel (check the bot's permissions there).");
+            await dmHost(g, hostNote(g, "A scheduled giveaway could not start because I could not post in its channel. Its keys were returned to you."));
+            return false;
+        }
     }
 
     // ---------- drawing ----------
@@ -259,7 +305,7 @@ export function createGiveawayService({ db, vault, discord, itad = null, multiBa
     // ---------- cancel ----------
     async function cancel(id) {
         const g = must(id);
-        if (closed(g)) throw new UserError("That giveaway is already over.");
+        if (!cancellable(g)) throw new UserError("That giveaway is already over.");
         db.setGiveawayStatus(g.id, "cancelled");
         const unused = await returnUnused(g, ["available", "assigned"], "The giveaway was cancelled.");
         await refresh(g.id);
@@ -363,7 +409,10 @@ export function createGiveawayService({ db, vault, discord, itad = null, multiBa
 
     /** Run about once a minute. */
     async function tick() {
-        const done = { ended: 0, forfeited: 0, prompts: 0, purged: 0 };
+        const done = { ended: 0, forfeited: 0, prompts: 0, purged: 0, started: 0 };
+        for (const g of db.dueScheduled(now())) {
+            try { if (await launch(g.id)) done.started++; } catch (e) { log(`giveaway start failed: ${e?.name ?? "error"}`); }
+        }
         for (const g of db.dueGiveaways(now())) {
             try { await end(g.id); done.ended++; } catch (e) { log(`giveaway end failed: ${e?.name ?? "error"}`); }
         }
@@ -377,5 +426,5 @@ export function createGiveawayService({ db, vault, discord, itad = null, multiBa
         return done;
     }
 
-    return { create, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, tick, refresh };
+    return { create, launch, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, tick, refresh };
 }

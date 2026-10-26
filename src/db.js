@@ -140,6 +140,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "gallery", "TEXT");
     addColumn("users", "free_dlc", "INTEGER NOT NULL DEFAULT 1");
+    addColumn("giveaways", "require_boost", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("giveaways", "starts_at", "INTEGER");
+    addColumn("giveaways", "duration_ms", "INTEGER");
     addColumn("guilds", "free_feed", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE TABLE IF NOT EXISTS guild_seen (guild_id TEXT NOT NULL, key TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (guild_id, key))");
     addColumn("users", "profile_slug", "TEXT");
