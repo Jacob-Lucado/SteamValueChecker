@@ -32,6 +32,7 @@ const FILES = {
     "/logo.png": ["logo.png", "image/png"],
     "/creator.png": ["creator.png", "image/png"],
     "/banner.png": ["banner.png", "image/png"],
+    "/preview.jpg": ["preview.jpg", "image/jpeg"],
     "/favicon.png": ["favicon.png", "image/png"]
 };
 const SESSION_MS = 7 * 24 * 3600_000;
@@ -186,7 +187,6 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/config": async () => ({
             regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
             help: HELP, about: ABOUT,
-            // The dashboard shows its own pages instead of GitHub links
             privacy: PRIVACY.split("\n").filter(l => !/github\.com/i.test(l)).join("\n"), maxUploadChars: MAX_UPLOAD_CHARS,
             // View Channel + Send Messages + Embed Links, the least the bot needs to post alerts
             inviteUrl: config.clientId
@@ -495,7 +495,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
 
         // ----- free games right now, grouped by platform -----
         // Live numbers for the About panel. Aggregate only, so it is open to everyone like the Help page.
-        "GET /api/about": async () => ({ about: botInfo ? botInfo() : null }),
+        "GET /api/about": async () => ({ about: botInfo ? botInfo() : null, creator: config.creator ?? null }),
 
         "GET /api/free": async (req) => {
             session(req);
@@ -658,6 +658,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return send(res, 404, "Not found", { "Content-Type": "text/plain" }); }
             cache.set(file, body);
         }
+        // The page's share-preview tags need the real public address, so it is filled in here.
+        if (file === "index.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
         send(res, 200, body, { "Content-Type": type, "Cache-Control": file === "index.html" ? "no-cache" : "public, max-age=3600" });
     }
 
@@ -677,6 +679,12 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const key = `${req.method} ${url.pathname}`;
 
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
+            if (req.method === "GET" && url.pathname === "/robots.txt") {
+                return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /auth/\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+            }
+            if (req.method === "GET" && url.pathname === "/sitemap.xml") {
+                return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url></urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+            }
             if (url.pathname.startsWith("/auth/")) {
                 const r = authLimit.hit(clientIp(req));
                 if (!r.ok) throw new HttpError(429, `Too many requests. Try again in ${r.retryAfterS}s.`);

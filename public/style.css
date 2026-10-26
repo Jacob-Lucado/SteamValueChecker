@@ -253,3 +253,8 @@ textarea[autocomplete="off"] { font-family: ui-monospace, Menlo, Consolas, monos
 .creator-logo { border-radius: 50%; background: #111; }
 .about-stats { margin-top: 14px; }
 .panel.about .about-head h3 { text-transform: none; letter-spacing: 0; color: var(--text, inherit); font-size: 1.5rem; }
+
+.about-banner { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 14px; margin: 0 0 16px; }
+.copyright { display: inline-flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+.copyright img { border-radius: 50%; background: #111; }
+.copyright:hover { color: var(--text, inherit); }

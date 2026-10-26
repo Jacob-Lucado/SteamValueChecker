@@ -549,3 +549,33 @@ test("giveaways are switched off cleanly without a key secret", async () => {
     assert.equal(r.status, 503);
     await t.close();
 });
+
+test("about is public and has the creator credit; privacy text has no GitHub link", async () => {
+    const t = await setup({ config: { creator: { name: "Jacob Lucado", url: "https://x.com/twit_user69" } } });
+    const about = await t.request("/api/about");
+    assert.equal(about.status, 200);
+    assert.equal(about.data.creator.name, "Jacob Lucado");
+    const cfg = await t.request("/api/config");
+    assert.ok(!/github\.com/i.test(cfg.data.privacy));
+    assert.equal(cfg.data.repoUrl, undefined);
+    assert.equal((await t.request("/creator.png", { raw: true })).status, 200);
+    assert.equal((await t.request("/banner.png", { raw: true })).status, 200);
+    await t.close();
+});
+
+test("the page has share-preview tags with the real address, plus robots and sitemap", async () => {
+    const t = await setup();
+    const page = await t.request("/", { raw: true });
+    const html = await page.text();
+    assert.ok(html.includes(`<meta property="og:image" content="${ORIGIN}/preview.jpg">`));
+    assert.ok(html.includes('name="twitter:card" content="summary_large_image"'));
+    assert.ok(!html.includes("__ORIGIN__"));
+    const img = await t.request("/preview.jpg", { raw: true });
+    assert.equal(img.status, 200);
+    assert.equal(img.headers.get("content-type"), "image/jpeg");
+    const robots = await (await t.request("/robots.txt", { raw: true })).text();
+    assert.match(robots, /Disallow: \/api\//);
+    assert.match(robots, new RegExp(`Sitemap: ${ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/sitemap.xml`));
+    assert.match(await (await t.request("/sitemap.xml", { raw: true })).text(), /<loc>/);
+    await t.close();
+});

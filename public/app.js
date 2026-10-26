@@ -109,14 +109,14 @@
   }
 
   // ---------- chrome ----------
-  const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["mydata", "My Data"], ["help", "Help"], ["admin", "Admin"]];
+  const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["mydata", "My Data"], ["help", "Help"], ["about", "About"], ["admin", "Admin"]];
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0];
 
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
     nav.replaceChildren(...NAV
-      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : id === "giveaways" ? state.me && state.me.giveaways && state.me.servers.some(g => g.manageable) : state.me || id === "help"))
+      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : id === "giveaways" ? state.me && state.me.giveaways && state.me.servers.some(g => g.manageable) : state.me || id === "help" || id === "about"))
       .map(([id, text]) => h("a", { href: "#/" + id, class: view === id ? "active" : "", text })));
 
     const acct = document.getElementById("account");
@@ -130,9 +130,10 @@
     } else {
       acct.replaceChildren(...[...links, themeButton(), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
+    const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
-      ...(state.cfg ? [ext(state.cfg.fanaticalUrl, "FanaticalGrabber")] : []),
-      ...(state.about && state.about.creator ? [" · Made by ", ext(state.about.creator.url, state.about.creator.name)] : []));
+      ...(cr ? [h("a", { class: "copyright", href: safeHref(cr.url), target: "_blank", rel: "noopener noreferrer" },
+        h("img", { src: "/creator.png", alt: "", width: "22", height: "22" }), `© ${new Date().getFullYear()} ${cr.name}`)] : []));
   }
 
   // ---------- landing ----------
@@ -850,38 +851,51 @@
   }
 
   // ---------- help ----------
-  // The bot's About card: logo, who made it, and live numbers.
-  function aboutPanel() {
-    const ab = state.about, c = ab && ab.creator;
-    const tile = (k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v === null || v === undefined ? "-" : String(v) }));
-    const n = v => (v === null || v === undefined ? null : Number(v).toLocaleString());
-    return h("div", { class: "panel about" },
-      h("div", { class: "about-head" },
-        h("img", { class: "about-logo", src: "/logo.png", alt: "", width: "72", height: "72" }),
-        h("div", {}, h("h3", { text: "Steam Value Checker" }),
-          c && h("div", { class: "creator" }, h("img", { class: "creator-logo", src: "/creator.png", alt: "", width: "28", height: "28" }), "Created by ", ext(c.url, c.name)))),
-      md(state.cfg.about),
-      ab && h("div", { class: "grid four about-stats" },
-        tile("Uptime", ab.uptime), tile("Servers", n(ab.servers)), tile("Members reached", n(ab.members)), tile("Latency", ab.pingMs === null ? null : ab.pingMs + " ms"),
-        tile("Games watched", n(ab.gamesWatched)), tile("Alerts, last 24h", n(ab.alerts24h)), tile("Giveaways run", n(ab.giveaways)), tile("Keys redeemed", n(ab.redeemed))));
+  // The About page: the same numbers as the /about command in Discord.
+  async function aboutView() {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(holder);
+    try {
+      const x = await api("/api/about");
+      state.about = x.about; state.creator = x.creator;
+      const ab = x.about, c = x.creator;
+      const n = v => (v === null || v === undefined ? "-" : Number(v).toLocaleString());
+      const tile = (icon, k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: `${icon} ${k}` }), h("div", { class: "v", text: String(v) }));
+      holder.className = "about-page";
+      holder.replaceChildren(
+        h("img", { class: "about-banner", src: "/banner.png", alt: "Steam Value Checker" }),
+        h("div", { class: "panel about" },
+          h("div", { class: "about-head" },
+            h("img", { class: "about-logo", src: "/logo.png", alt: "", width: "84", height: "84" }),
+            h("div", {}, h("h3", { text: "Steam Value Checker" }),
+              c && h("div", { class: "creator" }, h("img", { class: "creator-logo", src: "/creator.png", alt: "", width: "32", height: "32" }), "Created by ", ext(c.url, c.name)))),
+          md(state.cfg.about),
+          ab && h("p", { class: "muted small", text: "Online since " + new Date(ab.startedAt).toLocaleString() + " · v" + ab.version + " · Node " + String(ab.node).replace(/^v/, "") }),
+          ab ? h("div", { class: "grid four about-stats" },
+            tile("🟢", "Uptime", ab.uptime), tile("🌐", "Servers", n(ab.servers)), tile("👥", "Members reached", n(ab.members)), tile("📡", "Latency", ab.pingMs === null ? "-" : ab.pingMs + " ms"),
+            tile("🎮", "Games watched", n(ab.gamesWatched)), tile("🔔", "Alerts, last 24h", n(ab.alerts24h)), tile("🎁", "Giveaways run", n(ab.giveaways)), tile("✅", "Keys redeemed", n(ab.redeemed)))
+            : h("p", { class: "muted", text: "Live numbers are not available right now." }),
+          h("div", { class: "rule inline" },
+            c && h("a", { class: "btn blue", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Created by " + c.name }),
+            h("a", { class: "btn gray", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer", text: "FanaticalGrabber" }))));
+    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
   function helpView() {
     app.replaceChildren(
       pageHead("Help", "The dashboard does everything the Discord commands do."),
       h("div", { class: "panel" }, h("h3", { text: "Using the bot" }), md(state.cfg.help)),
-      aboutPanel(),
       h("div", { class: "panel" }, h("h3", { text: "Privacy" }), md(state.cfg.privacy)),
       fanaticalCard());
   }
 
   // ---------- routing ----------
-  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, admin: adminView };
+  const VIEWS = { value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, admin: adminView };
 
   function route() {
     renderChrome();
     const view = currentView();
-    if (!state.me && view !== "help") return landing();
+    if (!state.me && view !== "help" && view !== "about") return landing();
     (VIEWS[view] || (state.me ? valueView : landing))();
     window.scrollTo(0, 0);
   }
@@ -889,7 +903,7 @@
   async function boot() {
     try {
       if (!state.cfg) state.cfg = await api("/api/config");
-      try { const x = await api("/api/about"); state.about = x.about; } catch { state.about = null; }
+      try { const x = await api("/api/about"); state.about = x.about; state.creator = x.creator; } catch { state.about = null; state.creator = null; }
       try { state.me = await api("/api/me"); } catch { state.me = null; }
     } catch (e) {
       app.replaceChildren(h("div", { class: "notice warn", text: e.message }));
