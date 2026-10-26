@@ -320,14 +320,35 @@ const MAX_FREE_PER_MESSAGE = 10;
  * Free games on one platform, as one message. Each game has a link embed. One game gets a "Claim game" link button;
  * several get "Claim all" (which replies with every link) plus link buttons for the first few.
  */
+/** Art for a free game: Steam's header when the link is a Steam store page, otherwise IsThereAnyDeal's banner. */
+export function freeArt(g) {
+    const app = /store\.steampowered\.com\/app\/(\d+)/i.exec(g?.url ?? "");
+    if (app) return steamArt(app[1]);
+    return g?.gameIds?.[0] ? itadArt(g.gameIds[0]) : undefined;
+}
+
+const SHOP_ICON = { steam: "🎮", epic: "🛒", gog: "🟣", itch: "🎲", humble: "💚", ubisoft: "🔷", amazon: "📦", prime: "📦" };
+const shopIcon = shop => SHOP_ICON[Object.keys(SHOP_ICON).find(k => String(shop).toLowerCase().includes(k))] ?? "🎁";
+
 export function freeGamesPayload(shop, games) {
     const list = games.filter(g => safeUrl(g.url)).slice(0, MAX_FREE_PER_MESSAGE);
     if (!list.length) return null;
-    const embeds = list.map(g => ({
-        color: GREEN, title: g.title, url: safeUrl(g.url),
-        description: `Free on **${shop}**${g.expiry ? `, ends ${stamp(g.expiry)}` : ""}`,
-        footer: { text: "Claiming needs you to be signed in to the store  •  Data by IsThereAnyDeal" }
-    }));
+    const big = list.length <= 3; // full-width pictures for a few games, small ones when there are many
+    const embeds = list.map((g, n) => {
+        const art = freeArt(g);
+        return {
+            color: GREEN, title: `🎁 ${g.title}`.slice(0, 256), url: safeUrl(g.url),
+            description: `## FREE  •  ${shopIcon(shop)} ${shop}\n${g.expiry ? `Claim it ${stamp(g.expiry)} or it's gone.` : "Free to keep while the offer lasts."}`,
+            fields: [
+                { name: "Store", value: `${shopIcon(shop)} ${shop}`, inline: true },
+                { name: g.expiry ? "Ends" : "Status", value: g.expiry ? `${stamp(g.expiry)}\n<t:${Math.floor(g.expiry / 1000)}:f>` : "Limited time", inline: true },
+                { name: "Price", value: "~~Paid~~ **$0.00**", inline: true }
+            ],
+            image: big && art ? { url: art } : undefined,
+            thumbnail: !big && art ? { url: art } : undefined,
+            footer: n === list.length - 1 ? { text: "Claiming needs you to be signed in to the store  •  Data by IsThereAnyDeal" } : undefined
+        };
+    });
     const link = (label, url) => ({ type: 2, style: 5, label: label.slice(0, 80), url: safeUrl(url) });
     const row = list.length === 1
         ? [link("Claim game", list[0].url)]

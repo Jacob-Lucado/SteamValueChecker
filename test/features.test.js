@@ -521,3 +521,16 @@ test("multi-game giveaway embeds share a url so Discord shows a gallery", async 
     assert.equal(p.embeds[2].image.url, "https://a.example/3.jpg");
     assert.equal(giveawayPayload({ ...g, gallery: null }, [], 0, "active").embeds.length, 1);
 });
+
+test("free games cards carry store art, expiry and a claim button", async () => {
+    const { freeGamesPayload, freeArt } = await import("../src/render.js");
+    assert.match(freeArt({ url: "https://store.steampowered.com/app/123/X/" }), /apps\/123\/header\.jpg$/);
+    assert.match(freeArt({ url: "https://x.example/y", gameIds: ["abc"] }), /isthereanydeal\.com\/abc\/banner400\.jpg$/);
+    assert.equal(freeArt({ url: "https://x.example/y" }), undefined);
+    const p = freeGamesPayload("Steam", [{ title: "A", url: "https://store.steampowered.com/app/5/A/", expiry: Date.now() + 1e6 }, { title: "B", url: "https://x.example/b" }]);
+    assert.ok(p.embeds[0].image.url.includes("/apps/5/"));
+    assert.equal(p.embeds[1].image, undefined);
+    assert.equal(p.components[0].components[0].label, "Claim all (2)");
+    const many = freeGamesPayload("Steam", Array.from({ length: 5 }, (_, i) => ({ title: "G" + i, url: `https://store.steampowered.com/app/${i + 1}/` })));
+    assert.ok(many.embeds[0].thumbnail && !many.embeds[0].image);
+});
