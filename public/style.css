@@ -353,3 +353,9 @@ textarea[autocomplete="off"] { font-family: ui-monospace, Menlo, Consolas, monos
 .gw-preview img { max-width: 100%; max-height: 200px; border-radius: 10px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 16px; }
 .tab.small { padding: 5px 12px; font-size: 13px; }
+
+.free-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.free-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.free-card img, .free-noart { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; background: var(--panel); display: grid; place-items: center; font-size: 34px; }
+.free-info { padding: 14px; display: grid; gap: 8px; justify-items: start; }
+.tab.small.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }

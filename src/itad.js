@@ -277,7 +277,8 @@ export function createItad({
             out.push({
                 id: String(g.id ?? g.title), title: String(g.title ?? "Giveaway"), shop: g.shop?.name ?? g.page?.name ?? "Other",
                 url: typeof g.url === "string" ? g.url : null, expiry,
-                gameIds: (Array.isArray(g.games) ? g.games : []).map(x => x?.id).filter(Boolean)
+                gameIds: (Array.isArray(g.games) ? g.games : []).map(x => x?.id).filter(Boolean),
+                type: Array.isArray(g.games) && g.games.length && g.games.every(x => x?.type === "dlc") ? "dlc" : "game"
             });
         }
         setCached("giveaway-list", out);

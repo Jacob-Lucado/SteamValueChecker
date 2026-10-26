@@ -4,6 +4,7 @@
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
+import { freeMenu, shopSlug } from "./freemenu.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
@@ -260,8 +261,10 @@ export function createHandlers({ db, itad }) {
             }
             case "freegames": {
                 const on = i.options.getBoolean("enabled", true);
-                db.updateUser(user.discord_id, { free: on ? 1 : 0 });
-                return eph(i, on ? "You will be told when a game is free to claim. Several free games from one store come in one message with a Claim all button." : "Free game alerts are off.");
+                const dlc = i.options.getBoolean("dlc");
+                db.updateUser(user.discord_id, { free: on ? 1 : 0, ...(dlc === null ? {} : { free_dlc: dlc ? 1 : 0 }) });
+                const dlcNote = dlc === null ? "" : dlc ? " Free DLC is included." : " Free DLC is hidden.";
+                return eph(i, (on ? "You will be told when a game is free to claim. Several free games from one store come in one message with a Claim all button." : "Free game alerts are off.") + dlcNote);
             }
             case "share": {
                 const on = i.options.getBoolean("enabled", true);
@@ -394,17 +397,26 @@ export function createHandlers({ db, itad }) {
         const share = i.options.getBoolean("public") === true;
         await i.deferReply(share ? {} : { flags: MessageFlags.Ephemeral });
         try {
-            const list = (await itad.getGiveawayList()).filter(g => /^https:\/\//i.test(g.url ?? "") && (!store || String(g.shop ?? "").toLowerCase().includes(store)));
-            if (!list.length) {
-                return await i.editReply({ content: store ? `No free games found on a store matching "${store.slice(0, 40)}" right now.` : "No free games to claim right now. Turn on `/alerts freegames` and the bot will tell you when one appears." });
-            }
-            const byShop = new Map();
-            for (const g of list) { if (!byShop.has(g.shop)) byShop.set(g.shop, []); byShop.get(g.shop).push(g); }
-            const payloads = [...byShop].map(([shop, games]) => freeGamesPayload(shop, games)).filter(Boolean);
-            const shown = payloads.slice(0, MAX_FREE_PLATFORMS);
-            if (payloads.length > shown.length) shown[shown.length - 1].content += `\n(${payloads.length - shown.length} more stores not shown. Use the store option to pick one.)`;
-            await i.editReply(shown[0]);
-            for (const p of shown.slice(1)) await i.followUp(share ? p : { ...p, flags: MessageFlags.Ephemeral });
+            const list = await itad.getGiveawayList();
+            const showDlc = db.getUser(i.user.id)?.free_dlc !== 0;
+            const shops = [...new Set(list.map(g => g.shop))];
+            const wanted = store ? shops.find(s => String(s).toLowerCase().includes(store)) : null;
+            if (store && !wanted) return await i.editReply({ content: `No free games found on a store matching "${store.slice(0, 40)}" right now.` });
+            await i.editReply(freeMenu(list, { cat: "games", store: wanted ? shopSlug(wanted) : "all", page: 0, showDlc }));
+        } catch (err) { await failed(i, "freegames", err); }
+    }
+
+    /** Buttons and the store menu on the /freegames message. The whole state lives in the custom id, so it survives restarts. */
+    async function handleFreeMenu(i) {
+        try {
+            let cat, store, page;
+            if (i.isStringSelectMenu()) { [, cat] = i.customId.split(":"); store = i.values[0] ?? "all"; page = 0; }
+            else { [, cat, store, page] = i.customId.split(":"); page = Number(page) || 0; }
+            const showDlc = db.getUser(i.user.id)?.free_dlc !== 0;
+            const payload = freeMenu(await itad.getGiveawayList(), { cat, store, page, showDlc });
+            const owner = i.message?.interactionMetadata?.user?.id ?? i.message?.interaction?.user?.id;
+            if (owner && owner !== i.user.id) return await i.reply({ ...payload, flags: MessageFlags.Ephemeral }); // somebody else's public menu: give them their own
+            await i.update(payload);
         } catch (err) { await failed(i, "freegames", err); }
     }
 
@@ -458,5 +470,5 @@ export function createHandlers({ db, itad }) {
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleMyData, handleAutocomplete };
 }

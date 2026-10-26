@@ -45,6 +45,7 @@ export function prefsPatch(input, user) {
     if (has("bundles")) patch.bundles = input.bundles ? 1 : 0;
     if (has("share")) patch.share = input.share ? 1 : 0;
     if (has("free")) patch.free = input.free ? 1 : 0;
+    if (has("free_dlc")) patch.free_dlc = input.free_dlc ? 1 : 0;
     return patch;
 }
 
@@ -52,7 +53,7 @@ export function prefsPatch(input, user) {
 export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? "UTC",
-        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free)
+        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0
     };
 }
 

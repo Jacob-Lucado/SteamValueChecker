@@ -3,6 +3,7 @@
 
 import { summarize } from "./report.js";
 import { evaluate, describeTrigger, dealVerdict } from "./alerts.js";
+import { isDlc } from "./freemenu.js";
 import { alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
@@ -178,7 +179,7 @@ export async function runFreeGames({ db, itad, notifier, now = () => Date.now(),
     catch (err) { log(`free game lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; return stats; }
 
     for (const user of users) {
-        const fresh = list.filter(g => g.url && !db.hasSeen(user.discord_id, `free:${g.id}`));
+        const fresh = list.filter(g => g.url && !db.hasSeen(user.discord_id, `free:${g.id}`) && (user.free_dlc !== 0 || !isDlc(g)));
         if (!fresh.length) continue;
         stats.found += fresh.length;
         if (isQuiet(user, now())) { stats.deferred += fresh.length; continue; }

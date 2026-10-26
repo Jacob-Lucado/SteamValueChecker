@@ -20,6 +20,8 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard } from "../library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
+import { isDlc } from "../freemenu.js";
+import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
 import { MAX_KEYS } from "../gwstore.js";
@@ -305,7 +307,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
             }
             patch.delivery = nextDelivery;
-            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
             Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };
@@ -503,14 +505,17 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/about": async () => ({ about: botInfo ? botInfo() : null, creator: config.creator ?? null }),
 
         "GET /api/free": async (req) => {
-            session(req);
+            const s = session(req);
+            const showDlc = db.getUser(s.userId)?.free_dlc !== 0;
             const groups = new Map();
             for (const g of await itad.getGiveawayList()) {
                 if (!/^https:\/\//i.test(g.url ?? "")) continue;
+                const dlc = isDlc(g);
+                if (dlc && !showDlc) continue;
                 if (!groups.has(g.shop)) groups.set(g.shop, []);
-                groups.get(g.shop).push({ id: g.id, title: g.title, url: g.url, expiry: g.expiry });
+                groups.get(g.shop).push({ id: g.id, title: g.title, url: g.url, expiry: g.expiry, dlc, art: freeArt(g) ?? null });
             }
-            return { platforms: [...groups].map(([shop, games]) => ({ shop, games })) };
+            return { showDlc, platforms: [...groups].map(([shop, games]) => ({ shop, games })) };
         },
 
         // ----- giveaways (server managers) -----

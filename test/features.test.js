@@ -534,3 +534,29 @@ test("free games cards carry store art, expiry and a claim button", async () => 
     const many = freeGamesPayload("Steam", Array.from({ length: 5 }, (_, i) => ({ title: "G" + i, url: `https://store.steampowered.com/app/${i + 1}/` })));
     assert.ok(many.embeds[0].thumbnail && !many.embeds[0].image);
 });
+
+test("/freegames menu: pages, DLC split, store filter, DLC can be hidden", async () => {
+    const { freeMenu, isDlc } = await import("../src/freemenu.js");
+    const mk = (id, title, shop, type = "game") => ({ id, title, shop, type, url: "https://s.example/" + id, expiry: null, gameIds: [] });
+    const list = [mk("1", "Alpha", "Steam"), mk("2", "Beta", "Epic Game Store"), mk("3", "Alpha Pack", "Steam", "dlc"), mk("4", "Gamma Soundtrack", "GOG")];
+    assert.ok(isDlc(list[2]) && isDlc(list[3]) && !isDlc(list[0]));
+    const m = freeMenu(list, { cat: "games" });
+    assert.equal(m.embeds[0].title.includes("Alpha") || m.embeds[0].title.includes("Beta"), true);
+    assert.match(m.components[0].components[0].label, /Games \(2\)/);
+    assert.match(m.components[0].components[1].label, /DLC \(2\)/);
+    assert.equal(m.components.at(-1).components[0].disabled, true); // no previous page
+    const dlc = freeMenu(list, { cat: "dlc" });
+    assert.match(dlc.embeds[0].title, /🧩/);
+    const steamOnly = freeMenu(list, { cat: "all", store: "steam" });
+    assert.match(steamOnly.content, /\*\*2\*\*/);
+    const hidden = freeMenu(list, { cat: "dlc", showDlc: false });
+    assert.match(hidden.content, /\*\*2\*\*/); // forced back to games
+    assert.equal(hidden.components.some(r => r.components[0].custom_id?.startsWith("fg:dlc")), false);
+    assert.ok(freeMenu(list, { cat: "games", page: 99 }).embeds[0].footer.text.startsWith("2 of 2"));
+    assert.match(freeMenu([], {}).embeds[0].title, /Nothing/);
+    for (const row of m.components) for (const c of row.components) if (c.custom_id) assert.ok(c.custom_id.length <= 100);
+});
+
+test("free DLC preference is saved and validated", async () => {
+    assert.deepEqual(prefsPatch({ free_dlc: false }, {}), { free_dlc: 0 });
+});

@@ -532,6 +532,7 @@
     const bundles = h("input", { type: "checkbox", checked: s.bundles });
     const share = h("input", { type: "checkbox", checked: s.share });
     const free = h("input", { type: "checkbox", checked: s.free });
+    const freeDlc = h("input", { type: "checkbox", checked: s.free_dlc !== false });
     const freeNow = h("div", { class: "panel" }, h("h3", { text: "Free right now" }), h("p", { class: "muted", text: "Loading…" }));
     loadFree(freeNow);
     const history = h("div", { class: "panel" }, h("h3", { text: "Recent alerts" }), h("p", { class: "muted", text: "Loading…" }));
@@ -547,7 +548,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked, free: free.checked
+        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked
       });
       state.me.settings = r.settings;
       toast("Settings saved.", "ok");
@@ -569,7 +570,8 @@
         h("div", { class: "row" }, field("Quiet from", qs), field("Until", qe), field("Your time zone", tz)),
         h("label", { class: "check" }, digest, "Weekly digest of your wishlist sales, sent from 9:00 in your time zone on"), field("Day", digestDay),
         h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away"),
-        h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button.")),
+        h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
+        h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /freegames and the list below show)")),
       freeNow,
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
@@ -581,15 +583,30 @@
   async function loadFree(panel) {
     try {
       const d = await api("/api/free");
-      panel.replaceChildren(h("h3", { text: "Free right now" }), d.platforms.length
-        ? d.platforms.map(p => h("div", { class: "subpanel" }, h("h4", { text: p.shop + (p.games.length > 1 ? ` (${p.games.length})` : "") }),
-            h("ul", { class: "freelist" }, p.games.map(g => h("li", {}, ext(g.url, "Claim " + g.title, "btn green small"))))))
-        : h("div", { class: "empty", text: "Nothing is being given away right now." }),
+      const all = d.platforms.flatMap(p => p.games.map(g => ({ ...g, shop: p.shop })));
+      let cat = "games", shop = "all";
+      const body = h("div");
+      const tabs = h("div", { class: "tabs" });
+      const draw = () => {
+        const inCat = all.filter(g => cat === "all" || (cat === "dlc") === g.dlc);
+        const shops = [...new Set(inCat.map(g => g.shop))];
+        if (!shops.includes(shop)) shop = "all";
+        tabs.replaceChildren(...[["games", "🎮 Games"], ...(d.showDlc ? [["dlc", "🧩 DLC"], ["all", "📋 All"]] : [])].map(([id, label]) =>
+          h("button", { class: "tab" + (id === cat ? " active" : ""), text: `${label} (${all.filter(g => id === "all" || (id === "dlc") === g.dlc).length})`, onclick: () => { cat = id; draw(); } })));
+        const rows = inCat.filter(g => shop === "all" || g.shop === shop);
+        body.replaceChildren(
+          shops.length > 1 ? h("div", { class: "chips" }, ["all", ...shops].map(x => h("button", { class: "tab small" + (x === shop ? " active" : ""), text: x === "all" ? "All stores" : x, onclick: () => { shop = x; draw(); } }))) : null,
+          rows.length ? h("div", { class: "free-grid" }, rows.map(g => h("div", { class: "free-card" },
+            g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: g.dlc ? "🧩" : "🎮" }),
+            h("div", { class: "free-info" }, h("strong", { text: g.title }), h("span", { class: "muted small", text: g.shop + (g.dlc ? " • DLC" : "") + (g.expiry ? " • ends " + new Date(g.expiry).toLocaleDateString() : "") }),
+              ext(g.url, "Claim", "btn green small"))))) : h("div", { class: "empty", text: "Nothing here right now." }));
+      };
+      draw();
+      panel.replaceChildren(h("h3", { text: "Free right now" }), all.length ? h("div", {}, tabs, body) : h("div", { class: "empty", text: "Nothing is being given away right now." }),
         h("p", { class: "muted small", text: "Claiming happens on the store's site, where you need to be signed in." }));
     } catch (e) { panel.replaceChildren(h("h3", { text: "Free right now" }), h("div", { class: "notice warn", text: e.message })); }
   }
 
-  // ---------- servers ----------
   // ---------- servers ----------
   const guildInvite = g => (state.cfg.inviteUrl ? `${state.cfg.inviteUrl}&guild_id=${encodeURIComponent(g.id)}&disable_guild_select=true` : null);
   const serverIcon = (g, cls) => (g.icon ? h("img", { class: cls, src: g.icon, alt: "" }) : h("div", { class: cls + " noicon", text: (g.name || "?").trim().charAt(0).toUpperCase() }));

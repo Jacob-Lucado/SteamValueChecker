@@ -248,6 +248,7 @@ client.on(Events.InteractionCreate, async i => {
         } catch (err) { console.error(`[stop] ${err.stack ?? err.message}`); }
         return;
     }
+    if ((i.isButton() && i.customId.startsWith("fg:")) || (i.isStringSelectMenu() && i.customId.startsWith("fgs:"))) return handlers.handleFreeMenu(i);
     if (i.isButton() && i.customId === FREE_CLAIM_ALL_ID) {
         // Every link is read from the message the bot itself sent, so nothing is stored or taken from the user.
         const links = (i.message.embeds ?? []).filter(e => /^https:\/\//i.test(e.url ?? "")).map(e => `• [${String(e.title).slice(0, 80)}](${e.url})`);
