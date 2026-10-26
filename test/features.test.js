@@ -351,3 +351,45 @@ test("the free games setting is validated like the others", () => {
     assert.deepEqual(prefsPatch({ free: true }, {}), { free: 1 });
     assert.deepEqual(prefsPatch({ free: false }, {}), { free: 0 });
 });
+
+test("every slash command has a dashboard counterpart", async () => {
+    const { readFileSync } = await import("node:fs");
+    const server = readFileSync(new URL("../src/dashboard/server.js", import.meta.url), "utf8");
+    const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+    // command or command/subcommand -> a dashboard route (or page) that does the same job
+    const MAP = {
+        value: "POST /api/value", "wishlist/import": "POST /api/wishlist/import", "wishlist/add": "POST /api/wishlist/add",
+        "wishlist/remove": "POST /api/wishlist/remove", "wishlist/view": "GET /api/wishlist", "wishlist/check": "GET /api/wishlist/history",
+        "wishlist/alert": "POST /api/wishlist/alert",
+        "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
+        "alerts/delivery": "POST /api/settings", "alerts/pause": "POST /api/settings", "alerts/resume": "POST /api/settings", "alerts/region": "POST /api/settings",
+        "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",
+        "alerts/freegames": "POST /api/settings", "alerts/share": "POST /api/settings",
+        "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
+        "alertchannel/group": "POST /api/servers/group",
+        "library/add": "POST /api/library/add", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/remove": "POST /api/library/remove",
+        "serverlist/add": "POST /api/servers/list/add", "serverlist/view": "GET /api/servers/list", "serverlist/vote": "POST /api/servers/list/vote", "serverlist/remove": "POST /api/servers/list/remove",
+        leaderboard: "GET /api/servers/leaderboard",
+        "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
+        "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
+        "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
+        help: "cfg.help", about: "cfg.about", privacy: "cfg.privacy"
+    };
+    // Read command names from the source so this runs without discord.js installed.
+    const src = readFileSync(new URL("../src/commands.js", import.meta.url), "utf8");
+    const names = [];
+    let top = null;
+    for (const line of src.split("\n")) {
+        const t = line.match(/^    \.setName\("([a-z]+)"\)$/);
+        if (t) { top = t[1]; names.push(top); continue; }
+        const s = line.match(/addSubcommand\(s => s\.setName\("([a-z]+)"\)/);
+        if (s) { const i = names.lastIndexOf(top); if (i >= 0 && names[i] === top) names.splice(i, 1); names.push(`${top}/${s[1]}`); }
+    }
+    assert.ok(names.length > 40, "found " + names.length + " commands");
+    for (const n of names) {
+        const target = MAP[n];
+        assert.ok(target, `no dashboard mapping for /${n.replace("/", " ")}`);
+        if (target.startsWith("cfg.")) assert.ok(app.includes("state." + target), target);
+        else assert.ok(server.includes(`"${target}"`) || server.includes(`key === "${target}"`), `dashboard route missing: ${target}`);
+    }
+});

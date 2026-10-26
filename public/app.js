@@ -716,7 +716,7 @@
       const vouchSel = select([["", "A channel named #vouches (or the server default)"], ...channels.map(c => [c.id, "#" + c.name])], "");
       const title = text("Title", 100), length = text("2h, 3d, 1w, 1d12h", 20), game = text("Game name (used to find artwork)", 100);
       const desc = h("textarea", { placeholder: "Extra text on the giveaway (optional)", maxlength: "1500" });
-      const image = text("Your own large image, https link (optional)", 500), thumb = text("Your own small image, https link (optional)", 500);
+      const image = text("Your own image, GIF or video link, https (optional)", 500), thumb = text("Your own small picture or GIF link, https (optional)", 500);
       const auto = h("input", { type: "checkbox", checked: true });
       const color = text("#5865F2", 8), label = text("Enter giveaway", 40);
       const claim = text("48", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
@@ -741,7 +741,7 @@
         h("details", { class: "more" }, h("summary", { text: "Look and rules (all optional)" }),
           h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color", color)),
           field("Description", desc),
-          h("div", { class: "row" }, field("Large image link", image), field("Small image link", thumb)),
+          h("div", { class: "row" }, field("Image, GIF or video link", image), field("Small picture or GIF link", thumb)),
           h("label", { class: "check" }, auto, "Find artwork automatically when I don't give an image"),
           h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN)),
           h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),

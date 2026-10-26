@@ -5,6 +5,7 @@ const COLOR = 0xff9800;
 const GREEN = 0x57f287;
 const GREY = 0x8b95a5;
 const RED = 0xed4245;
+import { isVideoLink } from "./gwparse.js";
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 const ts = (ms, f = "R") => `<t:${Math.floor(ms / 1000)}:${f}>`;
 const role = id => `<@&${id}>`;
@@ -44,13 +45,15 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
     const req = requirements(g);
     if (req.length) fields.push({ name: "Requirements", value: req.join("\n").slice(0, 1000) });
 
+    // A video can't sit inside an embed, so its link goes in the message text where Discord plays it.
+    const video = safeUrl(g.image_url) && isVideoLink(g.image_url);
     const embed = {
         color: state === "cancelled" ? GREY : (g.color ?? COLOR),
         title: state === "cancelled" ? `${g.title} (cancelled)` : g.title,
         description: g.description ?? undefined,
         fields,
-        image: safeUrl(g.image_url) ? { url: g.image_url } : undefined,
-        thumbnail: safeUrl(g.thumbnail_url) ? { url: g.thumbnail_url } : undefined,
+        image: safeUrl(g.image_url) && !video ? { url: g.image_url } : undefined,
+        thumbnail: safeUrl(g.thumbnail_url) && !isVideoLink(g.thumbnail_url) ? { url: g.thumbnail_url } : undefined,
         footer: { text: `Giveaway #${g.id}${state === "active" ? "  •  Press the button to enter. Press it again to leave." : ""}` }
     };
     const enter = {
@@ -58,7 +61,10 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
         label: state === "active" ? (g.button_label || "Enter giveaway") : state === "cancelled" ? "Cancelled" : "Ended"
     };
     const payload = { embeds: [embed], components: [{ type: 1, components: [enter] }] };
-    if (state === "active" && g.ping_role_id) { payload.content = role(g.ping_role_id); payload.allowedMentions = { roles: [g.ping_role_id] }; }
+    const ping = state === "active" && g.ping_role_id ? role(g.ping_role_id) : null;
+    const content = [ping, video ? g.image_url : null].filter(Boolean).join("\n");
+    if (content) payload.content = content;
+    if (ping) payload.allowedMentions = { roles: [g.ping_role_id] };
     return payload;
 }
 

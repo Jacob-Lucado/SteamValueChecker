@@ -347,3 +347,19 @@ test("the giveaway post respects customisation", () => {
     assert.equal(p.components[0].components[0].label, "Join now!");
     assert.equal(p.content, "<@&P>");
 });
+
+test("videos and GIFs: video links go in the message text, GIFs stay in the embed", async () => {
+    const { isVideoLink, parseImageUrl } = await import("../src/gwparse.js");
+    const { giveawayPayload } = await import("../src/gwrender.js");
+    for (const u of ["https://x.com/a.mp4", "https://x.com/a.webm?x=1", "https://www.youtube.com/watch?v=abc", "https://youtu.be/abc", "https://tenor.com/view/x-123", "https://clips.twitch.tv/Abc"]) assert.equal(isVideoLink(u), true, u);
+    for (const u of ["https://x.com/a.gif", "https://i.imgur.com/a.png", "https://cdn.discordapp.com/attachments/1/2/a.gif", "https://x.com/a"]) assert.equal(isVideoLink(u), false, u);
+    assert.throws(() => parseImageUrl("https://x.com/a.mp4", "thumbnail"), /small image/);
+    assert.ok(parseImageUrl("https://x.com/a.mp4", "image"));
+    const base = { id: 1, title: "T", host_id: "1", ends_at: 1e12, status: "active", ping_role_id: "9" };
+    const vid = giveawayPayload({ ...base, image_url: "https://x.com/a.mp4" }, [{ label: "A" }], 0);
+    assert.equal(vid.embeds[0].image, undefined);
+    assert.match(vid.content, /<@&9>\nhttps:\/\/x\.com\/a\.mp4/);
+    const gif = giveawayPayload({ ...base, image_url: "https://x.com/a.gif" }, [{ label: "A" }], 0);
+    assert.equal(gif.embeds[0].image.url, "https://x.com/a.gif");
+    assert.equal(gif.content, "<@&9>");
+});

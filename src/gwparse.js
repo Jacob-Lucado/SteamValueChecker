@@ -52,13 +52,30 @@ export function parseColor(text) {
     return parseInt(s, 16);
 }
 
-/** Image links must be https. They are shown by Discord; the bot never downloads them. */
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|avi|ogv)$/i;
+const VIDEO_HOSTS = /(^|\.)(youtube\.com|youtu\.be|vimeo\.com|streamable\.com|medal\.tv|clips\.twitch\.tv|twitch\.tv|tenor\.com|giphy\.com|imgur\.com|gfycat\.com|redgifs\.com)$/i;
+
+/**
+ * True for links Discord plays as video rather than shows as an embed picture: video files, YouTube, Vimeo, Twitch
+ * clips, Streamable, Medal and GIF-site pages (Tenor, Giphy). Direct .gif files are pictures and animate in the embed.
+ */
+export function isVideoLink(url) {
+    try {
+        const u = new URL(url);
+        if (VIDEO_EXT.test(u.pathname)) return true;
+        if (/\.(png|jpe?g|gif|webp|avif)$/i.test(u.pathname)) return false;
+        return /(^|\.)(i\.imgur\.com|media\.discordapp\.net|cdn\.discordapp\.com|images-ext-\d\.discordapp\.net)$/i.test(u.hostname) ? false : VIDEO_HOSTS.test(u.hostname);
+    } catch { return false; }
+}
+
+/** Image or video links must be https. They are shown by Discord; the bot never downloads them. */
 export function parseImageUrl(text, what = "image") {
     const s = String(text ?? "").trim();
     if (!s) return null;
     let u;
     try { u = new URL(s); } catch { throw new UserError(`That ${what} link is not a valid address.`); }
     if (u.protocol !== "https:" || s.length > 500) throw new UserError(`The ${what} link must be an https address under 500 characters.`);
+    if (what === "thumbnail" && isVideoLink(u.toString())) throw new UserError("The small image must be a picture or GIF. Put a video in the large image slot.");
     return u.toString();
 }
 
