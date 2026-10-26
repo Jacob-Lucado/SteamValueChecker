@@ -1026,7 +1026,7 @@
   async function giveawaysView() {
     const servers = state.me.servers.filter(g => g.manageable);
     const holder = h("div");
-    const guild = select(servers.map(g => [g.id, g.name]), servers[0] && servers[0].id);
+    const guild = serverPicker(servers);
     const statusLabel = { active: "Running", scheduled: "Scheduled", ended: "Ended", cancelled: "Cancelled" };
 
     // Entry counts tick up live while a giveaway runs, without touching the form.
@@ -1500,11 +1500,41 @@
     if (e.key === "g") { gPending = true; setTimeout(() => { gPending = false; }, 1200); }
   });
 
+  // Server picker: pills instead of a long dropdown, starting on the server you used last (or the one your account is tied to).
+  // It behaves like a select: it has .value and fires "change". Many servers fall back to a normal dropdown.
+  function activeGuildId(servers, wanted) {
+    let saved = null;
+    try { saved = localStorage.getItem("svc_guild"); } catch { /* storage can be blocked */ }
+    const ok = id => id && servers.some(g => g.id === id);
+    return [wanted, saved, state.me && state.me.settings && state.me.settings.guild_id].find(ok) || (servers[0] && servers[0].id) || "";
+  }
+  function serverPicker(servers, wanted) {
+    let current = activeGuildId(servers, wanted);
+    const remember = id => { try { localStorage.setItem("svc_guild", id); } catch { /* fine */ } };
+    if (servers.length > 8) {
+      const sel = select(servers.map(g => [g.id, g.name]), current);
+      sel.addEventListener("change", () => remember(sel.value));
+      return sel;
+    }
+    const el = h("div", { class: "chips server-pills", role: "radiogroup", "aria-label": "Server" });
+    Object.defineProperty(el, "value", { get: () => current, set: v => { current = v; paint(); } });
+    function paint() {
+      el.replaceChildren(...servers.map(g => {
+        const b = h("button", { type: "button", class: "tab small" + (g.id === current ? " active" : ""), role: "radio", "aria-checked": g.id === current ? "true" : "false" },
+          g.icon ? h("img", { class: "pill-icon", src: g.icon, alt: "", width: "18", height: "18" }) : null, g.name);
+        b.addEventListener("click", () => { if (g.id === current) return; current = g.id; remember(g.id); paint(); el.dispatchEvent(new Event("change")); });
+        return b;
+      }));
+    }
+    paint();
+    return el;
+  }
+
   // ---------- game night ----------
   async function gameNightView() {
     const servers = state.me.servers.filter(g => g.bot !== false);
     const out = h("div");
-    const guild = select(servers.map(g => [g.id, g.name]), servers[0] && servers[0].id);
+    const guild = serverPicker(servers);
     const people = h("div", { class: "chips" });
     app.replaceChildren(pageHead("Game night", "Pick who is playing. See what everyone owns, who is missing a game, and what is worth buying together. Only members who opted in with /alerts share are listed."),
       h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, people, out));
@@ -1537,7 +1567,7 @@
     app.replaceChildren(pageHead("Server setup", "A few choices and your server is ready. The same steps are in Discord with /setup."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "You need the Manage Server permission in a server to set it up." })); return; }
     const wanted = currentParam();
-    const guild = select(servers.map(g => [g.id, g.name]), servers.some(g => g.id === wanted) ? wanted : servers[0].id);
+    const guild = serverPicker(servers, wanted);
     async function load() {
       holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
       try {

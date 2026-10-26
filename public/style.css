@@ -429,3 +429,7 @@ pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-
   .menu { left: 16px; right: 16px; min-width: 0; }
   .account { flex-wrap: wrap; margin-left: 0; width: 100%; }
 }
+
+.server-pills { margin: 0 0 12px; }
+.pill-icon { border-radius: 50%; margin-right: 8px; vertical-align: -4px; }
+.server-pills .tab { padding: 6px 14px; }
