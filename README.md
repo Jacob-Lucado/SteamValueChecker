@@ -85,7 +85,7 @@ Usage notes, credits and a plain-language privacy summary.
 
 ## Web dashboard
 
-Everything the slash commands do is also in a browser: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a Steam-style look and links to [FanaticalGrabber](https://github.com/Jacob-Lucado/FanaticalGrabber).
+Everything the slash commands do is also in a browser: the Value Checker (type titles or upload a FanaticalGrabber export, CSV download included), wishlist import, add, remove and alert rules, delivery and region settings, server alert channels for admins, and data export and delete. It has a modern dark look and links to [FanaticalGrabber](https://github.com/Jacob-Lucado/FanaticalGrabber).
 
 It is off unless you turn it on. To enable it:
 
