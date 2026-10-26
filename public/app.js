@@ -109,22 +109,63 @@
   }
 
   // ---------- chrome ----------
-  const NAV = [["home", "Home"], ["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["support", "Support"], ["notifications", "Notifications"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["about", "About"], ["admin", "Admin"]];
+  // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
+  const NAV = [
+    { id: "home", label: "Home", pages: [["home", "Home"]] },
+    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
+    { id: "account", label: "Account", pages: [["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
+    { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
+    { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
+  ];
+  const PUBLIC_PAGES = new Set(["home", "help", "about", "status"]);
+  function pageVisible(id) {
+    const me = state.me;
+    if (id === "admin") return Boolean(me && me.isOwner);
+    if (id === "giveaways") return Boolean(me && me.giveaways && me.servers.some(g => g.manageable));
+    if (id === "setup") return Boolean(me && me.servers.some(g => g.manageable));
+    return Boolean(me) || PUBLIC_PAGES.has(id);
+  }
+  let openMenu = null;
+  function closeMenu() { if (openMenu) { openMenu.btn.setAttribute("aria-expanded", "false"); openMenu.menu.hidden = true; openMenu = null; } }
+  document.addEventListener("click", e => { if (openMenu && !openMenu.wrap.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && openMenu) { const b = openMenu.btn; closeMenu(); b.focus(); } });
+  window.addEventListener("hashchange", closeMenu);
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[0];
   const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
 
   const NAV_I18N = {
-    es: { wishlist: "Lista de deseos", library: "Biblioteca", alerts: "Alertas", support: "Soporte", notifications: "Avisos", servers: "Servidores", help: "Ayuda", mydata: "Mis datos" },
-    fr: { wishlist: "Liste de souhaits", library: "Bibliothèque", alerts: "Alertes", support: "Assistance", notifications: "Notifications", servers: "Serveurs", help: "Aide", mydata: "Mes données" }
+    es: { games: "Juegos", account: "Cuenta", setup: "Configuración", wishlist: "Lista de deseos", library: "Biblioteca", alerts: "Alertas", support: "Soporte", notifications: "Avisos", servers: "Servidores", help: "Ayuda", mydata: "Mis datos" },
+    fr: { games: "Jeux", account: "Compte", setup: "Configuration", wishlist: "Liste de souhaits", library: "Bibliothèque", alerts: "Alertes", support: "Assistance", notifications: "Notifications", servers: "Serveurs", help: "Aide", mydata: "Mes données" }
   };
   const navText = (id, text) => (state.me && NAV_I18N[state.me.settings.lang] && NAV_I18N[state.me.settings.lang][id]) || text;
 
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
-    nav.replaceChildren(...NAV
-      .filter(([id]) => (id === "admin" ? state.me && state.me.isOwner : id === "giveaways" ? state.me && state.me.giveaways && state.me.servers.some(g => g.manageable) : state.me || id === "help" || id === "about" || id === "home" || id === "status"))
-      .map(([id, text]) => h("a", { href: "#/" + id, class: view === id ? "active" : "", text: navText(id, text) }, id === "notifications" && state.me && state.me.unread ? h("span", { class: "badge-count", text: String(Math.min(99, state.me.unread)) }) : null)));
+    const badge = n => (n ? h("span", { class: "badge-count", text: String(Math.min(99, n)) }) : null);
+    closeMenu();
+    nav.replaceChildren(...NAV.map(group => {
+      const pages = group.pages.filter(([id]) => pageVisible(id));
+      if (!pages.length) return null;
+      const unread = group.id === "account" && state.me ? state.me.unread : 0;
+      if (pages.length === 1) {
+        const [id, text] = pages[0];
+        return h("a", { href: "#/" + id, class: view === id ? "active" : "", text: navText(id, text) });
+      }
+      const active = pages.some(([id]) => id === view);
+      const menu = h("div", { class: "menu", role: "menu", hidden: true },
+        ...pages.map(([id, text]) => h("a", { href: "#/" + id, role: "menuitem", class: view === id ? "active" : "" }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)));
+      const btn = h("button", { type: "button", class: "nav-btn" + (active ? " active" : ""), "aria-haspopup": "true", "aria-expanded": "false" }, navText(group.id, group.label), " ▾", badge(unread));
+      const wrap = h("div", { class: "nav-group" }, btn, menu);
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const wasOpen = openMenu && openMenu.btn === btn;
+        closeMenu();
+        if (!wasOpen) { menu.hidden = false; btn.setAttribute("aria-expanded", "true"); openMenu = { wrap, btn, menu }; }
+      });
+      return wrap;
+    }).filter(Boolean));
 
     const acct = document.getElementById("account");
     const links = [state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean);
@@ -1353,6 +1394,9 @@
     load().catch(e => holder.replaceChildren(h("div", { class: "notice warn", text: e.message })));
   }
 
+  // CSP blocks style attributes, so the width is set through the DOM.
+  const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
+
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
   const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
@@ -1410,7 +1454,7 @@
     if (!steps || steps.every(x => x.done)) return null;
     const done = steps.filter(x => x.done).length;
     return h("div", { class: "panel" }, h("h3", { text: `Get set up (${done} of ${steps.length})` }),
-      h("div", { class: "progress" }, h("div", { style: `width:${Math.round(done / steps.length * 100)}%` })),
+      progressBar(done / steps.length),
       ...steps.map(x => h("a", { class: "step-row" + (x.done ? " done" : ""), href: x.href }, h("span", { text: x.done ? "✅" : "⬜" }), " ", x.text)));
   }
 
@@ -1455,7 +1499,53 @@
     if (e.key === "g") { gPending = true; setTimeout(() => { gPending = false; }, 1200); }
   });
 
-  const VIEWS = { notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  // ---------- guided server setup (same checklist as /setup in Discord) ----------
+  async function setupView() {
+    const servers = state.me.servers.filter(g => g.manageable);
+    const holder = h("div");
+    app.replaceChildren(pageHead("Server setup", "A few choices and your server is ready. The same steps are in Discord with /setup."), holder);
+    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "You need the Manage Server permission in a server to set it up." })); return; }
+    const wanted = currentParam();
+    const guild = select(servers.map(g => [g.id, g.name]), servers.some(g => g.id === wanted) ? wanted : servers[0].id);
+    async function load() {
+      holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+      try {
+        const st = await api("/api/servers/setup?guild=" + encodeURIComponent(guild.value));
+        const picker = servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null;
+        if (st.bot === false) {
+          holder.replaceChildren(...[picker, h("div", { class: "panel" }, h("h3", { text: "Add the bot first" }), h("p", { class: "muted", text: "The bot is not in this server yet." }),
+            state.cfg && state.cfg.inviteUrl ? ext(state.cfg.inviteUrl, "Add to this server", "btn green") : null)].filter(Boolean));
+          return;
+        }
+        const [ch, ro] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))]);
+        const chOpts = cur => select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], cur || "");
+        const row = (step, title, help, ...controls) => h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (step.done ? "✅ " : step.optional ? "➖ " : "⬜ ") + title }), h("div", { class: "muted small", text: help })), ...controls.filter(Boolean));
+        const save = (label, fn) => { const b = h("button", { class: "btn blue small", text: label }); b.addEventListener("click", () => busy(b, async () => { await fn(); toast("Saved.", "ok"); load(); })); return b; };
+        const [sAlert, sFeed, sSupport, sVouch] = st.steps;
+        const alertSel = chOpts(st.alertChannel), supportSel = chOpts(st.supportChannel), vouchSel = chOpts(st.vouchChannel);
+        const staffSel = select([["", "Only people with Manage Server"], ...ro.roles.map(r => [r.id, r.name])], st.staffRole || "");
+        const done = st.steps.filter(x => x.done).length;
+        const feedBtn = h("button", { class: "btn small " + (st.feed ? "red" : "green"), text: st.feed ? "Stop the feed" : "Turn on the feed" });
+        feedBtn.addEventListener("click", () => busy(feedBtn, async () => { await api("/api/servers/feed", { guild_id: guild.value, enabled: !st.feed }); load(); }));
+        holder.replaceChildren(...[picker, h("div", { class: "panel" },
+          h("h3", { text: `Checklist (${done} of ${st.steps.length})` }), progressBar(done / st.steps.length),
+          row(sAlert, "Alert channel", "Where alerts go when a member's DM fails, and where the free-games feed posts. The bot posts a short note there to check it can.",
+            h("div", { class: "row" }, alertSel, save("Save", () => (alertSel.value ? api("/api/servers/channel", { guild_id: guild.value, channel_id: alertSel.value }) : api("/api/servers/channel", { guild_id: guild.value, clear: true }))))),
+          row(sFeed, "Free-games feed", "Posts new free games (not DLC) in the alert channel for everyone.", st.alertChannel ? feedBtn : h("span", { class: "muted small", text: "Choose an alert channel first." })),
+          row(sSupport, "Support tickets", "Members use /support open. Tickets appear here with Reply, Assign and Resolve buttons, and in the Support page.",
+            h("div", { class: "row" }, supportSel, staffSel, save("Save", () => api("/api/tickets/setup", { guild_id: guild.value, channel_id: supportSel.value, staff_role_id: staffSel.value })))),
+          state.me.giveaways ? row(sVouch, "Giveaway vouches", "Winners' confirmations are posted here. Without one the bot looks for a channel named #vouches.",
+            h("div", { class: "row" }, vouchSel, save("Save", () => api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouchSel.value })))) : null),
+          h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
+            h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/wishlist import" })), h("li", {}, "Price a library: ", h("code", { text: "/value" })),
+            h("li", {}, "Ask for help: ", h("code", { text: "/support open" })), h("li", {}, "Managers can run giveaways: ", h("code", { text: "/giveaway create" }))))].filter(Boolean));
+      } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    guild.addEventListener("change", load);
+    load();
+  }
+
+  const VIEWS = { setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();

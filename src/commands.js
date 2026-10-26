@@ -244,6 +244,9 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
+const setup = new SlashCommandBuilder().setName("setup").setDescription("Server managers: guided setup for alerts, support tickets and giveaways")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
 
 const support = new SlashCommandBuilder()
@@ -258,5 +261,5 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, support, changelog, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, serverlist, leaderboard, serverstats, giveaway].map(serverOnly)
+    ...[alertchannel, serverlist, leaderboard, serverstats, giveaway, setup].map(serverOnly)
 ].map(c => c.toJSON());

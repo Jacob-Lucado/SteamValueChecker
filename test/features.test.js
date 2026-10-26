@@ -373,7 +373,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
         "freegames": "GET /api/free", "sales": "GET /api/sales", "status": "GET /api/status", "publicpage": "POST /api/profile", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
-        "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",
+        "setup": "GET /api/servers/setup", "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
@@ -482,7 +482,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "changelog", "freegames", "help", "library", "mydata", "privacy", "publicpage", "sales", "status", "support", "value", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist", "serverstats"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist", "serverstats", "setup"]);
     assert.match(src, /UserInstall/);
     assert.match(src, /BotDM/);
 });

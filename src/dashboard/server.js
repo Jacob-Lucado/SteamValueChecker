@@ -2,6 +2,7 @@
 // Login is Discord OAuth2 (identify + guilds). Sessions live in memory, so a restart logs everyone out.
 
 import http from "node:http";
+import { setupStatus } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -589,6 +590,13 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
             db.setFreeFeed(g.id, Boolean(body.enabled));
             return { freeFeed: Boolean(body.enabled) };
+        },
+
+        // The same checklist as /setup in Discord.
+        "GET /api/servers/setup": async (req, _b, url) => {
+            const s = session(req);
+            const g = managerGuild(s, url.searchParams.get("guild"));
+            return { ...setupStatus(db, g.id), staffRole: db.getTicketSettings(g.id).staff_role_id, bot: botGuilds ? Boolean(botGuilds(g.id)) : null };
         },
 
         "GET /api/servers/stats": async (req, _b, url) => {

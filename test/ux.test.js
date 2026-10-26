@@ -82,3 +82,22 @@ test("changelog has a newest version and renders", () => {
     assert.equal(LATEST, CHANGELOG[0].version);
     assert.match(changelogEmbed().description, /Support tickets/);
 });
+
+test("setup checklist: tracks channels from every part of the bot and renders the panel", async () => {
+    const { setupStatus, setupEmbed, setupComponents, SU } = await import("../src/setup.js");
+    const db = openDb(":memory:");
+    let st = setupStatus(db, "g1");
+    assert.equal(st.complete, false);
+    db.setGuildChannel("g1", "111", "u1");
+    db.setTicketSettings("g1", { channelId: "222", staffRoleId: null });
+    db.setGiveawaySettings("g1", { vouch_channel_id: "333" });
+    db.setFreeFeed("g1", true);
+    st = setupStatus(db, "g1");
+    assert.equal(st.complete, true);
+    assert.ok(st.steps.every(x => x.done));
+    const e = setupEmbed(st, "https://x.test", "g1");
+    assert.match(e.description, /<#111>/);
+    assert.match(e.description, /x\.test\/#\/setup\/g1/);
+    const ids = setupComponents(st).flatMap(r => r.components).map(c => c.custom_id);
+    assert.deepEqual(ids, [SU.alert, SU.support, SU.vouch, SU.feed, SU.refresh]);
+});

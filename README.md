@@ -110,6 +110,9 @@ Server owners (Manage Server, or a role set with `/giveaway setup`) can give awa
 
 Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in any public message or dashboard response, and are deleted on confirmation, cancellation or after a retention period. Set the secret in `.env` to enable giveaways; if you lose it, stored keys can't be read. Backups only contain encrypted keys.
 
+### Server setup (`/setup`)
+When the bot joins, the server owner gets a DM (or a note in the system channel) pointing to `/setup`: an ephemeral panel with channel pickers for the alert channel, support ticket channel and giveaway vouches, a free-games feed toggle and a live checklist. The dashboard's **Setup** page (Servers menu) does the same, including inviting the bot if it is not in the server yet. The dashboard menu is grouped into Games, Servers, Account and Help dropdowns.
+
 ### Support tickets (`/support`)
 `/support open` opens a ticket (a form asks for a subject and details), `/support mine` lists yours. Replies reach you by DM with a Reply button and on the dashboard's **Support** page; both sides see the same thread.
 Tickets go to the server's queue only if a manager ran `/support setup channel:#help` there; otherwise they go to the bot owner (the owner sets that channel with `/support setup global:true`). Staff answer with the Reply, Assign me and Resolve buttons or from the dashboard inbox (search, status filter, tags, assignee, canned replies, transcript download, owner-only recent errors). Quiet tickets resolve after 7 days waiting and close 3 days later; closed tickets are purged after 6 months. A giveaway "key did not work" report opens a ticket automatically. Staff never see game keys.

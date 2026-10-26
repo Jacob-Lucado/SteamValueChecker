@@ -31,6 +31,7 @@ import { createDiscordRest } from "./dashboard/discord.js";
 import { createVault } from "./vault.js";
 import { createGiveawayService } from "./giveaway.js";
 import { createTicketService } from "./tickets.js";
+import { createSetupHandlers } from "./setup.js";
 import { createTicketHandlers } from "./tickethandlers.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
 
@@ -93,6 +94,7 @@ const gwDiscord = {
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
 const tickets = createTicketService({ db, discord: gwDiscord, ownerId: cfg.ownerId, publicUrl: publicBase, log: m => console.log(`[tickets] ${m}`) });
 const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
+const setupUi = createSetupHandlers({ db, publicUrl: publicBase });
 const giveaways = cfg.keySecret
     ? createGiveawayService({ db, tickets, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
     : null;
@@ -157,13 +159,14 @@ client.on(Events.GuildCreate, async guild => {
         if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
         if (db.getMeta(`welcomed:${guild.id}`)) return;
         db.setMeta(`welcomed:${guild.id}`, "1");
-        await discord.sendDm(guild.ownerId, { embeds: [{ color: 0xff9800, title: `Thanks for adding Steam Value Checker to ${guild.name}`,
-            description: ["**Quick setup (about two minutes)**",
-                "1. `/alertchannel set` picks where alerts go when a DM fails, and `/alertchannel feed` posts new free games for everyone.",
-                "2. `/support setup` picks a channel for help tickets from your members.",
-                "3. `/giveaway setup` sets up key giveaways and a vouches channel.",
-                "4. Members run `/wishlist import` to get sale alerts, or `/value` to price a library.",
-                "", publicBase ? `Everything is also on the dashboard: ${publicBase}` : "", "Type `/help` any time."].filter(x => x !== null).join("\n") }] });
+        const link = publicBase ? `${publicBase}/#/setup/${guild.id}` : null;
+        const embed = { color: 0xff9800, title: `Thanks for adding Steam Value Checker to ${guild.name}`,
+            description: ["It takes about a minute to set up:", "1. In your server, run **`/setup`** and pick the channels from the menus.", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/wishlist import`, `/value` and `/support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };
+        const components = link ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open setup page", url: link }] }] : [];
+        await discord.sendDm(guild.ownerId, { embeds: [embed], components }).catch(async () => {
+            // DMs closed: leave a short note where managers will see it
+            const ch = guild.systemChannel; if (ch) await ch.send({ content: "Thanks for adding me! A server manager can run `/setup` to get started.", allowedMentions: { parse: [] } });
+        });
     } catch { /* the owner may have DMs closed */ }
 });
 
@@ -289,6 +292,7 @@ client.on(Events.InteractionCreate, async i => {
         return;
     }
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
+    if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
@@ -329,6 +333,7 @@ client.on(Events.InteractionCreate, async i => {
             case "freegames": return await handlers.handleFreeGames(i);
             case "status": return await handlers.handleStatus(i);
             case "support": return await ticketUi.handleCommand(i);
+            case "setup": return await setupUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
