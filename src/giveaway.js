@@ -18,17 +18,54 @@ const closed = g => g.status !== "active";
 /** The prize artwork Steam publishes for an app id. */
 export const steamHeader = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIComponent(appid)}/header.jpg`;
 
-/** Picks box art for a game from IsThereAnyDeal when the host did not provide an image. Returns { image, thumbnail } or null. */
-export async function autoImage(itad, gameTitle) {
-    if (!itad || !gameTitle) return null;
-    try {
-        const [hit] = await itad.lookupTitles([gameTitle]);
-        if (!hit?.id) return null;
-        const info = await itad.getTitle(hit.id);
-        if (info?.appid) return { image: steamHeader(info.appid), thumbnail: null };
-        if (info?.image && /^https:\/\//i.test(info.image)) return { image: info.image, thumbnail: null };
-    } catch { /* artwork is optional */ }
-    return null;
+const artCache = new Map(); // game name -> { at, art }
+const ART_TTL_MS = 6 * 3600_000;
+
+/** Fast path: Steam's own store search (one request, no API key, no shared rate limit). Returns an app id or null. */
+async function steamSearch(title, fetchFn) {
+    const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&l=english&cc=us`;
+    const res = await fetchFn(url, { signal: AbortSignal.timeout(4000), headers: { accept: "application/json" } });
+    if (!res.ok) return null;
+    const items = (await res.json())?.items ?? [];
+    const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const want = norm(title);
+    const hit = items.find(i => i?.type === "app" && norm(i.name) === want) ?? items.find(i => i?.type === "app");
+    return hit?.id ?? null;
+}
+
+/**
+ * Picks box art for a game when the host did not provide an image: Steam's store search first (fast), IsThereAnyDeal as the
+ * fallback. Results are cached for a few hours so repeat looks, including the dashboard's live preview, cost nothing.
+ * Returns { image, thumbnail } or null.
+ */
+export async function autoImage(itad, gameTitle, { fetchFn = globalThis.fetch, nowFn = Date.now } = {}) {
+    const title = String(gameTitle ?? "").trim().slice(0, 100);
+    if (!title) return null;
+    const key = title.toLowerCase();
+    const hit = artCache.get(key);
+    if (hit && nowFn() - hit.at < ART_TTL_MS) return hit.art;
+    let art = null;
+    try { const appid = fetchFn ? await steamSearch(title, fetchFn) : null; if (appid) art = { image: steamHeader(appid), thumbnail: null }; } catch { /* fall through */ }
+    if (!art && itad) {
+        try {
+            const [found] = await itad.lookupTitles([title]);
+            if (found?.id) {
+                const info = await itad.getTitle(found.id);
+                if (info?.appid) art = { image: steamHeader(info.appid), thumbnail: null };
+                else if (info?.image && /^https:\/\//i.test(info.image)) art = { image: info.image, thumbnail: null };
+            }
+        } catch { /* artwork is optional */ }
+    }
+    if (artCache.size > 500) artCache.clear();
+    if (art) artCache.set(key, { at: nowFn(), art }); // misses are not cached, so a later try can still succeed
+    return art;
+}
+
+/** A title made from the prize names when the host did not type one. */
+export function titleFromKeys(keys) {
+    const labels = [...new Set(keys.map(k => k.label).filter(Boolean))];
+    if (!labels.length) return "Giveaway";
+    return (labels.length === 1 ? labels[0] : `${labels[0]} + ${labels.length - 1} more`).slice(0, 100);
 }
 
 /** Weighted random pick without replacement. pool: [{ id, w }]. */
@@ -62,9 +99,8 @@ export function createGiveawayService({ db, vault, discord, itad = null, now = (
 
     // ---------- create ----------
     async function create(input) {
-        const title = cleanText(input.title, 100);
-        if (!title) throw new UserError("Give the giveaway a title.");
         if (!input.keys?.length) throw new UserError("Add at least one prize key.");
+        const title = cleanText(input.title, 100) ?? titleFromKeys(input.keys);
         if (db.countActiveGiveaways(input.guild_id) >= MAX_ACTIVE_GIVEAWAYS) throw new UserError(`This server already has ${MAX_ACTIVE_GIVEAWAYS} running giveaways. End one first.`);
 
         let image = input.image_url ?? null, thumbnail = input.thumbnail_url ?? null, imageSource = image ? "custom" : "none";

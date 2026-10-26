@@ -69,7 +69,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         const game = cleanText(o.getString("game"), 100);
         return {
             guild_id: i.guildId, host_id: i.user.id,
-            title: o.getString("title", true), duration_ms: parseDuration(o.getString("length", true)),
+            title: o.getString("title"), duration_ms: parseDuration(o.getString("length") ?? "24h"),
             channel_id: textChannel(o.getChannel("channel"), "giveaway channel") ?? i.channelId,
             game_title: game, description: o.getString("description"),
             image_url: parseImageUrl(o.getString("image"), "image"), thumbnail_url: parseImageUrl(o.getString("thumbnail"), "thumbnail"),
@@ -98,7 +98,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
     async function keysSubmitted(i) {
         try {
             const d = take(i.customId.split(":")[1], i);
-            const { keys, duplicates } = parseKeys(i.fields.getTextInputValue("keys"), d.draft.game_title ?? d.draft.title);
+            const { keys, duplicates } = parseKeys(i.fields.getTextInputValue("keys"), d.draft.game_title ?? d.draft.title ?? "Prize");
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const r = await giveaways.create({ ...d.draft, keys });
             const art = { auto: "Artwork was found automatically.", custom: "Using your image.", none: "No artwork (none was found; you can recreate it with an `image:` link)." }[r.imageSource];

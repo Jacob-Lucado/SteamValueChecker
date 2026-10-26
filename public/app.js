@@ -887,7 +887,24 @@
       const chSel = select(channels.map(c => [c.id, "#" + c.name]), channels[0] && channels[0].id);
       const roleSel = () => select([["", "None"], ...roles.map(r => [r.id, r.name])], "");
       const vouchSel = select([["", "A channel named #vouches (or the server default)"], ...channels.map(c => [c.id, "#" + c.name])], "");
-      const title = text("Title", 100), length = text("2h, 3d, 1w, 1d12h", 20), game = text("Game name (used to find artwork)", 100);
+      const title = text("Title (optional, made from the prizes if blank)", 100), length = text("2h, 3d, 1w, 1d12h", 20), game = text("Game name (optional, taken from the first prize)", 100);
+      length.value = "24h";
+      const presets = h("div", { class: "chips" }, ["1h", "6h", "24h", "3d", "1w"].map(p => h("button", { type: "button", class: "tab small", text: p, onclick: () => { length.value = p; } })));
+      const preview = h("div", { class: "gw-preview muted small", text: "Artwork appears here once you add a prize." });
+      let previewTimer = 0, previewKey = "";
+      const refreshPreview = () => {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(async () => {
+          if (image.value.trim()) { preview.replaceChildren(h("span", { text: "Using your own image." })); return; }
+          const first = (keys.value.split("\n").find(l => l.trim()) || "").split("|")[0].trim();
+          const q = game.value.trim() || (keys.value.includes("|") ? first : "");
+          if (!q || !auto.checked) { preview.replaceChildren(h("span", { text: "Artwork appears here once you add a prize." })); return; }
+          if (q === previewKey) return; previewKey = q;
+          preview.replaceChildren(h("span", { text: "Looking for artwork…" }));
+          try { const r = await api("/api/giveaways/art?game=" + encodeURIComponent(q)); preview.replaceChildren(r.image ? h("img", { src: r.image, alt: q }) : h("span", { text: "No artwork found. Paste an image link under Look and rules." })); }
+          catch { preview.replaceChildren(h("span", { text: "Could not look up artwork." })); }
+        }, 500);
+      };
       const desc = h("textarea", { placeholder: "Extra text on the giveaway (optional)", maxlength: "1500" });
       const image = text("Your own image, GIF or video link, https (optional)", 500), thumb = text("Your own small picture or GIF link, https (optional)", 500);
       const auto = h("input", { type: "checkbox", checked: true });
@@ -895,6 +912,8 @@
       const claim = text("48", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
       const reqRole = roleSel(), bonusRole = roleSel(), pingRole = roleSel();
       const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
+      for (const el of [keys, game, image]) el.addEventListener("input", refreshPreview);
+      auto.addEventListener("change", () => { previewKey = ""; refreshPreview(); });
       const create = h("button", { class: "btn green", text: "Start giveaway", onclick: () => busy(create, async () => {
         const num = el => (el.value === "" ? undefined : Number(el.value));
         const r = await api("/api/giveaways/create", {
@@ -908,8 +927,10 @@
         load();
       }) });
       return h("div", { class: "panel" }, h("h3", { text: "Start a giveaway" }),
-        h("div", { class: "row" }, field("Title", title), field("Length", length), field("Channel", chSel)),
-        field("Prize keys (one per line, Name | KEY)", keys),
+        field("Prize keys (paste them, one per line: Name | KEY)", keys),
+        preview,
+        h("div", { class: "row" }, field("Channel", chSel), field("Length", length)), presets,
+        field("Title", title),
         h("p", { class: "muted small", text: "Keys are encrypted as soon as they are saved. Each is deleted once the winner confirms it worked, and unused keys are sent back to you by DM. One winner per prize." }),
         h("details", { class: "more" }, h("summary", { text: "Look and rules (all optional)" }),
           h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color", color)),

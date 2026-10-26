@@ -496,3 +496,18 @@ test("the user-install link and global registration", async () => {
     assert.equal(loadConfig({ ...env }).globalCommands, false);
     assert.equal(loadConfig({ ...env, GLOBAL_COMMANDS: "1" }).globalCommands, true);
 });
+
+test("giveaway artwork: Steam search first, cached, ITAD fallback; title comes from prizes", async () => {
+    const { autoImage, titleFromKeys, steamHeader } = await import("../src/giveaway.js");
+    let calls = 0;
+    const fetchFn = async () => { calls++; return { ok: true, json: async () => ({ items: [{ type: "app", id: 1145360, name: "Hades" }, { type: "app", id: 1, name: "Hades II" }] }) }; };
+    const a = await autoImage(null, "Hades", { fetchFn });
+    assert.equal(a.image, steamHeader(1145360));
+    await autoImage(null, "hades", { fetchFn });
+    assert.equal(calls, 1);
+    const itad = { lookupTitles: async () => [{ id: "x" }], getTitle: async () => ({ appid: 99 }) };
+    const b = await autoImage(itad, "Zzz Unknown", { fetchFn: async () => ({ ok: false }) });
+    assert.equal(b.image, steamHeader(99));
+    assert.equal(titleFromKeys([{ label: "Hades" }]), "Hades");
+    assert.equal(titleFromKeys([{ label: "Hades" }, { label: "Celeste" }, { label: "Hades" }]), "Hades + 1 more");
+});

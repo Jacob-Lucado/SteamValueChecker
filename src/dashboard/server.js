@@ -20,6 +20,7 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard } from "../library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
+import { autoImage } from "../giveaway.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
 import { MAX_KEYS } from "../gwstore.js";
 
@@ -522,6 +523,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { giveaways: rows, settings: db.getGiveawaySettings(g.id), max: MAX_KEYS };
         },
 
+        "GET /api/giveaways/art": async (req, _b, url) => {
+            session(req);
+            const q = (url.searchParams.get("game") ?? "").trim().slice(0, 100);
+            if (!q) return { image: null };
+            const art = await autoImage(itad, q);
+            return { image: art?.image ?? null };
+        },
+
         "GET /api/giveaways/info": async (req, _b, url) => {
             const s = session(req);
             const g = managerGuild(s, url.searchParams.get("guild"));
@@ -543,9 +552,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!channels.some(c => c.id === body.channel_id)) throw new HttpError(400, "Pick a text channel from the list.");
             const text = v => (v === null || v === undefined || v === "" ? null : String(v));
             const int = v => (v === null || v === undefined || v === "" ? undefined : Number(v));
-            const { keys, duplicates } = parseKeys(String(body.keys ?? "").slice(0, 20_000), text(body.game) ?? String(body.title ?? "Prize"));
+            const { keys, duplicates } = parseKeys(String(body.keys ?? "").slice(0, 20_000), text(body.game) ?? text(body.title) ?? "Prize");
             const r = await giveaways.create({
-                guild_id: g.id, channel_id: body.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(body.length),
+                guild_id: g.id, channel_id: body.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
                 game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
                 color: parseColor(body.color), button_label: text(body.button_label), ping_role_id: text(body.ping_role_id), require_role_id: text(body.require_role_id),
                 bonus_role_id: text(body.bonus_role_id), bonus_entries: int(body.bonus_entries), claim_hours: int(body.claim_hours),
