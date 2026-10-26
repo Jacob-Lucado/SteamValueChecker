@@ -132,7 +132,7 @@ const LEVEL = {
  * One sale alert. `now` comes from alerts.current(). `art` is "image" (large, for a single alert),
  * "thumbnail" (small, when several alerts share a message) or null.
  */
-export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null } = {}) {
+export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null, insight = null } = {}) {
     const c = now.currency ?? "USD";
     const pct = Math.round((now.discount ?? 0) * 100);
     const lvl = LEVEL[verdict?.level] ?? LEVEL.info;
@@ -144,6 +144,7 @@ export function alertEmbed(item, now, { trigger, lower = false, verdict = null, 
         { name: "Discount", value: pct > 0 ? `${pct}% off` : "-", inline: true }
     ];
     if (now.atl !== null) fields.push({ name: "All-time low", value: money(now.atl, c), inline: true });
+    if (insight) fields.push({ name: "Last 12 months", value: `\`${insight.spark}\`\n${insight.text}`.slice(0, 1000), inline: false });
     const art_ = art ? artUrl(item) : undefined;
     return {
         color: lvl.color,
@@ -176,7 +177,7 @@ export function alertPayload(hits, { trigger, verdict }) {
     const single = hits.length === 1;
     return {
         content: single ? undefined : `${hits.length} games on your wishlist hit your alert.`,
-        embeds: hits.map(h => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: single ? "image" : "thumbnail" })),
+        embeds: hits.map(h => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: single ? "image" : "thumbnail", insight: h.insight ?? null })),
         components: hits.map(h => alertButtons(h.item, h.now, { single })).filter(Boolean)
     };
 }

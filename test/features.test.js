@@ -560,3 +560,17 @@ test("/freegames menu: pages, DLC split, store filter, DLC can be hidden", async
 test("free DLC preference is saved and validated", async () => {
     assert.deepEqual(prefsPatch({ free_dlc: false }, {}), { free_dlc: 0 });
 });
+
+test("price insight: sparkline plus a buy-now or wait nudge", async () => {
+    const { priceInsight } = await import("../src/insight.js");
+    const now = Date.parse("2026-10-26T00:00:00Z"), D = 86400_000;
+    const pts = [[300, 40], [200, 20], [120, 40], [60, 30], [20, 40]].map(([d, price]) => ({ t: now - d * D, price }));
+    pts.push({ t: now - 250 * D, price: 40 });
+    pts.sort((a, b) => a.t - b.t);
+    const great = priceInsight(pts, 20, { now });
+    assert.equal(great.spark.length, 12);
+    assert.equal(great.level, "great");
+    assert.equal(priceInsight(pts, 40, { now }).level, "wait");
+    assert.match(priceInsight(pts, 40, { now }).text, /in (Mar|Apr|May|Jan|Feb|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/);
+    assert.equal(priceInsight([{ t: now, price: 1 }], 1, { now }), null);
+});

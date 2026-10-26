@@ -3,6 +3,7 @@
 
 import { summarize } from "./report.js";
 import { evaluate, describeTrigger, dealVerdict } from "./alerts.js";
+import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
 import { alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
 import { isQuiet, digestDue } from "./timeutil.js";
@@ -62,6 +63,11 @@ export async function runCycle({ db, itad, notifier, now = () => Date.now(), log
         if (!user) continue;
         if (isQuiet(user, now())) { stats.deferred += list.length; continue; }
         for (const part of chunked(list, MAX_CARDS)) {
+            // History is fetched only for alerts that are really being sent, and a failure just leaves the note off.
+            await Promise.all(part.map(async h => {
+                try { h.insight = priceInsight(await itad.getHistory?.(h.item.itad_id, h.item.region ?? "US"), h.now.price, { now: now(), money: n => `${n.toFixed(2)} ${h.now.currency ?? "USD"}` }); }
+                catch { h.insight = null; }
+            }));
             const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict });
             const res = await notifier.deliver(user, payload);
             if (res.ok) {
