@@ -21,6 +21,7 @@ import { importLibrary, libraryView, leaderboard } from "../library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
+import { playNext } from "../library.js";
 import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
@@ -428,6 +429,21 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const clean = sanitize(entries, { max: 500 }).entries;
             if (!clean.length) throw new HttpError(400, "I need game titles, not keys.");
             return await importLibrary(db, itad, s.userId, clean);
+        },
+
+        "POST /api/library/status": async (req, body) => {
+            const s = session(req);
+            const item = db.listLibrary(s.userId).find(i => i.itad_id === body.itad_id);
+            if (!item) throw new HttpError(404, "That game is not in your library.");
+            if (!db.setLibraryStatus(s.userId, item.itad_id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, finished or dropped.");
+            return { title: item.title, status: body.status };
+        },
+
+        "GET /api/library/next": async (req) => {
+            const s = session(req);
+            const view = await libraryView(db, itad, userRow(s), { snapshot: false });
+            const n = playNext(view.rows);
+            return { next: n ? { pick: n.pick, others: n.others, why: n.why } : null, totals: view.totals, currency: view.currency };
         },
 
         "POST /api/library/remove": async (req, body) => {

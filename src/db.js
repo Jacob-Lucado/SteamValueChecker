@@ -140,6 +140,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "gallery", "TEXT");
     addColumn("users", "free_dlc", "INTEGER NOT NULL DEFAULT 1");
+    addColumn("library", "status", "TEXT NOT NULL DEFAULT 'backlog'");
     addColumn("items", "appid", "INTEGER");
     addColumn("library_snapshots", "msrp_paid", "REAL NOT NULL DEFAULT 0");
     addColumn("guilds", "group_min", "INTEGER NOT NULL DEFAULT 0");
@@ -281,6 +282,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         } catch (err) { db.exec("ROLLBACK"); throw err; }
         return { added, updated, skippedForLimit };
     }
+    const LIB_STATUSES = ["backlog", "playing", "finished", "dropped"];
+    const setLibraryStatus = (discordId, itadId, status) => LIB_STATUSES.includes(status)
+        ? run("UPDATE library SET status = ? WHERE discord_id = ? AND itad_id = ?", status, discordId, itadId).changes > 0 : false;
     const removeLibrary = (discordId, itadId) => run("DELETE FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId).changes > 0;
 
     const dayKey = (ms = now()) => new Date(ms).toISOString().slice(0, 10);
@@ -394,7 +398,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
-        countLibrary, listLibrary, upsertLibrary, removeLibrary, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
+        countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         setGroupMin, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, backupTo, exportUser, deleteUser, ...giveaways, close: () => db.close()

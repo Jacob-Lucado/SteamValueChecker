@@ -1,6 +1,7 @@
 // Builds the Discord embeds and the CSV download from report data.
 // Embeds are plain API objects (no discord.js needed), which keeps this module testable.
 
+import { protonLabel } from "./proton.js";
 export const ROWS_PER_PAGE = 15;
 const COLOR = 0xff9800;
 
@@ -132,7 +133,7 @@ const LEVEL = {
  * One sale alert. `now` comes from alerts.current(). `art` is "image" (large, for a single alert),
  * "thumbnail" (small, when several alerts share a message) or null.
  */
-export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null, insight = null } = {}) {
+export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null, insight = null, proton = null } = {}) {
     const c = now.currency ?? "USD";
     const pct = Math.round((now.discount ?? 0) * 100);
     const lvl = LEVEL[verdict?.level] ?? LEVEL.info;
@@ -144,6 +145,7 @@ export function alertEmbed(item, now, { trigger, lower = false, verdict = null, 
         { name: "Discount", value: pct > 0 ? `${pct}% off` : "-", inline: true }
     ];
     if (now.atl !== null) fields.push({ name: "All-time low", value: money(now.atl, c), inline: true });
+    if (proton && protonLabel(proton)) lines.push(protonLabel(proton));
     if (insight) fields.push({ name: "Last 12 months", value: `\`${insight.spark}\`\n${insight.text}`.slice(0, 1000), inline: false });
     const art_ = art ? artUrl(item) : undefined;
     return {
@@ -177,7 +179,7 @@ export function alertPayload(hits, { trigger, verdict }) {
     const single = hits.length === 1;
     return {
         content: single ? undefined : `${hits.length} games on your wishlist hit your alert.`,
-        embeds: hits.map(h => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: single ? "image" : "thumbnail", insight: h.insight ?? null })),
+        embeds: hits.map(h => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: single ? "image" : "thumbnail", insight: h.insight ?? null, proton: h.proton ?? null })),
         components: hits.map(h => alertButtons(h.item, h.now, { single })).filter(Boolean)
     };
 }
@@ -247,6 +249,21 @@ export function libraryEmbed(view, currency) {
     const fields = [{ name: "Your library", value: fence(lines) }];
     if (top) fields.push({ name: "Best deals", value: top.slice(0, 1000) });
     return { color: COLOR, title: "Library value", fields, footer: { text: "Prices by IsThereAnyDeal" } };
+}
+
+/** The backlog card: how much sits unplayed and what to play next. */
+export function backlogEmbed(view, next) {
+    const t = view.totals, c = view.currency;
+    const fields = [
+        { name: "Not started", value: `**${t.backlogGames}** game${t.backlogGames === 1 ? "" : "s"}${t.backlogPaid > 0 ? `\n${money(t.backlogPaid, c)} spent` : ""}`, inline: true },
+        { name: "Playing", value: String(t.playing), inline: true },
+        { name: "Finished", value: String(t.finished), inline: true }
+    ];
+    if (next) {
+        fields.push({ name: "🎯 Play next", value: `**${next.pick.title}**\n${next.why}`.slice(0, 1000) });
+        if (next.others.length) fields.push({ name: "Also in the running", value: next.others.map(o => o.title).join("\n").slice(0, 500) });
+    }
+    return { color: COLOR, title: "Your backlog", description: "Mark games with `/library status`. Games are in your backlog until you change them.", fields, footer: { text: "Prices by IsThereAnyDeal" } };
 }
 
 /** Several members of a server are watching the same game and it just hit their alert. */

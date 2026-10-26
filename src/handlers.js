@@ -10,11 +10,11 @@ import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
-import { importLibrary, libraryView, leaderboard, LibraryError } from "./library.js";
+import { importLibrary, libraryView, leaderboard, LibraryError, playNext } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
@@ -332,8 +332,21 @@ export function createHandlers({ db, itad }) {
                 db.removeLibrary(i.user.id, found.item.itad_id);
                 return eph(i, `Removed **${found.item.title}** from your library.`);
             }
+            if (sub === "status") {
+                const found = findItem(db.listLibrary(i.user.id), i.options.getString("game", true));
+                if (found.ambiguous) return eph(i, `More than one match: ${found.ambiguous.map(t => `**${t}**`).join(", ")}. Be more specific.`);
+                if (!found.item) return eph(i, "That game is not in your library.");
+                const state = i.options.getString("state", true);
+                db.setLibraryStatus(i.user.id, found.item.itad_id, state);
+                return eph(i, `**${found.item.title}** is now marked as ${state}.`);
+            }
             cooldown(i, "lib");
             await i.deferReply({ flags: MessageFlags.Ephemeral });
+            if (sub === "backlog") {
+                const view = await libraryView(db, itad, user, { snapshot: false });
+                if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
+                return void await i.editReply({ embeds: [backlogEmbed(view, playNext(view.rows))] });
+            }
             if (sub === "add") {
                 const paid = i.options.getNumber("paid");
                 const r = await importLibrary(db, itad, i.user.id, [{ title: i.options.getString("title", true), paid }]);

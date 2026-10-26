@@ -31,10 +31,11 @@ export async function libraryView(db, itad, user, { snapshot = true } = {}) {
         return {
             itad_id: it.itad_id, title: it.title, paid: it.paid, currency: s.currency,
             msrp: s.msrp, best: s.best, atl: s.atl,
-            saved: it.paid !== null && s.msrp !== null ? s.msrp - it.paid : null
+            saved: it.paid !== null && s.msrp !== null ? s.msrp - it.paid : null,
+            status: it.status ?? "backlog"
         };
     });
-    const totals = libraryTotals(rows);
+    const totals = { ...libraryTotals(rows), ...backlogStats(rows) };
     if (snapshot && rows.length) {
         db.upsertSnapshot(user.discord_id, { games: totals.games, paid: totals.paid, msrp: totals.msrp, msrp_paid: totals.msrpPaid, cheapest: totals.cheapest });
     }
@@ -72,4 +73,27 @@ export function leaderboard(db, guildId, { limit = 10 } = {}) {
         .map(r => ({ discord_id: r.discord_id, savedPct: ((r.msrp_paid - r.paid) / r.msrp_paid) * 100, games: r.games }))
         .sort((a, b) => b.savedPct - a.savedPct)
         .slice(0, limit);
+}
+
+export const STATUSES = [["backlog", "Backlog"], ["playing", "Playing"], ["finished", "Finished"], ["dropped", "Dropped"]];
+
+/** How much is sitting unplayed. Only games with a known price count toward the money. */
+export function backlogStats(rows) {
+    const open = rows.filter(r => r.status === "backlog");
+    const priced = open.filter(r => r.paid !== null);
+    return { backlogGames: open.length, backlogPaid: priced.reduce((t, r) => t + r.paid, 0), playing: rows.filter(r => r.status === "playing").length, finished: rows.filter(r => r.status === "finished").length };
+}
+
+/**
+ * What to play next. There is no game-length data here, so this goes by what you are already playing, then by the games
+ * you spent the most on (the money is already spent, so those are worth getting your use from). Returns { pick, others, why }.
+ */
+export function playNext(rows, { rand = Math.random } = {}) {
+    const playing = rows.filter(r => r.status === "playing");
+    if (playing.length) return { pick: playing[0], others: playing.slice(1, 3), why: "You are already playing this one. Finish it before starting something new." };
+    const open = rows.filter(r => r.status === "backlog").sort((a, b) => (b.paid ?? -1) - (a.paid ?? -1) || a.title.localeCompare(b.title));
+    if (!open.length) return null;
+    const top = open.slice(0, Math.min(3, open.length));
+    const pick = top[Math.floor(rand() * top.length)];
+    return { pick, others: open.filter(r => r !== pick).slice(0, 2), why: pick.paid ? `You paid ${pick.paid.toFixed(2)} for it and have not started it, the biggest unplayed spend in your library.` : "It has been waiting in your backlog." };
 }

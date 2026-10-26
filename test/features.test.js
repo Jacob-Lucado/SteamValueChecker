@@ -367,7 +367,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "alerts/freegames": "POST /api/settings", "alerts/share": "POST /api/settings",
         "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
         "alertchannel/group": "POST /api/servers/group",
-        "library/add": "POST /api/library/add", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/remove": "POST /api/library/remove",
+        "library/add": "POST /api/library/add", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/remove": "POST /api/library/remove", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
         "serverlist/add": "POST /api/servers/list/add", "serverlist/view": "GET /api/servers/list", "serverlist/vote": "POST /api/servers/list/vote", "serverlist/remove": "POST /api/servers/list/remove",
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
@@ -594,4 +594,36 @@ test("a /watch is removed after its alert and pruned after a month", () => {
     assert.equal(t.db.removeWatch("w1", "y"), 0); // wishlist games are never removed this way
     assert.equal(t.db.removeWatch("w1", "x"), 1);
     assert.equal(t.db.listItems("w1").length, 1);
+});
+
+test("backlog: status, unplayed spend and what to play next", async () => {
+    const { backlogStats, playNext } = await import("../src/library.js");
+    const rows = [{ title: "A", paid: 10, status: "backlog" }, { title: "B", paid: 30, status: "backlog" }, { title: "C", paid: null, status: "finished" }, { title: "D", paid: 5, status: "backlog" }];
+    const s = backlogStats(rows);
+    assert.equal(s.backlogGames, 3); assert.equal(s.backlogPaid, 45); assert.equal(s.finished, 1);
+    assert.equal(playNext(rows, { rand: () => 0 }).pick.title, "B");
+    assert.equal(playNext([...rows, { title: "P", paid: 1, status: "playing" }]).pick.title, "P");
+    assert.equal(playNext([{ title: "x", status: "finished" }]), null);
+    const t = rig({});
+    t.db.ensureUser("b1", "g");
+    t.db.upsertLibrary("b1", [{ itad_id: "i1", title: "Hades", paid: 5 }]);
+    assert.equal(t.db.listLibrary("b1")[0].status, "backlog");
+    assert.equal(t.db.setLibraryStatus("b1", "i1", "playing"), true);
+    assert.equal(t.db.setLibraryStatus("b1", "i1", "nonsense"), false);
+    assert.equal(t.db.listLibrary("b1")[0].status, "playing");
+});
+
+test("ProtonDB badge: cached lookup, silent on failure, shown on the alert", async () => {
+    const { protonTier, protonLabel } = await import("../src/proton.js");
+    let calls = 0;
+    const ok = async () => { calls++; return { ok: true, json: async () => ({ tier: "Platinum" }) }; };
+    assert.equal(await protonTier(424242, { fetchFn: ok }), "platinum");
+    assert.equal(await protonTier(424242, { fetchFn: ok }), "platinum");
+    assert.equal(calls, 1);
+    assert.equal(await protonTier(777, { fetchFn: async () => { throw new Error("net"); } }), null);
+    assert.equal(await protonTier(null, { fetchFn: ok }), null);
+    assert.match(protonLabel("gold"), /Gold/);
+    const { alertEmbed } = await import("../src/render.js");
+    const e = alertEmbed({ title: "G" }, { price: 5, regular: 10, discount: 0.5, currency: "USD", atl: null }, { trigger: "any", proton: "platinum" });
+    assert.match(e.description, /Platinum/);
 });

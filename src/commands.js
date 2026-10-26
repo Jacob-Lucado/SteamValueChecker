@@ -64,6 +64,11 @@ const library = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("import").setDescription("Add games from a FanaticalGrabber export (uses a Paid column if there is one)")
         .addAttachmentOption(o => o.setName("file").setDescription(".csv, .json, .txt or .md export").setRequired(true)))
     .addSubcommand(s => s.setName("view").setDescription("Your library value and savings"))
+    .addSubcommand(s => s.setName("status").setDescription("Mark a game as backlog, playing, finished or dropped")
+        .addStringOption(o => gameOption(o, true))
+        .addStringOption(o => o.setName("state").setDescription("Where you are with it").setRequired(true).addChoices(
+            { name: "Backlog (not started)", value: "backlog" }, { name: "Playing", value: "playing" }, { name: "Finished", value: "finished" }, { name: "Dropped", value: "dropped" })))
+    .addSubcommand(s => s.setName("backlog").setDescription("How much you have spent on games you have not played, and what to play next"))
     .addSubcommand(s => s.setName("remove").setDescription("Remove a game")
         .addStringOption(o => gameOption(o, true)));
 

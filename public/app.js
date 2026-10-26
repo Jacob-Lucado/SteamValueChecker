@@ -799,6 +799,12 @@
       toast(`Added ${r.added}, updated ${r.updated}.` + (r.notFound.length ? ` ${r.notFound.length} not found.` : ""), "ok"); load();
     }) });
 
+    const nextOut = h("div");
+    const nextBtn = h("button", { class: "btn green", text: "Pick for me", onclick: () => busy(nextBtn, async () => {
+      const d = await api("/api/library/next");
+      nextOut.replaceChildren(d.next ? h("div", { class: "panel" }, h("h3", { text: "🎯 Play next" }), h("p", {}, h("b", { text: d.next.pick.title })), h("p", { class: "muted", text: d.next.why }),
+        d.next.others.length ? h("p", { class: "muted small", text: "Also in the running: " + d.next.others.map(o => o.title).join(", ") }) : null) : h("div", { class: "notice warn", text: "Nothing in your backlog." }));
+    }) });
     async function load() {
       try {
         const d = await api("/api/library");
@@ -816,7 +822,9 @@
         const rows = d.rows.map(r => {
           const rm = h("button", { class: "btn red small", text: "Remove" });
           rm.addEventListener("click", () => busy(rm, async () => { await api("/api/library/remove", { itad_id: r.itad_id }); load(); }));
-          const holder = h("tr", { class: "chart-row", hidden: true }, h("td", { colspan: "6" }));
+          const holder = h("tr", { class: "chart-row", hidden: true }, h("td", { colspan: "7" }));
+          const stat = select([["backlog", "Backlog"], ["playing", "Playing"], ["finished", "Finished"], ["dropped", "Dropped"]], r.status || "backlog");
+          stat.addEventListener("change", async () => { try { await api("/api/library/status", { itad_id: r.itad_id, status: stat.value }); toast(`${r.title}: ${stat.value}.`, "ok"); load(); } catch (e) { toast(e.message, "error"); } });
           const hist = h("button", { class: "btn gray small", text: "Price history" });
           hist.addEventListener("click", () => {
             if (!holder.hidden) { holder.hidden = true; return; }
@@ -826,7 +834,7 @@
               holder.hidden = false;
             });
           });
-          return [h("tr", {}, h("td", { text: r.title }), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
+          return [h("tr", {}, h("td", { text: r.title }), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
             h("td", { class: "num", text: money(r.best && r.best.price, cur) }),
             h("td", { class: "num", text: r.saved === null ? "–" : (r.saved >= 0 ? "+" : "−") + money(Math.abs(r.saved), cur) }), h("td", { class: "actions" }, hist, rm)), holder];
         });
@@ -834,8 +842,11 @@
         body.replaceChildren(
           h("div", { class: "grid four" }, tile("Games", String(t.games), t.paidGames < t.games ? `${t.paidGames} with a price` : ""), tile("You paid", money(t.paid, cur)),
             tile("Worth at MSRP", money(t.msrp, cur)), tile("Saved vs MSRP", money(t.saved, cur), t.msrpPaid > 0 ? Math.round(t.savedPct) + "% off" : "add prices to see savings")),
+          h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
+            h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
+          nextOut,
           chart,
-          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Game", "Paid", "MSRP", "Cheapest now", "Saved", ""].map((c, i) => h("th", { class: i > 0 && i < 5 ? "num" : "", text: c })))), h("tbody", {}, rows.flat())))));
+          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Game", "Status", "Paid", "MSRP", "Cheapest now", "Saved", ""].map((c, i) => h("th", { class: i > 1 && i < 6 ? "num" : "", text: c })))), h("tbody", {}, rows.flat())))));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
