@@ -80,6 +80,8 @@ test("static files, security headers, and nothing outside the allowlist", async 
     assert.match(r.headers.get("content-security-policy"), /script-src 'self'/);
     assert.equal(r.headers.get("x-frame-options"), "DENY");
     assert.equal((await t.request("/app.js")).status, 200);
+    assert.equal((await t.request("/theme.js")).status, 200);
+    assert.match(r.text, /theme\.js/);
     assert.equal((await t.request("/style.css")).status, 200);
     assert.equal((await t.request("/logo.png")).status, 200);
     assert.equal((await t.request("/../package.json")).status, 404);

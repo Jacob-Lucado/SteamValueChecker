@@ -94,6 +94,20 @@
     h("span", {}, h("strong", { text: "FanaticalGrabber on GitHub" }),
       h("span", { class: "muted", text: "The browser extension that reveals and exports your Fanatical keys. Its CSV, JSON, TXT and Markdown exports work with the Value Checker." })));
 
+  // ---------- theme ----------
+  function themeButton() {
+    const btn = h("button", { class: "theme-btn", type: "button" });
+    const paint = () => {
+      const light = window.svcTheme && window.svcTheme.current() === "light";
+      btn.textContent = light ? "☾" : "☀";
+      btn.setAttribute("aria-label", light ? "Switch to dark theme" : "Switch to light theme");
+      btn.title = btn.getAttribute("aria-label");
+    };
+    btn.addEventListener("click", () => { if (window.svcTheme) window.svcTheme.toggle(); paint(); });
+    paint();
+    return btn;
+  }
+
   // ---------- chrome ----------
   const NAV = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["alerts", "Alerts"], ["servers", "Servers"], ["mydata", "My Data"], ["help", "Help"]];
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0];
@@ -111,9 +125,10 @@
       acct.replaceChildren(...[...links,
         state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
         h("span", { class: "who", text: state.me.user.username }),
+        themeButton(),
         h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } })].filter(Boolean));
     } else {
-      acct.replaceChildren(...[...links, h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
+      acct.replaceChildren(...[...links, themeButton(), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
     document.getElementById("footer-links").replaceChildren(
       ...(state.cfg ? [ext(state.cfg.fanaticalUrl, "FanaticalGrabber"), " · ", ext(state.cfg.repoUrl, "Source on GitHub")] : []));
