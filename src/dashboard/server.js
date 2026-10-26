@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, REPO_URL } from "../constants.js";
+import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { viewRows, findItem, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
 import { importWishlist, SteamError } from "../steam.js";
@@ -30,6 +30,8 @@ const FILES = {
     "/theme.js": ["theme.js", "text/javascript; charset=utf-8"],
     "/style.css": ["style.css", "text/css; charset=utf-8"],
     "/logo.png": ["logo.png", "image/png"],
+    "/creator.png": ["creator.png", "image/png"],
+    "/banner.png": ["banner.png", "image/png"],
     "/favicon.png": ["favicon.png", "image/png"]
 };
 const SESSION_MS = 7 * 24 * 3600_000;
@@ -56,7 +58,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, logs = null, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, logs = null, botInfo = null, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -182,8 +184,10 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     // ---------- API ----------
     const routes = {
         "GET /api/config": async () => ({
-            regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL, repoUrl: REPO_URL,
-            help: HELP, about: ABOUT, privacy: PRIVACY, maxUploadChars: MAX_UPLOAD_CHARS,
+            regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
+            help: HELP, about: ABOUT,
+            // The dashboard shows its own pages instead of GitHub links
+            privacy: PRIVACY.split("\n").filter(l => !/github\.com/i.test(l)).join("\n"), maxUploadChars: MAX_UPLOAD_CHARS,
             // View Channel + Send Messages + Embed Links, the least the bot needs to post alerts
             inviteUrl: config.clientId
                 ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=19456`
@@ -490,6 +494,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
 
         // ----- free games right now, grouped by platform -----
+        // Live numbers for the About panel. Aggregate only, so it is open to everyone like the Help page.
+        "GET /api/about": async () => ({ about: botInfo ? botInfo() : null }),
+
         "GET /api/free": async (req) => {
             session(req);
             const groups = new Map();

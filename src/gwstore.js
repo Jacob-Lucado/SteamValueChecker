@@ -180,6 +180,11 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         run("UPDATE giveaway_keys SET key_enc = NULL, status = 'expired' WHERE giveaway_id IN (SELECT id FROM giveaways WHERE host_id = ?)", userId);
         run("UPDATE giveaways SET status = 'cancelled', ended_at = COALESCE(ended_at, ?), host_id = 'deleted' WHERE host_id = ?", now(), userId);
     }
+    /** Bot-wide counts for the About page. Nothing personal. */
+    const giveawayTotals = () => ({
+        giveaways: get("SELECT COUNT(*) AS n FROM giveaways").n,
+        redeemed: get("SELECT COUNT(*) AS n FROM giveaway_keys WHERE status = 'confirmed'").n
+    });
     const hasGiveawayData = userId => Boolean(get("SELECT 1 AS x FROM giveaway_entries WHERE discord_id = ? UNION SELECT 1 FROM giveaway_keys WHERE winner_id = ? UNION SELECT 1 FROM giveaways WHERE host_id = ?", userId, userId, userId));
 
     return {
@@ -187,6 +192,6 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,
         listKeys, getKey, getKeyEnc, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,
-        getGiveawaySettings, setGiveawaySettings, forgetGiveawayUser, hasGiveawayData
+        giveawayTotals, getGiveawaySettings, setGiveawaySettings, forgetGiveawayUser, hasGiveawayData
     };
 }

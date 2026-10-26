@@ -91,7 +91,7 @@
 
   const fanaticalCard = () => state.cfg && h("a", { class: "card-link", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer" },
     h("span", { class: "icon", text: "🔑" }),
-    h("span", {}, h("strong", { text: "FanaticalGrabber on GitHub" }),
+    h("span", {}, h("strong", { text: "FanaticalGrabber" }),
       h("span", { class: "muted", text: "The browser extension that reveals and exports your Fanatical keys. Its CSV, JSON, TXT and Markdown exports work with the Value Checker." })));
 
   // ---------- theme ----------
@@ -131,7 +131,8 @@
       acct.replaceChildren(...[...links, themeButton(), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
     document.getElementById("footer-links").replaceChildren(
-      ...(state.cfg ? [ext(state.cfg.fanaticalUrl, "FanaticalGrabber"), " · ", ext(state.cfg.repoUrl, "Source on GitHub")] : []));
+      ...(state.cfg ? [ext(state.cfg.fanaticalUrl, "FanaticalGrabber")] : []),
+      ...(state.about && state.about.creator ? [" · Made by ", ext(state.about.creator.url, state.about.creator.name)] : []));
   }
 
   // ---------- landing ----------
@@ -849,11 +850,27 @@
   }
 
   // ---------- help ----------
+  // The bot's About card: logo, who made it, and live numbers.
+  function aboutPanel() {
+    const ab = state.about, c = ab && ab.creator;
+    const tile = (k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v === null || v === undefined ? "-" : String(v) }));
+    const n = v => (v === null || v === undefined ? null : Number(v).toLocaleString());
+    return h("div", { class: "panel about" },
+      h("div", { class: "about-head" },
+        h("img", { class: "about-logo", src: "/logo.png", alt: "", width: "72", height: "72" }),
+        h("div", {}, h("h3", { text: "Steam Value Checker" }),
+          c && h("div", { class: "creator" }, h("img", { class: "creator-logo", src: "/creator.png", alt: "", width: "28", height: "28" }), "Created by ", ext(c.url, c.name)))),
+      md(state.cfg.about),
+      ab && h("div", { class: "grid four about-stats" },
+        tile("Uptime", ab.uptime), tile("Servers", n(ab.servers)), tile("Members reached", n(ab.members)), tile("Latency", ab.pingMs === null ? null : ab.pingMs + " ms"),
+        tile("Games watched", n(ab.gamesWatched)), tile("Alerts, last 24h", n(ab.alerts24h)), tile("Giveaways run", n(ab.giveaways)), tile("Keys redeemed", n(ab.redeemed))));
+  }
+
   function helpView() {
     app.replaceChildren(
       pageHead("Help", "The dashboard does everything the Discord commands do."),
       h("div", { class: "panel" }, h("h3", { text: "Using the bot" }), md(state.cfg.help)),
-      h("div", { class: "panel" }, h("h3", { text: "About" }), md(state.cfg.about)),
+      aboutPanel(),
       h("div", { class: "panel" }, h("h3", { text: "Privacy" }), md(state.cfg.privacy)),
       fanaticalCard());
   }
@@ -872,6 +889,7 @@
   async function boot() {
     try {
       if (!state.cfg) state.cfg = await api("/api/config");
+      try { const x = await api("/api/about"); state.about = x.about; } catch { state.about = null; }
       try { state.me = await api("/api/me"); } catch { state.me = null; }
     } catch (e) {
       app.replaceChildren(h("div", { class: "notice warn", text: e.message }));

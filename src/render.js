@@ -347,3 +347,37 @@ export function extrasButtons(hits) {
         return { type: 1, components: [linkButton(hits.length > 1 ? `${label}: ${short(h.item.title, 28)}` : label, url)] };
     }).filter(Boolean);
 }
+
+const num = n => (n === null || n === undefined ? "-" : Number(n).toLocaleString("en-US"));
+
+/** The /about card: creator credit with logo, live numbers, banner and link buttons. */
+export function aboutPayload(info, { about, fanaticalUrl = null } = {}) {
+    const c = info.creator;
+    const stat = (icon, name, value) => ({ name: `${icon} ${name}`, value: `**${value}**`, inline: true });
+    const fields = [
+        stat("🟢", "Uptime", info.uptime),
+        stat("🌐", "Servers", num(info.servers)),
+        stat("👥", "Members reached", num(info.members)),
+        stat("📡", "Latency", info.pingMs === null ? "-" : `${info.pingMs} ms`),
+        stat("🎮", "Games watched", num(info.gamesWatched)),
+        stat("🔔", "Alerts, last 24h", num(info.alerts24h)),
+        stat("🎁", "Giveaways run", num(info.giveaways)),
+        stat("✅", "Keys redeemed", num(info.redeemed)),
+        stat("⚙️", "Version", `v${info.version}`)
+    ];
+    const embed = {
+        color: 0xff9800,
+        author: { name: `Created by ${c.name}`, url: safeUrl(c.url), icon_url: safeUrl(c.logo) },
+        title: "Steam Value Checker",
+        description: `${about ?? ""}\n\nOnline since ${stamp(info.startedAt)}`.trim().slice(0, 2000),
+        thumbnail: safeUrl(info.logo) ? { url: info.logo } : undefined,
+        fields,
+        image: safeUrl(info.banner) ? { url: info.banner } : undefined,
+        footer: { text: `Prices by IsThereAnyDeal  •  Node ${info.node}`, icon_url: safeUrl(c.logo) }
+    };
+    const row = [];
+    if (safeUrl(c.url)) row.push(linkButton(`Created by ${c.name}`, c.url));
+    if (safeUrl(info.dashboardUrl)) row.push(linkButton("Dashboard", info.dashboardUrl));
+    if (safeUrl(fanaticalUrl)) row.push(linkButton("FanaticalGrabber", fanaticalUrl));
+    return { embeds: [embed], components: row.length ? [{ type: 1, components: row }] : [] };
+}

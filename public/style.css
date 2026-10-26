@@ -245,3 +245,11 @@ input[type="time"] { width: 100%; font: inherit; }
 textarea[autocomplete="off"] { font-family: ui-monospace, Menlo, Consolas, monospace; min-height: 120px; }
 
 .logbox { max-height: 420px; overflow: auto; margin: 10px 0 0; padding: 12px; border: 1px solid var(--line, rgba(128,128,128,.3)); border-radius: 10px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; background: rgba(128,128,128,.08); }
+
+.about-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+.about-head h3 { margin: 0 0 6px; font-size: 1.4rem; }
+.about-logo { border-radius: 16px; }
+.creator { display: flex; align-items: center; gap: 8px; color: var(--muted, #8b95a5); font-size: .95rem; }
+.creator-logo { border-radius: 50%; background: #111; }
+.about-stats { margin-top: 14px; }
+.panel.about .about-head h3 { text-transform: none; letter-spacing: 0; color: var(--text, inherit); font-size: 1.5rem; }

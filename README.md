@@ -105,7 +105,7 @@ Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in a
 
 ### `/help`, `/about`, `/privacy`
 
-Usage notes, credits and a plain-language privacy summary.
+Usage notes and a plain-language privacy summary. `/about` is a card with the creator credit (name linked to X, with a logo), live uptime, servers, members reached, latency and giveaway totals. The same card is on the dashboard Help page. Set `CREATOR_NAME` and `CREATOR_X_URL` to change the credit.
 
 ## Web dashboard
 

@@ -8,7 +8,10 @@ import { createItad, ItadError } from "./itad.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
-import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID } from "./render.js";
+import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
+import { collectAbout } from "./about.js";
+import { FANATICAL_GRABBER_URL } from "./constants.js";
+import { readFileSync } from "node:fs";
 import { HELP, ABOUT, PRIVACY } from "./text.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
@@ -31,6 +34,8 @@ const COOLDOWN_MS = 15_000;
 const PAGE_TIMEOUT_MS = 10 * 60_000;
 
 const cfg = loadConfig();
+const STARTED_AT = Date.now();
+const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version; } catch { return "1.0.0"; } })();
 // Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
 const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret] });
 logs.capture();
@@ -136,6 +141,7 @@ client.once(Events.ClientReady, c => {
 client.on(Events.GuildDelete, guild => { if (guild.available !== false) db.clearGuildChannel(guild.id); });
 
 const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
+const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
 const embedReply = (i, description) =>
     i.reply({ embeds: [{ color: 0xff9800, description }], flags: MessageFlags.Ephemeral });
 
@@ -264,7 +270,7 @@ client.on(Events.InteractionCreate, async i => {
             case "freegames": return await handlers.handleFreeGames(i);
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
-            case "about": return await embedReply(i, ABOUT);
+            case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
             case "privacy": return await embedReply(i, PRIVACY);
         }
     } catch (err) {
@@ -280,7 +286,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, logs, config: { ...d, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, logs, botInfo: aboutInfo, config: { ...d, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

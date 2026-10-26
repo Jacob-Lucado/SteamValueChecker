@@ -373,7 +373,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
         "freegames": "GET /api/free", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
-        help: "cfg.help", about: "cfg.about", privacy: "cfg.privacy"
+        help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
     const src = readFileSync(new URL("../src/commands.js", import.meta.url), "utf8");
@@ -442,4 +442,34 @@ test("steam import remembers the Steam id, and a later import fills it in for ol
     db.setAppId("u1", "a", 999); // never overwrites
     assert.equal(db.listItems("u1")[0].appid, 123);
     assert.equal(db.getItemById(db.listItems("u1")[0].id).title, "A");
+});
+
+test("about: duration format, live numbers and the embed", async () => {
+    const { formatDuration, collectAbout } = await import("../src/about.js");
+    const { aboutPayload } = await import("../src/render.js");
+    assert.equal(formatDuration(0), "0s");
+    assert.equal(formatDuration(42_000), "42s");
+    assert.equal(formatDuration((3 * 86400 + 4 * 3600 + 5 * 60) * 1000), "3d 4h");
+    assert.equal(formatDuration((5 * 3600 + 12 * 60 + 9) * 1000), "5h 12m");
+
+    const db = openDb(join(mkdtempSync(join(tmpdir(), "svc-")), "t.db"));
+    const client = { ws: { ping: 41.6 }, guilds: { cache: new Map([["1", { memberCount: 100 }], ["2", { memberCount: 50 }]]) } };
+    const cfg = { dashboard: { publicUrl: "https://bot.example" }, creator: { name: "Jacob Lucado", url: "https://x.com/twit_user69" } };
+    const info = collectAbout({ client, db, cfg, startedAt: 1_000, version: "2.0.0", now: () => 61_000 });
+    assert.equal(info.servers, 2);
+    assert.equal(info.members, 150);
+    assert.equal(info.pingMs, 42);
+    assert.equal(info.uptime, "1m");
+    assert.equal(info.creator.logo, "https://bot.example/creator.png");
+    assert.equal(info.giveaways, 0);
+
+    const p = aboutPayload(info, { about: "Hello", fanaticalUrl: "https://github.com/x/y" });
+    const e = p.embeds[0];
+    assert.equal(e.author.name, "Created by Jacob Lucado");
+    assert.equal(e.author.url, "https://x.com/twit_user69");
+    assert.equal(e.author.icon_url, "https://bot.example/creator.png");
+    assert.ok(e.fields.some(f => f.name.includes("Servers") && f.value === "**2**"));
+    assert.deepEqual(p.components[0].components.map(c => c.label), ["Created by Jacob Lucado", "Dashboard", "FanaticalGrabber"]);
+    // without a Discord client (nothing connected yet) the numbers are blank, not wrong
+    assert.equal(collectAbout({ client: null, db, cfg, startedAt: 0 }).servers, null);
 });
