@@ -20,6 +20,7 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard } from "../library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
+import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
@@ -258,7 +259,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req);
             cooldown(s.userId, "add");
             userRow(s);
-            return addGameByTitle(db, itad, s.userId, body.title, body.type, num(body.value));
+            return addGameByTitle(db, itad, s.userId, body.title, body.type, num(body.value), { source: body.watch ? "watch" : "manual" });
         },
 
         "POST /api/wishlist/remove": async (req, body) => {
@@ -517,6 +518,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 stats: info ? { servers: info.servers, members: info.members, gamesWatched: info.gamesWatched, alerts24h: info.alerts24h } : null
             };
         },
+
+        "GET /api/sales": async (req) => { session(req); return { sales: upcomingSales(Date.now(), { limit: 8 }), updated: SALES_UPDATED }; },
 
         "GET /api/free": async (req) => {
             const s = session(req);

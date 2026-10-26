@@ -146,6 +146,16 @@ const wishlist = new SlashCommandBuilder()
         .addNumberOption(alertValue)
         .addStringOption(o => gameOption(o).setDescription("One game. Leave empty to change every game")));
 
+const sales = new SlashCommandBuilder()
+    .setName("sales")
+    .setDescription("Upcoming Steam sales and festivals, with countdowns");
+
+const watch = new SlashCommandBuilder()
+    .setName("watch")
+    .setDescription("Watch one game for a price drop without adding it to your wishlist. It is removed after the alert")
+    .addStringOption(o => o.setName("title").setDescription("Game title").setRequired(true).setMaxLength(100))
+    .addStringOption(alertType).addNumberOption(alertValue);
+
 const alerts = new SlashCommandBuilder()
     .setName("alerts")
     .setDescription("How and where you get sale alerts")
@@ -204,6 +214,6 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
 export const commands = [
-    ...[value, wishlist, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, sales, alerts, library, freegames, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, serverlist, leaderboard, giveaway].map(serverOnly)
 ].map(c => c.toJSON());

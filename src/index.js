@@ -131,7 +131,7 @@ client.once(Events.ClientReady, c => {
             try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
             try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
             try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
-            try { db.pruneAlertLog(); db.pruneSeen(); } catch (err) { ops.error("cleanup", err); }
+            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); } catch (err) { ops.error("cleanup", err); }
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }
             catch (err) { await ops.backupDone(null, err); }
@@ -298,6 +298,8 @@ client.on(Events.InteractionCreate, async i => {
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
             case "freegames": return await handlers.handleFreeGames(i);
+            case "sales": return await handlers.handleSales(i);
+            case "watch": return await handlers.handleWatch(i);
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));

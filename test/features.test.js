@@ -372,7 +372,7 @@ test("every slash command has a dashboard counterpart", async () => {
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
-        "freegames": "GET /api/free", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
+        "freegames": "GET /api/free", "sales": "GET /api/sales", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
@@ -480,7 +480,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "freegames", "help", "library", "mydata", "privacy", "value", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "freegames", "help", "library", "mydata", "privacy", "sales", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "giveaway", "leaderboard", "serverlist"]);
     assert.match(src, /UserInstall/);
     assert.match(src, /BotDM/);
@@ -573,4 +573,25 @@ test("price insight: sparkline plus a buy-now or wait nudge", async () => {
     assert.equal(priceInsight(pts, 40, { now }).level, "wait");
     assert.match(priceInsight(pts, 40, { now }).text, /in (Mar|Apr|May|Jan|Feb|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/);
     assert.equal(priceInsight([{ t: now, price: 1 }], 1, { now }), null);
+});
+
+test("sales calendar lists what is on or coming, soonest first", async () => {
+    const { upcomingSales, salesEmbed } = await import("../src/salescal.js");
+    const now = Date.parse("2026-10-26T20:00:00Z");
+    const ev = upcomingSales(now, { limit: 3 });
+    assert.equal(ev[0].live, true);
+    assert.ok(ev[1].start > ev[0].start);
+    assert.deepEqual(upcomingSales(now, { salesOnly: true }).map(e => e.kind), ["sale", "sale", "sale"]);
+    assert.match(salesEmbed(ev, { now }).description, /ON NOW/);
+    assert.equal(upcomingSales(Date.parse("2030-01-01")).length, 0);
+});
+
+test("a /watch is removed after its alert and pruned after a month", () => {
+    const t = rig({});
+    t.db.ensureUser("w1", "g");
+    t.db.addItems("w1", [{ itad_id: "x", title: "X" }], { source: "watch" });
+    t.db.addItems("w1", [{ itad_id: "y", title: "Y" }]);
+    assert.equal(t.db.removeWatch("w1", "y"), 0); // wishlist games are never removed this way
+    assert.equal(t.db.removeWatch("w1", "x"), 1);
+    assert.equal(t.db.listItems("w1").length, 1);
 });

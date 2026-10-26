@@ -74,6 +74,7 @@ export async function runCycle({ db, itad, notifier, now = () => Date.now(), log
                 stats.delivered += part.length;
                 for (const a of part) {
                     db.markAlerted(a.item.id, a.now.price);
+                    if (a.item.source === "watch") db.removeWatch(userId, a.item.itad_id); // a /watch is one-shot
                     db.logAlert({ discord_id: userId, itad_id: a.item.itad_id, title: a.item.title, kind: "sale", price: a.now.price, regular: a.now.regular, shop: a.now.shop, via: res.via });
                 }
             } else {

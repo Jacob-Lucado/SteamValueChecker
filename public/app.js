@@ -424,8 +424,9 @@
     const addValueField = field("Value", addValue);
     const syncAdd = () => { addValueField.style.display = addType.value === "percent" || addType.value === "price" ? "" : "none"; addValue.placeholder = addType.value === "percent" ? "% off" : "price"; };
     addType.addEventListener("change", syncAdd); syncAdd();
+    const watchOnly = h("input", { type: "checkbox" });
     const addBtn = h("button", { class: "btn blue", text: "Add game", onclick: () => busy(addBtn, async () => {
-      const r = await api("/api/wishlist/add", { title: title.value, type: addType.value, value: addValue.value === "" ? null : Number(addValue.value) });
+      const r = await api("/api/wishlist/add", { title: title.value, type: addType.value, value: addValue.value === "" ? null : Number(addValue.value), watch: watchOnly.checked });
       toast(`Added ${r.name}${r.approx ? " (closest match)" : ""}. Alert: ${r.trigger}.`, "ok");
       title.value = "";
       loadList();
@@ -475,7 +476,7 @@
       pageHead("Wishlist", "Sales first. You are alerted according to each game's rule."),
       h("div", { class: "grid two" },
         h("div", { class: "panel" }, h("h3", { text: "Import from Steam" }), field("Profile", profile), h("p", { class: "muted small", text: "Your wishlist must be public (Steam Profile > Edit Profile > Privacy Settings > Game details). No login needed. Run it again to sync." }), importBtn),
-        h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField), h("p", {}), addBtn)),
+        h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField), h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("p", {}), addBtn)),
       list);
     loadList();
   }
@@ -572,12 +573,26 @@
         h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away"),
         h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /freegames and the list below show)")),
-      freeNow,
+      freeNow, salesPanel(),
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
         h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
       h("p", { class: "muted", text: `Watching ${state.me.games} game${state.me.games === 1 ? "" : "s"}. Prices are checked about once an hour.` }),
       save, history);
+  }
+
+  function salesPanel() {
+    const panel = h("div", { class: "panel" }, h("h3", { text: "Steam sale calendar" }), h("p", { class: "muted", text: "Loading…" }));
+    api("/api/sales").then(d => {
+      const fmt = ms => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      panel.replaceChildren(h("h3", { text: "Steam sale calendar" }),
+        d.sales.length ? h("div", { class: "st-list" }, d.sales.map(e => h("div", { class: "st-row" },
+          h("div", {}, h("b", { text: (e.kind === "sale" ? "🏷️ " : "🎪 ") + e.name }), e.note && h("div", { class: "muted small", text: e.note })),
+          h("div", { class: "st-when" }, h("span", { class: "chip " + (e.live ? "ok" : "dim"), text: e.live ? "On now" : "Upcoming" }), h("span", { class: "muted small", text: `${fmt(e.start)} to ${fmt(e.end)}` })))))
+          : h("div", { class: "empty", text: "No upcoming events listed." }),
+        h("p", { class: "muted small", text: `From Valve's published schedule (updated ${d.updated}). Black Friday week is announced closer to the time.` }));
+    }).catch(e => panel.replaceChildren(h("h3", { text: "Steam sale calendar" }), h("div", { class: "notice warn", text: e.message })));
+    return panel;
   }
 
   async function loadFree(panel) {

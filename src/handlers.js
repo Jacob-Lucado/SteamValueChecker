@@ -4,6 +4,7 @@
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
+import { salesEmbed, upcomingSales } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
@@ -420,6 +421,21 @@ export function createHandlers({ db, itad }) {
         } catch (err) { await failed(i, "freegames", err); }
     }
 
+    // ---------- /sales and /watch ----------
+    async function handleSales(i) {
+        return i.reply({ embeds: [salesEmbed(upcomingSales(Date.now()), { watching: db.countItems(i.user.id) || null })], flags: MessageFlags.Ephemeral });
+    }
+
+    async function handleWatch(i) {
+        cooldown(i, "add");
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+            db.ensureUser(i.user.id, i.guildId);
+            const out = await addGameByTitle(db, itad, i.user.id, i.options.getString("title", true), i.options.getString("type"), i.options.getNumber("value"), { source: "watch" });
+            await i.editReply(`Watching **${out.name}**${out.approx ? " (closest match)" : ""}. Alert: ${out.trigger}. It is removed from your list once the alert is sent, or after 30 days.`);
+        } catch (err) { await failed(i, "watch", err); }
+    }
+
     // ---------- /mydata ----------
     async function handleMyData(i) {
         if (i.options.getSubcommand() === "export") {
@@ -470,5 +486,5 @@ export function createHandlers({ db, itad }) {
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleMyData, handleAutocomplete };
+    return { handleWishlist, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handleMyData, handleAutocomplete };
 }

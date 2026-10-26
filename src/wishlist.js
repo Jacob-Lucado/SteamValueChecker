@@ -69,7 +69,7 @@ export function exportJson(db, userId) {
 export class WishlistError extends Error {}
 
 /** Looks a title up and adds it with an alert rule. Shared by the Discord command and the dashboard. */
-export async function addGameByTitle(db, itad, userId, rawTitle, type, value) {
+export async function addGameByTitle(db, itad, userId, rawTitle, type, value, { source = "manual" } = {}) {
     let trig;
     try { trig = parseTrigger(type, value); } catch (e) { throw new WishlistError(e.message); }
     const title = String(rawTitle ?? "").trim().slice(0, 100);
@@ -79,7 +79,7 @@ export async function addGameByTitle(db, itad, userId, rawTitle, type, value) {
     if (!hit?.id) throw new WishlistError(`I could not find a game called ${title}. Check the spelling or try the full title.`);
 
     const name = hit.approx ? hit.matched : title;
-    const res = db.addItems(userId, [{ itad_id: hit.id, title: name }], { trigger: trig.type, value: trig.value });
+    const res = db.addItems(userId, [{ itad_id: hit.id, title: name }], { trigger: trig.type, value: trig.value, source });
     if (res.skippedForLimit) throw new WishlistError("Your list is full (200 games). Remove one first.");
     if (res.existing) throw new WishlistError(`${name} is already on your list.`);
     return { name, approx: hit.approx, trigger: describeTrigger({ trigger_type: trig.type, trigger_value: trig.value }) };

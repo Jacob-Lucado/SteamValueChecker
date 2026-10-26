@@ -251,6 +251,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const pruneAlertLog = (olderThanMs = 90 * 86400_000) => run("DELETE FROM alert_log WHERE at < ?", now() - olderThanMs).changes;
     const hasSeen = (discordId, key) => Boolean(get("SELECT 1 AS x FROM seen WHERE discord_id = ? AND key = ?", discordId, key));
     const markSeen = (discordId, key) => run("INSERT OR IGNORE INTO seen (discord_id, key, at) VALUES (?,?,?)", discordId, key, now());
+    /** One-off watches are removed after their alert, or after a month if the price never moved. */
+    const removeWatch = (userId, itadId) => run("DELETE FROM items WHERE discord_id = ? AND itad_id = ? AND source = 'watch'", userId, itadId).changes;
+    const pruneWatches = (olderThanMs = 30 * 86400_000) => run("DELETE FROM items WHERE source = 'watch' AND added_at < ?", now() - olderThanMs).changes;
     const pruneSeen = (olderThanMs = 120 * 86400_000) => run("DELETE FROM seen WHERE at < ?", now() - olderThanMs).changes;
 
     // ---------- library: what you own and what you paid ----------
@@ -390,7 +393,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
         ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
-        logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen,
+        logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         setGroupMin, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
