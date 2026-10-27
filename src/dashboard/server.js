@@ -1104,20 +1104,21 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     }
 
     // Visit counter for the FanaticalGrabber web page (GitHub Pages). Public, tiny, totals only, and only that site may call it.
-    const VISIT_SITES = { fanaticalgrabber: "https://jacob-lucado.github.io" };
+    const VISIT_SITES = { fanaticalgrabber: "https://jacob-lucado.github.io", dashboard: origin }; // the dashboard counts its own visitors, same origin
     const seenVisitors = new Map(); // ip -> time, in memory only, so one address counts as a new visitor once a day
     const visitLimit = createLimiter({ windowMs: 3600_000, max: 40, now });
-    const present = new Map(); // random per-tab id -> last seen. In memory only; nothing about a person is kept.
+    const presentBySite = new Map(); // site -> (random per-tab id -> last seen). In memory only; nothing about a person is kept.
+    const presentFor = site => { let m = presentBySite.get(site); if (!m) presentBySite.set(site, m = new Map()); return m; };
     const pingLimit = createLimiter({ windowMs: 60_000, max: 12, now });
     const ONLINE_MS = 75_000;
-    const online = () => { const t = now(); for (const [k, at] of present) if (t - at > ONLINE_MS) present.delete(k); return present.size; };
-    const markPresent = id => { if (/^[a-z0-9]{8,32}$/i.test(id ?? "") && (present.size < 5000 || present.has(id))) present.set(id, now()); };
+    const online = site => { const present = presentFor(site), t = now(); for (const [k, at] of present) if (t - at > ONLINE_MS) present.delete(k); return present.size; };
+    const markPresent = (site, id) => { const present = presentFor(site); if (/^[a-z0-9]{8,32}$/i.test(id ?? "") && (present.size < 5000 || present.has(id))) present.set(id, now()); };
     function visits(req, res, url) {
         const [site, action] = url.pathname.slice("/api/visits/".length).split("/");
         const allowed = VISIT_SITES[site];
         if (!allowed || (action && action !== "ping")) throw new HttpError(404, "Not found.");
         const cors = { "Access-Control-Allow-Origin": allowed, "Vary": "Origin", "Cross-Origin-Resource-Policy": "cross-origin" };
-        const counts = () => ({ ...db.siteCounts(site), online: online() });
+        const counts = () => ({ ...db.siteCounts(site), online: online(site) });
         if (req.method === "OPTIONS") return send(res, 204, "", { ...cors, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Max-Age": "86400" });
         if (req.method === "GET") return json(res, 200, counts(), { ...cors, "Cache-Control": "public, max-age=10" });
         if (req.method !== "POST") throw new HttpError(405, "Not allowed.");
@@ -1125,16 +1126,16 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         if (req.headers.origin !== allowed) return json(res, 200, counts(), cors); // ignore other origins quietly
         const id = url.searchParams.get("id");
         if (action === "ping") {
-            if (pingLimit.hit(ip).ok) markPresent(id);
+            if (pingLimit.hit(ip).ok) markPresent(site, id);
             return json(res, 200, counts(), cors);
         }
         if (!visitLimit.hit(ip).ok) return json(res, 200, counts(), cors);
-        markPresent(id);
+        markPresent(site, id);
         const t = now();
         for (const [k, at] of seenVisitors) if (t - at > 86400_000) seenVisitors.delete(k);
         const fresh = url.searchParams.get("new") === "1" && !seenVisitors.has(ip);
         if (fresh) seenVisitors.set(ip, t);
-        return json(res, 200, { ...db.siteHit(site, fresh), online: online() }, cors);
+        return json(res, 200, { ...db.siteHit(site, fresh), online: online(site) }, cors);
     }
 
     const server = http.createServer(async (req, res) => {

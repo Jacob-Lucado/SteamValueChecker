@@ -1819,6 +1819,41 @@
     route();
   }
 
+  // Visitor counter: totals only. A browser counts as new once (remembered here), no cookies and no addresses stored.
+  // "Viewing now" uses a random id kept for this tab only; the server forgets it 75 seconds after the last ping.
+  (function visitCounter() {
+    const out = document.getElementById("visits");
+    if (!out) return;
+    const BASE = "/api/visits/dashboard";
+    const rnd = new Uint8Array(12);
+    crypto.getRandomValues(rnd);
+    let id = Array.from(rnd, b => (b % 36).toString(36)).join("");
+    try { const k = sessionStorage.getItem("svc_tab"); if (k && /^[a-z0-9]{12}$/.test(k)) id = k; else sessionStorage.setItem("svc_tab", id); } catch { /* storage blocked */ }
+    let isNew = false;
+    try { isNew = !localStorage.getItem("svc_visited"); } catch { /* count as a view only */ }
+    let last = null;
+    const n = v => Number(v).toLocaleString();
+    const show = d => {
+      if (!d || typeof d.visitors !== "number") return;
+      last = d;
+      out.replaceChildren(
+        typeof d.online === "number" ? h("span", { class: "live-dot", "aria-hidden": "true", text: "● " }) : null,
+        typeof d.online === "number" ? `${n(Math.max(1, d.online))} viewing now · ` : null,
+        `${n(d.visitors)} visitors · ${n(d.views)} page views`);
+      out.hidden = false;
+    };
+    fetch(`${BASE}?id=${id}${isNew ? "&new=1" : ""}`, { method: "POST", keepalive: true })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { show(d); if (d && isNew) { try { localStorage.setItem("svc_visited", "1"); } catch { /* ignore */ } } })
+      .catch(() => {});
+    const beat = () => {
+      if (document.hidden || !last) return;
+      fetch(`${BASE}/ping?id=${id}`, { method: "POST" }).then(r => (r.ok ? r.json() : null)).then(show).catch(() => {});
+    };
+    setInterval(beat, 30000);
+    document.addEventListener("visibilitychange", beat);
+  })();
+
   window.addEventListener("hashchange", route);
   boot();
 })();

@@ -726,3 +726,18 @@ test("the header currency picker saves a region the bot also uses", async () => 
     assert.equal((await t.request("/api/settings", { method: "POST", body: { region: "XX" } })).status, 400);
     await t.close();
 });
+
+test("the dashboard counts its own visitors and live viewers, separately from the Grabber page", async () => {
+    const t = await setup();
+    try {
+        let r = await t.request("/api/visits/dashboard?id=aaaaaaaaaaaa&new=1", { method: "POST", headers: { Origin: ORIGIN } });
+        assert.equal(r.status, 200);
+        assert.deepEqual([r.data.visitors, r.data.views, r.data.online], [1, 1, 1]);
+        r = await t.request("/api/visits/fanaticalgrabber", { method: "GET" });
+        assert.equal(r.data.online, 0, "the other site's live count is separate");
+        r = await t.request("/api/visits/dashboard", { method: "POST", headers: { Origin: "https://evil.example" } });
+        assert.equal(r.data.views, 1, "other origins are ignored");
+        t.advance(80_000);
+        assert.equal((await t.request("/api/visits/dashboard")).data.online, 0, "viewers drop off after 75 seconds");
+    } finally { await t.close(); }
+});
