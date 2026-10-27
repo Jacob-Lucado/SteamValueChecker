@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, steamValue, steamNext, fmtHours } from "../src/steamlib.js";
+import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, steamValue, steamNext, fetchAchievements, syncAchievements, fmtHours } from "../src/steamlib.js";
 import { SteamError } from "../src/steam.js";
 
 const XML = `<gamesList><steamID64>76561198000000000</steamID64><games>
@@ -159,4 +159,32 @@ test("a sync reports what the synced games are worth, and a price lookup problem
     assert.equal(r2.value, null); assert.equal(r2.owned, 2);
     const v = steamValue([{ title: "A", msrp: 20, best: { price: 10 }, atl: 4 }, { title: "B", msrp: null, best: null }], "EUR");
     assert.deepEqual([v.games, v.priced, v.msrp, v.cheapest, v.atl, v.currency, v.top.map(t => t.title)], [2, 1, 20, 10, 4, "EUR", ["A"]]);
+});
+
+test("achievements: 100% marks a game Finished once, never overrides your choice, and skips recently checked games", async () => {
+    const { db } = rig();
+    db.syncSteamGames("u1", [
+        { itad_id: "full", title: "Full", appid: 1, minutes: 600, lastPlayed: null },
+        { itad_id: "part", title: "Part", appid: 2, minutes: 500, lastPlayed: null },
+        { itad_id: "none", title: "None", appid: 3, minutes: 400, lastPlayed: null },
+        { itad_id: "drop", title: "Dropped", appid: 4, minutes: 300, lastPlayed: null },
+        { itad_id: "idle", title: "Idle", appid: 5, minutes: 5, lastPlayed: null }
+    ]);
+    db.setLibraryStatus("u1", "drop", "dropped");
+    const urls = [];
+    const api = { 1: { playerstats: { achievements: [{ achieved: 1 }, { achieved: 1 }] } }, 2: { playerstats: { achievements: [{ achieved: 1 }, { achieved: 0 }, { achieved: 0 }] } }, 3: { playerstats: { success: false, error: "Requested app has no stats" } }, 4: { playerstats: { achievements: [{ achieved: 1 }] } } };
+    const f = async u => { urls.push(String(u)); const id = Number(String(u).match(/appid=(\d+)/)[1]); return res(api[id] ?? {}, { json: true, status: api[id] ? 200 : 400 }); };
+    const r = await syncAchievements({ db, userId: "u1", steamid: "76561198000000000", apiKey: "k", fetchImpl: f });
+    assert.deepEqual([r.checked, r.newlyFinished], [4, 1]);
+    assert.ok(!urls.some(u => u.includes("appid=5")), "barely played games are not looked up");
+    const st = Object.fromEntries(db.listLibrary("u1").map(g => [g.title, [g.status, g.ach_done, g.ach_total]]));
+    assert.deepEqual(st.Full, ["finished", 2, 2]); assert.deepEqual(st.Part, ["played", 1, 3]); assert.deepEqual(st.None, ["played", 0, 0]); assert.equal(st.Dropped[0], "dropped");
+    urls.length = 0;
+    const again = await syncAchievements({ db, userId: "u1", steamid: "76561198000000000", apiKey: "k", fetchImpl: f });
+    assert.equal(urls.length, 0, "checked within a week: nothing to do"); assert.equal(again.checked, 0);
+    db.setLibraryStatus("u1", "full", "played");
+    await syncAchievements({ db, userId: "u1", steamid: "76561198000000000", apiKey: "k", fetchImpl: f, now: Date.now() + 8 * 86400_000 });
+    assert.equal(db.listLibrary("u1").find(g => g.title === "Full").status, "played", "a status you chose is not undone by a later check");
+    assert.equal(await fetchAchievements("76561198000000000", 9, { apiKey: "k", fetchImpl: async () => res({}, { status: 403, json: true }) }), null);
+    await assert.rejects(fetchAchievements("76561198000000000", 9, { apiKey: "k", fetchImpl: async () => res({}, { status: 429, json: true }) }), e => e.code === "rate_limited");
 });

@@ -1007,7 +1007,7 @@
         const st = d.stats, cur = d.currency;
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
         const list = (rows, f) => h("ul", { class: "plain" }, rows.map(r => h("li", {}, h("b", { text: r.title }), " ", f(r))));
-        const sync = h("button", { class: "btn gray", text: "Sync now", onclick: () => busy(sync, async () => { const r = await api("/api/steam/sync", {}); toast(`Synced ${r.owned} games.`, "ok"); load(); }) });
+        const sync = h("button", { class: "btn gray", text: "Sync now", onclick: () => busy(sync, async () => { const r = await api("/api/steam/sync", {}); toast(`Synced ${r.owned} games.` + (r.achievements && r.achievements.checked ? ` Checked achievements for ${r.achievements.checked}` + (r.achievements.newlyFinished ? `, ${r.achievements.newlyFinished} marked Finished.` : ".") : ""), "ok"); load(); }) });
         const unlinkGames = h("input", { type: "checkbox" });
         const unlink = h("button", { class: "btn red", text: "Unlink", onclick: () => busy(unlink, async () => { const r = await api("/api/steam/unlink", { removeGames: unlinkGames.checked }); toast(r.removed ? `Unlinked, and removed ${r.removed} games.` : "Unlinked.", "ok"); load(); }) });
 
@@ -1035,6 +1035,7 @@
           h("div", { class: "grid four" },
             tile("Games", String(st.games), st.playedGames + " played"),
             tile("Hours played", hoursText(st.totalMinutes)),
+            st.completed ? tile("100% achievements", String(st.completed), "marked Finished") : null,
             tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
           h("div", { class: "panel" }, h("h3", { text: "💰 Estimated account value" }),
             h("div", { class: "grid four" },
@@ -1154,7 +1155,7 @@
           });
           const game = h("div", { class: "game-cell" },
             r.appid ? steamArt(r.appid, "game-thumb", 92, 43) : null,
-            h("div", {}, h("div", { class: "game-title", text: r.title }), r.minutes ? h("div", { class: "muted small", text: hoursText(r.minutes) + " played" }) : null));
+            h("div", {}, h("div", { class: "game-title", text: r.title }), (r.minutes || r.ach_total) ? h("div", { class: "muted small", text: [r.minutes ? hoursText(r.minutes) + " played" : null, r.ach_total ? `🏆 ${r.ach_done}/${r.ach_total}` : null].filter(Boolean).join(" · ") }) : null));
           const tick = h("input", { type: "checkbox", checked: picked.has(r.itad_id), "aria-label": "Select " + r.title });
           tick.addEventListener("change", () => { tick.checked ? picked.add(r.itad_id) : picked.delete(r.itad_id); drawBar(); });
           return [h("tr", {}, h("td", { class: "tick" }, tick), h("td", {}, game), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),

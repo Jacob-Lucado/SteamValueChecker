@@ -69,6 +69,7 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
         `Linked. Found **${r.owned}** games (**${fmtHours(r.minutes)}** played).`,
         r.value && r.value.games ? `Library value: **${money(r.value.msrp, r.value.currency)}** at full price, **${money(r.value.cheapest, r.value.currency)}** at today's cheapest prices.` : null,
         `Added **${r.added}**, updated **${r.updated}**.` + (r.unmatched ? ` ${r.unmatched} could not be matched to a price and were skipped.` : ""),
+        r.achievements?.checked ? `Checked achievements for **${r.achievements.checked}** games${r.achievements.newlyFinished ? `; **${r.achievements.newlyFinished}** at 100% were marked Finished` : ""}.${r.achievements.remaining ? " Run `/steam sync` again for the rest." : ""}` : null,
         r.skippedForLimit ? `Your library is full, so ${r.skippedForLimit} were skipped.` : null,
         r.truncated ? "Only your most played games fit in the library limit." : null,
         "What you paid is never read from Steam. Add it with `/library add` to see savings. Run `/steam view` for the breakdown or `/steam next` for something to play."

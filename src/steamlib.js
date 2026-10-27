@@ -80,6 +80,46 @@ export async function fetchOwnedGames(steamid, { apiKey = null, fetchImpl = glob
     throw new SteamError("private", PRIVATE_LIBRARY);
 }
 
+/**
+ * Achievement progress for one game from the Web API: { done, total }, or { done: 0, total: 0 } for a game with none.
+ * Needs the bot's STEAM_API_KEY and a public profile. Returns null when Steam would not say (private stats, a hiccup).
+ * Throws rate_limited on HTTP 429 so the caller can stop.
+ */
+export async function fetchAchievements(steamid, appid, { apiKey, fetchImpl = globalThis.fetch }) {
+    const res = await get(fetchImpl, `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${Number(appid)}&key=${encodeURIComponent(apiKey)}&steamid=${steamid}`);
+    if (res.status === 429) throw new SteamError("rate_limited", "Steam is rate limiting the bot. Try again in a few minutes.");
+    let data = null;
+    try { data = await res.json(); } catch { /* not json */ }
+    const stats = data?.playerstats;
+    if (Array.isArray(stats?.achievements)) return { done: stats.achievements.filter(a => Number(a?.achieved) === 1).length, total: stats.achievements.length };
+    if (/no stats/i.test(String(stats?.error ?? ""))) return { done: 0, total: 0 };
+    return null;
+}
+
+/**
+ * Looks up achievements for the member's played games (most played first), a few at a time, and marks games Finished when
+ * every achievement is unlocked. Games checked in the last week are skipped, so a re-sync only does what is new or stale.
+ * At most `limit` games per run; run it again for the rest. Never throws: a Steam problem just ends the run early.
+ */
+export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl = globalThis.fetch, now = Date.now(), limit = 400, concurrency = 6 }) {
+    const stale = now - 7 * 86400_000;
+    const todo = db.listLibrary(userId).filter(g => g.appid && (g.minutes ?? 0) >= 30 && (!g.ach_checked || g.ach_checked < stale)).sort((a, b) => b.minutes - a.minutes).slice(0, limit);
+    let checked = 0, newlyFinished = 0, stopped = false, i = 0;
+    const worker = async () => {
+        while (!stopped && i < todo.length) {
+            const g = todo[i++];
+            try {
+                const a = await fetchAchievements(steamid, g.appid, { apiKey, fetchImpl });
+                if (!a) continue;
+                checked++;
+                if (db.setAchievements(userId, g.itad_id, a).newlyFinished) newlyFinished++;
+            } catch { stopped = true; }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker));
+    return { checked, newlyFinished, remaining: Math.max(0, todo.length - i), stopped };
+}
+
 /** Profile link, custom name or SteamID64 -> SteamID64. */
 export async function resolveProfile(input, fetchImpl = globalThis.fetch) {
     const parsed = parseProfileInput(input);
@@ -112,7 +152,10 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
         const view = await libraryView(db, itad, db.getUser(userId), { snapshot: false });
         value = steamValue(view.rows.filter(r => r.appid), view.currency);
     } catch { /* value stays null */ }
-    return { steamid, owned: owned.length, matched: games.length, unmatched: ranked.length - games.length, minutes, truncated: owned.length > ranked.length, value, ...res };
+    // Achievements need the bot's API key. They are a bonus: any trouble just leaves them out.
+    let achievements = null;
+    if (apiKey) { try { achievements = await syncAchievements({ db, userId, steamid, apiKey, fetchImpl }); } catch { /* optional */ } }
+    return { steamid, owned: owned.length, matched: games.length, unmatched: ranked.length - games.length, minutes, truncated: owned.length > ranked.length, value, achievements, ...res };
 }
 
 /** Total value of the Steam-synced games: at full price (MSRP) and at the cheapest current price. */

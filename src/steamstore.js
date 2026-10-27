@@ -53,5 +53,20 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         return { added, updated, skippedForLimit };
     }
 
-    return { getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames };
+    /**
+     * Saves achievement progress for one game. If the game just reached 100% and the member has not already marked it
+     * finished or dropped, it becomes "finished". It only does that on the change to 100%, so a status you pick later sticks.
+     * Returns { newlyFinished }.
+     */
+    function setAchievements(discordId, itadId, { done, total }) {
+        const row = get("SELECT status, ach_done, ach_total FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId);
+        if (!row) return { newlyFinished: false };
+        const wasComplete = row.ach_total > 0 && row.ach_done === row.ach_total;
+        const complete = total > 0 && done === total;
+        const finish = complete && !wasComplete && !["finished", "dropped"].includes(row.status);
+        run("UPDATE library SET ach_done = ?, ach_total = ?, ach_checked = ?, status = ? WHERE discord_id = ? AND itad_id = ?", done, total, now(), finish ? "finished" : row.status, discordId, itadId);
+        return { newlyFinished: finish };
+    }
+
+    return { getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

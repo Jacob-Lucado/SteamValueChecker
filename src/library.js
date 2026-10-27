@@ -32,7 +32,7 @@ export async function libraryView(db, itad, user, { snapshot = true } = {}) {
             itad_id: it.itad_id, title: it.title, paid: it.paid, currency: s.currency,
             msrp: s.msrp, best: s.best, atl: s.atl,
             saved: it.paid !== null && s.msrp !== null ? s.msrp - it.paid : null,
-            status: it.status ?? "backlog", minutes: it.minutes ?? 0, appid: it.appid ?? null
+            status: it.status ?? "backlog", minutes: it.minutes ?? 0, appid: it.appid ?? null, ach_done: it.ach_done ?? null, ach_total: it.ach_total ?? null
         };
     });
     const totals = { ...libraryTotals(rows), ...backlogStats(rows) };
