@@ -12,6 +12,7 @@ const COOLDOWN_MS = 60_000;
 const last = new Map();
 const wait = userId => { const w = COOLDOWN_MS - (Date.now() - (last.get(userId) ?? 0)); if (w > 0) throw new UserError(`Slow down a little. Try again in ${Math.ceil(w / 1000)}s.`); last.set(userId, Date.now()); };
 
+const achievementsLine = v => `**${v.achDone.toLocaleString("en-US")}** of **${v.achTotal.toLocaleString("en-US")}** unlocked (${Math.round(v.achDone / v.achTotal * 100)}%) across ${v.achGames} games`;
 const line = (r, f) => `• **${r.title}** ${f(r)}`;
 const art = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIComponent(appid)}/header.jpg`;
 
@@ -21,6 +22,7 @@ export function steamEmbed({ stats, link, currency }) {
         stats.value ? `Worth **${money(stats.value.msrp, currency)}** at full price, **${money(stats.value.cheapest, currency)}** at today's cheapest prices` : null,
         `**${stats.games}** games, **${stats.playedGames}** played, **${fmtHours(stats.totalMinutes)}** on record`
     ].filter(Boolean).join("\n") });
+    if (stats.value?.achTotal) fields.splice(1, 0, { name: "Achievements", value: achievementsLine(stats.value) });
     if (stats.mostPlayed.length) fields.push({ name: "Most played", value: stats.mostPlayed.map(r => line(r, x => fmtHours(x.minutes))).join("\n") });
     if (stats.unplayedCount) fields.push({ name: "Barely or never played", value: `**${stats.unplayedCount}** games, worth **${money(stats.unplayedMsrp, currency)}** at full price` + (stats.unplayedTop.length ? "\n" + stats.unplayedTop.slice(0, 3).map(r => line(r, x => (x.msrp ? money(x.msrp, currency) : "no price"))).join("\n") : "") });
     return {
@@ -38,6 +40,7 @@ export function valueEmbed({ value, owned, currency, link }) {
         value.atl ? `**${money(value.atl, currency)}** at their all-time-low prices` : null
     ].filter(Boolean).join("\n");
     const fields = [{ name: "Estimated account value", value: rows }];
+    if (value.achTotal) fields.push({ name: "Achievements", value: achievementsLine(value) });
     if (value.top.length) fields.push({ name: "Most valuable games", value: value.top.map(r => line(r, x => money(x.msrp, currency))).join("\n") });
     const gap = Math.max(0, (owned ?? value.games) - value.priced);
     return {

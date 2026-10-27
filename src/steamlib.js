@@ -162,8 +162,10 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
 export function steamValue(rows, currency = "USD") {
     const sum = f => rows.reduce((t, r) => t + (Number.isFinite(f(r)) ? f(r) : 0), 0);
     const priced = rows.filter(r => Number.isFinite(r.msrp));
+    const withAch = rows.filter(r => r.ach_total > 0);
     return {
         games: rows.length, priced: priced.length, msrp: sum(r => r.msrp), cheapest: sum(r => r.best?.price), atl: sum(r => r.atl), currency,
+        achDone: withAch.reduce((t, r) => t + (r.ach_done ?? 0), 0), achTotal: withAch.reduce((t, r) => t + r.ach_total, 0), achGames: withAch.length,
         top: [...priced].sort((a, b) => b.msrp - a.msrp).slice(0, 5).map(r => ({ title: r.title, msrp: r.msrp, appid: r.appid ?? null }))
     };
 }

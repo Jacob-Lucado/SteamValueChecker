@@ -157,8 +157,9 @@ test("a sync reports what the synced games are worth, and a price lookup problem
     const broken = rig();
     const r2 = await syncSteamLibrary({ db: broken.db, itad: broken.itad, userId: "u1", steamid: "76561198000000000", fetchImpl: async () => res(XML) });
     assert.equal(r2.value, null); assert.equal(r2.owned, 2);
-    const v = steamValue([{ title: "A", msrp: 20, best: { price: 10 }, atl: 4 }, { title: "B", msrp: null, best: null }], "EUR");
-    assert.deepEqual([v.games, v.priced, v.msrp, v.cheapest, v.atl, v.currency, v.top.map(t => t.title)], [2, 1, 20, 10, 4, "EUR", ["A"]]);
+    const v = steamValue([{ title: "A", msrp: 20, best: { price: 10 }, atl: 4, ach_done: 3, ach_total: 10 }, { title: "B", msrp: null, best: null, ach_done: 5, ach_total: 5 }, { title: "C", msrp: 1, ach_done: null, ach_total: null }], "EUR");
+    assert.deepEqual([v.achDone, v.achTotal, v.achGames], [8, 15, 2]);
+    assert.deepEqual([v.games, v.priced, v.msrp, v.cheapest, v.atl, v.currency, v.top.map(t => t.title)], [3, 2, 21, 10, 4, "EUR", ["A", "C"]]);
 });
 
 test("achievements: 100% marks a game Finished once, never overrides your choice, and skips recently checked games", async () => {
