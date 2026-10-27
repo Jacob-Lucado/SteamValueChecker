@@ -37,7 +37,7 @@ export const HELP = [
     "• `/support open` asks the team for help; `/support mine` lists your tickets. Server managers set a ticket channel with `/support setup`. A giveaway key that did not work opens one for you.",
     "• `/alerts mute` stops DMs for one kind of alert (kept on the dashboard's Notifications page). `/alerts language` switches buttons to Spanish or French. `/changelog` shows what is new.",
     "• Sale alerts have **Snooze 7 days** and **Only below a price** buttons.",
-    "• `/steam link` links your **public** Steam profile and fills your library with your games and hours played; `/steam view` shows what you never played and what it is worth, and `/steam next` picks what to play next. `/bundle` checks if a bundle beats buying the games separately. `/saleprep` plans what to buy in the next sale.",
+    "• `/steam link` links your **public** Steam profile and fills your library with your games and hours played; `/steam view` shows what you never played and what it is worth, `/steam value` estimates your account's worth (add `public:true` to share it), and `/steam next` picks what to play next. `/bundle` checks if a bundle beats buying the games separately. `/saleprep` plans what to buy in the next sale.",
     "• `/lfg post` finds people to play with (Join/Leave buttons, optional Discord event). `/library grabber` gives the FanaticalGrabber extension a link code to send your game titles in one click.",
     "• `/currency` picks the currency prices are shown in (saved, and shared with the dashboard).",
     "• `/mydata` exports or deletes everything stored about you.",

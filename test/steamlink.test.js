@@ -130,5 +130,6 @@ test("a sync reports what the synced games are worth, and a price lookup problem
     const broken = rig();
     const r2 = await syncSteamLibrary({ db: broken.db, itad: broken.itad, userId: "u1", steamid: "76561198000000000", fetchImpl: async () => res(XML) });
     assert.equal(r2.value, null); assert.equal(r2.owned, 2);
-    assert.deepEqual(steamValue([{ msrp: 20, best: { price: 10 } }, { msrp: null, best: null }], "EUR"), { games: 2, msrp: 20, cheapest: 10, currency: "EUR" });
+    const v = steamValue([{ title: "A", msrp: 20, best: { price: 10 }, atl: 4 }, { title: "B", msrp: null, best: null }], "EUR");
+    assert.deepEqual([v.games, v.priced, v.msrp, v.cheapest, v.atl, v.currency, v.top.map(t => t.title)], [2, 1, 20, 10, 4, "EUR", ["A"]]);
 });

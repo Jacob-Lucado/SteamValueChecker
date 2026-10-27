@@ -1,7 +1,7 @@
 // /steam: link a public Steam profile so the library and hours played fill in by themselves, and get a pick for what to play next.
 import { MessageFlags } from "discord.js";
 import { libraryView } from "./library.js";
-import { resolveProfile, syncSteamLibrary, playStats, steamNext, fmtHours } from "./steamlib.js";
+import { resolveProfile, syncSteamLibrary, playStats, steamNext, steamValue, fmtHours } from "./steamlib.js";
 import { SteamError } from "./steam.js";
 import { UserError } from "./errors.js";
 import { ItadError } from "./itad.js";
@@ -27,6 +27,22 @@ export function steamEmbed({ stats, link, currency }) {
         color: 0x66c0f4, title: "Your Steam library",
         fields,
         footer: { text: `Synced ${link?.synced_at ? new Date(link.synced_at).toISOString().slice(0, 10) : "never"}  •  Run /steam sync to refresh, /steam next for something to play.` }
+    };
+}
+
+/** The "estimated account value" card. These are estimates from current prices, not what was paid. */
+export function valueEmbed({ value, owned, currency, link }) {
+    const rows = [
+        `**${money(value.msrp, currency)}** at full price (list price today)`,
+        `**${money(value.cheapest, currency)}** at today's cheapest prices`,
+        value.atl ? `**${money(value.atl, currency)}** at their all-time-low prices` : null
+    ].filter(Boolean).join("\n");
+    const fields = [{ name: "Estimated account value", value: rows }];
+    if (value.top.length) fields.push({ name: "Most valuable games", value: value.top.map(r => line(r, x => money(x.msrp, currency))).join("\n") });
+    const gap = Math.max(0, (owned ?? value.games) - value.priced);
+    return {
+        color: 0x66c0f4, title: "💰 Estimated Steam account value", fields,
+        footer: { text: `${value.priced} of ${owned ?? value.games} games priced${gap ? ` (${gap} free, removed or not found are not counted)` : ""}  •  An estimate from current prices, not what was paid.  •  Synced ${link?.synced_at ? new Date(link.synced_at).toISOString().slice(0, 10) : "never"}` }
     };
 }
 
@@ -79,6 +95,15 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
                 const n = steamNext(view.rows);
                 if (!n) throw new UserError("Nothing left to suggest. Everything from Steam is finished or dropped, or not synced yet (`/steam sync`).");
                 return void await i.editReply({ embeds: [nextEmbed(n, view.currency)] });
+            }
+            if (sub === "value") {
+                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                const shared = i.options.getBoolean("public") === true;
+                await i.deferReply(shared ? {} : { flags: MessageFlags.Ephemeral });
+                const view = await libraryView(db, itad, db.getUser(i.user.id), { snapshot: false });
+                const rows = view.rows.filter(r => r.appid);
+                if (!rows.length) throw new UserError("No Steam games in your library yet. Run `/steam sync`.");
+                return void await i.editReply({ embeds: [valueEmbed({ value: steamValue(rows, view.currency), owned: link.games, currency: view.currency, link })] });
             }
             if (sub === "view") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

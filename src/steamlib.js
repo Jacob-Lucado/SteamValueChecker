@@ -118,7 +118,11 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
 /** Total value of the Steam-synced games: at full price (MSRP) and at the cheapest current price. */
 export function steamValue(rows, currency = "USD") {
     const sum = f => rows.reduce((t, r) => t + (Number.isFinite(f(r)) ? f(r) : 0), 0);
-    return { games: rows.length, msrp: sum(r => r.msrp), cheapest: sum(r => r.best?.price), currency };
+    const priced = rows.filter(r => Number.isFinite(r.msrp));
+    return {
+        games: rows.length, priced: priced.length, msrp: sum(r => r.msrp), cheapest: sum(r => r.best?.price), atl: sum(r => r.atl), currency,
+        top: [...priced].sort((a, b) => b.msrp - a.msrp).slice(0, 5).map(r => ({ title: r.title, msrp: r.msrp, appid: r.appid ?? null }))
+    };
 }
 
 const hours = m => m / 60;

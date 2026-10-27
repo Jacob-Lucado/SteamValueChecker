@@ -624,6 +624,7 @@ test("Steam linking: link, view, sync and unlink from the dashboard", async () =
     assert.equal(view.data.link.steamid, "76561198000000000");
     assert.equal(view.data.stats.playedGames, 1);
     assert.ok(view.data.stats.value && !("perHour" in view.data.stats));
+    assert.equal(view.data.stats.value.top[0].title, "Counter");
     const nx = await t.request("/api/steam/next");
     assert.equal(nx.data.next.pick.title, "Counter");
     assert.equal((await t.request("/api/steam/next?skip=" + encodeURIComponent(nx.data.next.pick.itad_id))).data.next, null, "pick another skips what was offered");

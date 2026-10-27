@@ -88,6 +88,8 @@ const steam = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("sync").setDescription("Refresh your games and playtime from Steam"))
     .addSubcommand(s => s.setName("view").setDescription("Your Steam library: games, hours played, what you never played and what it is worth"))
     .addSubcommand(s => s.setName("next").setDescription("What should I play next? A pick from your own library"))
+    .addSubcommand(s => s.setName("value").setDescription("Estimated Steam account value: what your games cost at full price, today's cheapest and all-time-low prices")
+        .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it")))
     .addSubcommand(s => s.setName("unlink").setDescription("Forget your Steam profile")
         .addBooleanOption(o => o.setName("remove_games").setDescription("Also remove the games that came from Steam")));
 

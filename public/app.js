@@ -1016,10 +1016,16 @@
         out.className = "";
         out.replaceChildren(
           h("div", { class: "grid four" },
-            tile("Library value", money(st.value.msrp, cur), money(st.value.cheapest, cur) + " at today's cheapest"),
             tile("Games", String(st.games), st.playedGames + " played"),
             tile("Hours played", hoursText(st.totalMinutes)),
             tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
+          h("div", { class: "panel" }, h("h3", { text: "💰 Estimated account value" }),
+            h("div", { class: "grid four" },
+              tile("At full price", money(st.value.msrp, cur), "list price today"),
+              tile("At today's cheapest", money(st.value.cheapest, cur), "best current deal"),
+              st.value.atl ? tile("At all-time lows", money(st.value.atl, cur), "if bought at the lowest ever") : null),
+            st.value.top.length ? h("p", { class: "muted small", text: "Most valuable: " + st.value.top.map(r => `${r.title} (${money(r.msrp, cur)})`).join(", ") }) : null,
+            h("p", { class: "muted small", text: `${st.value.priced} of ${d.link.games} games priced. An estimate from current prices, not what was paid. Free, removed or unlisted games are not counted.` })),
           h("div", { class: "panel" }, h("h3", { text: "What should I play next?" }),
             h("p", { class: "muted small", text: "A pick from your own library: what you are playing, games you started and never finished, then the most valuable ones you never touched." }), nextBtn),
           nextOut,
