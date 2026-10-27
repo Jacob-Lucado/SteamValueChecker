@@ -75,7 +75,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, dm = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -502,6 +502,41 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const clean = sanitize(entries, { max: 500 }).entries;
             if (!clean.length) throw new HttpError(400, "I need game titles, not keys.");
             return await importLibrary(db, itad, s.userId, clean);
+        },
+
+        "GET /api/redeem": async (req) => {
+            const s = session(req);
+            db.pruneRedeemJobs();
+            return { job: db.pendingRedeemJob(s.userId) };
+        },
+
+        "POST /api/redeem/finish": async (req, body) => {
+            // The page reports what the extension did with a batch that was queued by /redeem. Results go back to the member's Discord DMs.
+            const s = session(req);
+            const job = db.pendingRedeemJob(s.userId);
+            if (body.cancel) { db.cancelRedeemJob(s.userId); return { ok: true }; }
+            if (!job || job.id !== Number(body.id)) throw new HttpError(404, "That batch is no longer waiting.");
+            const mine = new Set(job.keys);
+            const results = (Array.isArray(body.results) ? body.results : []).slice(0, 500)
+                .map(r => ({ key: String(r?.key ?? "").toUpperCase(), status: String(r?.status ?? "error").slice(0, 20), game: String(r?.game ?? "").slice(0, 100), message: String(r?.message ?? "").slice(0, 120) }))
+                .filter(r => mine.has(r.key));
+            const count = (...st) => results.filter(r => st.includes(r.status)).length;
+            const failed = results.filter(r => !["redeemed", "owned", "used"].includes(r.status));
+            const left = job.keys.length - results.length;
+            const summary = `${count("redeemed")} redeemed, ${count("owned", "used")} already owned or used, ${failed.length} failed${left > 0 ? `, ${left} not tried` : ""}`;
+            const aborted = String(body.aborted ?? "").slice(0, 160);
+            const lines = [`Your batch redeem finished: **${summary}.**`];
+            if (aborted) lines.push(`⚠️ ${aborted}`);
+            const done = results.filter(r => r.status === "redeemed");
+            if (done.length) lines.push("", "**Redeemed**", ...done.slice(0, 25).map(r => `• ${r.game || "Unnamed product"} (\`${r.key.slice(0, 5)}-•••••-${r.key.slice(-5)}\`)`));
+            if (failed.length) lines.push("", "**Failed** (still yours to retry)", ...failed.slice(0, 25).map(r => `• \`${r.key}\` ${r.message || r.status}`));
+            if (left > 0) lines.push("", `**${left}** key${left === 1 ? "" : "s"} were not tried. Send them again with /redeem.`);
+            if (!db.finishRedeemJob(s.userId, job.id, summary)) throw new HttpError(404, "That batch is no longer waiting.");
+            const text = lines.join("\n").slice(0, 3900);
+            try { db.addNotification(s.userId, { type: "redeem", title: "Batch redeem finished", body: summary, url: "#/redeem" }); } catch { /* the DM is what counts */ }
+            let sent = false;
+            if (dm) { try { await dm(s.userId, { embeds: [{ color: 0x57f287, title: "Batch redeem", description: text }] }); sent = true; } catch { /* DMs closed: it is in Notifications */ } }
+            return { ok: true, summary, dm: sent };
         },
 
         "POST /api/library/status": async (req, body) => {

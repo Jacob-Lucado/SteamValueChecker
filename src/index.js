@@ -27,6 +27,7 @@ import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, runGuildFe
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
+import { createRedeemHandlers } from "./redeemhandlers.js";
 import { createDealHandlers } from "./dealhandlers.js";
 import { createLfgService } from "./lfg.js";
 import { createLfgHandlers } from "./lfghandlers.js";
@@ -54,6 +55,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
+const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey });
 const dealUi = createDealHandlers({ db, itad });
 
@@ -378,6 +380,7 @@ client.on(Events.InteractionCreate, async i => {
                 db.updateUser(user.discord_id, { region: pick });
                 return await i.reply({ content: `Prices are now in **${name(pick)}**, here and on the dashboard.`, flags: MessageFlags.Ephemeral });
             }
+            case "redeem": return await redeemUi.handle(i);
             case "steam": return await steamUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
             case "saleprep": return await dealUi.handleSalePrep(i);
@@ -412,7 +415,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), lfg, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), lfg, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

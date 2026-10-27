@@ -1097,7 +1097,8 @@
     const tbody = h("tbody");
     const table = h("div", { class: "table-wrap", hidden: true }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "Key" }), h("th", { text: "Result" }), h("th", { text: "Game" }))), tbody));
     const tools = h("p", { hidden: true });
-    let ext = null, jobId = null, rows = new Map(), running = false;
+    let ext = null, jobId = null, rows = new Map(), running = false, queued = null, outcomes = [];
+    const queuedBox = h("div", { class: "notice", hidden: true });
     const keysIn = () => [...new Set((box.value.match(KEY_G) || []).map(k => k.toUpperCase()))].slice(0, 500);
     const mask = k => k.slice(0, 5) + "-•••••-" + k.slice(-5);
     function refresh() {
@@ -1119,6 +1120,7 @@
       if (m.id !== jobId) return;
       if (m.type === "busy") { running = false; stop.hidden = true; progress.textContent = "The extension is already redeeming a batch. Wait for it to finish."; refresh(); return; }
       if (m.type === "result") {
+        outcomes.push({ key: m.key, status: m.status, message: m.message, game: m.game });
         const tr = rows.get(m.key);
         const [word, tone] = WORDS[m.status] || WORDS.error;
         if (tr) { tr.cells[1].replaceChildren(h("span", { class: "badge " + (tone === "ok" ? "" : "none"), text: word }), m.message && m.status !== "redeemed" ? h("span", { class: "muted small", text: " " + m.message }) : ""); tr.cells[2].textContent = m.game || ""; tr.dataset.status = m.status; }
@@ -1132,6 +1134,12 @@
         progress.textContent = (m.aborted ? m.aborted + " " : "") + `${c("redeemed")} redeemed, ${c("owned") + c("used")} owned or used, ${c("invalid") + c("region") + c("needs_base") + c("error")} failed${left ? `, ${left} not tried` : ""}.`;
         tools.hidden = false;
         refresh();
+        if (queued && queued.running) {
+          const q = queued; queued = null;
+          api("/api/redeem/finish", { id: q.id, results: outcomes, aborted: m.aborted || "" })
+            .then(r => { progress.textContent += r.dm ? " The results are in your Discord DMs." : " The results are in your Notifications."; })
+            .catch(e => toast(e.message, "error"));
+        }
       }
     }
     window.addEventListener("message", onMsg);
@@ -1141,16 +1149,35 @@
     setTimeout(() => { if (!ext) { extState.className = "notice warn"; extState.replaceChildren("The extension was not found. Install FanaticalGrabber 2.3 or newer, then reload this page. ", state.cfg && state.cfg.fanaticalUrl ? ext2(state.cfg.fanaticalUrl) : ""); } }, 1500);
     function ext2(url) { return h("a", { href: safeHref(url), target: "_blank", rel: "noopener noreferrer", text: "Get it here" }); }
     box.addEventListener("input", refresh);
-    go.addEventListener("click", () => {
-      const keys = keysIn();
+    function start(keys, fromQueue) {
       if (!keys.length || !ext) return;
       if (!confirm(`Are you logged into Steam in this browser? Redeem ${keys.length} key${keys.length === 1 ? "" : "s"} on that account? Redeeming cannot be undone.`)) return;
+      if (queued) queued.running = Boolean(fromQueue);
       jobId = "r" + Math.random().toString(36).slice(2);
-      rows = new Map(); tbody.replaceChildren(); tools.hidden = true;
+      rows = new Map(); outcomes = []; tbody.replaceChildren(); tools.hidden = true;
       for (const k of keys) { const tr = h("tr", {}, h("td", {}, h("code", { text: mask(k) })), h("td", { class: "muted", text: "Waiting" }), h("td")); rows.set(k, tr); tbody.append(tr); }
       table.hidden = false; running = true; stop.hidden = false; progress.textContent = "Starting…"; refresh();
       window.postMessage({ svc: "page", type: "redeem", id: jobId, items: keys }, location.origin);
-    });
+    }
+    go.addEventListener("click", () => start(keysIn(), false));
+    // A batch queued with /redeem in Discord: shown here, started only when the member presses Run.
+    async function checkQueue() {
+      if (running || queued) return;
+      try {
+        const { job } = await api("/api/redeem");
+        if (!job || running) return;
+        queued = { id: job.id, keys: job.keys, running: false };
+        const run = h("button", { class: "btn green", text: "Run", disabled: !ext });
+        run.addEventListener("click", () => { box.value = job.keys.join("\n"); refresh(); start(job.keys, true); });
+        const drop = h("button", { class: "btn gray", text: "Cancel batch" });
+        drop.addEventListener("click", () => busy(drop, async () => { await api("/api/redeem/finish", { cancel: true }); queued = null; queuedBox.hidden = true; toast("Batch cancelled.", "ok"); }));
+        queuedBox.hidden = false; queuedBox.className = "notice ok";
+        queuedBox.replaceChildren(h("strong", { text: `${job.total} key${job.total === 1 ? "" : "s"} queued from Discord. ` }), "Log into Steam in this browser, then press Run. Results go to your Discord DMs. ", run, " ", drop);
+      } catch { /* not signed in or offline: the page still works by hand */ }
+    }
+    checkQueue();
+    const poll = setInterval(checkQueue, 20000);
+    window.addEventListener("hashchange", () => clearInterval(poll), { once: true });
     stop.addEventListener("click", () => { window.postMessage({ svc: "page", type: "stop", id: jobId }, location.origin); progress.textContent = "Stopping after the current key…"; });
     const copyBtn = h("button", { class: "btn gray", text: "Copy results" });
     copyBtn.addEventListener("click", async () => {
@@ -1168,7 +1195,7 @@
     refresh();
     app.replaceChildren(
       pageHead("Batch redeem", "Paste Steam keys and redeem them all in one go."),
-      h("div", { class: "panel" }, extState,
+      h("div", { class: "panel" }, extState, queuedBox,
         h("div", { class: "notice warn", text: "Before you start: log into Steam in this browser (store.steampowered.com). Keys are redeemed on the account you are logged into there." }),
         h("p", { class: "muted small", text: "Steam only accepts keys from your own logged-in browser, and a website cannot use that login by itself. The FanaticalGrabber extension can, so this page hands the keys to it. Your keys go from this page to the extension to Steam. They are never sent to this site's server." }),
         field("Steam keys", box), field("Or add a file (.txt, .csv, .json)", file), found, h("p", {}, go, " ", stop), progress),

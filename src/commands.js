@@ -217,6 +217,13 @@ const currency = new SlashCommandBuilder()
     .setDescription("Choose the currency prices are shown in (also used on the dashboard). Leave empty to see yours")
     .addStringOption(o => o.setName("currency").setDescription("Currency and region").addChoices(...REGIONS));
 
+const redeem = new SlashCommandBuilder()
+    .setName("redeem")
+    .setDescription("Redeem Steam keys in a batch: queue them here, then confirm on the dashboard")
+    .addStringOption(o => o.setName("keys").setDescription("Steam keys (AAAAA-BBBBB-CCCCC), separated by spaces or lines").setMaxLength(6000))
+    .addAttachmentOption(o => o.setName("file").setDescription("A .txt, .csv or .json file with keys (a FanaticalGrabber export works)"))
+    .addBooleanOption(o => o.setName("cancel").setDescription("Cancel the batch that is waiting"));
+
 const sales = new SlashCommandBuilder()
     .setName("sales")
     .setDescription("Upcoming Steam sales and festivals, with countdowns");
@@ -317,7 +324,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, watch, currency, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, currency, redeem, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats].map(serverOrDm)
 ].map(c => c.toJSON());

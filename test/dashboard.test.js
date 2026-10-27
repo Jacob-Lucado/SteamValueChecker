@@ -760,3 +760,42 @@ test("the Library page can set many games' status at once", async () => {
     assert.equal((await t.request("/api/library/status", { method: "POST", body: { itad_ids: [], status: "finished" } })).status, 400);
     await t.close();
 });
+
+test("Batch redeem: a job queued from Discord is run by the page and the results come back by DM", async () => {
+    const dms = [];
+    const t = await signedIn({ extra: { dm: async (u, p) => { dms.push({ u, p }); } } });
+    const keys = ["AAAAA-BBBBB-CCCCC", "DDDDD-EEEEE-FFFFF", "GGGGG-HHHHH-JJJJJ"];
+    assert.equal((await t.request("/api/redeem")).data.job, null);
+    t.db.createRedeemJob("u1", keys);
+    const got = (await t.request("/api/redeem")).data.job;
+    assert.deepEqual(got.keys, keys);
+    assert.equal((await t.request("/api/redeem/finish", { method: "POST", body: { id: got.id + 1, results: [] } })).status, 404, "someone else's or a wrong job id is refused");
+    const fin = await t.request("/api/redeem/finish", { method: "POST", body: { id: got.id, aborted: "Steam rate limit hit.", results: [
+        { key: keys[0], status: "redeemed", game: "Hades" }, { key: keys[1], status: "invalid", message: "Invalid key" }, { key: "ZZZZZ-ZZZZZ-ZZZZZ", status: "redeemed", game: "Not mine" }] } });
+    assert.equal(fin.status, 200);
+    assert.match(fin.data.summary, /1 redeemed, 0 already owned or used, 1 failed, 1 not tried/);
+    assert.equal(dms.length, 1);
+    const text = dms[0].p.embeds[0].description;
+    assert.match(text, /Hades/); assert.match(text, /DDDDD-EEEEE-FFFFF/); assert.doesNotMatch(text, /Not mine/); assert.doesNotMatch(text, /AAAAA-BBBBB-CCCCC/, "redeemed keys are masked");
+    assert.equal((await t.request("/api/redeem")).data.job, null, "keys are gone once the job is finished");
+    assert.equal((await t.request("/api/redeem/finish", { method: "POST", body: { id: got.id, results: [] } })).status, 404, "a finished job cannot be finished twice");
+    await t.close();
+});
+
+test("Batch redeem jobs: keys are found, replaced by a newer batch and expire after a day", async () => {
+    const { openDb } = await import("../src/db.js");
+    const { extractKeys } = await import("../src/redeemstore.js");
+    assert.deepEqual(extractKeys("hi aaaaa-bbbbb-ccccc, AAAAA-BBBBB-CCCCC and not-a-key 12345-67890-ABCDE"), ["AAAAA-BBBBB-CCCCC", "12345-67890-ABCDE"]);
+    let clock = 1_000_000;
+    const db = openDb(":memory:", { now: () => clock });
+    db.ensureUser("u1", null);
+    db.createRedeemJob("u1", ["AAAAA-BBBBB-CCCCC"]);
+    db.createRedeemJob("u1", ["DDDDD-EEEEE-FFFFF"]);
+    assert.deepEqual(db.pendingRedeemJob("u1").keys, ["DDDDD-EEEEE-FFFFF"], "a new batch replaces the waiting one");
+    clock += 25 * 3600_000;
+    assert.equal(db.pendingRedeemJob("u1"), null, "an old batch expires");
+    db.createRedeemJob("u1", ["AAAAA-BBBBB-CCCCC"]);
+    assert.equal(db.cancelRedeemJob("u1"), true);
+    assert.equal(db.pendingRedeemJob("u1"), null);
+    db.close();
+});

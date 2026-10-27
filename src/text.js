@@ -39,6 +39,7 @@ export const HELP = [
     "• Sale alerts have **Snooze 7 days** and **Only below a price** buttons.",
     "• `/steam link` links your **public** Steam profile and fills your library with your games and hours played; `/steam view` shows what you never played and what it is worth, `/steam sync` also marks games you got every achievement in as Finished. `/steam value` estimates your account's worth (add `public:true` to share it), and `/steam next` picks what to play next. `/bundle` checks if a bundle beats buying the games separately. `/saleprep` plans what to buy in the next sale.",
     "• `/lfg post` finds people to play with (Join/Leave buttons, optional Discord event). `/library grabber` gives the FanaticalGrabber extension a link code to send your game titles in one click.",
+    "• `/redeem` queues Steam keys (typed or in a file). Press Run on the dashboard's Batch redeem page while logged into Steam, with the FanaticalGrabber extension 2.3+, and the results come back as a DM.",
     "• `/currency` picks the currency prices are shown in (saved, and shared with the dashboard).",
     "• `/mydata` exports or deletes everything stored about you.",
     "",

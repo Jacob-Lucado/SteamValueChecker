@@ -5,7 +5,7 @@ export const CHANGELOG = [
         "`/bundle` checks whether a bundle beats buying separately. `/saleprep` plans a sale shopping list and recaps past alerts.",
         "`/lfg post` makes a looking-for-group post with Join and Leave buttons and an optional Discord event.",
         "FanaticalGrabber 2.2 can send game titles (never keys) straight to your library: get a code with `/library grabber`.",
-        "Batch redeem (dashboard, Games menu): paste Steam keys and redeem them all through the FanaticalGrabber extension 2.3. Keys never reach this site's server.",
+        "Batch redeem (dashboard, Games menu): paste Steam keys and redeem them all through the FanaticalGrabber extension 2.3. `/redeem` queues keys from Discord and DMs you the results.",
         "The bot owner can download the latest backup from the Admin page." ] },
     { version: "2026.10.27", date: "2026-10-27", title: "Game night and easier setup", items: [
         "`/gamenight`: what everyone in your voice channel can play together, who is missing a game, and what to buy together.",
