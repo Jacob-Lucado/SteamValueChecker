@@ -45,6 +45,7 @@ const FILES = {
     "/style.css": ["style.css", "text/css; charset=utf-8"],
     "/logo.png": ["logo.png", "image/png"],
     "/creator.png": ["creator.png", "image/png"],
+    "/creator-bg.webp": ["creator-bg.webp", "image/webp"],
     "/banner.png": ["banner.png", "image/png"],
     "/multikey.png": ["multikey.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
