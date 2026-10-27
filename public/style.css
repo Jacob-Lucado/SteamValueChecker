@@ -206,8 +206,8 @@ td.now { color: var(--accent); }
 /* theme switch */
 .theme-btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--soft); color: var(--text); font-size: 16px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .next-art { width: 100%; max-width: 460px; border-radius: 10px; display: block; margin-bottom: 10px; }
-/* The creator logo, large and faint, behind everything. It never takes clicks. */
-body::before { content: ""; position: fixed; right: -6vmin; bottom: -8vmin; width: min(92vmin, 920px); aspect-ratio: 1; background: url(/creator-bg.webp) center / contain no-repeat; opacity: var(--logo-opacity, .07); pointer-events: none; z-index: 0; }
+/* The creator logo, large and faint, centered behind everything. It never takes clicks. */
+body::before { content: ""; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(92vmin, 920px); aspect-ratio: 1; background: url(/creator-bg.webp) center / contain no-repeat; opacity: var(--logo-opacity, .07); pointer-events: none; z-index: 0; }
 :root[data-theme="light"] { --logo-opacity: .1; }
 :root[data-contrast] { --logo-opacity: 0; }
 header, main, footer { position: relative; z-index: 1; }
