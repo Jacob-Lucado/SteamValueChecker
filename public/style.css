@@ -107,6 +107,8 @@ input[type=text], input[type=number], input[type=search], select, textarea {
   padding: 10px 12px; font: inherit; transition: border-color .15s, box-shadow .15s;
 }
 textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13.5px; }
+select option, select optgroup { background: var(--panel); color: var(--text); }
+select option:checked { background: var(--accent); color: var(--on-accent); }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(77, 163, 255, .2); }
 input[type=file] { color: var(--muted); max-width: 100%; }
 input[type=file]::file-selector-button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-right: 10px; cursor: pointer; }
