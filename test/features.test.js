@@ -691,3 +691,11 @@ test("the currency list fits a Discord choice menu (25 max) with unique codes", 
     assert.equal(new Set(REGIONS.map(r => r.value)).size, REGIONS.length);
     assert.ok(REGIONS.some(r => r.value === "IN"));
 });
+
+test("slash command text fits Discord's limits (discord.js throws at startup otherwise, and the stub does not catch it)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../src/commands.js", import.meta.url), "utf8");
+    for (const m of src.matchAll(/setDescription\("((?:[^"\\]|\\.)*)"\)/g)) assert.ok(m[1].length <= 100, `description is ${m[1].length} characters: ${m[1]}`);
+    for (const m of src.matchAll(/setName\("([^"]*)"\)/g)) if (!/^\w[\w-]*$/.test(m[1]) || /[A-Z]/.test(m[1]) || m[1].length > 32) assert.fail(`bad command or option name: ${m[1]}`);
+    for (const m of src.matchAll(/\{ name: "((?:[^"\\]|\\.)*)", value: "/g)) assert.ok(m[1].length <= 100, `choice name too long: ${m[1]}`);
+});
