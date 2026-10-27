@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseGamesXml, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, fmtHours } from "../src/steamlib.js";
+import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, fmtHours } from "../src/steamlib.js";
 import { SteamError } from "../src/steam.js";
 
 const XML = `<gamesList><steamID64>76561198000000000</steamID64><games>
@@ -89,4 +89,18 @@ test("playtime stats: cost per hour uses what you paid, falls back to the cheape
     assert.equal(s.perHour, 16 / 12);
     assert.equal(s.unplayedCount, 2); assert.equal(s.unplayedMsrp, 100); assert.equal(s.unplayedTop[0].title, "C");
     assert.equal(fmtHours(45), "45 min"); assert.equal(fmtHours(90), "1.5 h"); assert.equal(fmtHours(6000), "100 h");
+});
+
+const json = { rgGames: [{ appid: 10, name: "Counter & \"Strike\"", hours_forever: "1,234.5", last_played: 1700000000 }, { appid: 20, name: "Quiet", playtime_forever: 90 }, { appid: 0, name: "bad" }] };
+const PAGE = `<html><template id="gameslist_config" data-profile-gameslist="${JSON.stringify(json).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"></template></html>`;
+
+test("reads the games page Steam serves for public profiles, and falls back to the XML list", async () => {
+    const g = parseGamesPage(PAGE);
+    assert.deepEqual(g.map(x => [x.appid, x.name, x.minutes, x.lastPlayed]), [[10, 'Counter & "Strike"', 74070, 1700000000], [20, "Quiet", 90, null]]);
+    assert.deepEqual(parseGamesPage("<html>nothing</html>"), []);
+    const urls = [];
+    const page = await fetchOwnedGames("76561198000000000", { fetchImpl: async u => { urls.push(String(u)); return res(PAGE); } });
+    assert.equal(page.length, 2); assert.equal(urls.length, 1, "stops at the first source that has games");
+    const viaXml = await fetchOwnedGames("76561198000000000", { fetchImpl: async u => res(String(u).includes("xml=1") ? XML : "<html></html>") });
+    assert.equal(viaXml[0].appid, 10);
 });

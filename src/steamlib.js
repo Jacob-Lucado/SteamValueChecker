@@ -19,6 +19,29 @@ export function parseGamesXml(xml) {
     return out;
 }
 
+/**
+ * Games from the profile's games page. Steam embeds the list as HTML-escaped JSON in a data-profile-gameslist attribute.
+ * Playtime is minutes (playtime_forever) or a text like "1,234.5" hours (hours_forever), depending on the page version.
+ */
+export function parseGamesPage(html) {
+    const m = String(html).match(/data-profile-gameslist=(["'])([\s\S]*?)\1/);
+    if (!m) return [];
+    let data;
+    try { data = JSON.parse(decode(m[2])); } catch { return []; }
+    const list = data?.rgGames ?? data?.games ?? [];
+    if (!Array.isArray(list)) return [];
+    const out = [];
+    for (const g of list) {
+        const appid = Number(g?.appid);
+        const name = typeof g?.name === "string" ? g.name.trim() : "";
+        let minutes = Number(g?.playtime_forever);
+        if (!Number.isFinite(minutes)) minutes = Math.round(parseFloat(String(g?.hours_forever ?? "0").replace(/,/g, "")) * 60) || 0;
+        const last = Number(g?.last_played);
+        if (Number.isInteger(appid) && appid > 0 && name) out.push({ appid, name, minutes: Math.max(0, Math.round(minutes)), lastPlayed: Number.isFinite(last) && last > 0 ? last : null });
+    }
+    return out;
+}
+
 /** Games from the Web API's GetOwnedGames response. */
 export function parseOwnedJson(data) {
     const games = data?.response?.games;
@@ -42,12 +65,18 @@ export async function fetchOwnedGames(steamid, { apiKey = null, fetchImpl = glob
         if (!games?.length) throw new SteamError("private", PRIVATE_LIBRARY);
         return games;
     }
-    const res = await get(fetchImpl, `https://steamcommunity.com/profiles/${steamid}/games?tab=all&xml=1`);
-    if (res.status === 429) throw new SteamError("rate_limited", "Steam is rate limiting the bot. Try again in a few minutes.");
-    if (!res.ok) throw new SteamError("http", `Steam returned HTTP ${res.status}.`);
-    const games = parseGamesXml(await res.text());
-    if (!games.length) throw new SteamError("private", PRIVATE_LIBRARY);
-    return games;
+    // Without a key, read the public games page first, then the older XML list. Either is empty for a private profile.
+    let limited = false, failed = null;
+    for (const [url, parse] of [[`https://steamcommunity.com/profiles/${steamid}/games/?tab=all`, parseGamesPage], [`https://steamcommunity.com/profiles/${steamid}/games?tab=all&xml=1`, parseGamesXml]]) {
+        const res = await get(fetchImpl, url);
+        if (res.status === 429) { limited = true; continue; }
+        if (!res.ok) { failed = res.status; continue; }
+        const games = parse(await res.text());
+        if (games.length) return games;
+    }
+    if (limited) throw new SteamError("rate_limited", "Steam is rate limiting the bot. Try again in a few minutes.");
+    if (failed) throw new SteamError("http", `Steam returned HTTP ${failed}.`);
+    throw new SteamError("private", PRIVATE_LIBRARY);
 }
 
 /** Profile link, custom name or SteamID64 -> SteamID64. */
