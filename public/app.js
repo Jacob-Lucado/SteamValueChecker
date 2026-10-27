@@ -112,7 +112,7 @@
   // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["steam", "Steam"]] },
+    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["steam", "Steam"], ["deals", "Deals"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -897,6 +897,61 @@
       h("p", { class: "muted small", text: d.joined ? "You are on the leaderboard. Change this on the Alerts page." : "You are not on it. Opt in on the Alerts page (“Share with your server”). Ranked by percent saved vs MSRP, since members shop in different currencies." })));
   }
 
+  // ---------- bundles and sale prep ----------
+  async function dealsView() {
+    const bundlesOut = h("div", { class: "muted", text: "Looking for bundles…" });
+    const prepOut = h("div", { class: "muted", text: "Checking your wishlist…" });
+    const recapOut = h("div");
+    const game = h("input", { type: "text", placeholder: "A game (leave empty to check your wishlist)", maxlength: "100" });
+    const budget = h("input", { type: "number", min: "1", max: "10000", step: "1", placeholder: "Budget (optional)" });
+    const tone = l => (l === "great" || l === "good" ? "ok" : l === "wait" ? "warn" : "");
+    async function loadBundles() {
+      bundlesOut.className = "muted"; bundlesOut.replaceChildren("Looking for bundles…");
+      try {
+        const d = await api("/api/bundles" + (game.value.trim() ? "?game=" + encodeURIComponent(game.value.trim()) : ""));
+        bundlesOut.className = "";
+        if (!d.bundles.length) { bundlesOut.replaceChildren(h("div", { class: "empty", text: game.value.trim() ? "That game is not in an active bundle right now." : "None of your wishlist games are in an active bundle right now." })); return; }
+        bundlesOut.replaceChildren(...d.bundles.map(b => h("div", { class: "panel" },
+          h("h3", { text: b.title }),
+          h("p", { class: "muted small", text: [b.shop, b.expiry ? "ends " + new Date(b.expiry).toLocaleDateString() : null].filter(Boolean).join(" · ") }),
+          h("div", { class: "notice " + tone(b.verdict.level), text: b.verdict.text }),
+          h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Tier", "Games", "You own", "Worth today", "Saves", "On your wishlist"].map(c => h("th", { text: c })))),
+            h("tbody", {}, b.tiers.map(t => h("tr", {}, h("td", { class: "num", text: money(t.price, b.currency || d.currency) }), h("td", { class: "num", text: String(t.games) }), h("td", { class: "num", text: String(t.owned) }),
+              h("td", { class: "num", text: t.worth > 0 ? money(t.worth, b.currency || d.currency) : "–" }), h("td", { class: "num", text: t.worth > 0 ? (t.saves >= 0 ? "+" : "−") + money(Math.abs(t.saves), b.currency || d.currency) : "–" }), h("td", { text: t.wanted.slice(0, 4).join(", ") })))))),
+          b.url ? ext(b.url, "Open the bundle") : null,
+          h("p", { class: "muted small", text: "Assumes each tier includes the cheaper ones and leaves out games you own." }))));
+      } catch (e) { bundlesOut.className = ""; bundlesOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    async function loadPrep() {
+      prepOut.className = "muted"; prepOut.replaceChildren("Checking your wishlist…");
+      try {
+        const d = await api("/api/saleprep" + (budget.value ? "?budget=" + encodeURIComponent(budget.value) : ""));
+        prepOut.className = "";
+        const cur = d.currency;
+        const when = d.sale ? (d.sale.live ? d.sale.name + " is on now." : "Next: " + d.sale.name + " starts " + new Date(d.sale.start).toLocaleDateString() + ".") : "No Steam sale is on the calendar yet.";
+        const list = (rows, f) => h("ul", { class: "plain" }, rows.map(r => h("li", {}, h("b", { text: r.title }), " ", h("span", { class: "muted", text: f(r) }))));
+        prepOut.replaceChildren(h("p", { class: "muted", text: when + " Looked at " + d.watching + " wishlist games." }),
+          h("div", { class: "grid two" },
+            h("div", { class: "panel" }, h("h3", { text: "Buy now (" + d.buyNow.length + ")" }), d.buyNow.length ? list(d.buyNow, r => money(r.price, cur) + (r.discount > 0 ? " (-" + Math.round(r.discount * 100) + "%)" : "") + " · " + r.verdict) : h("p", { class: "muted", text: "Nothing at or near a low right now." })),
+            h("div", { class: "panel" }, h("h3", { text: "Wait for a bigger drop (" + d.wait.length + ")" }), d.wait.length ? list(d.wait, r => money(r.price, cur) + ", has been " + money(r.atl, cur)) : h("p", { class: "muted", text: "Nothing far above its low." }))),
+          d.plan ? h("div", { class: "panel" }, h("h3", { text: "With " + money(d.budget, cur) }), d.plan.picks.length ? list(d.plan.picks, r => money(r.price, cur)) : h("p", { class: "muted", text: "Nothing on the buy-now list fits that budget." }),
+            h("p", { class: "muted small", text: money(d.plan.spent, cur) + " spent, " + money(d.plan.left, cur) + " left." })) : null);
+      } catch (e) { prepOut.className = ""; prepOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    const recapBtn = h("button", { class: "btn gray", text: "Show sale recap", onclick: () => busy(recapBtn, async () => {
+      const r = await api("/api/saleprep/recap");
+      recapOut.replaceChildren(r.alerts ? h("div", { class: "panel" }, h("h3", { text: "Last " + r.days + " days" }), h("p", { text: "Your alerts caught " + r.games + " games, " + r.spend.toFixed(2) + " at the alert prices" + (r.saved > 0 ? ", " + r.saved.toFixed(2) + " under regular." : ".") }),
+        h("ul", { class: "plain" }, r.top.map(a => h("li", {}, h("b", { text: a.title }), " ", h("span", { class: "muted", text: a.price.toFixed(2) + (a.regular ? " (was " + a.regular.toFixed(2) + ")" : "") + (a.shop ? " at " + a.shop : "") }))))) : h("div", { class: "empty", text: "No sale alerts in the last " + r.days + " days." }));
+    }) });
+    const checkBtn = h("button", { class: "btn blue", text: "Check bundles", onclick: () => busy(checkBtn, loadBundles) });
+    const planBtn = h("button", { class: "btn blue", text: "Update plan", onclick: () => busy(planBtn, loadPrep) });
+    app.replaceChildren(pageHead("Deals", "Is a bundle worth it, and what to buy before the next Steam sale."),
+      h("h2", { text: "Bundle check" }), h("div", { class: "panel" }, field("Game", game), h("p"), checkBtn), bundlesOut,
+      h("h2", { text: "Sale prep" }), h("div", { class: "panel" }, field("Budget", budget), h("p"), planBtn), prepOut,
+      h("h2", { text: "Sale recap" }), recapBtn, recapOut);
+    loadBundles(); loadPrep();
+  }
+
   // ---------- steam link ----------
   const hoursText = m => (m < 60 ? m + " min" : (m / 60).toFixed(m < 600 ? 1 : 0) + " h");
   async function steamView() {
@@ -1650,7 +1705,7 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, steam: steamView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, steam: steamView, deals: dealsView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();

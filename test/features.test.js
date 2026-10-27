@@ -374,6 +374,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
         "freegames": "GET /api/free", "sales": "GET /api/sales", "status": "GET /api/status", "publicpage": "POST /api/profile", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
         "steam/link": "POST /api/steam/link", "steam/sync": "POST /api/steam/sync", "steam/view": "GET /api/steam", "steam/unlink": "POST /api/steam/unlink",
+        "bundle": "GET /api/bundles", "saleprep/plan": "GET /api/saleprep", "saleprep/recap": "GET /api/saleprep/recap",
         "setup": "GET /api/servers/setup", "gamenight": "POST /api/gamenight", "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
@@ -482,7 +483,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "changelog", "freegames", "help", "library", "mydata", "privacy", "publicpage", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "bundle", "changelog", "freegames", "help", "library", "mydata", "privacy", "publicpage", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "gamenight", "giveaway", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["leaderboard", "serverlist", "serverstats"]);

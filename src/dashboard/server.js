@@ -27,6 +27,8 @@ import { setProfile, publicWishlist } from "../profile.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
 import { resolveProfile, syncSteamLibrary, playStats } from "../steamlib.js";
+import { bundleCheck } from "../bundle.js";
+import { salePrep, saleRecap } from "../saleprep.js";
 import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
@@ -50,7 +52,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -204,7 +206,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             .sort((a, b) => Number(b.manageable) - Number(a.manageable) || a.name.localeCompare(b.name));
     }
 
-    const PAGES = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["support", "Support"], ["notifications", "Notifications"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"]];
+    const PAGES = [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["steam", "Steam"], ["deals", "Deals"], ["alerts", "Alerts"], ["servers", "Servers"], ["giveaways", "Giveaways"], ["support", "Support"], ["notifications", "Notifications"], ["mydata", "My Data"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"]];
     /** The first-run checklist on the dashboard home. */
     function setupSteps(s, u) {
         return [
@@ -702,6 +704,33 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const page = await publicWishlist(db, itad, url.searchParams.get("slug"));
             if (!page) throw new HttpError(404, "That page does not exist or is private.");
             return page;
+        },
+
+        "GET /api/bundles": async (req, _b, url) => {
+            const s = session(req);
+            cooldown(s.userId, "deals");
+            const u = userRow(s);
+            const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
+            let gameIds;
+            if (title) {
+                const [hit] = await itad.lookupTitles([title]);
+                if (!hit?.id) throw new HttpError(400, `I could not find a game called ${title}.`);
+                gameIds = [hit.id];
+            } else gameIds = db.listItems(s.userId).map(i => i.itad_id);
+            return await bundleCheck({ db, itad, user: u, gameIds });
+        },
+
+        "GET /api/saleprep": async (req, _b, url) => {
+            const s = session(req);
+            cooldown(s.userId, "deals");
+            const budget = Number(url.searchParams.get("budget"));
+            return await salePrep({ db, itad, user: userRow(s), budget: Number.isFinite(budget) && budget > 0 && budget <= 10_000 ? budget : null });
+        },
+
+        "GET /api/saleprep/recap": async (req, _b, url) => {
+            const s = session(req);
+            const days = Math.min(90, Math.max(1, Math.round(Number(url.searchParams.get("days"))) || 14));
+            return saleRecap(db, s.userId, { days });
         },
 
         "GET /api/sales": async (req) => { session(req); return { sales: upcomingSales(Date.now(), { limit: 8 }), updated: SALES_UPDATED }; },

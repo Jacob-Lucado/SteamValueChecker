@@ -273,6 +273,40 @@ export function createItad({
         return out;
     }
 
+    /**
+     * Active bundles that include any of these games, with every tier and its games.
+     * Returns [{ id, title, shop, url, expiry, currency, tiers: [{ price, games: [{ id, title }] }], matches: [gameId] }].
+     * Tiers are listed cheapest first. Cached for the same time as prices.
+     */
+    async function getBundleDetails(ids, country = "US") {
+        const key = `bunx:${country}:${[...ids].sort().join(",")}`;
+        const hit = getCached(key);
+        if (hit !== undefined) return hit;
+        const wanted = new Set(ids);
+        const byId = new Map();
+        for (const part of chunk([...wanted], 200)) {
+            const data = await call("POST", "/games/overview/v2", { country, vouchers: "false" }, part);
+            for (const b of Array.isArray(data?.bundles) ? data.bundles : []) {
+                const expiry = isoOrNull(b?.expiry);
+                if (expiry !== null && expiry < now()) continue;
+                const tiers = (Array.isArray(b?.tiers) ? b.tiers : [])
+                    .map(t => ({ price: Number(t?.price?.amount), currency: t?.price?.currency ?? null,
+                        games: (Array.isArray(t?.games) ? t.games : []).filter(g => typeof g?.id === "string").map(g => ({ id: g.id, title: String(g.title ?? g.slug ?? g.id) })) }))
+                    .filter(t => Number.isFinite(t.price) && t.games.length)
+                    .sort((a, b2) => a.price - b2.price);
+                if (!tiers.length) continue;
+                const bid = String(b.id ?? b.title);
+                const matches = new Set(byId.get(bid)?.matches ?? []);
+                for (const t of tiers) for (const g of t.games) if (wanted.has(g.id)) matches.add(g.id);
+                if (!matches.size) continue;
+                byId.set(bid, { id: bid, title: String(b.title ?? "Bundle"), shop: b.page?.name ?? null, url: typeof b.url === "string" ? b.url : null, expiry, currency: tiers[0].currency, tiers, matches: [...matches] });
+            }
+        }
+        const out = [...byId.values()];
+        setCached(key, out);
+        return out;
+    }
+
     /** Every active giveaway: [{ id, title, shop, url, expiry, gameIds }]. One call, cached. */
     async function getGiveawayList() {
         const hit = getCached("giveaway-list");
@@ -320,5 +354,5 @@ export function createItad({
         return points;
     }
 
-    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getGiveaways, getGiveawayList, getHistory, health, _cache: cache };
+    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHistory, health, _cache: cache };
 }

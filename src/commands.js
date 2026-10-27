@@ -87,6 +87,19 @@ const steam = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("unlink").setDescription("Forget your Steam profile")
         .addBooleanOption(o => o.setName("remove_games").setDescription("Also remove the games that came from Steam")));
 
+const bundle = new SlashCommandBuilder()
+    .setName("bundle")
+    .setDescription("Is a bundle worth it? Tier prices against what the games cost today, skipping ones you own")
+    .addStringOption(o => o.setName("game").setDescription("A game to look for (default: bundles with anything on your wishlist)").setMaxLength(100));
+
+const saleprep = new SlashCommandBuilder()
+    .setName("saleprep")
+    .setDescription("Get your wishlist ready for a Steam sale, or see what your alerts caught")
+    .addSubcommand(s => s.setName("plan").setDescription("What to buy now, what to wait on, and what fits a budget")
+        .addNumberOption(o => o.setName("budget").setDescription("How much you want to spend").setMinValue(1).setMaxValue(10000)))
+    .addSubcommand(s => s.setName("recap").setDescription("The drops your alerts caught recently")
+        .addIntegerOption(o => o.setName("days").setDescription("How far back (default 14)").setMinValue(1).setMaxValue(90)));
+
 const serverlist = new SlashCommandBuilder()
     .setName("serverlist")
     .setDescription("A wishlist shared by this server, with votes")
@@ -280,7 +293,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, steam, support, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight].map(serverOnly),
     ...[serverlist, leaderboard, serverstats].map(serverOrDm)
 ].map(c => c.toJSON());

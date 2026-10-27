@@ -27,6 +27,7 @@ import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, runGuildFe
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
+import { createDealHandlers } from "./dealhandlers.js";
 import { createDashboard } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
 import { createVault } from "./vault.js";
@@ -52,6 +53,7 @@ const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey });
+const dealUi = createDealHandlers({ db, itad });
 
 // DMs and channel posts go through here, so notify.js can be tested without Discord.
 const discord = {
@@ -355,6 +357,8 @@ client.on(Events.InteractionCreate, async i => {
             case "giveaway": return await gw.handleCommand(i);
             case "library": return await handlers.handleLibrary(i);
             case "steam": return await steamUi.handle(i);
+            case "bundle": return await dealUi.handleBundle(i);
+            case "saleprep": return await dealUi.handleSalePrep(i);
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
             case "freegames": return await handlers.handleFreeGames(i);
