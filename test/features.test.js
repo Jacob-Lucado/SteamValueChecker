@@ -361,7 +361,7 @@ test("every slash command has a dashboard counterpart", async () => {
         value: "POST /api/value", "wishlist/import": "POST /api/wishlist/import", "wishlist/add": "POST /api/wishlist/add",
         "wishlist/remove": "POST /api/wishlist/remove", "wishlist/view": "GET /api/wishlist", "wishlist/check": "GET /api/wishlist/history",
         "wishlist/alert": "POST /api/wishlist/alert",
-        "currency": "POST /api/settings", redeem: "POST /api/redeem/finish", "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
+        "currency": "POST /api/settings", redeem: "POST /api/redeem/finish", "redeem/history": "GET /api/redeem/history", "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
         "alerts/delivery": "POST /api/settings", "alerts/pause": "POST /api/settings", "alerts/resume": "POST /api/settings", "alerts/region": "POST /api/settings",
         "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",
         "alerts/freegames": "POST /api/settings", "alerts/mute": "POST /api/settings", "alerts/language": "POST /api/settings", changelog: "GET /api/changelog", "alerts/share": "POST /api/settings",

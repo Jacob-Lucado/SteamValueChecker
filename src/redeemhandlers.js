@@ -11,17 +11,26 @@ export function createRedeemHandlers({ db, publicUrl }) {
         const reply = content => i.reply({ content, flags: MessageFlags.Ephemeral });
         db.ensureUser(i.user.id, i.guildId);
         if (i.options.getBoolean("cancel")) return reply(db.cancelRedeemJob(i.user.id) ? "Cancelled. Those keys are erased." : "No batch is waiting.");
+        if (i.options.getBoolean("history")) {
+            const rows = db.redeemHistory(i.user.id, 15);
+            if (!rows.length) return reply("No redeemed keys yet. Keys are listed here once a batch has run, as a masked hint only.");
+            const word = { redeemed: "redeemed", owned: "already owned", used: "already used", invalid: "invalid" };
+            return reply(["**Your recent key results** (keys are never kept, only a masked hint):", ...rows.map(r => `• \`${r.hint}\` ${word[r.status] ?? r.status}${r.game ? ` - ${r.game}` : ""} <t:${Math.floor(r.at / 1000)}:d>`)].join("\n"));
+        }
         const file = i.options.getAttachment("file");
         const text = [i.options.getString("keys"), file ? await readUploadText(file) : null].filter(Boolean).join("\n");
         if (!text.trim()) {
             const w = db.pendingRedeemJob(i.user.id);
             return reply(w ? `A batch of **${w.total}** key${w.total === 1 ? " is" : "s are"} waiting. Open ${link ?? "the dashboard's Batch redeem page"} to run it, or \`/redeem cancel:true\` to drop it.` : "Give me some keys with `keys:` or `file:`, for example `/redeem keys:AAAAA-BBBBB-CCCCC`.");
         }
-        const keys = extractKeys(text);
-        if (!keys.length) throw new UserError("I could not find any Steam keys. They look like `AAAAA-BBBBB-CCCCC`.");
+        const all = extractKeys(text);
+        if (!all.length) throw new UserError("I could not find any Steam keys. They look like `AAAAA-BBBBB-CCCCC`.");
+        const known = db.knownRedeems(i.user.id, all);
+        const keys = all.filter(k => !known.has(k));
+        if (!keys.length) throw new UserError(`All ${all.length} of those keys were already redeemed or used. Nothing to queue.`);
         db.createRedeemJob(i.user.id, keys);
         return reply([
-            `Queued **${keys.length}** Steam key${keys.length === 1 ? "" : "s"}. Nothing is redeemed yet.`,
+            `Queued **${keys.length}** Steam key${keys.length === 1 ? "" : "s"}${known.size ? ` (skipped ${known.size} you already redeemed)` : ""}. Nothing is redeemed yet.`,
             `1. Log into Steam in your browser (store.steampowered.com).`,
             `2. Open ${link ?? "the dashboard's **Batch redeem** page"} with the FanaticalGrabber extension (2.3 or newer) installed, and press **Run**.`,
             `I will DM you the results. Keys are erased when it finishes, or after 24 hours. Redeeming cannot be undone.`

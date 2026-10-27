@@ -23,6 +23,7 @@ import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard, serverStats } from "../library.js";
+import { extractKeys } from "../redeemstore.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
@@ -510,6 +511,32 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { job: db.pendingRedeemJob(s.userId) };
         },
 
+        "GET /api/redeem/history": async (req) => {
+            const s = session(req);
+            const entries = db.redeemHistory(s.userId, 100);
+            const count = st => entries.filter(e => e.status === st).length;
+            return { entries, counts: { redeemed: count("redeemed"), owned: count("owned"), used: count("used"), invalid: count("invalid") } };
+        },
+
+        "POST /api/redeem/check": async (req, body) => {
+            // Which pasted keys were already redeemed here, so the page can skip them instead of spending a Steam attempt.
+            const s = session(req);
+            const keys = extractKeys((Array.isArray(body.keys) ? body.keys : []).slice(0, 500).join("\n"));
+            return { known: Object.fromEntries(db.knownRedeems(s.userId, keys)) };
+        },
+
+        "POST /api/redeem/log": async (req, body) => {
+            // A batch run straight from the page: remember how the keys ended up (hashes only).
+            const s = session(req);
+            const results = (Array.isArray(body.results) ? body.results : []).slice(0, 500).map(r => ({ key: String(r?.key ?? ""), status: String(r?.status ?? ""), game: String(r?.game ?? "").slice(0, 100) }));
+            return { logged: db.logRedeem(s.userId, results) };
+        },
+
+        "POST /api/redeem/history/clear": async (req) => {
+            const s = session(req);
+            return { cleared: db.clearRedeemHistory(s.userId) };
+        },
+
         "POST /api/redeem/finish": async (req, body) => {
             // The page reports what the extension did with a batch that was queued by /redeem. Results go back to the member's Discord DMs.
             const s = session(req);
@@ -531,6 +558,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (done.length) lines.push("", "**Redeemed**", ...done.slice(0, 25).map(r => `• ${r.game || "Unnamed product"} (\`${r.key.slice(0, 5)}-•••••-${r.key.slice(-5)}\`)`));
             if (failed.length) lines.push("", "**Failed** (still yours to retry)", ...failed.slice(0, 25).map(r => `• \`${r.key}\` ${r.message || r.status}`));
             if (left > 0) lines.push("", `**${left}** key${left === 1 ? "" : "s"} were not tried. Send them again with /redeem.`);
+            db.logRedeem(s.userId, results);
             if (!db.finishRedeemJob(s.userId, job.id, summary)) throw new HttpError(404, "That batch is no longer waiting.");
             const text = lines.join("\n").slice(0, 3900);
             try { db.addNotification(s.userId, { type: "redeem", title: "Batch redeem finished", body: summary, url: "#/redeem" }); } catch { /* the DM is what counts */ }

@@ -1137,8 +1137,10 @@
         if (queued && queued.running) {
           const q = queued; queued = null;
           api("/api/redeem/finish", { id: q.id, results: outcomes, aborted: m.aborted || "" })
-            .then(r => { progress.textContent += r.dm ? " The results are in your Discord DMs." : " The results are in your Notifications."; })
+            .then(r => { progress.textContent += r.dm ? " The results are in your Discord DMs." : " The results are in your Notifications."; loadHistory(); })
             .catch(e => toast(e.message, "error"));
+        } else {
+          api("/api/redeem/log", { results: outcomes }).then(loadHistory).catch(() => {});
         }
       }
     }
@@ -1149,12 +1151,19 @@
     setTimeout(() => { if (!ext) { extState.className = "notice warn"; extState.replaceChildren("The extension was not found. Install FanaticalGrabber 2.3 or newer, then reload this page. ", state.cfg && state.cfg.fanaticalUrl ? ext2(state.cfg.fanaticalUrl) : ""); } }, 1500);
     function ext2(url) { return h("a", { href: safeHref(url), target: "_blank", rel: "noopener noreferrer", text: "Get it here" }); }
     box.addEventListener("input", refresh);
-    function start(keys, fromQueue) {
+    async function start(keys, fromQueue) {
       if (!keys.length || !ext) return;
+      const skipped = [];
+      try {
+        const { known } = await api("/api/redeem/check", { keys });
+        for (const k of keys) if (known[k]) skipped.push({ key: k, status: known[k].status, game: known[k].game || "", message: "Already handled earlier" });
+        if (skipped.length) { toast(`Skipping ${skipped.length} key${skipped.length === 1 ? "" : "s"} you already redeemed.`, "ok"); keys = keys.filter(k => !known[k]); }
+      } catch { /* the check is a convenience */ }
+      if (!keys.length) { if (queued && fromQueue) api("/api/redeem/finish", { id: queued.id, results: skipped, aborted: "" }).catch(() => {}); return; }
       if (!confirm(`Are you logged into Steam in this browser? Redeem ${keys.length} key${keys.length === 1 ? "" : "s"} on that account? Redeeming cannot be undone.`)) return;
       if (queued) queued.running = Boolean(fromQueue);
       jobId = "r" + Math.random().toString(36).slice(2);
-      rows = new Map(); outcomes = []; tbody.replaceChildren(); tools.hidden = true;
+      rows = new Map(); outcomes = skipped.slice(); tbody.replaceChildren(); tools.hidden = true;
       for (const k of keys) { const tr = h("tr", {}, h("td", {}, h("code", { text: mask(k) })), h("td", { class: "muted", text: "Waiting" }), h("td")); rows.set(k, tr); tbody.append(tr); }
       table.hidden = false; running = true; stop.hidden = false; progress.textContent = "Starting…"; refresh();
       window.postMessage({ svc: "page", type: "redeem", id: jobId, items: keys }, location.origin);
@@ -1192,6 +1201,23 @@
       toast(`Added ${r.added != null ? r.added : entries.length} to your library.`, "ok");
     }));
     tools.append(copyBtn, " ", addBtn);
+    const histOut = h("div", { class: "muted small", text: "Loading…" });
+    async function loadHistory() {
+      try {
+        const d = await api("/api/redeem/history");
+        if (!d.entries.length) { histOut.className = "muted small"; histOut.replaceChildren("Nothing yet. Keys you redeem here are listed with a masked hint. The keys themselves are never kept."); return; }
+        const W = { redeemed: "Redeemed", owned: "Already owned", used: "Already used", invalid: "Invalid" };
+        const clear = h("button", { class: "btn gray small", text: "Clear history" });
+        clear.addEventListener("click", () => busy(clear, async () => { await api("/api/redeem/history/clear", {}); loadHistory(); }));
+        histOut.className = "";
+        histOut.replaceChildren(
+          h("p", { class: "muted small", text: `${d.counts.redeemed} redeemed, ${d.counts.owned + d.counts.used} already owned or used, ${d.counts.invalid} invalid. Pasted keys that appear here are skipped automatically.` }),
+          h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "Key" }), h("th", { text: "Result" }), h("th", { text: "Game" }), h("th", { text: "When" }))),
+            h("tbody", {}, d.entries.slice(0, 50).map(e => h("tr", {}, h("td", {}, h("code", { text: e.hint })), h("td", { text: W[e.status] || e.status }), h("td", { text: e.game || "" }), h("td", { class: "muted", text: new Date(e.at).toLocaleDateString() })))))),
+          h("p", {}, clear));
+      } catch (e) { histOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    loadHistory();
     refresh();
     app.replaceChildren(
       pageHead("Batch redeem", "Paste Steam keys and redeem them all in one go."),
@@ -1200,7 +1226,8 @@
         h("p", { class: "muted small", text: "Steam only accepts keys from your own logged-in browser, and a website cannot use that login by itself. The FanaticalGrabber extension can, so this page hands the keys to it. Your keys go from this page to the extension to Steam. They are never sent to this site's server." }),
         field("Steam keys", box), field("Or add a file (.txt, .csv, .json)", file), found, h("p", {}, go, " ", stop), progress),
       h("div", { class: "panel", hidden: false }, h("h3", { text: "Results" }), table, tools,
-        h("p", { class: "muted small", text: "Steam allows around 50 attempts an hour. If it blocks you, the batch stops and you can retry the rest later. Keys already handled are skipped." })));
+        h("p", { class: "muted small", text: "Steam allows around 50 attempts an hour. If it blocks you, the batch stops and you can retry the rest later. Keys already handled are skipped." })),
+      h("div", { class: "panel" }, h("h3", { text: "History" }), histOut));
   }
 
   // ---------- library ----------

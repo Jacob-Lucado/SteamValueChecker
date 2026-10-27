@@ -799,3 +799,20 @@ test("Batch redeem jobs: keys are found, replaced by a newer batch and expire af
     assert.equal(db.pendingRedeemJob("u1"), null);
     db.close();
 });
+
+test("Key history: settled keys are remembered as hashes, pasted repeats are flagged, and it can be cleared", async () => {
+    const t = await signedIn();
+    try {
+        const a = "AAAAA-BBBBB-CCCCC", b = "DDDDD-EEEEE-FFFFF", c = "GGGGG-HHHHH-JJJJJ";
+        const log = await t.request("/api/redeem/log", { method: "POST", body: { results: [{ key: a, status: "redeemed", game: "Hades" }, { key: b, status: "rate_limited" }, { key: c, status: "invalid" }, { key: "nope", status: "redeemed" }] } });
+        assert.equal(log.data.logged, 2, "only settled statuses with real keys are kept");
+        const chk = await t.request("/api/redeem/check", { method: "POST", body: { keys: [a, b, c] } });
+        assert.deepEqual(Object.keys(chk.data.known), [a], "only redeemed, owned or used keys are skipped; an invalid one may be retried");
+        const hist = (await t.request("/api/redeem/history")).data;
+        assert.equal(hist.entries.length, 2);
+        assert.ok(hist.entries.every(e => /^[A-Z0-9]{5}-•••••-[A-Z0-9]{5}$/.test(e.hint)), "only a masked hint is stored");
+        assert.doesNotMatch(JSON.stringify(t.db.exportUser("u1")), /BBBBB/, "the middle of a key never appears in an export");
+        assert.equal((await t.request("/api/redeem/history/clear", { method: "POST", body: {} })).data.cleared, 2);
+        assert.equal((await t.request("/api/redeem/history")).data.entries.length, 0);
+    } finally { await t.close(); }
+});

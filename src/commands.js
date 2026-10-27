@@ -223,7 +223,8 @@ const redeem = new SlashCommandBuilder()
     .setDescription("Redeem Steam keys in a batch: queue them here, then confirm on the dashboard")
     .addStringOption(o => o.setName("keys").setDescription("Steam keys (AAAAA-BBBBB-CCCCC), separated by spaces or lines").setMaxLength(6000))
     .addAttachmentOption(o => o.setName("file").setDescription("A .txt, .csv or .json file with keys (a FanaticalGrabber export works)"))
-    .addBooleanOption(o => o.setName("cancel").setDescription("Cancel the batch that is waiting"));
+    .addBooleanOption(o => o.setName("cancel").setDescription("Cancel the batch that is waiting"))
+    .addBooleanOption(o => o.setName("history").setDescription("Show how your recent keys turned out"));
 
 const sales = new SlashCommandBuilder()
     .setName("sales")
