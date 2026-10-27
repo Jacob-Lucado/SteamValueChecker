@@ -382,6 +382,7 @@ client.on(Events.InteractionCreate, async i => {
                 return await i.reply({ content: `Prices are now in **${name(pick)}**, here and on the dashboard.`, flags: MessageFlags.Ephemeral });
             }
             case "redeem": return await redeemUi.handle(i);
+            case "compare": return await handlers.handleCompare(i);
             case "steam": return await steamUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
             case "saleprep": return await dealUi.handleSalePrep(i);

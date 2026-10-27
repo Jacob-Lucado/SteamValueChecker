@@ -24,6 +24,7 @@ import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
+import { compareLibraries } from "../compare.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
@@ -755,6 +756,17 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
             const ids = db.sharingMembers(g.id).slice(0, 60);
             return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
+        },
+        "GET /api/compare": async (req, _b, url) => {
+            // Same rules as /compare: a friend in one of your servers who turned on sharing (/alerts share).
+            const s = session(req);
+            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const them = String(url.searchParams.get("user") ?? "");
+            if (them === s.userId) throw new HttpError(400, "Pick someone else.");
+            if (!db.sharingMembers(g.id).includes(them)) throw new HttpError(403, "That member has not opted in with /alerts share.");
+            const r = compareLibraries(db, s.userId, them);
+            const name = (await rest.memberName(g.id, them).catch(() => null)) || "Member " + them.slice(-4);
+            return { name, ...r, shared: r.shared.slice(0, 300), onlyA: r.onlyA.slice(0, 300), onlyB: r.onlyB.slice(0, 300) };
         },
         "GET /api/lfg": async (req, _b, url) => {
             const s = session(req);

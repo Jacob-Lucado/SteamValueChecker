@@ -480,3 +480,20 @@ export function trendEmbed(tr, currency, backlogNow) {
     fields.push({ name: `Since ${tr.first.days} days ago`, value: part(tr.first), inline: true });
     return { color: COLOR, title: "Your library trend", description: `Now: **${money(tr.last.cheapest, currency)}** at cheapest prices, **${money(tr.last.msrp, currency)}** at full price, **${tr.last.games}** games${backlogNow !== undefined ? `, **${backlogNow}** in the backlog` : ""}.`, fields, footer: { text: "From daily snapshots. The dashboard's Library page shows the charts." } };
 }
+
+
+const hrs = m => (m >= 60 ? `${Math.round(m / 60).toLocaleString("en-US")}h` : "0h");
+const top = (list, n, f) => (list.length ? list.slice(0, n).map(f).join("\n") + (list.length > n ? `\n…and ${list.length - n} more` : "") : "Nothing.");
+/** "You vs a friend" card from compareLibraries(). */
+export function compareEmbed(r, meName, themName) {
+    return {
+        color: COLOR, title: `${meName} vs ${themName}`,
+        description: `**${r.shared.length}** games in common (${r.overlapPct}% overlap). ${meName} owns **${r.a.games}**, ${themName} owns **${r.b.games}**.${r.a.minutes || r.b.minutes ? ` Hours on record: **${hrs(r.a.minutes)}** vs **${hrs(r.b.minutes)}**.` : ""}`,
+        fields: [
+            { name: "You both own", value: top(r.shared, 10, x => `• ${x.title}${x.aMinutes || x.bMinutes ? ` (${hrs(x.aMinutes)} / ${hrs(x.bMinutes)})` : ""}`).slice(0, 1020) },
+            { name: `Only ${meName}`, value: top(r.onlyA, 8, x => `• ${x.title}`).slice(0, 1020), inline: true },
+            { name: `Only ${themName}`, value: top(r.onlyB, 8, x => `• ${x.title}`).slice(0, 1020), inline: true }
+        ],
+        footer: { text: "Only members who opted in with /alerts share can be compared." }
+    };
+}

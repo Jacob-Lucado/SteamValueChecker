@@ -361,7 +361,7 @@ test("every slash command has a dashboard counterpart", async () => {
         value: "POST /api/value", "wishlist/import": "POST /api/wishlist/import", "wishlist/add": "POST /api/wishlist/add",
         "wishlist/remove": "POST /api/wishlist/remove", "wishlist/view": "GET /api/wishlist", "wishlist/check": "GET /api/wishlist/history",
         "wishlist/alert": "POST /api/wishlist/alert",
-        "currency": "POST /api/settings", redeem: "POST /api/redeem/finish", "redeem/history": "GET /api/redeem/history", "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
+        "currency": "POST /api/settings", redeem: "POST /api/redeem/finish", compare: "GET /api/compare", "redeem/history": "GET /api/redeem/history", "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
         "alerts/delivery": "POST /api/settings", "alerts/pause": "POST /api/settings", "alerts/resume": "POST /api/settings", "alerts/region": "POST /api/settings",
         "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",
         "alerts/freegames": "POST /api/settings", "alerts/mute": "POST /api/settings", "alerts/language": "POST /api/settings", changelog: "GET /api/changelog", "alerts/share": "POST /api/settings",
@@ -485,7 +485,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "bundle", "changelog", "currency", "freegames", "help", "library", "mydata", "privacy", "publicpage", "redeem", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "gamenight", "giveaway", "lfgCmd", "setup"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "compare", "gamenight", "giveaway", "lfgCmd", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["leaderboard", "serverlist", "serverstats"]);
     assert.match(src, /const serverOnly = b => b[\s\S]*?setContexts\(InteractionContextType\.Guild\);/, "server-only commands stay out of DMs");

@@ -816,3 +816,22 @@ test("Key history: settled keys are remembered as hashes, pasted repeats are fla
         assert.equal((await t.request("/api/redeem/history")).data.entries.length, 0);
     } finally { await t.close(); }
 });
+
+test("Compare: two libraries side by side, only with opted-in members of a shared server", async () => {
+    const t = await signedIn();
+    try {
+        t.db.ensureUser("u1", "g-admin"); t.db.ensureUser("u2", "g-admin");
+        t.db.upsertLibrary("u1", [{ itad_id: "a", title: "Alpha", paid: null }, { itad_id: "b", title: "Beta", paid: null }]);
+        t.db.upsertLibrary("u2", [{ itad_id: "b", title: "Beta", paid: null }, { itad_id: "c", title: "Gamma", paid: null }]);
+        assert.equal((await t.request("/api/compare?guild=g-admin&user=u2")).status, 403, "not opted in");
+        t.db.updateUser("u2", { share: 1 });
+        const r = await t.request("/api/compare?guild=g-admin&user=u2");
+        assert.equal(r.status, 200);
+        assert.deepEqual(r.data.shared.map(x => x.title), ["Beta"]);
+        assert.deepEqual(r.data.onlyA.map(x => x.title), ["Alpha"]);
+        assert.deepEqual(r.data.onlyB.map(x => x.title), ["Gamma"]);
+        assert.equal(r.data.overlapPct, 33);
+        assert.equal((await t.request("/api/compare?guild=g-admin&user=u1")).status, 400, "not yourself");
+        assert.equal((await t.request("/api/compare?guild=nope&user=u2")).status, 403, "only servers you are in");
+    } finally { await t.close(); }
+});

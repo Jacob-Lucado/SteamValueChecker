@@ -226,6 +226,12 @@ const redeem = new SlashCommandBuilder()
     .addBooleanOption(o => o.setName("cancel").setDescription("Cancel the batch that is waiting"))
     .addBooleanOption(o => o.setName("history").setDescription("Show how your recent keys turned out"));
 
+const compare = new SlashCommandBuilder()
+    .setName("compare")
+    .setDescription("Compare your game library with a friend: what you both own and what only one of you has")
+    .addUserOption(o => o.setName("friend").setDescription("Someone in this server who turned on /alerts share").setRequired(true))
+    .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel (default: only you see it)"));
+
 const sales = new SlashCommandBuilder()
     .setName("sales")
     .setDescription("Upcoming Steam sales and festivals, with countdowns");
@@ -327,6 +333,6 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, watch, currency, redeem, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, giveaway, setup, gamenight, lfgCmd].map(serverOnly),
+    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare].map(serverOnly),
     ...[serverlist, leaderboard, serverstats].map(serverOrDm)
 ].map(c => c.toJSON());

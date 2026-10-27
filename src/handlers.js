@@ -14,10 +14,11 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { CHANGELOG, LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, trendEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, trendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
+import { compareLibraries } from "./compare.js";
 import { importLibrary, libraryView, leaderboard, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
@@ -641,5 +642,19 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    return { handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    async function handleCompare(i) {
+        const friend = i.options.getUser("friend", true);
+        const pub = i.options.getBoolean("public") === true;
+        const reply = content => i.reply({ content, flags: MessageFlags.Ephemeral });
+        if (!i.guildId) return reply("Use this in a server, so I know who you can compare with.");
+        if (friend.id === i.user.id) return reply("That is you. Pick someone else.");
+        if (!db.sharingMembers(i.guildId).includes(friend.id)) return reply(`${friend.displayName ?? friend.username} has not opted in. They can turn it on with \`/alerts share\`.`);
+        db.ensureUser(i.user.id, i.guildId);
+        const r = compareLibraries(db, i.user.id, friend.id);
+        if (!r.a.games) return reply("Your library is empty. Use `/library add`, `/library import` or `/steam link` first.");
+        if (!r.b.games) return reply(`${friend.displayName ?? friend.username} has no games in their library yet.`);
+        return i.reply({ embeds: [compareEmbed(r, "You", friend.displayName ?? friend.username)], ...(pub ? {} : { flags: MessageFlags.Ephemeral }) });
+    }
+
+    return { handleCompare, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }
