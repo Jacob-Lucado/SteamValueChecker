@@ -2,7 +2,7 @@ import "dotenv/config";
 import v8 from "node:v8";
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType,
-    Events, GatewayIntentBits, MessageFlags,
+    Events, GatewayIntentBits, MessageFlags, Routes,
     version as DJS_VERSION
 } from "discord.js";
 import { loadConfig } from "./config.js";
@@ -28,6 +28,8 @@ import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
 import { createDealHandlers } from "./dealhandlers.js";
+import { createLfgService } from "./lfg.js";
+import { createLfgHandlers } from "./lfghandlers.js";
 import { createDashboard } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
 import { createVault } from "./vault.js";
@@ -89,6 +91,14 @@ const gwDiscord = {
         const m = await channel.send(payload);
         return { id: m.id };
     },
+    /** A server event for a looking-for-group post. Needs the Manage Events permission; the caller handles the failure. */
+    async createEvent(guildId, e) {
+        const ev = await client.rest.post(Routes.guildScheduledEvents(guildId), { body: {
+            name: e.name, description: e.description, scheduled_start_time: new Date(e.start).toISOString(), scheduled_end_time: new Date(e.end).toISOString(),
+            privacy_level: 2, entity_type: 3, entity_metadata: { location: e.location }
+        } });
+        return { id: ev.id };
+    },
     async edit(channelId, messageId, payload) {
         const channel = await client.channels.fetch(channelId);
         const m = await channel.messages.fetch(messageId);
@@ -115,6 +125,8 @@ const giveaways = cfg.keySecret
     ? createGiveawayService({ db, tickets, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
     : null;
 const gw = createGiveawayHandlers({ db, giveaways });
+const lfg = createLfgService({ db, discord: gwDiscord, log: m => console.log(`[lfg] ${m}`) });
+const lfgUi = createLfgHandlers({ db, lfg });
 
 // Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
 const ops = createOps({
@@ -146,6 +158,7 @@ client.once(Events.ClientReady, c => {
     } else console.log("Giveaways are off (set KEY_ENCRYPTION_SECRET to turn them on).");
 
     // Support tickets: quiet ones resolve and close on their own
+    schedule(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
     schedule(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
 
     // Bundles, giveaways, weekly digests, library snapshots, cleanup and the daily backup
@@ -320,6 +333,7 @@ client.on(Events.InteractionCreate, async i => {
     }
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
+    if (i.isButton() && i.customId.startsWith("lfg_")) return lfgUi.handleButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
@@ -365,6 +379,7 @@ client.on(Events.InteractionCreate, async i => {
             case "status": return await handlers.handleStatus(i);
             case "support": return await ticketUi.handleCommand(i);
             case "gamenight": return await handlers.handleGameNight(i);
+            case "lfg": return await lfgUi.handleCommand(i);
             case "setup": return await setupUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);
@@ -389,7 +404,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), config: { ...d, steamApiKey: cfg.steamApiKey, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), lfg, config: { ...d, steamApiKey: cfg.steamApiKey, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

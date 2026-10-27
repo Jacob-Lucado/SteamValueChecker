@@ -100,6 +100,19 @@ const saleprep = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("recap").setDescription("The drops your alerts caught recently")
         .addIntegerOption(o => o.setName("days").setDescription("How far back (default 14)").setMinValue(1).setMaxValue(90)));
 
+const lfgCmd = new SlashCommandBuilder()
+    .setName("lfg")
+    .setDescription("Looking for group: find people to play with, with a join button and a reminder")
+    .addSubcommand(s => s.setName("post").setDescription("Post a game and a time in this channel")
+        .addStringOption(o => o.setName("game").setDescription("What you want to play").setRequired(true).setMaxLength(80))
+        .addStringOption(o => o.setName("when").setDescription("e.g. 8pm, tonight 8pm, tomorrow 19:30, in 2 hours").setRequired(true).setMaxLength(40))
+        .addIntegerOption(o => o.setName("slots").setDescription("How many players, counting you (default 4)").setMinValue(2).setMaxValue(20))
+        .addStringOption(o => o.setName("note").setDescription("Anything else, like skill level or voice channel").setMaxLength(200))
+        .addBooleanOption(o => o.setName("event").setDescription("Also create a Discord event (the bot needs Manage Events)")))
+    .addSubcommand(s => s.setName("list").setDescription("Open posts in this server"))
+    .addSubcommand(s => s.setName("close").setDescription("Close a post you made (managers can close any)")
+        .addIntegerOption(o => o.setName("id").setDescription("The post number from /lfg list").setRequired(true).setMinValue(1)));
+
 const serverlist = new SlashCommandBuilder()
     .setName("serverlist")
     .setDescription("A wishlist shared by this server, with votes")
@@ -294,6 +307,6 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, giveaway, setup, gamenight].map(serverOnly),
+    ...[alertchannel, giveaway, setup, gamenight, lfgCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats].map(serverOrDm)
 ].map(c => c.toJSON());

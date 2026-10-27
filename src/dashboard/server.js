@@ -72,7 +72,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -652,6 +652,61 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const ids = db.sharingMembers(g.id).slice(0, 60);
             return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
         },
+        "GET /api/lfg": async (req, _b, url) => {
+            const s = session(req);
+            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const posts = db.listOpenLfg(g.id);
+            const ids = [...new Set(posts.flatMap(p => [p.creator_id, ...db.lfgMembers(p.id)]))].slice(0, 40);
+            const names = Object.fromEntries(await Promise.all(ids.map(async id => [id, (await rest.memberName(g.id, id).catch(() => null)) || "Member " + id.slice(-4)])));
+            return { me: s.userId, manageable: isManager(g), posts: posts.map(p => {
+                const members = db.lfgMembers(p.id);
+                return { id: p.id, game: p.game, starts_at: p.starts_at, slots: p.slots, note: p.note, host: names[p.creator_id] ?? p.creator_id, members: members.map(m => names[m] ?? "Member " + m.slice(-4)),
+                    joined: members.includes(s.userId), canClose: p.creator_id === s.userId || isManager(g), url: p.message_id ? `https://discord.com/channels/${p.guild_id}/${p.channel_id}/${p.message_id}` : null };
+            }) };
+        },
+
+        "POST /api/lfg": async (req, body) => {
+            const s = session(req);
+            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
+            const g = managerGuild(s, String(body.guild_id));
+            let channels;
+            try { channels = await rest.listChannels(g.id); } catch { throw new HttpError(400, "The bot is not in that server yet. Invite it first."); }
+            const channelId = String(body.channel_id ?? "");
+            if (!channels.some(c => c.id === channelId)) throw new HttpError(400, "Pick one of the server's text channels.");
+            const startsAt = Number(body.starts_at);
+            const { post, eventError } = await lfg.create({ guildId: g.id, channelId, creatorId: s.userId, game: body.game, startsAt, slots: body.slots, note: body.note, event: body.event === true });
+            return { id: post.id, eventError };
+        },
+
+        "POST /api/lfg/join": async (req, body) => {
+            const s = session(req);
+            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getLfg(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that post.");
+            return { result: (await lfg.join(p.id, s.userId)).result };
+        },
+
+        "POST /api/lfg/leave": async (req, body) => {
+            const s = session(req);
+            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getLfg(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that post.");
+            await lfg.leave(p.id, s.userId);
+            return { ok: true };
+        },
+
+        "POST /api/lfg/close": async (req, body) => {
+            const s = session(req);
+            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
+            const g = guildFor(s, String(body.guild_id));
+            const p = db.getLfg(Number(body.id));
+            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that post.");
+            await lfg.close(p.id, s.userId, { canManage: isManager(g) });
+            return { ok: true };
+        },
+
         "POST /api/gamenight": async (req, body) => {
             const s = session(req); const g = guildFor(s, String(body.guild_id));
             const allowed = new Set(db.sharingMembers(g.id));
