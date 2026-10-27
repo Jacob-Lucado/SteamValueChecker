@@ -30,7 +30,7 @@ export function parseProfileInput(input) {
     return null;
 }
 
-async function get(fetchImpl, url, timeoutMs = 15000) {
+export async function get(fetchImpl, url, timeoutMs = 15000) {
     try {
         return await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { "User-Agent": "SteamValueChecker" } });
     } catch {

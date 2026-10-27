@@ -112,7 +112,7 @@
   // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"]] },
+    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["steam", "Steam"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -897,6 +897,45 @@
       h("p", { class: "muted small", text: d.joined ? "You are on the leaderboard. Change this on the Alerts page." : "You are not on it. Opt in on the Alerts page (“Share with your server”). Ranked by percent saved vs MSRP, since members shop in different currencies." })));
   }
 
+  // ---------- steam link ----------
+  const hoursText = m => (m < 60 ? m + " min" : (m / 60).toFixed(m < 600 ? 1 : 0) + " h");
+  async function steamView() {
+    const out = h("div", { class: "muted", text: "Loading…" });
+    const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
+    const linkBtn = h("button", { class: "btn blue", text: "Link and import", onclick: () => busy(linkBtn, async () => {
+      const r = await api("/api/steam/link", { profile: profile.value });
+      toast(`Found ${r.owned} games. Added ${r.added}, updated ${r.updated}.` + (r.unmatched ? ` ${r.unmatched} had no price match.` : ""), "ok"); load();
+    }) });
+    async function load() {
+      try {
+        const d = await api("/api/steam");
+        if (!d.link) { out.className = ""; out.replaceChildren(h("div", { class: "empty", text: "No Steam profile linked yet. Your Game details must be public on Steam for this to work." })); return; }
+        const st = d.stats, cur = d.currency;
+        const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
+        const list = (rows, f) => h("ul", { class: "plain" }, rows.map(r => h("li", {}, h("b", { text: r.title }), " ", f(r))));
+        const sync = h("button", { class: "btn gray", text: "Sync now", onclick: () => busy(sync, async () => { const r = await api("/api/steam/sync", {}); toast(`Synced ${r.owned} games.`, "ok"); load(); }) });
+        const unlinkGames = h("input", { type: "checkbox" });
+        const unlink = h("button", { class: "btn red", text: "Unlink", onclick: () => busy(unlink, async () => { const r = await api("/api/steam/unlink", { removeGames: unlinkGames.checked }); toast(r.removed ? `Unlinked and removed ${r.removed} games.` : "Unlinked.", "ok"); load(); }) });
+        out.className = "";
+        out.replaceChildren(
+          h("div", { class: "grid four" }, tile("Games", String(st.games)), tile("Played", String(st.playedGames), hoursText(st.totalMinutes)),
+            tile("Cost per hour", st.perHour === null ? "–" : money(st.perHour, cur), "games with an hour or more"), tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
+          h("div", { class: "grid two" },
+            st.mostPlayed.length ? h("div", { class: "panel" }, h("h3", { text: "Most played" }), list(st.mostPlayed, r => h("span", { class: "muted", text: hoursText(r.minutes) }))) : null,
+            st.bestValue.length ? h("div", { class: "panel" }, h("h3", { text: "Best value per hour" }), list(st.bestValue, r => h("span", { class: "muted", text: money(r.perHour, cur) + "/h" + (r.estimated ? "*" : "") + " · " + hoursText(r.minutes) }))) : null,
+            st.worstValue.length ? h("div", { class: "panel" }, h("h3", { text: "Priciest per hour" }), list(st.worstValue, r => h("span", { class: "muted", text: money(r.perHour, cur) + "/h" + (r.estimated ? "*" : "") + " · " + hoursText(r.minutes) }))) : null,
+            st.unplayedTop.length ? h("div", { class: "panel" }, h("h3", { text: "Biggest unplayed" }), list(st.unplayedTop, r => h("span", { class: "muted", text: money(r.msrp, cur) }))) : null),
+          h("p", { class: "muted small", text: "* No price recorded, so today's cheapest price is used. Last synced " + (d.link.synced_at ? new Date(d.link.synced_at).toLocaleString() : "never") + ". What you paid is never read from Steam." }),
+          h("div", { class: "panel" }, h("h3", { text: "Manage" }), h("div", { class: "row" }, sync), h("p"), h("label", { class: "check" }, unlinkGames, " Also remove the games that came from Steam"), h("p"), unlink));
+      } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    app.replaceChildren(pageHead("Steam", "Link your public Steam profile to fill your library, playtime and cost per hour automatically."),
+      h("div", { class: "panel" }, h("h3", { text: "Link a profile" }), field("Steam profile", profile), h("p"), linkBtn,
+        h("p", { class: "muted small", text: "Set Game details to Public in Steam's privacy settings. Only the public ID and your games with playtime are stored." })),
+      out);
+    load();
+  }
+
   // ---------- library ----------
   async function libraryView() {
     const body = h("div", { class: "muted", text: "Loading prices…" });
@@ -1611,7 +1650,7 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, steam: steamView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();

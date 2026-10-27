@@ -26,6 +26,7 @@ import { createNotifier } from "./notify.js";
 import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, runGuildFeeds, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
+import { createSteamHandlers } from "./steamhandlers.js";
 import { createDashboard } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
 import { createVault } from "./vault.js";
@@ -43,13 +44,14 @@ const cfg = loadConfig();
 const STARTED_AT = Date.now();
 const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version; } catch { return "1.0.0"; } })();
 // Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
-const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret] });
+const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey] });
 logs.capture();
 const itad = createItad({ apiKey: cfg.itadKey });
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
+const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey });
 
 // DMs and channel posts go through here, so notify.js can be tested without Discord.
 const discord = {
@@ -212,8 +214,19 @@ const status = createStatusMonitor({
 });
 client.once(Events.ClientReady, () => { status.start(); });
 const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
+/** Splits long text at line breaks so each piece fits one embed description (4096). Discord allows 6000 characters across a message's embeds. */
+export function chunkText(text, max = 3900) {
+    const out = [];
+    let cur = "";
+    for (const line of String(text).split("\n")) {
+        if (cur && cur.length + line.length + 1 > max) { out.push(cur); cur = ""; }
+        cur += (cur ? "\n" : "") + line;
+    }
+    if (cur) out.push(cur);
+    return out;
+}
 const embedReply = (i, description) =>
-    i.reply({ embeds: [{ color: 0xff9800, description }], flags: MessageFlags.Ephemeral });
+    i.reply({ embeds: chunkText(description).map(d => ({ color: 0xff9800, description: d })), flags: MessageFlags.Ephemeral });
 
 function pageButtons(page, pages) {
     return new ActionRowBuilder().addComponents(
@@ -341,6 +354,7 @@ client.on(Events.InteractionCreate, async i => {
             case "alertchannel": return await handlers.handleAlertChannel(i);
             case "giveaway": return await gw.handleCommand(i);
             case "library": return await handlers.handleLibrary(i);
+            case "steam": return await steamUi.handle(i);
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
             case "freegames": return await handlers.handleFreeGames(i);
@@ -371,7 +385,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), config: { ...d, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), config: { ...d, steamApiKey: cfg.steamApiKey, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

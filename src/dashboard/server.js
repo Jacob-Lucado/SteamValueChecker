@@ -26,6 +26,7 @@ import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
+import { resolveProfile, syncSteamLibrary, playStats } from "../steamlib.js";
 import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
@@ -49,7 +50,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -69,7 +70,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -475,7 +476,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (paid !== null && !(Number.isFinite(paid) && paid >= 0 && paid <= 10_000)) throw new HttpError(400, "Paid must be a number from 0 to 10,000.");
             const r = await importLibrary(db, itad, s.userId, [{ title: String(body.title ?? ""), paid }]);
             if (r.notFound.length) throw new HttpError(400, `I could not find a game called ${r.notFound[0]}.`);
-            if (r.skippedForLimit) throw new HttpError(400, "Your library is full (500 games).");
+            if (r.skippedForLimit) throw new HttpError(400, "Your library is full (1,500 games).");
             return r;
         },
 
@@ -504,6 +505,44 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!item) throw new HttpError(404, "That game is not in your library.");
             if (!db.setLibraryStatus(s.userId, item.itad_id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, finished or dropped.");
             return { title: item.title, status: body.status };
+        },
+
+        "GET /api/steam": async (req) => {
+            const s = session(req);
+            const u = userRow(s);
+            const link = db.getSteamLink(s.userId);
+            if (!link) return { link: null };
+            const view = await libraryView(db, itad, u, { snapshot: false });
+            return { link, currency: view.currency, stats: playStats(view.rows.filter(r => r.appid)) };
+        },
+
+        "POST /api/steam/link": async (req, body) => {
+            const s = session(req);
+            const undo = cooldown(s.userId, "steam");
+            userRow(s);
+            try {
+                const steamid = await resolveProfile(String(body.profile ?? ""), steamFetch);
+                return await syncSteamLibrary({ db, itad, userId: s.userId, steamid, apiKey: config.steamApiKey ?? null, fetchImpl: steamFetch });
+            } catch (err) { undo(); throw err; }
+        },
+
+        "POST /api/steam/sync": async (req) => {
+            const s = session(req);
+            const undo = cooldown(s.userId, "steam");
+            userRow(s);
+            const link = db.getSteamLink(s.userId);
+            if (!link) { undo(); throw new HttpError(400, "Link your Steam profile first."); }
+            try { return await syncSteamLibrary({ db, itad, userId: s.userId, steamid: link.steamid, apiKey: config.steamApiKey ?? null, fetchImpl: steamFetch }); }
+            catch (err) { undo(); throw err; }
+        },
+
+        "POST /api/steam/unlink": async (req, body) => {
+            const s = session(req);
+            userRow(s);
+            if (!db.removeSteamLink(s.userId)) throw new HttpError(400, "No Steam profile is linked.");
+            let removed = 0;
+            if (body.removeGames === true) for (const g of db.listLibrary(s.userId).filter(g => g.appid)) if (db.removeLibrary(s.userId, g.itad_id)) removed++;
+            return { ok: true, removed };
         },
 
         "GET /api/library/next": async (req) => {

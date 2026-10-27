@@ -77,6 +77,16 @@ const library = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("remove").setDescription("Remove a game")
         .addStringOption(o => gameOption(o, true)));
 
+const steam = new SlashCommandBuilder()
+    .setName("steam")
+    .setDescription("Link your public Steam profile: playtime, cost per hour and your library, filled in for you")
+    .addSubcommand(s => s.setName("link").setDescription("Link a public Steam profile and import your games")
+        .addStringOption(o => o.setName("profile").setDescription("Profile link, custom name or SteamID64").setRequired(true).setMaxLength(200)))
+    .addSubcommand(s => s.setName("sync").setDescription("Refresh your games and playtime from Steam"))
+    .addSubcommand(s => s.setName("view").setDescription("Playtime, best and worst value per hour, and what you never played"))
+    .addSubcommand(s => s.setName("unlink").setDescription("Forget your Steam profile")
+        .addBooleanOption(o => o.setName("remove_games").setDescription("Also remove the games that came from Steam")));
+
 const serverlist = new SlashCommandBuilder()
     .setName("serverlist")
     .setDescription("A wishlist shared by this server, with votes")
@@ -270,7 +280,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, support, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, sales, publicpage, status, alerts, library, freegames, steam, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight].map(serverOnly),
     ...[serverlist, leaderboard, serverstats].map(serverOrDm)
 ].map(c => c.toJSON());

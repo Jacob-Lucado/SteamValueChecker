@@ -431,7 +431,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const paid = i.options.getNumber("paid");
                 const r = await importLibrary(db, itad, i.user.id, [{ title: i.options.getString("title", true), paid }]);
                 if (r.notFound.length) throw new UserError(`I could not find a game called ${r.notFound[0]}.`);
-                if (r.skippedForLimit) throw new UserError("Your library is full (500 games).");
+                if (r.skippedForLimit) throw new UserError("Your library is full (1,500 games).");
                 return void await i.editReply(r.updated ? "Updated that game in your library." : "Added to your library.");
             }
             if (sub === "import") {
@@ -439,7 +439,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const r = await importLibrary(db, itad, i.user.id, entries);
                 const lines = [`Added **${r.added}**, updated **${r.updated}**.`];
                 if (r.notFound.length) lines.push(`${r.notFound.length} could not be matched and were skipped.`);
-                if (r.skippedForLimit) lines.push(`Your library is full (500 games), so ${r.skippedForLimit} were skipped.`);
+                if (r.skippedForLimit) lines.push(`Your library is full (1,500 games), so ${r.skippedForLimit} were skipped.`);
                 if (entries.some(e => e.paid === null)) lines.push("Games without a Paid column are counted in value but not in savings.");
                 return void await i.editReply(lines.join("\n"));
             }
