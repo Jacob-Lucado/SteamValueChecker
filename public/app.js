@@ -1536,7 +1536,7 @@
         return h("label", { class: "check" }, box, " ", `Send ${text} to Discord`);
       });
       holder.className = "";
-      holder.replaceChildren(
+      holder.replaceChildren(...[
         prizes.length ? h("div", { class: "panel" }, h("h3", { text: "Your prizes" }),
           h("p", { class: "muted small", text: "Press Claim key on the winners message in Discord. Keys are never shown here." }),
           ...prizes.map(p => h("div", { class: "kv" }, h("span", {}, h("b", { text: p.label + " " }), h("span", { class: "muted", text: `${p.title} · ${PRIZE_STATUS[p.status] || p.status}${p.status === "assigned" && p.deadline ? " · claim by " + new Date(p.deadline).toLocaleString() : ""}` })),
@@ -1545,7 +1545,7 @@
         h("div", { class: "panel" }, h("h3", { text: "Recent" }),
           d.items.length ? h("div", { class: "cards" }, ...d.items.map(n => h(n.url && /^https:\/\//.test(n.url) ? "a" : "div", { class: "card-link" + (n.read ? "" : " unread"), ...(n.url && /^https:\/\//.test(n.url) ? { href: n.url, target: "_blank", rel: "noopener noreferrer" } : {}) },
             h("span", { class: "icon", text: TYPE_ICON[n.type] || "🔔" }),
-            h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${new Date(n.at).toLocaleString()}${n.body ? " · " + n.body.replace(/[*_`]/g, "").slice(0, 140) : ""}` }))))) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." })));
+            h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${new Date(n.at).toLocaleString()}${n.body ? " · " + n.body.replace(/[*_`]/g, "").slice(0, 140) : ""}` }))))) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." }))].filter(Boolean));
       if (d.unread) { await api("/api/notifications/read", {}); state.me.unread = 0; renderChrome(); }
     } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
