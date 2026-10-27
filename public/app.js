@@ -192,11 +192,13 @@
     const links = [state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean);
     if (state.me) {
       acct.replaceChildren(...[...links,
-        state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
-        h("span", { class: "who", text: state.me.user.username }),
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
         currencyPicker(), contrastButton(), themeButton(),
-        h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } })].filter(Boolean));
+        // The signed-in name and Log out always sit together, set slightly apart from the tools.
+        h("div", { class: "user-chip" },
+          state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
+          h("span", { class: "who", text: state.me.user.username }),
+          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } }))].filter(Boolean));
     } else {
       acct.replaceChildren(...[...links, themeButton(), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
