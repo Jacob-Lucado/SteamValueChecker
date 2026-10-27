@@ -143,22 +143,33 @@
 
   // Prices come from one saved setting, the region (it decides the currency). It is kept on the account, so the Discord bot uses it too.
   function currencyPicker() {
-    const pick = select(state.cfg.regions.map(r => [r.value, r.name]), state.me.settings.region);
-    pick.className = "currency-select";
-    pick.title = "Currency for prices here and in the Discord bot";
-    pick.setAttribute("aria-label", "Currency");
-    pick.addEventListener("change", async () => {
-      const before = state.me.settings.region;
-      pick.disabled = true;
-      try {
-        const r = await api("/api/settings", { region: pick.value });
-        state.me.settings = r.settings;
-        toast("Prices are now in " + (state.cfg.regions.find(x => x.value === pick.value)?.name ?? pick.value) + ".", "ok");
-        route();
-      } catch (e) { pick.value = before; toast(e.message, "error"); }
-      pick.disabled = false;
+    const regions = state.cfg.regions;
+    const current = regions.find(r => r.value === state.me.settings.region);
+    const code = (current && current.name.match(/\(([A-Z]{3})\)/) || [])[1] || state.me.settings.region;
+    const btn = h("button", { type: "button", class: "nav-btn cur-btn", "aria-haspopup": "true", "aria-expanded": "false", title: "Currency for prices here and in the Discord bot", "aria-label": "Currency: " + (current ? current.name : code) }, code, " ▾");
+    const menu = h("div", { class: "menu right scroll", role: "menu", hidden: true },
+      ...regions.map(r => {
+        const item = h("button", { type: "button", role: "menuitem", class: r.value === state.me.settings.region ? "active" : "", text: r.name });
+        item.addEventListener("click", async () => {
+          closeMenu();
+          if (r.value === state.me.settings.region) return;
+          try {
+            const res = await api("/api/settings", { region: r.value });
+            state.me.settings = res.settings;
+            toast("Prices are now in " + r.name + ".", "ok");
+            route();
+          } catch (e) { toast(e.message, "error"); }
+        });
+        return item;
+      }));
+    const wrap = h("div", { class: "nav-group" }, btn, menu);
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const wasOpen = openMenu && openMenu.btn === btn;
+      closeMenu();
+      if (!wasOpen) { menu.hidden = false; btn.setAttribute("aria-expanded", "true"); openMenu = { wrap, btn, menu }; }
     });
-    return pick;
+    return wrap;
   }
 
   function renderChrome() {
@@ -176,7 +187,8 @@
       }
       const active = pages.some(([id]) => id === view);
       const menu = h("div", { class: "menu", role: "menu", hidden: true },
-        ...pages.map(([id, text]) => h("a", { href: "#/" + id, role: "menuitem", class: view === id ? "active" : "" }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)));
+        ...pages.map(([id, text]) => h("a", { href: "#/" + id, role: "menuitem", class: view === id ? "active" : "" }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
+        group.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗") : null);
       const btn = h("button", { type: "button", class: "nav-btn" + (active ? " active" : ""), "aria-haspopup": "true", "aria-expanded": "false" }, navText(group.id, group.label), " ▾", badge(unread));
       const wrap = h("div", { class: "nav-group" }, btn, menu);
       btn.addEventListener("click", e => {
@@ -189,7 +201,7 @@
     }).filter(Boolean));
 
     const acct = document.getElementById("account");
-    const links = [state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean);
+    const links = state.me ? [] : [state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
     if (state.me) {
       acct.replaceChildren(...[...links,
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
