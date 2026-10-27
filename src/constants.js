@@ -12,7 +12,19 @@ export const REGIONS = [
     { name: "Norway (NOK)", value: "NO" },
     { name: "Poland (PLN)", value: "PL" },
     { name: "Japan (JPY)", value: "JP" },
-    { name: "Mexico (MXN)", value: "MX" }
+    { name: "Mexico (MXN)", value: "MX" },
+    { name: "India (INR)", value: "IN" },
+    { name: "South Korea (KRW)", value: "KR" },
+    { name: "Singapore (SGD)", value: "SG" },
+    { name: "Hong Kong (HKD)", value: "HK" },
+    { name: "Turkey (TRY)", value: "TR" },
+    { name: "South Africa (ZAR)", value: "ZA" },
+    { name: "Denmark (DKK)", value: "DK" },
+    { name: "Czechia (CZK)", value: "CZ" },
+    { name: "Thailand (THB)", value: "TH" },
+    { name: "Indonesia (IDR)", value: "ID" },
+    { name: "Argentina (ARS)", value: "AR" },
+    { name: "Chile (CLP)", value: "CL" }
 ];
 
 export const ALERT_TYPES = [

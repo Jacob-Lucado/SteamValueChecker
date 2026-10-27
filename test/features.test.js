@@ -684,3 +684,10 @@ test("help mentions the newer commands and stays within what the bot can send", 
     for (const c of ["/steam link", "/bundle", "/saleprep", "/lfg post", "/library grabber"]) assert.ok(HELP.includes(c), c);
     assert.ok(HELP.length < 5800, `help is ${HELP.length} characters`);
 });
+
+test("the currency list fits a Discord choice menu (25 max) with unique codes", async () => {
+    const { REGIONS } = await import("../src/constants.js");
+    assert.ok(REGIONS.length <= 25, `${REGIONS.length} regions`);
+    assert.equal(new Set(REGIONS.map(r => r.value)).size, REGIONS.length);
+    assert.ok(REGIONS.some(r => r.value === "IN"));
+});
