@@ -154,3 +154,15 @@ test("game night: shared games, almost-shared games and a group buy, only for op
     db.setGameNight("g1", false);
     assert.equal(voiceGroups({ db, eligible: [hit("a"), hit("b")], voiceMap: () => new Map([["vc1", ["a", "b"]]]) }).length, 0);
 });
+
+test("game night says who has no games on record, and points them to /steam link", async () => {
+    const { gameNight, gameNightEmbed } = await import("../src/gamenight.js");
+    const db = openDb(":memory:");
+    for (const id of ["a", "b", "c"]) { db.ensureUser(id, "g1"); db.updateUser(id, { share: 1 }); }
+    for (const id of ["a", "b"]) db.upsertLibrary(id, [{ itad_id: "hades", title: "HADES", paid: null }]);
+    const r = await gameNight({ db, itad: { getPrices: async () => new Map() }, userIds: ["a", "b", "c"] });
+    assert.deepEqual(r.empty, ["c"]);
+    const field = gameNightEmbed(r).fields.find(f => f.name === "No games on record");
+    assert.match(field.value, /<@c>/);
+    assert.match(field.value, /\/steam link/);
+});

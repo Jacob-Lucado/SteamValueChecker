@@ -6,6 +6,8 @@ import { gameNight } from "../gamenight.js";
 import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { join as joinPath } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -1153,6 +1155,18 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                     "Content-Type": "application/json; charset=utf-8",
                     "Content-Disposition": 'attachment; filename="my-steam-value-checker-data.json"',
                     "Cache-Control": "no-store"
+                });
+            }
+
+            if (key === "GET /api/admin/backup") {
+                const s = session(req);
+                if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can download backups.");
+                let names = [];
+                try { names = readdirSync(config.backupDir ?? "").filter(n => /^steamvaluechecker-\d{4}-\d{2}-\d{2}\.db$/.test(n)).sort(); } catch { /* none yet */ }
+                if (!names.length) throw new HttpError(404, "There is no backup yet.");
+                const name = names[names.length - 1];
+                return send(res, 200, readFileSync(joinPath(config.backupDir, name)), {
+                    "Content-Type": "application/vnd.sqlite3", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store"
                 });
             }
 

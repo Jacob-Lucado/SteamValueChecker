@@ -12,7 +12,7 @@ const MANAGE = String(0x20);
 
 const deal = (amount, regular) => ({ shop: { name: "GOG" }, price: { amount, currency: "USD" }, regular: { amount: regular, currency: "USD" }, cut: 0, url: "https://deal.example/x" });
 
-async function setup({ sendFails = false, guildsOf, config = {}, giveawayService = null } = {}) {
+async function setup({ sendFails = false, guildsOf, config = {}, giveawayService = null, extra = {}, itadExtra = {} } = {}) {
     const db = openDb(":memory:");
     let clock = 1_000_000;
     const sent = [];
@@ -42,7 +42,7 @@ async function setup({ sendFails = false, guildsOf, config = {}, giveawayService
         getGiveawayList: async () => [{ id: "1", title: "Alpha", shop: "Epic", url: "https://e.example/a", expiry: null }, { id: "2", title: "Beta", shop: "Epic", url: "https://e.example/b", expiry: null }, { id: "3", title: "Evil", shop: "Steam", url: "javascript:alert(1)", expiry: null }],
         getHistory: async () => Array.from({ length: 400 }, (_, i) => ({ t: 1_700_000_000_000 + i * 86400_000, price: 10 + (i % 7), regular: 20, shop: "GOG" }))
     };
-    const dash = createDashboard({ db, itad, rest, giveaways: typeof giveawayService === "function" ? giveawayService(db) : giveawayService, config: { publicUrl: ORIGIN, port: 0, host: "127.0.0.1", clientId: "123", ...config }, now: () => clock });
+    const dash = createDashboard({ db, itad: { ...itad, ...itadExtra }, rest, ...(typeof extra === "function" ? extra(db) : extra), giveaways: typeof giveawayService === "function" ? giveawayService(db) : giveawayService, config: { publicUrl: ORIGIN, port: 0, host: "127.0.0.1", clientId: "123", ...config }, now: () => clock });
     const addr = await dash.listen(0, "127.0.0.1");
     const base = `http://127.0.0.1:${addr.port}`;
     let cookie = "";
@@ -605,4 +605,80 @@ test("visit counter for the FanaticalGrabber page: only that origin counts, one 
         const pre = await t.request("/api/visits/fanaticalgrabber", { method: "OPTIONS", headers: { Origin: SITE } });
         assert.equal(pre.status, 204);
     } finally { await t.close(); }
+});
+
+const XML = '<gamesList><games><game><appID>10</appID><name><![CDATA[Counter]]></name><hoursOnRecord>12.5</hoursOnRecord></game></games></gamesList>';
+
+test("Steam linking: link, view, sync and unlink from the dashboard", async () => {
+    const t = await signedIn({
+        extra: { steamFetch: async () => ({ ok: true, status: 200, text: async () => XML }) },
+        itadExtra: { lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, "id-" + i.slice(4)])) }
+    });
+    assert.equal((await t.request("/api/steam")).data.link, null);
+    const bad = await t.request("/api/steam/link", { method: "POST", body: { profile: "!!" } });
+    assert.equal(bad.status, 400);
+    const ok = await t.request("/api/steam/link", { method: "POST", body: { profile: "76561198000000000" } });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.data.owned, 1); assert.equal(ok.data.added, 1);
+    const view = await t.request("/api/steam");
+    assert.equal(view.data.link.steamid, "76561198000000000");
+    assert.equal(view.data.stats.playedGames, 1);
+    assert.equal((await t.request("/api/steam/sync", { method: "POST", body: {} })).status, 429, "a second sync right away waits");
+    t.advance(61_000);
+    assert.equal((await t.request("/api/steam/sync", { method: "POST", body: {} })).status, 200);
+    const un = await t.request("/api/steam/unlink", { method: "POST", body: { removeGames: true } });
+    assert.equal(un.data.removed, 1);
+    assert.equal((await t.request("/api/steam")).data.link, null);
+    assert.equal((await t.request("/api/steam/unlink", { method: "POST", body: {} })).status, 400);
+    await t.close();
+});
+
+test("Steam linking: a private profile is a clear 400, not a crash", async () => {
+    const t = await signedIn({ extra: { steamFetch: async () => ({ ok: true, status: 200, text: async () => "<gamesList></gamesList>" }) } });
+    const r = await t.request("/api/steam/link", { method: "POST", body: { profile: "76561198000000000" } });
+    assert.equal(r.status, 400);
+    assert.match(r.data.error ?? r.text, /Game details/);
+    await t.close();
+});
+
+test("the owner can download the latest backup, nobody else can", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "svc-bak-"));
+    const t = await signedIn({ config: { ownerId: "u1", backupDir: dir } });
+    assert.equal((await t.request("/api/admin/backup")).status, 404, "no backup yet");
+    writeFileSync(join(dir, "steamvaluechecker-2026-10-25.db"), "old");
+    writeFileSync(join(dir, "steamvaluechecker-2026-10-26.db"), "newest");
+    const r = await t.request("/api/admin/backup");
+    assert.equal(r.status, 200);
+    assert.equal(r.text, "newest");
+    assert.match(r.headers.get("content-disposition"), /steamvaluechecker-2026-10-26\.db/);
+    await t.close();
+    const other = await signedIn({ config: { backupDir: dir } });
+    assert.equal((await other.request("/api/admin/backup")).status, 403);
+    await other.close();
+});
+
+test("looking for group from the dashboard: managers post, members join, other servers are walled off", async () => {
+    const { createLfgService } = await import("../src/lfg.js");
+    const posts = [];
+    const t = await signedIn({ extra: db => ({ lfg: createLfgService({ db, discord: { post: async (c, p) => { posts.push({ c, p }); return { id: "m1" }; }, edit: async () => {} } }) }) });
+    const soon = Date.now() + 3600_000;
+    const made = await t.request("/api/lfg", { method: "POST", body: { guild_id: "g-admin", channel_id: "c2", game: "Deep Rock", starts_at: soon, slots: 3 } });
+    assert.equal(made.status, 200);
+    assert.equal(posts[0].c, "c2");
+    assert.equal((await t.request("/api/lfg", { method: "POST", body: { guild_id: "g-admin", channel_id: "nope", game: "X", starts_at: soon } })).status, 400, "only the server's own channels");
+    assert.equal((await t.request("/api/lfg", { method: "POST", body: { guild_id: "g-member", channel_id: "c2", game: "X", starts_at: soon } })).status, 403, "members cannot post from the dashboard");
+    const list = await t.request("/api/lfg?guild=g-admin");
+    assert.equal(list.data.posts.length, 1);
+    assert.equal(list.data.posts[0].joined, true, "the host is in");
+    assert.equal(list.data.posts[0].canClose, true);
+    const id = made.data.id;
+    assert.equal((await t.request("/api/lfg/leave", { method: "POST", body: { guild_id: "g-admin", id } })).status, 200);
+    assert.equal((await t.request("/api/lfg/join", { method: "POST", body: { guild_id: "g-admin", id } })).data.result, "joined");
+    assert.equal((await t.request("/api/lfg/join", { method: "POST", body: { guild_id: "g-member", id } })).status, 404, "a post from another server is not found");
+    assert.equal((await t.request("/api/lfg/close", { method: "POST", body: { guild_id: "g-admin", id } })).status, 200);
+    assert.equal((await t.request("/api/lfg?guild=g-admin")).data.posts.length, 0);
+    await t.close();
 });

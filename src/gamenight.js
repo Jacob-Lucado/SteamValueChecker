@@ -19,6 +19,7 @@ export async function gameNight({ db, itad, userIds, region = "US" }) {
         wants.set(u.discord_id, new Set(db.listItems(u.discord_id).map(i => (title.set(i.itad_id, i.title), i.itad_id))));
     }
     const ids = users.map(u => u.discord_id);
+    const empty = ids.filter(id => owned.get(id).size === 0);
     const everyGame = new Set([...owned.values()].flatMap(s => [...s]));
     const allOwn = [], almost = [];
     for (const g of everyGame) {
@@ -39,7 +40,7 @@ export async function gameNight({ db, itad, userIds, region = "US" }) {
     const buy = wanted.map(([g, w]) => ({ id: g, title: title.get(g), wanters: w, now: prices.get(g) ? current(summarize(prices.get(g))) : null }));
 
     const byTitle = (a, b) => a.title.localeCompare(b.title);
-    return { people: ids, hidden, allOwn: allOwn.sort(byTitle), almost: almost.sort((a, b) => a.missing.length - b.missing.length || byTitle(a, b)), buy };
+    return { people: ids, hidden, empty, allOwn: allOwn.sort(byTitle), almost: almost.sort((a, b) => a.missing.length - b.missing.length || byTitle(a, b)), buy };
 }
 
 const list = (rows, f) => (rows.length ? rows.slice(0, MAX_LIST).map(f).join("\n") + (rows.length > MAX_LIST ? `\n…and ${rows.length - MAX_LIST} more` : "") : null);
@@ -53,6 +54,7 @@ export function gameNightEmbed(r) {
     if (near) fields.push({ name: "Almost everyone owns", value: near });
     const buy = list(r.buy, b => `• **${b.title}** wanted by ${b.wanters.map(w => `<@${w}>`).join(", ")}${b.now?.price != null ? ` at **${money(b.now.price, b.now.currency ?? "USD")}**${b.now.discount > 0 ? ` (-${Math.round(b.now.discount * 100)}%)` : ""}${b.now.shop ? ` at ${b.now.shop}` : ""}` : ""}`);
     if (buy) fields.push({ name: "Worth buying together", value: buy });
+    if (r.empty?.length) fields.push({ name: "No games on record", value: `${r.empty.map(m => `<@${m}>`).join(", ")} ${r.empty.length === 1 ? "has" : "have"} no games in the bot yet, so ${r.empty.length === 1 ? "they are" : "they are all"} left out of "Everyone owns". Link Steam with \`/steam link\` or add games with \`/library import\`.` });
     return { color: 0xff9800, title: `Game night for ${r.people.length}`, description: r.people.map(p => `<@${p}>`).join(" "), fields,
         footer: { text: `${r.hidden ? `${r.hidden} not counted (not opted in)  •  ` : ""}Only members who opted in with /alerts share are included` } };
 }
