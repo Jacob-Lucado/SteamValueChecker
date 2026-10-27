@@ -1,7 +1,7 @@
 // /steam: link a public Steam profile so the library, playtime and cost per hour fill in by themselves.
 import { MessageFlags } from "discord.js";
 import { libraryView } from "./library.js";
-import { resolveProfile, syncSteamLibrary, playStats, fmtHours } from "./steamlib.js";
+import { resolveProfile, syncSteamLibrary, playStats, steamValue, fmtHours } from "./steamlib.js";
 import { SteamError } from "./steam.js";
 import { UserError } from "./errors.js";
 import { ItadError } from "./itad.js";
@@ -18,6 +18,7 @@ const perHour = (r, cur) => `${money(r.perHour, cur)}/h${r.estimated ? "*" : ""}
 export function steamEmbed({ stats, link, currency }) {
     const fields = [];
     fields.push({ name: "Overall", value: [
+        stats.value ? `Library value: **${money(stats.value.msrp, currency)}** at full price, **${money(stats.value.cheapest, currency)}** at today's cheapest prices` : null,
         `**${stats.games}** games, **${stats.playedGames}** played, **${fmtHours(stats.totalMinutes)}** on record`,
         stats.perHour !== null ? `About **${money(stats.perHour, currency)}** per hour across games with an hour or more` : null
     ].filter(Boolean).join("\n") });
@@ -44,6 +45,7 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
 
     const summary = r => [
         `Linked. Found **${r.owned}** games (**${fmtHours(r.minutes)}** played).`,
+        r.value && r.value.games ? `Library value: **${money(r.value.msrp, r.value.currency)}** at full price, **${money(r.value.cheapest, r.value.currency)}** at today's cheapest prices.` : null,
         `Added **${r.added}**, updated **${r.updated}**.` + (r.unmatched ? ` ${r.unmatched} could not be matched to a price and were skipped.` : ""),
         r.skippedForLimit ? `Your library is full, so ${r.skippedForLimit} were skipped.` : null,
         r.truncated ? "Only your most played games fit in the library limit." : null,

@@ -981,7 +981,7 @@
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
     const linkBtn = h("button", { class: "btn blue", text: "Link and import", onclick: () => busy(linkBtn, async () => {
       const r = await api("/api/steam/link", { profile: profile.value });
-      toast(`Found ${r.owned} games. Added ${r.added}, updated ${r.updated}.` + (r.unmatched ? ` ${r.unmatched} had no price match.` : ""), "ok"); load();
+      toast(`Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + `. Added ${r.added}, updated ${r.updated}.` + (r.unmatched ? ` ${r.unmatched} had no price match.` : ""), "ok"); load();
     }) });
     async function load() {
       try {
@@ -995,7 +995,7 @@
         const unlink = h("button", { class: "btn red", text: "Unlink", onclick: () => busy(unlink, async () => { const r = await api("/api/steam/unlink", { removeGames: unlinkGames.checked }); toast(r.removed ? `Unlinked and removed ${r.removed} games.` : "Unlinked.", "ok"); load(); }) });
         out.className = "";
         out.replaceChildren(
-          h("div", { class: "grid four" }, tile("Games", String(st.games)), tile("Played", String(st.playedGames), hoursText(st.totalMinutes)),
+          h("div", { class: "grid four" }, tile("Library value", money(st.value.msrp, cur), money(st.value.cheapest, cur) + " at today's cheapest"), tile("Games", String(st.games)), tile("Played", String(st.playedGames), hoursText(st.totalMinutes)),
             tile("Cost per hour", st.perHour === null ? "–" : money(st.perHour, cur), "games with an hour or more"), tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
           h("div", { class: "grid two" },
             st.mostPlayed.length ? h("div", { class: "panel" }, h("h3", { text: "Most played" }), list(st.mostPlayed, r => h("span", { class: "muted", text: hoursText(r.minutes) }))) : null,

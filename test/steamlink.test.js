@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, fmtHours } from "../src/steamlib.js";
+import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, steamValue, fmtHours } from "../src/steamlib.js";
 import { SteamError } from "../src/steam.js";
 
 const XML = `<gamesList><steamID64>76561198000000000</steamID64><games>
@@ -103,4 +103,15 @@ test("reads the games page Steam serves for public profiles, and falls back to t
     assert.equal(page.length, 2); assert.equal(urls.length, 1, "stops at the first source that has games");
     const viaXml = await fetchOwnedGames("76561198000000000", { fetchImpl: async u => res(String(u).includes("xml=1") ? XML : "<html></html>") });
     assert.equal(viaXml[0].appid, 10);
+});
+
+test("a sync reports what the synced games are worth, and a price lookup problem does not undo it", async () => {
+    const { db, itad } = rig();
+    const priced = { ...itad, getPrices: async ids => new Map(ids.map(id => [id, { deals: [{ shop: { name: "GOG" }, price: { amount: 10, currency: "USD" }, regular: { amount: 20, currency: "USD" }, cut: 50, url: "https://x.example" }], historyLow: { all: { amount: 5 } } }])) };
+    const r = await syncSteamLibrary({ db, itad: priced, userId: "u1", steamid: "76561198000000000", fetchImpl: async () => res(XML) });
+    assert.equal(r.value.games, 1); assert.equal(r.value.msrp, 20); assert.equal(r.value.cheapest, 10);
+    const broken = rig();
+    const r2 = await syncSteamLibrary({ db: broken.db, itad: broken.itad, userId: "u1", steamid: "76561198000000000", fetchImpl: async () => res(XML) });
+    assert.equal(r2.value, null); assert.equal(r2.owned, 2);
+    assert.deepEqual(steamValue([{ msrp: 20, best: { price: 10 } }, { msrp: null, best: null }], "EUR"), { games: 2, msrp: 20, cheapest: 10, currency: "EUR" });
 });

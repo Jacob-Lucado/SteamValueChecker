@@ -2,6 +2,7 @@
 // and work out what the playtime says about value. Pure logic plus two fetches; Discord and the dashboard call this.
 import { STEAM_SHOP_ID, SteamError, parseProfileInput, resolveVanity, get } from "./steam.js";
 import { MAX_LIBRARY_PER_USER } from "./db.js";
+import { libraryView } from "./library.js";
 
 const PRIVATE_LIBRARY = "I can't see that library. In Steam, open Profile > Edit Profile > Privacy Settings and set **Game details** to Public (and turn off \"Always keep my total playtime private\"), then try again.";
 
@@ -105,7 +106,19 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
     const minutes = owned.reduce((t, g) => t + g.minutes, 0);
     db.setSteamLink(userId, steamid);
     db.markSteamSynced(userId, { games: owned.length, minutes });
-    return { steamid, owned: owned.length, matched: games.length, unmatched: ranked.length - games.length, minutes, truncated: owned.length > ranked.length, ...res };
+    // What the synced games are worth right now. A price lookup problem must not undo a good sync, so it is optional.
+    let value = null;
+    try {
+        const view = await libraryView(db, itad, db.getUser(userId), { snapshot: false });
+        value = steamValue(view.rows.filter(r => r.appid), view.currency);
+    } catch { /* value stays null */ }
+    return { steamid, owned: owned.length, matched: games.length, unmatched: ranked.length - games.length, minutes, truncated: owned.length > ranked.length, value, ...res };
+}
+
+/** Total value of the Steam-synced games: at full price (MSRP) and at the cheapest current price. */
+export function steamValue(rows, currency = "USD") {
+    const sum = f => rows.reduce((t, r) => t + (Number.isFinite(f(r)) ? f(r) : 0), 0);
+    return { games: rows.length, msrp: sum(r => r.msrp), cheapest: sum(r => r.best?.price), currency };
 }
 
 const hours = m => m / 60;
@@ -124,7 +137,7 @@ export function playStats(rows) {
     const spend = costed.reduce((t, r) => t + price(r), 0), costedMin = costed.reduce((t, r) => t + r.minutes, 0);
     const unplayed = rows.filter(r => (r.minutes ?? 0) < 60);
     return {
-        games: rows.length, playedGames: played.length, totalMinutes: totalMin,
+        value: steamValue(rows), games: rows.length, playedGames: played.length, totalMinutes: totalMin,
         perHour: costedMin ? spend / hours(costedMin) : null,
         mostPlayed: [...played].sort((a, b) => b.minutes - a.minutes).slice(0, 5),
         bestValue: [...costed].sort((a, b) => a.perHour - b.perHour).slice(0, 3),
