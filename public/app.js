@@ -1084,6 +1084,7 @@
       h("div", { class: "grid two" },
         h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), field("Paid", paid), h("p"), add),
         h("div", { class: "panel" }, h("h3", { text: "Import" }), field("FanaticalGrabber export (a Paid column is used)", file), h("p"), imp)),
+      h("div", { class: "notice" }, "Want it filled in for you? ", h("a", { href: "#/steam", text: "Link your Steam profile" }), " to sync every game you own, with playtime. It never changes what you paid."),
       h("div", { class: "panel" }, h("h3", { text: "FanaticalGrabber one-click send" }), grabberOut),
       body);
     grabberLoad();
