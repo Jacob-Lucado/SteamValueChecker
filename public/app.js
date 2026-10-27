@@ -979,7 +979,18 @@
     }) });
     const checkBtn = h("button", { class: "btn blue", text: "Check bundles", onclick: () => busy(checkBtn, loadBundles) });
     const planBtn = h("button", { class: "btn blue", text: "Update plan", onclick: () => busy(planBtn, loadPrep) });
+    const regionGame = h("input", { type: "text", placeholder: "A game, e.g. Hades", maxlength: "100" });
+    const regionOut = h("div");
+    const regionBtn = h("button", { class: "btn blue", text: "Compare regions", onclick: () => busy(regionBtn, async () => {
+      const r = await api("/api/regions?game=" + encodeURIComponent(regionGame.value.trim()));
+      const ranked = r.rows.some(x => x.usd !== null);
+      regionOut.replaceChildren(h("div", { class: "panel" }, h("h3", { text: r.game + ": price by region" }),
+        h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "Region" }), h("th", { text: "Cheapest" }), h("th", { text: ranked ? "In US dollars" : "" }), h("th", { text: "Shop" }))),
+          h("tbody", {}, r.rows.map(x => h("tr", {}, h("td", { text: x.name + (x.home ? " (yours)" : "") }), h("td", { text: money(x.price, x.currency) }), h("td", { class: "muted", text: x.usd !== null && x.currency !== "USD" ? "about " + money(x.usd, "USD") : "" }), h("td", { text: x.shop })))))),
+        h("p", { class: "muted small", text: "Keys and accounts are usually locked to the region they were sold in, so use this for information." })));
+    }) });
     app.replaceChildren(pageHead("Deals", "Is a bundle worth it, and what to buy before the next Steam sale."),
+      h("h2", { text: "Price by region" }), h("div", { class: "panel" }, field("Game", regionGame), h("p"), regionBtn), regionOut,
       h("h2", { text: "Bundle check" }), h("div", { class: "panel" }, field("Game", game), h("p"), checkBtn), bundlesOut,
       h("h2", { text: "Sale prep" }), h("div", { class: "panel" }, field("Budget", budget), h("p"), planBtn), prepOut,
       h("h2", { text: "Sale recap" }), recapBtn, recapOut);

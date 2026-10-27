@@ -83,7 +83,10 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/bundle titles:` | Is a bundle worth it? Compares each tier to the cheapest current prices of the games you do not own |
 | `/saleprep plan\|recap` | A buy-now / wait list and a budget plan for the next Steam sale, and a recap of what alerts caught |
 | `/lfg post\|list\|close` | Looking-for-group posts with Join/Leave buttons, an optional Discord scheduled event (needs Manage Events) and auto-close |
-| `/redeem` | Queue Steam keys (`keys:` or a `file:`) for batch redeeming. Open the dashboard's **Batch redeem** page while logged into Steam, with FanaticalGrabber 2.3+, and press Run. Results come back as a DM. Keys are stored only until the batch finishes (24 hours at most) |
+| `/redeem` | Queue Steam keys (`keys:` or a `file:`) for batch redeeming. Open the dashboard's **Batch redeem** page while logged into Steam, with FanaticalGrabber 2.3+, and press Run. Results come back as a DM. Keys are stored only until the batch finishes (24 hours at most). `history:true` lists recent results (masked hints) and repeat keys are skipped |
+| `/library trend` | How your library value, game count and backlog changed over the last month and since tracking began (from daily snapshots) |
+| `/compare` | Your library against a friend's: games you both own, and what only one of you has. They must have opted in with `/alerts share`; server only |
+| `/regions` | One game's cheapest price in about a dozen regions, ranked in US dollars (recent ECB exchange rates). Region-locked keys mean this is for information |
 | `/library grabber` | A link code for the FanaticalGrabber extension's **Send to Steam Value Checker** button. Only game titles are sent, never keys; the code is stored hashed and can be turned off |
 | `/currency [currency]` | Choose the currency prices are shown in (saved; the dashboard's top-bar picker is the same setting). With no option it shows yours |
 | `/mydata export\|delete` | Download or delete everything stored about you |

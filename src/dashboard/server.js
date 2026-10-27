@@ -25,6 +25,7 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { importLibrary, libraryView, leaderboard, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
 import { compareLibraries } from "../compare.js";
+import { regionPrices } from "../regions.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
@@ -77,7 +78,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, dm = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -889,6 +890,18 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 gameIds = [hit.id];
             } else gameIds = db.listItems(s.userId).map(i => i.itad_id);
             return await bundleCheck({ db, itad, user: u, gameIds });
+        },
+
+        "GET /api/regions": async (req, _b, url) => {
+            const s = session(req);
+            cooldown(s.userId, "deals");
+            const u = userRow(s);
+            const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
+            if (!title) throw new HttpError(400, "Type a game title.");
+            const [hit] = await itad.lookupTitles([title]);
+            if (!hit?.id) throw new HttpError(400, `I could not find a game called ${title}.`);
+            const rows = await regionPrices({ itad, fx, itadId: hit.id, home: u.region, majorOnly: u.stores === "major" }).catch(e => { throw new HttpError(502, e.message); });
+            return { game: hit.matched || title, rows };
         },
 
         "GET /api/saleprep": async (req, _b, url) => {

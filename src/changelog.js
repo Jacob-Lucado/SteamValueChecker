@@ -6,6 +6,9 @@ export const CHANGELOG = [
         "`/lfg post` makes a looking-for-group post with Join and Leave buttons and an optional Discord event.",
         "FanaticalGrabber 2.2 can send game titles (never keys) straight to your library: get a code with `/library grabber`.",
         "Batch redeem (dashboard, Games menu): paste Steam keys and redeem them all through the FanaticalGrabber extension 2.3. `/redeem` queues keys from Discord and DMs you the results.",
+        "Release-day alerts: games on your wishlist that are not out yet get a DM when they launch. Mute with `/alerts mute`.",
+        "`/library trend` and a backlog chart on the Library page. `/compare` your library with a friend. `/regions` ranks a game's price across regions.",
+        "Batch redeem remembers how keys turned out (masked), skips repeats and has `/redeem history:true`.",
         "The bot owner can download the latest backup from the Admin page." ] },
     { version: "2026.10.27", date: "2026-10-27", title: "Game night and easier setup", items: [
         "`/gamenight`: what everyone in your voice channel can play together, who is missing a game, and what to buy together.",

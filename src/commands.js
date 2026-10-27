@@ -232,6 +232,11 @@ const compare = new SlashCommandBuilder()
     .addUserOption(o => o.setName("friend").setDescription("Someone in this server who turned on /alerts share").setRequired(true))
     .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel (default: only you see it)"));
 
+const regions = new SlashCommandBuilder()
+    .setName("regions")
+    .setDescription("See one game's cheapest price in other regions, ranked in US dollars")
+    .addStringOption(o => o.setName("game").setDescription("Game title").setRequired(true).setMaxLength(100));
+
 const sales = new SlashCommandBuilder()
     .setName("sales")
     .setDescription("Upcoming Steam sales and festivals, with countdowns");
@@ -332,7 +337,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, watch, currency, redeem, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare].map(serverOnly),
     ...[serverlist, leaderboard, serverstats].map(serverOrDm)
 ].map(c => c.toJSON());

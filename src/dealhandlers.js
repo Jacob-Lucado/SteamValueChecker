@@ -3,10 +3,12 @@ import { MessageFlags } from "discord.js";
 import { bundleCheck } from "./bundle.js";
 import { salePrep, saleRecap } from "./saleprep.js";
 import { bundleEmbeds, salePrepEmbed, recapEmbed } from "./dealrender.js";
+import { regionPrices } from "./regions.js";
+import { regionsEmbed } from "./render.js";
 import { UserError } from "./errors.js";
 import { ItadError } from "./itad.js";
 
-export function createDealHandlers({ db, itad }) {
+export function createDealHandlers({ db, itad, fx = null }) {
     const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
     async function failed(i, err) {
         const known = err instanceof UserError || err instanceof ItadError;
@@ -33,6 +35,19 @@ export function createDealHandlers({ db, itad }) {
         } catch (err) { await failed(i, err); }
     }
 
+    async function handleRegions(i) {
+        const user = db.ensureUser(i.user.id, i.guildId);
+        try {
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            const title = i.options.getString("game", true);
+            const [hit] = await itad.lookupTitles([title]);
+            if (!hit?.id) throw new UserError(`I could not find a game called ${title}.`);
+            const rows = await regionPrices({ itad, fx, itadId: hit.id, home: user.region, majorOnly: user.stores === "major" });
+            if (!rows.length) throw new UserError("No shop has a price for that game in these regions.");
+            return void await i.editReply({ embeds: [regionsEmbed(hit.matched || title, rows)] });
+        } catch (err) { await failed(i, err); }
+    }
+
     async function handleSalePrep(i) {
         const user = db.ensureUser(i.user.id, i.guildId);
         try {
@@ -42,5 +57,5 @@ export function createDealHandlers({ db, itad }) {
             return void await i.editReply({ embeds: [salePrepEmbed(r)] });
         } catch (err) { await failed(i, err); }
     }
-    return { handleBundle, handleSalePrep };
+    return { handleRegions, handleBundle, handleSalePrep };
 }

@@ -497,3 +497,15 @@ export function compareEmbed(r, meName, themName) {
         footer: { text: "Only members who opted in with /alerts share can be compared." }
     };
 }
+
+
+/** Region price ranking from regionPrices(). */
+export function regionsEmbed(game, rows) {
+    const ranked = rows.some(r => r.usd !== null);
+    const lines = rows.map((r, i) => `${ranked ? `${i + 1}. ` : "• "}**${r.name}** ${money(r.price, r.currency)}${r.usd !== null && r.currency !== "USD" ? ` (about ${money(r.usd, "USD")})` : ""} at ${r.shop}${r.home ? " ← your region" : ""}`);
+    return {
+        color: COLOR, title: `${game}: price by region`,
+        description: (lines.join("\n") || "No prices found.").slice(0, 3900),
+        footer: { text: ranked ? "Converted at recent exchange rates. Keys and accounts are usually locked to the region they were sold in, so use this for information." : "Shown in each region's own currency. Keys and accounts are usually region-locked." }
+    };
+}

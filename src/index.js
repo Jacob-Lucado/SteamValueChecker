@@ -29,6 +29,7 @@ import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
 import { createRedeemHandlers } from "./redeemhandlers.js";
 import { createDealHandlers } from "./dealhandlers.js";
+import { createFx } from "./fx.js";
 import { createLfgService } from "./lfg.js";
 import { createLfgHandlers } from "./lfghandlers.js";
 import { createDashboard } from "./dashboard/server.js";
@@ -57,7 +58,8 @@ const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey });
-const dealUi = createDealHandlers({ db, itad });
+const fx = createFx();
+const dealUi = createDealHandlers({ db, itad, fx });
 
 // DMs and channel posts go through here, so notify.js can be tested without Discord.
 const discord = {
@@ -385,6 +387,7 @@ client.on(Events.InteractionCreate, async i => {
             case "compare": return await handlers.handleCompare(i);
             case "steam": return await steamUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
+            case "regions": return await dealUi.handleRegions(i);
             case "saleprep": return await dealUi.handleSalePrep(i);
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
@@ -417,7 +420,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), lfg, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), lfg, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

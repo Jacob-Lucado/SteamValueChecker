@@ -103,3 +103,17 @@ test("sale recap counts the drops your alerts caught in the window", () => {
     assert.equal(r.games, 2); assert.equal(r.spend, 13); assert.equal(r.saved, 15);
     assert.equal(saleRecap(db, "u1", { days: 1, now: now + 3 * 86400_000 }).alerts, 0);
 });
+
+test("regions: ranks a game's cheapest price across regions in US dollars, and degrades without exchange rates", async () => {
+    const { regionPrices } = await import("../src/regions.js");
+    const { createFx } = await import("../src/fx.js");
+    const entry = (amount, currency) => ({ deals: [{ shop: { name: "Steam" }, price: { amount, currency }, regular: { amount: amount * 2, currency }, cut: 50, url: "https://s" }] });
+    const itad = { getPrices: async (ids, country) => new Map([[ids[0], country === "US" ? entry(20, "USD") : country === "TR" ? entry(300, "TRY") : country === "IN" ? entry(1000, "INR") : null]]) };
+    const fx = createFx({ fetchImpl: async () => ({ ok: true, json: async () => ({ rates: { TRY: 30, INR: 80 } }) }) });
+    const rows = await regionPrices({ itad, fx, itadId: "g", home: "US" });
+    assert.deepEqual(rows.map(r => r.region), ["TR", "IN", "US"]);
+    assert.equal(rows.find(r => r.region === "US").home, true);
+    assert.equal(Math.round(rows.find(r => r.region === "TR").usd), 10);
+    const noFx = await regionPrices({ itad, fx: createFx({ fetchImpl: async () => { throw new Error("offline"); } }), itadId: "g", home: "US" });
+    assert.equal(noFx.length, 3); assert.ok(noFx.every(r => r.usd === null || r.currency === "USD"), "only dollars convert without rates");
+});
