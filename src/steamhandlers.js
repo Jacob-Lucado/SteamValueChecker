@@ -1,7 +1,7 @@
-// /steam: link a public Steam profile so the library, playtime and cost per hour fill in by themselves.
+// /steam: link a public Steam profile so the library and hours played fill in by themselves, and get a pick for what to play next.
 import { MessageFlags } from "discord.js";
 import { libraryView } from "./library.js";
-import { resolveProfile, syncSteamLibrary, playStats, steamValue, fmtHours } from "./steamlib.js";
+import { resolveProfile, syncSteamLibrary, playStats, steamNext, fmtHours } from "./steamlib.js";
 import { SteamError } from "./steam.js";
 import { UserError } from "./errors.js";
 import { ItadError } from "./itad.js";
@@ -13,23 +13,29 @@ const last = new Map();
 const wait = userId => { const w = COOLDOWN_MS - (Date.now() - (last.get(userId) ?? 0)); if (w > 0) throw new UserError(`Slow down a little. Try again in ${Math.ceil(w / 1000)}s.`); last.set(userId, Date.now()); };
 
 const line = (r, f) => `• **${r.title}** ${f(r)}`;
-const perHour = (r, cur) => `${money(r.perHour, cur)}/h${r.estimated ? "*" : ""}`;
+const art = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIComponent(appid)}/header.jpg`;
 
 export function steamEmbed({ stats, link, currency }) {
     const fields = [];
-    fields.push({ name: "Overall", value: [
-        stats.value ? `Library value: **${money(stats.value.msrp, currency)}** at full price, **${money(stats.value.cheapest, currency)}** at today's cheapest prices` : null,
-        `**${stats.games}** games, **${stats.playedGames}** played, **${fmtHours(stats.totalMinutes)}** on record`,
-        stats.perHour !== null ? `About **${money(stats.perHour, currency)}** per hour across games with an hour or more` : null
+    fields.push({ name: "Your library", value: [
+        stats.value ? `Worth **${money(stats.value.msrp, currency)}** at full price, **${money(stats.value.cheapest, currency)}** at today's cheapest prices` : null,
+        `**${stats.games}** games, **${stats.playedGames}** played, **${fmtHours(stats.totalMinutes)}** on record`
     ].filter(Boolean).join("\n") });
     if (stats.mostPlayed.length) fields.push({ name: "Most played", value: stats.mostPlayed.map(r => line(r, x => fmtHours(x.minutes))).join("\n") });
-    if (stats.bestValue.length) fields.push({ name: "Best value", value: stats.bestValue.map(r => line(r, x => `${perHour(x, currency)} (${fmtHours(x.minutes)})`)).join("\n"), inline: true });
-    if (stats.worstValue.length) fields.push({ name: "Priciest per hour", value: stats.worstValue.map(r => line(r, x => `${perHour(x, currency)} (${fmtHours(x.minutes)})`)).join("\n"), inline: true });
-    if (stats.unplayedCount) fields.push({ name: "Barely or never played", value: `**${stats.unplayedCount}** games, worth **${money(stats.unplayedMsrp, currency)}** at full price` + (stats.unplayedTop.length ? "\n" + stats.unplayedTop.map(r => line(r, x => money(x.msrp, currency))).join("\n") : "") });
+    if (stats.unplayedCount) fields.push({ name: "Barely or never played", value: `**${stats.unplayedCount}** games, worth **${money(stats.unplayedMsrp, currency)}** at full price` + (stats.unplayedTop.length ? "\n" + stats.unplayedTop.slice(0, 3).map(r => line(r, x => (x.msrp ? money(x.msrp, currency) : "no price"))).join("\n") : "") });
     return {
-        color: 0x66c0f4, title: "Your Steam playtime",
+        color: 0x66c0f4, title: "Your Steam library",
         fields,
-        footer: { text: `Synced ${link?.synced_at ? new Date(link.synced_at).toISOString().slice(0, 10) : "never"}  •  * = no price recorded, so today's cheapest price is used. Run /steam sync to refresh.` }
+        footer: { text: `Synced ${link?.synced_at ? new Date(link.synced_at).toISOString().slice(0, 10) : "never"}  •  Run /steam sync to refresh, /steam next for something to play.` }
+    };
+}
+
+export function nextEmbed(n, currency) {
+    return {
+        color: 0x66c0f4, title: `🎯 Play ${n.pick.title}`, description: n.why,
+        image: n.pick.appid ? { url: art(n.pick.appid) } : undefined,
+        fields: n.others.length ? [{ name: "Also good", value: n.others.map(r => line(r, x => (x.minutes ? fmtHours(x.minutes) : "unplayed"))).join("\n") }] : [],
+        footer: { text: n.remaining ? `${n.remaining} more to choose from. Run /steam next again for another.` : "That is everything left that you have not finished." }
     };
 }
 
@@ -49,7 +55,7 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
         `Added **${r.added}**, updated **${r.updated}**.` + (r.unmatched ? ` ${r.unmatched} could not be matched to a price and were skipped.` : ""),
         r.skippedForLimit ? `Your library is full, so ${r.skippedForLimit} were skipped.` : null,
         r.truncated ? "Only your most played games fit in the library limit." : null,
-        "What you paid is never read from Steam. Add it with `/library add` to see savings. Run `/steam view` for the playtime breakdown."
+        "What you paid is never read from Steam. Add it with `/library add` to see savings. Run `/steam view` for the breakdown or `/steam next` for something to play."
     ].filter(Boolean).join("\n");
 
     async function handle(i) {
@@ -66,6 +72,14 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
                 return eph(i, removed ? `Unlinked, and removed ${removed} games that came from Steam.` : "Unlinked. Your library stays as it is. Add `remove_games: true` next time to remove the games that came from Steam.");
             }
             const link = db.getSteamLink(i.user.id);
+            if (sub === "next") {
+                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                const view = await libraryView(db, itad, db.getUser(i.user.id), { snapshot: false });
+                const n = steamNext(view.rows);
+                if (!n) throw new UserError("Nothing left to suggest. Everything from Steam is finished or dropped, or not synced yet (`/steam sync`).");
+                return void await i.editReply({ embeds: [nextEmbed(n, view.currency)] });
+            }
             if (sub === "view") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");
                 await i.deferReply({ flags: MessageFlags.Ephemeral });

@@ -82,11 +82,12 @@ const library = new SlashCommandBuilder()
 
 const steam = new SlashCommandBuilder()
     .setName("steam")
-    .setDescription("Link your public Steam profile: playtime, cost per hour and your library, filled in for you")
+    .setDescription("Link your public Steam profile: your library, hours played, what you never played, and what to play next")
     .addSubcommand(s => s.setName("link").setDescription("Link a public Steam profile and import your games")
         .addStringOption(o => o.setName("profile").setDescription("Profile link, custom name or SteamID64").setRequired(true).setMaxLength(200)))
     .addSubcommand(s => s.setName("sync").setDescription("Refresh your games and playtime from Steam"))
-    .addSubcommand(s => s.setName("view").setDescription("Playtime, best and worst value per hour, and what you never played"))
+    .addSubcommand(s => s.setName("view").setDescription("Your Steam library: games, hours played, what you never played and what it is worth"))
+    .addSubcommand(s => s.setName("next").setDescription("What should I play next? A pick from your own library"))
     .addSubcommand(s => s.setName("unlink").setDescription("Forget your Steam profile")
         .addBooleanOption(o => o.setName("remove_games").setDescription("Also remove the games that came from Steam")));
 

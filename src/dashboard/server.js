@@ -28,7 +28,7 @@ import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
-import { resolveProfile, syncSteamLibrary, playStats } from "../steamlib.js";
+import { resolveProfile, syncSteamLibrary, playStats, steamNext } from "../steamlib.js";
 import { bundleCheck } from "../bundle.js";
 import { salePrep, saleRecap } from "../saleprep.js";
 import { isDlc } from "../freemenu.js";
@@ -533,6 +533,16 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!link) return { link: null };
             const view = await libraryView(db, itad, u, { snapshot: false });
             return { link, currency: view.currency, stats: playStats(view.rows.filter(r => r.appid)) };
+        },
+
+        // What to play next from the Steam library. `skip` (comma-separated ids already offered) makes "pick another" fresh.
+        "GET /api/steam/next": async (req, _body, url) => {
+            const s = session(req);
+            const u = userRow(s);
+            if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Link your Steam profile first.");
+            const skip = String(url.searchParams.get("skip") ?? "").split(",").filter(x => /^[\w-]{1,64}$/.test(x)).slice(0, 200);
+            const view = await libraryView(db, itad, u, { snapshot: false });
+            return { next: steamNext(view.rows, { skip }), currency: view.currency };
         },
 
         "POST /api/steam/link": async (req, body) => {

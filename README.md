@@ -79,7 +79,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/alertchannel group minimum:` | Post once when that many opted-in members watch the same game and it hits their alert |
 | `/alerts pause`, `resume`, `region`, `stores`, `status` | Your alert settings |
 | `/alertchannel set\|clear\|show` | Server admins (Manage Server): the channel used when a DM fails, or when a member opts out of DMs |
-| `/steam link\|sync\|view\|unlink` | Link a **public** Steam profile: imports your games with playtime, cost per hour and a backlog planner. Uses `STEAM_API_KEY` if set, otherwise the public profile XML. *Game details* must be public |
+| `/steam link\|sync\|view\|next\|unlink` | Link a **public** Steam profile: imports your games with hours played, shows what you never played and the total value, and `/steam next` picks what to play next from your own library. Uses `STEAM_API_KEY` if set, otherwise the public games page. *Game details* must be public |
 | `/bundle titles:` | Is a bundle worth it? Compares each tier to the cheapest current prices of the games you do not own |
 | `/saleprep plan\|recap` | A buy-now / wait list and a budget plan for the next Steam sale, and a recap of what alerts caught |
 | `/lfg post\|list\|close` | Looking-for-group posts with Join/Leave buttons, an optional Discord scheduled event (needs Manage Events) and auto-close |

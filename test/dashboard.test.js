@@ -623,6 +623,10 @@ test("Steam linking: link, view, sync and unlink from the dashboard", async () =
     const view = await t.request("/api/steam");
     assert.equal(view.data.link.steamid, "76561198000000000");
     assert.equal(view.data.stats.playedGames, 1);
+    assert.ok(view.data.stats.value && !("perHour" in view.data.stats));
+    const nx = await t.request("/api/steam/next");
+    assert.equal(nx.data.next.pick.title, "Counter");
+    assert.equal((await t.request("/api/steam/next?skip=" + encodeURIComponent(nx.data.next.pick.itad_id))).data.next, null, "pick another skips what was offered");
     assert.equal((await t.request("/api/steam/sync", { method: "POST", body: {} })).status, 429, "a second sync right away waits");
     t.advance(61_000);
     assert.equal((await t.request("/api/steam/sync", { method: "POST", body: {} })).status, 200);

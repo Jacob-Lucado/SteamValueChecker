@@ -124,26 +124,42 @@ export function steamValue(rows, currency = "USD") {
 const hours = m => m / 60;
 export const fmtHours = m => (m < 60 ? `${m} min` : `${hours(m).toFixed(hours(m) < 10 ? 1 : 0)} h`);
 
-/**
- * What the playtime says about value. Cost per hour uses what you paid, or today's cheapest price when you did not
- * record a price (flagged with `estimated`). Games under an hour are left out of the cost-per-hour ranks, because one
- * short session says little.
- */
+/** What your Steam library looks like: games, hours, what is unplayed and what it is all worth. */
 export function playStats(rows) {
     const played = rows.filter(r => (r.minutes ?? 0) > 0);
-    const totalMin = rows.reduce((t, r) => t + (r.minutes ?? 0), 0);
-    const price = r => (r.paid ?? r.best?.price ?? null);
-    const costed = played.filter(r => price(r) !== null && r.minutes >= 60).map(r => ({ ...r, perHour: price(r) / hours(r.minutes), estimated: r.paid === null }));
-    const spend = costed.reduce((t, r) => t + price(r), 0), costedMin = costed.reduce((t, r) => t + r.minutes, 0);
     const unplayed = rows.filter(r => (r.minutes ?? 0) < 60);
+    const unplayedList = [...unplayed].sort((a, b) => (b.msrp ?? 0) - (a.msrp ?? 0));
     return {
-        value: steamValue(rows), games: rows.length, playedGames: played.length, totalMinutes: totalMin,
-        perHour: costedMin ? spend / hours(costedMin) : null,
+        value: steamValue(rows),
+        games: rows.length, playedGames: played.length, totalMinutes: rows.reduce((t, r) => t + (r.minutes ?? 0), 0),
         mostPlayed: [...played].sort((a, b) => b.minutes - a.minutes).slice(0, 5),
-        bestValue: [...costed].sort((a, b) => a.perHour - b.perHour).slice(0, 3),
-        worstValue: [...costed].sort((a, b) => b.perHour - a.perHour).slice(0, 3),
         unplayedCount: unplayed.length,
         unplayedMsrp: unplayed.reduce((t, r) => t + (r.msrp ?? 0), 0),
-        unplayedTop: [...unplayed].sort((a, b) => (b.msrp ?? 0) - (a.msrp ?? 0)).slice(0, 3)
+        unplayedTop: unplayedList.slice(0, 5)
     };
+}
+
+/**
+ * What to play next, from your own library. In order of preference: what you marked as playing, games you started and
+ * never went back to (30 minutes to 10 hours), games you never touched (worth the most first), then anything else not
+ * finished or dropped. `skip` is a list of itad ids already offered, so "pick another" does not repeat. Returns
+ * { pick, others, why, remaining } or null.
+ */
+export function steamNext(rows, { rand = Math.random, skip = [] } = {}) {
+    const skipped = new Set(skip);
+    const tier = r => (r.status === "playing" ? 0 : r.minutes >= 30 && r.minutes < 600 ? 1 : r.minutes < 30 ? 2 : 3);
+    const pool = rows.filter(r => r.appid && r.status !== "finished" && r.status !== "dropped")
+        .sort((a, b) => tier(a) - tier(b) || (tier(a) === 1 ? b.minutes - a.minutes : tier(a) === 2 ? (b.msrp ?? 0) - (a.msrp ?? 0) : a.minutes - b.minutes) || a.title.localeCompare(b.title));
+    const fresh = pool.filter(r => !skipped.has(r.itad_id));
+    if (!fresh.length) return null;
+    const best = tier(fresh[0]);
+    const top = fresh.filter(r => tier(r) === best).slice(0, 3);
+    const pick = top[Math.floor(rand() * top.length)];
+    const why = [
+        "You are playing this right now. Finish it before you start something new.",
+        `You started this (${fmtHours(pick.minutes)}) and never went back. Pick it up again.`,
+        pick.msrp ? `You own it and have not played it. It is one of the most valuable games in your library (${pick.msrp.toFixed(2)} at full price).` : "You own it and have not played it yet.",
+        `You have ${fmtHours(pick.minutes)} in it but it is not finished. Time to wrap it up.`
+    ][tier(pick)];
+    return { pick, others: fresh.filter(r => r !== pick).slice(0, 2), why, remaining: fresh.length - 1 };
 }

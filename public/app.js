@@ -992,21 +992,45 @@
         const list = (rows, f) => h("ul", { class: "plain" }, rows.map(r => h("li", {}, h("b", { text: r.title }), " ", f(r))));
         const sync = h("button", { class: "btn gray", text: "Sync now", onclick: () => busy(sync, async () => { const r = await api("/api/steam/sync", {}); toast(`Synced ${r.owned} games.`, "ok"); load(); }) });
         const unlinkGames = h("input", { type: "checkbox" });
-        const unlink = h("button", { class: "btn red", text: "Unlink", onclick: () => busy(unlink, async () => { const r = await api("/api/steam/unlink", { removeGames: unlinkGames.checked }); toast(r.removed ? `Unlinked and removed ${r.removed} games.` : "Unlinked.", "ok"); load(); }) });
+        const unlink = h("button", { class: "btn red", text: "Unlink", onclick: () => busy(unlink, async () => { const r = await api("/api/steam/unlink", { removeGames: unlinkGames.checked }); toast(r.removed ? `Unlinked, and removed ${r.removed} games.` : "Unlinked.", "ok"); load(); }) });
+
+        // What to play next: a pick from your own library. "Pick another" never repeats one already offered.
+        const offered = [];
+        const nextOut = h("div");
+        const nextBtn = h("button", { class: "btn green", text: "What should I play next?" });
+        async function pickNext() {
+          const q = offered.length ? "?skip=" + encodeURIComponent(offered.join(",")) : "";
+          const r = await api("/api/steam/next" + q);
+          if (!r.next) { nextOut.replaceChildren(h("div", { class: "notice warn", text: offered.length ? "That is everything. Start over to see them again." : "Nothing left to suggest. Everything is finished or dropped." })); offered.length = 0; nextBtn.textContent = "What should I play next?"; return; }
+          const n = r.next;
+          offered.push(n.pick.itad_id);
+          nextBtn.textContent = "Pick another";
+          nextOut.replaceChildren(h("div", { class: "panel" },
+            n.pick.appid ? h("img", { class: "next-art", src: `https://cdn.akamai.steamstatic.com/steam/apps/${n.pick.appid}/header.jpg`, alt: "", loading: "lazy" }) : null,
+            h("h3", { text: "🎯 " + n.pick.title }), h("p", { class: "muted", text: n.why }),
+            n.others.length ? h("p", { class: "muted small", text: "Also good: " + n.others.map(o => o.title).join(", ") }) : null,
+            h("p", { class: "muted small", text: n.remaining ? `${n.remaining} more to choose from.` : "That is everything left that you have not finished." })));
+        }
+        nextBtn.addEventListener("click", () => busy(nextBtn, pickNext));
+
         out.className = "";
         out.replaceChildren(
-          h("div", { class: "grid four" }, tile("Library value", money(st.value.msrp, cur), money(st.value.cheapest, cur) + " at today's cheapest"), tile("Games", String(st.games)), tile("Played", String(st.playedGames), hoursText(st.totalMinutes)),
-            tile("Cost per hour", st.perHour === null ? "–" : money(st.perHour, cur), "games with an hour or more"), tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
+          h("div", { class: "grid four" },
+            tile("Library value", money(st.value.msrp, cur), money(st.value.cheapest, cur) + " at today's cheapest"),
+            tile("Games", String(st.games), st.playedGames + " played"),
+            tile("Hours played", hoursText(st.totalMinutes)),
+            tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
+          h("div", { class: "panel" }, h("h3", { text: "What should I play next?" }),
+            h("p", { class: "muted small", text: "A pick from your own library: what you are playing, games you started and never finished, then the most valuable ones you never touched." }), nextBtn),
+          nextOut,
           h("div", { class: "grid two" },
             st.mostPlayed.length ? h("div", { class: "panel" }, h("h3", { text: "Most played" }), list(st.mostPlayed, r => h("span", { class: "muted", text: hoursText(r.minutes) }))) : null,
-            st.bestValue.length ? h("div", { class: "panel" }, h("h3", { text: "Best value per hour" }), list(st.bestValue, r => h("span", { class: "muted", text: money(r.perHour, cur) + "/h" + (r.estimated ? "*" : "") + " · " + hoursText(r.minutes) }))) : null,
-            st.worstValue.length ? h("div", { class: "panel" }, h("h3", { text: "Priciest per hour" }), list(st.worstValue, r => h("span", { class: "muted", text: money(r.perHour, cur) + "/h" + (r.estimated ? "*" : "") + " · " + hoursText(r.minutes) }))) : null,
-            st.unplayedTop.length ? h("div", { class: "panel" }, h("h3", { text: "Biggest unplayed" }), list(st.unplayedTop, r => h("span", { class: "muted", text: money(r.msrp, cur) }))) : null),
-          h("p", { class: "muted small", text: "* No price recorded, so today's cheapest price is used. Last synced " + (d.link.synced_at ? new Date(d.link.synced_at).toLocaleString() : "never") + ". What you paid is never read from Steam." }),
+            st.unplayedTop.length ? h("div", { class: "panel" }, h("h3", { text: "Biggest unplayed" }), list(st.unplayedTop, r => h("span", { class: "muted", text: r.msrp ? money(r.msrp, cur) : "no price" }))) : null),
+          h("p", { class: "muted small", text: "Last synced " + (d.link.synced_at ? new Date(d.link.synced_at).toLocaleString() : "never") + ". What you paid is never read from Steam; add it on the Library page." }),
           h("div", { class: "panel" }, h("h3", { text: "Manage" }), h("div", { class: "row" }, sync), h("p"), h("label", { class: "check" }, unlinkGames, " Also remove the games that came from Steam"), h("p"), unlink));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
-    app.replaceChildren(pageHead("Steam", "Link your public Steam profile to fill your library, playtime and cost per hour automatically."),
+    app.replaceChildren(pageHead("Steam", "Link your public Steam profile to fill your library automatically: your games, hours played, what you never played and what to play next."),
       h("div", { class: "panel" }, h("h3", { text: "Link a profile" }), field("Steam profile", profile), h("p"), linkBtn,
         h("p", { class: "muted small", text: "Set Game details to Public in Steam's privacy settings. Only the public ID and your games with playtime are stored." })),
       out);

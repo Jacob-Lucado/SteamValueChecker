@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, steamValue, fmtHours } from "../src/steamlib.js";
+import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, steamValue, steamNext, fmtHours } from "../src/steamlib.js";
 import { SteamError } from "../src/steam.js";
 
 const XML = `<gamesList><steamID64>76561198000000000</steamID64><games>
@@ -74,7 +74,7 @@ test("unlinking and deleting remove the link", async () => {
     assert.equal(db.getSteamLink("u1"), null);
 });
 
-test("playtime stats: cost per hour uses what you paid, falls back to the cheapest price, and ignores short sessions", () => {
+test("library stats: games, hours, unplayed and total value", () => {
     const rows = [
         { title: "A", minutes: 600, paid: 10, best: { price: 5 }, msrp: 20 },
         { title: "B", minutes: 120, paid: null, best: { price: 6 }, msrp: 30 },
@@ -83,12 +83,29 @@ test("playtime stats: cost per hour uses what you paid, falls back to the cheape
     ];
     const s = playStats(rows);
     assert.equal(s.games, 4); assert.equal(s.playedGames, 3); assert.equal(s.totalMinutes, 750);
-    assert.equal(s.bestValue[0].title, "A"); assert.equal(s.bestValue[0].perHour, 1);
-    assert.equal(s.bestValue[1].estimated, true);
-    assert.ok(!s.worstValue.some(r => r.title === "C"), "30 minutes is too short to rank");
-    assert.equal(s.perHour, 16 / 12);
+    assert.deepEqual([s.value.msrp, s.value.cheapest], [150, 60]);
+    assert.equal(s.mostPlayed[0].title, "A");
     assert.equal(s.unplayedCount, 2); assert.equal(s.unplayedMsrp, 100); assert.equal(s.unplayedTop[0].title, "C");
+    assert.ok(!("perHour" in s), "no cost-per-hour any more");
     assert.equal(fmtHours(45), "45 min"); assert.equal(fmtHours(90), "1.5 h"); assert.equal(fmtHours(6000), "100 h");
+});
+
+test("what to play next: playing first, then started-and-dropped, then the most valuable unplayed; another never repeats", () => {
+    const g = (title, minutes, msrp, status = "backlog") => ({ itad_id: "id-" + title, title, appid: 1, minutes, msrp, status });
+    const first = () => 0;
+    const rows = [g("Never", 0, 60), g("Cheap", 0, 5), g("Started", 120, 30), g("Done", 900, 20, "finished"), g("Now", 300, 10, "playing"), g("Quit", 40, 15, "dropped")];
+    let n = steamNext(rows, { rand: first });
+    assert.equal(n.pick.title, "Now"); assert.match(n.why, /playing/);
+    n = steamNext(rows.filter(r => r.title !== "Now"), { rand: first });
+    assert.equal(n.pick.title, "Started"); assert.match(n.why, /never went back/);
+    n = steamNext(rows.filter(r => !["Now", "Started"].includes(r.title)), { rand: first });
+    assert.equal(n.pick.title, "Never", "the most valuable unplayed game comes first");
+    assert.equal(n.others[0].title, "Cheap");
+    const skip = [];
+    const seen = [];
+    for (let i = 0; i < 6; i++) { const x = steamNext(rows, { rand: first, skip }); if (!x) break; seen.push(x.pick.title); skip.push(x.pick.itad_id); }
+    assert.deepEqual(seen, ["Now", "Started", "Never", "Cheap"], "finished and dropped games are never suggested, and nothing repeats");
+    assert.equal(steamNext([g("Done", 5, 5, "finished")]), null);
 });
 
 const json = { rgGames: [{ appid: 10, name: "Counter & \"Strike\"", hours_forever: "1,234.5", last_played: 1700000000 }, { appid: 20, name: "Quiet", playtime_forever: 90 }, { appid: 0, name: "bad" }] };
