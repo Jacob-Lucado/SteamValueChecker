@@ -39,6 +39,7 @@ export const HELP = [
     "• Sale alerts have **Snooze 7 days** and **Only below a price** buttons.",
     "• `/steam link` links your **public** Steam profile and fills your library with playtime, cost per hour and a backlog. `/bundle` checks if a bundle beats buying the games separately. `/saleprep` plans what to buy in the next sale.",
     "• `/lfg post` finds people to play with (Join/Leave buttons, optional Discord event). `/library grabber` gives the FanaticalGrabber extension a link code to send your game titles in one click.",
+    "• `/currency` picks the currency prices are shown in (saved, and shared with the dashboard).",
     "• `/mydata` exports or deletes everything stored about you.",
     "",
     "Most commands also work in a DM with the bot. `/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight` and `/lfg` only work in a server.",

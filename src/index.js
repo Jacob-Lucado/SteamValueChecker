@@ -12,7 +12,7 @@ import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
 import { collectAbout } from "./about.js";
-import { FANATICAL_GRABBER_URL } from "./constants.js";
+import { FANATICAL_GRABBER_URL, REGIONS } from "./constants.js";
 import { readFileSync } from "node:fs";
 import { HELP, ABOUT, PRIVACY } from "./text.js";
 import { openDb } from "./db.js";
@@ -370,6 +370,14 @@ client.on(Events.InteractionCreate, async i => {
             case "alertchannel": return await handlers.handleAlertChannel(i);
             case "giveaway": return await gw.handleCommand(i);
             case "library": return await handlers.handleLibrary(i);
+            case "currency": {
+                const user = db.ensureUser(i.user.id, i.guildId);
+                const pick = i.options.getString("currency");
+                const name = v => REGIONS.find(r => r.value === v)?.name ?? v;
+                if (!pick) return await i.reply({ content: `Prices are shown in **${name(user.region)}**. Change it with \`/currency currency:\`, or from the dashboard's top bar.`, flags: MessageFlags.Ephemeral });
+                db.updateUser(user.discord_id, { region: pick });
+                return await i.reply({ content: `Prices are now in **${name(pick)}**, here and on the dashboard.`, flags: MessageFlags.Ephemeral });
+            }
             case "steam": return await steamUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
             case "saleprep": return await dealUi.handleSalePrep(i);
