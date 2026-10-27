@@ -1105,6 +1105,7 @@
         d.next.others.length ? h("p", { class: "muted small", text: "Also in the running: " + d.next.others.map(o => o.title).join(", ") }) : null) : h("div", { class: "notice warn", text: "Nothing in your backlog." }));
     }) });
     const view = { q: "", status: "all", sort: "name", page: 0 };
+    const picked = new Set(); // itad ids ticked for a bulk status change
     const STATUS_OPTIONS = [["backlog", "Backlog"], ["playing", "Playing"], ["played", "Played"], ["finished", "Finished"], ["dropped", "Dropped"]];
     async function load() {
       try {
@@ -1137,7 +1138,7 @@
         function rowFor(r) {
           const rm = h("button", { class: "btn red small", text: "Remove" });
           rm.addEventListener("click", () => busy(rm, async () => { await api("/api/library/remove", { itad_id: r.itad_id }); load(); }));
-          const holder = h("tr", { class: "chart-row", hidden: true }, h("td", { colspan: "7" }));
+          const holder = h("tr", { class: "chart-row", hidden: true }, h("td", { colspan: "8" }));
           const stat = select(STATUS_OPTIONS, r.status || "backlog");
           stat.className = "status-select";
           stat.setAttribute("aria-label", "Status for " + r.title);
@@ -1154,14 +1155,37 @@
           const game = h("div", { class: "game-cell" },
             r.appid ? steamArt(r.appid, "game-thumb", 92, 43) : null,
             h("div", {}, h("div", { class: "game-title", text: r.title }), r.minutes ? h("div", { class: "muted small", text: hoursText(r.minutes) + " played" }) : null));
-          return [h("tr", {}, h("td", {}, game), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
+          const tick = h("input", { type: "checkbox", checked: picked.has(r.itad_id), "aria-label": "Select " + r.title });
+          tick.addEventListener("change", () => { tick.checked ? picked.add(r.itad_id) : picked.delete(r.itad_id); drawBar(); });
+          return [h("tr", {}, h("td", { class: "tick" }, tick), h("td", {}, game), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
             h("td", { class: "num", text: money(r.best && r.best.price, cur) }),
             h("td", { class: "num", text: r.saved === null ? "–" : (r.saved >= 0 ? "+" : "−") + money(Math.abs(r.saved), cur) }), h("td", {}, h("div", { class: "row-actions" }, hist, rm))), holder];
+        }
+
+        // Steam does not say which games you finished, so pick them here: tick games (or everything the filter shows) and set a status.
+        const bar = h("div", { class: "bulk-bar", hidden: true });
+        const bulkStatus = select(STATUS_OPTIONS, "finished");
+        let matching = [];
+        function drawBar() {
+          const n = picked.size;
+          bar.hidden = !n && !matching.length;
+          const apply = h("button", { class: "btn blue small", text: "Apply" });
+          apply.addEventListener("click", () => busy(apply, async () => {
+            const r = await api("/api/library/status", { itad_ids: [...picked], status: bulkStatus.value });
+            picked.clear(); toast(`${r.updated} games set to ${bulkStatus.value}.`, "ok"); load();
+          }));
+          const all = h("button", { class: "btn gray small", text: `Select all ${matching.length} shown`, onclick: () => { matching.forEach(r => picked.add(r.itad_id)); drawTable(); } });
+          const none = h("button", { class: "btn gray small", text: "Clear", onclick: () => { picked.clear(); drawTable(); } });
+          bar.replaceChildren(
+            h("span", { class: "muted small", text: n ? `${n} selected` : "Tick games to change their status together." }),
+            matching.length ? all : null,
+            ...(n ? [bulkStatus, apply, none] : []));
         }
 
         function drawTable() {
           const q = view.q.trim().toLowerCase();
           const list = d.rows.filter(r => (view.status === "all" || (r.status || "backlog") === view.status) && (!q || r.title.toLowerCase().includes(q))).sort(sorters[view.sort] || sorters.name);
+          matching = list;
           const pages = Math.max(1, Math.ceil(list.length / PAGE));
           view.page = Math.min(view.page, pages - 1);
           const start = view.page * PAGE;
@@ -1169,10 +1193,11 @@
           const prev = h("button", { class: "btn gray small", text: "← Previous", onclick: go(-1) }); prev.disabled = view.page === 0;
           const next = h("button", { class: "btn gray small", text: "Next →", onclick: go(1) }); next.disabled = view.page >= pages - 1;
           tableHost.replaceChildren(
-            list.length ? h("div", { class: "table-wrap" }, h("table", { class: "library-table" }, h("thead", {}, h("tr", {}, ["Game", "Status", "Paid", "MSRP", "Cheapest now", "Saved", ""].map((c, i) => h("th", { class: i > 1 && i < 6 ? "num" : "", text: c })))),
+            list.length ? h("div", { class: "table-wrap" }, h("table", { class: "library-table" }, h("thead", {}, h("tr", {}, ["", "Game", "Status", "Paid", "MSRP", "Cheapest now", "Saved", ""].map((c, i) => h("th", { class: i > 2 && i < 7 ? "num" : "", text: c })))),
               h("tbody", {}, list.slice(start, start + PAGE).flatMap(rowFor))))
               : h("div", { class: "empty", text: "No games match." }),
             h("div", { class: "pager" }, h("span", { class: "muted small", text: list.length ? `Showing ${start + 1}–${Math.min(list.length, start + PAGE)} of ${list.length}` : "" }), pages > 1 ? h("span", { class: "row-actions" }, prev, h("span", { class: "muted small", text: `Page ${view.page + 1} of ${pages}` }), next) : null));
+          drawBar();
         }
         drawTable();
 
@@ -1184,7 +1209,7 @@
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
           chart,
-          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), tableHost));
+          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 

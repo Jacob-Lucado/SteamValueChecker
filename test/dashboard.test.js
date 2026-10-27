@@ -746,3 +746,17 @@ test("the dashboard counts its own visitors and live viewers, separately from th
         assert.equal((await t.request("/api/visits/dashboard")).data.online, 0, "viewers drop off after 75 seconds");
     } finally { await t.close(); }
 });
+
+test("the Library page can set many games' status at once", async () => {
+    const t = await signedIn();
+    for (const title of ["Alpha", "Beta", "Gamma"]) await t.request("/api/library/add", { method: "POST", body: { title } }), t.advance(4000);
+    const ids = t.db.listLibrary("u1").map(g => g.itad_id);
+    assert.equal(ids.length, 3);
+    const r = await t.request("/api/library/status", { method: "POST", body: { itad_ids: [ids[0], ids[1], "not-mine"], status: "finished" } });
+    assert.equal(r.data.updated, 2);
+    const st = Object.fromEntries(t.db.listLibrary("u1").map(g => [g.title, g.status]));
+    assert.deepEqual(st, { Alpha: "finished", Beta: "finished", Gamma: "backlog" });
+    assert.equal((await t.request("/api/library/status", { method: "POST", body: { itad_ids: ids, status: "bogus" } })).status, 400);
+    assert.equal((await t.request("/api/library/status", { method: "POST", body: { itad_ids: [], status: "finished" } })).status, 400);
+    await t.close();
+});

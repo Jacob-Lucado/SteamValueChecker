@@ -506,7 +506,20 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
 
         "POST /api/library/status": async (req, body) => {
             const s = session(req);
-            const item = db.listLibrary(s.userId).find(i => i.itad_id === body.itad_id);
+            const lib = db.listLibrary(s.userId);
+            if (Array.isArray(body.itad_ids)) {
+                // Many games at once (the Library page's selection). Unknown ids are ignored.
+                const mine = new Set(lib.map(i => i.itad_id));
+                const ids = [...new Set(body.itad_ids.map(String))].filter(id => mine.has(id)).slice(0, 1500);
+                if (!ids.length) throw new HttpError(400, "Select some games first.");
+                let updated = 0;
+                for (const id of ids) {
+                    if (!db.setLibraryStatus(s.userId, id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, played, finished or dropped.");
+                    updated++;
+                }
+                return { updated, status: body.status };
+            }
+            const item = lib.find(i => i.itad_id === body.itad_id);
             if (!item) throw new HttpError(404, "That game is not in your library.");
             if (!db.setLibraryStatus(s.userId, item.itad_id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, played, finished or dropped.");
             return { title: item.title, status: body.status };

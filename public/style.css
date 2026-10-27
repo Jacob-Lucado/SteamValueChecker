@@ -224,6 +224,8 @@ header, main, footer { position: relative; z-index: 1; }
 .game-title { color: var(--white); font-weight: 550; }
 .status-select { min-width: 130px; }
 .row-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; white-space: nowrap; }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--soft); }
+.library-table td.tick { width: 28px; padding-right: 0; }
 .pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .visits { color: var(--muted); font-size: 13px; }
 .visits .live-dot { color: var(--good); }
