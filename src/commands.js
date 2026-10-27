@@ -41,7 +41,7 @@ const value = new SlashCommandBuilder()
         .setMaxValue(1000000))
     .addStringOption(o => o
         .setName("region")
-        .setDescription("Price region (default United States)")
+        .setDescription("Price region and currency (default: the one you saved, else United States)")
         .addChoices(...REGIONS))
     .addStringOption(o => o
         .setName("stores")

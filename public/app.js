@@ -141,6 +141,26 @@
   };
   const navText = (id, text) => (state.me && NAV_I18N[state.me.settings.lang] && NAV_I18N[state.me.settings.lang][id]) || text;
 
+  // Prices come from one saved setting, the region (it decides the currency). It is kept on the account, so the Discord bot uses it too.
+  function currencyPicker() {
+    const pick = select(state.cfg.regions.map(r => [r.value, r.name]), state.me.settings.region);
+    pick.className = "currency-select";
+    pick.title = "Currency for prices here and in the Discord bot";
+    pick.setAttribute("aria-label", "Currency");
+    pick.addEventListener("change", async () => {
+      const before = state.me.settings.region;
+      pick.disabled = true;
+      try {
+        const r = await api("/api/settings", { region: pick.value });
+        state.me.settings = r.settings;
+        toast("Prices are now in " + (state.cfg.regions.find(x => x.value === pick.value)?.name ?? pick.value) + ".", "ok");
+        route();
+      } catch (e) { pick.value = before; toast(e.message, "error"); }
+      pick.disabled = false;
+    });
+    return pick;
+  }
+
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
@@ -175,7 +195,7 @@
         state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
         h("span", { class: "who", text: state.me.user.username }),
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
-        contrastButton(), themeButton(),
+        currencyPicker(), contrastButton(), themeButton(),
         h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } })].filter(Boolean));
     } else {
       acct.replaceChildren(...[...links, themeButton(), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));

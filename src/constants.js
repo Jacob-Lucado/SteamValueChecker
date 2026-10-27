@@ -5,7 +5,14 @@ export const REGIONS = [
     { name: "Europe - Germany (EUR)", value: "DE" },
     { name: "Canada (CAD)", value: "CA" },
     { name: "Australia (AUD)", value: "AU" },
-    { name: "Brazil (BRL)", value: "BR" }
+    { name: "Brazil (BRL)", value: "BR" },
+    { name: "New Zealand (NZD)", value: "NZ" },
+    { name: "Switzerland (CHF)", value: "CH" },
+    { name: "Sweden (SEK)", value: "SE" },
+    { name: "Norway (NOK)", value: "NO" },
+    { name: "Poland (PLN)", value: "PL" },
+    { name: "Japan (JPY)", value: "JP" },
+    { name: "Mexico (MXN)", value: "MX" }
 ];
 
 export const ALERT_TYPES = [

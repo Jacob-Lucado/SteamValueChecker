@@ -272,7 +272,7 @@ async function handleValue(i) {
             );
         }
 
-        const region = i.options.getString("region") ?? "US";
+        const region = i.options.getString("region") ?? db.getUser(i.user.id)?.region ?? "US"; // reading a saved setting does not store anything
         const majorOnly = i.options.getString("stores") === "major";
         const sort = i.options.getString("sort") ?? "input";
         const paidOption = i.options.getNumber("paid");

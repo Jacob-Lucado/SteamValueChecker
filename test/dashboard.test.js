@@ -716,3 +716,13 @@ test("FanaticalGrabber link: make a code, send games with it, replace it, turn i
     assert.equal((await send(again.data.token, [{ title: "Echo" }])).status, 401);
     await t.close();
 });
+
+test("the header currency picker saves a region the bot also uses", async () => {
+    const t = await signedIn();
+    assert.ok(t.request && (await t.request("/api/config")).data.regions.some(r => r.value === "NZ" ) , "more currencies are offered");
+    const r = await t.request("/api/settings", { method: "POST", body: { region: "NZ" } });
+    assert.equal(r.data.settings.region, "NZ");
+    assert.equal(t.db.getUser("u1").region, "NZ");
+    assert.equal((await t.request("/api/settings", { method: "POST", body: { region: "XX" } })).status, 400);
+    await t.close();
+});
