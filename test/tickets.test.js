@@ -4,9 +4,9 @@ import { openDb } from "../src/db.js";
 import { createTicketService } from "../src/tickets.js";
 
 function setup() {
-    const db = openDb(":memory:");
-    const posts = [], edits = [], dms = [];
     let n = 0, t = Date.parse("2026-10-26T12:00:00Z");
+    const db = openDb(":memory:", { now: () => t }); // one fake clock for the store and the service, so the test does not depend on today's date
+    const posts = [], edits = [], dms = [];
     const discord = {
         post: async (c, p) => { posts.push([c, p]); return { id: String(++n) }; },
         edit: async (c, m, p) => { edits.push([c, m, p]); },

@@ -59,7 +59,7 @@ export function prefsPatch(input, user) {
     return patch;
 }
 
-export const MUTABLE = ["alert", "bundle", "free", "digest"];
+export const MUTABLE = ["alert", "bundle", "free", "digest", "release"];
 
 /** The new settings in a form that is safe to send to the browser. */
 export function prefsView(u) {

@@ -14,11 +14,11 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { CHANGELOG, LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, trendEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
-import { importLibrary, libraryView, leaderboard, LibraryError, playNext, serverStats } from "./library.js";
+import { importLibrary, libraryView, leaderboard, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
@@ -439,6 +439,13 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const view = await libraryView(db, itad, user, { snapshot: false });
                 if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
                 return void await i.editReply({ embeds: [backlogEmbed(view, playNext(view.rows))] });
+            }
+            if (sub === "trend") {
+                const view = await libraryView(db, itad, user);
+                if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
+                const tr = trendSummary(view.snapshots);
+                if (!tr) throw new UserError("A trend needs at least two days of data. I take a snapshot every day, so check back tomorrow.");
+                return void await i.editReply({ embeds: [trendEmbed(tr, view.currency, view.totals.backlogGames)] });
             }
             if (sub === "add") {
                 const paid = i.options.getNumber("paid");

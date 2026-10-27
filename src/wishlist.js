@@ -36,7 +36,8 @@ export async function viewRows(db, itad, user) {
             itad_id: it.itad_id, title: it.title, source: it.source,
             best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
             alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value,
-            low1y: now.low1y, low3m: now.low3m, verdict: dealVerdict(now)
+            low1y: now.low1y, low3m: now.low3m, verdict: dealVerdict(now),
+            release_at: it.release_at && it.release_at > Date.now() ? it.release_at : null
         };
     });
     rows.sort((a, b) => b.discount - a.discount || a.title.localeCompare(b.title));

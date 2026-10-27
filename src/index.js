@@ -23,7 +23,7 @@ import { createLogBuffer } from "./logbuffer.js";
 import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
-import { runCycle, runExtras, runDigests, runSnapshots, runFreeGames, runGuildFeeds, schedule } from "./poller.js";
+import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runGuildFeeds, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
@@ -169,6 +169,7 @@ client.once(Events.ClientReady, c => {
             const log = m => console.log(`[maintenance] ${m}`);
             const result = {};
             try { result.extras = await runExtras({ db, itad, notifier, log }); } catch (err) { ops.error("extras", err); }
+            try { result.releases = await runReleases({ db, itad, notifier, log }); } catch (err) { ops.error("releases", err); }
             try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
             try { result.feeds = await runGuildFeeds({ db, itad, notifier, log }); } catch (err) { ops.error("server feeds", err); }
             try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }

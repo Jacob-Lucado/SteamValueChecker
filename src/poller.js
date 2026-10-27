@@ -7,7 +7,7 @@ import { protonTier } from "./proton.js";
 import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
-import { alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
+import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
 import { libraryView } from "./library.js";
@@ -299,6 +299,44 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
                 stats.posted += part.length;
             }
         }
+    }
+    return stats;
+}
+
+
+/**
+ * Release-day alerts for wishlisted games that were not out yet when they were added. Release dates are looked up in small
+ * batches (60 games a run), then each launch is announced once per member, within a week of the date.
+ */
+export async function runReleases({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+    const stats = { looked: 0, found: 0, delivered: 0, failed: 0, deferred: 0 };
+    for (const g of db.itemsNeedingRelease(60)) {
+        try {
+            const info = await itad.getTitle(g.itad_id);
+            db.setRelease(g.itad_id, info?.release ?? null);
+            stats.looked++;
+        } catch (err) { log(`release lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; break; }
+    }
+    const due = db.releasedItems().filter(it => !db.hasSeen(it.discord_id, `release:${it.itad_id}`));
+    if (!due.length) return stats;
+    const byRegion = new Map();
+    for (const it of due) { if (!byRegion.has(it.region)) byRegion.set(it.region, new Set()); byRegion.get(it.region).add(it.itad_id); }
+    const prices = new Map();
+    for (const [region, ids] of byRegion) {
+        try { prices.set(region, await itad.getPrices([...ids], region)); } catch { prices.set(region, new Map()); }
+    }
+    for (const it of due) {
+        stats.found++;
+        const user = db.getUser(it.discord_id);
+        if (!user) continue;
+        if (isQuiet(user, now())) { stats.deferred++; continue; }
+        const sum = summarize(prices.get(it.region)?.get(it.itad_id), { majorOnly: user.stores === "major" });
+        const embed = releaseEmbed({ title: it.title, releaseAt: it.release_at, best: sum.best, currency: sum.currency ?? "USD", url: sum.best?.url });
+        const res = await notifier.deliver(user, { embeds: [embed] }, "release");
+        if (!res.ok) { stats.failed++; continue; }
+        stats.delivered++;
+        db.markSeen(it.discord_id, `release:${it.itad_id}`);
+        db.logAlert({ discord_id: it.discord_id, itad_id: it.itad_id, title: it.title, kind: "release", price: sum.best?.price ?? null, shop: sum.best?.shop ?? null, via: res.via });
     }
     return stats;
 }

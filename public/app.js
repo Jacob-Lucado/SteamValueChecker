@@ -588,7 +588,7 @@
     const pick = h("input", { type: "checkbox", class: "pick", "aria-label": "Select " + r.title });
     pick.addEventListener("change", () => onPick && onPick(r.itad_id, pick.checked));
     return h("div", { class: "wish" + (sale ? " sale" : "") },
-      h("div", {}, h("div", { class: "name" }, pick, " ", r.title, " ", verdictBadge(r.verdict)), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}` })),
+      h("div", {}, h("div", { class: "name" }, pick, " ", r.title, " ", verdictBadge(r.verdict)), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}${r.release_at ? " · releases " + new Date(r.release_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " (you will be told)" : ""}` })),
       h("div", { class: "price-box" },
         h("span", { class: "badge" + (sale ? "" : " none"), text: sale ? "-" + pct + "%" : "–" }),
         sale && r.regular !== null && h("span", { class: "was", text: money(r.regular, cur) }),
@@ -1264,6 +1264,13 @@
               { name: "Cheapest now", cls: "s0", points: snaps.map(x => ({ x: Date.parse(x.day), y: x.cheapest })) }
             ], { format: v => money(v, cur), label: "Library value over time" }))
           : h("p", { class: "muted small", text: "The value chart appears after the second day of data." });
+        const withCounts = snaps.filter(x => x.backlog !== null && x.backlog !== undefined);
+        const backlogChart = withCounts.length > 1
+          ? h("div", { class: "panel" }, h("h3", { text: "Backlog over time" }), lineChart([
+              { name: "In backlog", cls: "s0", points: withCounts.map(x => ({ x: Date.parse(x.day), y: x.backlog })) },
+              { name: "Finished", cls: "s1", points: withCounts.map(x => ({ x: Date.parse(x.day), y: x.finished || 0 })) }
+            ], { format: v => String(Math.round(v)), label: "Games in your backlog and finished games over time" }))
+          : null;
         // The games table: search, status filter, sort and pages, so a big Steam library stays easy to move around in.
         const PAGE = 50;
         const SORTS = [["name", "Name (A to Z)"], ["msrp", "Price, high to low"], ["cheapest", "Cheapest now, high to low"], ["saved", "Saved, most first"], ["hours", "Hours played"]];
@@ -1351,7 +1358,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
-          chart,
+          chart, backlogChart || "",
           h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
@@ -1793,9 +1800,9 @@
   const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
 
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
-  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest" };
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest", release: "Release day" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
-  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", status: "🛠️", giveaway: "🏆", ticket: "🎫" };
+  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", release: "🎉", status: "🛠️", giveaway: "🏆", ticket: "🎫" };
 
   async function notificationsView() {
     const holder = h("div", { class: "muted", text: "Loading…" });

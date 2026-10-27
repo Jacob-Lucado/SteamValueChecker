@@ -37,7 +37,7 @@ export async function libraryView(db, itad, user, { snapshot = true } = {}) {
     });
     const totals = { ...libraryTotals(rows), ...backlogStats(rows) };
     if (snapshot && rows.length) {
-        db.upsertSnapshot(user.discord_id, { games: totals.games, paid: totals.paid, msrp: totals.msrp, msrp_paid: totals.msrpPaid, cheapest: totals.cheapest });
+        db.upsertSnapshot(user.discord_id, { games: totals.games, paid: totals.paid, msrp: totals.msrp, msrp_paid: totals.msrpPaid, cheapest: totals.cheapest, backlog: totals.backlogGames, playing: totals.playing, finished: totals.finished });
     }
     return { rows, totals, currency: rows.find(r => r.currency)?.currency ?? "USD", snapshots: db.listSnapshots(user.discord_id) };
 }
@@ -107,4 +107,17 @@ export function serverStats(db, guildId) {
     const top = leaderboard(db, guildId, { limit: 3 });
     const shared = db.listServerGames(guildId).slice(0, 3);
     return { ...base, games, saved, top, sharedList: shared.map(g => ({ title: g.title, votes: g.votes ?? 0 })) };
+}
+
+
+/** How a library moved over time, from its daily snapshots: since the first one and over the last 30 days. Null with fewer than two days of data. */
+export function trendSummary(snaps) {
+    const list = (snaps ?? []).filter(Boolean);
+    if (list.length < 2) return null;
+    const last = list[list.length - 1], first = list[0];
+    const cutoff = Date.parse(last.day) - 30 * 86400_000;
+    const month = list.find(x => Date.parse(x.day) >= cutoff) ?? first;
+    const diff = (a, b, k) => (a[k] === null || a[k] === undefined || b[k] === null || b[k] === undefined ? null : b[k] - a[k]);
+    const delta = from => ({ days: Math.round((Date.parse(last.day) - Date.parse(from.day)) / 86400_000), games: diff(from, last, "games"), msrp: diff(from, last, "msrp"), cheapest: diff(from, last, "cheapest"), backlog: diff(from, last, "backlog"), finished: diff(from, last, "finished") });
+    return { last, first: delta(first), month: month === first ? null : delta(month), points: list.length };
 }

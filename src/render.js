@@ -356,7 +356,7 @@ export function leaderboardEmbed(entries) {
 /** The member's recent alerts. */
 export function alertHistoryEmbed(entries) {
     if (!entries.length) return { color: COLOR, title: "Recent alerts", description: "No alerts yet." };
-    const label = { sale: "sale", bundle: "bundle", giveaway: "free", digest: "digest", group: "group" };
+    const label = { sale: "sale", bundle: "bundle", giveaway: "free", digest: "digest", group: "group", release: "release" };
     const lines = entries.slice(0, 15).map(e => {
         const when = `<t:${Math.floor(e.at / 1000)}:d>`;
         const price = Number.isFinite(e.price) ? ` at ${e.price.toFixed(2)}` : "";
@@ -454,4 +454,29 @@ export function aboutPayload(info, { about, fanaticalUrl = null } = {}) {
     if (safeUrl(info.userInstallUrl)) row.push(linkButton("Add to your account", info.userInstallUrl));
     if (safeUrl(fanaticalUrl)) row.push(linkButton("FanaticalGrabber", fanaticalUrl));
     return { embeds: [embed], components: row.length ? [{ type: 1, components: row }] : [] };
+}
+
+
+/** "Now out" card for a wishlisted game that has just launched. */
+export function releaseEmbed({ title, releaseAt, best, currency, url }) {
+    const lines = [`Released <t:${Math.floor(releaseAt / 1000)}:D>.`];
+    lines.push(best ? `Cheapest right now: **${money(best.price, currency)}** at ${best.shop}.` : "No prices are listed yet. Your sale alerts will tell you when one appears.");
+    return { color: COLOR, title: `🎉 Now out: ${title}`, description: lines.join("\n"), url: url || undefined };
+}
+
+
+const sign = (n, f) => (n === null || n === undefined ? null : `${n > 0 ? "+" : n < 0 ? "-" : ""}${f(Math.abs(n))}`);
+/** "Library trend" card from trendSummary(). */
+export function trendEmbed(tr, currency, backlogNow) {
+    const part = d => [
+        sign(d.cheapest, v => money(v, currency)) && `Cheapest-price value **${sign(d.cheapest, v => money(v, currency))}**`,
+        sign(d.msrp, v => money(v, currency)) && `Full-price value **${sign(d.msrp, v => money(v, currency))}**`,
+        sign(d.games, v => String(v)) && `Games **${sign(d.games, v => String(v))}**`,
+        sign(d.backlog, v => String(v)) && `Backlog **${sign(d.backlog, v => String(v))}**`,
+        sign(d.finished, v => String(v)) && `Finished **${sign(d.finished, v => String(v))}**`
+    ].filter(Boolean).join("\n") || "Nothing changed.";
+    const fields = [];
+    if (tr.month) fields.push({ name: `Last ${tr.month.days} days`, value: part(tr.month), inline: true });
+    fields.push({ name: `Since ${tr.first.days} days ago`, value: part(tr.first), inline: true });
+    return { color: COLOR, title: "Your library trend", description: `Now: **${money(tr.last.cheapest, currency)}** at cheapest prices, **${money(tr.last.msrp, currency)}** at full price, **${tr.last.games}** games${backlogNow !== undefined ? `, **${backlogNow}** in the backlog` : ""}.`, fields, footer: { text: "From daily snapshots. The dashboard's Library page shows the charts." } };
 }

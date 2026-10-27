@@ -156,6 +156,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     // Columns added after the first release. Safe to run on every start.
     const cols = t => db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
     const addColumn = (table, name, def) => { if (!cols(table).includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`); };
+    addColumn("items", "release_at", "INTEGER");
+    addColumn("items", "release_check", "INTEGER");
+    addColumn("items", "release_wait", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "quiet_start", "INTEGER");
     addColumn("users", "quiet_end", "INTEGER");
     addColumn("users", "tz", "TEXT NOT NULL DEFAULT 'UTC'");
@@ -189,6 +192,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library", "ach_checked", "INTEGER");
     addColumn("items", "appid", "INTEGER");
     addColumn("library_snapshots", "msrp_paid", "REAL NOT NULL DEFAULT 0");
+    addColumn("library_snapshots", "backlog", "INTEGER");
+    addColumn("library_snapshots", "playing", "INTEGER");
+    addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("guilds", "group_min", "INTEGER NOT NULL DEFAULT 0");
 
     const run = (sql, ...p) => db.prepare(sql).run(...p);
@@ -278,6 +284,20 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const digestUsers = () => all("SELECT * FROM users WHERE digest = 1 AND paused = 0").map(clean);
 
     /** Everything the poller needs: items of users who have not paused alerts. */
+    /** Wishlist games whose release date is unknown or may have moved: unchecked, no date (weekly), or still in the future (daily). */
+    const itemsNeedingRelease = (limit = 60) => all(
+        `SELECT itad_id, MIN(title) AS title FROM items
+          WHERE release_check IS NULL OR (release_at IS NULL AND release_check < ?) OR (release_at > ? AND release_check < ?)
+          GROUP BY itad_id LIMIT ?`, now() - 7 * 86400_000, now(), now() - 86400_000, limit).map(clean);
+    /** Stores a release date for every wishlist entry of a game. A game still unreleased on the first check is flagged so its launch gets announced. */
+    const setRelease = (itadId, releaseAt) => run(
+        `UPDATE items SET release_at = ?, release_wait = CASE WHEN release_check IS NULL AND ? > ? THEN 1 ELSE release_wait END, release_check = ? WHERE itad_id = ?`,
+        releaseAt, releaseAt ?? 0, now(), now(), itadId);
+    /** Wishlist entries flagged as unreleased that came out within the last week. */
+    const releasedItems = () => all(
+        `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.muted
+           FROM items i JOIN users u ON u.discord_id = i.discord_id
+          WHERE u.paused = 0 AND i.release_wait = 1 AND i.release_at IS NOT NULL AND i.release_at <= ? AND i.release_at > ?`, now(), now() - 7 * 86400_000).map(clean);
     const activeItems = () => all(
         `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.bundles, u.share
            FROM items i JOIN users u ON u.discord_id = i.discord_id
@@ -359,12 +379,13 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const dayKey = (ms = now()) => new Date(ms).toISOString().slice(0, 10);
     const upsertSnapshot = (discordId, t) => run(
-        `INSERT INTO library_snapshots (discord_id, day, games, paid, msrp, msrp_paid, cheapest) VALUES (?,?,?,?,?,?,?)
-         ON CONFLICT(discord_id, day) DO UPDATE SET games = excluded.games, paid = excluded.paid, msrp = excluded.msrp, msrp_paid = excluded.msrp_paid, cheapest = excluded.cheapest`,
-        discordId, dayKey(), t.games, t.paid, t.msrp, t.msrp_paid ?? t.msrp, t.cheapest
+        `INSERT INTO library_snapshots (discord_id, day, games, paid, msrp, msrp_paid, cheapest, backlog, playing, finished) VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(discord_id, day) DO UPDATE SET games = excluded.games, paid = excluded.paid, msrp = excluded.msrp, msrp_paid = excluded.msrp_paid, cheapest = excluded.cheapest,
+             backlog = excluded.backlog, playing = excluded.playing, finished = excluded.finished`,
+        discordId, dayKey(), t.games, t.paid, t.msrp, t.msrp_paid ?? t.msrp, t.cheapest, t.backlog ?? null, t.playing ?? null, t.finished ?? null
     );
     const listSnapshots = (discordId, limit = 365) =>
-        all("SELECT day, games, paid, msrp, msrp_paid, cheapest FROM (SELECT * FROM library_snapshots WHERE discord_id = ? ORDER BY day DESC LIMIT ?) ORDER BY day", discordId, limit).map(clean);
+        all("SELECT day, games, paid, msrp, msrp_paid, cheapest, backlog, playing, finished FROM (SELECT * FROM library_snapshots WHERE discord_id = ? ORDER BY day DESC LIMIT ?) ORDER BY day", discordId, limit).map(clean);
     const hasSnapshotToday = discordId => Boolean(get("SELECT 1 AS x FROM library_snapshots WHERE discord_id = ? AND day = ?", discordId, dayKey()));
     const usersWithLibrary = () => all("SELECT DISTINCT discord_id FROM library").map(r => r.discord_id);
     /** Latest snapshot of each member who opted in and last used this server. */
@@ -497,7 +518,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
-        markAlerted, clearAlerted, activeItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
+        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,

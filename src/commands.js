@@ -76,6 +76,7 @@ const library = new SlashCommandBuilder()
         .addStringOption(o => gameOption(o, true))
         .addStringOption(o => o.setName("state").setDescription("Where you are with it").setRequired(true).addChoices(
             { name: "Backlog (not started)", value: "backlog" }, { name: "Playing", value: "playing" }, { name: "Played (not finished)", value: "played" }, { name: "Finished", value: "finished" }, { name: "Dropped", value: "dropped" })))
+    .addSubcommand(s => s.setName("trend").setDescription("How your library value and backlog have changed over time"))
     .addSubcommand(s => s.setName("backlog").setDescription("How much you have spent on games you have not played, and what to play next"))
     .addSubcommand(s => s.setName("remove").setDescription("Remove a game")
         .addStringOption(o => gameOption(o, true)));
@@ -271,7 +272,7 @@ alerts
         .addBooleanOption(o => o.setName("dlc").setDescription("Also show free DLC and add-ons (default on)")))
     .addSubcommand(s => s.setName("mute").setDescription("Stop DMs for one kind of alert (you can still read them on the dashboard's Notifications page)")
         .addStringOption(o => o.setName("type").setDescription("Which alerts").setRequired(true).addChoices(
-            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "Weekly digest", value: "digest" }))
+            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }))
         .addBooleanOption(o => o.setName("muted").setDescription("True to mute, false to get them again").setRequired(true)))
     .addSubcommand(s => s.setName("language").setDescription("Language for the bot's buttons and messages")
         .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices({ name: "English", value: "en" }, { name: "Español", value: "es" }, { name: "Français", value: "fr" })))

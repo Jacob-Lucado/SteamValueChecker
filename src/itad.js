@@ -227,7 +227,7 @@ export function createItad({
             if (err.code === "http") return null; // 404 and similar: this game has no info, not a bot failure
             throw err;
         }
-        const v = info?.title ? { title: String(info.title), appid: info.appid ?? null } : null;
+        const v = info?.title ? { title: String(info.title), appid: info.appid ?? null, release: isoOrNull(info.releaseDate) } : null;
         setCached(`title:${id}`, v);
         return v;
     }

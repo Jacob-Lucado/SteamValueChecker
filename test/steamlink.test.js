@@ -189,3 +189,14 @@ test("achievements: 100% marks a game Finished once, never overrides your choice
     assert.equal(await fetchAchievements("76561198000000000", 9, { apiKey: "k", fetchImpl: async () => res({}, { status: 403, json: true }) }), null);
     await assert.rejects(fetchAchievements("76561198000000000", 9, { apiKey: "k", fetchImpl: async () => res({}, { status: 429, json: true }) }), e => e.code === "rate_limited");
 });
+
+test("library trend: needs two days, then reports the change", async () => {
+    const { trendSummary } = await import("../src/library.js");
+    assert.equal(trendSummary([{ day: "2026-10-01", games: 3, msrp: 10, cheapest: 5, backlog: 3, finished: 0 }]), null);
+    const tr = trendSummary([
+        { day: "2026-09-01", games: 2, msrp: 10, cheapest: 6, backlog: null, finished: null },
+        { day: "2026-10-01", games: 3, msrp: 20, cheapest: 10, backlog: 3, finished: 0 },
+        { day: "2026-10-31", games: 5, msrp: 50, cheapest: 25, backlog: 2, finished: 3 }]);
+    assert.equal(tr.first.msrp, 40); assert.equal(tr.first.backlog, null, "old snapshots had no counts");
+    assert.equal(tr.month.days, 30); assert.equal(tr.month.backlog, -1); assert.equal(tr.month.finished, 3);
+});
