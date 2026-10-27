@@ -1009,6 +1009,26 @@
       toast(`Added ${r.added}, updated ${r.updated}.` + (r.notFound.length ? ` ${r.notFound.length} not found.` : ""), "ok"); load();
     }) });
 
+    // One-click send from the FanaticalGrabber extension: a link code the extension keeps, shown here only once.
+    const grabberOut = h("div", { class: "muted small", text: "Loading…" });
+    async function grabberLoad() {
+      try {
+        const { link } = await api("/api/grabber");
+        const make = h("button", { class: "btn blue small", text: link ? "Make a new code" : "Make a link code" });
+        make.addEventListener("click", () => busy(make, async () => {
+          const { token } = await api("/api/grabber/token", { action: "new" });
+          const box = h("input", { type: "text", readonly: "", value: token, "aria-label": "Link code" });
+          box.addEventListener("focus", () => box.select());
+          grabberOut.replaceChildren(h("p", { class: "muted small", text: "Copy this now. It is shown once. Anyone with it can add games to your library." }), box,
+            h("p", {}, h("button", { class: "btn gray small", text: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(token); toast("Copied.", "ok"); } catch { box.select(); toast("Press Ctrl+C to copy.", "error"); } } })));
+        }));
+        const off = link && h("button", { class: "btn red small", text: "Turn off" });
+        if (off) off.addEventListener("click", () => busy(off, async () => { await api("/api/grabber/token", { action: "off" }); toast("Link turned off.", "ok"); grabberLoad(); }));
+        grabberOut.className = "";
+        grabberOut.replaceChildren(h("p", { class: "muted small", text: link ? `Linked. ${link.sends} send${link.sends === 1 ? "" : "s"} so far${link.used_at ? `, last ${new Date(link.used_at).toLocaleDateString()}` : ""}.` : "Not linked. Make a code, then paste it into the FanaticalGrabber extension once." }), h("p", {}, make, " ", off));
+      } catch (e) { grabberOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+
     const nextOut = h("div");
     const nextBtn = h("button", { class: "btn green", text: "Pick for me", onclick: () => busy(nextBtn, async () => {
       const d = await api("/api/library/next");
@@ -1064,7 +1084,9 @@
       h("div", { class: "grid two" },
         h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), field("Paid", paid), h("p"), add),
         h("div", { class: "panel" }, h("h3", { text: "Import" }), field("FanaticalGrabber export (a Paid column is used)", file), h("p"), imp)),
+      h("div", { class: "panel" }, h("h3", { text: "FanaticalGrabber one-click send" }), grabberOut),
       body);
+    grabberLoad();
     load();
   }
 

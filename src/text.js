@@ -37,9 +37,11 @@ export const HELP = [
     "• `/support open` asks the team for help; `/support mine` lists your tickets. Server managers set a ticket channel with `/support setup`. A giveaway key that did not work opens one for you.",
     "• `/alerts mute` stops DMs for one kind of alert (kept on the dashboard's Notifications page). `/alerts language` switches buttons to Spanish or French. `/changelog` shows what is new.",
     "• Sale alerts have **Snooze 7 days** and **Only below a price** buttons.",
+    "• `/steam link` links your **public** Steam profile and fills your library with playtime, cost per hour and a backlog. `/bundle` checks if a bundle beats buying the games separately. `/saleprep` plans what to buy in the next sale.",
+    "• `/lfg post` finds people to play with (Join/Leave buttons, optional Discord event). `/library grabber` gives the FanaticalGrabber extension a link code to send your game titles in one click.",
     "• `/mydata` exports or deletes everything stored about you.",
     "",
-    "Most commands also work in a DM with the bot. `/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup` and `/gamenight` only work in a server.",
+    "Most commands also work in a DM with the bot. `/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight` and `/lfg` only work in a server.",
     "Replies are private to you. Never post game keys in chat or in a ticket. The bot ignores anything that looks like a key, except keys a server manager enters in the private giveaway form."
 ].join("\n");
 
@@ -56,7 +58,7 @@ export const PRIVACY = [
     "**What it never needs:** Steam or Fanatical logins, cookies or passwords. Anything that looks like a key is dropped before any lookup. The one exception is giveaways: a server manager can enter prize keys in a private form, and they are stored encrypted until the winner confirms (then deleted).",
     "**Where titles go:** game titles are sent to IsThereAnyDeal to get prices. Nothing else is sent.",
     "**Storage:** `/value` saves nothing. Prices are cached in memory for 30 minutes and results are not logged. Your reply is visible only to you.",
-    "**Wishlist alerts and library:** if you use them, the bot stores your Discord ID, wishlist, alert rules, settings, library and what you paid, 90 days of alert history, server list votes and (if you import) your public Steam ID. Sharing with your server (group alerts, leaderboard) is off until you opt in. It sends alerts by DM, or in the server alert channel if a DM fails or you choose that, where the game name is visible to the channel and you are mentioned. `/mydata export` and `/mydata delete` give you control. Support tickets (your messages and the replies) are kept until they have been closed for 6 months, are shared only with the bot owner or, if you chose a server, that server's staff, and are deleted by `/mydata delete`. A copy of each alert is kept 60 days in your notification center. If the web dashboard is on, signing in shares only your Discord name, avatar and server list, kept in memory for the session.",
+    "**Wishlist alerts and library:** if you use them, the bot stores your Discord ID, wishlist, alert rules, settings, library and what you paid, 90 days of alert history, server list votes and (if you import or link) your public Steam ID and playtime, an optional hashed FanaticalGrabber link code, and any looking-for-group posts. Sharing with your server (group alerts, leaderboard) is off until you opt in. It sends alerts by DM, or in the server alert channel if a DM fails or you choose that, where the game name is visible to the channel and you are mentioned. `/mydata export` and `/mydata delete` give you control. Support tickets (your messages and the replies) are kept until they have been closed for 6 months, are shared only with the bot owner or, if you chose a server, that server's staff, and are deleted by `/mydata delete`. A copy of each alert is kept 60 days in your notification center. If the web dashboard is on, signing in shares only your Discord name, avatar and server list, kept in memory for the session.",
     "",
     "Full text: https://github.com/Jacob-Lucado/SteamValueChecker/blob/main/PRIVACY.md"
 ].join("\n");

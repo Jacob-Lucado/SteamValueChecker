@@ -75,7 +75,7 @@ async function setup({ sendFails = false, guildsOf, config = {}, giveawayService
         return request(`/auth/callback?code=good&state=${state}`);
     }
 
-    return { db, dash, request, signIn, sent, advance: ms => { clock += ms; }, close: () => dash.close() };
+    return { db, dash, base, request, signIn, sent, advance: ms => { clock += ms; }, close: () => dash.close() };
 }
 
 test("static files, security headers, and nothing outside the allowlist", async () => {
@@ -680,5 +680,39 @@ test("looking for group from the dashboard: managers post, members join, other s
     assert.equal((await t.request("/api/lfg/join", { method: "POST", body: { guild_id: "g-member", id } })).status, 404, "a post from another server is not found");
     assert.equal((await t.request("/api/lfg/close", { method: "POST", body: { guild_id: "g-admin", id } })).status, 200);
     assert.equal((await t.request("/api/lfg?guild=g-admin")).data.posts.length, 0);
+    await t.close();
+});
+
+test("FanaticalGrabber link: make a code, send games with it, replace it, turn it off", async () => {
+    const t = await signedIn();
+    assert.equal((await t.request("/api/grabber")).data.link, null);
+    const made = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+    assert.equal(made.status, 200);
+    const token = made.data.token;
+    assert.match(token, /^svcg_[A-Za-z0-9_-]{43}$/);
+    assert.equal(JSON.stringify(t.db.exportUser("u1")).includes(token), false, "the code is never stored readable");
+
+    const send = (code, entries) => fetch(t.base + "/api/grabber/import", { method: "POST", headers: { "Content-Type": "application/json", ...(code ? { Authorization: `Bearer ${code}` } : {}) }, body: JSON.stringify({ entries }) }).then(async r => ({ status: r.status, data: await r.json() }));
+    assert.equal((await send(null, [{ title: "Alpha" }])).status, 401);
+    assert.equal((await send("svcg_" + "A".repeat(43), [{ title: "Alpha" }])).status, 401);
+    const ok = await send(token, [{ title: "Alpha", paid: 4.5 }, { title: "Beta" }, { title: "zzz nothing" }, { title: "AB1DE-FGH2J-KLM3O" }]);
+    assert.equal(ok.status, 200);
+    assert.deepEqual([ok.data.added, ok.data.notFound], [2, 1]);
+    assert.equal(t.db.listLibrary("u1").find(g => g.title === "Alpha").paid, 4.5);
+    assert.equal((await send(token, [{ title: "Gamma" }])).status, 429, "sends are paced");
+    t.advance(11_000);
+    assert.equal((await send(token, [{ title: "AB1DE-FGH2J-KLM3O" }])).status, 400, "keys are refused");
+    t.advance(11_000);
+    assert.equal((await t.request("/api/grabber")).data.link.sends, 1);
+
+    t.advance(6_000);
+    const again = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+    assert.equal((await send(token, [{ title: "Delta" }])).status, 401, "the old code stops working");
+    t.advance(11_000);
+    assert.equal((await send(again.data.token, [{ title: "Delta" }])).status, 200);
+    t.advance(6_000);
+    await t.request("/api/grabber/token", { method: "POST", body: { action: "off" } });
+    t.advance(11_000);
+    assert.equal((await send(again.data.token, [{ title: "Echo" }])).status, 401);
     await t.close();
 });

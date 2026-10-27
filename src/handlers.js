@@ -420,6 +420,19 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.setLibraryStatus(i.user.id, found.item.itad_id, state);
                 return eph(i, `**${found.item.title}** is now marked as ${state}.`);
             }
+            if (sub === "grabber") {
+                if (i.options.getString("action") === "off") {
+                    return eph(i, db.revokeGrabberToken(i.user.id) ? "The FanaticalGrabber link is off. The old code no longer works." : "You do not have a FanaticalGrabber link.");
+                }
+                cooldown(i, "lib");
+                const token = db.createGrabberToken(i.user.id);
+                return eph(i, [
+                    "Your FanaticalGrabber link code (shown once, keep it private; anyone with it can add games to your library):",
+                    `\`${token}\``,
+                    "Open the Grabber panel on Fanatical, choose **Send to Steam Value Checker**, and paste it when asked.",
+                    "Making a new code replaces this one. `/library grabber action:Turn the link off` removes it."
+                ].join("\n"));
+            }
             cooldown(i, "lib");
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             if (sub === "backlog") {

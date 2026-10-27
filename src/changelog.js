@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.10.28", date: "2026-10-28", title: "Steam library, bundles and looking for group", items: [
+        "`/steam link` (or the Steam page) links a public profile: playtime, cost per hour and a backlog planner.",
+        "`/bundle` checks whether a bundle beats buying separately. `/saleprep` plans a sale shopping list and recaps past alerts.",
+        "`/lfg post` makes a looking-for-group post with Join and Leave buttons and an optional Discord event.",
+        "FanaticalGrabber 2.2 can send game titles (never keys) straight to your library: get a code with `/library grabber`.",
+        "The bot owner can download the latest backup from the Admin page." ] },
     { version: "2026.10.27", date: "2026-10-27", title: "Game night and easier setup", items: [
         "`/gamenight`: what everyone in your voice channel can play together, who is missing a game, and what to buy together.",
         "Optional group-buy nudges in a voice channel when a game several of you want goes on sale.",

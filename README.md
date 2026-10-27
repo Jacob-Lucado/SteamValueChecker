@@ -79,6 +79,11 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/alertchannel group minimum:` | Post once when that many opted-in members watch the same game and it hits their alert |
 | `/alerts pause`, `resume`, `region`, `stores`, `status` | Your alert settings |
 | `/alertchannel set\|clear\|show` | Server admins (Manage Server): the channel used when a DM fails, or when a member opts out of DMs |
+| `/steam link\|sync\|view\|unlink` | Link a **public** Steam profile: imports your games with playtime, cost per hour and a backlog planner. Uses `STEAM_API_KEY` if set, otherwise the public profile XML. *Game details* must be public |
+| `/bundle titles:` | Is a bundle worth it? Compares each tier to the cheapest current prices of the games you do not own |
+| `/saleprep plan\|recap` | A buy-now / wait list and a budget plan for the next Steam sale, and a recap of what alerts caught |
+| `/lfg post\|list\|close` | Looking-for-group posts with Join/Leave buttons, an optional Discord scheduled event (needs Manage Events) and auto-close |
+| `/library grabber` | A link code for the FanaticalGrabber extension's **Send to Steam Value Checker** button. Only game titles are sent, never keys; the code is stored hashed and can be turned off |
 | `/mydata export\|delete` | Download or delete everything stored about you |
 
 **How alerts are delivered**
@@ -114,7 +119,7 @@ Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in a
 Run it in (or point it at) a voice channel. It looks at who is in the channel and, among members who opted in with `/alerts share`, lists games everyone owns, games almost everyone owns (and who is missing), and games at least two of them want but do not own, with the current price ("worth buying together"). A button picks one game at random. The dashboard's **Game night** page does the same for any opted-in members you pick. With **Game night nudges** on (`/setup`), the bot also posts once in a voice channel's text chat when two or more opted-in people sitting in it have the same game hit their alert. Needs the voice-state intent (non-privileged); nothing about voice is stored.
 
 ### Server setup (`/setup`)
-When the bot joins, the server owner gets a DM (or a note in the system channel) pointing to `/setup`: an ephemeral panel with channel pickers for the alert channel, support ticket channel and giveaway vouches, a free-games feed toggle and a live checklist. **Create the channels for me** (also on the dashboard) makes a Steam Value Checker category with `#deal-alerts`, a private `#support-tickets` (only you, the bot and an optional staff role) and `#vouches`, and connects them. It needs the Manage Channels permission; the invite link now asks for it (19472), and existing servers can grant it to the bot's role. The dashboard's **Setup** page (Servers menu) does the same, including inviting the bot if it is not in the server yet. The dashboard menu is grouped into Games, Servers, Account and Help dropdowns.
+When the bot joins, the server owner gets a DM (or a note in the system channel) pointing to `/setup`: an ephemeral panel with channel pickers for the alert channel, support ticket channel and giveaway vouches, a free-games feed toggle and a live checklist. **Create the channels for me** (also on the dashboard) makes a Steam Value Checker category with `#deal-alerts`, a private `#support-tickets` (only you, the bot and an optional staff role) and `#vouches`, and connects them. It needs the Manage Channels permission; the invite link now asks for it (19472, plus Manage Events, 8589954064, for looking-for-group events), and existing servers can grant it to the bot's role. The dashboard's **Setup** page (Servers menu) does the same, including inviting the bot if it is not in the server yet. The dashboard menu is grouped into Games, Servers, Account and Help dropdowns.
 
 ### Support tickets (`/support`)
 `/support open` opens a ticket (a form asks for a subject and details), `/support mine` lists yours. Replies reach you by DM with a Reply button and on the dashboard's **Support** page; both sides see the same thread.

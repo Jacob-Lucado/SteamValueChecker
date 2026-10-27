@@ -54,7 +54,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbertoken: 5_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -231,7 +231,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&integration_type=1&scope=applications.commands`
                 : null,
             inviteUrl: config.clientId
-                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=19472`
+                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=8589954064`
                 : null
         }),
 
@@ -509,6 +509,21 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!item) throw new HttpError(404, "That game is not in your library.");
             if (!db.setLibraryStatus(s.userId, item.itad_id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, finished or dropped.");
             return { title: item.title, status: body.status };
+        },
+
+        "GET /api/grabber": async (req) => {
+            const s = session(req);
+            userRow(s);
+            return { link: db.getGrabberLink(s.userId) };
+        },
+
+        // Makes (or replaces) the link code the FanaticalGrabber extension uses. The code is returned once and never stored readable.
+        "POST /api/grabber/token": async (req, body) => {
+            const s = session(req);
+            cooldown(s.userId, "grabbertoken");
+            userRow(s);
+            if (body.action === "off") return { ok: true, removed: db.revokeGrabberToken(s.userId) };
+            return { token: db.createGrabberToken(s.userId) };
         },
 
         "GET /api/steam": async (req) => {
@@ -1168,6 +1183,23 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 return send(res, 200, readFileSync(joinPath(config.backupDir, name)), {
                     "Content-Type": "application/vnd.sqlite3", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store"
                 });
+            }
+
+            if (key === "POST /api/grabber/import") {
+                // Called by the FanaticalGrabber extension with a link code instead of a dashboard session. Adds titles only.
+                const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
+                const uid = m ? db.grabberUserForToken(m[1]) : null;
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /library grabber.");
+                if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
+                cooldown(uid, "grabber");
+                const body = await readJson(req, 60_000);
+                const entries = (Array.isArray(body.entries) ? body.entries : []).slice(0, 500).map(e => ({ title: String(e?.title ?? ""), paid: e?.paid === null || e?.paid === "" || !Number.isFinite(Number(e?.paid)) ? null : Number(e.paid) }));
+                const clean = sanitize(entries, { max: 500 }).entries;
+                if (!clean.length) throw new HttpError(400, "I need game titles, not keys.");
+                db.ensureUser(uid);
+                const r = await importLibrary(db, itad, uid, clean);
+                db.noteGrabberUse(uid);
+                return json(res, 200, { added: r.added, updated: r.updated, notFound: r.notFound.length, skippedForLimit: r.skippedForLimit });
             }
 
             const handler = routes[key];

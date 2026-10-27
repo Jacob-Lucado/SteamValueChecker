@@ -7,6 +7,7 @@ import { dirname } from "node:path";
 import { giveawaySchema, giveawayStore } from "./gwstore.js";
 import { ticketSchema, ticketStore } from "./ticketstore.js";
 import { steamSchema, steamStore } from "./steamstore.js";
+import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { lfgSchema, lfgStore } from "./lfgstore.js";
 
 export const MAX_ITEMS_PER_USER = 200;
@@ -141,6 +142,7 @@ CREATE TABLE IF NOT EXISTS status_meta (
 ${giveawaySchema}
 ${ticketSchema}
 ${steamSchema}
+${grabberSchema}
 ${lfgSchema}`;
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
@@ -191,6 +193,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const giveaways = giveawayStore({ db, run, get, all, clean, now });
     const tickets = ticketStore({ run, get, all, clean, now });
     const lfg = lfgStore({ db, run, get, all, clean, now });
+    const grabber = grabberStore({ run, get, clean, now });
     const steam = steamStore({ db, run, get, all, clean, now, maxLibrary: MAX_LIBRARY_PER_USER });
 
     function ensureUser(discordId, guildId = null) {
@@ -446,13 +449,13 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support };
+        return { user: u, items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), grabber_link: grabber.getGrabberLink(discordId), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support };
     }
 
     function deleteUser(discordId) {
         db.exec("BEGIN");
         try {
-            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "grabber_links"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
             lfg.forgetLfgUser(discordId);
@@ -486,6 +489,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, ...steam, ...lfg, close: () => db.close()
+        stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, ...steam, ...grabber, ...lfg, close: () => db.close()
     };
 }

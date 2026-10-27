@@ -367,7 +367,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "alerts/freegames": "POST /api/settings", "alerts/mute": "POST /api/settings", "alerts/language": "POST /api/settings", changelog: "GET /api/changelog", "alerts/share": "POST /api/settings",
         "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
         "alertchannel/group": "POST /api/servers/group", "alertchannel/feed": "POST /api/servers/feed", "serverstats": "GET /api/servers/stats",
-        "library/add": "POST /api/library/add", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/remove": "POST /api/library/remove", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
+        "library/add": "POST /api/library/add", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/grabber": "POST /api/grabber/token", "library/remove": "POST /api/library/remove", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
         "serverlist/add": "POST /api/servers/list/add", "serverlist/view": "GET /api/servers/list", "serverlist/vote": "POST /api/servers/list/vote", "serverlist/remove": "POST /api/servers/list/remove",
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
@@ -677,4 +677,10 @@ test("server free feed posts games once per server, never DLC; stats are counts 
     assert.equal(JSON.stringify(st).includes("s1"), false);
     assert.match(serverStatsEmbed(st).fields.find(f => f.name === "Most wanted").value, /Hades/);
     assert.match(serverStatsEmbed(serverStats(t.db, "nobody")).description, /opted in/);
+});
+
+test("help mentions the newer commands and stays within what the bot can send", async () => {
+    const { HELP } = await import("../src/text.js");
+    for (const c of ["/steam link", "/bundle", "/saleprep", "/lfg post", "/library grabber"]) assert.ok(HELP.includes(c), c);
+    assert.ok(HELP.length < 5800, `help is ${HELP.length} characters`);
 });
