@@ -1090,7 +1090,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         }
         // The page's share-preview tags need the real public address, so it is filled in here.
         if (file === "index.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
-        send(res, 200, body, { "Content-Type": type, "Cache-Control": file === "index.html" ? "no-cache" : "public, max-age=3600" });
+        send(res, 200, body, { "Content-Type": type, "Cache-Control": /\.(js|css|html)$/.test(file) ? "no-cache" : "public, max-age=3600" });
     }
 
     // ---------- server ----------
