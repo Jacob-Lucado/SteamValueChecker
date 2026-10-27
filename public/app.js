@@ -112,7 +112,7 @@
   // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["steam", "Steam"], ["deals", "Deals"]] },
+    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["steam", "Steam"], ["deals", "Deals"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -1074,6 +1074,108 @@
     load();
   }
 
+  // ---------- batch redeem ----------
+  // Steam only takes keys from the owner's logged-in browser, so the FanaticalGrabber extension does the redeeming.
+  // Keys travel page -> extension -> Steam in this browser. They are never sent to the dashboard's server.
+  function redeemView() {
+    const KEY_G = /\b[A-Z0-9]{5}(?:-[A-Z0-9]{5}){2}\b/gi;
+    const WORDS = { redeemed: ["Redeemed", "ok"], owned: ["Already owned", "none"], used: ["Already used", "none"], invalid: ["Invalid", "bad"], region: ["Wrong region", "bad"], needs_base: ["Needs base game", "bad"], not_logged_in: ["Not logged in", "bad"], rate_limited: ["Rate limited", "bad"], error: ["Error", "bad"] };
+    const box = h("textarea", { placeholder: "Paste keys here, one per line or mixed with other text.\nAAAAA-BBBBB-CCCCC", maxlength: "60000", autocomplete: "off", spellcheck: "false", rows: "8" });
+    const file = h("input", { type: "file", accept: ".txt,.csv,.json,.md" });
+    file.addEventListener("change", async () => {
+      const f = file.files[0];
+      if (!f) return;
+      if (f.size > 200000) { toast("That file is too large (200 KB max).", "error"); file.value = ""; return; }
+      box.value = (box.value ? box.value + "\n" : "") + await f.text();
+      file.value = ""; refresh();
+    });
+    const found = h("p", { class: "muted small", text: "No keys yet." });
+    const extState = h("div", { class: "notice", text: "Looking for the FanaticalGrabber extension…" });
+    const go = h("button", { class: "btn green", text: "Redeem on Steam", disabled: true });
+    const stop = h("button", { class: "btn red", text: "Stop", hidden: true });
+    const progress = h("p", { class: "muted small" });
+    const tbody = h("tbody");
+    const table = h("div", { class: "table-wrap", hidden: true }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "Key" }), h("th", { text: "Result" }), h("th", { text: "Game" }))), tbody));
+    const tools = h("p", { hidden: true });
+    let ext = null, jobId = null, rows = new Map(), running = false;
+    const keysIn = () => [...new Set((box.value.match(KEY_G) || []).map(k => k.toUpperCase()))].slice(0, 500);
+    const mask = k => k.slice(0, 5) + "-•••••-" + k.slice(-5);
+    function refresh() {
+      const n = keysIn().length;
+      found.textContent = n ? `${n} Steam key${n === 1 ? "" : "s"} found${n === 500 ? " (500 is the most per batch)" : ""}.` : "No keys yet.";
+      go.disabled = !ext || running || !n;
+    }
+    function onMsg(e) {
+      if (e.source !== window || e.origin !== location.origin) return;
+      const m = e.data;
+      if (!m || m.svc !== "ext") return;
+      if (m.type === "pong") {
+        ext = m.version;
+        extState.className = "notice ok";
+        extState.textContent = `FanaticalGrabber ${ext} is ready. Make sure you are logged into Steam in this browser.`;
+        refresh();
+        return;
+      }
+      if (m.id !== jobId) return;
+      if (m.type === "busy") { running = false; stop.hidden = true; progress.textContent = "The extension is already redeeming a batch. Wait for it to finish."; refresh(); return; }
+      if (m.type === "result") {
+        const tr = rows.get(m.key);
+        const [word, tone] = WORDS[m.status] || WORDS.error;
+        if (tr) { tr.cells[1].replaceChildren(h("span", { class: "badge " + (tone === "ok" ? "" : "none"), text: word }), m.message && m.status !== "redeemed" ? h("span", { class: "muted small", text: " " + m.message }) : ""); tr.cells[2].textContent = m.game || ""; tr.dataset.status = m.status; }
+        progress.textContent = `Redeeming ${m.index + 1} of ${m.total}. About 3 seconds between keys so Steam does not block you.`;
+        return;
+      }
+      if (m.type === "done") {
+        running = false; stop.hidden = true;
+        const c = s => [...rows.values()].filter(r => r.dataset.status === s).length;
+        const left = [...rows.values()].filter(r => !r.dataset.status).length;
+        progress.textContent = (m.aborted ? m.aborted + " " : "") + `${c("redeemed")} redeemed, ${c("owned") + c("used")} owned or used, ${c("invalid") + c("region") + c("needs_base") + c("error")} failed${left ? `, ${left} not tried` : ""}.`;
+        tools.hidden = false;
+        refresh();
+      }
+    }
+    window.addEventListener("message", onMsg);
+    // The page only lives while this view is open: stop listening once the route changes.
+    window.addEventListener("hashchange", () => window.removeEventListener("message", onMsg), { once: true });
+    window.postMessage({ svc: "page", type: "ping" }, location.origin);
+    setTimeout(() => { if (!ext) { extState.className = "notice warn"; extState.replaceChildren("The extension was not found. Install FanaticalGrabber 2.3 or newer, then reload this page. ", state.cfg && state.cfg.fanaticalUrl ? ext2(state.cfg.fanaticalUrl) : ""); } }, 1500);
+    function ext2(url) { return h("a", { href: safeHref(url), target: "_blank", rel: "noopener noreferrer", text: "Get it here" }); }
+    box.addEventListener("input", refresh);
+    go.addEventListener("click", () => {
+      const keys = keysIn();
+      if (!keys.length || !ext) return;
+      if (!confirm(`Are you logged into Steam in this browser? Redeem ${keys.length} key${keys.length === 1 ? "" : "s"} on that account? Redeeming cannot be undone.`)) return;
+      jobId = "r" + Math.random().toString(36).slice(2);
+      rows = new Map(); tbody.replaceChildren(); tools.hidden = true;
+      for (const k of keys) { const tr = h("tr", {}, h("td", {}, h("code", { text: mask(k) })), h("td", { class: "muted", text: "Waiting" }), h("td")); rows.set(k, tr); tbody.append(tr); }
+      table.hidden = false; running = true; stop.hidden = false; progress.textContent = "Starting…"; refresh();
+      window.postMessage({ svc: "page", type: "redeem", id: jobId, items: keys }, location.origin);
+    });
+    stop.addEventListener("click", () => { window.postMessage({ svc: "page", type: "stop", id: jobId }, location.origin); progress.textContent = "Stopping after the current key…"; });
+    const copyBtn = h("button", { class: "btn gray", text: "Copy results" });
+    copyBtn.addEventListener("click", async () => {
+      const lines = [...rows.entries()].map(([k, tr]) => `${k}\t${tr.dataset.status || "not tried"}\t${tr.cells[2].textContent}`);
+      try { await navigator.clipboard.writeText(lines.join("\n")); toast("Copied.", "ok"); } catch { toast("Could not copy.", "error"); }
+    });
+    const addBtn = h("button", { class: "btn blue", text: "Add redeemed games to my library" });
+    addBtn.addEventListener("click", () => busy(addBtn, async () => {
+      const entries = [...rows.values()].filter(r => r.dataset.status === "redeemed" && r.cells[2].textContent).map(r => ({ title: r.cells[2].textContent }));
+      if (!entries.length) throw new Error("No redeemed games with a name to add.");
+      const r = await api("/api/library/import", { entries });
+      toast(`Added ${r.added != null ? r.added : entries.length} to your library.`, "ok");
+    }));
+    tools.append(copyBtn, " ", addBtn);
+    refresh();
+    app.replaceChildren(
+      pageHead("Batch redeem", "Paste Steam keys and redeem them all in one go."),
+      h("div", { class: "panel" }, extState,
+        h("div", { class: "notice warn", text: "Before you start: log into Steam in this browser (store.steampowered.com). Keys are redeemed on the account you are logged into there." }),
+        h("p", { class: "muted small", text: "Steam only accepts keys from your own logged-in browser, and a website cannot use that login by itself. The FanaticalGrabber extension can, so this page hands the keys to it. Your keys go from this page to the extension to Steam. They are never sent to this site's server." }),
+        field("Steam keys", box), field("Or add a file (.txt, .csv, .json)", file), found, h("p", {}, go, " ", stop), progress),
+      h("div", { class: "panel", hidden: false }, h("h3", { text: "Results" }), table, tools,
+        h("p", { class: "muted small", text: "Steam allows around 50 attempts an hour. If it blocks you, the batch stops and you can retry the rest later. Keys already handled are skipped." })));
+  }
+
   // ---------- library ----------
   async function libraryView() {
     const body = h("div", { class: "muted", text: "Loading prices…" });
@@ -1920,7 +2022,7 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, steam: steamView, deals: dealsView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, steam: steamView, deals: dealsView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();

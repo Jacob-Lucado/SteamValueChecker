@@ -473,3 +473,4 @@ pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-
   .topbar-inner { flex-wrap: nowrap; }
   #nav { flex-wrap: nowrap; }
 }
+[hidden] { display: none !important; }
