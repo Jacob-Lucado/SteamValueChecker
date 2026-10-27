@@ -220,6 +220,7 @@ header, main, footer { position: relative; z-index: 1; }
 .library-table th { padding: 10px 14px; }
 .game-cell { display: flex; align-items: center; gap: 14px; min-width: 240px; }
 .game-thumb { width: 92px; height: 43px; border-radius: 5px; object-fit: cover; flex: none; background: var(--soft); }
+.art-missing { background: var(--soft); border: 1px solid var(--line); }
 .game-title { color: var(--white); font-weight: 550; }
 .status-select { min-width: 130px; }
 .row-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; white-space: nowrap; }

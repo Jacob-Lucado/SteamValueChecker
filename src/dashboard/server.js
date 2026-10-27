@@ -105,7 +105,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             "X-Frame-Options": "DENY",
             "Referrer-Policy": "no-referrer",
             "Content-Security-Policy":
-                "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net data:; " +
+                "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net data:; " +
                 "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
             ...headers
         });

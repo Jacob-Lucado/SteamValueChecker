@@ -975,6 +975,23 @@
   }
 
   // ---------- steam link ----------
+  // Steam game art. Newer games are not on the old path, so try the others in turn and show a quiet placeholder if none load.
+  function steamArt(appid, cls, w, ht) {
+    const urls = [
+      `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`,
+      `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appid}/header.jpg`,
+      `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/capsule_231x87.jpg`,
+      `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`
+    ];
+    let i = 0;
+    const img = h("img", { class: cls, src: urls[0], alt: "", loading: "lazy", ...(w ? { width: String(w), height: String(ht) } : {}) });
+    img.addEventListener("error", () => {
+      i += 1;
+      if (i < urls.length) img.src = urls[i];
+      else img.replaceWith(h("div", { class: cls + " art-missing", "aria-hidden": "true" }));
+    });
+    return img;
+  }
   const hoursText = m => (m < 60 ? m + " min" : (m / 60).toFixed(m < 600 ? 1 : 0) + " h");
   async function steamView() {
     const out = h("div", { class: "muted", text: "Loading…" });
@@ -1006,7 +1023,7 @@
           offered.push(n.pick.itad_id);
           nextBtn.textContent = "Pick another";
           nextOut.replaceChildren(h("div", { class: "panel" },
-            n.pick.appid ? h("img", { class: "next-art", src: `https://cdn.akamai.steamstatic.com/steam/apps/${n.pick.appid}/header.jpg`, alt: "", loading: "lazy" }) : null,
+            n.pick.appid ? steamArt(n.pick.appid, "next-art") : null,
             h("h3", { text: "🎯 " + n.pick.title }), h("p", { class: "muted", text: n.why }),
             n.others.length ? h("p", { class: "muted small", text: "Also good: " + n.others.map(o => o.title).join(", ") }) : null,
             h("p", { class: "muted small", text: n.remaining ? `${n.remaining} more to choose from.` : "That is everything left that you have not finished." })));
@@ -1135,7 +1152,7 @@
             });
           });
           const game = h("div", { class: "game-cell" },
-            r.appid ? h("img", { class: "game-thumb", src: `https://cdn.akamai.steamstatic.com/steam/apps/${r.appid}/capsule_184x69.jpg`, alt: "", loading: "lazy", width: "92", height: "35" }) : null,
+            r.appid ? steamArt(r.appid, "game-thumb", 92, 43) : null,
             h("div", {}, h("div", { class: "game-title", text: r.title }), r.minutes ? h("div", { class: "muted small", text: hoursText(r.minutes) + " played" }) : null));
           return [h("tr", {}, h("td", {}, game), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
             h("td", { class: "num", text: money(r.best && r.best.price, cur) }),
