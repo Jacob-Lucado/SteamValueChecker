@@ -508,7 +508,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req);
             const item = db.listLibrary(s.userId).find(i => i.itad_id === body.itad_id);
             if (!item) throw new HttpError(404, "That game is not in your library.");
-            if (!db.setLibraryStatus(s.userId, item.itad_id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, finished or dropped.");
+            if (!db.setLibraryStatus(s.userId, item.itad_id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, played, finished or dropped.");
             return { title: item.title, status: body.status };
         },
 

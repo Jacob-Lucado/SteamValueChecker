@@ -75,7 +75,7 @@ export function leaderboard(db, guildId, { limit = 10 } = {}) {
         .slice(0, limit);
 }
 
-export const STATUSES = [["backlog", "Backlog"], ["playing", "Playing"], ["finished", "Finished"], ["dropped", "Dropped"]];
+export const STATUSES = [["backlog", "Backlog"], ["playing", "Playing"], ["played", "Played"], ["finished", "Finished"], ["dropped", "Dropped"]];
 
 /** How much is sitting unplayed. Only games with a known price count toward the money. */
 export function backlogStats(rows) {

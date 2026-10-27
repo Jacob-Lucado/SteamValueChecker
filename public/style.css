@@ -212,6 +212,18 @@ body::before { content: ""; position: fixed; right: -6vmin; bottom: -8vmin; widt
 :root[data-contrast] { --logo-opacity: 0; }
 header, main, footer { position: relative; z-index: 1; }
 @media print { body::before { display: none; } }
+/* Library table: room to breathe, a status menu wide enough to read, buttons side by side */
+.library-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 14px; }
+.library-controls input[type=search] { flex: 1 1 260px; min-width: 0; }
+.library-controls select { flex: 0 1 220px; }
+.library-table td { padding: 14px 14px; }
+.library-table th { padding: 10px 14px; }
+.game-cell { display: flex; align-items: center; gap: 14px; min-width: 240px; }
+.game-thumb { width: 92px; height: 43px; border-radius: 5px; object-fit: cover; flex: none; background: var(--soft); }
+.game-title { color: var(--white); font-weight: 550; }
+.status-select { min-width: 130px; }
+.row-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; white-space: nowrap; }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .visits { color: var(--muted); font-size: 13px; }
 .visits .live-dot { color: var(--good); }
 .currency-select { height: 36px; max-width: 170px; border-radius: 18px; padding: 0 12px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font-size: 13px; cursor: pointer; }

@@ -57,10 +57,37 @@ test("syncing fills the library with playtime, keeps what you paid and the statu
     assert.equal(db.getSteamLink("u1").games, 2);
 });
 
-test("new Steam games start as backlog, or playing once they have an hour", async () => {
+test("new Steam games start as backlog, played (an hour or more), or playing (an hour or more in the last two weeks)", async () => {
     const { db, itad } = rig();
     await syncSteamLibrary({ db, itad, userId: "u1", steamid: "76561198000000000", fetchImpl: async () => res(XML) });
-    assert.equal(db.listLibrary("u1")[0].status, "playing");
+    assert.equal(db.listLibrary("u1")[0].status, "played", "no recent play on record");
+    const recent = Math.floor(Date.now() / 1000) - 86400;
+    const fresh = rig();
+    fresh.db.syncSteamGames("u1", [{ itad_id: "r", title: "Recent", appid: 5, minutes: 300, lastPlayed: recent }, { itad_id: "q", title: "Quick", appid: 6, minutes: 20, lastPlayed: recent }]);
+    const st = Object.fromEntries(fresh.db.listLibrary("u1").map(g => [g.title, g.status]));
+    assert.deepEqual(st, { Recent: "playing", Quick: "backlog" });
+});
+
+test("a one-time cleanup turns old auto-marked Playing games into Played, then leaves your choices alone", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { DatabaseSync } = await import("node:sqlite");
+    const path = join(mkdtempSync(join(tmpdir(), "svc-mig-")), "t.db");
+    const a = openDb(path);
+    a.ensureUser("u1", "g1");
+    a.syncSteamGames("u1", [{ itad_id: "old", title: "Old", appid: 1, minutes: 500, lastPlayed: 1 }, { itad_id: "new", title: "New", appid: 2, minutes: 500, lastPlayed: Math.floor(Date.now() / 1000) }]);
+    a.setLibraryStatus("u1", "old", "playing"); // what the old version did
+    a.close();
+    const raw = new DatabaseSync(path); raw.exec("DELETE FROM status_meta WHERE key = 'migrated:steam-played'"); raw.close(); // as if upgrading
+    const b = openDb(path);
+    const st = () => Object.fromEntries(b.listLibrary("u1").map(g => [g.title, g.status]));
+    assert.deepEqual(st(), { Old: "played", New: "playing" });
+    b.setLibraryStatus("u1", "old", "playing"); // your own choice later
+    b.close();
+    const c = openDb(path);
+    assert.equal(c.listLibrary("u1").find(g => g.title === "Old").status, "playing", "never runs twice");
+    c.close();
 });
 
 test("unlinking and deleting remove the link", async () => {

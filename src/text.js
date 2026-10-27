@@ -29,7 +29,7 @@ export const HELP = [
     "",
     "**More**",
     "• `/watch` watches one game for a price drop without adding it to your wishlist (it is removed after the alert). `/sales` shows the Steam sale calendar.",
-    "• `/library status` marks a game as backlog, playing, finished or dropped. `/library backlog` shows what you have not played, what it cost and what to play next.",
+    "• `/library status` marks a game as backlog, playing, played, finished or dropped. `/library backlog` shows what you have not played, what it cost and what to play next.",
     "• `/publicpage` turns on a shareable page of your wishlist and best prices, handy for gifts. `/freegames` has Games and DLC tabs; `/alerts freegames dlc:false` hides DLC.",
     "• `/serverstats` shows a server's numbers. `/alertchannel feed` posts new free games in the channel. `/status` shows whether the bot is healthy.",
     "• `/gamenight` (in a voice channel) shows what everyone there owns, who is missing a game, and what is worth buying together. Only members who opted in with `/alerts share` count. Managers can turn on nudges in `/setup`.",

@@ -1087,6 +1087,8 @@
       nextOut.replaceChildren(d.next ? h("div", { class: "panel" }, h("h3", { text: "🎯 Play next" }), h("p", {}, h("b", { text: d.next.pick.title })), h("p", { class: "muted", text: d.next.why }),
         d.next.others.length ? h("p", { class: "muted small", text: "Also in the running: " + d.next.others.map(o => o.title).join(", ") }) : null) : h("div", { class: "notice warn", text: "Nothing in your backlog." }));
     }) });
+    const view = { q: "", status: "all", sort: "name", page: 0 };
+    const STATUS_OPTIONS = [["backlog", "Backlog"], ["playing", "Playing"], ["played", "Played"], ["finished", "Finished"], ["dropped", "Dropped"]];
     async function load() {
       try {
         const d = await api("/api/library");
@@ -1101,11 +1103,27 @@
               { name: "Cheapest now", cls: "s0", points: snaps.map(x => ({ x: Date.parse(x.day), y: x.cheapest })) }
             ], { format: v => money(v, cur), label: "Library value over time" }))
           : h("p", { class: "muted small", text: "The value chart appears after the second day of data." });
-        const rows = d.rows.map(r => {
+        // The games table: search, status filter, sort and pages, so a big Steam library stays easy to move around in.
+        const PAGE = 50;
+        const SORTS = [["name", "Name (A to Z)"], ["msrp", "Price, high to low"], ["cheapest", "Cheapest now, high to low"], ["saved", "Saved, most first"], ["hours", "Hours played"]];
+        const num = v => (typeof v === "number" ? v : -Infinity);
+        const sorters = { name: (x, y) => x.title.localeCompare(y.title), msrp: (x, y) => num(y.msrp) - num(x.msrp), cheapest: (x, y) => num(y.best && y.best.price) - num(x.best && x.best.price), saved: (x, y) => num(y.saved) - num(x.saved), hours: (x, y) => (y.minutes || 0) - (x.minutes || 0) };
+        const tableHost = h("div");
+        const search = h("input", { type: "search", placeholder: "Search your games", value: view.q, "aria-label": "Search your games" });
+        const statusFilter = select([["all", "All statuses"], ...STATUS_OPTIONS], view.status);
+        const sortBy = select(SORTS, view.sort);
+        const redraw = () => { view.q = search.value; view.status = statusFilter.value; view.sort = sortBy.value; drawTable(); };
+        search.addEventListener("input", () => { view.page = 0; redraw(); });
+        statusFilter.addEventListener("change", () => { view.page = 0; redraw(); });
+        sortBy.addEventListener("change", () => { view.page = 0; redraw(); });
+
+        function rowFor(r) {
           const rm = h("button", { class: "btn red small", text: "Remove" });
           rm.addEventListener("click", () => busy(rm, async () => { await api("/api/library/remove", { itad_id: r.itad_id }); load(); }));
           const holder = h("tr", { class: "chart-row", hidden: true }, h("td", { colspan: "7" }));
-          const stat = select([["backlog", "Backlog"], ["playing", "Playing"], ["finished", "Finished"], ["dropped", "Dropped"]], r.status || "backlog");
+          const stat = select(STATUS_OPTIONS, r.status || "backlog");
+          stat.className = "status-select";
+          stat.setAttribute("aria-label", "Status for " + r.title);
           stat.addEventListener("change", async () => { try { await api("/api/library/status", { itad_id: r.itad_id, status: stat.value }); toast(`${r.title}: ${stat.value}.`, "ok"); load(); } catch (e) { toast(e.message, "error"); } });
           const hist = h("button", { class: "btn gray small", text: "Price history" });
           hist.addEventListener("click", () => {
@@ -1116,19 +1134,40 @@
               holder.hidden = false;
             });
           });
-          return [h("tr", {}, h("td", { text: r.title }), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
+          const game = h("div", { class: "game-cell" },
+            r.appid ? h("img", { class: "game-thumb", src: `https://cdn.akamai.steamstatic.com/steam/apps/${r.appid}/capsule_184x69.jpg`, alt: "", loading: "lazy", width: "92", height: "35" }) : null,
+            h("div", {}, h("div", { class: "game-title", text: r.title }), r.minutes ? h("div", { class: "muted small", text: hoursText(r.minutes) + " played" }) : null));
+          return [h("tr", {}, h("td", {}, game), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
             h("td", { class: "num", text: money(r.best && r.best.price, cur) }),
-            h("td", { class: "num", text: r.saved === null ? "–" : (r.saved >= 0 ? "+" : "−") + money(Math.abs(r.saved), cur) }), h("td", { class: "actions" }, hist, rm)), holder];
-        });
+            h("td", { class: "num", text: r.saved === null ? "–" : (r.saved >= 0 ? "+" : "−") + money(Math.abs(r.saved), cur) }), h("td", {}, h("div", { class: "row-actions" }, hist, rm))), holder];
+        }
+
+        function drawTable() {
+          const q = view.q.trim().toLowerCase();
+          const list = d.rows.filter(r => (view.status === "all" || (r.status || "backlog") === view.status) && (!q || r.title.toLowerCase().includes(q))).sort(sorters[view.sort] || sorters.name);
+          const pages = Math.max(1, Math.ceil(list.length / PAGE));
+          view.page = Math.min(view.page, pages - 1);
+          const start = view.page * PAGE;
+          const go = n => () => { view.page += n; drawTable(); tableHost.scrollIntoView({ block: "start" }); };
+          const prev = h("button", { class: "btn gray small", text: "← Previous", onclick: go(-1) }); prev.disabled = view.page === 0;
+          const next = h("button", { class: "btn gray small", text: "Next →", onclick: go(1) }); next.disabled = view.page >= pages - 1;
+          tableHost.replaceChildren(
+            list.length ? h("div", { class: "table-wrap" }, h("table", { class: "library-table" }, h("thead", {}, h("tr", {}, ["Game", "Status", "Paid", "MSRP", "Cheapest now", "Saved", ""].map((c, i) => h("th", { class: i > 1 && i < 6 ? "num" : "", text: c })))),
+              h("tbody", {}, list.slice(start, start + PAGE).flatMap(rowFor))))
+              : h("div", { class: "empty", text: "No games match." }),
+            h("div", { class: "pager" }, h("span", { class: "muted small", text: list.length ? `Showing ${start + 1}–${Math.min(list.length, start + PAGE)} of ${list.length}` : "" }), pages > 1 ? h("span", { class: "row-actions" }, prev, h("span", { class: "muted small", text: `Page ${view.page + 1} of ${pages}` }), next) : null));
+        }
+        drawTable();
+
         body.className = "";
         body.replaceChildren(
-          h("div", { class: "grid four" }, tile("Games", String(t.games), t.paidGames < t.games ? `${t.paidGames} with a price` : ""), tile("You paid", money(t.paid, cur)),
+          h("div", { class: "grid four" }, tile("Games", String(t.games), t.paidGames < t.games ? `${t.paidGames} with what you paid` : ""), tile("You paid", money(t.paid, cur)),
             tile("Worth at MSRP", money(t.msrp, cur)), tile("Saved vs MSRP", money(t.saved, cur), t.msrpPaid > 0 ? Math.round(t.savedPct) + "% off" : "add prices to see savings")),
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
           chart,
-          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Game", "Status", "Paid", "MSRP", "Cheapest now", "Saved", ""].map((c, i) => h("th", { class: i > 1 && i < 6 ? "num" : "", text: c })))), h("tbody", {}, rows.flat())))));
+          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 

@@ -70,7 +70,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/sales` | Upcoming Steam sales and festivals with countdowns (dates in `src/salescal.js`, update when Valve announces new ones) |
 | `/publicpage enabled: name:` | A public, shareable page of your wishlist and best prices at `#/u/name`. Shows only game names, art and prices |
 | `/status` | Live health checks, uptime and incidents (the same data as the dashboard Status page) |
-| `/library status\|backlog` | Mark games backlog, playing, finished or dropped; see unplayed spend and what to play next |
+| `/library status\|backlog` | Mark games backlog, playing, played, finished or dropped; see unplayed spend and what to play next |
 | `/serverstats` | A server's numbers for members who opted in: most wanted games, savings, top of the server list. Counts only |
 | `/alertchannel feed enabled:` | Post new free games (not DLC) in the alert channel for everyone |
 | `/library add\|import\|view\|remove` | Games you own and what you paid. Shows what they are worth, what you saved against MSRP, and a value-over-time chart on the dashboard |

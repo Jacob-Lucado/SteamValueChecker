@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS steam_links (
     minutes    INTEGER NOT NULL DEFAULT 0
 );`;
 
+/** A new Steam game starts as backlog (barely touched), played (an hour or more), or playing (an hour or more, in the last two weeks). */
+const startStatus = (g, lastPlayedMs, nowMs) => ((g.minutes ?? 0) < 60 ? "backlog" : lastPlayedMs && nowMs - lastPlayedMs < 14 * 86400_000 ? "playing" : "played");
+
 export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     const getSteamLink = id => clean(get("SELECT * FROM steam_links WHERE discord_id = ?", id)) ?? null;
     const setSteamLink = (id, steamid) => run(
@@ -41,7 +44,7 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
                     skippedForLimit++;
                 } else {
                     run("INSERT INTO library (discord_id, itad_id, title, paid, added_at, status, appid, minutes, last_played) VALUES (?,?,?,?,?,?,?,?,?)",
-                        discordId, g.itad_id, g.title, null, now(), (g.minutes ?? 0) >= 60 ? "playing" : "backlog", g.appid ?? null, g.minutes ?? 0, played);
+                        discordId, g.itad_id, g.title, null, now(), startStatus(g, played, now()), g.appid ?? null, g.minutes ?? 0, played);
                     n++; added++;
                 }
             }

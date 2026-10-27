@@ -346,7 +346,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
     const setProfile = (id, { slug, isPublic }) => run("UPDATE users SET profile_slug = ?, profile_public = ? WHERE discord_id = ?", slug, isPublic ? 1 : 0, id);
     const getProfileBySlug = slug => clean(get("SELECT * FROM users WHERE profile_slug = ?", slug));
-    const LIB_STATUSES = ["backlog", "playing", "finished", "dropped"];
+    const LIB_STATUSES = ["backlog", "playing", "played", "finished", "dropped"];
     const setLibraryStatus = (discordId, itadId, status) => LIB_STATUSES.includes(status)
         ? run("UPDATE library SET status = ? WHERE discord_id = ? AND itad_id = ?", status, discordId, itadId).changes > 0 : false;
     const removeLibrary = (discordId, itadId) => run("DELETE FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId).changes > 0;
@@ -480,6 +480,13 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const statusEvents = (limit = 20) => all("SELECT at, component, state, note FROM status_events ORDER BY id DESC LIMIT ?", limit).map(clean);
     const getMeta = key => get("SELECT value FROM status_meta WHERE key = ?", key)?.value ?? null;
     const setMeta = (key, value) => run("INSERT INTO status_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, String(value));
+
+    // One time: an earlier version marked every Steam game with an hour or more as "playing". Only games touched in the last
+    // two weeks keep that; the rest become "played". Runs once, so a status you choose later is never changed.
+    if (getMeta("migrated:steam-played") === null) {
+        run("UPDATE library SET status = 'played' WHERE appid IS NOT NULL AND status = 'playing' AND (last_played IS NULL OR last_played < ?)", now() - 14 * 86400_000);
+        setMeta("migrated:steam-played", "1");
+    }
 
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,

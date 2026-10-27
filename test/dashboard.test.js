@@ -626,8 +626,8 @@ test("Steam linking: link, view, sync and unlink from the dashboard", async () =
     assert.ok(view.data.stats.value && !("perHour" in view.data.stats));
     assert.equal(view.data.stats.value.top[0].title, "Counter");
     const nx = await t.request("/api/steam/next");
-    assert.equal(nx.data.next.pick.title, "Counter");
-    assert.equal((await t.request("/api/steam/next?skip=" + encodeURIComponent(nx.data.next.pick.itad_id))).data.next, null, "pick another skips what was offered");
+    assert.equal(nx.status, 200);
+    assert.equal(nx.data.next, null, "a game with 12 hours already played is not suggested as next");
     assert.equal((await t.request("/api/steam/sync", { method: "POST", body: {} })).status, 429, "a second sync right away waits");
     t.advance(61_000);
     assert.equal((await t.request("/api/steam/sync", { method: "POST", body: {} })).status, 200);

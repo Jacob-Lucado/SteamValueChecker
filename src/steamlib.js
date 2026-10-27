@@ -152,7 +152,7 @@ export function playStats(rows) {
 export function steamNext(rows, { rand = Math.random, skip = [] } = {}) {
     const skipped = new Set(skip);
     const tier = r => (r.status === "playing" ? 0 : r.minutes >= 30 && r.minutes < 600 ? 1 : r.minutes < 30 ? 2 : 3);
-    const pool = rows.filter(r => r.appid && r.status !== "finished" && r.status !== "dropped")
+    const pool = rows.filter(r => r.appid && r.status !== "finished" && r.status !== "dropped" && !(r.status === "played" && r.minutes >= 600)) // long-played games are not "next"
         .sort((a, b) => tier(a) - tier(b) || (tier(a) === 1 ? b.minutes - a.minutes : tier(a) === 2 ? (b.msrp ?? 0) - (a.msrp ?? 0) : a.minutes - b.minutes) || a.title.localeCompare(b.title));
     const fresh = pool.filter(r => !skipped.has(r.itad_id));
     if (!fresh.length) return null;
