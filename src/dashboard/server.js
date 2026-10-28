@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
-import { viewRows, findItem, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
+import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
 import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
 import { ItadError } from "../itad.js";
 import { parseTrigger, describeTrigger } from "../alerts.js";
@@ -145,6 +145,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         const t = now();
         for (const [k, s] of sessions) if (s.expires < t) sessions.delete(k);
         for (const [k, exp] of states) if (exp < t) states.delete(k);
+        for (const [k, at] of lastRun) if (t - at > 120_000) lastRun.delete(k); // the longest cooldown is a minute
     }
 
     function session(req) {

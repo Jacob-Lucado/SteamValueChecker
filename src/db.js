@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS items (
     UNIQUE (discord_id, itad_id)
 );
 CREATE INDEX IF NOT EXISTS items_user ON items(discord_id);
+CREATE INDEX IF NOT EXISTS items_game ON items(itad_id);
 CREATE TABLE IF NOT EXISTS site_visits (
     site     TEXT PRIMARY KEY,
     views    INTEGER NOT NULL DEFAULT 0,
@@ -178,6 +179,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "bundles", "INTEGER NOT NULL DEFAULT 1");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
+    db.exec("CREATE INDEX IF NOT EXISTS users_guild ON users(guild_id, share)");
     addColumn("giveaways", "gallery", "TEXT");
     addColumn("items", "snooze_until", "INTEGER");
     addColumn("users", "muted", "TEXT NOT NULL DEFAULT ''");

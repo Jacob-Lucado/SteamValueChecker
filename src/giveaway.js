@@ -7,7 +7,7 @@ import { randomInt } from "node:crypto";
 import { UserError } from "./errors.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
-import { giveawayPayload, winnersPayload, keyMessage, confirmPayload, vouchPayload, leftoverMessage, hostNote } from "./gwrender.js";
+import { giveawayPayload, winnersPayload, confirmPayload, vouchPayload, leftoverMessage, hostNote } from "./gwrender.js";
 
 const CONFIRM_FIRST_MS = 10 * 60_000;
 const CONFIRM_REMINDER_MS = 24 * 3600_000;

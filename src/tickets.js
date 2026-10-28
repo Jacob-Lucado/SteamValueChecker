@@ -11,7 +11,6 @@ const WAITING_TO_RESOLVED_MS = 7 * 86400_000, RESOLVED_TO_CLOSED_MS = 3 * 86400_
 const ICON = { open: "🟢", waiting: "🟡", resolved: "✅", closed: "⚫" };
 const COLOR = { open: 0x57f287, waiting: 0xf2b84b, resolved: 0x5865f2, closed: 0x747f8d };
 const clip = (s, n) => String(s ?? "").trim().slice(0, n);
-const stamp = ms => `<t:${Math.floor(ms / 1000)}:R>`;
 
 export function staffEmbed(t, messages) {
     const last = messages.filter(m => m.role !== "system").at(-1);
