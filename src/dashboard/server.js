@@ -65,7 +65,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -617,6 +617,40 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             });
             const nowTotal = rows.reduce((a, r) => a + (r.price ?? 0), 0);
             return { currency: currency ?? "USD", fullPrice: Math.round(total * 100) / 100, cheapestNow: Math.round(nowTotal * 100) / 100, matched: rows.length, unmatched: titles.length - rows.length };
+        },
+
+        // One page per game: prices, a year of history with the buy-now-or-wait verdict, bundles, free offers and server interest.
+        "GET /api/game": async (req, _b, url) => {
+            const s = session(req);
+            const id = String(url.searchParams.get("id") ?? "");
+            if (!/^[0-9a-f-]{20,40}$/i.test(id)) throw new HttpError(400, "That is not a game id.");
+            cooldown(s.userId, "gamepage");
+            const u = userRow(s);
+            const info = await itad.getTitle(id);
+            if (!info) throw new HttpError(404, "That game was not found.");
+            const [prices, history, bundles, giveaways] = await Promise.all([
+                itad.getPrices([id], u.region).catch(() => new Map()),
+                itad.getHistory(id, u.region).catch(() => []),
+                itad.getBundles([id], u.region).catch(() => new Map()),
+                itad.getGiveaways().catch(() => new Map())
+            ]);
+            const sum = summarize(prices.get(id), { majorOnly: u.stores === "major" });
+            const cur = sum.currency || "USD";
+            const fmt = n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } };
+            const nowPrice = sum.best?.price ?? null;
+            const step = Math.max(1, Math.ceil(history.length / MAX_HISTORY_POINTS));
+            const watchers = u.guild_id ? db.sharedWatchedItems(u.guild_id).find(w => w.itad_id === id)?.watchers ?? 0 : 0;
+            return {
+                id, title: info.title, appid: info.appid ?? null, release: info.release ?? null, currency: cur,
+                price: nowPrice, shop: sum.best?.shop ?? null, url: /^https:\/\//i.test(sum.best?.url ?? "") ? sum.best.url : null,
+                steam: sum.steam, msrp: sum.msrp, atl: sum.atl, low1y: sum.low1y, low3m: sum.low3m,
+                points: history.filter((_, i) => i % step === 0 || i === history.length - 1).map(p => ({ t: p.t, price: p.price })),
+                advice: nowPrice !== null ? buyOrWait(history, nowPrice, { sales: upcomingSales(Date.now()), past: salesBefore(), money: fmt }) : null,
+                bundles: (bundles.get(id) ?? []).slice(0, 5).map(b => ({ title: b.title, shop: b.shop, price: b.price, currency: b.currency, expiry: b.expiry, url: /^https:\/\//i.test(b.url ?? "") ? b.url : null })),
+                free: (giveaways.get(id) ?? []).slice(0, 3).map(g => ({ title: g.title, shop: g.shop, expiry: g.expiry, url: /^https:\/\//i.test(g.url ?? "") ? g.url : null })),
+                onWishlist: db.listItems(s.userId).some(g => g.itad_id === id), inLibrary: db.listLibrary(s.userId).some(g => g.itad_id === id),
+                watchers
+            };
         },
 
         "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },

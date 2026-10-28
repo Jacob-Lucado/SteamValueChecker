@@ -989,3 +989,25 @@ test("key vault value: prices titles only", async () => {
         assert.ok(r.data.fullPrice >= r.data.cheapestNow && r.data.cheapestNow > 0);
     } finally { await t.close(); }
 });
+
+test("game page: price, history verdict, bundles, free offers and who watches it", async () => {
+    const GID = "018d0000-0000-7000-8000-000000000001";
+    const t = await signedIn({ itadExtra: {
+        getTitle: async id => (id === GID ? { title: "Celeste", appid: 504230, release: Date.UTC(2018, 0, 25) } : null),
+        getBundles: async () => new Map([[GID, [{ title: "Indie Bundle", shop: "Humble", price: 5, currency: "USD", expiry: null, url: "https://h.example/b" }]]]),
+        getGiveaways: async () => new Map([[GID, [{ title: "Celeste", shop: "Epic", expiry: null, url: "https://e.example/c" }]]])
+    } });
+    try {
+        assert.equal((await t.request("/api/game?id=bad")).status, 400);
+        t.advance(2_000);
+        assert.equal((await t.request("/api/game?id=018d0000-0000-7000-8000-00000000ffff")).status, 404);
+        t.advance(2_000);
+        const r = await t.request("/api/game?id=" + GID);
+        assert.equal(r.status, 200);
+        assert.equal(r.data.title, "Celeste"); assert.equal(r.data.appid, 504230);
+        assert.equal(r.data.price, 10); assert.equal(r.data.atl, 5);
+        assert.equal(r.data.bundles[0].title, "Indie Bundle"); assert.equal(r.data.free[0].shop, "Epic");
+        assert.equal(r.data.onWishlist, false); assert.equal(r.data.watchers, 0);
+        assert.ok(Array.isArray(r.data.points));
+    } finally { await t.close(); }
+});
