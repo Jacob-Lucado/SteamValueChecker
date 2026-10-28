@@ -961,3 +961,31 @@ test("backlog challenge from the dashboard: set a goal, see progress, bad goals 
     assert.equal((await t.request("/api/library/challenge")).data.goal, 3);
     await t.close();
 });
+
+test("extension bundle helper: current prices for several Steam apps by link code", async () => {
+    const t = await signedIn({ itadExtra: { lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, i === "app/999" ? null : "id-" + i.slice(4)])) } });
+    const made = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+    const post = (code, body) => fetch(t.base + "/api/grabber/prices", { method: "POST", headers: { "Content-Type": "application/json", ...(code ? { Authorization: `Bearer ${code}` } : {}) }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, data: await r.json() }));
+    assert.equal((await post(null, { appids: [1] })).status, 401);
+    assert.equal((await post(made.data.token, { appids: ["x"] })).status, 400);
+    t.advance(3_000);
+    const ok = await post(made.data.token, { appids: [10, 20, 999, 10] });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.data.items.map(i => i.appid), [10, 20], "unknown apps are dropped, repeats merged");
+    assert.equal(ok.data.items[0].atl, 5);
+    t.advance(3_000);
+    assert.equal((await post(made.data.token, { appids: [10] })).status, 200);
+    await t.close();
+});
+
+test("key vault value: prices titles only", async () => {
+    const t = await signedIn();
+    try {
+        assert.equal((await t.request("/api/vault/value", { method: "POST", body: { titles: [] } })).status, 400);
+        t.advance(16_000);
+        const r = await t.request("/api/vault/value", { method: "POST", body: { titles: ["Alpha", "Beta", "zzz nothing", "Alpha"] } });
+        assert.equal(r.status, 200);
+        assert.equal(r.data.matched, 2); assert.equal(r.data.unmatched, 1);
+        assert.ok(r.data.fullPrice >= r.data.cheapestNow && r.data.cheapestNow > 0);
+    } finally { await t.close(); }
+});

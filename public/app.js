@@ -1201,6 +1201,25 @@
     const tools = h("p", { hidden: true });
     let ext = null, extFound = false, jobId = null, rows = new Map(), running = false, queued = null, outcomes = [];
     const queuedBox = h("div", { class: "notice", hidden: true });
+    // The key vault: keys the extension saw when you revealed them on Fanatical and has not redeemed yet. Only titles are priced.
+    const vaultBox = h("div", { class: "panel", hidden: true });
+    function showVault(items) {
+      if (!items.length) { vaultBox.hidden = true; return; }
+      const worth = h("span", { class: "muted small", text: "" });
+      const priceBtn = h("button", { class: "btn gray small", text: "What are they worth?" });
+      priceBtn.addEventListener("click", () => busy(priceBtn, async () => {
+        const r = await api("/api/vault/value", { titles: items.map(i => i.title) });
+        worth.textContent = ` About ${money(r.fullPrice, r.currency)} at full price, ${money(r.cheapestNow, r.currency)} at today's cheapest prices (${r.matched} of ${items.length} matched).`;
+      }));
+      const load = h("button", { class: "btn blue small", text: `Load ${items.length} into the box` });
+      load.addEventListener("click", () => { box.value = [...new Set([...keysIn(), ...items.map(i => i.key)])].join("\n"); refresh(); toast("Loaded. Press Redeem when you are ready.", "ok"); });
+      vaultBox.hidden = false;
+      vaultBox.replaceChildren(h("h3", { text: "🗝️ Key vault" }),
+        h("p", { class: "muted small", text: `${items.length} key${items.length === 1 ? "" : "s"} you revealed on Fanatical and have not redeemed. They stay in your browser; only the game titles are used to price them.` }),
+        h("ul", { class: "plain" }, items.slice(0, 8).map(i => h("li", {}, h("b", { text: i.title }), " ", h("code", { text: mask(i.key) })))),
+        items.length > 8 ? h("p", { class: "muted small", text: `and ${items.length - 8} more` }) : "",
+        h("div", { class: "row" }, priceBtn, load), worth);
+    }
     const keysIn = () => [...new Set((box.value.match(KEY_G) || []).map(k => k.toUpperCase()))].slice(0, 500);
     const MIN_EXT = "2.3.0"; // the first FanaticalGrabber version with the page bridge
     const versionLess = (a, b) => { const x = String(a).split(".").map(n => parseInt(n, 10) || 0), y = String(b).split(".").map(n => parseInt(n, 10) || 0); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
@@ -1216,6 +1235,7 @@
       if (e.source !== window || e.origin !== location.origin) return;
       const m = e.data;
       if (!m || m.svc !== "ext") return;
+      if (m.type === "vault") { showVault(m.items || []); return; }
       if (m.type === "pong") {
         if (versionLess(m.version, MIN_EXT)) {
           ext = null; extFound = true;
@@ -1227,6 +1247,7 @@
           extState.textContent = `FanaticalGrabber ${ext} is ready. Make sure you are logged into Steam in this browser.`;
         }
         refresh();
+        if (ext) window.postMessage({ svc: "page", type: "vault" }, location.origin);
         return;
       }
       if (m.id !== jobId) return;
@@ -1332,7 +1353,7 @@
     refresh();
     app.replaceChildren(
       pageHead("Batch redeem", "Paste Steam keys and redeem them all in one go."),
-      h("div", { class: "panel" }, extState, queuedBox,
+      vaultBox, h("div", { class: "panel" }, extState, queuedBox,
         h("div", { class: "notice warn", text: "Before you start: log into Steam in this browser (store.steampowered.com). Keys are redeemed on the account you are logged into there." }),
         h("p", { class: "muted small", text: "Steam only accepts keys from your own logged-in browser, and a website cannot use that login by itself. The FanaticalGrabber extension can, so this page hands the keys to it. Your keys go from this page to the extension to Steam. They are never sent to this site's server." }),
         field("Steam keys", box), field("Or add a file (.txt, .csv, .json)", file), found, h("p", {}, go, " ", stop), progress),

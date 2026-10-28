@@ -64,7 +64,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, grabbertoken: 5_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, grabberprices: 2_000, grabbertoken: 5_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -595,6 +595,27 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             let sent = false;
             if (dm) { try { await dm(s.userId, { embeds: [{ color: 0x57f287, title: "Batch redeem", description: text }] }); sent = true; } catch { /* DMs closed: it is in Notifications */ } }
             return { ok: true, summary, dm: sent };
+        },
+
+        // The key vault shows titles only: what the unredeemed games are worth right now. Keys never come here.
+        "POST /api/vault/value": async (req, body) => {
+            const s = session(req);
+            cooldown(s.userId, "value");
+            const u = userRow(s);
+            const titles = [...new Set((Array.isArray(body.titles) ? body.titles : []).map(t => String(t ?? "").trim().slice(0, 150)).filter(Boolean))].slice(0, 150);
+            if (!titles.length) throw new HttpError(400, "No titles.");
+            const looked = (await itad.lookupTitles(titles)).filter(r => r.id);
+            const prices = looked.length ? await itad.getPrices(looked.map(r => r.id), u.region) : new Map();
+            let total = 0, currency = null;
+            const rows = looked.map(r => {
+                const sum = summarize(prices.get(r.id), { majorOnly: u.stores === "major" });
+                currency ??= sum.currency;
+                const price = sum.best?.price ?? sum.steam ?? null;
+                if (price !== null) total += sum.msrp && sum.msrp > price ? sum.msrp : price;
+                return { title: r.title, msrp: sum.msrp, price };
+            });
+            const nowTotal = rows.reduce((a, r) => a + (r.price ?? 0), 0);
+            return { currency: currency ?? "USD", fullPrice: Math.round(total * 100) / 100, cheapestNow: Math.round(nowTotal * 100) / 100, matched: rows.length, unmatched: titles.length - rows.length };
         },
 
         "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },
@@ -1451,6 +1472,27 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 const r = await importLibrary(db, itad, uid, clean);
                 db.noteGrabberUse(uid);
                 return json(res, 200, { added: r.added, updated: r.updated, notFound: r.notFound.length, skippedForLimit: r.skippedForLimit });
+            }
+
+            if (key === "POST /api/grabber/prices") {
+                // The extension's bundle and cart helpers: current prices for up to 60 Steam apps, by link code. Only app numbers are sent.
+                const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
+                const uid = m ? db.grabberUserForToken(m[1]) : null;
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /library grabber.");
+                if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
+                cooldown(uid, "grabberprices");
+                const body = await readJson(req, 5_000);
+                const appids = [...new Set((Array.isArray(body.appids) ? body.appids : []).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 1e9))].slice(0, 60);
+                if (!appids.length) throw new HttpError(400, "No app numbers.");
+                const user = db.getUser(uid);
+                const ids = await itad.lookupShopIds(STEAM_SHOP_ID, appids.map(a => `app/${a}`));
+                const found = appids.map(a => [a, ids.get(`app/${a}`)]).filter(([, id]) => id);
+                const prices = found.length ? await itad.getPrices(found.map(([, id]) => id), user?.region ?? "US") : new Map();
+                const items = found.map(([appid, id]) => {
+                    const sum = summarize(prices.get(id), { majorOnly: user?.stores === "major" });
+                    return { appid, steam: sum.steam, msrp: sum.msrp, best: sum.best ? { price: sum.best.price, shop: sum.best.shop } : null, atl: sum.atl, currency: sum.currency };
+                });
+                return json(res, 200, { items });
             }
 
             if (key === "GET /api/grabber/game") {
