@@ -2,7 +2,7 @@
 // One price lookup per game and region, no matter how many people watch it.
 
 import { summarize } from "./report.js";
-import { evaluate, describeTrigger, dealVerdict } from "./alerts.js";
+import { evaluate, describeTrigger, dealVerdict, meaningfulDrop } from "./alerts.js";
 import { protonTier } from "./proton.js";
 import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
@@ -92,7 +92,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
         try {
             for (const g of voiceGroups({ db, eligible, voiceMap })) {
                 const key = `vc:${g.itadId}`, deal = db.getGuildDeal(g.guildId, key);
-                if (deal && !(g.now.price < deal.last_price - EPS || now() - deal.at > GROUP_REPING_MS)) continue;
+                if (deal && !(meaningfulDrop(deal.last_price, g.now.price) || now() - deal.at > GROUP_REPING_MS)) continue;
                 if (await notifier.postChannel(g.channelId, { embeds: [voiceBuyEmbed(g)] })) { db.setGuildDeal(g.guildId, key, g.now.price); stats.groupPosts++; }
             }
         } catch (err) { log(`voice nudges failed: ${err.name}`); }
@@ -114,7 +114,7 @@ async function groupPings({ db, notifier, eligible, now }) {
             if (hits.length < guild.group_min) continue;
             const best = hits.reduce((m, h) => (h.now.price < m.now.price ? h : m));
             const deal = db.getGuildDeal(guild.guild_id, itadId);
-            const fresh = !deal || best.now.price < deal.last_price - EPS || now() - deal.at > GROUP_REPING_MS;
+            const fresh = !deal || meaningfulDrop(deal.last_price, best.now.price) || now() - deal.at > GROUP_REPING_MS;
             if (!fresh) continue;
             if (await notifier.postGuild(guild.guild_id, { embeds: [groupEmbed(best.item.title, hits.length, best.now)] })) {
                 db.setGuildDeal(guild.guild_id, itadId, best.now.price);

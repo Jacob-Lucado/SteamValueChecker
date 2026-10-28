@@ -4,6 +4,13 @@ import { TRIGGERS } from "./db.js";
 
 const EPS = 0.005;
 
+/**
+ * Is this price low enough, compared with the one we last alerted at, to be worth another message? A drop of a few cents is
+ * usually exchange-rate noise from a shop that prices in another currency, and would otherwise repeat the alert every cycle.
+ * Needs at least 3% and 25 cents (or the full amount, for very cheap games).
+ */
+export const meaningfulDrop = (last, price) => price < last - Math.min(last, Math.max(0.25, last * 0.03)) + EPS;
+
 /** Current numbers for one game from a report.js summary: price now, discount, all-time low. */
 export function current(summary) {
     const price = summary?.best?.price ?? null;
@@ -37,7 +44,7 @@ export function evaluate(item, summary) {
         return { action: item.last_alert_price != null ? "reset" : "none", now };
     }
     if (item.last_alert_price == null) return { action: "alert", now, reason: "new" };
-    if (now.price < item.last_alert_price - EPS) return { action: "alert", now, reason: "lower" };
+    if (meaningfulDrop(item.last_alert_price, now.price)) return { action: "alert", now, reason: "lower" };
     return { action: "none", now };
 }
 

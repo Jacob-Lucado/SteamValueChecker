@@ -54,3 +54,13 @@ test("finding games by title", () => {
     assert.ok(findItem(items, "zzz").none);
     assert.deepEqual(suggest(items, "ades").map(s => s.value), ["Hades", "Hades II"]);
 });
+
+test("re-alerts need a real drop, not a few cents of exchange-rate noise", async () => {
+    const { meaningfulDrop } = await import("../src/alerts.js");
+    assert.equal(meaningfulDrop(10.57, 10.56), false, "one cent");
+    assert.equal(meaningfulDrop(10.57, 10.4), false, "under 25 cents");
+    assert.equal(meaningfulDrop(30, 29.5), false, "under 3%");
+    assert.equal(meaningfulDrop(10.57, 9.5), true);
+    assert.equal(meaningfulDrop(0.99, 0.5), true, "cheap games can still drop");
+    assert.equal(meaningfulDrop(10, 10.5), false, "a rise is never a drop");
+});
