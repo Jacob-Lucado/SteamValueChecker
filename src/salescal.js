@@ -11,6 +11,17 @@ export const SALES = [
     { name: "Steam Summer Sale", kind: "sale", start: d("2027-06-24"), end: d("2027-07-08"), note: "A major sale, second only to winter." }
 ];
 
+/** Big sales that already happened (kept for the price oracle). Dates are Valve's published ones, to the day. */
+export const PAST_SALES = [
+    { name: "Steam Autumn Sale", kind: "sale", start: d("2025-11-26"), end: d("2025-12-03") },
+    { name: "Steam Winter Sale", kind: "sale", start: d("2025-12-18"), end: d("2026-01-05") },
+    { name: "Steam Spring Sale", kind: "sale", start: d("2026-03-19"), end: d("2026-03-26") },
+    { name: "Steam Summer Sale", kind: "sale", start: d("2026-06-25"), end: d("2026-07-09") }
+];
+
+/** Big sales that ended in the last `days` days, for checking how a game behaved in them. */
+export const salesBefore = (now = Date.now(), days = 365) => [...PAST_SALES, ...SALES].filter(s => s.kind === "sale" && s.end < now && s.end > now - days * 86400_000);
+
 /** Events that are on now or still to come, soonest first. */
 export function upcomingSales(now = Date.now(), { limit = 6, salesOnly = false } = {}) {
     return SALES.filter(s => s.end > now && (!salesOnly || s.kind === "sale"))

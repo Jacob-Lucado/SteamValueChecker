@@ -5,7 +5,7 @@ import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
 import { setProfile } from "./profile.js";
-import { salesEmbed, upcomingSales } from "./salescal.js";
+import { salesEmbed, upcomingSales, salesBefore } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
@@ -163,7 +163,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             const now = { ...current(s), currency: s.currency };
             if (now.price === null) throw new UserError("No current price found for that game.");
             let advice = null;
-            try { advice = buyOrWait(await itad.getHistory(found.item.itad_id, user.region), now.price, { sales: upcomingSales(Date.now()), money: n => money(n, now.currency) }); } catch { /* the check works without it */ }
+            try { advice = buyOrWait(await itad.getHistory(found.item.itad_id, user.region), now.price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => money(n, now.currency) }); } catch { /* the check works without it */ }
             await i.editReply({ embeds: [checkEmbed(found.item.title, now, dealVerdict(now), advice)] });
         } catch (err) {
             await failed(i, "wishlist check", err);

@@ -35,3 +35,15 @@ test("leaning buy when cheaper than usual and near the low; wait when far above"
     assert.equal(buyOrWait(hist, 20, { now: NOW }).verdict, "wait");
     assert.equal(buyOrWait(pts([[300, 20], [100, 18], [50, 20]]), 20, { now: NOW }).verdict, "lean_wait", "mild gap and no repeat dips");
 });
+
+test("sale oracle: counts big sales that fit in the history where the game got near its low", () => {
+    const past = [{ name: "A", kind: "sale", start: NOW - 300 * D, end: NOW - 290 * D }, { name: "B", kind: "sale", start: NOW - 200 * D, end: NOW - 190 * D }, { name: "C", kind: "sale", start: NOW - 100 * D, end: NOW - 90 * D }];
+    const hist = pts([[340, 20], [295, 10], [195, 10.5], [150, 20], [95, 18], [10, 18]]);
+    const a = buyOrWait(hist, 18, { now: NOW, past });
+    assert.deepEqual(a.oracle, { hit: 2, of: 3 });
+    assert.match(a.reasons.join(" "), /2 of the last 3 big Steam sales/);
+    assert.equal(buyOrWait(hist, 18, { now: NOW, past: past.slice(0, 1) }).oracle, null, "one sale is too few to say anything");
+    const none = buyOrWait(pts([[340, 20], [250, 10], [150, 20], [10, 18]]), 18, { now: NOW, past });
+    assert.equal(none.oracle.hit, 0);
+    assert.match(none.reasons.join(" "), /not reached its low in any/);
+});

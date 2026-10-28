@@ -35,7 +35,7 @@ import { buyOrWait } from "../advice.js";
 import { spendSummary, regionCurrency } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
-import { upcomingSales, SALES_UPDATED } from "../salescal.js";
+import { upcomingSales, salesBefore, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext } from "../steamlib.js";
 import { bundleCheck } from "../bundle.js";
@@ -468,7 +468,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 const sum = summarize(prices.get(id), { majorOnly: u.stores === "major" });
                 const nowPrice = sum.best?.price ?? all.at(-1)?.price;
                 const cur = sum.currency || "USD";
-                advice = buyOrWait(all, nowPrice, { sales: upcomingSales(Date.now()), money: n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } } });
+                advice = buyOrWait(all, nowPrice, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } } });
             } catch { /* the chart works without it */ }
             return { title: own.title, points, advice };
         },
