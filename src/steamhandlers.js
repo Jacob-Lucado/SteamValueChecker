@@ -20,14 +20,14 @@ const art = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIC
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export function recapEmbed(r) {
-    if (!r.totalMinutes) return { color: 0x66c0f4, title: `Your ${r.year} in games`, description: "No playtime recorded for that year yet. Steam does not share past playtime, so this starts the day you linked. Your library now syncs on its own every few hours, so it fills in as you play." };
+    if (!r.totalMinutes) return { color: 0x66c0f4, title: `Hours tracked in ${r.year}`, description: "Nothing tracked for that year yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." };
     const peak = Math.max(...r.months), bars = " ▁▂▃▄▅▆▇█";
     const spark = r.months.map(m => bars[Math.round(m / peak * 8)]).join("");
     return {
-        color: 0x66c0f4, title: `Your ${r.year} in games`,
+        color: 0x66c0f4, title: `Hours tracked in ${r.year}`,
         description: `**${fmtHours(r.totalMinutes)}** across **${r.games}** game${r.games === 1 ? "" : "s"} on **${r.activeDays}** different day${r.activeDays === 1 ? "" : "s"}. Busiest month: **${MONTHS[r.busiestMonth]}**.\n\`${spark}\` Jan to Dec`,
         fields: [{ name: "Top games", value: r.top.map((g, n) => `${n + 1}. **${g.title}** ${fmtHours(g.minutes)}`).join("\n") }],
-        footer: { text: "Counted from the hours added between Steam syncs, so it starts from when you first linked." }
+        footer: { text: "Steam only shares lifetime hours, so this counts what was added between syncs since you linked. It can't see earlier play." }
     };
 }
 

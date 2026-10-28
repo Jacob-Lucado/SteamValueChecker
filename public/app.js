@@ -1111,17 +1111,17 @@
       h("p", { class: "muted small", text: "Genres weighted by hours played, with wishlist games that fit. Genres come from Steam's public store pages." }), go, out);
   }
 
-  // Year in games: hours per month and top games, plus a card drawn on a canvas that can be saved as an image.
+  // Hours tracked: hours per month and top games, plus a card drawn on a canvas that can be saved as an image.
   function recapPanel() {
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const year = h("input", { type: "number", min: "2020", max: "2100", value: String(new Date().getFullYear()), class: "short-num", "aria-label": "Year" });
     const out = h("div");
     function drawCard(r) {
-      const c = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": `Your ${r.year} in games: ${hoursText(r.totalMinutes)} played` });
+      const c = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": `Hours tracked in ${r.year}: ${hoursText(r.totalMinutes)}` });
       const x = c.getContext("2d");
       const g = x.createLinearGradient(0, 0, 1200, 630); g.addColorStop(0, "#1b2838"); g.addColorStop(1, "#2a475e");
       x.fillStyle = g; x.fillRect(0, 0, 1200, 630);
-      x.fillStyle = "#66c0f4"; x.font = "600 30px system-ui, sans-serif"; x.fillText(`MY ${r.year} IN GAMES`, 60, 80);
+      x.fillStyle = "#66c0f4"; x.font = "600 30px system-ui, sans-serif"; x.fillText(`HOURS I TRACKED IN ${r.year}`, 60, 80);
       x.fillStyle = "#fff"; x.font = "700 96px system-ui, sans-serif"; x.fillText(hoursText(r.totalMinutes), 60, 190);
       x.fillStyle = "#c7d5e0"; x.font = "28px system-ui, sans-serif";
       x.fillText(`${r.games} games on ${r.activeDays} days` + (r.busiestMonth !== null ? `, busiest in ${MON[r.busiestMonth]}` : ""), 60, 240);
@@ -1138,21 +1138,21 @@
         x.fillText(`${n + 1}. ${name}`, 740, 375 + n * 46);
         x.fillStyle = "#8ba4b6"; x.font = "20px system-ui, sans-serif"; x.fillText(hoursText(t.minutes), 1090, 375 + n * 46); x.fillStyle = "#fff"; x.font = "26px system-ui, sans-serif";
       });
-      x.fillStyle = "#5c7080"; x.font = "18px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 600);
+      x.fillStyle = "#5c7080"; x.font = "18px system-ui, sans-serif"; x.fillText("Counted from when I linked Steam  •  Steam Value Checker", 60, 600);
       return c;
     }
     async function load() {
       const r = await api("/api/steam/recap?year=" + encodeURIComponent(year.value));
-      if (!r.totalMinutes) { out.replaceChildren(h("p", { class: "muted", text: "No playtime recorded for that year yet. Steam does not share past playtime, so this starts the day you linked your profile. Your library now syncs on its own every few hours, so it fills in as you play." })); return; }
+      if (!r.totalMinutes) { out.replaceChildren(h("p", { class: "muted", text: "Nothing tracked for that year yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." })); return; }
       const card = drawCard(r);
       const save = h("button", { class: "btn blue", text: "Save as image" });
       save.addEventListener("click", () => card.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: `my-${r.year}-in-games.png` }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }));
       out.replaceChildren(card, h("div", { class: "row" }, save));
     }
-    const go = h("button", { class: "btn gray", text: "Show my year" });
+    const go = h("button", { class: "btn gray", text: "Show my hours" });
     go.addEventListener("click", () => busy(go, load));
-    return h("div", { class: "panel" }, h("h3", { text: "🎞️ Your year in games" }),
-      h("p", { class: "muted small", text: "Hours played, month by month, from the time you linked Steam. Save it as an image to share." }),
+    return h("div", { class: "panel" }, h("h3", { text: "⏱️ Hours tracked since you linked" }),
+      h("p", { class: "muted small", text: "Steam only tells us lifetime hours per game, not when you played them. So this counts the hours you add after linking, month by month, as your library syncs. It can't show anything from before you linked. Save it as an image to share." }),
       h("div", { class: "row" }, year, go), out);
   }
 
@@ -2377,7 +2377,7 @@
       { href: "#/mypage", title: "My page", text: "Every feature as a card. Switch the simple ones on here, pin the ones you use and make a profile card." },
       { href: "#/wishlist", title: "Wishlist", text: "Import your Steam wishlist or add games. Pick the rule for each one: any sale, a percent off, a price or an all-time low." },
       { href: "#/library", title: "Library", text: "What you own and paid, your backlog, spend, challenge and trophies." },
-      { href: "#/steam", title: "Steam", text: "Link your public profile for hours played, your year in games and a taste profile." },
+      { href: "#/steam", title: "Steam", text: "Link your public profile for hours played, hours tracked over time and a taste profile." },
       { href: "#/alerts", title: "Alert settings", text: "Choose DM or a server channel, quiet hours, a weekly digest and free game alerts." },
       { href: "#/notifications", title: "Notifications", text: "A copy of every alert, so a missed DM is never lost." },
       { href: "#/help", title: "Help and support", text: "The full command list lives in Help, and Support reaches a human. Press / anywhere to search." }
@@ -2437,7 +2437,7 @@
       { id: "bundles", icon: "📦", title: "Bundle and giveaway alerts", text: "When a wishlist game is in a bundle or given away.", href: "#/alerts", status: () => [st().bundles, st().bundles ? "On" : "Off"], toggle: { key: "bundles", label: "Turn on" } },
       { id: "share", icon: "👥", title: "Share with your server", text: "Group alerts, the savings leaderboard and the backlog league.", href: "#/alerts", status: () => [st().share, st().share ? "Opted in" : "Not shared"], toggle: { key: "share", label: "Share" } },
       { id: "library", icon: "📚", title: "Library", text: "What you own, what you paid, backlog, spend and trophies.", href: "#/library", status: () => [me.library > 0, me.library + " game" + (me.library === 1 ? "" : "s")] },
-      { id: "steam", icon: "🎮", title: "Steam link", text: "Hours played, your year in games and a taste profile.", href: "#/steam", status: () => [flag("steam"), flag("steam") ? "Linked" : "Not linked"] },
+      { id: "steam", icon: "🎮", title: "Steam link", text: "Hours played, hours tracked over time and a taste profile.", href: "#/steam", status: () => [flag("steam"), flag("steam") ? "Linked" : "Not linked"] },
       { id: "challenge", icon: "🏁", title: "Backlog challenge", text: "A monthly goal of games to finish, with a streak and badges.", href: "#/library", status: () => [flag("challenge"), flag("challenge") ? "Goal set this month" : "No goal this month"] },
       { id: "friends", icon: "🎂", title: "Friends and gifts", text: "Birthdays, reminders and what is on sale for them.", href: "#/friends", status: () => [flag("friend"), flag("friend") ? "Friends added" : "None yet"] },
       { id: "public", icon: "🔗", title: "Public wishlist page", text: "A shareable page for gifts, where visitors can mark what they will buy.", href: "#/alerts", status: () => [Boolean(profile && profile.public), profile && profile.public ? "On" : "Off"] },

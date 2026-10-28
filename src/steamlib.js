@@ -248,7 +248,7 @@ export function steamNext(rows, { rand = Math.random, skip = [] } = {}) {
 }
 
 /**
- * Keeps linked libraries fresh in the background so the "year in games" recap adds up on its own instead of only when
+ * Keeps linked libraries fresh in the background so the hours-tracked recap adds up on its own instead of only when
  * someone presses Sync. Runs from the hourly maintenance job: each linked member is synced about every six hours, a few
  * per run, and the whole run stops if Steam starts rate limiting. A private or broken profile is simply skipped.
  */

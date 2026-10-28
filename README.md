@@ -91,7 +91,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/compare` | Your library against a friend's: games you both own, and what only one of you has. They must have opted in with `/alerts share`; server only |
 | `/regions` | One game's cheapest price in about a dozen regions, ranked in US dollars (recent ECB exchange rates). Region-locked keys mean this is for information |
 | `/calendar` | `view` lists release dates of wishlisted games, Steam sales, server events and open `/lfg` posts. `add` and `remove` (Manage Server) manage server events, announced in the channel with a reminder before they start. `feed` makes an optional private link for Google, Apple or Outlook calendar |
-| `/steam recap [year]` | Your year in games: hours played per month and your top games, counted from the minutes added between Steam syncs |
+| `/steam recap [year]` | Hours tracked since you linked Steam, per month and per game. Steam only shares lifetime hours, so this counts what is added between syncs (they run automatically every few hours) |
 | `/library spend` | What you have spent from the amounts you recorded: totals, the last 12 months, best and worst cost per hour played, and bought-but-unplayed. Months follow when a game was added to your library |
 | `/library challenge [goal]` | A monthly goal of games to finish and a streak of months you met it. A game counts when marked finished (or 100% achievements) in that UTC month |
 | `/wishlist cleanup` / `priority` | Remove wishlist games you already own; star a game so it is listed first and its alerts come through quiet hours |

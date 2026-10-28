@@ -1,7 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /changelog lists them.
 export const CHANGELOG = [
-    { version: "2026.10.29", date: "2026-10-29", title: "Year in games, challenges, gifts and a Steam panel", items: [
-        "`/steam recap` (and a card you can save as an image on the Steam page): your hours per month and top games, counted from your syncs, and linked libraries now sync automatically every few hours.",
+    { version: "2026.10.29", date: "2026-10-29", title: "Hours tracked, challenges, gifts and a Steam panel", items: [
+        "`/steam recap` (and a card you can save as an image on the Steam page): the hours you add after linking Steam, per month and per game. Steam only shares lifetime hours, so nothing from before you linked. Linked libraries now sync automatically every few hours.",
         "`/library challenge`: set a monthly goal of games to finish and keep a streak. It is on the Library page too.",
         "Wishlist: `/wishlist cleanup` removes games you already own, and `/wishlist priority` stars a game so it is listed first and its alerts come through quiet hours.",
         "Your `/publicpage` lets visitors mark \"I'm gifting this\" so nobody doubles up. You only see how many are claimed, and can clear them.",
