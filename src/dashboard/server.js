@@ -31,6 +31,7 @@ import { addToServerList, serverListView, vote, removeFromServerList } from "../
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { summarize } from "../report.js";
+import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
@@ -584,6 +585,16 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             let sent = false;
             if (dm) { try { await dm(s.userId, { embeds: [{ color: 0x57f287, title: "Batch redeem", description: text }] }); sent = true; } catch { /* DMs closed: it is in Notifications */ } }
             return { ok: true, summary, dm: sent };
+        },
+
+        "GET /api/library/challenge": async (req) => { const s = session(req); return challengeView(db, s.userId); },
+        "POST /api/library/challenge": async (req, body) => {
+            const s = session(req);
+            const goal = Number(body.goal);
+            if (!Number.isInteger(goal) || goal < 0 || goal > MAX_GOAL) throw new HttpError(400, `Pick a goal from 0 to ${MAX_GOAL}.`);
+            userRow(s);
+            db.setChallenge(s.userId, monthKey(Date.now()), goal);
+            return challengeView(db, s.userId);
         },
 
         "POST /api/library/status": async (req, body) => {

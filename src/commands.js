@@ -76,6 +76,8 @@ const library = new SlashCommandBuilder()
         .addStringOption(o => gameOption(o, true))
         .addStringOption(o => o.setName("state").setDescription("Where you are with it").setRequired(true).addChoices(
             { name: "Backlog (not started)", value: "backlog" }, { name: "Playing", value: "playing" }, { name: "Played (not finished)", value: "played" }, { name: "Finished", value: "finished" }, { name: "Dropped", value: "dropped" })))
+    .addSubcommand(s => s.setName("challenge").setDescription("Monthly backlog challenge: set a goal of games to finish, keep a streak")
+        .addIntegerOption(o => o.setName("goal").setDescription("Games to finish this month (1 to 20). 0 clears it. Leave empty to see progress").setMinValue(0).setMaxValue(20)))
     .addSubcommand(s => s.setName("trend").setDescription("How your library value and backlog have changed over time"))
     .addSubcommand(s => s.setName("backlog").setDescription("How much you have spent on games you have not played, and what to play next"))
     .addSubcommand(s => s.setName("remove").setDescription("Remove a game")

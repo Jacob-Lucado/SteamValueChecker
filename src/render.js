@@ -517,3 +517,23 @@ export function regionsEmbed(game, rows) {
         footer: { text: ranked ? "Converted at recent exchange rates. Keys and accounts are usually locked to the region they were sold in, so use this for information." : "Shown in each region's own currency. Keys and accounts are usually region-locked." }
     };
 }
+
+export function challengeEmbed(c) {
+    const bar = (done, goal) => { const n = Math.min(10, Math.round(done / goal * 10)); return "▰".repeat(n) + "▱".repeat(10 - n); };
+    if (!c.goal) {
+        return { color: 0xa4d007, title: "Backlog challenge", description: `No goal for ${c.month} yet. Set one with \`/library challenge goal:3\` and finish that many games this month.` +
+            (c.streak ? `\n🔥 Streak: **${c.streak}** month${c.streak === 1 ? "" : "s"}` : "") };
+    }
+    const met = c.done >= c.goal;
+    const hist = c.history.filter(h => h.month !== c.month).map(h => `${h.done >= h.goal ? "✅" : "▫️"} ${h.month}: ${h.done}/${h.goal}`);
+    return {
+        color: 0xa4d007, title: `Backlog challenge, ${c.month}`,
+        description: `${bar(c.done, c.goal)} **${c.done}** of **${c.goal}** finished` + (met ? " 🎉 Goal met!" : ` · ${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left`),
+        fields: [
+            { name: "Streak", value: `🔥 **${c.streak}** month${c.streak === 1 ? "" : "s"} (best ${c.best})`, inline: true },
+            ...(c.titles.length ? [{ name: "Finished this month", value: c.titles.map(t => `• ${t}`).join("\n").slice(0, 1000) }] : []),
+            ...(hist.length ? [{ name: "Earlier months", value: hist.join("\n") }] : [])
+        ],
+        footer: { text: "A game counts when you mark it finished (or reach 100% achievements). Months are counted in UTC." }
+    };
+}

@@ -950,3 +950,14 @@ test("gift claims: visitors mark a game, others see it taken, the owner only see
     assert.equal((await pub(B)).data.games.length, 0);
     await t.close();
 });
+
+test("backlog challenge from the dashboard: set a goal, see progress, bad goals refused", async () => {
+    const t = await signedIn();
+    const r0 = await t.request("/api/library/challenge");
+    assert.equal(r0.data.goal, 0);
+    assert.equal((await t.request("/api/library/challenge", { method: "POST", body: { goal: 99 } })).status, 400);
+    const r1 = await t.request("/api/library/challenge", { method: "POST", body: { goal: 3 } });
+    assert.equal(r1.data.goal, 3);
+    assert.equal((await t.request("/api/library/challenge")).data.goal, 3);
+    await t.close();
+});

@@ -93,7 +93,7 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         const wasComplete = row.ach_total > 0 && row.ach_done === row.ach_total;
         const complete = total > 0 && done === total;
         const finish = complete && !wasComplete && !["finished", "dropped"].includes(row.status);
-        run("UPDATE library SET ach_done = ?, ach_total = ?, ach_checked = ?, status = ? WHERE discord_id = ? AND itad_id = ?", done, total, now(), finish ? "finished" : row.status, discordId, itadId);
+        run("UPDATE library SET ach_done = ?, ach_total = ?, ach_checked = ?, status = ?, status_at = CASE WHEN ? THEN ? ELSE status_at END WHERE discord_id = ? AND itad_id = ?", done, total, now(), finish ? "finished" : row.status, finish ? 1 : 0, now(), discordId, itadId);
         return { newlyFinished: finish };
     }
 

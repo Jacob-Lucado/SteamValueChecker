@@ -221,3 +221,30 @@ test("playtime recap: hours gained between syncs are logged per day and summed b
     db.deleteUser("u1");
     db.close();
 });
+
+test("backlog challenge: finished games count in their month, and the streak survives an open month", async () => {
+    const { streakOf, challengeView, monthKey } = await import("../src/challenge.js");
+    assert.equal(monthKey(Date.UTC(2026, 0, 31, 23)), "2026-01");
+    // streak: Nov and Dec met, Jan (open) not yet met -> still 2; a gap resets
+    assert.deepEqual(streakOf([{ month: "2025-11", goal: 2, done: 2 }, { month: "2025-12", goal: 1, done: 3 }, { month: "2026-01", goal: 2, done: 0 }], "2026-01"), { streak: 2, best: 2 });
+    assert.equal(streakOf([{ month: "2025-10", goal: 1, done: 1 }, { month: "2025-12", goal: 1, done: 1 }], "2026-01").streak, 1, "a skipped month breaks it");
+    assert.equal(streakOf([{ month: "2026-01", goal: 2, done: 2 }, { month: "2025-12", goal: 1, done: 1 }], "2026-01").streak, 2, "the open month counts when met");
+
+    let clock = Date.UTC(2025, 11, 5);
+    const db = openDb(":memory:", { now: () => clock });
+    db.ensureUser("u1", "g1");
+    db.upsertLibrary("u1", ["A", "B", "C"].map((t, n) => ({ itad_id: "id" + n, title: t, paid: null })));
+    db.setChallenge("u1", "2025-12", 2);
+    db.setLibraryStatus("u1", "id0", "finished");
+    clock = Date.UTC(2025, 11, 20); db.setLibraryStatus("u1", "id1", "finished");
+    db.setLibraryStatus("u1", "id1", "finished"); // setting it again does not move the date
+    clock = Date.UTC(2026, 0, 3); db.setChallenge("u1", "2026-01", 1); db.setLibraryStatus("u1", "id2", "finished");
+    const jan = challengeView(db, "u1", Date.UTC(2026, 0, 10));
+    assert.deepEqual([jan.goal, jan.done, jan.streak], [1, 1, 2]);
+    const dec = challengeView(db, "u1", Date.UTC(2025, 11, 25));
+    assert.deepEqual([dec.goal, dec.done, dec.titles], [2, 2, ["A", "B"]]);
+    assert.equal(dec.daysLeft, 7);
+    db.setChallenge("u1", "2026-01", 0);
+    assert.equal(challengeView(db, "u1", Date.UTC(2026, 0, 10)).goal, 0, "0 clears the goal");
+    db.deleteUser("u1"); db.close();
+});

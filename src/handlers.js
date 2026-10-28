@@ -14,11 +14,12 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { CHANGELOG, LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, trendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
+import { wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, trendEmbed, challengeEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
 import { compareLibraries } from "./compare.js";
+import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
 import { importLibrary, libraryView, leaderboard, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
@@ -457,6 +458,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                     "Open the Grabber panel on Fanatical, choose **Send to Steam Value Checker**, and paste it when asked.",
                     "Making a new code replaces this one. `/library grabber action:Turn the link off` removes it."
                 ].join("\n"));
+            }
+            if (sub === "challenge") {
+                const goal = i.options.getInteger("goal");
+                if (goal !== null) db.setChallenge(i.user.id, monthKey(Date.now()), Math.min(MAX_GOAL, Math.max(0, goal)));
+                return void await i.reply({ embeds: [challengeEmbed(challengeView(db, i.user.id))], flags: MessageFlags.Ephemeral });
             }
             cooldown(i, "lib");
             await i.deferReply({ flags: MessageFlags.Ephemeral });

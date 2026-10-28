@@ -12,6 +12,7 @@ import { redeemSchema, redeemStore } from "./redeemstore.js";
 import { calendarSchema, calendarStore } from "./calendarstore.js";
 import { lfgSchema, lfgStore } from "./lfgstore.js";
 import { giftSchema, giftStore } from "./giftstore.js";
+import { challengeSchema, challengeStore } from "./challengestore.js";
 
 export const MAX_ITEMS_PER_USER = 200;
 export const MAX_LIBRARY_PER_USER = 1500;
@@ -149,6 +150,7 @@ ${grabberSchema}
 ${redeemSchema}
 ${calendarSchema}
 ${giftSchema}
+${challengeSchema}
 ${lfgSchema}`;
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
@@ -189,6 +191,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "profile_public", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_profile_slug ON users(profile_slug) WHERE profile_slug IS NOT NULL");
     addColumn("library", "status", "TEXT NOT NULL DEFAULT 'backlog'");
+    addColumn("library", "status_at", "INTEGER");
     addColumn("library", "appid", "INTEGER");
     addColumn("library", "minutes", "INTEGER NOT NULL DEFAULT 0");
     addColumn("library", "last_played", "INTEGER");
@@ -215,6 +218,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const redeem = redeemStore({ run, get, all, clean, now });
     const calendar = calendarStore({ run, get, all, clean, now });
     const gifts = giftStore({ run, get, all, now });
+    const challenges = challengeStore({ run, all });
     const steam = steamStore({ db, run, get, all, clean, now, maxLibrary: MAX_LIBRARY_PER_USER });
 
     function ensureUser(discordId, guildId = null) {
@@ -388,7 +392,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const getProfileBySlug = slug => clean(get("SELECT * FROM users WHERE profile_slug = ?", slug));
     const LIB_STATUSES = ["backlog", "playing", "played", "finished", "dropped"];
     const setLibraryStatus = (discordId, itadId, status) => LIB_STATUSES.includes(status)
-        ? run("UPDATE library SET status = ? WHERE discord_id = ? AND itad_id = ?", status, discordId, itadId).changes > 0 : false;
+        ? run("UPDATE library SET status = ?, status_at = CASE WHEN status = ? THEN status_at ELSE ? END WHERE discord_id = ? AND itad_id = ?", status, status, now(), discordId, itadId).changes > 0 : false;
     const removeLibrary = (discordId, itadId) => run("DELETE FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId).changes > 0;
 
     const dayKey = (ms = now()) => new Date(ms).toISOString().slice(0, 10);
@@ -504,7 +508,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     function deleteUser(discordId) {
         db.exec("BEGIN");
         try {
-            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_claims"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_claims", "challenges"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
             calendar.forgetCalendarUser(discordId);
@@ -546,6 +550,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...lfg, close: () => db.close()
+        stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...challenges, ...lfg, close: () => db.close()
     };
 }

@@ -1341,6 +1341,27 @@
   }
 
   // ---------- library ----------
+  // Monthly backlog challenge: a goal, a progress bar and a streak.
+  function challengePanel() {
+    const out = h("div");
+    function draw(c) {
+      const goal = h("input", { type: "number", min: "0", max: "20", value: String(c.goal || 3), class: "short-num", "aria-label": "Games to finish this month" });
+      const save = h("button", { class: "btn green small", text: c.goal ? "Change goal" : "Start the challenge" });
+      save.addEventListener("click", () => busy(save, async () => { draw(await api("/api/library/challenge", { goal: Number(goal.value) })); toast("Saved.", "ok"); }));
+      const pct = c.goal ? Math.min(100, Math.round(c.done / c.goal * 100)) : 0;
+      out.replaceChildren(
+        c.goal ? h("div", {}, h("p", {}, h("b", { text: `${c.done} of ${c.goal} finished` }), c.done >= c.goal ? " 🎉 Goal met!" : ` · ${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left in ${c.month}`), progressBar(pct / 100))
+          : h("p", { class: "muted", text: `Pick how many games you want to finish in ${c.month}.` }),
+        h("p", { class: "muted small", text: c.streak ? `🔥 ${c.streak}-month streak (best ${c.best})` : "No streak yet. Meet your goal this month to start one." }),
+        c.titles.length ? h("p", { class: "muted small", text: "Finished: " + c.titles.join(", ") }) : "",
+        c.history.length > 1 ? h("p", { class: "muted small", text: c.history.filter(x => x.month !== c.month).map(x => `${x.done >= x.goal ? "✅" : "▫️"} ${x.month} ${x.done}/${x.goal}`).join("   ") }) : "",
+        h("div", { class: "row" }, field("Games to finish this month (0 clears)", goal), save));
+    }
+    api("/api/library/challenge").then(draw).catch(e => out.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+    return h("div", { class: "panel" }, h("h3", { text: "🏁 Backlog challenge" }),
+      h("p", { class: "muted small", text: "Mark games finished (or reach 100% achievements) to count them. Keep the streak going month after month." }), out);
+  }
+
   async function libraryView() {
     const body = h("div", { class: "muted", text: "Loading prices…" });
     const title = h("input", { type: "text", placeholder: "Game title", maxlength: "100" });
@@ -1495,7 +1516,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
-          chart, backlogChart || "",
+          challengePanel(), chart, backlogChart || "",
           h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
