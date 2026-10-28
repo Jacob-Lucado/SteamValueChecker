@@ -236,7 +236,8 @@ const publicpage = new SlashCommandBuilder()
     .setName("publicpage")
     .setDescription("A public page of your wishlist and its best prices that you can share, for gifts")
     .addBooleanOption(o => o.setName("enabled").setDescription("Turn the page on or off").setRequired(true))
-    .addStringOption(o => o.setName("name").setDescription("Page name, 3 to 24 letters, numbers, - or _").setMinLength(3).setMaxLength(24));
+    .addStringOption(o => o.setName("name").setDescription("Page name, 3 to 24 letters, numbers, - or _").setMinLength(3).setMaxLength(24))
+    .addBooleanOption(o => o.setName("reset_claims").setDescription("Clear every \"I'm gifting this\" mark visitors made on your page"));
 
 const currency = new SlashCommandBuilder()
     .setName("currency")

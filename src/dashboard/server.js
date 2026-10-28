@@ -31,6 +31,7 @@ import { addToServerList, serverListView, vote, removeFromServerList } from "../
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { summarize } from "../report.js";
+import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext } from "../steamlib.js";
@@ -88,6 +89,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     const lastRun = new Map();
     const cache = new Map();
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
+    const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
     const authLimit = createLimiter({ windowMs: 60_000, max: config.authPerMinute ?? 20, now });
     const names = new Map(); // "guild:user" -> { name, until }
 
@@ -892,13 +894,34 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             };
         },
 
-        "GET /api/profile": async (req) => { const s = session(req); const u = userRow(s); return { slug: u.profile_slug ?? null, public: Boolean(u.profile_public) }; },
-        "POST /api/profile": async (req, body) => { const s = session(req); userRow(s); return setProfile(db, s.userId, { enabled: Boolean(body.enabled), slug: body.slug }); },
+        "GET /api/profile": async (req) => { const s = session(req); const u = userRow(s); return { slug: u.profile_slug ?? null, public: Boolean(u.profile_public), claims: db.countGiftClaims(s.userId) }; },
+        "POST /api/profile": async (req, body) => {
+            const s = session(req); userRow(s);
+            const r = setProfile(db, s.userId, { enabled: Boolean(body.enabled), slug: body.slug });
+            const cleared = body.resetClaims ? db.clearGiftClaims(s.userId) : 0;
+            return { ...r, cleared, claims: db.countGiftClaims(s.userId) };
+        },
         // Public on purpose (anyone with the link), but only for members who switched their page on.
         "GET /api/public/wishlist": async (_req, _b, url) => {
-            const page = await publicWishlist(db, itad, url.searchParams.get("slug"));
+            const t = url.searchParams.get("t");
+            const page = await publicWishlist(db, itad, url.searchParams.get("slug"), GIFT_TOKEN.test(t ?? "") ? t : null);
             if (!page) throw new HttpError(404, "That page does not exist or is private.");
             return page;
+        },
+        // Anyone with the link can mark or unmark a gift. A made-up code from their browser is the only identity; the owner is never told who.
+        "POST /api/public/gift": async (req, body) => {
+            if (!giftLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const token = String(body.token ?? "");
+            if (!GIFT_TOKEN.test(token)) throw new HttpError(400, "Bad request.");
+            const owner = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
+            if (!owner || !owner.profile_public) throw new HttpError(404, "That page does not exist or is private.");
+            const id = String(body.id ?? "");
+            if (!db.listItems(owner.discord_id).some(g => g.itad_id === id && g.source !== "watch")) throw new HttpError(404, "That game is not on this list.");
+            if (body.claim === false) return { claim: db.unclaimGift(owner.discord_id, id, token) ? null : "taken" };
+            const r = db.claimGift(owner.discord_id, id, token);
+            if (r === "taken") throw new HttpError(409, "Someone else already said they are gifting this one.");
+            if (r === "full") throw new HttpError(429, `You can claim up to ${MAX_CLAIMS_PER_VISITOR} games per list.`);
+            return { claim: "mine" };
         },
 
         "GET /api/bundles": async (req, _b, url) => {

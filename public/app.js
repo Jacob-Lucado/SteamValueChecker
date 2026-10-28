@@ -688,16 +688,46 @@
       showLink(p.slug);
       panel.replaceChildren(h("h3", { text: "Public wishlist page" }),
         h("p", { class: "muted", text: "Share a link to your wishlist and its best prices, handy for gifts. It shows only game names, art and prices. Never your Discord account or anything else." }),
-        h("label", { class: "check" }, on, "Turn my page on"), field("Page name", slug), link, h("p"), save);
+        h("label", { class: "check" }, on, "Turn my page on"), field("Page name", slug), link,
+        h("p", { class: "muted small", text: "Visitors can mark a game as “I’m gifting this” so nobody doubles up. You are never told who or which games, so the surprise stays." + (p.claims ? ` ${p.claims} ${p.claims === 1 ? "is" : "are"} claimed right now.` : "") }),
+        p.claims ? h("button", { class: "btn gray small", text: "Clear gift marks", onclick: ev => busy(ev.currentTarget, async () => { const r = await api("/api/profile", { enabled: on.checked, slug: slug.value, resetClaims: true }); toast(`Cleared ${r.cleared}.`, "ok"); }) }) : "", h("p"), save);
     }).catch(e => panel.replaceChildren(h("h3", { text: "Public wishlist page" }), h("div", { class: "notice warn", text: e.message })));
     return panel;
+  }
+
+  // A random code that stands in for "me" on public wishlist pages, so I can undo a gift mark. Never tied to an account.
+  let memoryCode = "";
+  function giftCode() {
+    try {
+      let c = localStorage.getItem("svc-gift-code");
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(c || "")) { c = randomCode(); localStorage.setItem("svc-gift-code", c); }
+      return c;
+    } catch { return memoryCode || (memoryCode = randomCode()); }
+  }
+  function randomCode() { const a = new Uint8Array(24); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+  function giftButton(g, slug) {
+    const wrap = h("div", { class: "gift" });
+    const draw = () => {
+      if (g.claim === "taken") { wrap.replaceChildren(h("span", { class: "muted small", text: "🎁 Someone is already gifting this" })); return; }
+      const b = h("button", { class: "btn gray small", text: g.claim === "mine" ? "🎁 You are gifting this (undo)" : "🎁 I’ll gift this" });
+      b.addEventListener("click", () => busy(b, async () => {
+        try {
+          const r = await api("/api/public/gift", { slug, id: g.id, token: giftCode(), claim: g.claim !== "mine" });
+          g.claim = r.claim; toast(g.claim === "mine" ? "Marked. Others will see someone is gifting this." : "Mark removed.", "ok");
+        } catch (e) { toast(e.message, "error"); if (/already/.test(e.message)) g.claim = "taken"; }
+        draw();
+      }));
+      wrap.replaceChildren(b);
+    };
+    draw();
+    return wrap;
   }
 
   async function publicWishlistView(slug) {
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(holder);
     try {
-      const d = await api("/api/public/wishlist?slug=" + encodeURIComponent(slug));
+      const d = await api("/api/public/wishlist?slug=" + encodeURIComponent(slug) + "&t=" + encodeURIComponent(giftCode()));
       const money2 = (n, c) => (n === null || n === undefined ? "-" : new Intl.NumberFormat(undefined, { style: "currency", currency: c || "USD" }).format(n));
       holder.className = "";
       holder.replaceChildren(pageHead(d.slug + "'s wishlist", `${d.games.length} game${d.games.length === 1 ? "" : "s"} with today's best prices. Thinking of a gift?`),
@@ -706,7 +736,7 @@
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money2(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
+            g.url && ext(g.url, "View deal", "btn green small"), giftButton(g, d.slug))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 

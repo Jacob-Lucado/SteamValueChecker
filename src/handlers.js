@@ -588,9 +588,13 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         try {
             db.ensureUser(i.user.id, i.guildId);
             const r = setProfile(db, i.user.id, { enabled: i.options.getBoolean("enabled", true), slug: i.options.getString("name") });
-            if (!r.public) return eph(i, "Your public page is off. Nobody can open it.");
+            const cleared = i.options.getBoolean("reset_claims") ? db.clearGiftClaims(i.user.id) : 0;
+            if (!r.public) return eph(i, "Your public page is off. Nobody can open it." + (cleared ? ` Cleared ${cleared} gift claim${cleared === 1 ? "" : "s"}.` : ""));
             const link = publicUrl ? `${publicUrl}/#/u/${r.slug}` : null;
-            return eph(i, `Your page is on${link ? `: ${link}` : `, as **${r.slug}**`}\nIt shows only game names, art and today's best prices. Never your Discord account.`);
+            const n = db.countGiftClaims(i.user.id);
+            return eph(i, `Your page is on${link ? `: ${link}` : `, as **${r.slug}**`}\nIt shows only game names, art and today's best prices. Never your Discord account.\n` +
+                `Visitors can mark a game as "I'm gifting this" so nobody doubles up. You are not told who, or which games` + (n ? `, only that **${n}** ${n === 1 ? "is" : "are"} claimed right now.` : ".") +
+                (cleared ? ` Cleared ${cleared} just now.` : n ? " Add `reset_claims: true` to clear them." : ""));
         } catch (err) { await failed(i, "publicpage", err); }
     }
 

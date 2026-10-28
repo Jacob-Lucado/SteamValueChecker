@@ -919,3 +919,34 @@ test("extension store overlay: prices and owned/wishlist state for one Steam app
     assert.equal((await get(made.data.token, "appid=999")).data.found, false);
     await t.close();
 });
+
+test("gift claims: visitors mark a game, others see it taken, the owner only sees a count and can clear it", async () => {
+    const t = await signedIn();
+    await t.request("/api/wishlist/add", { method: "POST", body: { title: "Celeste" } });
+    await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
+    const id = (await t.request("/api/wishlist")).data.rows[0].itad_id;
+    const A = "a".repeat(24), B = "b".repeat(24);
+    const pub = (tok) => t.request("/api/public/wishlist?slug=jacob" + (tok ? "&t=" + tok : ""));
+    const gift = (body) => t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id, ...body } });
+    assert.equal((await pub(A)).data.games[0].claim, null);
+    assert.equal((await gift({ token: "short" })).status, 400);
+    assert.equal((await gift({ token: A })).data.claim, "mine");
+    assert.equal((await pub(A)).data.games[0].claim, "mine");
+    assert.equal((await pub(B)).data.games[0].claim, "taken");
+    assert.equal((await pub()).data.games[0].claim, "taken");
+    assert.equal((await gift({ token: B })).status, 409, "a second visitor cannot take it");
+    assert.equal((await gift({ token: B, claim: false })).data.claim, "taken", "and cannot undo someone else's");
+    assert.equal((await t.request("/api/profile")).data.claims, 1);
+    assert.equal(JSON.stringify((await t.request("/api/profile")).data).includes(A), false, "the owner is not told who");
+    assert.equal((await t.request("/api/public/gift", { method: "POST", body: { slug: "nobody", id, token: A } })).status, 404);
+    assert.equal((await gift({ token: A, claim: false })).data.claim, null);
+    assert.equal((await pub(B)).data.games[0].claim, null);
+    await gift({ token: A });
+    const cleared = await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob", resetClaims: true } });
+    assert.equal(cleared.data.cleared, 1);
+    assert.equal((await pub(B)).data.games[0].claim, null);
+    // a game the owner already has is left off the page
+    t.db.upsertLibrary("u1", [{ itad_id: id, title: "Celeste", paid: null }]);
+    assert.equal((await pub(B)).data.games.length, 0);
+    await t.close();
+});
