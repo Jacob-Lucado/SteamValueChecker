@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, playStats, steamValue, steamNext, fetchAchievements, syncAchievements, fmtHours } from "../src/steamlib.js";
+import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, runSteamAutoSync, playStats, steamValue, steamNext, fetchAchievements, syncAchievements, fmtHours } from "../src/steamlib.js";
 import { SteamError } from "../src/steam.js";
 
 const XML = `<gamesList><steamID64>76561198000000000</steamID64><games>
@@ -287,4 +287,25 @@ test("taste: genres are fetched politely, weighted by hours, and wishlist games 
     // a failing fetch stops the run quietly
     assert.equal(await refreshTags({ db, appids: [7, 8], fetchImpl: async () => ({ ok: false, status: 429 }), delayMs: 0 }), 0);
     db.close();
+});
+
+test("the year recap: the first sync imports without counting, later syncs count, and linked members sync on their own", async () => {
+    const { db, itad } = rig();
+    const mk = n => `<gamesList><games><game><appID>10</appID><name>Counter</name><hoursOnRecord>${n}</hoursOnRecord></game><game><appID>30</appID><name>Quiet</name><hoursOnRecord>0</hoursOnRecord></game></games></gamesList>`;
+    const now0 = Date.now(), year = new Date(now0).getUTCFullYear();
+    await syncSteamLibrary({ db, itad, userId: "u1", steamid: "76561198000000000", fetchImpl: async () => res(mk(100)) });
+    assert.equal(db.playRecap("u1", year).totalMinutes, 0, "the first sync only imports");
+    // A game that was at 0 hours and now has some counts (it used to be skipped), and Counter's growth counts.
+    const later = `<gamesList><games><game><appID>10</appID><name>Counter</name><hoursOnRecord>101</hoursOnRecord></game><game><appID>30</appID><name>Quiet</name><hoursOnRecord>2</hoursOnRecord></game></games></gamesList>`;
+    await syncSteamLibrary({ db, itad, userId: "u1", steamid: "76561198000000000", fetchImpl: async () => res(later) });
+    assert.equal(db.playRecap("u1", year).totalMinutes, 60 + 120, "1 h on Counter plus 2 h on a game that started at 0");
+    // Automatic sync: only members who are due, and it keeps going when one profile fails.
+    const calls = [];
+    const f = async () => { calls.push(1); return res(later); };
+    const a = await runSteamAutoSync({ db, itad, fetchImpl: f, now: Date.now() + 60_000 });
+    assert.equal(a.synced, 0, "synced a minute ago, so not due");
+    const b = await runSteamAutoSync({ db, itad, fetchImpl: f, now: Date.now() + 7 * 3600_000 });
+    assert.equal(b.synced, 1); assert.ok(calls.length >= 1);
+    const c = await runSteamAutoSync({ db, itad, fetchImpl: async () => res("<gamesList></gamesList>"), now: Date.now() + 14 * 3600_000 });
+    assert.equal(c.failed, 1, "a private profile is skipped, not fatal");
 });

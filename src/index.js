@@ -24,6 +24,7 @@ import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
 import { refreshTags } from "./taste.js";
+import { runSteamAutoSync } from "./steamlib.js";
 import { runFriendReminders } from "./friends.js";
 import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runGuildFeeds, runServerDigests, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
@@ -186,6 +187,7 @@ client.once(Events.ClientReady, c => {
             try { result.friends = await runFriendReminders({ db, itad, notifier, log }); } catch (err) { ops.error("friend reminders", err); }
             try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
             try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
+            try { result.steamSync = await runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }); } catch (err) { ops.error("steam auto-sync", err); }
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); } catch (err) { ops.error("cleanup", err); }
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }

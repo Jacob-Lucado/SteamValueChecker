@@ -1143,7 +1143,7 @@
     }
     async function load() {
       const r = await api("/api/steam/recap?year=" + encodeURIComponent(year.value));
-      if (!r.totalMinutes) { out.replaceChildren(h("p", { class: "muted", text: "No playtime recorded for that year yet. Hours are added up between each Steam sync, so this fills in as you play." })); return; }
+      if (!r.totalMinutes) { out.replaceChildren(h("p", { class: "muted", text: "No playtime recorded for that year yet. Steam does not share past playtime, so this starts the day you linked your profile. Your library now syncs on its own every few hours, so it fills in as you play." })); return; }
       const card = drawCard(r);
       const save = h("button", { class: "btn blue", text: "Save as image" });
       save.addEventListener("click", () => card.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: `my-${r.year}-in-games.png` }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }));

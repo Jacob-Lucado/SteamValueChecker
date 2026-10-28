@@ -60,7 +60,7 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
      * if they have an hour or more on record; games already in the library keep the status the member chose.
      * Returns { added, updated, skippedForLimit }.
      */
-    function syncSteamGames(discordId, games) {
+    function syncSteamGames(discordId, games, { track } = {}) {
         let added = 0, updated = 0, skippedForLimit = 0;
         let n = get("SELECT COUNT(*) AS n FROM library WHERE discord_id = ?", discordId).n;
         db.exec("BEGIN");
@@ -72,7 +72,7 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
                     // Growth since the last sync is the playtime for that period: that is what the recap adds up.
                     const before = get("SELECT minutes FROM library WHERE id = ?", have.id)?.minutes ?? 0;
                     const gained = Math.max(0, (g.minutes ?? 0) - before);
-                    if (gained > 0 && before > 0) run("INSERT INTO playtime_log (discord_id, day, itad_id, title, minutes) VALUES (?,?,?,?,?)", discordId, new Date(now()).toISOString().slice(0, 10), g.itad_id, g.title, gained);
+                    if ((track === undefined ? before > 0 : track) && gained > 0) run("INSERT INTO playtime_log (discord_id, day, itad_id, title, minutes) VALUES (?,?,?,?,?)", discordId, new Date(now()).toISOString().slice(0, 10), g.itad_id, g.title, gained);
                     run("UPDATE library SET appid = ?, minutes = ?, last_played = ? WHERE id = ?", g.appid ?? null, g.minutes ?? 0, played, have.id);
                     updated++;
                 } else if (n >= maxLibrary) {
@@ -80,6 +80,8 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
                 } else {
                     run("INSERT INTO library (discord_id, itad_id, title, paid, added_at, status, appid, minutes, last_played) VALUES (?,?,?,?,?,?,?,?,?)",
                         discordId, g.itad_id, g.title, null, now(), startStatus(g, played, now()), g.appid ?? null, g.minutes ?? 0, played);
+                    // Only after the first sync (the first one just imports what was already played), a new game that shows up already played counts too.
+                    if (track === true && (g.minutes ?? 0) > 0) run("INSERT INTO playtime_log (discord_id, day, itad_id, title, minutes) VALUES (?,?,?,?,?)", discordId, new Date(now()).toISOString().slice(0, 10), g.itad_id, g.title, g.minutes);
                     n++; added++;
                 }
             }

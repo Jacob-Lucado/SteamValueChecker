@@ -20,7 +20,7 @@ const art = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIC
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export function recapEmbed(r) {
-    if (!r.totalMinutes) return { color: 0x66c0f4, title: `Your ${r.year} in games`, description: "No playtime recorded for that year yet. The bot adds up the hours between each Steam sync, so it fills in as you play (use `/steam sync`)." };
+    if (!r.totalMinutes) return { color: 0x66c0f4, title: `Your ${r.year} in games`, description: "No playtime recorded for that year yet. Steam does not share past playtime, so this starts the day you linked. Your library now syncs on its own every few hours, so it fills in as you play." };
     const peak = Math.max(...r.months), bars = " ▁▂▃▄▅▆▇█";
     const spark = r.months.map(m => bars[Math.round(m / peak * 8)]).join("");
     return {

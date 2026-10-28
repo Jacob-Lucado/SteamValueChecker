@@ -165,7 +165,7 @@ export async function resolveProfile(input, fetchImpl = globalThis.fetch) {
  * Reads the linked profile and syncs it into the library. `steamid` is already resolved.
  * Games over the library limit are skipped, most played first so the ones that matter are kept.
  */
-export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = null, fetchImpl = globalThis.fetch }) {
+export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = null, fetchImpl = globalThis.fetch, achievements: wantAch = true }) {
     const owned = await fetchOwnedGames(steamid, { apiKey, fetchImpl });
     const ranked = [...owned].sort((a, b) => b.minutes - a.minutes || a.name.localeCompare(b.name)).slice(0, MAX_LIBRARY_PER_USER);
     const map = await itad.lookupShopIds(STEAM_SHOP_ID, ranked.map(g => `app/${g.appid}`));
@@ -176,7 +176,7 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
         seen.add(id);
         games.push({ itad_id: id, title: g.name || `App ${g.appid}`, appid: g.appid, minutes: g.minutes, lastPlayed: g.lastPlayed });
     }
-    const res = db.syncSteamGames(userId, games);
+    const res = db.syncSteamGames(userId, games, { track: !!db.getSteamLink(userId)?.synced_at });
     const minutes = owned.reduce((t, g) => t + g.minutes, 0);
     db.setSteamLink(userId, steamid);
     db.markSteamSynced(userId, { games: owned.length, minutes });
@@ -188,7 +188,7 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
     } catch { /* value stays null */ }
     // Achievements need the bot's API key. They are a bonus: any trouble just leaves them out.
     let achievements = null;
-    if (apiKey) { try { achievements = await syncAchievements({ db, userId, steamid, apiKey, fetchImpl }); } catch { /* optional */ } }
+    if (apiKey && wantAch) { try { achievements = await syncAchievements({ db, userId, steamid, apiKey, fetchImpl }); } catch { /* optional */ } }
     return { steamid, owned: owned.length, matched: games.length, unmatched: ranked.length - games.length, minutes, truncated: owned.length > ranked.length, value, achievements, ...res };
 }
 
@@ -245,4 +245,25 @@ export function steamNext(rows, { rand = Math.random, skip = [] } = {}) {
         `You have ${fmtHours(pick.minutes)} in it but it is not finished. Time to wrap it up.`
     ][tier(pick)];
     return { pick, others: fresh.filter(r => r !== pick).slice(0, 2), why, remaining: fresh.length - 1 };
+}
+
+/**
+ * Keeps linked libraries fresh in the background so the "year in games" recap adds up on its own instead of only when
+ * someone presses Sync. Runs from the hourly maintenance job: each linked member is synced about every six hours, a few
+ * per run, and the whole run stops if Steam starts rate limiting. A private or broken profile is simply skipped.
+ */
+export async function runSteamAutoSync({ db, itad, apiKey = null, fetchImpl = globalThis.fetch, now = Date.now(), minGapMs = 6 * 3600_000, maxUsers = 8, log = () => {} }) {
+    const stats = { synced: 0, skipped: 0, failed: 0 };
+    const due = db.steamLinkedUsers().map(id => ({ id, link: db.getSteamLink(id) })).filter(x => x.link && (!x.link.synced_at || now - x.link.synced_at >= minGapMs))
+        .sort((a, b) => (a.link.synced_at ?? 0) - (b.link.synced_at ?? 0)).slice(0, maxUsers);
+    for (const { id, link } of due) {
+        try { await syncSteamLibrary({ db, itad, userId: id, steamid: link.steamid, apiKey, fetchImpl, achievements: false }); stats.synced++; }
+        catch (err) {
+            if (err?.code === "rate_limited") { log("steam auto-sync paused: rate limited"); break; }
+            stats.failed++;
+        }
+        await new Promise(r => setTimeout(r, 1500));
+    }
+    stats.skipped = Math.max(0, db.steamLinkedUsers().length - due.length);
+    return stats;
 }
