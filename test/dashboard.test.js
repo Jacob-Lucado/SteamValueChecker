@@ -580,7 +580,7 @@ test("the page has share-preview tags with the real address, plus robots and sit
     const t = await setup();
     const page = await t.request("/", { raw: true });
     const html = await page.text();
-    assert.ok(html.includes(`<meta property="og:image" content="${ORIGIN}/preview.jpg">`));
+    assert.ok(html.includes(`<meta property="og:image" content="${ORIGIN}/preview.jpg?v=2">`));
     assert.ok(html.includes('name="twitter:card" content="summary_large_image"'));
     assert.ok(!html.includes("__ORIGIN__"));
     const img = await t.request("/preview.jpg", { raw: true });
