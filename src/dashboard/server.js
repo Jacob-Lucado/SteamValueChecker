@@ -31,6 +31,7 @@ import { addToServerList, serverListView, vote, removeFromServerList } from "../
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { summarize } from "../report.js";
+import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
 import { spendSummary, regionCurrency } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
@@ -64,7 +65,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, grabberprices: 2_000, grabbertoken: 5_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -675,6 +676,19 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
 
         // What to play next from the Steam library. `skip` (comma-separated ids already offered) makes "pick another" fresh.
+        "GET /api/steam/taste": async (req) => {
+            const s = session(req);
+            const u = userRow(s);
+            if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Link your Steam profile first.");
+            cooldown(s.userId, "taste");
+            const need = db.appsNeedingTags(s.userId, 10);
+            if (need.length) await refreshTags({ db, appids: need, fetchImpl: steamFetch ?? globalThis.fetch, delayMs: 300 });
+            const profile = tasteProfile(db, s.userId);
+            let picks = [], currency = "USD";
+            try { const w = await viewRows(db, itad, u); currency = w.currency ?? "USD"; picks = recommend(db, s.userId, w.rows, profile).map(p => ({ ...p, why: tasteWhy(p) })); } catch { /* optional */ }
+            return { ...profile, picks, currency };
+        },
+
         "GET /api/steam/recap": async (req, _body, url) => {
             const s = session(req);
             if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Link your Steam profile first.");

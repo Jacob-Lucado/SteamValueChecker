@@ -1,6 +1,8 @@
 // /steam: link a public Steam profile so the library and hours played fill in by themselves, and get a pick for what to play next.
 import { MessageFlags } from "discord.js";
 import { libraryView } from "./library.js";
+import { viewRows } from "./wishlist.js";
+import { refreshTags, tasteProfile, recommend, tasteWhy } from "./taste.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext, steamValue, fmtHours } from "./steamlib.js";
 import { SteamError } from "./steam.js";
 import { UserError } from "./errors.js";
@@ -26,6 +28,18 @@ export function recapEmbed(r) {
         description: `**${fmtHours(r.totalMinutes)}** across **${r.games}** game${r.games === 1 ? "" : "s"} on **${r.activeDays}** different day${r.activeDays === 1 ? "" : "s"}. Busiest month: **${MONTHS[r.busiestMonth]}**.\n\`${spark}\` Jan to Dec`,
         fields: [{ name: "Top games", value: r.top.map((g, n) => `${n + 1}. **${g.title}** ${fmtHours(g.minutes)}`).join("\n") }],
         footer: { text: "Counted from the hours added between Steam syncs, so it starts from when you first linked." }
+    };
+}
+
+export function tasteEmbed(profile, picks, currency) {
+    if (!profile.games) return { color: 0x66c0f4, title: "Your taste in games", description: "Link Steam and sync first, so I can see what you play." };
+    if (!profile.genres.length) return { color: 0x66c0f4, title: "Your taste in games", description: `I am still looking up genres (${profile.tagged} of ${profile.games} games so far). Try again in a little while.` };
+    const bar = pct => "▰".repeat(Math.max(1, Math.round(pct / 10))) + "▱".repeat(10 - Math.max(1, Math.round(pct / 10)));
+    return {
+        color: 0x66c0f4, title: "Your taste in games",
+        description: profile.genres.slice(0, 6).map(g => `\`${bar(g.pct)}\` **${g.name}** ${g.pct}%`).join("\n") + (profile.tagged < profile.games ? `\n*Based on ${profile.tagged} of ${profile.games} games so far.*` : ""),
+        fields: picks.length ? [{ name: "Wishlist picks that fit", value: picks.map(p => `• **${p.title}**${p.price != null ? " " + money(p.price, currency) : ""}: ${tasteWhy(p)}`).join("\n") }] : [],
+        footer: { text: "Weighted by hours played. Genres come from Steam's public store pages." }
     };
 }
 
@@ -112,6 +126,17 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
                 const n = steamNext(view.rows);
                 if (!n) throw new UserError("Nothing left to suggest. Everything from Steam is finished or dropped, or not synced yet (`/steam sync`).");
                 return void await i.editReply({ embeds: [nextEmbed(n, view.currency)] });
+            }
+            if (sub === "taste") {
+                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                const user = db.getUser(i.user.id);
+                const need = db.appsNeedingTags(i.user.id, 10);
+                if (need.length) await refreshTags({ db, appids: need, fetchImpl, delayMs: 300 });
+                const profile = tasteProfile(db, i.user.id);
+                let picks = [], currency = "USD";
+                try { const w = await viewRows(db, itad, user); currency = w.currency ?? "USD"; picks = recommend(db, i.user.id, w.rows, profile); } catch { /* the profile is still useful */ }
+                return void await i.editReply({ embeds: [tasteEmbed(profile, picks, currency)] });
             }
             if (sub === "recap") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

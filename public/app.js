@@ -1061,6 +1061,22 @@
     return img;
   }
   const hoursText = m => (m < 60 ? m + " min" : (m / 60).toFixed(m < 600 ? 1 : 0) + " h");
+  // Taste profile from hours played, plus wishlist picks that fit.
+  function tastePanel() {
+    const out = h("div");
+    const go = h("button", { class: "btn gray", text: "Show my taste" });
+    go.addEventListener("click", () => busy(go, async () => {
+      const t = await api("/api/steam/taste");
+      if (!t.genres.length) { out.replaceChildren(h("p", { class: "muted", text: `Still looking up genres (${t.tagged} of ${t.games} games so far). Try again in a little while.` })); return; }
+      out.replaceChildren(
+        h("div", { class: "taste-bars" }, t.genres.slice(0, 8).map(g => { const i = h("i"); i.style.width = Math.max(3, g.pct * 2) + "%"; return h("div", { class: "taste-row" }, h("span", { text: g.name }), h("div", { class: "taste-track" }, i), h("b", { text: g.pct + "%" })); })),
+        t.tagged < t.games ? h("p", { class: "muted small", text: `Based on ${t.tagged} of ${t.games} games so far. More are looked up every hour.` }) : "",
+        t.picks.length ? h("div", {}, h("h4", { text: "Wishlist picks that fit" }), h("ul", { class: "plain" }, t.picks.map(p => h("li", {}, h("b", { text: p.title }), p.price != null ? " " + money(p.price, t.currency) : "", " ", h("span", { class: "muted small", text: p.why }))))) : "");
+    }));
+    return h("div", { class: "panel" }, h("h3", { text: "🎯 Your taste" }),
+      h("p", { class: "muted small", text: "Genres weighted by hours played, with wishlist games that fit. Genres come from Steam's public store pages." }), go, out);
+  }
+
   // Year in games: hours per month and top games, plus a card drawn on a canvas that can be saved as an image.
   function recapPanel() {
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -1158,7 +1174,7 @@
             st.value.achTotal ? h("p", { class: "muted small", text: `Achievements: ${st.value.achDone.toLocaleString()} of ${st.value.achTotal.toLocaleString()} unlocked across ${st.value.achGames} games.` }) : null,
             st.value.top.length ? h("p", { class: "muted small", text: "Most valuable: " + st.value.top.map(r => `${r.title} (${money(r.msrp, cur)})`).join(", ") }) : null,
             h("p", { class: "muted small", text: `${st.value.priced} of ${d.link.games} games priced. An estimate from current prices, not what was paid. Free, removed or unlisted games are not counted.` })),
-          recapPanel(),
+          recapPanel(), tastePanel(),
           h("div", { class: "panel" }, h("h3", { text: "What should I play next?" }),
             h("p", { class: "muted small", text: "A pick from your own library: what you are playing, games you started and never finished, then the most valuable ones you never touched." }), nextBtn),
           nextOut,

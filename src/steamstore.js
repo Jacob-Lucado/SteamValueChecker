@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS playtime_log (
     title      TEXT NOT NULL,
     minutes    INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS app_tags (
+    appid      INTEGER PRIMARY KEY,
+    genres     TEXT NOT NULL DEFAULT '',
+    cats       TEXT NOT NULL DEFAULT '',
+    fetched_at INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS playtime_log_user ON playtime_log(discord_id, day);`;
 
 /** Rows of { day, title, minutes } for one calendar year into a recap: totals, hours per month, top games. */
@@ -101,5 +107,21 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     const playRecap = (id, year) => recapSummary(playtimeLog(id), year);
     const prunePlaytime = () => run("DELETE FROM playtime_log WHERE day < ?", new Date(now() - 3 * 366 * 86400_000).toISOString().slice(0, 10)).changes;
 
-    return { playtimeLog, playRecap, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    // Genres and categories from Steam's public store data, shared by everyone (nothing about a member is stored here).
+    const saveAppTags = (appid, genres, cats) => run("INSERT INTO app_tags (appid, genres, cats, fetched_at) VALUES (?,?,?,?) ON CONFLICT(appid) DO UPDATE SET genres = excluded.genres, cats = excluded.cats, fetched_at = excluded.fetched_at", appid, genres.join("|"), cats.join("|"), now());
+    const getAppTags = appids => {
+        const out = new Map();
+        for (const id of appids) { const r = get("SELECT genres, cats FROM app_tags WHERE appid = ?", id); if (r) out.set(id, { genres: r.genres ? r.genres.split("|") : [], cats: r.cats ? r.cats.split("|") : [] }); }
+        return out;
+    };
+    /** Apps of this member (library by hours played, then wishlist) with no tags fetched in the last 30 days. */
+    const appsNeedingTags = (id, limit = 25) => all(
+        `SELECT appid FROM (SELECT appid, minutes AS w FROM library WHERE discord_id = ? AND appid IS NOT NULL
+                            UNION ALL SELECT appid, -1 AS w FROM items WHERE discord_id = ? AND appid IS NOT NULL)
+         WHERE appid NOT IN (SELECT appid FROM app_tags WHERE fetched_at > ?) GROUP BY appid ORDER BY MAX(w) DESC LIMIT ?`, id, id, now() - 30 * 86400_000, limit).map(r => r.appid);
+    const allAppsNeedingTags = (limit = 40) => all(
+        `SELECT appid FROM (SELECT appid FROM library WHERE appid IS NOT NULL UNION SELECT appid FROM items WHERE appid IS NOT NULL)
+         WHERE appid NOT IN (SELECT appid FROM app_tags WHERE fetched_at > ?) LIMIT ?`, now() - 30 * 86400_000, limit).map(r => r.appid);
+
+    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

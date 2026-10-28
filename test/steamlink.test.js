@@ -262,3 +262,29 @@ test("spend tracker: totals, year, months, cost per hour and bought-but-unplayed
     assert.deepEqual(sp.unplayed, { count: 2, total: 80 }, "C and Old are unplayed; the finished one is not counted");
     assert.equal(spendSummary([], { now: NOW }).games, 0);
 });
+
+test("taste: genres are fetched politely, weighted by hours, and wishlist games are ranked by fit", async () => {
+    const { fetchAppTags, refreshTags, tasteProfile, recommend } = await import("../src/taste.js");
+    const store = { 1: ["RPG", "Indie"], 2: ["RPG"], 3: ["Racing"], 4: ["RPG", "Strategy"], 5: ["Racing"] };
+    const calls = [];
+    const fetchImpl = async url => { const id = new URL(url).searchParams.get("appids"); calls.push(id); return { ok: true, json: async () => ({ [id]: store[id] ? { success: true, data: { genres: store[id].map(description => ({ description })), categories: [{ description: "Single-player" }] } } : { success: false } }) }; };
+    assert.deepEqual(await fetchAppTags(2, fetchImpl), { genres: ["RPG"], cats: ["Single-player"] });
+    assert.equal(await fetchAppTags(99, fetchImpl), null);
+
+    const db = openDb(":memory:");
+    db.ensureUser("u1", "g1");
+    db.upsertLibrary("u1", [1, 2, 3].map(n => ({ itad_id: "id" + n, title: "G" + n, paid: null })));
+    db.syncSteamGames("u1", [{ itad_id: "id1", title: "G1", appid: 1, minutes: 6000 }, { itad_id: "id2", title: "G2", appid: 2, minutes: 600 }, { itad_id: "id3", title: "G3", appid: 3, minutes: 60 }]);
+    db.addItems("u1", [{ itad_id: "w4", title: "Wish RPG", appid: 4 }, { itad_id: "w5", title: "Wish Racer", appid: 5 }]);
+    assert.deepEqual(db.appsNeedingTags("u1", 10).slice(0, 3), [1, 2, 3], "most played first");
+    assert.equal(await refreshTags({ db, appids: db.appsNeedingTags("u1", 10), fetchImpl, delayMs: 0 }), 5);
+    assert.deepEqual(db.appsNeedingTags("u1", 10), [], "nothing left to fetch");
+    const profile = tasteProfile(db, "u1");
+    assert.equal(profile.genres[0].name, "RPG"); assert.ok(profile.genres[0].pct > profile.genres.find(g => g.name === "Racing").pct);
+    const rows = [{ itad_id: "w4", title: "Wish RPG", best: { price: 10 }, discount: 0.5 }, { itad_id: "w5", title: "Wish Racer", best: { price: 10 }, discount: 0.5 }];
+    const picks = recommend(db, "u1", rows, profile);
+    assert.equal(picks[0].title, "Wish RPG"); assert.deepEqual(picks[0].matched, ["RPG"]);
+    // a failing fetch stops the run quietly
+    assert.equal(await refreshTags({ db, appids: [7, 8], fetchImpl: async () => ({ ok: false, status: 429 }), delayMs: 0 }), 0);
+    db.close();
+});
