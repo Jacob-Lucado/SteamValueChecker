@@ -15,6 +15,7 @@ export const CHANGELOG = [
         "`/alerts push` (and the Alerts page) sends a copy of every alert to your phone through ntfy.sh, a Discord webhook or a Slack webhook.",
         "Dashboard: a page for every game (click a wishlist title) and a Sale war room with a budget slider.",
         "Dashboard: a My page under Account lists every feature as a card with its status, switches for the simple ones, and links to set up the rest. Pin, reorder or hide cards.",
+        "My page also has a Profile card: pick what to show (games, finished, hours, percent saved, streak, badges, genres), choose a colour and save it as an image.",
         "Taste profile (`/steam taste`) suggests games from your own library's tags." ] },
     { version: "2026.10.28", date: "2026-10-28", title: "Steam library, bundles and looking for group", items: [
         "`/steam link` (or the Steam page) links a public profile: your games, hours played, what you never played and what it is all worth. `/steam next` picks what to play next from your own library, and `/steam value` estimates your Steam account's value. A sync marks games with every achievement unlocked as Finished.",

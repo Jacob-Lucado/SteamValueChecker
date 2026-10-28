@@ -685,6 +685,24 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             db.updateUser(s.userId, { push_url: p.url });
             return { push: p.host };
         },
+        // Everything the shareable profile card shows, from stored data only (no price lookups).
+        "GET /api/profile/card": async (req) => {
+            const s = session(req); userRow(s);
+            const lib = db.listLibrary(s.userId);
+            const tc = trophyCase(db, s.userId);
+            const ch = challengeView(db, s.userId);
+            const snaps = db.listSnapshots(s.userId, 1);
+            const last = snaps[snaps.length - 1] ?? snaps[0] ?? null;
+            return {
+                name: s.username, games: lib.length, finished: lib.filter(g => g.status === "finished").length,
+                backlog: lib.filter(g => g.status === "backlog").length,
+                hours: Math.round(lib.reduce((t, g) => t + (g.minutes ?? 0), 0) / 60),
+                savedPct: last && last.msrp_paid > 0 ? Math.round((last.msrp_paid - last.paid) / last.msrp_paid * 100) : null,
+                streak: ch.streak, bestStreak: ch.best,
+                badges: tc.badges.filter(b => b.tier).map(b => ({ icon: b.icon, name: b.name, tier: b.tier })),
+                genres: tasteProfile(db, s.userId).genres.slice(0, 3).map(g => g.name)
+            };
+        },
         "GET /api/library/badges": async (req) => { const s = session(req); userRow(s); return trophyCase(db, s.userId); },
         "GET /api/library/challenge": async (req) => { const s = session(req); return challengeView(db, s.userId); },
         "POST /api/library/challenge": async (req, body) => {

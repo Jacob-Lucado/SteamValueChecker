@@ -2397,6 +2397,54 @@
     const on = CARDS.filter(c => c.status && c.status()[0]).length, tot = CARDS.filter(c => c.status).length;
     app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), bar, grid);
     draw();
+    app.append(profileCardPanel());
+  }
+
+  // A shareable profile card drawn on a canvas. Pick what it shows and the colour, then save it as an image. Nothing is uploaded.
+  function profileCardPanel() {
+    const KEY = "svc_profilecard";
+    let opt = { games: true, finished: true, hours: true, saved: true, streak: true, badges: true, genres: true, theme: "steam" };
+    try { Object.assign(opt, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch { /* defaults */ }
+    const THEMES = { steam: ["#1b2838", "#66c0f4"], night: ["#14151a", "#b388ff"], forest: ["#13241c", "#5fd38d"], sunset: ["#2a1620", "#ff9a62"] };
+    const out = h("div", { class: "muted", text: "Loading…" });
+    const wrap = h("div", { class: "panel" }, h("h3", { text: "Profile card" }), out);
+    api("/api/profile/card").then(d => {
+      const canvas = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": "Your profile card" });
+      const draw = () => {
+        const [bg, ac] = THEMES[opt.theme] || THEMES.steam, x = canvas.getContext("2d");
+        x.fillStyle = bg; x.fillRect(0, 0, 1200, 630);
+        x.fillStyle = ac; x.fillRect(0, 0, 1200, 10);
+        x.beginPath(); x.arc(110, 120, 52, 0, Math.PI * 2); x.fill();
+        x.fillStyle = bg; x.font = "700 56px system-ui, sans-serif"; x.textAlign = "center"; x.fillText((d.name || "?").slice(0, 1).toUpperCase(), 110, 140); x.textAlign = "left";
+        x.fillStyle = "#fff"; x.font = "700 56px system-ui, sans-serif"; x.fillText((d.name || "Gamer").slice(0, 22), 190, 122);
+        x.fillStyle = ac; x.font = "600 26px system-ui, sans-serif"; x.fillText("GAME LIBRARY", 190, 160);
+        const stats = [];
+        if (opt.games) stats.push([String(d.games), "games"]);
+        if (opt.finished) stats.push([String(d.finished), "finished"]);
+        if (opt.hours && d.hours) stats.push([d.hours.toLocaleString() + " h", "played"]);
+        if (opt.saved && d.savedPct !== null) stats.push([d.savedPct + "%", "saved vs MSRP"]);
+        if (opt.streak && d.bestStreak) stats.push([d.streak + " / " + d.bestStreak, "month streak / best"]);
+        stats.forEach(([v, k], n) => {
+          const sx = 60 + (n % 3) * 380, sy = 270 + Math.floor(n / 3) * 130;
+          x.fillStyle = "#fff"; x.font = "700 72px system-ui, sans-serif"; x.fillText(v, sx, sy);
+          x.fillStyle = "#8ba4b6"; x.font = "24px system-ui, sans-serif"; x.fillText(k, sx, sy + 34);
+        });
+        if (opt.badges && d.badges.length) { x.font = "44px system-ui, sans-serif"; d.badges.slice(0, 8).forEach((b, n) => x.fillText(b.icon, 60 + n * 64, 560)); }
+        if (opt.genres && d.genres.length) { x.fillStyle = ac; x.font = "600 24px system-ui, sans-serif"; x.textAlign = "right"; x.fillText(d.genres.join(" · "), 1140, 560); x.textAlign = "left"; }
+        x.fillStyle = "#5c7080"; x.font = "18px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 604);
+      };
+      const box = (key, label) => { const c = h("input", { type: "checkbox", checked: opt[key] }); c.addEventListener("change", () => { opt[key] = c.checked; keep(); draw(); }); return h("label", { class: "check" }, c, label); };
+      const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(opt)); } catch { /* per-device */ } };
+      const theme = select(Object.keys(THEMES).map(k => [k, k[0].toUpperCase() + k.slice(1)]), opt.theme);
+      theme.addEventListener("change", () => { opt.theme = theme.value; keep(); draw(); });
+      const save = h("button", { class: "btn blue", text: "Save as image", onclick: () => canvas.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: "my-game-profile.png" }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }) });
+      out.className = "";
+      out.replaceChildren(h("p", { class: "muted small", text: "Drawn on your device from your library, hours, challenge and badges. Choose what to show, then save the image to share." }),
+        h("div", { class: "row" }, box("games", "Games"), box("finished", "Finished"), box("hours", "Hours"), box("saved", "Percent saved"), box("streak", "Streak"), box("badges", "Badges"), box("genres", "Top genres")),
+        field("Colour", theme), canvas, save);
+      draw();
+    }).catch(e => out.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+    return wrap;
   }
 
   async function friendsView() {

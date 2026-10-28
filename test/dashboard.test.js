@@ -1046,3 +1046,13 @@ test("phone alerts: saving needs a reachable allowlisted link and never echoes i
         assert.equal((await post({ url: "" })).data.push, null);
     } finally { await t.close(); }
 });
+
+test("profile card data comes from stored data only", async () => {
+    const t = await signedIn();
+    try {
+        const r = await t.request("/api/profile/card");
+        assert.equal(r.status, 200);
+        assert.equal(r.data.games, 0); assert.equal(r.data.savedPct, null);
+        assert.ok(Array.isArray(r.data.badges)); assert.ok(Array.isArray(r.data.genres));
+    } finally { await t.close(); }
+});
