@@ -61,6 +61,11 @@ test("re-alerts need a real drop, not a few cents of exchange-rate noise", async
     assert.equal(meaningfulDrop(10.57, 10.4), false, "under 25 cents");
     assert.equal(meaningfulDrop(30, 29.5), false, "under 3%");
     assert.equal(meaningfulDrop(10.57, 9.5), true);
+    assert.equal(meaningfulDrop(0, 0), false, "a free game is not a new drop every check");
+    assert.equal(meaningfulDrop(0.99, 0), true, "but going from 99 cents to free is");
     assert.equal(meaningfulDrop(0.99, 0.5), true, "cheap games can still drop");
     assert.equal(meaningfulDrop(10, 10.5), false, "a rise is never a drop");
+    // the bug seen live: a game that stays free kept sending "price dropped again"
+    assert.equal(evaluate(item({ last_alert_price: 0 }), summary(0)).action, "none");
+    assert.equal(evaluate(item(), summary(0)).action, "alert", "the first time it goes free still alerts");
 });

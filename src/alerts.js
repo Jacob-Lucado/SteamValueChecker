@@ -9,7 +9,8 @@ const EPS = 0.005;
  * usually exchange-rate noise from a shop that prices in another currency, and would otherwise repeat the alert every cycle.
  * Needs at least 3% and 25 cents (or the full amount, for very cheap games).
  */
-export const meaningfulDrop = (last, price) => price < last - Math.min(last, Math.max(0.25, last * 0.03)) + EPS;
+// A price already at $0 can't drop further, so a free game never re-alerts (the plain threshold maths said 0 < 0 + EPS).
+export const meaningfulDrop = (last, price) => price < last - EPS && price < last - Math.min(last, Math.max(0.25, last * 0.03)) + EPS;
 
 /** Current numbers for one game from a report.js summary: price now, discount, all-time low. */
 export function current(summary) {
