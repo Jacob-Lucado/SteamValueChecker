@@ -585,7 +585,8 @@
       busy(hist, async () => {
         const d = await api("/api/wishlist/history?itad_id=" + encodeURIComponent(r.itad_id));
         if (!d.points.length) { chartHolder.replaceChildren(h("p", { class: "muted small", text: "No price history yet." })); return; }
-        chartHolder.replaceChildren(h("p", { class: "muted small", text: "Lowest store price over the last year, " + r.title }),
+        chartHolder.replaceChildren(d.advice ? h("div", { class: "notice " + (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "warn") }, h("b", { text: (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "🟢 " : "🟠 ") + "Buy now or wait? " + d.advice.label + ". " }), d.advice.reasons.join(" ")) : "",
+          h("p", { class: "muted small", text: "Lowest store price over the last year, " + r.title }),
           lineChart([{ name: "Price", cls: "s0", points: d.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }));
       });
     });
@@ -1362,6 +1363,31 @@
       h("p", { class: "muted small", text: "Mark games finished (or reach 100% achievements) to count them. Keep the streak going month after month." }), out);
   }
 
+  // Spend tracker: totals, the last 12 months and cost per hour, from the amounts you recorded.
+  function spendPanel() {
+    const out = h("div", { class: "muted", text: "Loading…" });
+    api("/api/library/spend").then(sp => {
+      if (!sp.games) { out.className = ""; out.replaceChildren(h("p", { class: "muted", text: "No amounts recorded yet. Add what you paid in the table below, or import a FanaticalGrabber export that has prices." })); return; }
+      const c = sp.currency, peak = Math.max(...sp.months.map(m => m.total), 1);
+      const line = g => h("li", {}, h("b", { text: g.title }), ` ${money(g.paid, c)} for ${g.hours} h (${money(g.perHour, c)}/h)`);
+      out.className = "";
+      out.replaceChildren(
+        h("div", { class: "grid four" },
+          h("div", { class: "tile" }, h("div", { class: "k", text: "All time" }), h("div", { class: "v", text: money(sp.total, c) }), h("div", { class: "s", text: sp.games + " games, about " + money(sp.avg, c) + " each" })),
+          h("div", { class: "tile" }, h("div", { class: "k", text: String(sp.year.year) }), h("div", { class: "v", text: money(sp.year.total, c) }), h("div", { class: "s", text: sp.year.games + " games" })),
+          h("div", { class: "tile" }, h("div", { class: "k", text: "Bought, not played" }), h("div", { class: "v", text: money(sp.unplayed.total, c) }), h("div", { class: "s", text: sp.unplayed.count + " games" }))),
+        h("div", { class: "spend-bars", role: "img", "aria-label": "Spending per month, last 12 months" }, sp.months.map(m => {
+          const bar = h("i"); bar.style.height = Math.max(m.total ? 4 : 1, Math.round(m.total / peak * 100)) + "%";
+          return h("div", { class: "spend-col", title: `${m.month}: ${money(m.total, c)} (${m.games} game${m.games === 1 ? "" : "s"})` }, bar, h("span", { text: m.month.slice(5) }));
+        })),
+        h("p", { class: "muted small", text: "Months follow when a game was added to your library, so treat them as approximate." }),
+        h("div", { class: "grid two" },
+          sp.bestValue.length ? h("div", {}, h("h4", { text: "Best value per hour" }), h("ul", { class: "plain" }, sp.bestValue.map(line))) : "",
+          sp.worstValue.length ? h("div", {}, h("h4", { text: "Most expensive per hour" }), h("ul", { class: "plain" }, sp.worstValue.map(line))) : ""));
+    }).catch(e => out.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+    return h("div", { class: "panel" }, h("h3", { text: "💸 What you have spent" }), out);
+  }
+
   async function libraryView() {
     const body = h("div", { class: "muted", text: "Loading prices…" });
     const title = h("input", { type: "text", placeholder: "Game title", maxlength: "100" });
@@ -1516,7 +1542,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
-          challengePanel(), chart, backlogChart || "",
+          challengePanel(), spendPanel(), chart, backlogChart || "",
           h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }

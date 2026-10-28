@@ -31,6 +31,8 @@ import { addToServerList, serverListView, vote, removeFromServerList } from "../
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { summarize } from "../report.js";
+import { buyOrWait } from "../advice.js";
+import { spendSummary, regionCurrency } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
@@ -460,7 +462,15 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const all = await itad.getHistory(id, u.region);
             const step = Math.max(1, Math.ceil(all.length / MAX_HISTORY_POINTS));
             const points = all.filter((_, i) => i % step === 0 || i === all.length - 1).map(p => ({ t: p.t, price: p.price, shop: p.shop }));
-            return { title: own.title, points };
+            let advice = null;
+            try {
+                const prices = await itad.getPrices([id], u.region);
+                const sum = summarize(prices.get(id), { majorOnly: u.stores === "major" });
+                const nowPrice = sum.best?.price ?? all.at(-1)?.price;
+                const cur = sum.currency || "USD";
+                advice = buyOrWait(all, nowPrice, { sales: upcomingSales(Date.now()), money: n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } } });
+            } catch { /* the chart works without it */ }
+            return { title: own.title, points, advice };
         },
 
         "POST /api/wishlist/bulk": async (req, body) => {
@@ -587,6 +597,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { ok: true, summary, dm: sent };
         },
 
+        "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },
         "GET /api/library/challenge": async (req) => { const s = session(req); return challengeView(db, s.userId); },
         "POST /api/library/challenge": async (req, body) => {
             const s = session(req);

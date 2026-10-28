@@ -62,7 +62,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/wishlist remove game:` | Removes a game (autocompletes from your list) |
 | `/wishlist view` | Your list with current prices, sales first |
 | `/wishlist alert type:` | Sets when you are alerted, for one game or all: any sale, a % off or more, a price or lower, or an all-time low |
-| `/wishlist check game:` | Is it a good deal right now? Price, 3-month, 1-year and all-time lows, and a plain verdict |
+| `/wishlist check game:` | Is it a good deal right now? Price, 3-month, 1-year and all-time lows, a plain verdict, and a buy now or wait recommendation from a year of price history and the next Steam sale |
 | `/alerts delivery` | DM (default) or the server alert channel |
 | `/alerts quiethours`, `digest`, `bundles`, `freegames`, `share`, `history` | Hold alerts overnight (with your time zone), a weekly sales digest, bundle and giveaway alerts, opt in to server group alerts and the leaderboard, and your recent alerts |
 | `/alerts freegames enabled:` | Get told when any game is free to claim. One message per store; several free games from the same store come with a **Claim all** button, a single game with **Claim game** |
@@ -89,6 +89,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/regions` | One game's cheapest price in about a dozen regions, ranked in US dollars (recent ECB exchange rates). Region-locked keys mean this is for information |
 | `/calendar` | `view` lists release dates of wishlisted games, Steam sales, server events and open `/lfg` posts. `add` and `remove` (Manage Server) manage server events, announced in the channel with a reminder before they start. `feed` makes an optional private link for Google, Apple or Outlook calendar |
 | `/steam recap [year]` | Your year in games: hours played per month and your top games, counted from the minutes added between Steam syncs |
+| `/library spend` | What you have spent from the amounts you recorded: totals, the last 12 months, best and worst cost per hour played, and bought-but-unplayed. Months follow when a game was added to your library |
 | `/library challenge [goal]` | A monthly goal of games to finish and a streak of months you met it. A game counts when marked finished (or 100% achievements) in that UTC month |
 | `/wishlist cleanup` / `priority` | Remove wishlist games you already own; star a game so it is listed first and its alerts come through quiet hours |
 | `/publicpage reset_claims:true` | Visitors to your public page can mark a game as "I'm gifting this". You see only how many, never who; this clears them |

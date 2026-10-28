@@ -7,6 +7,8 @@ export const CHANGELOG = [
         "Your `/publicpage` lets visitors mark \"I'm gifting this\" so nobody doubles up. You only see how many are claimed, and can clear them.",
         "Free games: a one-time last-chance reminder when an offer you were told about ends within a day.",
         "Server admins: `/alertchannel digest` posts a Friday round-up of cheap shared games, free games and events.",
+        "Buy now or wait: `/wishlist check` and the price history chart now give a verdict from a year of prices, how often it has hit its low and whether a Steam sale is coming.",
+        "`/library spend` and a Library page panel: what you have spent, by month, cost per hour played and what you bought and never played.",
         "FanaticalGrabber 2.4 adds a Steam-style batch redeem panel on Steam's own pages, a price overlay on game pages and a queue from Fanatical." ] },
     { version: "2026.10.28", date: "2026-10-28", title: "Steam library, bundles and looking for group", items: [
         "`/steam link` (or the Steam page) links a public profile: your games, hours played, what you never played and what it is all worth. `/steam next` picks what to play next from your own library, and `/steam value` estimates your Steam account's value. A sync marks games with every achievement unlocked as Finished.",

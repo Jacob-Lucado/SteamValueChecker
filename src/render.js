@@ -314,7 +314,7 @@ export function groupEmbed(title, count, now) {
 }
 
 /** One game's price and lows, for /wishlist check. */
-export function checkEmbed(title, now, verdict) {
+export function checkEmbed(title, now, verdict, advice = null) {
     const c = now.currency ?? "USD";
     const fields = [
         { name: "Price now", value: money(now.price, c), inline: true },
@@ -324,6 +324,7 @@ export function checkEmbed(title, now, verdict) {
         { name: "1-year low", value: money(now.low1y, c), inline: true },
         { name: "All-time low", value: money(now.atl, c), inline: true }
     ];
+    if (advice) fields.push({ name: `${{ buy: "🟢", lean_buy: "🟢", lean_wait: "🟡", wait: "🟠" }[advice.verdict]} Buy now or wait? ${advice.label}`, value: advice.reasons.join(" ") });
     return {
         color: verdict && verdict.level === "great" ? GREEN : COLOR,
         title, url: safeUrl(now.url), fields,
@@ -535,5 +536,22 @@ export function challengeEmbed(c) {
             ...(hist.length ? [{ name: "Earlier months", value: hist.join("\n") }] : [])
         ],
         footer: { text: "A game counts when you mark it finished (or reach 100% achievements). Months are counted in UTC." }
+    };
+}
+
+export function spendEmbed(sp) {
+    if (!sp.games) return { color: 0xf0883e, title: "What you have spent", description: "No amounts recorded yet. Add what you paid with `/library add`, or import a FanaticalGrabber export that has prices, and I will add it up." };
+    const c = sp.currency, peak = Math.max(...sp.months.map(m => m.total), 1), bars = " ▁▂▃▄▅▆▇█";
+    const spark = sp.months.map(m => bars[Math.round(m.total / peak * 8)]).join("");
+    const line = g => `• **${g.title}** ${money(g.paid, c)} for ${g.hours} h (${money(g.perHour, c)}/h)`;
+    return {
+        color: 0xf0883e, title: "What you have spent",
+        description: `**${money(sp.total, c)}** on **${sp.games}** game${sp.games === 1 ? "" : "s"} (about ${money(sp.avg, c)} each). **${money(sp.year.total, c)}** in ${sp.year.year}.\n\`${spark}\` last 12 months`,
+        fields: [
+            ...(sp.bestValue.length ? [{ name: "Best value per hour", value: sp.bestValue.map(line).join("\n") }] : []),
+            ...(sp.worstValue.length ? [{ name: "Most expensive per hour", value: sp.worstValue.map(line).join("\n") }] : []),
+            ...(sp.unplayed.count ? [{ name: "Bought and not played", value: `**${sp.unplayed.count}** game${sp.unplayed.count === 1 ? "" : "s"}, **${money(sp.unplayed.total, c)}**` }] : [])
+        ],
+        footer: { text: "Months follow when a game was added to your library. Games without an amount are not counted." }
     };
 }

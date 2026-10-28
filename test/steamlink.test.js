@@ -248,3 +248,17 @@ test("backlog challenge: finished games count in their month, and the streak sur
     assert.equal(challengeView(db, "u1", Date.UTC(2026, 0, 10)).goal, 0, "0 clears the goal");
     db.deleteUser("u1"); db.close();
 });
+
+test("spend tracker: totals, year, months, cost per hour and bought-but-unplayed", async () => {
+    const { spendSummary, regionCurrency } = await import("../src/spend.js");
+    assert.equal(regionCurrency("GB"), "GBP"); assert.equal(regionCurrency("??"), "USD");
+    const NOW = Date.UTC(2026, 5, 15);
+    const g = (title, paid, month, minutes = 0, status = "backlog") => ({ title, paid, added_at: Date.UTC(2026, month - 1, 10), minutes, status });
+    const sp = spendSummary([g("A", 20, 6, 600), g("B", 10, 6, 60), g("C", 30, 1), g("D", null, 6, 100), g("E", 8, 6, 0, "finished"), { ...g("Old", 50, 3), added_at: Date.UTC(2024, 2, 1) }], { now: NOW, currency: "USD" });
+    assert.equal(sp.total, 118); assert.equal(sp.games, 5); assert.equal(sp.year.total, 68);
+    assert.equal(sp.months.length, 12); assert.equal(sp.months.at(-1).month, "2026-06"); assert.equal(sp.months.at(-1).total, 38);
+    assert.deepEqual(sp.bestValue.map(x => x.title), ["A", "B"]); assert.equal(sp.bestValue[0].perHour, 2);
+    assert.deepEqual(sp.worstValue.map(x => x.title), ["B", "A"]);
+    assert.deepEqual(sp.unplayed, { count: 2, total: 80 }, "C and Old are unplayed; the finished one is not counted");
+    assert.equal(spendSummary([], { now: NOW }).games, 0);
+});
