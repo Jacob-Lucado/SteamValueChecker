@@ -270,6 +270,9 @@
           feature("🎁", "Free game alerts", "Hear when a game is free on Steam, Epic, GOG and more, with one-click Claim buttons. Or run /freegames any time."),
           feature("🏆", "Key giveaways", "Server owners run giveaways with many keys, custom art, GIFs or video. Winners claim by button, confirm it worked, and a vouch is posted."),
           feature("👥", "Server tools", "A shared server wishlist with votes, an opt-in savings leaderboard, and group pings when several members want the same deal."),
+          feature("🎂", "Friends and gifts", "Keep friends' birthdays, see what is on sale on their public wishlist and get a reminder a week ahead. Visitors can mark gifts so nobody doubles up."),
+          feature("🏅", "Trophies and leagues", "Earn badges from your library and monthly challenge streak, and compete in a server backlog league."),
+          feature("📱", "Phone alerts and war room", "Copy alerts to ntfy, Discord or Slack, and plan a Steam sale cart with a budget slider."),
           feature("📊", "A full dashboard", "Everything the commands do, in your browser: charts, price history, bulk actions and giveaway management."))),
 
       h("section", { class: "lp-section" },
@@ -2134,7 +2137,7 @@
     const done = steps.filter(x => x.done).length;
     return h("div", { class: "panel" }, h("h3", { text: `Get set up (${done} of ${steps.length})` }),
       progressBar(done / steps.length),
-      ...steps.map(x => h("a", { class: "step-row" + (x.done ? " done" : ""), href: x.href }, h("span", { text: x.done ? "✅" : "⬜" }), " ", x.text)));
+      ...steps.map(x => h("a", { class: "step-row" + (x.done ? " done" : ""), href: x.href }, h("span", { text: x.done ? "✅" : "⬜" }), " ", x.text, x.optional && !x.done ? h("span", { class: "muted small", text: "  optional" }) : null)));
   }
 
   // High contrast is a per-device choice kept in localStorage; the page works without it.
