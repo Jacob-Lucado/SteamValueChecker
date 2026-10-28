@@ -1215,7 +1215,7 @@
       try {
         const d = await api("/api/steam");
         state.steamLinked = !!d.link;
-        if (d.link && autoFillArt(d.card, d.stats, state.artForce)) toast("Filled your picture and banner from Steam. Change them on My page.", "ok");
+        if (d.link && autoFillArt(d.card, d.stats, state.artForce)) toast("Updated your profile card picture and banner from Steam.", "ok");
         state.artForce = false;
         // Linked: the look-up takes the link box's place. Not linked: link first, look-up below.
         slot.replaceChildren(...(d.link ? [lookup] : [linkPanel, lookup]));
@@ -2523,15 +2523,15 @@
   // Steam art for the pictures. A wide hero for the banner (with the store header as a fallback) and the Steam profile picture.
   const heroUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/library_hero.jpg`;
   const headerUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/header.jpg`;
-  // After a sync or link: fill the picture and banner from Steam. Only empty slots are filled, and without `force` only once,
-  // so pictures you cleared or changed yourself stay as you left them.
+  // From Steam: the profile picture, and a banner from the hero art of the game you play most. Steam does not share profile
+  // backgrounds, so the banner is the closest thing. On a sync or link (`force`) both are replaced with the fresh ones;
+  // otherwise only empty slots are filled.
   function autoFillArt(card, stats, force = false) {
     const art = loadMyArt();
-    if (art.auto && !force) return false;
     let changed = false;
-    if (!art.avatar && okImage(card?.avatar)) { art.avatar = card.avatar; changed = true; }
+    if (okImage(card?.avatar) && (force || !art.avatar) && art.avatar !== card.avatar) { art.avatar = card.avatar; changed = true; }
     const top = stats?.mostPlayed?.[0]?.appid;
-    if (!art.banner && top) { art.banner = heroUrl(top); changed = true; }
+    if (top && (force || !art.banner) && art.banner !== heroUrl(top)) { art.banner = heroUrl(top); changed = true; }
     art.auto = true; saveMyArt(art);
     return changed;
   }
@@ -2568,10 +2568,15 @@
     api("/api/profile/card").then(d => {
       const canvas = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": "Your profile card" });
       let pic = null, banner = null;
-      const myArt = loadMyArt();
       const loadImg = (src, done, fallback) => { const im = new Image(); im.crossOrigin = "anonymous"; im.referrerPolicy = "no-referrer"; im.onload = () => { done(im); draw(); }; im.onerror = () => { if (fallback) loadImg(fallback, done); }; im.src = src; };
-      if (myArt.avatar) loadImg(myArt.avatar, im => { pic = im; });
-      if (myArt.banner) { const m = /\/steam\/apps\/(\d+)\/library_hero\.jpg$/.exec(myArt.banner); loadImg(myArt.banner, im => { banner = im; }, m ? headerUrl(m[1]) : null); }
+      const loadArt = () => {
+        const myArt = loadMyArt();
+        if (myArt.avatar) loadImg(myArt.avatar, im => { pic = im; });
+        if (myArt.banner) { const m = /\/steam\/apps\/(\d+)\/library_hero\.jpg$/.exec(myArt.banner); loadImg(myArt.banner, im => { banner = im; }, m ? headerUrl(m[1]) : null); }
+      };
+      loadArt();
+      // Linked but no pictures yet: pull them from Steam so the card is never blank.
+      { const have = loadMyArt(); if (!have.avatar || !have.banner) api("/api/steam").then(sd => { if (sd.link && autoFillArt(sd.card, sd.stats)) loadArt(); }).catch(() => {}); }
       const rr = (x, px, py, w, hh, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + hh, r); x.arcTo(px + w, py + hh, px, py + hh, r); x.arcTo(px, py + hh, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
       const cover = (x, im, px, py, w, hh) => { const k = Math.max(w / im.width, hh / im.height), dw = im.width * k, dh = im.height * k; x.drawImage(im, px + (w - dw) / 2, py + (hh - dh) / 2, dw, dh); };
       const draw = () => {
