@@ -1108,9 +1108,13 @@
     const tbody = h("tbody");
     const table = h("div", { class: "table-wrap", hidden: true }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "Key" }), h("th", { text: "Result" }), h("th", { text: "Game" }))), tbody));
     const tools = h("p", { hidden: true });
-    let ext = null, jobId = null, rows = new Map(), running = false, queued = null, outcomes = [];
+    let ext = null, extFound = false, jobId = null, rows = new Map(), running = false, queued = null, outcomes = [];
     const queuedBox = h("div", { class: "notice", hidden: true });
     const keysIn = () => [...new Set((box.value.match(KEY_G) || []).map(k => k.toUpperCase()))].slice(0, 500);
+    const MIN_EXT = "2.3.0"; // the first FanaticalGrabber version with the page bridge
+    const versionLess = (a, b) => { const x = String(a).split(".").map(n => parseInt(n, 10) || 0), y = String(b).split(".").map(n => parseInt(n, 10) || 0); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+    const getLink = () => (state.cfg && state.cfg.fanaticalUrl ? h("a", { href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer", text: "Get it here" }) : "");
+    const recheck = () => { const b = h("button", { class: "btn gray small", text: "Check again" }); b.addEventListener("click", () => { window.postMessage({ svc: "page", type: "ping" }, location.origin); setTimeout(() => { if (!ext) b.textContent = "Still not detected. Reload this page after updating."; }, 800); }); return b; };
     const mask = k => k.slice(0, 5) + "-•••••-" + k.slice(-5);
     function refresh() {
       const n = keysIn().length;
@@ -1122,9 +1126,15 @@
       const m = e.data;
       if (!m || m.svc !== "ext") return;
       if (m.type === "pong") {
-        ext = m.version;
-        extState.className = "notice ok";
-        extState.textContent = `FanaticalGrabber ${ext} is ready. Make sure you are logged into Steam in this browser.`;
+        if (versionLess(m.version, MIN_EXT)) {
+          ext = null; extFound = true;
+          extState.className = "notice warn";
+          extState.replaceChildren(`Your FanaticalGrabber is version ${String(m.version).slice(0, 12)}, but batch redeem needs ${MIN_EXT} or newer. Update it from the Chrome Web Store, or use the latest .zip, then reload this page. `, getLink(), " ", recheck());
+        } else {
+          ext = m.version; extFound = true;
+          extState.className = "notice ok";
+          extState.textContent = `FanaticalGrabber ${ext} is ready. Make sure you are logged into Steam in this browser.`;
+        }
         refresh();
         return;
       }
@@ -1159,8 +1169,7 @@
     // The page only lives while this view is open: stop listening once the route changes.
     window.addEventListener("hashchange", () => window.removeEventListener("message", onMsg), { once: true });
     window.postMessage({ svc: "page", type: "ping" }, location.origin);
-    setTimeout(() => { if (!ext) { extState.className = "notice warn"; extState.replaceChildren("The extension was not found. Install FanaticalGrabber 2.3 or newer, then reload this page. ", state.cfg && state.cfg.fanaticalUrl ? ext2(state.cfg.fanaticalUrl) : ""); } }, 1500);
-    function ext2(url) { return h("a", { href: safeHref(url), target: "_blank", rel: "noopener noreferrer", text: "Get it here" }); }
+    setTimeout(() => { if (!extFound) { extState.className = "notice warn"; extState.replaceChildren(`The FanaticalGrabber extension was not detected. Install it, or update it if it is older than ${MIN_EXT} (older versions cannot take keys from this page), then reload this page. `, getLink(), " ", recheck()); } }, 1500);
     box.addEventListener("input", refresh);
     async function start(keys, fromQueue) {
       if (!keys.length || !ext) return;
