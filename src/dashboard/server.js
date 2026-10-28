@@ -35,7 +35,7 @@ import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
 import { friendDeals, friendRows, saveFriend } from "../friends.js";
-import { spendSummary, regionCurrency } from "../spend.js";
+import { spendSummary, regionCurrency, grabberRegion } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
 import { upcomingSales, salesBefore, SALES_UPDATED } from "../salescal.js";
@@ -1579,7 +1579,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 const user = db.getUser(uid);
                 const ids = await itad.lookupShopIds(STEAM_SHOP_ID, appids.map(a => `app/${a}`));
                 const found = appids.map(a => [a, ids.get(`app/${a}`)]).filter(([, id]) => id);
-                const prices = found.length ? await itad.getPrices(found.map(([, id]) => id), user?.region ?? "US") : new Map();
+                const prices = found.length ? await itad.getPrices(found.map(([, id]) => id), grabberRegion(user, body.cc)) : new Map();
                 const items = found.map(([appid, id]) => {
                     const sum = summarize(prices.get(id), { majorOnly: user?.stores === "major" });
                     return { appid, steam: sum.steam, msrp: sum.msrp, best: sum.best ? { price: sum.best.price, shop: sum.best.shop } : null, atl: sum.atl, currency: sum.currency };
@@ -1599,7 +1599,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 const map = await itad.lookupShopIds(STEAM_SHOP_ID, [`app/${appid}`]);
                 const id = map.get(`app/${appid}`);
                 if (!id) return json(res, 200, { found: false });
-                const prices = await itad.getPrices([id], user?.region ?? "US");
+                const prices = await itad.getPrices([id], grabberRegion(user, url.searchParams.get("cc")));
                 const sum = summarize(prices.get(id), { majorOnly: user?.stores === "major" });
                 return json(res, 200, {
                     found: true, currency: sum.currency, msrp: sum.msrp, steam: sum.steam, cut: sum.cut,

@@ -6,6 +6,19 @@ export const regionCurrency = region => /\(([A-Z]{3})\)/.exec(REGIONS.find(r => 
 const monthOf = ms => new Date(ms).toISOString().slice(0, 7);
 const hours = m => (m ?? 0) / 60;
 
+// The extension reports the member's Steam store country. Use it when we price in that region (euro countries share Germany's prices),
+// otherwise fall back to the region they set in Discord.
+const EURO = new Set(["AT", "BE", "CY", "EE", "ES", "FI", "FR", "GR", "HR", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PT", "SI", "SK", "DE"]);
+export function grabberRegion(user, cc) {
+    const c = String(cc ?? "").toUpperCase();
+    if (/^[A-Z]{2}$/.test(c)) {
+        if (REGIONS.some(r => r.value === c)) return c;
+        if (EURO.has(c)) return "DE";
+        if (c === "UK") return "GB";
+    }
+    return user?.region ?? "US";
+}
+
 export function spendSummary(lib, { now = Date.now(), currency = "USD" } = {}) {
     const paid = lib.filter(g => Number.isFinite(g.paid) && g.paid > 0);
     const total = paid.reduce((a, g) => a + g.paid, 0);

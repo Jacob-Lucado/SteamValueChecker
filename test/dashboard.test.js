@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createDashboard } from "../src/dashboard/server.js";
 import { DiscordApiError } from "../src/dashboard/discord.js";
 import { openDb } from "../src/db.js";
+import { grabberRegion } from "../src/spend.js";
 import { createVault } from "../src/vault.js";
 import { createGiveawayService } from "../src/giveaway.js";
 import { applySteamImport, WishlistError } from "../src/wishlist.js";
@@ -976,6 +977,27 @@ test("extension bundle helper: current prices for several Steam apps by link cod
     t.advance(3_000);
     assert.equal((await post(made.data.token, { appids: [10] })).status, 200);
     await t.close();
+});
+
+test("extension prices in the member's detected Steam country, falling back to their Discord region", async () => {
+    assert.equal(grabberRegion({ region: "US" }, "gb"), "GB");
+    assert.equal(grabberRegion({ region: "US" }, "FR"), "DE", "euro countries share one price list");
+    assert.equal(grabberRegion({ region: "CA" }, "ZZ"), "CA", "unknown country falls back");
+    assert.equal(grabberRegion({ region: "CA" }, "<script>"), "CA");
+    assert.equal(grabberRegion(null, undefined), "US");
+    const seen = [];
+    const t = await signedIn({ itadExtra: {
+        lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, "id-" + i.slice(4)])),
+        getPrices: async (ids, region) => { seen.push(region); return new Map(ids.map(id => [id, { deals: [], historyLow: { all: { amount: 5 } } }])); }
+    } });
+    try {
+        const made = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+        const hdr = { Authorization: `Bearer ${made.data.token}` };
+        await fetch(t.base + "/api/grabber/game?appid=10&cc=JP", { headers: hdr });
+        t.advance(3_000);
+        await fetch(t.base + "/api/grabber/prices", { method: "POST", headers: { "Content-Type": "application/json", ...hdr }, body: JSON.stringify({ appids: [10], cc: "AU" }) });
+        assert.deepEqual(seen, ["JP", "AU"]);
+    } finally { await t.close(); }
 });
 
 test("key vault value: prices titles only", async () => {
