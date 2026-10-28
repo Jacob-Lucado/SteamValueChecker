@@ -112,7 +112,7 @@
   // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["compare", "Compare"], ["calendar", "Calendar"], ["friends", "Friends"], ["steam", "Steam"], ["deals", "Deals"], ["warroom", "Sale war room"]] },
+    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["compare", "Compare"], ["calendar", "Calendar"], ["friends", "Friends"], ["steam", "Steam"], ["deals", "Deals"], ["free", "Free games"], ["warroom", "Sale war room"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -631,8 +631,7 @@
     const share = h("input", { type: "checkbox", checked: s.share });
     const free = h("input", { type: "checkbox", checked: s.free });
     const freeDlc = h("input", { type: "checkbox", checked: s.free_dlc !== false });
-    const freeNow = h("div", { class: "panel" }, h("h3", { text: "Free right now" }), h("p", { class: "muted", text: "Loading…" }));
-    loadFree(freeNow);
+    const freeNow = h("div", { class: "panel" }, h("h3", { text: "Free right now" }), h("p", { class: "muted", text: "Everything that is free to claim today has its own page now." }), h("a", { class: "btn blue small", href: "#/free", text: "Open Free games" }));
     const history = h("div", { class: "panel" }, h("h3", { text: "Recent alerts" }), h("p", { class: "muted", text: "Loading…" }));
     api("/api/alerts/history").then(d => {
       const kinds = { sale: "Sale", bundle: "Bundle", giveaway: "Free", group: "Group", digest: "Digest" };
@@ -742,7 +741,7 @@
       holder.replaceChildren(
         pageHead(g.title, g.release ? "Released " + new Date(g.release).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""),
         g.appid ? steamArt(g.appid, "next-art") : "",
-        h("div", { class: "row" }, g.url ? ext(g.url, "View the best deal", "btn green") : "", g.onWishlist || g.inLibrary ? h("span", { class: "chip ok", text: g.inLibrary ? "In your library" : "On your wishlist" }) : add),
+        h("div", { class: "game-actions" }, g.url ? ext(g.url, "View the best deal", "btn green") : "", g.onWishlist || g.inLibrary ? h("span", { class: "chip ok", text: g.inLibrary ? "In your library" : "On your wishlist" }) : add),
         h("div", { class: "grid four" },
           tile("Best price now", g.price != null ? money(g.price, cur) : "–", g.shop || ""),
           tile("Steam", g.steam != null ? money(g.steam, cur) : "–", g.msrp ? "Regular " + money(g.msrp, cur) : ""),
@@ -750,8 +749,8 @@
           tile("1-year low", g.low1y != null ? money(g.low1y, cur) : "–", g.low3m != null ? "3-month " + money(g.low3m, cur) : "")),
         g.advice ? h("div", { class: "notice " + (good ? "ok" : "warn") }, h("b", { text: (good ? "🟢 " : "🟠 ") + "Buy now or wait? " + g.advice.label + ". " }), g.advice.reasons.join(" ")) : "",
         g.points.length ? h("div", { class: "panel" }, h("h3", { text: "Price over the last year" }), lineChart([{ name: "Price", cls: "s0", points: g.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + g.title })) : "",
-        g.free.length ? h("div", { class: "panel" }, h("h3", { text: "🎁 Free right now" }), g.free.map(f => h("p", {}, h("b", { text: f.title }), " on " + f.shop + " ", f.url ? ext(f.url, "Claim", "btn green small") : ""))) : "",
-        g.bundles.length ? h("div", { class: "panel" }, h("h3", { text: "In a bundle" }), g.bundles.map(b => h("p", {}, h("b", { text: b.title }), ` (${b.shop || "bundle"}) from ${money(b.price, b.currency || cur)} `, b.url ? ext(b.url, "Open", "btn gray small") : ""))) : "",
+        g.free.length ? h("div", { class: "panel" }, h("h3", { text: "🎁 Free right now" }), g.free.map(f => h("div", { class: "game-line" }, h("span", {}, h("b", { text: f.title }), " on " + f.shop), f.url ? ext(f.url, "Claim", "btn green small") : ""))) : "",
+        g.bundles.length ? h("div", { class: "panel" }, h("h3", { text: "In a bundle" }), g.bundles.map(b => h("div", { class: "game-line" }, h("span", {}, h("b", { text: b.title }), ` (${b.shop || "bundle"}) from ${money(b.price, b.currency || cur)}`), b.url ? ext(b.url, "Open", "btn gray small") : ""))) : "",
         g.watchers ? h("p", { class: "muted", text: `👥 ${g.watchers} member${g.watchers === 1 ? "" : "s"} of your server ${g.watchers === 1 ? "is" : "are"} watching this (only people who opted in with /alerts share).` }) : "");
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
@@ -791,7 +790,11 @@
     try {
       const d = await api("/api/free");
       const all = d.platforms.flatMap(p => p.games.map(g => ({ ...g, shop: p.shop })));
-      let cat = "games", shop = "all";
+      let cat = "games", shop = "all", sort = "ending";
+      const SORTS = { ending: (a, b) => (a.expiry || Infinity) - (b.expiry || Infinity) || a.title.localeCompare(b.title), name: (a, b) => a.title.localeCompare(b.title), store: (a, b) => a.shop.localeCompare(b.shop) || a.title.localeCompare(b.title) };
+      const sortSel = select([["ending", "Ending soonest"], ["name", "A to Z"], ["store", "By store"]], sort);
+      sortSel.addEventListener("change", () => { sort = sortSel.value; draw(); });
+      const soon = g => g.expiry && g.expiry - Date.now() < 48 * 3600_000 && g.expiry > Date.now();
       const body = h("div");
       const tabs = h("div", { class: "tabs" });
       const draw = () => {
@@ -800,18 +803,31 @@
         if (!shops.includes(shop)) shop = "all";
         tabs.replaceChildren(...[["games", "🎮 Games"], ...(d.showDlc ? [["dlc", "🧩 DLC"], ["all", "📋 All"]] : [])].map(([id, label]) =>
           h("button", { class: "tab" + (id === cat ? " active" : ""), text: `${label} (${all.filter(g => id === "all" || (id === "dlc") === g.dlc).length})`, onclick: () => { cat = id; draw(); } })));
-        const rows = inCat.filter(g => shop === "all" || g.shop === shop);
+        const rows = inCat.filter(g => shop === "all" || g.shop === shop).sort(SORTS[sort]);
         body.replaceChildren(...[
           shops.length > 1 ? h("div", { class: "chips" }, ["all", ...shops].map(x => h("button", { class: "tab small" + (x === shop ? " active" : ""), text: x === "all" ? "All stores" : x, onclick: () => { shop = x; draw(); } }))) : null,
           rows.length ? h("div", { class: "free-grid" }, rows.map(g => h("div", { class: "free-card" },
             g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: g.dlc ? "🧩" : "🎮" }),
-            h("div", { class: "free-info" }, h("strong", { text: g.title }), h("span", { class: "muted small", text: g.shop + (g.dlc ? " • DLC" : "") + (g.expiry ? " • ends " + new Date(g.expiry).toLocaleDateString() : "") }),
+            h("div", { class: "free-info" }, h("strong", { text: g.title }), h("span", { class: "muted small", text: g.shop + (g.dlc ? " • DLC" : "") + (g.expiry ? " • ends " + new Date(g.expiry).toLocaleDateString() : "") }), soon(g) ? h("span", { class: "chip warn", text: "⏰ Ending soon" }) : null,
               ext(g.url, "Claim", "btn green small"))))) : h("div", { class: "empty", text: "Nothing here right now." })].filter(Boolean));
       };
       draw();
-      panel.replaceChildren(h("h3", { text: "Free right now" }), all.length ? h("div", {}, tabs, body) : h("div", { class: "empty", text: "Nothing is being given away right now." }),
+      panel.replaceChildren(h("h3", { text: "Free right now" }), all.length ? h("div", {}, h("div", { class: "row free-bar" }, tabs, field("Sort", sortSel)), body) : h("div", { class: "empty", text: "Nothing is being given away right now." }),
         h("p", { class: "muted small", text: "Claiming happens on the store's site, where you need to be signed in." }));
     } catch (e) { panel.replaceChildren(h("h3", { text: "Free right now" }), h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  // Free games: everything free to claim right now, with the store filter and sort, and the two settings that matter here.
+  async function freeView() {
+    const panel = h("div", { class: "panel" }, h("h3", { text: "Free right now" }), h("p", { class: "muted", text: "Loading…" }));
+    const set = state.me.settings;
+    const sw = (key, label, hint) => { const c = h("input", { type: "checkbox", checked: key === "free_dlc" ? set.free_dlc !== false : Boolean(set[key]) });
+      c.addEventListener("change", async () => { try { const r = await api("/api/settings", { [key]: c.checked }); state.me.settings = r.settings; toast("Saved.", "ok"); if (key === "free_dlc") loadFree(panel); } catch (e) { toast(e.message, "error"); c.checked = !c.checked; } });
+      return h("label", { class: "check" }, c, " ", h("b", { text: label }), " ", h("span", { class: "muted small", text: hint })); };
+    app.replaceChildren(pageHead("Free games", "Everything that is free to claim right now on Steam, Epic, GOG and more. Claiming happens on the store's site."),
+      h("div", { class: "panel" }, sw("free", "Tell me when a game goes free", "(sent by DM or to your alert channel)"), h("p"), sw("free_dlc", "Show free DLC", "(also hides it from /freegames)")),
+      panel);
+    loadFree(panel);
   }
 
   // ---------- servers ----------
@@ -1174,6 +1190,7 @@
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
     const linkBtn = h("button", { class: "btn blue", text: "Link and import", onclick: () => busy(linkBtn, async () => {
       const r = await api("/api/steam/link", { profile: profile.value });
+      state.artForce = true;
       toast(`Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + `. Added ${r.added}, updated ${r.updated}.` + (r.unmatched ? ` ${r.unmatched} had no price match.` : ""), "ok"); load();
     }) });
     // Look up anyone's public profile. Nothing is saved; it just shows their card and play stats.
@@ -1198,13 +1215,15 @@
       try {
         const d = await api("/api/steam");
         state.steamLinked = !!d.link;
+        if (d.link && autoFillArt(d.card, d.stats, state.artForce)) toast("Filled your picture and banner from Steam. Change them on My page.", "ok");
+        state.artForce = false;
         // Linked: the look-up takes the link box's place. Not linked: link first, look-up below.
         slot.replaceChildren(...(d.link ? [lookup] : [linkPanel, lookup]));
         if (!d.link) { out.className = ""; out.replaceChildren(h("div", { class: "empty", text: "No Steam profile linked yet. Your Game details must be public on Steam for this to work." })); return; }
         const st = d.stats, cur = d.currency;
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
         const list = (rows, f) => h("ul", { class: "plain" }, rows.map(r => h("li", {}, h("b", { text: r.title }), " ", f(r))));
-        const sync = h("button", { class: "btn gray", text: "Sync now", onclick: () => busy(sync, async () => { const r = await api("/api/steam/sync", {}); toast(`Synced ${r.owned} games.` + (r.achievements && r.achievements.checked ? ` Checked achievements for ${r.achievements.checked}` + (r.achievements.newlyFinished ? `, ${r.achievements.newlyFinished} marked Finished.` : ".") : ""), "ok"); load(); }) });
+        const sync = h("button", { class: "btn gray", text: "Sync now", onclick: () => busy(sync, async () => { const r = await api("/api/steam/sync", {}); state.artForce = true; toast(`Synced ${r.owned} games.` + (r.achievements && r.achievements.checked ? ` Checked achievements for ${r.achievements.checked}` + (r.achievements.newlyFinished ? `, ${r.achievements.newlyFinished} marked Finished.` : ".") : ""), "ok"); load(); }) });
         const unlinkGames = h("input", { type: "checkbox" });
         const unlink = h("button", { class: "btn red", text: "Unlink", onclick: () => busy(unlink, async () => { const r = await api("/api/steam/unlink", { removeGames: unlinkGames.checked }); toast(r.removed ? `Unlinked, and removed ${r.removed} games.` : "Unlinked.", "ok"); load(); }) });
 
@@ -2378,6 +2397,7 @@
       { href: "#/wishlist", title: "Wishlist", text: "Import your Steam wishlist or add games. Pick the rule for each one: any sale, a percent off, a price or an all-time low." },
       { href: "#/library", title: "Library", text: "What you own and paid, your backlog, spend, challenge and trophies." },
       { href: "#/steam", title: "Steam", text: "Link your public profile for hours played, hours tracked over time and a taste profile." },
+      { href: "#/free", title: "Free games", text: "Everything free to claim right now on Steam, Epic, GOG and more, with store filters." },
       { href: "#/alerts", title: "Alert settings", text: "Choose DM or a server channel, quiet hours, a weekly digest and free game alerts." },
       { href: "#/notifications", title: "Notifications", text: "A copy of every alert, so a missed DM is never lost." },
       { href: "#/help", title: "Help and support", text: "The full command list lives in Help, and Support reaches a human. Press / anywhere to search." }
@@ -2432,7 +2452,7 @@
     const st = () => me.settings;
     const CARDS = [
       { id: "wishlist", icon: "💸", title: "Wishlist sale alerts", text: "Watch games and hear about sales, lows and bundles.", href: "#/wishlist", status: () => [me.games > 0, me.games + " game" + (me.games === 1 ? "" : "s") + " watched"], toggle: { key: "paused", label: "Alerts on", invert: true } },
-      { id: "free", icon: "🎁", title: "Free game alerts", text: "Told when a game is free on Steam, Epic, GOG and more.", href: "#/alerts", status: () => [st().free, st().free ? "On" : "Off"], toggle: { key: "free", label: "Turn on" } },
+      { id: "free", icon: "🎁", title: "Free game alerts", text: "Told when a game is free on Steam, Epic, GOG and more. The free games page lists them all.", href: "#/free", status: () => [st().free, st().free ? "On" : "Off"], toggle: { key: "free", label: "Turn on" } },
       { id: "digest", icon: "📰", title: "Weekly digest", text: "One summary of your wishlist sales each week.", href: "#/alerts", status: () => [st().digest, st().digest ? "On" : "Off"], toggle: { key: "digest", label: "Turn on" } },
       { id: "bundles", icon: "📦", title: "Bundle and giveaway alerts", text: "When a wishlist game is in a bundle or given away.", href: "#/alerts", status: () => [st().bundles, st().bundles ? "On" : "Off"], toggle: { key: "bundles", label: "Turn on" } },
       { id: "share", icon: "👥", title: "Share with your server", text: "Group alerts, the savings leaderboard and the backlog league.", href: "#/alerts", status: () => [st().share, st().share ? "Opted in" : "Not shared"], toggle: { key: "share", label: "Share" } },
@@ -2498,12 +2518,29 @@
 
   // Pictures from any https address for your own My page and profile card. Kept only on this device; nothing is uploaded or shared.
   const ART_KEY = "svc_myart";
-  function loadMyArt() { try { const v = JSON.parse(localStorage.getItem(ART_KEY) || "{}"); return { banner: okImage(v.banner) ? v.banner : "", avatar: okImage(v.avatar) ? v.avatar : "" }; } catch { return { banner: "", avatar: "" }; } }
+  function loadMyArt() { try { const v = JSON.parse(localStorage.getItem(ART_KEY) || "{}"); return { banner: okImage(v.banner) ? v.banner : "", avatar: okImage(v.avatar) ? v.avatar : "", auto: v.auto === true }; } catch { return { banner: "", avatar: "", auto: false }; } }
+  function saveMyArt(art) { try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* per-device only */ } }
+  // Steam art for the pictures. A wide hero for the banner (with the store header as a fallback) and the Steam profile picture.
+  const heroUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/library_hero.jpg`;
+  const headerUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/header.jpg`;
+  // After a sync or link: fill the picture and banner from Steam. Only empty slots are filled, and without `force` only once,
+  // so pictures you cleared or changed yourself stay as you left them.
+  function autoFillArt(card, stats, force = false) {
+    const art = loadMyArt();
+    if (art.auto && !force) return false;
+    let changed = false;
+    if (!art.avatar && okImage(card?.avatar)) { art.avatar = card.avatar; changed = true; }
+    const top = stats?.mostPlayed?.[0]?.appid;
+    if (!art.banner && top) { art.banner = heroUrl(top); changed = true; }
+    art.auto = true; saveMyArt(art);
+    return changed;
+  }
   function okImage(u) { if (!u) return false; try { const x = new URL(u); return x.protocol === "https:" && !x.username && !x.password && u.length <= 500; } catch { return false; } }
   function myBanner(art) {
     if (!art.banner) return "";
     const img = h("img", { class: "mp-banner", src: art.banner, alt: "", referrerpolicy: "no-referrer", loading: "lazy" });
-    img.addEventListener("error", () => img.remove());
+    // Not every game has a wide hero image; fall back to its store header before giving up.
+    img.addEventListener("error", () => { const m = /\/steam\/apps\/(\d+)\/library_hero\.jpg$/.exec(img.src); if (m && !img.dataset.tried) { img.dataset.tried = "1"; img.src = headerUrl(m[1]); } else img.remove(); });
     return img;
   }
   function drawArt(box, art) {
@@ -2511,8 +2548,8 @@
     const avatar = h("input", { type: "url", maxlength: "500", placeholder: "https://… (a square picture)", value: art.avatar });
     const apply = h("button", { class: "btn blue", text: "Save pictures", onclick: () => {
       for (const [v, n] of [[banner.value.trim(), "banner"], [avatar.value.trim(), "picture"]]) if (v && !okImage(v)) return toast("The " + n + " link must start with https://", "error");
-      art.banner = banner.value.trim(); art.avatar = avatar.value.trim();
-      try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* per-device only */ }
+      art.banner = banner.value.trim(); art.avatar = avatar.value.trim(); art.auto = true;
+      saveMyArt(art);
       toast("Saved on this device.", "ok"); myPageView();
     } });
     box.replaceChildren(h("summary", { text: "Your pictures (banner and profile card picture)" }),
@@ -2530,32 +2567,67 @@
     const wrap = h("div", { class: "panel" }, h("h3", { text: "Profile card" }), out);
     api("/api/profile/card").then(d => {
       const canvas = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": "Your profile card" });
-      let pic = null;
+      let pic = null, banner = null;
       const myArt = loadMyArt();
-      if (myArt.avatar) { const im = new Image(); im.crossOrigin = "anonymous"; im.referrerPolicy = "no-referrer"; im.onload = () => { pic = im; draw(); }; im.src = myArt.avatar; }
+      const loadImg = (src, done, fallback) => { const im = new Image(); im.crossOrigin = "anonymous"; im.referrerPolicy = "no-referrer"; im.onload = () => { done(im); draw(); }; im.onerror = () => { if (fallback) loadImg(fallback, done); }; im.src = src; };
+      if (myArt.avatar) loadImg(myArt.avatar, im => { pic = im; });
+      if (myArt.banner) { const m = /\/steam\/apps\/(\d+)\/library_hero\.jpg$/.exec(myArt.banner); loadImg(myArt.banner, im => { banner = im; }, m ? headerUrl(m[1]) : null); }
+      const rr = (x, px, py, w, hh, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + hh, r); x.arcTo(px + w, py + hh, px, py + hh, r); x.arcTo(px, py + hh, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
+      const cover = (x, im, px, py, w, hh) => { const k = Math.max(w / im.width, hh / im.height), dw = im.width * k, dh = im.height * k; x.drawImage(im, px + (w - dw) / 2, py + (hh - dh) / 2, dw, dh); };
       const draw = () => {
         const [bg, ac] = THEMES[opt.theme] || THEMES.steam, x = canvas.getContext("2d");
-        x.fillStyle = bg; x.fillRect(0, 0, 1200, 630);
-        x.fillStyle = ac; x.fillRect(0, 0, 1200, 10);
-        x.beginPath(); x.arc(110, 120, 52, 0, Math.PI * 2); x.fill();
-        if (pic) { x.save(); x.beginPath(); x.arc(110, 120, 52, 0, Math.PI * 2); x.clip(); x.drawImage(pic, 58, 68, 104, 104); x.restore(); }
-        else { x.fillStyle = bg; x.font = "700 56px system-ui, sans-serif"; x.textAlign = "center"; x.fillText((d.name || "?").slice(0, 1).toUpperCase(), 110, 140); x.textAlign = "left"; }
-        x.fillStyle = "#fff"; x.font = "700 56px system-ui, sans-serif"; x.fillText((d.name || "Gamer").slice(0, 22), 190, 122);
-        x.fillStyle = ac; x.font = "600 26px system-ui, sans-serif"; x.fillText("GAME LIBRARY", 190, 160);
+        const BH = 230;
+        // Background: a soft vertical fade with an accent glow in the corner.
+        const g = x.createLinearGradient(0, 0, 0, 630); g.addColorStop(0, bg); g.addColorStop(1, "#0b0d12");
+        x.fillStyle = g; x.fillRect(0, 0, 1200, 630);
+        const glow = x.createRadialGradient(1100, 80, 10, 1100, 80, 520); glow.addColorStop(0, ac + "33"); glow.addColorStop(1, ac + "00");
+        x.fillStyle = glow; x.fillRect(0, 0, 1200, 630);
+        // Banner: the picture if there is one, else a diagonal accent pattern. A dark fade keeps the name readable.
+        x.save(); x.beginPath(); x.rect(0, 0, 1200, BH); x.clip();
+        if (banner) cover(x, banner, 0, 0, 1200, BH);
+        else { const bg2 = x.createLinearGradient(0, 0, 1200, BH); bg2.addColorStop(0, ac + "55"); bg2.addColorStop(1, ac + "11"); x.fillStyle = bg2; x.fillRect(0, 0, 1200, BH); x.strokeStyle = ac + "22"; x.lineWidth = 2; for (let n = -BH; n < 1300; n += 36) { x.beginPath(); x.moveTo(n, BH); x.lineTo(n + BH, 0); x.stroke(); } }
+        const fade = x.createLinearGradient(0, 0, 0, BH); fade.addColorStop(0, "rgba(0,0,0,0.10)"); fade.addColorStop(1, "rgba(11,13,18,0.92)");
+        x.fillStyle = fade; x.fillRect(0, 0, 1200, BH); x.restore();
+        x.fillStyle = ac; x.fillRect(0, BH - 3, 1200, 3);
+        // Avatar: a ring in the accent colour overlapping the banner.
+        const ax = 140, ay = BH + 6, R = 72;
+        x.beginPath(); x.arc(ax, ay, R + 8, 0, Math.PI * 2); x.fillStyle = "#0b0d12"; x.fill();
+        x.beginPath(); x.arc(ax, ay, R + 4, 0, Math.PI * 2); x.fillStyle = ac; x.fill();
+        x.save(); x.beginPath(); x.arc(ax, ay, R, 0, Math.PI * 2); x.clip();
+        if (pic) cover(x, pic, ax - R, ay - R, R * 2, R * 2);
+        else { x.fillStyle = bg; x.fillRect(ax - R, ay - R, R * 2, R * 2); x.fillStyle = ac; x.font = "700 72px system-ui, sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText((d.name || "?").slice(0, 1).toUpperCase(), ax, ay + 4); x.textAlign = "left"; x.textBaseline = "alphabetic"; }
+        x.restore();
+        // Name and subtitle.
+        x.fillStyle = "#fff"; x.font = "700 52px system-ui, sans-serif"; x.fillText((d.name || "Gamer").slice(0, 24), 250, ay + 36);
+        x.fillStyle = ac; x.font = "600 22px system-ui, sans-serif"; x.fillText("GAME LIBRARY", 252, ay + 70);
+        // Stat tiles in one row.
         const stats = [];
         if (opt.games) stats.push([String(d.games), "games"]);
         if (opt.finished) stats.push([String(d.finished), "finished"]);
         if (opt.hours && d.hours) stats.push([d.hours.toLocaleString() + " h", "played"]);
-        if (opt.saved && d.savedPct !== null) stats.push([d.savedPct + "%", "saved vs MSRP"]);
+        if (opt.saved && d.savedPct !== null) stats.push([d.savedPct + "%", "saved vs full price"]);
         if (opt.streak && d.bestStreak) stats.push([d.streak + " / " + d.bestStreak, "month streak / best"]);
-        stats.forEach(([v, k], n) => {
-          const sx = 60 + (n % 3) * 380, sy = 270 + Math.floor(n / 3) * 130;
-          x.fillStyle = "#fff"; x.font = "700 72px system-ui, sans-serif"; x.fillText(v, sx, sy);
-          x.fillStyle = "#8ba4b6"; x.font = "24px system-ui, sans-serif"; x.fillText(k, sx, sy + 34);
+        const n = stats.length, gap = 18, left = 60, tw = n ? (1080 - gap * (n - 1)) / n : 0, ty = 340, th = 150;
+        stats.forEach(([v, k], i) => {
+          const tx = left + i * (tw + gap);
+          rr(x, tx, ty, tw, th, 18); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill();
+          x.strokeStyle = "rgba(255,255,255,0.10)"; x.lineWidth = 1.5; x.stroke();
+          x.fillStyle = ac; rr(x, tx + 22, ty + 20, 34, 5, 2.5); x.fill();
+          x.fillStyle = "#fff"; x.font = `700 ${n > 4 ? 46 : 56}px system-ui, sans-serif`; x.fillText(v, tx + 22, ty + 90, tw - 40);
+          x.fillStyle = "#9fb3c4"; x.font = "22px system-ui, sans-serif"; x.fillText(k, tx + 22, ty + 124, tw - 40);
         });
-        if (opt.badges && d.badges.length) { x.font = "44px system-ui, sans-serif"; d.badges.slice(0, 8).forEach((b, n) => x.fillText(b.icon, 60 + n * 64, 560)); }
-        if (opt.genres && d.genres.length) { x.fillStyle = ac; x.font = "600 24px system-ui, sans-serif"; x.textAlign = "right"; x.fillText(d.genres.join(" · "), 1140, 560); x.textAlign = "left"; }
-        x.fillStyle = "#5c7080"; x.font = "18px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 604);
+        // Badges and genres.
+        const by = 518;
+        if (opt.badges && d.badges.length) {
+          const icons = d.badges.slice(0, 8), bw = 24 + icons.length * 52;
+          rr(x, 60, by, bw, 56, 28); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke();
+          x.font = "30px system-ui, sans-serif"; x.fillStyle = "#fff"; icons.forEach((b, i) => x.fillText(b.icon, 78 + i * 52, by + 39));
+        }
+        if (opt.genres && d.genres.length) {
+          x.font = "600 21px system-ui, sans-serif"; let gx = 1140;
+          for (const gname of [...d.genres].slice(0, 3).reverse()) { const w = x.measureText(gname).width + 34; gx -= w; rr(x, gx, by + 8, w, 40, 20); x.fillStyle = ac + "26"; x.fill(); x.strokeStyle = ac + "66"; x.stroke(); x.fillStyle = ac; x.fillText(gname, gx + 17, by + 35); gx -= 12; }
+        }
+        x.fillStyle = "#5c7080"; x.font = "17px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 614);
       };
       const box = (key, label) => { const c = h("input", { type: "checkbox", checked: opt[key] }); c.addEventListener("change", () => { opt[key] = c.checked; keep(); draw(); }); return h("label", { class: "check" }, c, label); };
       const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(opt)); } catch { /* per-device */ } };
@@ -2814,7 +2886,7 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, deals: dealsView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     renderChrome();

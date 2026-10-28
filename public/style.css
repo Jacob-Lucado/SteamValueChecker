@@ -558,3 +558,20 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .sc-info h3 { margin: 0 0 2px; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-size: 20px; color: var(--text); }
 .sc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .sc-playing { color: var(--good, #3ddc97); font-weight: 600; font-size: 14px; margin: 2px 0; }
+.free-bar { justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+.free-bar .tabs { margin: 0; }
+.free-bar select { min-width: 160px; }
+.free-info .chip { align-self: flex-start; }
+
+/* Game page spacing */
+.next-art { margin: 6px 0 18px; }
+.game-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 20px; }
+.game-actions > * { flex: 0 0 auto; }
+.game-actions + .grid { margin-bottom: 20px; }
+.grid.four + .notice { margin: 0 0 20px; }
+.grid.four + .panel, .notice + .panel { margin-top: 0; }
+.panel { margin-bottom: 20px; }
+.panel > h3:first-child { margin-bottom: 14px; }
+.game-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.game-line:first-of-type { border-top: 0; padding-top: 0; }
+.game-line:last-child { padding-bottom: 2px; }
