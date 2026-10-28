@@ -902,3 +902,20 @@ test("Calendar: .ics text is escaped and folded, and events are validated", asyn
     assert.throws(() => cleanEvent({ title: "x", startsAt: now + 1e6, remindMin: 7 }, now), /Reminder/);
     assert.equal(cleanEvent({ title: " Hi  there ", startsAt: now + 1e6 }, now).title, "Hi there");
 });
+
+test("extension store overlay: prices and owned/wishlist state for one Steam app, by link code", async () => {
+    const t = await signedIn({ itadExtra: { lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, i === "app/999" ? null : "id-" + i.slice(4)])) } });
+    const made = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+    const get = (code, q) => fetch(t.base + "/api/grabber/game?" + q, { headers: code ? { Authorization: `Bearer ${code}` } : {} }).then(async r => ({ status: r.status, data: await r.json() }));
+    assert.equal((await get(null, "appid=10")).status, 401);
+    assert.equal((await get(made.data.token, "appid=abc")).status, 400);
+    const hit = await get(made.data.token, "appid=10");
+    assert.equal(hit.status, 200);
+    assert.equal(hit.data.found, true); assert.equal(hit.data.atl, 5); assert.equal(hit.data.owned, false);
+    t.advance(2_000);
+    t.db.upsertLibrary("u1", [{ itad_id: "id-10", title: "Counter", paid: null }]);
+    assert.equal((await get(made.data.token, "appid=10")).data.owned, true);
+    t.advance(2_000);
+    assert.equal((await get(made.data.token, "appid=999")).data.found, false);
+    await t.close();
+});

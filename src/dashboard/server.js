@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { viewRows, findItem, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
-import { importWishlist, SteamError } from "../steam.js";
+import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
 import { ItadError } from "../itad.js";
 import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
@@ -30,6 +30,7 @@ import { calendarEntries, toIcs, KINDS } from "../calendar.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
+import { summarize } from "../report.js";
 import { upcomingSales, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext } from "../steamlib.js";
@@ -59,7 +60,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbertoken: 5_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, grabbertoken: 5_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -1396,6 +1397,28 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 const r = await importLibrary(db, itad, uid, clean);
                 db.noteGrabberUse(uid);
                 return json(res, 200, { added: r.added, updated: r.updated, notFound: r.notFound.length, skippedForLimit: r.skippedForLimit });
+            }
+
+            if (key === "GET /api/grabber/game") {
+                // Called by the extension on a Steam store page, with the member's link code. Returns prices and whether they own or wishlisted it.
+                const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
+                const uid = m ? db.grabberUserForToken(m[1]) : null;
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /library grabber.");
+                const appid = Number(url.searchParams.get("appid"));
+                if (!Number.isInteger(appid) || appid <= 0 || appid > 1e9) throw new HttpError(400, "Bad app id.");
+                cooldown(uid, "grabbergame");
+                const user = db.getUser(uid);
+                const map = await itad.lookupShopIds(STEAM_SHOP_ID, [`app/${appid}`]);
+                const id = map.get(`app/${appid}`);
+                if (!id) return json(res, 200, { found: false });
+                const prices = await itad.getPrices([id], user?.region ?? "US");
+                const sum = summarize(prices.get(id), { majorOnly: user?.stores === "major" });
+                return json(res, 200, {
+                    found: true, currency: sum.currency, msrp: sum.msrp, steam: sum.steam, cut: sum.cut,
+                    best: sum.best ? { price: sum.best.price, shop: sum.best.shop } : null, atl: sum.atl, low1y: sum.low1y,
+                    owned: db.listLibrary(uid).some(g => g.itad_id === id),
+                    wishlisted: db.listItems(uid).some(g => g.itad_id === id)
+                });
             }
 
             const handler = routes[key];
