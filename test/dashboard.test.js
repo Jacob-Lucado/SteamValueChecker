@@ -622,6 +622,34 @@ test("visit counter for the FanaticalGrabber page: only that origin counts, one 
 
 const XML = '<gamesList><games><game><appID>10</appID><name><![CDATA[Counter]]></name><hoursOnRecord>12.5</hoursOnRecord></game></games></gamesList>';
 
+const PROFILE_XML = '<profile><steamID64>76561198000000000</steamID64><steamID><![CDATA[Jacob <b>L</b>]]></steamID><onlineState>online</onlineState><privacyState>public</privacyState><avatarFull><![CDATA[https://avatars.steamstatic.com/abc_full.jpg]]></avatarFull><memberSince>March 3, 2012</memberSince><location>Roanoke, Virginia</location></profile>';
+test("Steam page: profile card for the linked account, and a look-up of anyone's public profile", async () => {
+    const fetched = [];
+    const t = await signedIn({
+        extra: { steamFetch: async url => { fetched.push(url); const xml = /\/profiles\/\d+\/\?xml=1/.test(url) ? PROFILE_XML : XML; return { ok: true, status: 200, text: async () => xml }; } },
+        itadExtra: { lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, "id-" + i.slice(4)])) }
+    });
+    try {
+        await t.request("/api/steam/link", { method: "POST", body: { profile: "76561198000000000" } });
+        const v = await t.request("/api/steam");
+        assert.equal(v.data.card.name, "Jacob <b>L</b>", "sent as plain text; the page never treats it as HTML");
+        assert.equal(v.data.card.avatar, "https://avatars.steamstatic.com/abc_full.jpg");
+        assert.equal(v.data.card.location, "Roanoke, Virginia");
+        const n = fetched.filter(u => /\?xml=1/.test(u) && /profiles\/76561198000000000\/\?xml=1/.test(u)).length;
+        await t.request("/api/steam");
+        assert.equal(fetched.filter(u => /profiles\/76561198000000000\/\?xml=1/.test(u)).length, n, "the card is cached");
+        const l = await t.request("/api/steam/lookup?profile=" + encodeURIComponent("76561198000000001"));
+        assert.equal(l.status, 200);
+        assert.equal(l.data.stats.games, 1); assert.equal(l.data.stats.mostPlayed[0].title, "Counter"); assert.equal(l.data.mine, false);
+        assert.equal(t.db.listLibrary("u1").length, 1, "looking someone up stores nothing");
+        assert.equal((await t.request("/api/steam/lookup?profile=76561198000000001")).status, 429, "lookups are rate limited");
+        t.advance(9_000);
+        assert.equal((await t.request("/api/steam/lookup?profile=!!")).status, 400);
+        t.advance(9_000);
+        assert.equal((await t.request("/api/steam/lookup?profile=76561198000000000")).data.mine, true);
+    } finally { await t.close(); }
+});
+
 test("Steam linking: link, view, sync and unlink from the dashboard", async () => {
     const t = await signedIn({
         extra: { steamFetch: async () => ({ ok: true, status: 200, text: async () => XML }) },

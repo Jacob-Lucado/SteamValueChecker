@@ -120,6 +120,29 @@ export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl 
     return { checked, newlyFinished, remaining: Math.max(0, todo.length - i), stopped };
 }
 
+/** The public profile card from the community XML: name, picture, location, member since. Null when Steam has nothing to show. */
+export function parseProfileXml(xml, steamid) {
+    const tag = n => { const m = new RegExp(`<${n}>\\s*(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([^<]*))\\s*</${n}>`).exec(String(xml ?? "")); const v = (m?.[1] ?? m?.[2] ?? "").trim(); return v || null; };
+    const name = tag("steamID");
+    if (!name) return null;
+    const pic = tag("avatarFull");
+    return {
+        steamid: String(steamid), name: name.slice(0, 64),
+        avatar: pic && /^https:\/\/[\w.-]+\//.test(pic) ? pic : null,
+        url: `https://steamcommunity.com/profiles/${steamid}`,
+        realName: tag("realname")?.slice(0, 64) ?? null, location: tag("location")?.slice(0, 80) ?? null,
+        memberSince: tag("memberSince")?.slice(0, 30) ?? null, status: tag("onlineState") ?? null,
+        headline: tag("headline")?.slice(0, 120) ?? null, privacy: tag("privacyState") ?? null
+    };
+}
+
+export async function fetchProfileCard(steamid, fetchImpl = globalThis.fetch) {
+    try {
+        const res = await get(fetchImpl, `https://steamcommunity.com/profiles/${steamid}/?xml=1`);
+        return res.ok ? parseProfileXml(await res.text(), steamid) : null;
+    } catch { return null; }
+}
+
 /** Profile link, custom name or SteamID64 -> SteamID64. */
 export async function resolveProfile(input, fetchImpl = globalThis.fetch) {
     const parsed = parseProfileInput(input);

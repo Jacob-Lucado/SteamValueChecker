@@ -40,7 +40,7 @@ import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
 import { upcomingSales, salesBefore, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
-import { resolveProfile, syncSteamLibrary, playStats, steamNext } from "../steamlib.js";
+import { resolveProfile, syncSteamLibrary, playStats, steamNext, fetchProfileCard, fetchOwnedGames } from "../steamlib.js";
 import { bundleCheck } from "../bundle.js";
 import { salePrep, saleRecap } from "../saleprep.js";
 import { isDlc } from "../freemenu.js";
@@ -67,7 +67,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -138,6 +138,16 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         if (!size) return {};
         try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }
         catch { throw new HttpError(400, "Bad request."); }
+    }
+
+    // Public profile cards are cached for ten minutes so the Steam page does not ask Steam every time.
+    const cardCache = new Map();
+    async function profileCard(steamid) {
+        const hit = cardCache.get(steamid);
+        if (hit && now() - hit.at < 600_000) return hit.card;
+        const card = await fetchProfileCard(steamid, steamFetch);
+        if (card) { if (cardCache.size > 500) cardCache.clear(); cardCache.set(steamid, { at: now(), card }); }
+        return card;
     }
 
     function sweep() {
@@ -749,7 +759,22 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const link = db.getSteamLink(s.userId);
             if (!link) return { link: null };
             const view = await libraryView(db, itad, u, { snapshot: false });
-            return { link, currency: view.currency, stats: playStats(view.rows.filter(r => r.appid)) };
+            return { link, currency: view.currency, stats: playStats(view.rows.filter(r => r.appid)), card: await profileCard(link.steamid) };
+        },
+
+        // Look at anyone's PUBLIC Steam profile without linking or storing anything: their card and play stats.
+        "GET /api/steam/lookup": async (req, _b, url) => {
+            const s = session(req);
+            userRow(s);
+            const undo = cooldown(s.userId, "steamlookup");
+            try {
+                const steamid = await resolveProfile(String(url.searchParams.get("profile") ?? ""), steamFetch);
+                const [card, games] = await Promise.all([profileCard(steamid), fetchOwnedGames(steamid, { apiKey: config.steamApiKey ?? null, fetchImpl: steamFetch })]);
+                const played = games.filter(g => g.minutes > 0), barely = games.filter(g => g.minutes < 60);
+                return { card: card ?? { steamid, name: "Steam user " + steamid, avatar: null, url: `https://steamcommunity.com/profiles/${steamid}` }, mine: db.getSteamLink(s.userId)?.steamid === steamid,
+                    stats: { games: games.length, playedGames: played.length, totalMinutes: games.reduce((t, g) => t + g.minutes, 0), barely: barely.length,
+                        mostPlayed: [...played].sort((a, b) => b.minutes - a.minutes).slice(0, 8).map(g => ({ appid: g.appid, title: g.name || "App " + g.appid, minutes: g.minutes })) } };
+            } catch (err) { undo(); throw err; }
         },
 
         // What to play next from the Steam library. `skip` (comma-separated ids already offered) makes "pick another" fresh.

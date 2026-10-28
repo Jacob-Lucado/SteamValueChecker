@@ -1156,6 +1156,19 @@
       h("div", { class: "row" }, year, go), out);
   }
 
+  // A Steam profile card: picture, name, where and since when, and a link to the real profile. `actions` are extra buttons.
+  function steamProfileCard(c, ...actions) {
+    const meta = [c.realName, c.location, c.memberSince ? "On Steam since " + c.memberSince : null].filter(Boolean).join(" · ");
+    const dot = { online: "🟢 Online", offline: "⚫ Offline", "in-game": "🎮 In a game" }[c.status];
+    return h("div", { class: "panel sc-card" },
+      c.avatar ? h("img", { class: "sc-avatar", src: c.avatar, alt: "", width: "72", height: "72", referrerpolicy: "no-referrer", loading: "lazy" }) : h("div", { class: "sc-avatar sc-none", text: "👤" }),
+      h("div", { class: "sc-info" },
+        h("h3", { text: c.name }),
+        meta ? h("div", { class: "muted small", text: meta }) : null,
+        dot || c.headline ? h("div", { class: "muted small", text: [dot, c.headline].filter(Boolean).join(" · ") }) : null),
+      h("div", { class: "sc-actions" }, h("a", { class: "btn gray small", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Open on Steam ↗" }), ...actions));
+  }
+
   async function steamView() {
     const out = h("div", { class: "muted", text: "Loading…" });
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
@@ -1163,9 +1176,30 @@
       const r = await api("/api/steam/link", { profile: profile.value });
       toast(`Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + `. Added ${r.added}, updated ${r.updated}.` + (r.unmatched ? ` ${r.unmatched} had no price match.` : ""), "ok"); load();
     }) });
+    // Look up anyone's public profile. Nothing is saved; it just shows their card and play stats.
+    const found = h("div");
+    const q = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200", "aria-label": "Steam profile to look up" });
+    const findBtn = h("button", { class: "btn blue", text: "Look up", onclick: () => busy(findBtn, async () => {
+      const r = await api("/api/steam/lookup?profile=" + encodeURIComponent(q.value));
+      const st = r.stats, tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
+      const linkIt = !state.steamLinked && !r.mine ? h("button", { class: "btn green small", type: "button", text: "Link this profile", onclick: e => busy(e.currentTarget, async () => { await api("/api/steam/link", { profile: r.card.steamid }); toast("Linked.", "ok"); load(); }) }) : null;
+      found.replaceChildren(steamProfileCard(r.card, linkIt),
+        h("div", { class: "grid four" }, tile("Games", String(st.games), st.playedGames + " played"), tile("Hours played", hoursText(st.totalMinutes)), tile("Barely played", String(st.barely), "under an hour each")),
+        st.mostPlayed.length ? h("div", { class: "panel" }, h("h3", { text: "Most played" }), h("ul", { class: "plain" }, st.mostPlayed.map(g => h("li", {}, h("b", { text: g.title }), " ", h("span", { class: "muted", text: hoursText(g.minutes) }))))) : null,
+        h("p", { class: "muted small", text: "Only what their public profile shows. Nothing is saved." }));
+    }) });
+    q.addEventListener("keydown", e => { if (e.key === "Enter") findBtn.click(); });
+    const lookup = h("div", {}, h("div", { class: "panel" }, h("h3", { text: "Look up a profile" }), field("Any public Steam profile", q), h("p"), findBtn,
+      h("p", { class: "muted small", text: "See someone's card, games and hours. Nothing is saved." })), found);
+    const linkPanel = h("div", { class: "panel" }, h("h3", { text: "Link a profile" }), field("Steam profile", profile), h("p"), linkBtn,
+      h("p", { class: "muted small", text: "Set Game details to Public in Steam's privacy settings. Only the public ID and your games with playtime are stored." }));
+    const slot = h("div");
     async function load() {
       try {
         const d = await api("/api/steam");
+        state.steamLinked = !!d.link;
+        // Linked: the look-up takes the link box's place. Not linked: link first, look-up below.
+        slot.replaceChildren(...(d.link ? [lookup] : [linkPanel, lookup]));
         if (!d.link) { out.className = ""; out.replaceChildren(h("div", { class: "empty", text: "No Steam profile linked yet. Your Game details must be public on Steam for this to work." })); return; }
         const st = d.stats, cur = d.currency;
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
@@ -1194,7 +1228,9 @@
         nextBtn.addEventListener("click", () => busy(nextBtn, pickNext));
 
         out.className = "";
+        const quickUnlink = h("button", { class: "btn red small", type: "button", text: "Unlink", title: "Unlink this profile (your games stay unless you remove them under Manage)", onclick: () => { if (confirm("Unlink this Steam profile? Your library games stay.")) busy(quickUnlink, async () => { await api("/api/steam/unlink", { removeGames: false }); toast("Unlinked.", "ok"); load(); }); } });
         out.replaceChildren(
+          d.card ? steamProfileCard(d.card, quickUnlink) : null,
           h("div", { class: "grid four" },
             tile("Games", String(st.games), st.playedGames + " played"),
             tile("Hours played", hoursText(st.totalMinutes)),
@@ -1220,9 +1256,7 @@
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     app.replaceChildren(pageHead("Steam", "Link your public Steam profile to fill your library automatically: your games, hours played, what you never played and what to play next."),
-      h("div", { class: "panel" }, h("h3", { text: "Link a profile" }), field("Steam profile", profile), h("p"), linkBtn,
-        h("p", { class: "muted small", text: "Set Game details to Public in Steam's privacy settings. Only the public ID and your games with playtime are stored." })),
-      out);
+      slot, out);
     load();
   }
 

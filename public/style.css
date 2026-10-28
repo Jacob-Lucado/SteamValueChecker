@@ -549,3 +549,11 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .war-row:last-child { border-bottom: 0; }
 .war-row { display: block; padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .fr-actions { margin-top: 10px; }
+
+/* Steam profile card */
+.sc-card { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.sc-avatar { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; flex: none; border: 1px solid var(--line); }
+.sc-none { display: grid; place-items: center; font-size: 30px; background: var(--panel2, rgba(255,255,255,.05)); }
+.sc-info { flex: 1 1 200px; min-width: 0; }
+.sc-info h3 { margin: 0 0 2px; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-size: 20px; color: var(--text); }
+.sc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
