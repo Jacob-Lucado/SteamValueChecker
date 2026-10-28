@@ -185,6 +185,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "seen_version", "TEXT");
     addColumn("users", "lang", "TEXT NOT NULL DEFAULT 'en'");
     addColumn("users", "welcomed", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("users", "tipped", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "free_dlc", "INTEGER NOT NULL DEFAULT 1");
     addColumn("giveaways", "require_boost", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "starts_at", "INTEGER");
@@ -233,7 +234,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
     const getUser = id => clean(get("SELECT * FROM users WHERE discord_id = ?", id));
 
-    const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed",
+    const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
         "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free", "free_dlc"
     ]);

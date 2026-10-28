@@ -792,3 +792,16 @@ test("backlog league ranks opted-in members by games finished this month; badges
     assert.equal(b.marathon.tier, "Silver"); assert.equal(b.value.tier, "Bronze");
     assert.equal(b.clean.tier, "Gold");
 });
+
+test("quick start tip: short, mentions the first steps and the dashboard only when there is one", async () => {
+    const { quickStart } = await import("../src/text.js");
+    const a = quickStart("https://x.example"), b = quickStart();
+    assert.match(a.description, /wishlist import/); assert.match(a.description, /x\.example\/#\/mypage/);
+    assert.doesNotMatch(b.description, /https?:/);
+    assert.ok(a.description.length < 700);
+    const db = openDb(":memory:");
+    db.ensureUser("u9", null);
+    assert.equal(db.getUser("u9").tipped, 0);
+    db.updateUser("u9", { tipped: 1 });
+    assert.equal(db.getUser("u9").tipped, 1);
+});

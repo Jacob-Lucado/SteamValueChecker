@@ -525,3 +525,10 @@ input.short-num { width: 6em; }
 .mp-tools { display: flex; gap: 4px; margin-top: auto; padding-top: 6px; }
 
 .mp-banner { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: var(--radius); margin-bottom: 12px; }
+
+.tour { position: fixed; right: 18px; bottom: 18px; z-index: 60; max-width: min(360px, calc(100vw - 36px)); }
+.tour-card { background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.tour-card h3 { text-transform: none; letter-spacing: 0; font-size: 17px; color: var(--white); margin: 4px 0 6px; }
+.tour-card p { margin: 0 0 12px; }
+.tour-card .row > * { flex: 0 0 auto; }
+.tour-ring { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 8px; }

@@ -2310,6 +2310,50 @@
   }
 
   // My page: every feature as a card with its status, a switch where one is simple, and a link to set it up. Cards can be pinned, hidden and reordered (kept on this device).
+  // First-login tour: a short card that points at the real menu items one at a time. Shown once per account; "Take the tour" replays it.
+  function startTour() {
+    const steps = [
+      { title: "Welcome", text: "A 30 second look around. Use the arrow keys or the buttons, and Esc to leave any time." },
+      { sel: "#nav", title: "The menu", text: "Pages are grouped: Games, Servers, Account and Help. Open a group to see what is inside." },
+      { href: "#/mypage", title: "My page", text: "Every feature as a card. Switch the simple ones on here, pin the ones you use and make a profile card." },
+      { href: "#/wishlist", title: "Wishlist", text: "Import your Steam wishlist or add games. Pick the rule for each one: any sale, a percent off, a price or an all-time low." },
+      { href: "#/library", title: "Library", text: "What you own and paid, your backlog, spend, challenge and trophies." },
+      { href: "#/steam", title: "Steam", text: "Link your public profile for hours played, your year in games and a taste profile." },
+      { href: "#/alerts", title: "Alert settings", text: "Choose DM or a server channel, quiet hours, a weekly digest and free game alerts." },
+      { href: "#/notifications", title: "Notifications", text: "A copy of every alert, so a missed DM is never lost." },
+      { href: "#/help", title: "Help and support", text: "The full command list lives in Help, and Support reaches a human. Press / anywhere to search." }
+    ];
+    document.getElementById("tour")?.remove();
+    const root = h("div", { id: "tour", class: "tour", role: "dialog", "aria-modal": "false", "aria-labelledby": "tour-title" });
+    let n = 0, ringed = null;
+    const finish = () => {
+      root.remove(); document.removeEventListener("keydown", onKey, true); if (ringed) ringed.classList.remove("tour-ring");
+      if (state.me) { state.me.tour = false; api("/api/tour/done", {}).catch(() => {}); }
+    };
+    function show() {
+      const s = steps[n];
+      if (ringed) ringed.classList.remove("tour-ring");
+      const target = s.sel ? document.querySelector(s.sel) : s.href ? document.querySelector('#nav a[href="' + s.href + '"]') : null;
+      ringed = target; if (target) { target.classList.add("tour-ring"); target.scrollIntoView({ block: "nearest" }); }
+      const back = h("button", { class: "btn gray small", type: "button", text: "Back", disabled: n === 0, onclick: () => { n--; show(); } });
+      const next = h("button", { class: "btn blue small", type: "button", text: n === steps.length - 1 ? "Done" : "Next", onclick: () => { if (n === steps.length - 1) finish(); else { n++; show(); } } });
+      const skip = h("button", { class: "btn gray small", type: "button", text: "Skip", onclick: finish });
+      root.replaceChildren(h("div", { class: "tour-card" },
+        h("div", { class: "muted small", text: "Step " + (n + 1) + " of " + steps.length }),
+        h("h3", { id: "tour-title", text: s.title }), h("p", { text: s.text }),
+        h("div", { class: "row" }, skip, back, next)));
+      next.focus();
+    }
+    function onKey(e) {
+      if (e.key === "Escape") { e.preventDefault(); finish(); }
+      else if (e.key === "ArrowRight" && n < steps.length - 1) { n++; show(); }
+      else if (e.key === "ArrowLeft" && n > 0) { n--; show(); }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.append(root);
+    show();
+  }
+
   async function myPageView() {
     const grid = h("div", { class: "mp-grid" });
     const KEY = "svc_mypage";
@@ -2382,7 +2426,8 @@
     }
     const bar = h("div", { class: "row" });
     const on = CARDS.filter(c => c.status && c.status()[0]).length, tot = CARDS.filter(c => c.status).length;
-    app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), myBanner(art), artBox, bar, grid);
+    const tourBtn = h("button", { class: "btn gray small", type: "button", text: "Take the tour", onclick: startTour });
+    app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), tourBtn, myBanner(art), artBox, bar, grid);
     drawArt(artBox, art);
     draw();
     app.append(profileCardPanel());
@@ -2731,6 +2776,7 @@
       return;
     }
     route();
+    if (state.me && state.me.tour) setTimeout(() => { if (state.me && state.me.tour && !document.getElementById("tour")) startTour(); }, 700);
   }
 
   // Visitor counter: totals only. A browser counts as new once (remembered here), no cookies and no addresses stored.

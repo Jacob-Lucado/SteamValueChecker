@@ -266,9 +266,12 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 library: db.countLibrary(s.userId),
                 unread: db.unreadNotifications(s.userId),
                 news: u.seen_version === LATEST ? null : LATEST,
+                tour: !u.welcomed,
                 setup: setupSteps(s, u)
             };
         },
+
+        "POST /api/tour/done": async (req) => { const s = session(req); userRow(s); db.updateUser(s.userId, { welcomed: 1 }); return { ok: true }; },
 
         "GET /api/notifications": async (req) => {
             const s = session(req); userRow(s);

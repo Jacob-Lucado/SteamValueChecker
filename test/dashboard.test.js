@@ -1048,3 +1048,12 @@ test("the page allows https pictures but still no scripts, frames or other conne
         assert.match(csp, /script-src 'self'(;|$)/); assert.match(csp, /default-src 'none'/); assert.match(csp, /connect-src 'self'/);
     } finally { await t.close(); }
 });
+
+test("first-login tour: offered until finished, then not again", async () => {
+    const t = await signedIn();
+    try {
+        assert.equal((await t.request("/api/me")).data.tour, true);
+        assert.equal((await t.request("/api/tour/done", { method: "POST", body: {} })).status, 200);
+        assert.equal((await t.request("/api/me")).data.tour, false);
+    } finally { await t.close(); }
+});

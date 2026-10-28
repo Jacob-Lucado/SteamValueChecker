@@ -14,7 +14,7 @@ import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID,
 import { collectAbout } from "./about.js";
 import { FANATICAL_GRABBER_URL, REGIONS } from "./constants.js";
 import { readFileSync } from "node:fs";
-import { HELP, ABOUT, PRIVACY } from "./text.js";
+import { HELP, ABOUT, PRIVACY, quickStart } from "./text.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
@@ -377,8 +377,10 @@ client.on(Events.InteractionCreate, async i => {
     }
     if (!i.isChatInputCommand()) return;
     console.log(`[command] /${i.commandName}${i.options?.getSubcommand?.(false) ? " " + i.options.getSubcommand(false) : ""}`);
+    const known = db.getUser(i.user.id);
+    const showTip = !known?.tipped && !["help", "about", "privacy", "mydata", "changelog"].includes(i.commandName);
     try {
-        switch (i.commandName) {
+        await (async () => { switch (i.commandName) {
             case "value": return await handleValue(i);
             case "wishlist": return await handlers.handleWishlist(i);
             case "alerts": return await handlers.handleAlerts(i);
@@ -418,6 +420,11 @@ client.on(Events.InteractionCreate, async i => {
             case "help": return await embedReply(i, HELP);
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
             case "privacy": return await embedReply(i, PRIVACY);
+        } })();
+        if (showTip && (i.replied || i.deferred)) {
+            db.ensureUser(i.user.id, i.guildId);
+            db.updateUser(i.user.id, { tipped: 1 });
+            await i.followUp({ embeds: [quickStart(publicBase)], flags: MessageFlags.Ephemeral }).catch(() => {});
         }
     } catch (err) {
         console.error(`[${i.commandName}] ${err.stack ?? `${err.name}: ${err.message}`}`);
