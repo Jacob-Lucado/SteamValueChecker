@@ -123,7 +123,7 @@ test("discord login: state is checked, the session cookie is locked down, logout
     const fresh = await t.request("/auth/login");
     const s2 = new URL(fresh.headers.get("location")).searchParams.get("state");
     const ok = await t.request(`/auth/callback?code=good&state=${s2}`);
-    assert.equal(ok.headers.get("location"), "/");
+    assert.equal(ok.headers.get("location"), "/#/mypage");
     assert.match(ok.set.join(), /svc_session=.*HttpOnly.*SameSite=Lax/);
     const me = await t.request("/api/me");
     assert.equal(me.status, 200);

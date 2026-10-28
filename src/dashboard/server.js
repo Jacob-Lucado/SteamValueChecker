@@ -1448,7 +1448,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             expires: now() + SESSION_MS
         });
         setCookie(res, COOKIE, id, SESSION_MS / 1000);
-        send(res, 302, "", { Location: "/" });
+        send(res, 302, "", { Location: "/#/mypage" });
     }
 
     function logout(req, res) {
