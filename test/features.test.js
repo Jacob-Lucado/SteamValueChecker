@@ -383,7 +383,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "wishlist/remove": "POST /api/wishlist/remove", "wishlist/view": "GET /api/wishlist", "wishlist/check": "GET /api/wishlist/history",
         "wishlist/alert": "POST /api/wishlist/alert", "wishlist/cleanup": "POST /api/wishlist/cleanup", "wishlist/priority": "POST /api/wishlist/priority",
         "currency": "POST /api/settings", redeem: "POST /api/redeem/finish", "calendar/view": "GET /api/calendar", "calendar/add": "POST /api/calendar/events", "calendar/remove": "POST /api/calendar/events/delete", "calendar/feed": "POST /api/calendar/feed", regions: "GET /api/regions", compare: "GET /api/compare", "redeem/history": "GET /api/redeem/history", "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
-        "alerts/delivery": "POST /api/settings", "alerts/push": "POST /api/push", "alerts/pause": "POST /api/settings", "alerts/resume": "POST /api/settings", "alerts/region": "POST /api/settings",
+        "alerts/delivery": "POST /api/settings", "alerts/pause": "POST /api/settings", "alerts/resume": "POST /api/settings", "alerts/region": "POST /api/settings",
         "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",
         "alerts/freegames": "POST /api/settings", "alerts/mute": "POST /api/settings", "alerts/language": "POST /api/settings", changelog: "GET /api/changelog", "alerts/share": "POST /api/settings",
         "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
@@ -791,28 +791,4 @@ test("backlog league ranks opted-in members by games finished this month; badges
     assert.equal(b.finisher.tier, "Bronze"); assert.equal(b.streak.tier, "Silver");
     assert.equal(b.marathon.tier, "Silver"); assert.equal(b.value.tier, "Bronze");
     assert.equal(b.clean.tier, "Gold");
-});
-
-test("phone alerts: only allowlisted https hosts, a copy per alert, never blocks Discord", async () => {
-    const { parsePushUrl, sendPush, pushText } = await import("../src/push.js");
-    assert.equal(parsePushUrl("https://ntfy.sh/my-secret-topic-1").kind, "ntfy");
-    assert.equal(parsePushUrl("https://discord.com/api/webhooks/123456789012/abcdefghijklmnopqrstuvwxyz_-1").kind, "discord");
-    for (const bad of ["http://ntfy.sh/topic-abc", "https://169.254.169.254/latest", "https://localhost/x", "https://ntfy.sh.evil.com/topic-abc", "https://ntfy.sh/topic-abc?x=1", "https://user@ntfy.sh/topic-abc", "https://ntfy.sh:444/topic-abc", "https://ntfy.sh/a", "not a link"]) {
-        assert.throws(() => parsePushUrl(bad), undefined, bad);
-    }
-    assert.equal(pushText({ embeds: [{ title: "**Hades** <@123> sale", description: "`$5`" }] }).title, "Hades  sale");
-    const calls = [];
-    const ok = await sendPush("https://ntfy.sh/my-secret-topic-1", { embeds: [{ title: "Sale", description: "Hades $5" }] }, { fetchImpl: async (u, init) => { calls.push([u, init.redirect]); return { status: 200 }; } });
-    assert.equal(ok, true); assert.deepEqual(calls, [["https://ntfy.sh/my-secret-topic-1", "manual"]]);
-    assert.equal(await sendPush("https://evil.example/x", {}, { fetchImpl: async () => { throw new Error("must not be called"); } }), false);
-    assert.equal(await sendPush("https://ntfy.sh/my-secret-topic-1", {}, { fetchImpl: async () => { throw new Error("down"); } }), false);
-
-    const db = openDb(":memory:");
-    db.ensureUser("u1", null); db.updateUser("u1", { push_url: "https://ntfy.sh/my-secret-topic-1" });
-    const pushes = [];
-    const failDm = createNotifier({ db, discord: { sendDm: async () => { throw new Error("closed"); }, sendChannel: async () => {} }, push: async (u, p) => { pushes.push(u); return true; } });
-    const r = await failDm.deliver(db.getUser("u1"), { embeds: [{ title: "x" }] }, "alert");
-    assert.deepEqual([r.ok, r.via, pushes.length], [true, "push", 1], "push rescues a closed DM");
-    const throwing = createNotifier({ db, discord: { sendDm: async () => {}, sendChannel: async () => {} }, push: async () => { throw new Error("boom"); } });
-    assert.equal((await throwing.deliver(db.getUser("u1"), { embeds: [{ title: "x" }] }, "alert")).via, "dm");
 });

@@ -272,7 +272,7 @@
           feature("👥", "Server tools", "A shared server wishlist with votes, an opt-in savings leaderboard, and group pings when several members want the same deal."),
           feature("🎂", "Friends and gifts", "Keep friends' birthdays, see what is on sale on their public wishlist and get a reminder a week ahead. Visitors can mark gifts so nobody doubles up."),
           feature("🏅", "Trophies and leagues", "Earn badges from your library and monthly challenge streak, and compete in a server backlog league."),
-          feature("📱", "Phone alerts and war room", "Copy alerts to ntfy, Discord or Slack, and plan a Steam sale cart with a budget slider."),
+          feature("📱", "Sale war room", "Plan a Steam sale cart with a budget slider."),
           feature("📊", "A full dashboard", "Everything the commands do, in your browser: charts, price history, bulk actions and giveaway management."))),
 
       h("section", { class: "lp-section" },
@@ -670,26 +670,12 @@
         h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away"),
         h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /freegames and the list below show)")),
-      freeNow, salesPanel(), pushPanel(), publicPagePanel(),
+      freeNow, salesPanel(), publicPagePanel(),
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
         h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
       h("p", { class: "muted", text: `Watching ${state.me.games} game${state.me.games === 1 ? "" : "s"}. Prices are checked about once an hour.` }),
       save, history);
-  }
-
-  function pushPanel() {
-    const cur = state.me.settings.push;
-    const link = h("input", { type: "url", maxlength: "300", placeholder: cur ? "Saved (" + cur + "). Paste a new link to replace it." : "https://ntfy.sh/your-topic" });
-    const status = h("p", { class: "muted small", text: cur ? "Alerts are also sent to " + cur + "." : "Off." });
-    const save = h("button", { class: "btn blue", text: "Save and send a test", onclick: () => busy(save, async () => {
-      const r = await api("/api/push", { url: link.value }); state.me.settings.push = r.push; link.value = "";
-      status.textContent = r.push ? "Alerts are also sent to " + r.push + "." : "Off."; toast(r.push ? "Saved. Check your phone." : "Turned off.", "ok");
-    }) });
-    const off = h("button", { class: "btn gray", text: "Turn off", onclick: () => busy(off, async () => { await api("/api/push", { url: "" }); state.me.settings.push = null; status.textContent = "Off."; toast("Turned off.", "ok"); }) });
-    return h("div", { class: "panel" }, h("h3", { text: "Phone alerts" }),
-      h("p", { class: "muted", text: "Get a copy of every alert on your phone. Use an ntfy.sh topic (install the free ntfy app and pick a long, hard-to-guess topic name), a Discord webhook or a Slack incoming webhook. Only those three are accepted. The link is stored privately and never shown again." }),
-      field("Link", link), status, h("div", { class: "row" }, save, off));
   }
 
   function publicPagePanel() {
@@ -2342,7 +2328,6 @@
       { id: "free", icon: "🎁", title: "Free game alerts", text: "Told when a game is free on Steam, Epic, GOG and more.", href: "#/alerts", status: () => [st().free, st().free ? "On" : "Off"], toggle: { key: "free", label: "Turn on" } },
       { id: "digest", icon: "📰", title: "Weekly digest", text: "One summary of your wishlist sales each week.", href: "#/alerts", status: () => [st().digest, st().digest ? "On" : "Off"], toggle: { key: "digest", label: "Turn on" } },
       { id: "bundles", icon: "📦", title: "Bundle and giveaway alerts", text: "When a wishlist game is in a bundle or given away.", href: "#/alerts", status: () => [st().bundles, st().bundles ? "On" : "Off"], toggle: { key: "bundles", label: "Turn on" } },
-      { id: "phone", icon: "📱", title: "Phone alerts", text: "A copy of every alert through ntfy, Discord or Slack.", href: "#/alerts", status: () => [Boolean(st().push), st().push ? "Sending to " + st().push : "Off"] },
       { id: "share", icon: "👥", title: "Share with your server", text: "Group alerts, the savings leaderboard and the backlog league.", href: "#/alerts", status: () => [st().share, st().share ? "Opted in" : "Not shared"], toggle: { key: "share", label: "Share" } },
       { id: "library", icon: "📚", title: "Library", text: "What you own, what you paid, backlog, spend and trophies.", href: "#/library", status: () => [me.library > 0, me.library + " game" + (me.library === 1 ? "" : "s")] },
       { id: "steam", icon: "🎮", title: "Steam link", text: "Hours played, your year in games and a taste profile.", href: "#/steam", status: () => [flag("steam"), flag("steam") ? "Linked" : "Not linked"] },
@@ -2713,7 +2698,7 @@
           h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
             h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/wishlist import" }), ", then star favorites with ", h("code", { text: "/wishlist priority" })),
             h("li", {}, "Price a library: ", h("code", { text: "/value" }), " or link Steam for hours, ", h("code", { text: "/steam recap" }), " and ", h("code", { text: "/library challenge" })),
-            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/library badges" }), " and ", h("code", { text: "/leaderboard board:finished" })), h("li", {}, "Get alerts on a phone: ", h("code", { text: "/alerts push" })), h("li", {}, "See events and release dates: ", h("code", { text: "/calendar view" })),
+            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/library badges" }), " and ", h("code", { text: "/leaderboard board:finished" })), h("li", {}, "See events and release dates: ", h("code", { text: "/calendar view" })),
             h("li", {}, "Ask for help: ", h("code", { text: "/support open" })), h("li", {}, "Managers can run giveaways: ", h("code", { text: "/giveaway create" }))))].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }

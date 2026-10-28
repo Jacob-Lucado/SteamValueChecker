@@ -12,7 +12,6 @@ export const CHANGELOG = [
         "FanaticalGrabber 2.5 adds a Steam-style batch redeem panel on Steam's own pages, a price overlay on game pages, a bundle helper, a cart check and a queue from Fanatical.",
         "`/friend`: keep friends' birthdays and public wishlist pages, see what is on sale for them and get a reminder a week before. Dashboard: Friends page.",
         "`/library badges` and a Trophy case on the Library page. `/leaderboard board:finished` is a monthly backlog league for members who opted in.",
-        "`/alerts push` (and the Alerts page) sends a copy of every alert to your phone through ntfy.sh, a Discord webhook or a Slack webhook.",
         "Dashboard: a page for every game (click a wishlist title) and a Sale war room with a budget slider.",
         "Dashboard: a My page under Account lists every feature as a card with its status, switches for the simple ones, and links to set up the rest. Pin, reorder or hide cards.",
         "My page also has a Profile card: pick what to show (games, finished, hours, percent saved, streak, badges, genres), choose a colour and save it as an image.",

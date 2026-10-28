@@ -22,7 +22,6 @@ import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
-import { parsePushUrl, sendPush } from "../push.js";
 import { trophyCase } from "../badges.js";
 import { importLibrary, libraryView, leaderboard, finishedLeague, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
@@ -68,7 +67,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, push: 10_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -88,7 +87,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, calendar = null, dm = null, fx = null, steamFetch = globalThis.fetch, pushFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, calendar = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -211,7 +210,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     const userRow = s => db.ensureUser(s.userId);
 
     function publicSettings(u) {
-        return { push: u.push_url ? new URL(u.push_url).hostname : null, region: u.region, stores: u.stores, delivery: u.delivery, paused: Boolean(u.paused), guild_id: u.guild_id, steam_id: u.steam_id, ...prefsView(u) };
+        return { region: u.region, stores: u.stores, delivery: u.delivery, paused: Boolean(u.paused), guild_id: u.guild_id, steam_id: u.steam_id, ...prefsView(u) };
     }
 
     function serversFor(s, u) {
@@ -235,7 +234,6 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             { id: "steam", text: "Link your public Steam profile for hours, recap and taste (optional)", done: Boolean(db.getSteamLink(s.userId)), href: "#/steam", optional: true },
             { id: "challenge", text: "Set a monthly backlog challenge (optional)", done: db.challengeRows(s.userId).some(r => r.month === monthKey(Date.now())), href: "#/library", optional: true },
             { id: "friend", text: "Add a friend's birthday for gift reminders (optional)", done: db.countFriends(s.userId) > 0, href: "#/friends", optional: true },
-            { id: "push", text: "Get alerts on your phone (optional)", done: Boolean(u.push_url), href: "#/alerts", optional: true },
             { id: "server", text: "Add the bot to a server", done: s.guilds.some(g => (botGuilds ? botGuilds(g.id) : false)), href: "#/servers" }
         ];
     }
@@ -676,16 +674,6 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
 
         "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },
-        "POST /api/push": async (req, body) => {
-            const s = session(req); userRow(s);
-            const link = String(body.url ?? "").trim();
-            if (!link) { db.updateUser(s.userId, { push_url: null }); return { push: null }; }
-            const p = parsePushUrl(link);
-            cooldown(s.userId, "push");
-            if (!(await sendPush(p.url, { embeds: [{ title: "Steam Value Checker", description: "Phone alerts are on. This is a test." }] }, { fetchImpl: pushFetch }))) throw new HttpError(400, `Could not reach ${p.host} with that link, so it was not saved.`);
-            db.updateUser(s.userId, { push_url: p.url });
-            return { push: p.host };
-        },
         // Everything the shareable profile card shows, from stored data only (no price lookups).
         "GET /api/profile/card": async (req) => {
             const s = session(req); userRow(s);
