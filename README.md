@@ -85,6 +85,10 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/lfg post\|list\|close` | Looking-for-group posts with Join/Leave buttons, an optional Discord scheduled event (needs Manage Events) and auto-close |
 | `/redeem` | Queue Steam keys (`keys:` or a `file:`) for batch redeeming. Open the dashboard's **Batch redeem** page while logged into Steam, with FanaticalGrabber 2.3+, and press Run. Results come back as a DM. Keys are stored only until the batch finishes (24 hours at most). `history:true` lists recent results (masked hints) and repeat keys are skipped |
 | `/library trend` | How your library value, game count and backlog changed over the last month and since tracking began (from daily snapshots) |
+| `/friend add`, `list`, `deals`, `remove` | Friends' nicknames and birthdays (month and day) with their public wishlist page; a reminder a week ahead and what is on sale for them |
+| `/library badges` | Trophy case of badges earned from your library and challenge streak |
+| `/leaderboard board:finished` | Monthly backlog league for members who opted in |
+| `/alerts push` | Copy every alert to your phone through ntfy.sh, a Discord webhook or a Slack webhook (those hosts only) |
 | `/compare` | Your library against a friend's: games you both own, and what only one of you has. They must have opted in with `/alerts share`; server only |
 | `/regions` | One game's cheapest price in about a dozen regions, ranked in US dollars (recent ECB exchange rates). Region-locked keys mean this is for information |
 | `/calendar` | `view` lists release dates of wishlisted games, Steam sales, server events and open `/lfg` posts. `add` and `remove` (Manage Server) manage server events, announced in the channel with a reminder before they start. `feed` makes an optional private link for Google, Apple or Outlook calendar |

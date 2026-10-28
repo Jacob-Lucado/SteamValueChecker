@@ -2555,7 +2555,7 @@
           h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
             h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/wishlist import" }), ", then star favorites with ", h("code", { text: "/wishlist priority" })),
             h("li", {}, "Price a library: ", h("code", { text: "/value" }), " or link Steam for hours, ", h("code", { text: "/steam recap" }), " and ", h("code", { text: "/library challenge" })),
-            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/publicpage" })), h("li", {}, "See events and release dates: ", h("code", { text: "/calendar view" })),
+            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/library badges" }), " and ", h("code", { text: "/leaderboard board:finished" })), h("li", {}, "Get alerts on a phone: ", h("code", { text: "/alerts push" })), h("li", {}, "See events and release dates: ", h("code", { text: "/calendar view" })),
             h("li", {}, "Ask for help: ", h("code", { text: "/support open" })), h("li", {}, "Managers can run giveaways: ", h("code", { text: "/giveaway create" }))))].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
