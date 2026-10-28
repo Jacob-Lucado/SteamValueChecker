@@ -557,3 +557,4 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .sc-info { flex: 1 1 200px; min-width: 0; }
 .sc-info h3 { margin: 0 0 2px; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-size: 20px; color: var(--text); }
 .sc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sc-playing { color: var(--good, #3ddc97); font-weight: 600; font-size: 14px; margin: 2px 0; }

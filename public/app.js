@@ -1158,14 +1158,14 @@
 
   // A Steam profile card: picture, name, where and since when, and a link to the real profile. `actions` are extra buttons.
   function steamProfileCard(c, ...actions) {
-    const meta = [c.realName, c.location, c.memberSince ? "On Steam since " + c.memberSince : null].filter(Boolean).join(" · ");
-    const dot = { online: "🟢 Online", offline: "⚫ Offline", "in-game": "🎮 In a game" }[c.status];
+    const dot = c.playing ? null : { online: "🟢 Online", offline: "⚫ Offline", "in-game": "🎮 In a game" }[c.status];
+    const meta = [dot, c.memberSince ? "On Steam since " + c.memberSince : null].filter(Boolean).join(" · ");
     return h("div", { class: "panel sc-card" },
       c.avatar ? h("img", { class: "sc-avatar", src: c.avatar, alt: "", width: "72", height: "72", referrerpolicy: "no-referrer", loading: "lazy" }) : h("div", { class: "sc-avatar sc-none", text: "👤" }),
       h("div", { class: "sc-info" },
         h("h3", { text: c.name }),
-        meta ? h("div", { class: "muted small", text: meta }) : null,
-        dot || c.headline ? h("div", { class: "muted small", text: [dot, c.headline].filter(Boolean).join(" · ") }) : null),
+        c.playing ? h("div", { class: "sc-playing", text: "🎮 Playing " + c.playing }) : null,
+        meta ? h("div", { class: "muted small", text: meta }) : null),
       h("div", { class: "sc-actions" }, h("a", { class: "btn gray small", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Open on Steam ↗" }), ...actions));
   }
 

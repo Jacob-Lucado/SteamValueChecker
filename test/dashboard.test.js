@@ -622,7 +622,7 @@ test("visit counter for the FanaticalGrabber page: only that origin counts, one 
 
 const XML = '<gamesList><games><game><appID>10</appID><name><![CDATA[Counter]]></name><hoursOnRecord>12.5</hoursOnRecord></game></games></gamesList>';
 
-const PROFILE_XML = '<profile><steamID64>76561198000000000</steamID64><steamID><![CDATA[Jacob <b>L</b>]]></steamID><onlineState>online</onlineState><privacyState>public</privacyState><avatarFull><![CDATA[https://avatars.steamstatic.com/abc_full.jpg]]></avatarFull><memberSince>March 3, 2012</memberSince><location>Roanoke, Virginia</location></profile>';
+const PROFILE_XML = '<profile><steamID64>76561198000000000</steamID64><steamID><![CDATA[Jacob <b>L</b>]]></steamID><onlineState>in-game</onlineState><privacyState>public</privacyState><avatarFull><![CDATA[https://avatars.steamstatic.com/abc_full.jpg]]></avatarFull><memberSince>March 3, 2012</memberSince><location>Roanoke, Virginia</location><inGameInfo><gameName><![CDATA[Hades II]]></gameName></inGameInfo></profile>';
 test("Steam page: profile card for the linked account, and a look-up of anyone's public profile", async () => {
     const fetched = [];
     const t = await signedIn({
@@ -634,7 +634,8 @@ test("Steam page: profile card for the linked account, and a look-up of anyone's
         const v = await t.request("/api/steam");
         assert.equal(v.data.card.name, "Jacob <b>L</b>", "sent as plain text; the page never treats it as HTML");
         assert.equal(v.data.card.avatar, "https://avatars.steamstatic.com/abc_full.jpg");
-        assert.equal(v.data.card.location, "Roanoke, Virginia");
+        assert.equal(v.data.card.playing, "Hades II");
+        assert.equal("location" in v.data.card, false, "location is not kept");
         const n = fetched.filter(u => /\?xml=1/.test(u) && /profiles\/76561198000000000\/\?xml=1/.test(u)).length;
         await t.request("/api/steam");
         assert.equal(fetched.filter(u => /profiles\/76561198000000000\/\?xml=1/.test(u)).length, n, "the card is cached");

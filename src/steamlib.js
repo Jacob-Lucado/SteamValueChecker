@@ -130,7 +130,7 @@ export function parseProfileXml(xml, steamid) {
         steamid: String(steamid), name: name.slice(0, 64),
         avatar: pic && /^https:\/\/[\w.-]+\//.test(pic) ? pic : null,
         url: `https://steamcommunity.com/profiles/${steamid}`,
-        realName: tag("realname")?.slice(0, 64) ?? null, location: tag("location")?.slice(0, 80) ?? null,
+        playing: tag("gameName")?.slice(0, 100) ?? null,
         memberSince: tag("memberSince")?.slice(0, 30) ?? null, status: tag("onlineState") ?? null,
         headline: tag("headline")?.slice(0, 120) ?? null, privacy: tag("privacyState") ?? null
     };
