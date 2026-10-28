@@ -541,6 +541,9 @@ details.panel > summary { cursor: pointer; font-weight: 600; color: var(--white)
 details.panel[open] > summary { margin-bottom: 10px; }
 
 .war-slider { width: 100%; margin: 8px 0; }
+.war-tools { margin-bottom: 12px; }
+.war-tools > div:not(.war-quick) { flex: 0 1 220px; }
+.war-quick { display: flex; gap: 8px; flex-wrap: wrap; }
 .war-list { padding: 4px 16px; }
 .war-list .empty { margin: 8px 0; }
 .war-row:last-child { border-bottom: 0; }
