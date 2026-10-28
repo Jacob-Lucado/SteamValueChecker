@@ -112,7 +112,7 @@
   // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["compare", "Compare"], ["calendar", "Calendar"], ["friends", "Friends"], ["steam", "Steam"], ["deals", "Deals"]] },
+    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["compare", "Compare"], ["calendar", "Calendar"], ["friends", "Friends"], ["steam", "Steam"], ["deals", "Deals"], ["warroom", "Sale war room"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -2263,6 +2263,49 @@
   // ---------- calendar ----------
   // Built in: wishlist release dates, Steam sales, server events and group games. Managers add server events here.
   // The private feed link (for Google, Apple or Outlook calendar) is optional.
+  // Sale war room: your buy-now list with a budget slider. Ticked games are the cart; the slider auto-fills the best savings first.
+  async function warRoomView() {
+    const out = h("div", { class: "muted", text: "Checking your wishlist…" });
+    const st = { rows: [], cur: "USD", picked: new Set(), budget: 0, sale: null };
+    const slider = h("input", { type: "range", min: "0", max: "500", step: "5", value: "0" });
+    const label = h("strong", { text: "" });
+    const total = h("div", { class: "muted" });
+    const list = h("div");
+    const sum = () => st.rows.filter(r => st.picked.has(r.itad_id)).reduce((t, r) => t + r.price, 0);
+    function autofill() {
+      st.picked = new Set(); let left = st.budget;
+      const order = [...st.rows].sort((a, b) => ((b.regular ?? b.price) - b.price) / b.price - ((a.regular ?? a.price) - a.price) / a.price);
+      for (const r of order) if (r.price <= left + 1e-9) { st.picked.add(r.itad_id); left -= r.price; }
+    }
+    function draw() {
+      label.textContent = "Budget: " + money(st.budget, st.cur);
+      const spent = sum(), saved = st.rows.filter(r => st.picked.has(r.itad_id)).reduce((t, r) => t + Math.max(0, (r.regular ?? r.price) - r.price), 0);
+      total.textContent = st.picked.size + " in the cart · " + money(spent, st.cur) + (spent > st.budget && st.budget > 0 ? " (over budget by " + money(spent - st.budget, st.cur) + ")" : "") + " · saves " + money(saved, st.cur);
+      list.replaceChildren(...st.rows.map(r => {
+        const box = h("input", { type: "checkbox", checked: st.picked.has(r.itad_id) });
+        box.addEventListener("change", () => { if (box.checked) st.picked.add(r.itad_id); else st.picked.delete(r.itad_id); draw(); });
+        return h("label", { class: "war-row" }, box, h("b", { text: " " + r.title }), h("span", { class: "muted", text: "  " + money(r.price, st.cur) + (r.discount > 0 ? " (-" + Math.round(r.discount * 100) + "%)" : "") + " at " + r.shop + (r.verdict ? " · " + r.verdict : "") }));
+      }));
+    }
+    slider.addEventListener("input", () => { st.budget = Number(slider.value); autofill(); draw(); });
+    async function load() {
+      try {
+        const d = await api("/api/saleprep");
+        st.rows = d.buyNow; st.cur = d.currency; st.sale = d.sale;
+        const top = Math.max(50, Math.ceil(st.rows.reduce((t, r) => t + r.price, 0) / 5) * 5);
+        slider.max = String(top);
+        out.className = "";
+        out.replaceChildren(h("p", { class: "muted", text: (d.sale ? (d.sale.live ? d.sale.name + " is on now. This page refreshes every 5 minutes." : "Next: " + d.sale.name + " starts " + new Date(d.sale.start).toLocaleDateString() + ".") : "No Steam sale is on the calendar yet.") + " " + st.rows.length + " of " + d.watching + " wishlist games are at or near a low." }),
+          h("div", { class: "panel" }, label, slider, total), list);
+        st.picked = new Set([...st.picked].filter(id => st.rows.some(r => r.itad_id === id)));
+        draw();
+        if (d.sale && d.sale.live && currentView() === "warroom") setTimeout(() => { if (currentView() === "warroom") load(); }, 300_000);
+      } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    app.replaceChildren(pageHead("Sale war room", "Plan your cart for a Steam sale: set a budget and the best savings fill it first. Untick anything you do not want."), out);
+    load();
+  }
+
   async function friendsView() {
     const list = h("div", { class: "muted", text: "Loading…" });
     const name = h("input", { type: "text", maxlength: "30", placeholder: "Nickname" });
@@ -2506,7 +2549,7 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, deals: dealsView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, deals: dealsView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();
