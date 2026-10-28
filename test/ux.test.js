@@ -81,7 +81,8 @@ test("giveaway templates are per server and prizes for a winner never include ke
 test("changelog has a newest version and renders", () => {
     assert.equal(LATEST, CHANGELOG[0].version);
     assert.match(changelogEmbed().description, new RegExp(CHANGELOG[0].title.slice(0, 12)));
-    assert.match(changelogEmbed(99).description, /Support tickets/);
+    assert.match(changelogEmbed(2).description, /Steam library, bundles/);
+    assert.ok(changelogEmbed(99).description.length <= 4000);
 });
 
 test("setup checklist: tracks channels from every part of the bot and renders the panel", async () => {
