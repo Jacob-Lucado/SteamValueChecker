@@ -33,6 +33,7 @@ import { setProfile, publicWishlist } from "../profile.js";
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
+import { friendDeals, friendRows, saveFriend } from "../friends.js";
 import { spendSummary, regionCurrency } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
@@ -65,7 +66,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -651,6 +652,20 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 onWishlist: db.listItems(s.userId).some(g => g.itad_id === id), inLibrary: db.listLibrary(s.userId).some(g => g.itad_id === id),
                 watchers
             };
+        },
+
+        "GET /api/friends": async (req) => { const s = session(req); userRow(s); return { friends: friendRows(db, s.userId) }; },
+        "POST /api/friends/add": async (req, body) => { const s = session(req); userRow(s); return saveFriend(db, s.userId, { name: body.name, birthday: body.birthday, page: body.page }); },
+        "POST /api/friends/remove": async (req, body) => { const s = session(req); if (!db.removeFriend(s.userId, String(body.name ?? ""))) throw new HttpError(404, "No friend by that name."); return { removed: true }; },
+        "GET /api/friends/deals": async (req, _b, url) => {
+            const s = session(req);
+            const f = db.getFriend(s.userId, String(url.searchParams.get("name") ?? ""));
+            if (!f) throw new HttpError(404, "No friend by that name.");
+            if (!f.slug) throw new HttpError(400, "Add their public page name first.");
+            cooldown(s.userId, "deals");
+            const deals = await friendDeals(db, itad, f.slug, 10);
+            if (!deals) throw new HttpError(404, "That page is not public, or does not exist.");
+            return { name: f.name, deals };
         },
 
         "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },

@@ -357,7 +357,7 @@ export function leaderboardEmbed(entries) {
 /** The member's recent alerts. */
 export function alertHistoryEmbed(entries) {
     if (!entries.length) return { color: COLOR, title: "Recent alerts", description: "No alerts yet." };
-    const label = { sale: "sale", bundle: "bundle", giveaway: "free", digest: "digest", group: "group", release: "release" };
+    const label = { sale: "sale", bundle: "bundle", giveaway: "free", digest: "digest", group: "group", release: "release", friend: "friend" };
     const lines = entries.slice(0, 15).map(e => {
         const when = `<t:${Math.floor(e.at / 1000)}:d>`;
         const price = Number.isFinite(e.price) ? ` at ${e.price.toFixed(2)}` : "";

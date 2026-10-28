@@ -232,6 +232,19 @@ const wishlist = new SlashCommandBuilder()
         .addNumberOption(alertValue)
         .addStringOption(o => gameOption(o).setDescription("One game. Leave empty to change every game")));
 
+const friendCmd = new SlashCommandBuilder()
+    .setName("friend")
+    .setDescription("Gift helper: your friends' birthdays and what is on sale on their public wishlists")
+    .addSubcommand(s => s.setName("add").setDescription("Add or update a friend (a reminder comes a week before their birthday)")
+        .addStringOption(o => o.setName("name").setDescription("A nickname").setRequired(true).setMaxLength(30))
+        .addStringOption(o => o.setName("birthday").setDescription("Month and day as MM-DD, for example 03-27").setMaxLength(5))
+        .addStringOption(o => o.setName("page").setDescription("Their public wishlist page name (from /publicpage)").setMaxLength(24)))
+    .addSubcommand(s => s.setName("list").setDescription("Your friends and their upcoming birthdays"))
+    .addSubcommand(s => s.setName("deals").setDescription("What is on sale on a friend's public wishlist")
+        .addStringOption(o => o.setName("name").setDescription("The friend").setRequired(true).setMaxLength(30)))
+    .addSubcommand(s => s.setName("remove").setDescription("Remove a friend")
+        .addStringOption(o => o.setName("name").setDescription("The friend").setRequired(true).setMaxLength(30)));
+
 const status = new SlashCommandBuilder()
     .setName("status")
     .setDescription("Is the bot healthy? Live checks, uptime and any recent incidents");
@@ -314,7 +327,7 @@ alerts
         .addBooleanOption(o => o.setName("dlc").setDescription("Also show free DLC and add-ons (default on)")))
     .addSubcommand(s => s.setName("mute").setDescription("Stop DMs for one kind of alert (you can still read them on the dashboard's Notifications page)")
         .addStringOption(o => o.setName("type").setDescription("Which alerts").setRequired(true).addChoices(
-            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }))
+            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }, { name: "Friend birthday reminders", value: "friend" }))
         .addBooleanOption(o => o.setName("muted").setDescription("True to mute, false to get them again").setRequired(true)))
     .addSubcommand(s => s.setName("language").setDescription("Language for the bot's buttons and messages")
         .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices({ name: "English", value: "en" }, { name: "Español", value: "es" }, { name: "Français", value: "fr" })))
@@ -369,7 +382,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());

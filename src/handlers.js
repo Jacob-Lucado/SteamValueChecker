@@ -21,6 +21,8 @@ import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
 import { compareLibraries } from "./compare.js";
 import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
 import { buyOrWait } from "./advice.js";
+import { daysUntilBirthday } from "./friendstore.js";
+import { friendDeals, friendRows, saveFriend, birthdayEmbed } from "./friends.js";
 import { spendSummary, regionCurrency } from "./spend.js";
 import { importLibrary, libraryView, leaderboard, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
@@ -602,6 +604,32 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "serverstats", err); }
     }
 
+    // ---------- /friend ----------
+    async function handleFriend(i) {
+        const sub = i.options.getSubcommand();
+        db.ensureUser(i.user.id, i.guildId);
+        try {
+            if (sub === "add") {
+                const r = saveFriend(db, i.user.id, { name: i.options.getString("name", true), birthday: i.options.getString("birthday"), page: i.options.getString("page") });
+                return eph(i, `${r.updated ? "Updated" : "Added"} **${r.name}**. I will remind you a week before their birthday${i.options.getString("birthday") ? "" : " once you add it (`birthday:03-27`)"}.`);
+            }
+            if (sub === "remove") return eph(i, db.removeFriend(i.user.id, i.options.getString("name", true)) ? "Removed." : "No friend by that name.");
+            if (sub === "list") {
+                const rows = friendRows(db, i.user.id);
+                if (!rows.length) return eph(i, "No friends yet. Add one with `/friend add`.");
+                return i.reply({ flags: MessageFlags.Ephemeral, embeds: [{ color: 0xe91e63, title: "Your friends", description: rows.map(f => `• **${f.name}**${f.birthday ? ` 🎂 ${f.birthday}${f.daysToBirthday <= 30 ? ` (in ${f.daysToBirthday} day${f.daysToBirthday === 1 ? "" : "s"})` : ""}` : ""}${f.slug ? " · has a public page" : ""}`).join("\n") }] });
+            }
+            const f = db.getFriend(i.user.id, i.options.getString("name", true));
+            if (!f) return eph(i, "No friend by that name. See `/friend list`.");
+            if (!f.slug) return eph(i, `Add **${f.name}**'s public page first: \`/friend add name:${f.name} page:their-page-name\`.`);
+            cooldown(i, "view");
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            const deals = await friendDeals(db, itad, f.slug, 8);
+            if (!deals) return void await i.editReply({ content: `${f.name}'s page \`${f.slug}\` is not public, or does not exist.` });
+            return void await i.editReply({ embeds: [{ ...birthdayEmbed(f, f.birthday ? daysUntilBirthday(f.birthday, Date.now()) : 0, deals), title: `🎁 On sale for ${f.name}`, description: deals.length ? deals.map(d => `• **${d.title}** ${money(d.price, d.currency ?? "USD")}${d.discount > 0 ? ` (-${d.discount}%)` : ""} at ${d.shop}`).join("\n") : "Nothing on their public wishlist is on sale right now.", footer: { text: "Games someone already said they will gift are left out." } }] });
+        } catch (err) { await failed(i, "friend", err); }
+    }
+
     // ---------- /publicpage ----------
     async function handlePublicPage(i) {
         try {
@@ -697,5 +725,5 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return i.reply({ embeds: [compareEmbed(r, "You", friend.displayName ?? friend.username)], ...(pub ? {} : { flags: MessageFlags.Ephemeral }) });
     }
 
-    return { handleCompare, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleFriend, handleCompare, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

@@ -1011,3 +1011,21 @@ test("game page: price, history verdict, bundles, free offers and who watches it
         assert.ok(Array.isArray(r.data.points));
     } finally { await t.close(); }
 });
+
+test("friends: add, list, deals and remove", async () => {
+    const t = await signedIn();
+    try {
+        const post = (p, body) => t.request(p, { method: "POST", body });
+        assert.equal((await post("/api/friends/add", { name: "Sam", birthday: "99-99" })).status, 400);
+        assert.equal((await post("/api/friends/add", { name: "Sam", birthday: "03-27" })).status, 200);
+        const list = await t.request("/api/friends");
+        assert.equal(list.data.friends.length, 1);
+        assert.equal(list.data.friends[0].birthday, "03-27");
+        t.advance(4_000);
+        assert.equal((await t.request("/api/friends/deals?name=Sam")).status, 400, "needs a page");
+        t.advance(4_000);
+        assert.equal((await t.request("/api/friends/deals?name=Nobody")).status, 404);
+        assert.equal((await post("/api/friends/remove", { name: "Sam" })).status, 200);
+        assert.equal((await post("/api/friends/remove", { name: "Sam" })).status, 404);
+    } finally { await t.close(); }
+});

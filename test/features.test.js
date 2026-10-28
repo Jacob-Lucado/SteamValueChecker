@@ -393,7 +393,7 @@ test("every slash command has a dashboard counterpart", async () => {
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
-        "freegames": "GET /api/free", "sales": "GET /api/sales", "status": "GET /api/status", "publicpage": "POST /api/profile", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
+        "freegames": "GET /api/free", "sales": "GET /api/sales", "status": "GET /api/status", "publicpage": "POST /api/profile", "friend/add": "POST /api/friends/add", "friend/list": "GET /api/friends", "friend/remove": "POST /api/friends/remove", "friend/deals": "GET /api/friends/deals", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
         "steam/link": "POST /api/steam/link", "steam/sync": "POST /api/steam/sync", "steam/recap": "GET /api/steam/recap", "steam/taste": "GET /api/steam/taste", "steam/view": "GET /api/steam", "steam/next": "GET /api/steam/next", "steam/value": "GET /api/steam", "steam/unlink": "POST /api/steam/unlink",
         "lfg/post": "POST /api/lfg", "lfg/list": "GET /api/lfg", "lfg/close": "POST /api/lfg/close",
         "bundle": "GET /api/bundles", "saleprep/plan": "GET /api/saleprep", "saleprep/recap": "GET /api/saleprep/recap",
@@ -505,7 +505,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "bundle", "changelog", "currency", "freegames", "help", "library", "mydata", "privacy", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "bundle", "changelog", "currency", "freegames", "friendCmd", "help", "library", "mydata", "privacy", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "compare", "gamenight", "giveaway", "lfgCmd", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);
@@ -746,4 +746,32 @@ test("slash command text fits Discord's limits (discord.js throws at startup oth
     for (const m of src.matchAll(/setDescription\("((?:[^"\\]|\\.)*)"\)/g)) assert.ok(m[1].length <= 100, `description is ${m[1].length} characters: ${m[1]}`);
     for (const m of src.matchAll(/setName\("([^"]*)"\)/g)) if (!/^\w[\w-]*$/.test(m[1]) || /[A-Z]/.test(m[1]) || m[1].length > 32) assert.fail(`bad command or option name: ${m[1]}`);
     for (const m of src.matchAll(/\{ name: "((?:[^"\\]|\\.)*)", value: "/g)) assert.ok(m[1].length <= 100, `choice name too long: ${m[1]}`);
+});
+
+test("friends: birthday maths, limits and a once-a-year reminder", async () => {
+    const { daysUntilBirthday } = await import("../src/friendstore.js");
+    const { runFriendReminders, saveFriend, cleanBirthday } = await import("../src/friends.js");
+    const day = (m, d, y = 2026) => Date.UTC(y, m - 1, d, 12);
+    assert.equal(daysUntilBirthday("03-27", day(3, 20)), 7);
+    assert.equal(daysUntilBirthday("03-27", day(3, 27)), 0);
+    assert.equal(daysUntilBirthday("03-27", day(3, 28)), 364);
+    assert.throws(() => cleanBirthday("13-40"));
+    const db = openDb(":memory:");
+    db.ensureUser("u1", null);
+    assert.equal(saveFriend(db, "u1", { name: "Sam", birthday: "03-27" }).added, true);
+    assert.equal(saveFriend(db, "u1", { name: "sam", birthday: "03-28" }).updated, true);
+    assert.equal(db.listFriends("u1").length, 1);
+    saveFriend(db, "u1", { name: "Sam", birthday: "03-27" });
+    const sent = [];
+    const notifier = { deliver: async (u, p, type) => { sent.push(type); return { ok: true }; } };
+    const itad = {};
+    assert.equal((await runFriendReminders({ db, itad, notifier, now: () => day(3, 10) })).sent, 0, "too early");
+    assert.equal((await runFriendReminders({ db, itad, notifier, now: () => day(3, 21) })).sent, 1);
+    assert.equal((await runFriendReminders({ db, itad, notifier, now: () => day(3, 22) })).sent, 0, "only once a year");
+    assert.deepEqual(sent, ["friend"]);
+    assert.equal((await runFriendReminders({ db, itad, notifier, now: () => day(3, 21, 2027) })).sent, 1, "again next year");
+    for (let n = 0; n < 25; n++) { try { saveFriend(db, "u1", { name: "F" + n }); } catch { /* full */ } }
+    assert.equal(db.listFriends("u1").length, 20);
+    db.deleteUser("u1");
+    assert.equal(db.listFriends("u1").length, 0);
 });

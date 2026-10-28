@@ -112,7 +112,7 @@
   // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["compare", "Compare"], ["calendar", "Calendar"], ["steam", "Steam"], ["deals", "Deals"]] },
+    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["compare", "Compare"], ["calendar", "Calendar"], ["friends", "Friends"], ["steam", "Steam"], ["deals", "Deals"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -2050,9 +2050,9 @@
   const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
 
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
-  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest", release: "Release day" };
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
-  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", release: "🎉", status: "🛠️", giveaway: "🏆", ticket: "🎫" };
+  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫" };
 
   async function notificationsView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
@@ -2250,6 +2250,33 @@
   // ---------- calendar ----------
   // Built in: wishlist release dates, Steam sales, server events and group games. Managers add server events here.
   // The private feed link (for Google, Apple or Outlook calendar) is optional.
+  async function friendsView() {
+    const list = h("div", { class: "muted", text: "Loading…" });
+    const name = h("input", { type: "text", maxlength: "30", placeholder: "Nickname" });
+    const bday = h("input", { type: "text", maxlength: "5", placeholder: "MM-DD (optional)" });
+    const page = h("input", { type: "text", maxlength: "24", placeholder: "Their public page name (optional)" });
+    const deals = h("div");
+    async function load() {
+      const { friends } = await api("/api/friends");
+      if (!friends.length) return list.replaceChildren(h("div", { class: "empty", text: "No friends yet. Add a nickname, a birthday and their public wishlist page name; you get a reminder a week before with what is on sale for them." }));
+      list.replaceChildren(...friends.map(f => {
+        const show = h("button", { class: "btn small", text: "On sale for them", disabled: !f.slug });
+        show.addEventListener("click", () => busy(show, async () => {
+          const r = await api("/api/friends/deals?name=" + encodeURIComponent(f.name));
+          deals.replaceChildren(h("h3", { text: "On sale for " + r.name }), r.deals.length ? h("div", {}, ...r.deals.map(d => h("div", { class: "row-line" }, h("a", { href: d.url || "#", target: "_blank", rel: "noopener", text: d.title }), h("span", { class: "muted", text: " " + money(d.price, d.currency || "USD") + (d.discount > 0 ? " (-" + d.discount + "%)" : "") + " at " + d.shop })))) : h("div", { class: "muted", text: "Nothing on their wishlist is on sale right now." }));
+        }));
+        const del = h("button", { class: "btn red small", text: "Remove" });
+        del.addEventListener("click", () => busy(del, async () => { await api("/api/friends/remove", { name: f.name }); toast("Removed.", "ok"); load(); }));
+        return h("div", { class: "panel" }, h("strong", { text: f.name }), h("span", { class: "muted", text: f.birthday ? "  🎂 " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") : "" }), h("div", { class: "row" }, show, del));
+      }));
+    }
+    const add = h("button", { class: "btn", text: "Save friend" });
+    add.addEventListener("click", () => busy(add, async () => { await api("/api/friends/add", { name: name.value, birthday: bday.value, page: page.value }); toast("Saved.", "ok"); name.value = bday.value = page.value = ""; load(); }));
+    app.replaceChildren(pageHead("Friends", "Birthdays and gift ideas. Only a nickname and the month and day are kept."),
+      h("div", { class: "panel" }, h("div", { class: "row" }, field("Nickname", name), field("Birthday", bday), field("Public page", page)), add), list, deals);
+    load().catch(e => list.replaceChildren(h("div", { class: "empty", text: e.message })));
+  }
+
   async function calendarView() {
     const KIND = { release: ["🎮", "Releases"], sale: ["🏷️", "Steam sales"], event: ["📅", "Server events"], lfg: ["👥", "Group games"] };
     const st = { kinds: new Set(Object.keys(KIND)), guild: "", mode: "list", month: new Date() };
@@ -2466,7 +2493,7 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, steam: steamView, deals: dealsView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, deals: dealsView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, admin: adminView };
 
   function route() {
     renderChrome();

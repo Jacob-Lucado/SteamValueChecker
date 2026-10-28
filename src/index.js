@@ -24,6 +24,7 @@ import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
 import { refreshTags } from "./taste.js";
+import { runFriendReminders } from "./friends.js";
 import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runGuildFeeds, runServerDigests, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
@@ -182,6 +183,7 @@ client.once(Events.ClientReady, c => {
             try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
             try { result.feeds = await runGuildFeeds({ db, itad, notifier, log }); } catch (err) { ops.error("server feeds", err); }
             try { result.serverDigests = await runServerDigests({ db, itad, notifier, names: id => client.guilds.cache.get(id)?.name, log }); } catch (err) { ops.error("server digests", err); }
+            try { result.friends = await runFriendReminders({ db, itad, notifier, log }); } catch (err) { ops.error("friend reminders", err); }
             try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
             try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); } catch (err) { ops.error("cleanup", err); }
@@ -411,6 +413,7 @@ client.on(Events.InteractionCreate, async i => {
             case "watch": return await handlers.handleWatch(i);
             case "serverstats": return await handlers.handleServerStats(i);
             case "publicpage": return await handlers.handlePublicPage(i);
+            case "friend": return await handlers.handleFriend(i);
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
