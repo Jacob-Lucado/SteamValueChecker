@@ -9,7 +9,32 @@ CREATE TABLE IF NOT EXISTS steam_links (
     synced_at  INTEGER,
     games      INTEGER NOT NULL DEFAULT 0,
     minutes    INTEGER NOT NULL DEFAULT 0
-);`;
+);
+CREATE TABLE IF NOT EXISTS playtime_log (
+    discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    day        TEXT NOT NULL,
+    itad_id    TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    minutes    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS playtime_log_user ON playtime_log(discord_id, day);`;
+
+/** Rows of { day, title, minutes } for one calendar year into a recap: totals, hours per month, top games. */
+export function recapSummary(rows, year) {
+    const months = Array(12).fill(0), per = new Map(), days = new Set();
+    let total = 0;
+    for (const r of rows) {
+        if (!String(r.day).startsWith(String(year))) continue;
+        const m = Number(String(r.day).slice(5, 7)) - 1;
+        if (!(m >= 0 && m < 12)) continue;
+        months[m] += r.minutes; total += r.minutes; days.add(r.day);
+        const g = per.get(r.title) ?? { title: r.title, minutes: 0 };
+        g.minutes += r.minutes; per.set(r.title, g);
+    }
+    const top = [...per.values()].sort((a, b) => b.minutes - a.minutes || a.title.localeCompare(b.title)).slice(0, 5);
+    const best = total ? months.indexOf(Math.max(...months)) : null;
+    return { year, totalMinutes: total, months, top, games: per.size, activeDays: days.size, busiestMonth: best };
+}
 
 /** A new Steam game starts as backlog (barely touched), played (an hour or more), or playing (an hour or more, in the last two weeks). */
 const startStatus = (g, lastPlayedMs, nowMs) => ((g.minutes ?? 0) < 60 ? "backlog" : lastPlayedMs && nowMs - lastPlayedMs < 14 * 86400_000 ? "playing" : "played");
@@ -38,6 +63,10 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
                 const have = get("SELECT id FROM library WHERE discord_id = ? AND itad_id = ?", discordId, g.itad_id);
                 const played = g.lastPlayed ? g.lastPlayed * 1000 : null;
                 if (have) {
+                    // Growth since the last sync is the playtime for that period: that is what the recap adds up.
+                    const before = get("SELECT minutes FROM library WHERE id = ?", have.id)?.minutes ?? 0;
+                    const gained = Math.max(0, (g.minutes ?? 0) - before);
+                    if (gained > 0 && before > 0) run("INSERT INTO playtime_log (discord_id, day, itad_id, title, minutes) VALUES (?,?,?,?,?)", discordId, new Date(now()).toISOString().slice(0, 10), g.itad_id, g.title, gained);
                     run("UPDATE library SET appid = ?, minutes = ?, last_played = ? WHERE id = ?", g.appid ?? null, g.minutes ?? 0, played, have.id);
                     updated++;
                 } else if (n >= maxLibrary) {
@@ -68,5 +97,9 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         return { newlyFinished: finish };
     }
 
-    return { getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    const playtimeLog = id => all("SELECT day, itad_id, title, minutes FROM playtime_log WHERE discord_id = ? ORDER BY day", id);
+    const playRecap = (id, year) => recapSummary(playtimeLog(id), year);
+    const prunePlaytime = () => run("DELETE FROM playtime_log WHERE day < ?", new Date(now() - 3 * 366 * 86400_000).toISOString().slice(0, 10)).changes;
+
+    return { playtimeLog, playRecap, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

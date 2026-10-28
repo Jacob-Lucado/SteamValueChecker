@@ -496,3 +496,6 @@ pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-
 .cal-chip.lfg { background: var(--good-bg); }
 @media (max-width: 640px) { .cal-cell { min-height: 64px; padding: 3px; } .cal-chip { font-size: 10px; padding: 1px 3px; } }
 textarea.short { min-height: 64px; font-family: inherit; font-size: 14px; }
+
+.recap-card { width: 100%; height: auto; border-radius: 10px; display: block; margin: 10px 0; }
+input.short-num { width: 6em; }

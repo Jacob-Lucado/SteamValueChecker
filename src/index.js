@@ -181,7 +181,7 @@ client.once(Events.ClientReady, c => {
             try { result.feeds = await runGuildFeeds({ db, itad, notifier, log }); } catch (err) { ops.error("server feeds", err); }
             try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
             try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
-            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); } catch (err) { ops.error("cleanup", err); }
+            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); } catch (err) { ops.error("cleanup", err); }
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }
             catch (err) { await ops.backupDone(null, err); }

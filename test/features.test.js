@@ -373,7 +373,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
         "freegames": "GET /api/free", "sales": "GET /api/sales", "status": "GET /api/status", "publicpage": "POST /api/profile", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
-        "steam/link": "POST /api/steam/link", "steam/sync": "POST /api/steam/sync", "steam/view": "GET /api/steam", "steam/next": "GET /api/steam/next", "steam/value": "GET /api/steam", "steam/unlink": "POST /api/steam/unlink",
+        "steam/link": "POST /api/steam/link", "steam/sync": "POST /api/steam/sync", "steam/recap": "GET /api/steam/recap", "steam/view": "GET /api/steam", "steam/next": "GET /api/steam/next", "steam/value": "GET /api/steam", "steam/unlink": "POST /api/steam/unlink",
         "lfg/post": "POST /api/lfg", "lfg/list": "GET /api/lfg", "lfg/close": "POST /api/lfg/close",
         "bundle": "GET /api/bundles", "saleprep/plan": "GET /api/saleprep", "saleprep/recap": "GET /api/saleprep/recap",
         "setup": "GET /api/servers/setup", "gamenight": "POST /api/gamenight", "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",

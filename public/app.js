@@ -1022,6 +1022,51 @@
     return img;
   }
   const hoursText = m => (m < 60 ? m + " min" : (m / 60).toFixed(m < 600 ? 1 : 0) + " h");
+  // Year in games: hours per month and top games, plus a card drawn on a canvas that can be saved as an image.
+  function recapPanel() {
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const year = h("input", { type: "number", min: "2020", max: "2100", value: String(new Date().getFullYear()), class: "short-num", "aria-label": "Year" });
+    const out = h("div");
+    function drawCard(r) {
+      const c = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": `Your ${r.year} in games: ${hoursText(r.totalMinutes)} played` });
+      const x = c.getContext("2d");
+      const g = x.createLinearGradient(0, 0, 1200, 630); g.addColorStop(0, "#1b2838"); g.addColorStop(1, "#2a475e");
+      x.fillStyle = g; x.fillRect(0, 0, 1200, 630);
+      x.fillStyle = "#66c0f4"; x.font = "600 30px system-ui, sans-serif"; x.fillText(`MY ${r.year} IN GAMES`, 60, 80);
+      x.fillStyle = "#fff"; x.font = "700 96px system-ui, sans-serif"; x.fillText(hoursText(r.totalMinutes), 60, 190);
+      x.fillStyle = "#c7d5e0"; x.font = "28px system-ui, sans-serif";
+      x.fillText(`${r.games} games on ${r.activeDays} days` + (r.busiestMonth !== null ? `, busiest in ${MON[r.busiestMonth]}` : ""), 60, 240);
+      const peak = Math.max(1, ...r.months);
+      r.months.forEach((m, n) => {
+        const bh = Math.round(m / peak * 200), bx = 60 + n * 52;
+        x.fillStyle = m === peak ? "#a4d007" : "#66c0f4"; x.fillRect(bx, 520 - bh, 38, Math.max(bh, 3));
+        x.fillStyle = "#8ba4b6"; x.font = "16px system-ui, sans-serif"; x.fillText(MON[n], bx + 2, 548);
+      });
+      x.fillStyle = "#c7d5e0"; x.font = "600 26px system-ui, sans-serif"; x.fillText("TOP GAMES", 740, 330);
+      x.fillStyle = "#fff"; x.font = "26px system-ui, sans-serif";
+      r.top.slice(0, 5).forEach((t, n) => {
+        const name = t.title.length > 24 ? t.title.slice(0, 23) + "…" : t.title;
+        x.fillText(`${n + 1}. ${name}`, 740, 375 + n * 46);
+        x.fillStyle = "#8ba4b6"; x.font = "20px system-ui, sans-serif"; x.fillText(hoursText(t.minutes), 1090, 375 + n * 46); x.fillStyle = "#fff"; x.font = "26px system-ui, sans-serif";
+      });
+      x.fillStyle = "#5c7080"; x.font = "18px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 600);
+      return c;
+    }
+    async function load() {
+      const r = await api("/api/steam/recap?year=" + encodeURIComponent(year.value));
+      if (!r.totalMinutes) { out.replaceChildren(h("p", { class: "muted", text: "No playtime recorded for that year yet. Hours are added up between each Steam sync, so this fills in as you play." })); return; }
+      const card = drawCard(r);
+      const save = h("button", { class: "btn blue", text: "Save as image" });
+      save.addEventListener("click", () => card.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: `my-${r.year}-in-games.png` }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }));
+      out.replaceChildren(card, h("div", { class: "row" }, save));
+    }
+    const go = h("button", { class: "btn gray", text: "Show my year" });
+    go.addEventListener("click", () => busy(go, load));
+    return h("div", { class: "panel" }, h("h3", { text: "🎞️ Your year in games" }),
+      h("p", { class: "muted small", text: "Hours played, month by month, from the time you linked Steam. Save it as an image to share." }),
+      h("div", { class: "row" }, year, go), out);
+  }
+
   async function steamView() {
     const out = h("div", { class: "muted", text: "Loading…" });
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
@@ -1074,6 +1119,7 @@
             st.value.achTotal ? h("p", { class: "muted small", text: `Achievements: ${st.value.achDone.toLocaleString()} of ${st.value.achTotal.toLocaleString()} unlocked across ${st.value.achGames} games.` }) : null,
             st.value.top.length ? h("p", { class: "muted small", text: "Most valuable: " + st.value.top.map(r => `${r.title} (${money(r.msrp, cur)})`).join(", ") }) : null,
             h("p", { class: "muted small", text: `${st.value.priced} of ${d.link.games} games priced. An estimate from current prices, not what was paid. Free, removed or unlisted games are not counted.` })),
+          recapPanel(),
           h("div", { class: "panel" }, h("h3", { text: "What should I play next?" }),
             h("p", { class: "muted small", text: "A pick from your own library: what you are playing, games you started and never finished, then the most valuable ones you never touched." }), nextBtn),
           nextOut,

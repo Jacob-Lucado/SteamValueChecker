@@ -629,6 +629,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
 
         // What to play next from the Steam library. `skip` (comma-separated ids already offered) makes "pick another" fresh.
+        "GET /api/steam/recap": async (req, _body, url) => {
+            const s = session(req);
+            if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Link your Steam profile first.");
+            const year = Number(url.searchParams.get("year")) || new Date().getUTCFullYear();
+            if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new HttpError(400, "Pick a year from 2020 on.");
+            return db.playRecap(s.userId, year);
+        },
+
         "GET /api/steam/next": async (req, _body, url) => {
             const s = session(req);
             const u = userRow(s);

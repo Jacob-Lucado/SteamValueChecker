@@ -16,6 +16,19 @@ const achievementsLine = v => `**${v.achDone.toLocaleString("en-US")}** of **${v
 const line = (r, f) => `• **${r.title}** ${f(r)}`;
 const art = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIComponent(appid)}/header.jpg`;
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function recapEmbed(r) {
+    if (!r.totalMinutes) return { color: 0x66c0f4, title: `Your ${r.year} in games`, description: "No playtime recorded for that year yet. The bot adds up the hours between each Steam sync, so it fills in as you play (use `/steam sync`)." };
+    const peak = Math.max(...r.months), bars = " ▁▂▃▄▅▆▇█";
+    const spark = r.months.map(m => bars[Math.round(m / peak * 8)]).join("");
+    return {
+        color: 0x66c0f4, title: `Your ${r.year} in games`,
+        description: `**${fmtHours(r.totalMinutes)}** across **${r.games}** game${r.games === 1 ? "" : "s"} on **${r.activeDays}** different day${r.activeDays === 1 ? "" : "s"}. Busiest month: **${MONTHS[r.busiestMonth]}**.\n\`${spark}\` Jan to Dec`,
+        fields: [{ name: "Top games", value: r.top.map((g, n) => `${n + 1}. **${g.title}** ${fmtHours(g.minutes)}`).join("\n") }],
+        footer: { text: "Counted from the hours added between Steam syncs, so it starts from when you first linked." }
+    };
+}
+
 export function steamEmbed({ stats, link, currency }) {
     const fields = [];
     fields.push({ name: "Your library", value: [
@@ -99,6 +112,12 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
                 const n = steamNext(view.rows);
                 if (!n) throw new UserError("Nothing left to suggest. Everything from Steam is finished or dropped, or not synced yet (`/steam sync`).");
                 return void await i.editReply({ embeds: [nextEmbed(n, view.currency)] });
+            }
+            if (sub === "recap") {
+                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                const year = i.options.getInteger("year") ?? new Date().getUTCFullYear();
+                const shared = i.options.getBoolean("public") === true;
+                return void await i.reply({ embeds: [recapEmbed(db.playRecap(i.user.id, year))], ...(shared ? {} : { flags: MessageFlags.Ephemeral }) });
             }
             if (sub === "value") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

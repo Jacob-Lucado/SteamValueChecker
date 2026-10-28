@@ -200,3 +200,24 @@ test("library trend: needs two days, then reports the change", async () => {
     assert.equal(tr.first.msrp, 40); assert.equal(tr.first.backlog, null, "old snapshots had no counts");
     assert.equal(tr.month.days, 30); assert.equal(tr.month.backlog, -1); assert.equal(tr.month.finished, 3);
 });
+
+test("playtime recap: hours gained between syncs are logged per day and summed by month and game", async () => {
+    const { recapSummary } = await import("../src/steamstore.js");
+    let clock = Date.UTC(2026, 2, 10);
+    const db = openDb(":memory:", { now: () => clock });
+    db.ensureUser("u1", "g1");
+    const g = minutes => [{ itad_id: "a", title: "Alpha", appid: 1, minutes }, { itad_id: "b", title: "Beta", appid: 2, minutes: 30 }];
+    db.syncSteamGames("u1", g(60));            // first sync is a baseline, nothing is logged
+    assert.equal(db.playtimeLog("u1").length, 0);
+    clock = Date.UTC(2026, 2, 12); db.syncSteamGames("u1", g(180));   // +120 in March
+    clock = Date.UTC(2026, 4, 1); db.syncSteamGames("u1", g(240));    // +60 in May
+    db.syncSteamGames("u1", g(240));           // nothing new, nothing logged
+    const r = db.playRecap("u1", 2026);
+    assert.equal(r.totalMinutes, 180); assert.equal(r.months[2], 120); assert.equal(r.months[4], 60);
+    assert.equal(r.busiestMonth, 2); assert.equal(r.activeDays, 2); assert.deepEqual(r.top, [{ title: "Alpha", minutes: 180 }]);
+    assert.equal(db.playRecap("u1", 2025).totalMinutes, 0);
+    assert.equal(recapSummary([], 2026).busiestMonth, null);
+    assert.equal(db.exportUser("u1").playtime_log.length, 2);
+    db.deleteUser("u1");
+    db.close();
+});
