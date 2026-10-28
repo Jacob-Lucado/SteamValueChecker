@@ -622,7 +622,7 @@ test("visit counter for the FanaticalGrabber page: only that origin counts, one 
 
 const XML = '<gamesList><games><game><appID>10</appID><name><![CDATA[Counter]]></name><hoursOnRecord>12.5</hoursOnRecord></game></games></gamesList>';
 
-const PROFILE_XML = '<profile><steamID64>76561198000000000</steamID64><steamID><![CDATA[Jacob <b>L</b>]]></steamID><onlineState>in-game</onlineState><privacyState>public</privacyState><avatarFull><![CDATA[https://avatars.steamstatic.com/abc_full.jpg]]></avatarFull><memberSince>March 3, 2012</memberSince><location>Roanoke, Virginia</location><inGameInfo><gameName><![CDATA[Hades II]]></gameName></inGameInfo></profile>';
+const PROFILE_XML = '<profile><steamID64>76561198000000000</steamID64><steamID><![CDATA[Jacob <b>L</b>]]></steamID><onlineState>in-game</onlineState><privacyState>public</privacyState><avatarFull><![CDATA[https://avatars.steamstatic.com/abc_full.jpg]]></avatarFull><memberSince>March 3, 2012</memberSince><location>Roanoke, Virginia</location><inGameInfo><gameName><![CDATA[Hades II]]></gameName></inGameInfo><mostPlayedGames><mostPlayedGame><gameName><![CDATA[Fell &amp; Sell]]></gameName></mostPlayedGame></mostPlayedGames></profile>';
 test("Steam page: profile card for the linked account, and a look-up of anyone's public profile", async () => {
     const fetched = [];
     const t = await signedIn({

@@ -122,15 +122,26 @@ export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl 
 
 /** The public profile card from the community XML: name, picture, location, member since. Null when Steam has nothing to show. */
 export function parseProfileXml(xml, steamid) {
-    const tag = n => { const m = new RegExp(`<${n}>\\s*(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([^<]*))\\s*</${n}>`).exec(String(xml ?? "")); const v = (m?.[1] ?? m?.[2] ?? "").trim(); return v || null; };
+    const text = String(xml ?? "");
+    const unescape = v => v.replace(/&(#x?[0-9a-f]+|amp|lt|gt|quot|apos);/gi, (_m, e) => {
+        const k = e.toLowerCase();
+        if (k === "amp") return "&"; if (k === "lt") return "<"; if (k === "gt") return ">"; if (k === "quot") return '"'; if (k === "apos") return "'";
+        const code = k[1] === "x" ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10);
+        return Number.isInteger(code) && code > 0 && code < 0x110000 ? String.fromCodePoint(code) : "";
+    });
+    // Plain text only: CDATA is taken as is, ordinary text has its entities (&amp; and friends) decoded.
+    const tagIn = (src, n) => { const m = new RegExp(`<${n}>\\s*(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([^<]*))\\s*</${n}>`).exec(src); const v = (m?.[1] ?? (m?.[2] !== undefined ? unescape(m[2]) : "")).trim(); return v || null; };
+    const tag = n => tagIn(text, n);
     const name = tag("steamID");
     if (!name) return null;
     const pic = tag("avatarFull");
+    // gameName also appears under mostPlayedGames, so only look inside inGameInfo for what they are playing right now.
+    const inGame = /<inGameInfo>([\s\S]*?)<\/inGameInfo>/.exec(text)?.[1];
     return {
         steamid: String(steamid), name: name.slice(0, 64),
         avatar: pic && /^https:\/\/[\w.-]+\//.test(pic) ? pic : null,
         url: `https://steamcommunity.com/profiles/${steamid}`,
-        playing: tag("gameName")?.slice(0, 100) ?? null,
+        playing: inGame ? tagIn(inGame, "gameName")?.slice(0, 100) ?? null : null,
         memberSince: tag("memberSince")?.slice(0, 30) ?? null, status: tag("onlineState") ?? null,
         headline: tag("headline")?.slice(0, 120) ?? null, privacy: tag("privacyState") ?? null
     };

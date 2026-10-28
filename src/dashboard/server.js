@@ -140,11 +140,11 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         catch { throw new HttpError(400, "Bad request."); }
     }
 
-    // Public profile cards are cached for ten minutes so the Steam page does not ask Steam every time.
+    // Public profile cards are cached for a minute and a half so the Steam page does not ask Steam every time.
     const cardCache = new Map();
     async function profileCard(steamid) {
         const hit = cardCache.get(steamid);
-        if (hit && now() - hit.at < 600_000) return hit.card;
+        if (hit && now() - hit.at < 90_000) return hit.card;
         const card = await fetchProfileCard(steamid, steamFetch);
         if (card) { if (cardCache.size > 500) cardCache.clear(); cardCache.set(steamid, { at: now(), card }); }
         return card;
