@@ -31,6 +31,8 @@ import { createRedeemHandlers } from "./redeemhandlers.js";
 import { createDealHandlers } from "./dealhandlers.js";
 import { createFx } from "./fx.js";
 import { createLfgService } from "./lfg.js";
+import { createCalendarService } from "./calendar.js";
+import { createCalendarHandlers } from "./calendarhandlers.js";
 import { createLfgHandlers } from "./lfghandlers.js";
 import { createDashboard } from "./dashboard/server.js";
 import { createDiscordRest } from "./dashboard/discord.js";
@@ -131,6 +133,8 @@ const giveaways = cfg.keySecret
 const gw = createGiveawayHandlers({ db, giveaways });
 const lfg = createLfgService({ db, discord: gwDiscord, log: m => console.log(`[lfg] ${m}`) });
 const lfgUi = createLfgHandlers({ db, lfg });
+const calendar = createCalendarService({ db, discord: gwDiscord, log: m => console.log(`[calendar] ${m}`) });
+const calendarUi = createCalendarHandlers({ db, calendar, publicUrl: publicBase });
 
 // Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
 const ops = createOps({
@@ -162,6 +166,7 @@ client.once(Events.ClientReady, c => {
     } else console.log("Giveaways are off (set KEY_ENCRYPTION_SECRET to turn them on).");
 
     // Support tickets: quiet ones resolve and close on their own
+    schedule(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
     schedule(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
     schedule(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
 
@@ -396,6 +401,7 @@ client.on(Events.InteractionCreate, async i => {
             case "support": return await ticketUi.handleCommand(i);
             case "gamenight": return await handlers.handleGameNight(i);
             case "lfg": return await lfgUi.handleCommand(i);
+            case "calendar": return await calendarUi.handle(i);
             case "setup": return await setupUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);
@@ -420,7 +426,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), lfg, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), lfg, calendar, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

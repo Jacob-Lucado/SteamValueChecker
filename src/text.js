@@ -41,6 +41,7 @@ export const HELP = [
     "• `/lfg post` finds people to play with (Join/Leave buttons, optional Discord event). `/library grabber` gives the FanaticalGrabber extension a link code to send your game titles in one click.",
     "• `/redeem` queues Steam keys (typed or in a file). Press Run on the dashboard's Batch redeem page while logged into Steam, with the FanaticalGrabber extension 2.3+, and the results come back as a DM.",
     "• `/library trend` shows how your library value and backlog changed. `/compare` lines your library up against a friend who opted in with `/alerts share`. `/regions` ranks one game's price across regions. `/redeem history:true` shows how your last keys turned out. Wishlisted games that are not out yet get a release-day alert (`/alerts mute type:Release-day alerts` to stop it).",
+    "• `/calendar view` lists what is coming up: wishlist release dates, Steam sales, your server's events and group games. Managers add events with `/calendar add` (announced, with a reminder). The dashboard has a month view, and `/calendar feed` makes an optional private link for Google, Apple or Outlook calendar.",
     "• `/currency` picks the currency prices are shown in (saved, and shared with the dashboard).",
     "• `/mydata` exports or deletes everything stored about you.",
     "",

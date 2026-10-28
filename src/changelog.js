@@ -8,6 +8,7 @@ export const CHANGELOG = [
         "Batch redeem (dashboard, Games menu): paste Steam keys and redeem them all through the FanaticalGrabber extension 2.3. `/redeem` queues keys from Discord and DMs you the results.",
         "Release-day alerts: games on your wishlist that are not out yet get a DM when they launch. Mute with `/alerts mute`.",
         "`/library trend` and a backlog chart on the Library page. `/compare` your library with a friend. `/regions` ranks a game's price across regions.",
+        "Calendar: `/calendar view` and a Calendar page show your wishlist release dates, Steam sales, server events and group games. Managers add server events (announced, with a reminder). An optional private link syncs it to Google, Apple or Outlook calendar.",
         "Batch redeem remembers how keys turned out (masked), skips repeats and has `/redeem history:true`.",
         "The bot owner can download the latest backup from the Admin page." ] },
     { version: "2026.10.27", date: "2026-10-27", title: "Game night and easier setup", items: [

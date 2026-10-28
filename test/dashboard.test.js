@@ -835,3 +835,58 @@ test("Compare: two libraries side by side, only with opted-in members of a share
         assert.equal((await t.request("/api/compare?guild=nope&user=u2")).status, 403, "only servers you are in");
     } finally { await t.close(); }
 });
+
+test("Calendar: personal entries, manager events with announcement and reminder, and the optional private .ics feed", async () => {
+    const { createCalendarService } = await import("../src/calendar.js");
+    const posts = [];
+    let cal;
+    const t = await setup({ extra: db => { cal = createCalendarService({ db, discord: { post: async (c, p) => { posts.push({ c, p }); return { id: "m" + posts.length }; } } }); return { calendar: cal }; } });
+    t.advance(Date.now() - 1_000_000); // the dashboard's test clock starts near 1970; bring it to today so dates line up
+    await t.signIn();
+    try {
+        const DAY = 86400_000;
+        t.db.ensureUser("u1", "g-admin");
+        t.db.addItems("u1", [{ itad_id: "w", title: "Wish" }]);
+        t.db.setRelease("w", Date.now() + 5 * DAY);
+        let r = (await t.request("/api/calendar?days=365")).data;
+        assert.ok(r.entries.some(e => e.kind === "release" && e.title === "Wish releases"), "a wishlisted game's release date");
+        assert.ok(r.entries.some(e => e.kind === "sale"), "Steam sales");
+        assert.equal((await t.request("/api/calendar/events", { method: "POST", body: { guild_id: "g-member", title: "x", starts_at: Date.now() + DAY } })).status, 403, "members cannot add events");
+        assert.equal((await t.request("/api/calendar/events", { method: "POST", body: { guild_id: "g-admin", title: "x", starts_at: Date.now() - DAY } })).status, 400, "not in the past");
+        const add = await t.request("/api/calendar/events", { method: "POST", body: { guild_id: "g-admin", title: "Co-op night", notes: "Bring snacks", starts_at: Date.now() + 30 * 60_000, channel_id: "c1", remind_min: 60 } });
+        assert.equal(add.status, 200); assert.equal(add.data.announced, true);
+        assert.match(posts[0].p.embeds[0].title, /Co-op night/);
+        r = (await t.request("/api/calendar?days=30")).data;
+        const ev = r.entries.find(e => e.kind === "event");
+        assert.equal(ev.title, "Co-op night"); assert.equal(ev.canRemove, true);
+        await cal.tick();
+        assert.match(posts[1].p.embeds[0].title, /Starting soon/, "the reminder goes out once the window opens");
+        await cal.tick();
+        assert.equal(posts.length, 2, "and only once");
+
+        const feed = await t.request("/api/calendar/feed", { method: "POST", body: { action: "new" } });
+        assert.match(feed.data.url, /\/calendar\/feed\/svcc_[A-Za-z0-9_-]{43}\.ics$/);
+        const ics = await t.request(new URL(feed.data.url).pathname);
+        assert.equal(ics.status, 200);
+        assert.match(ics.text, /BEGIN:VCALENDAR/); assert.match(ics.text, /SUMMARY:Wish releases/); assert.match(ics.text, /SUMMARY:Co-op night/);
+        assert.equal((await t.request("/calendar/feed/svcc_" + "A".repeat(43) + ".ics")).status, 404, "a wrong link finds nothing");
+        assert.equal((await t.request("/api/calendar/feed", { method: "POST", body: { action: "off" } })).data.off, true);
+        assert.equal((await t.request(new URL(feed.data.url).pathname)).status, 404, "turned off");
+
+        assert.equal((await t.request("/api/calendar/events/delete", { method: "POST", body: { guild_id: "g-admin", id: ev.id } })).status, 200);
+        assert.equal((await t.request("/api/calendar?days=30")).data.entries.some(e => e.kind === "event"), false);
+    } finally { await t.close(); }
+});
+
+test("Calendar: .ics text is escaped and folded, and events are validated", async () => {
+    const { toIcs, cleanEvent } = await import("../src/calendar.js");
+    const ics = toIcs([{ kind: "event", id: 1, guild_id: "g", title: "A, B; C", start: Date.UTC(2026, 10, 7, 20), end: null, allDay: false, notes: "x".repeat(200) + "\nline" }], { now: Date.UTC(2026, 9, 27) });
+    assert.match(ics, /SUMMARY:A\\, B\; C/);
+    assert.ok(ics.split("\r\n").every(l => l.length <= 75), "long lines are folded");
+    assert.match(ics, /DTSTART:20261107T200000Z/);
+    const now = Date.UTC(2026, 9, 27);
+    assert.throws(() => cleanEvent({ title: "", startsAt: now + 1e6 }, now), /title/);
+    assert.throws(() => cleanEvent({ title: "x", startsAt: now - 1e9 }, now), /passed/);
+    assert.throws(() => cleanEvent({ title: "x", startsAt: now + 1e6, remindMin: 7 }, now), /Reminder/);
+    assert.equal(cleanEvent({ title: " Hi  there ", startsAt: now + 1e6 }, now).title, "Hi there");
+});

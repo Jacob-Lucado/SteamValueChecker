@@ -40,6 +40,7 @@ Steam Value Checker is a Discord bot that prices a list of games and, if you cho
 - If you use batch redeem: keys you queue with `/redeem` are kept only until the batch finishes, you cancel it, or 24 hours pass, then erased. Keys you paste on the dashboard page go from your browser to the extension to Steam and never reach this server. For each settled key the bot keeps a SHA-256 hash and a masked hint (first and last five characters), the result and the game name, so repeats are skipped and `/redeem history:true` can list them. Clear it from the Batch redeem page.
 - If you wishlist a game that is not out yet: its release date, so you can be told on launch.
 - If you use `/compare`: only members who opted in with `/alerts share` can be compared, and the other person sees nothing. Only game titles and hours are shown.
+- If you use the calendar: server events a manager adds (title, notes, time, channel and who added it) are visible to that server's members and removed 30 days after they happen. If you make a calendar link, a SHA-256 hash of it, which servers it covers and when it was last used are stored. The link itself is never stored. `/calendar feed action:off` deletes it.
 - If you post with `/lfg`: the post (game, time, slots), who joined, and the Discord event ID if one was made. Posts are removed shortly after they close.
 - Your alert history: what was sent, when, the price and how (DM or channel). It is deleted after 90 days.
 - If you use a server's shared list: the games you suggested and your votes.

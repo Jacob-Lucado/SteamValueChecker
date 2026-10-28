@@ -26,6 +26,7 @@ import { importLibrary, libraryView, leaderboard, serverStats } from "../library
 import { extractKeys } from "../redeemstore.js";
 import { compareLibraries } from "../compare.js";
 import { regionPrices } from "../regions.js";
+import { calendarEntries, toIcs, KINDS } from "../calendar.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
@@ -78,7 +79,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, calendar = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -904,6 +905,56 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { game: hit.matched || title, rows };
         },
 
+        "GET /api/calendar": async (req, _b, url) => {
+            // One list for the member: wishlist release dates, Steam sales, events and group games from their servers.
+            const s = session(req);
+            const days = Math.min(365, Math.max(1, Math.round(Number(url.searchParams.get("days"))) || 60));
+            const t = now();
+            const mine = s.guilds.filter(g => !botGuilds || botGuilds(g.id));
+            const wanted = String(url.searchParams.get("guild") ?? "");
+            const guildIds = (wanted ? mine.filter(g => g.id === wanted) : mine).map(g => g.id);
+            const kinds = String(url.searchParams.get("kinds") ?? "").split(",").filter(k => KINDS.includes(k));
+            const entries = calendarEntries(db, s.userId, { from: t - 86400_000, to: t + days * 86400_000, guildIds, kinds: kinds.length ? kinds : KINDS });
+            const names = Object.fromEntries(mine.map(g => [g.id, g.name]));
+            const feed = db.getCalFeed(s.userId);
+            return { now: t, servers: mine.map(g => ({ id: g.id, name: g.name, manageable: isManager(g) })),
+                entries: entries.map(e => ({ ...e, server: e.guild_id ? names[e.guild_id] ?? null : null, canRemove: e.kind === "event" && isManager(mine.find(g => g.id === e.guild_id) ?? {}) })),
+                feed: feed ? { created_at: feed.created_at, used_at: feed.used_at } : null };
+        },
+
+        "POST /api/calendar/events": async (req, body) => {
+            const s = session(req);
+            if (!calendar) throw new HttpError(503, "The calendar is not available.");
+            const g = managerGuild(s, String(body.guild_id));
+            let channelId = null;
+            if (body.channel_id) {
+                let channels;
+                try { channels = await rest.listChannels(g.id); } catch { throw new HttpError(400, "The bot is not in that server yet. Invite it first."); }
+                channelId = String(body.channel_id);
+                if (!channels.some(c => c.id === channelId)) throw new HttpError(400, "Pick one of the server's text channels.");
+            }
+            const r = await calendar.create({ guildId: g.id, creatorId: s.userId, title: body.title, notes: body.notes, startsAt: Number(body.starts_at), channelId, remindMin: body.remind_min === undefined ? 60 : Number(body.remind_min) });
+            return r;
+        },
+
+        "POST /api/calendar/events/delete": async (req, body) => {
+            const s = session(req);
+            if (!calendar) throw new HttpError(503, "The calendar is not available.");
+            const g = managerGuild(s, String(body.guild_id));
+            if (!calendar.remove(Number(body.id), g.id)) throw new HttpError(404, "I can't find that event.");
+            return { ok: true };
+        },
+
+        "POST /api/calendar/feed": async (req, body) => {
+            // An optional private link for Google, Apple or Outlook calendar. The link is shown once; only its hash is kept.
+            const s = session(req);
+            if (body.action === "off") return { off: db.revokeCalFeed(s.userId) };
+            cooldown(s.userId, "grabbertoken");
+            const mine = s.guilds.filter(g => !botGuilds || botGuilds(g.id)).map(g => g.id);
+            const token = db.createCalFeed(s.userId, mine.slice(0, 20));
+            return { url: `${origin}/calendar/feed/${token}.ics` };
+        },
+
         "GET /api/saleprep": async (req, _b, url) => {
             const s = session(req);
             cooldown(s.userId, "deals");
@@ -1296,6 +1347,17 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 return send(res, 200, readFileSync(joinPath(config.backupDir, name)), {
                     "Content-Type": "application/vnd.sqlite3", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store"
                 });
+            }
+
+            const icsMatch = req.method === "GET" ? /^\/calendar\/feed\/(svcc_[A-Za-z0-9_-]{43})\.ics$/.exec(url.pathname) : null;
+            if (icsMatch) {
+                // A private calendar link: the secret in the address is the only credential, so it is never cached or indexed.
+                const f = db.calFeedForToken(icsMatch[1]);
+                if (!f) throw new HttpError(404, "Not found.");
+                db.noteCalFeedUse(f.discord_id);
+                const t = now();
+                const body = toIcs(calendarEntries(db, f.discord_id, { from: t - 7 * 86400_000, to: t + 400 * 86400_000, guildIds: f.guild_ids }), { now: t });
+                return send(res, 200, body, { "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" });
             }
 
             if (key === "POST /api/grabber/import") {

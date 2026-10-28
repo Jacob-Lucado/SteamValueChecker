@@ -87,6 +87,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/library trend` | How your library value, game count and backlog changed over the last month and since tracking began (from daily snapshots) |
 | `/compare` | Your library against a friend's: games you both own, and what only one of you has. They must have opted in with `/alerts share`; server only |
 | `/regions` | One game's cheapest price in about a dozen regions, ranked in US dollars (recent ECB exchange rates). Region-locked keys mean this is for information |
+| `/calendar` | `view` lists release dates of wishlisted games, Steam sales, server events and open `/lfg` posts. `add` and `remove` (Manage Server) manage server events, announced in the channel with a reminder before they start. `feed` makes an optional private link for Google, Apple or Outlook calendar |
 | `/library grabber` | A link code for the FanaticalGrabber extension's **Send to Steam Value Checker** button. Only game titles are sent, never keys; the code is stored hashed and can be turned off |
 | `/currency [currency]` | Choose the currency prices are shown in (saved; the dashboard's top-bar picker is the same setting). With no option it shows yours |
 | `/mydata export\|delete` | Download or delete everything stored about you |

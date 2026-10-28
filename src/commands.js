@@ -120,6 +120,24 @@ const lfgCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("close").setDescription("Close a post you made (managers can close any)")
         .addIntegerOption(o => o.setName("id").setDescription("The post number from /lfg list").setRequired(true).setMinValue(1)));
 
+const calendarCmd = new SlashCommandBuilder()
+    .setName("calendar")
+    .setDescription("What is coming up: game releases, Steam sales and server events. Managers can add events")
+    .addSubcommand(s => s.setName("view").setDescription("Release dates, sales, events and group games coming up")
+        .addIntegerOption(o => o.setName("days").setDescription("How far ahead (default 14)").setMinValue(1).setMaxValue(90)))
+    .addSubcommand(s => s.setName("add").setDescription("Add a server event (managers): shown to members and announced here")
+        .addStringOption(o => o.setName("title").setDescription("What is happening").setRequired(true).setMaxLength(80))
+        .addStringOption(o => o.setName("when").setDescription("e.g. tomorrow 19:30, friday 9pm, 2026-11-07 20:00").setRequired(true).setMaxLength(40))
+        .addStringOption(o => o.setName("notes").setDescription("Details, like the game or a voice channel").setMaxLength(400))
+        .addBooleanOption(o => o.setName("announce").setDescription("Post it in this channel now and remind members before it starts (default on)"))
+        .addIntegerOption(o => o.setName("reminder").setDescription("When to remind (default 1 hour before)").addChoices(
+            { name: "No reminder", value: 0 }, { name: "15 minutes before", value: 15 }, { name: "1 hour before", value: 60 }, { name: "1 day before", value: 1440 })))
+    .addSubcommand(s => s.setName("remove").setDescription("Remove a server event (managers)")
+        .addIntegerOption(o => o.setName("id").setDescription("The event number from /calendar view").setRequired(true).setMinValue(1)))
+    .addSubcommand(s => s.setName("feed").setDescription("Optional: a private link to show this calendar in Google, Apple or Outlook calendar")
+        .addStringOption(o => o.setName("action").setDescription("What to do (default: make a link)").addChoices(
+            { name: "Make a new link", value: "new" }, { name: "Turn the link off", value: "off" })));
+
 const serverlist = new SlashCommandBuilder()
     .setName("serverlist")
     .setDescription("A wishlist shared by this server, with votes")
@@ -339,5 +357,5 @@ const support = new SlashCommandBuilder()
 export const commands = [
     ...[value, wishlist, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare].map(serverOnly),
-    ...[serverlist, leaderboard, serverstats].map(serverOrDm)
+    ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
