@@ -360,7 +360,7 @@ test("every slash command has a dashboard counterpart", async () => {
     const MAP = {
         value: "POST /api/value", "wishlist/import": "POST /api/wishlist/import", "wishlist/add": "POST /api/wishlist/add",
         "wishlist/remove": "POST /api/wishlist/remove", "wishlist/view": "GET /api/wishlist", "wishlist/check": "GET /api/wishlist/history",
-        "wishlist/alert": "POST /api/wishlist/alert",
+        "wishlist/alert": "POST /api/wishlist/alert", "wishlist/cleanup": "POST /api/wishlist/cleanup", "wishlist/priority": "POST /api/wishlist/priority",
         "currency": "POST /api/settings", redeem: "POST /api/redeem/finish", "calendar/view": "GET /api/calendar", "calendar/add": "POST /api/calendar/events", "calendar/remove": "POST /api/calendar/events/delete", "calendar/feed": "POST /api/calendar/feed", regions: "GET /api/regions", compare: "GET /api/compare", "redeem/history": "GET /api/redeem/history", "alerts/status": "GET /api/me", "alerts/history": "GET /api/alerts/history",
         "alerts/delivery": "POST /api/settings", "alerts/pause": "POST /api/settings", "alerts/resume": "POST /api/settings", "alerts/region": "POST /api/settings",
         "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",

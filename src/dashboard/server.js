@@ -348,6 +348,19 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { removed: item.title };
         },
 
+        "POST /api/wishlist/cleanup": async (req) => {
+            const s = session(req);
+            const owned = db.ownedWishlist(s.userId);
+            db.removeOwnedWishlist(s.userId);
+            return { removed: owned.length, titles: owned.slice(0, 30).map(x => x.title) };
+        },
+
+        "POST /api/wishlist/priority": async (req, body) => {
+            const s = session(req);
+            if (!db.setPriority(s.userId, String(body.itad_id), body.starred !== false)) throw new HttpError(404, "That game is not on your list.");
+            return { starred: body.starred !== false };
+        },
+
         "POST /api/wishlist/alert": async (req, body) => {
             const s = session(req);
             let trig;

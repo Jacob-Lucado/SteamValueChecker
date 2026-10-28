@@ -63,8 +63,12 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
         stats.alerts += list.length;
         const user = db.getUser(userId);
         if (!user) continue;
-        if (isQuiet(user, now())) { stats.deferred += list.length; continue; }
-        for (const part of chunked(list, MAX_CARDS)) {
+        // Quiet hours hold back alerts, except for games the member starred as a priority.
+        const quiet = isQuiet(user, now());
+        const sendable = quiet ? list.filter(h => h.item.priority) : list;
+        stats.deferred += list.length - sendable.length;
+        if (!sendable.length) continue;
+        for (const part of chunked(sendable, MAX_CARDS)) {
             // History is fetched only for alerts that are really being sent, and a failure just leaves the note off.
             await Promise.all(part.map(async h => {
                 try { h.insight = priceInsight(await itad.getHistory?.(h.item.itad_id, h.item.region ?? "US"), h.now.price, { now: now(), money: n => `${n.toFixed(2)} ${h.now.currency ?? "USD"}` }); }

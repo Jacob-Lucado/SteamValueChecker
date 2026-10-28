@@ -158,6 +158,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     // Columns added after the first release. Safe to run on every start.
     const cols = t => db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
     const addColumn = (table, name, def) => { if (!cols(table).includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`); };
+    addColumn("items", "priority", "INTEGER NOT NULL DEFAULT 0");
     addColumn("items", "release_at", "INTEGER");
     addColumn("items", "release_check", "INTEGER");
     addColumn("items", "release_wait", "INTEGER NOT NULL DEFAULT 0");
@@ -230,7 +231,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
 
     const countItems = id => get("SELECT COUNT(*) AS n FROM items WHERE discord_id = ?", id).n;
-    const listItems = id => all("SELECT * FROM items WHERE discord_id = ? ORDER BY title COLLATE NOCASE", id).map(clean);
+    const listItems = id => all("SELECT * FROM items WHERE discord_id = ? ORDER BY priority DESC, title COLLATE NOCASE", id).map(clean);
 
     /** Adds games, skipping ones already on the list. Returns { added, existing, skippedForLimit }. */
     function addItems(discordId, games, { source = "manual", trigger = "any", value = null } = {}) {
@@ -304,9 +305,14 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const activeItems = () => all(
         `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.bundles, u.share
            FROM items i JOIN users u ON u.discord_id = i.discord_id
-          WHERE u.paused = 0 AND (i.snooze_until IS NULL OR i.snooze_until < ?)`,
+          WHERE u.paused = 0 AND (i.snooze_until IS NULL OR i.snooze_until < ?)
+            AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = i.discord_id AND l.itad_id = i.itad_id)`,
         now()
     ).map(clean);
+    /** Wishlist games that are already in the member's library (owned), so alerts for them are pointless. */
+    const ownedWishlist = id => all("SELECT i.* FROM items i JOIN library l ON l.discord_id = i.discord_id AND l.itad_id = i.itad_id WHERE i.discord_id = ? ORDER BY i.title COLLATE NOCASE", id).map(clean);
+    const removeOwnedWishlist = id => run("DELETE FROM items WHERE discord_id = ? AND itad_id IN (SELECT itad_id FROM library WHERE discord_id = ?)", id, id).changes;
+    const setPriority = (id, itadId, on) => run("UPDATE items SET priority = ? WHERE discord_id = ? AND itad_id = ?", on ? 1 : 0, id, itadId).changes > 0;
 
     // Plain visit counters for the companion web page. Only totals are kept: no addresses, no per-visit rows.
     const siteHit = (site, newVisitor) => {
@@ -521,7 +527,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
-        siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, removeSteamNotIn, setTrigger,
+        siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,

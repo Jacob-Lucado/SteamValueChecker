@@ -29,10 +29,12 @@ export async function viewRows(db, itad, user) {
     const items = db.listItems(user.discord_id);
     if (!items.length) return { rows: [], currency: "USD" };
     const prices = await itad.getPrices(items.map(i => i.itad_id), user.region);
+    const owned = new Set(db.listLibrary(user.discord_id).map(x => x.itad_id));
     const rows = items.map(it => {
         const s = summarize(prices.get(it.itad_id), { majorOnly: user.stores === "major" });
         const now = current(s);
         return {
+            owned: owned.has(it.itad_id), priority: Boolean(it.priority),
             itad_id: it.itad_id, title: it.title, source: it.source,
             best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
             alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value,
@@ -40,7 +42,7 @@ export async function viewRows(db, itad, user) {
             release_at: it.release_at && it.release_at > Date.now() ? it.release_at : null
         };
     });
-    rows.sort((a, b) => b.discount - a.discount || a.title.localeCompare(b.title));
+    rows.sort((a, b) => Number(a.owned) - Number(b.owned) || Number(b.priority) - Number(a.priority) || b.discount - a.discount || a.title.localeCompare(b.title));
     return { rows, currency: rows.find(r => r.currency)?.currency ?? "USD" };
 }
 

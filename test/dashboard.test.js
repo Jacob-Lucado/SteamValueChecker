@@ -190,6 +190,18 @@ test("wishlist: add, view with sale info, change rules, remove", async () => {
     assert.equal(all.data.updated, 1);
     assert.equal((await t.request("/api/wishlist/alert", { method: "POST", body: { itad_id: "nope", type: "any" } })).status, 404);
 
+    // priority star and owned cleanup
+    assert.equal((await t.request("/api/wishlist/priority", { method: "POST", body: { itad_id: "nope" } })).status, 404);
+    assert.equal((await t.request("/api/wishlist/priority", { method: "POST", body: { itad_id: row.itad_id } })).status, 200);
+    assert.equal((await t.request("/api/wishlist")).data.rows[0].priority, true);
+    t.db.upsertLibrary("u1", [{ itad_id: row.itad_id, title: "Celeste", steam_appid: 1, playtime_minutes: 0 }]);
+    assert.equal((await t.request("/api/wishlist")).data.rows[0].owned, true);
+    const clean = await t.request("/api/wishlist/cleanup", { method: "POST", body: {} });
+    assert.equal(clean.data.removed, 1);
+    assert.equal(t.db.countItems("u1"), 0);
+    t.db.addItems("u1", [{ itad_id: row.itad_id, title: "Celeste", slug: "celeste" }]);
+    t.db.removeLibrary && t.db.removeLibrary("u1", row.itad_id);
+
     assert.equal((await t.request("/api/wishlist/remove", { method: "POST", body: { itad_id: "nope" } })).status, 404);
     assert.equal((await t.request("/api/wishlist/remove", { method: "POST", body: { itad_id: row.itad_id } })).status, 200);
     assert.equal(t.db.countItems("u1"), 0);

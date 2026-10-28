@@ -107,6 +107,22 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return eph(i, `Removed **${found.item.title}**.`);
     }
 
+    async function wishlistCleanup(i) {
+        const owned = db.ownedWishlist(i.user.id);
+        if (!owned.length) return eph(i, "Nothing to clean up. None of your wishlist games are in your library.");
+        db.removeOwnedWishlist(i.user.id);
+        return eph(i, `Removed **${owned.length}** game${owned.length === 1 ? "" : "s"} you already own from your wishlist: ${owned.slice(0, 15).map(x => x.title).join(", ")}${owned.length > 15 ? ", and more" : ""}.`);
+    }
+
+    async function wishlistPriority(i) {
+        const found = findItem(db.listItems(i.user.id), i.options.getString("game", true));
+        if (found.ambiguous) return eph(i, `More than one match: ${found.ambiguous.map(t => `**${t}**`).join(", ")}. Be more specific.`);
+        if (!found.item) return eph(i, "That game is not on your list.");
+        const on = i.options.getBoolean("starred") !== false;
+        db.setPriority(i.user.id, found.item.itad_id, on);
+        return eph(i, on ? `⭐ **${found.item.title}** is a priority: it is listed first and its alerts come through even in quiet hours.` : `**${found.item.title}** is no longer a priority.`);
+    }
+
     async function wishlistView(i, user) {
         cooldown(i, "view");
         await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -232,6 +248,8 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 case "import": return await wishlistImport(i, user);
                 case "add": return await wishlistAdd(i);
                 case "remove": return await wishlistRemove(i);
+                case "cleanup": return await wishlistCleanup(i);
+                case "priority": return await wishlistPriority(i);
                 case "view": return await wishlistView(i, user);
                 case "alert": return await wishlistAlert(i);
                 case "check": return await wishlistCheck(i, user);

@@ -550,7 +550,11 @@
         });
         const bulk = h("div", { class: "panel" }, h("h3", { text: "Several games at once" }),
           h("div", { class: "rule inline" }, h("label", { class: "check" }, selectAll, "Select all"), count, bulkRule, removeSel));
-        list.replaceChildren(all, bulk, ...rows);
+        const ownedN = data.rows.filter(r => r.owned).length;
+        const cleanBtn = h("button", { class: "btn gray small", text: "Remove them" });
+        cleanBtn.addEventListener("click", () => busy(cleanBtn, async () => { const c = await api("/api/wishlist/cleanup", {}); state.me.games -= c.removed; toast(`Removed ${c.removed} owned game${c.removed === 1 ? "" : "s"}.`, "ok"); loadList(); }));
+        const cleanup = ownedN ? h("div", { class: "notice" }, `${ownedN} game${ownedN === 1 ? " is" : "s are"} already in your library. `, cleanBtn) : "";
+        list.replaceChildren(cleanup, all, bulk, ...rows);
       } catch (e) {
         list.className = "";
         list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
@@ -585,10 +589,12 @@
           lineChart([{ name: "Price", cls: "s0", points: d.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }));
       });
     });
+    const star = h("button", { class: "btn gray small", text: r.priority ? "★ Priority" : "☆ Priority", title: "Priority games are listed first and alert even in quiet hours", "aria-pressed": String(Boolean(r.priority)) });
+    star.addEventListener("click", () => busy(star, async () => { await api("/api/wishlist/priority", { itad_id: r.itad_id, starred: !r.priority }); reload(); }));
     const pick = h("input", { type: "checkbox", class: "pick", "aria-label": "Select " + r.title });
     pick.addEventListener("change", () => onPick && onPick(r.itad_id, pick.checked));
     return h("div", { class: "wish" + (sale ? " sale" : "") },
-      h("div", {}, h("div", { class: "name" }, pick, " ", r.title, " ", verdictBadge(r.verdict)), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}${r.release_at ? " · releases " + new Date(r.release_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " (you will be told)" : ""}` })),
+      h("div", {}, h("div", { class: "name" }, pick, " ", r.priority ? "⭐ " : "", r.title, " ", verdictBadge(r.verdict), r.owned ? h("span", { class: "badge none", text: "Owned" }) : ""), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}${r.release_at ? " · releases " + new Date(r.release_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " (you will be told)" : ""}` })),
       h("div", { class: "price-box" },
         h("span", { class: "badge" + (sale ? "" : " none"), text: sale ? "-" + pct + "%" : "–" }),
         sale && r.regular !== null && h("span", { class: "was", text: money(r.regular, cur) }),
@@ -597,7 +603,7 @@
       h("div", { class: "rule" }, ...ruleControl({ type: r.trigger_type, value: r.trigger_value }, async (type, value) => {
         await api("/api/wishlist/alert", { itad_id: r.itad_id, type, value });
         toast("Rule saved.", "ok"); reload();
-      }), snooze, hist, remove), chartHolder);
+      }), star, snooze, hist, remove), chartHolder);
   }
 
   // ---------- alerts ----------

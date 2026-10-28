@@ -152,7 +152,7 @@ export function alertEmbed(item, now, { trigger, lower = false, verdict = null, 
     const art_ = art ? artUrl(item) : undefined;
     return {
         color: lvl.color,
-        title: lower ? `${item.title}: price dropped again` : pct > 0 ? `${item.title} is ${pct}% off` : `${item.title} is on sale`,
+        title: `${item.priority ? "⭐ " : ""}${lower ? `${item.title}: price dropped again` : pct > 0 ? `${item.title} is ${pct}% off` : `${item.title} is on sale`}`,
         url: safeUrl(now.url),
         description: lines.join("\n"),
         fields,
