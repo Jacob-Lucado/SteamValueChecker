@@ -35,7 +35,7 @@ export function freeMenu(list, { cat = "games", store = "all", page = 0, showDlc
 
     const components = [];
     if (showDlc) {
-        components.push({ type: 1, components: CATS.map(([id, icon, label]) => ({ type: 2, style: id === cat ? 1 : 2, label: `${icon} ${label} (${count(id)})`, custom_id: `fg:${id}:all:0` })) });
+        components.push({ type: 1, components: CATS.map(([id, icon, label]) => ({ type: 2, style: id === cat ? 1 : 2, label: `${icon} ${label} (${count(id)})`, custom_id: `fg:${id}:all:0:tab` })) }); // the :tab suffix keeps these ids different from Prev/Next, which can point at the same place
     }
     if (shops.length > 1 || store !== "all") {
         components.push({ type: 1, components: [{

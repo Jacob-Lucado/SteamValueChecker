@@ -583,6 +583,11 @@ test("/freegames menu: pages, DLC split, store filter, DLC can be hidden", async
     assert.ok(freeMenu(list, { cat: "games", page: 99 }).embeds[0].footer.text.startsWith("2 of 2"));
     assert.match(freeMenu([], {}).embeds[0].title, /Nothing/);
     for (const row of m.components) for (const c of row.components) if (c.custom_id) assert.ok(c.custom_id.length <= 100);
+    // Discord rejects a message whose component ids repeat (Prev on page 2 used to match the tab for page 1)
+    for (const opts of [{ cat: "games", page: 1 }, { cat: "games", page: 0 }, { cat: "all", page: 1 }, { cat: "dlc", page: 1 }, { cat: "all", store: "steam", page: 1 }]) {
+        const ids = freeMenu(list, opts).components.flatMap(r => r.components.map(c => c.custom_id)).filter(Boolean);
+        assert.equal(new Set(ids).size, ids.length, "duplicate ids for " + JSON.stringify(opts));
+    }
 });
 
 test("free DLC preference is saved and validated", async () => {
