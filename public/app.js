@@ -2275,7 +2275,7 @@
     const slider = h("input", { type: "range", class: "war-slider", min: "0", max: "500", step: "5", value: "0", "aria-label": "Budget" });
     const label = h("strong", { text: "" });
     const total = h("div", { class: "muted" });
-    const list = h("div");
+    const list = h("div", { class: "panel war-list" });
     const sum = () => st.rows.filter(r => st.picked.has(r.itad_id)).reduce((t, r) => t + r.price, 0);
     function autofill() {
       st.picked = new Set(); let left = st.budget;

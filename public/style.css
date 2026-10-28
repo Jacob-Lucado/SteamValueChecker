@@ -541,5 +541,8 @@ details.panel > summary { cursor: pointer; font-weight: 600; color: var(--white)
 details.panel[open] > summary { margin-bottom: 10px; }
 
 .war-slider { width: 100%; margin: 8px 0; }
-.war-row { display: block; padding: 6px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.war-list { padding: 4px 16px; }
+.war-list .empty { margin: 8px 0; }
+.war-row:last-child { border-bottom: 0; }
+.war-row { display: block; padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .fr-actions { margin-top: 10px; }
