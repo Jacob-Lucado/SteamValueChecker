@@ -523,3 +523,5 @@ input.short-num { width: 6em; }
 .mp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mp-icon { font-size: 1.4rem; }
 .mp-tools { display: flex; gap: 4px; margin-top: auto; padding-top: 6px; }
+
+.mp-banner { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: var(--radius); margin-bottom: 12px; }

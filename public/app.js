@@ -2327,6 +2327,8 @@
   async function myPageView() {
     const grid = h("div", { class: "mp-grid" });
     const KEY = "svc_mypage";
+    const art = loadMyArt();
+    const artBox = h("div", { class: "panel" });
     const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
     const save = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* per-device only */ } };
     const lay = Object.assign({ order: [], hidden: [], pinned: [] }, load());
@@ -2395,9 +2397,34 @@
     }
     const bar = h("div", { class: "row" });
     const on = CARDS.filter(c => c.status && c.status()[0]).length, tot = CARDS.filter(c => c.status).length;
-    app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), bar, grid);
+    app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), myBanner(art), artBox, bar, grid);
+    drawArt(artBox, art);
     draw();
     app.append(profileCardPanel());
+  }
+
+  // Pictures from any https address for your own My page and profile card. Kept only on this device; nothing is uploaded or shared.
+  const ART_KEY = "svc_myart";
+  function loadMyArt() { try { const v = JSON.parse(localStorage.getItem(ART_KEY) || "{}"); return { banner: okImage(v.banner) ? v.banner : "", avatar: okImage(v.avatar) ? v.avatar : "" }; } catch { return { banner: "", avatar: "" }; } }
+  function okImage(u) { if (!u) return false; try { const x = new URL(u); return x.protocol === "https:" && !x.username && !x.password && u.length <= 500; } catch { return false; } }
+  function myBanner(art) {
+    if (!art.banner) return "";
+    const img = h("img", { class: "mp-banner", src: art.banner, alt: "", referrerpolicy: "no-referrer", loading: "lazy" });
+    img.addEventListener("error", () => img.remove());
+    return img;
+  }
+  function drawArt(box, art) {
+    const banner = h("input", { type: "url", maxlength: "500", placeholder: "https://… (a wide image)", value: art.banner });
+    const avatar = h("input", { type: "url", maxlength: "500", placeholder: "https://… (a square picture)", value: art.avatar });
+    const apply = h("button", { class: "btn blue", text: "Save pictures", onclick: () => {
+      for (const [v, n] of [[banner.value.trim(), "banner"], [avatar.value.trim(), "picture"]]) if (v && !okImage(v)) return toast("The " + n + " link must start with https://", "error");
+      art.banner = banner.value.trim(); art.avatar = avatar.value.trim();
+      try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* per-device only */ }
+      toast("Saved on this device.", "ok"); myPageView();
+    } });
+    box.replaceChildren(h("h3", { text: "Your pictures" }),
+      h("p", { class: "muted small", text: "Use images from any https address: a banner for this page and a picture for your profile card. They are loaded by your browser from that site, which can see your address, so use hosts you trust. They stay on this device and are never uploaded or shown to anyone else. A picture the host does not allow for downloads is skipped on the saved card." }),
+      h("div", { class: "row" }, field("Banner", banner), field("Profile card picture", avatar)), apply);
   }
 
   // A shareable profile card drawn on a canvas. Pick what it shows and the colour, then save it as an image. Nothing is uploaded.
@@ -2410,12 +2437,16 @@
     const wrap = h("div", { class: "panel" }, h("h3", { text: "Profile card" }), out);
     api("/api/profile/card").then(d => {
       const canvas = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": "Your profile card" });
+      let pic = null;
+      const myArt = loadMyArt();
+      if (myArt.avatar) { const im = new Image(); im.crossOrigin = "anonymous"; im.referrerPolicy = "no-referrer"; im.onload = () => { pic = im; draw(); }; im.src = myArt.avatar; }
       const draw = () => {
         const [bg, ac] = THEMES[opt.theme] || THEMES.steam, x = canvas.getContext("2d");
         x.fillStyle = bg; x.fillRect(0, 0, 1200, 630);
         x.fillStyle = ac; x.fillRect(0, 0, 1200, 10);
         x.beginPath(); x.arc(110, 120, 52, 0, Math.PI * 2); x.fill();
-        x.fillStyle = bg; x.font = "700 56px system-ui, sans-serif"; x.textAlign = "center"; x.fillText((d.name || "?").slice(0, 1).toUpperCase(), 110, 140); x.textAlign = "left";
+        if (pic) { x.save(); x.beginPath(); x.arc(110, 120, 52, 0, Math.PI * 2); x.clip(); x.drawImage(pic, 58, 68, 104, 104); x.restore(); }
+        else { x.fillStyle = bg; x.font = "700 56px system-ui, sans-serif"; x.textAlign = "center"; x.fillText((d.name || "?").slice(0, 1).toUpperCase(), 110, 140); x.textAlign = "left"; }
         x.fillStyle = "#fff"; x.font = "700 56px system-ui, sans-serif"; x.fillText((d.name || "Gamer").slice(0, 22), 190, 122);
         x.fillStyle = ac; x.font = "600 26px system-ui, sans-serif"; x.fillText("GAME LIBRARY", 190, 160);
         const stats = [];

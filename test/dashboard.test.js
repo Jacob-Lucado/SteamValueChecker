@@ -1056,3 +1056,12 @@ test("profile card data comes from stored data only", async () => {
         assert.ok(Array.isArray(r.data.badges)); assert.ok(Array.isArray(r.data.genres));
     } finally { await t.close(); }
 });
+
+test("the page allows https pictures but still no scripts, frames or other connections", async () => {
+    const t = await setup();
+    try {
+        const csp = (await t.request("/")).headers.get("content-security-policy") ?? "";
+        assert.match(csp, /img-src [^;]*\bhttps:/);
+        assert.match(csp, /script-src 'self'(;|$)/); assert.match(csp, /default-src 'none'/); assert.match(csp, /connect-src 'self'/);
+    } finally { await t.close(); }
+});
