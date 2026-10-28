@@ -94,6 +94,7 @@ test("setup checklist: tracks channels from every part of the bot and renders th
     db.setGiveawaySettings("g1", { vouch_channel_id: "333" });
     db.setFreeFeed("g1", true);
     db.setGameNight("g1", true);
+    db.setWeeklyDigest("g1", true);
     st = setupStatus(db, "g1");
     assert.equal(st.complete, true);
     assert.ok(st.steps.every(x => x.done));
@@ -101,7 +102,7 @@ test("setup checklist: tracks channels from every part of the bot and renders th
     assert.match(e.description, /<#111>/);
     assert.match(e.description, /x\.test\/#\/setup\/g1/);
     const ids = setupComponents(st).flatMap(r => r.components).map(c => c.custom_id);
-    assert.deepEqual(ids, [SU.alert, SU.support, SU.vouch, SU.auto, SU.gn, SU.feed, SU.refresh]);
+    assert.deepEqual(ids, [SU.alert, SU.support, SU.vouch, SU.auto, SU.gn, SU.feed, SU.digest, SU.refresh]);
 });
 
 test("auto setup: creates the category and channels, keeps support private, skips what exists, explains a missing permission", async () => {
@@ -148,6 +149,7 @@ test("game night: shared games, almost-shared games and a group buy, only for op
 
     // voice nudge: two opted-in members in one channel both have the same alert, and the server switched it on
     db.setGameNight("g1", true);
+    db.setWeeklyDigest("g1", true);
     const hit = id => ({ item: { discord_id: id, share: 1, itad_id: "hollow", title: "HOLLOW" }, now: { price: 4.99, currency: "USD", discount: 0.5, shop: "Fanatical" } });
     const groups = voiceGroups({ db, eligible: [hit("a"), hit("b"), hit("c")], voiceMap: () => new Map([["vc1", ["a", "b", "x"]], ["vc2", ["c"]]]) });
     assert.equal(groups.length, 1);

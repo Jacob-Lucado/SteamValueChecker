@@ -3,15 +3,16 @@
 const EPHEMERAL = 64;
 const PermissionFlagsBits = { ManageGuild: 1n << 5n, ViewChannel: 1n << 10n, SendMessages: 1n << 11n, EmbedLinks: 1n << 14n };
 
-export const SU = { alert: "su_alert", support: "su_support", vouch: "su_vouch", feed: "su_feed", gn: "su_gn", refresh: "su_refresh", auto: "su_auto" };
+export const SU = { alert: "su_alert", support: "su_support", vouch: "su_vouch", feed: "su_feed", digest: "su_digest", gn: "su_gn", refresh: "su_refresh", auto: "su_auto" };
 
 /** Where a server stands. Used by both sides so they always agree. */
 export function setupStatus(db, guildId) {
     const g = db.getGuild(guildId), t = db.getTicketSettings(guildId), gw = db.getGiveawaySettings(guildId);
-    const s = { alertChannel: g?.channel_id ?? null, feed: Boolean(g?.free_feed), supportChannel: t.channel_id ?? null, staffRole: t.staff_role_id ?? null, vouchChannel: gw.vouch_channel_id ?? null, gameNight: db.gameNightOn(guildId) };
+    const s = { alertChannel: g?.channel_id ?? null, feed: Boolean(g?.free_feed), supportChannel: t.channel_id ?? null, staffRole: t.staff_role_id ?? null, vouchChannel: gw.vouch_channel_id ?? null, gameNight: db.gameNightOn(guildId), weeklyDigest: Boolean(g?.weekly_digest) };
     const steps = [
         { id: "alert", text: "Alert channel (used when a DM fails, and for the free-games feed)", done: Boolean(s.alertChannel) },
         { id: "feed", text: "Post new free games for everyone (optional)", done: s.feed, optional: true },
+        { id: "digest", text: "Friday round-up: cheap games members watch, free games and events (optional)", done: s.weeklyDigest, optional: true },
         { id: "support", text: "Support ticket channel for your members", done: Boolean(s.supportChannel) },
         { id: "gamenight", text: "Game night: nudge voice channels when a game they all want goes on sale (optional)", done: s.gameNight, optional: true },
         { id: "vouch", text: "Vouches channel for giveaways (optional)", done: Boolean(s.vouchChannel), optional: true }
@@ -36,6 +37,7 @@ export function setupComponents(st) {
             { type: 2, style: 3, label: "Create the channels for me", custom_id: SU.auto },
             { type: 2, style: st.gameNight ? 4 : 2, label: st.gameNight ? "Stop game night nudges" : "Game night nudges", custom_id: SU.gn },
             { type: 2, style: st.feed ? 4 : 2, label: st.feed ? "Stop free-games feed" : "Free-games feed", custom_id: SU.feed },
+            { type: 2, style: st.weeklyDigest ? 4 : 2, label: st.weeklyDigest ? "Stop Friday digest" : "Friday digest", custom_id: SU.digest },
             { type: 2, style: 2, label: "Refresh", custom_id: SU.refresh }] }];
 }
 
@@ -124,6 +126,9 @@ export function createSetupHandlers({ db, publicUrl = null }) {
             return i.editReply({ embeds: [setupEmbed(st, publicUrl, i.guildId, note)], components: setupComponents(st) });
         } else if (i.customId === SU.gn) {
             db.setGameNight(i.guildId, !db.gameNightOn(i.guildId));
+        } else if (i.customId === SU.digest) {
+            if (!db.getGuild(i.guildId)) return eph(i, "Choose an alert channel first. The digest posts there.");
+            db.setWeeklyDigest(i.guildId, !db.getGuild(i.guildId).weekly_digest);
         } else if (i.customId === SU.feed) {
             if (!db.getGuild(i.guildId)) return eph(i, "Choose an alert channel first. The free-games feed posts there.");
             db.setFreeFeed(i.guildId, !db.getGuild(i.guildId).free_feed);
