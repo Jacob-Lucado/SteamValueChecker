@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS users (
     dm_failures  INTEGER NOT NULL DEFAULT 0,
     created_at   INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS card_prefs (
+    discord_id TEXT PRIMARY KEY REFERENCES users(discord_id) ON DELETE CASCADE,
+    prefs      TEXT NOT NULL DEFAULT '{}'
+);
 CREATE TABLE IF NOT EXISTS items (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     discord_id    TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
@@ -510,11 +514,15 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         db.exec(`VACUUM INTO '${String(path).replace(/'/g, "''")}'`);
     }
 
+    // What the shareable profile card shows: platform names, colour, picture links and which stats. One small JSON blob per member.
+    const getCardPrefs = discordId => { try { return JSON.parse(get("SELECT prefs FROM card_prefs WHERE discord_id = ?", discordId)?.prefs ?? "{}"); } catch { return {}; } };
+    const setCardPrefs = (discordId, prefs) => run("INSERT INTO card_prefs (discord_id, prefs) VALUES (?, ?) ON CONFLICT(discord_id) DO UPDATE SET prefs = excluded.prefs", discordId, JSON.stringify(prefs));
+
     function exportUser(discordId) {
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support };
+        return { user: u, friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId) };
     }
 
     function deleteUser(discordId) {
@@ -562,6 +570,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...lfg, close: () => db.close()
+        stats, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...lfg, close: () => db.close()
     };
 }

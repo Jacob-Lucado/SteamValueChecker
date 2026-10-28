@@ -30,6 +30,7 @@ import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGame
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
+import { createCardHandlers } from "./cardhandlers.js";
 import { createRedeemHandlers } from "./redeemhandlers.js";
 import { createDealHandlers } from "./dealhandlers.js";
 import { createFx } from "./fx.js";
@@ -63,6 +64,7 @@ const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey });
+const cardUi = createCardHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const fx = createFx();
 const dealUi = createDealHandlers({ db, itad, fx });
 
@@ -400,6 +402,7 @@ client.on(Events.InteractionCreate, async i => {
             case "redeem": return await redeemUi.handle(i);
             case "compare": return await handlers.handleCompare(i);
             case "steam": return await steamUi.handle(i);
+            case "profilecard": return await cardUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
             case "regions": return await dealUi.handleRegions(i);
             case "saleprep": return await dealUi.handleSalePrep(i);

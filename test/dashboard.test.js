@@ -1091,6 +1091,29 @@ test("profile card data comes from stored data only", async () => {
     } finally { await t.close(); }
 });
 
+test("profile card settings are saved per member, validated, and the same card is drawn as a PNG", async () => {
+    const t = await signedIn();
+    const post = (path, body) => t.request(path, { method: "POST", body });
+    try {
+        let r = await t.request("/api/profile/card");
+        assert.equal(r.data.prefs.theme, "steam"); assert.deepEqual(r.data.prefs.platforms, []); assert.ok(r.data.platforms.some(p => p.id === "xbox"));
+        assert.equal((await post("/api/profile/card-settings", { platforms: [{ id: "xbox", name: "Jacob360" }, { id: "gog", name: "jl" }], theme: "night" })).status, 200);
+        r = await t.request("/api/profile/card");
+        assert.deepEqual(r.data.prefs.platforms.map(p => p.id), ["xbox", "gog"]); assert.equal(r.data.prefs.theme, "night");
+        assert.equal((await post("/api/profile/card-settings", { platforms: [{ id: "bogus", name: "x" }] })).status, 400);
+        assert.equal((await post("/api/profile/card-settings", { avatar: "http://insecure.example/a.png" })).status, 400);
+        assert.equal((await t.request("/api/profile/card")).data.prefs.platforms.length, 2, "a refused change leaves the saved card alone");
+        t.advance(5_000);
+        const img = await t.request("/api/profile/card.png", { raw: true });
+        assert.equal(img.status, 200); assert.equal(img.headers.get("content-type"), "image/png");
+        assert.deepEqual([...new Uint8Array(await img.arrayBuffer()).subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+        assert.equal((await t.request("/api/steam/value.png")).status, 429, "pictures are rate limited");
+        t.advance(5_000);
+        assert.equal((await t.request("/api/steam/value.png")).status, 404, "no Steam profile linked yet");
+        assert.ok(JSON.stringify(t.db.exportUser("u1").profile_card).includes("Jacob360"), "included in the data export");
+    } finally { await t.close(); }
+});
+
 test("the page allows https pictures but still no scripts, frames or other connections", async () => {
     const t = await setup();
     try {

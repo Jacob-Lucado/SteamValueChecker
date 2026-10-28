@@ -97,7 +97,7 @@ const steam = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it")))
     .addSubcommand(s => s.setName("view").setDescription("Your Steam library: games, hours played, what you never played and what it is worth"))
     .addSubcommand(s => s.setName("next").setDescription("What should I play next? A pick from your own library"))
-    .addSubcommand(s => s.setName("value").setDescription("Estimated Steam account value at full price, today's cheapest and all-time-low prices")
+    .addSubcommand(s => s.setName("value").setDescription("Your Steam account value as a picture: at full price, today's cheapest and all-time-low prices")
         .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it")))
     .addSubcommand(s => s.setName("unlink").setDescription("Forget your Steam profile")
         .addBooleanOption(o => o.setName("remove_games").setDescription("Also remove the games that came from Steam")));
@@ -358,6 +358,11 @@ const serverstats = new SlashCommandBuilder()
     .setName("serverstats")
     .setDescription("This server's numbers: most wanted games, savings and top savers (members who opted in)");
 
+const profilecard = new SlashCommandBuilder()
+    .setName("profilecard")
+    .setDescription("Your shareable game profile card as a picture: library, hours, trophies and your gaming names")
+    .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it"));
+
 const mydata = new SlashCommandBuilder()
     .setName("mydata")
     .setDescription("See or delete everything the bot stores about you")
@@ -385,7 +390,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());

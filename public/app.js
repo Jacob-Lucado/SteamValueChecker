@@ -1247,6 +1247,11 @@
         nextBtn.addEventListener("click", () => busy(nextBtn, pickNext));
 
         out.className = "";
+        const valueImageBtn = h("button", { class: "btn gray small", type: "button", text: "Save as image", title: "The same picture /steam value posts in Discord", onclick: e => busy(e.currentTarget, async () => {
+          const res = await fetch("/api/steam/value.png", { credentials: "same-origin" });
+          if (!res.ok) { let m = "Could not draw the picture."; try { m = (await res.json()).error || m; } catch { /* keep the default */ } throw new Error(m); }
+          const url = URL.createObjectURL(await res.blob()), a = h("a", { href: url, download: "steam-account-value.png" }); a.click(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+        }) });
         const quickUnlink = h("button", { class: "btn red small", type: "button", text: "Unlink", title: "Unlink this profile (your games stay unless you remove them under Manage)", onclick: () => { if (confirm("Unlink this Steam profile? Your library games stay.")) busy(quickUnlink, async () => { await api("/api/steam/unlink", { removeGames: false }); toast("Unlinked.", "ok"); load(); }); } });
         out.replaceChildren(
           d.card ? steamProfileCard(d.card, quickUnlink) : null,
@@ -1255,7 +1260,7 @@
             tile("Hours played", hoursText(st.totalMinutes)),
             st.value.achTotal ? tile("Achievements", `${st.value.achDone.toLocaleString()} / ${st.value.achTotal.toLocaleString()}`, `${Math.round(st.value.achDone / st.value.achTotal * 100)}% unlocked, ${st.value.achGames} games` + (st.completed ? `, ${st.completed} at 100%` : "")) : null,
             tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
-          h("div", { class: "panel" }, h("h3", { text: "💰 Estimated account value" }),
+          h("div", { class: "panel" }, h("h3", { text: "💰 Estimated account value" }), valueImageBtn,
             h("div", { class: "grid four" },
               tile("At full price", money(st.value.msrp, cur), "list price today"),
               tile("At today's cheapest", money(st.value.cheapest, cur), "best current deal"),
@@ -2516,10 +2521,14 @@
     app.append(profileCardPanel());
   }
 
-  // Pictures from any https address for your own My page and profile card. Kept only on this device; nothing is uploaded or shared.
+  // Pictures from any https address for your own My page and profile card. Shown on your profile card. The links are saved with your account so /profilecard can draw them; nothing is uploaded and nobody else sees them unless you post your card.
   const ART_KEY = "svc_myart";
   function loadMyArt() { try { const v = JSON.parse(localStorage.getItem(ART_KEY) || "{}"); return { banner: okImage(v.banner) ? v.banner : "", avatar: okImage(v.avatar) ? v.avatar : "", auto: v.auto === true }; } catch { return { banner: "", avatar: "", auto: false }; } }
-  function saveMyArt(art) { try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* per-device only */ } }
+  function saveMyArt(art) {
+    try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* the website still works without it */ }
+    // The /profilecard command draws from the server, so it needs the same pictures. Failing quietly is fine; the card here still works.
+    if (state.me) api("/api/profile/card-settings", { avatar: art.avatar || "", banner: art.banner || "" }).catch(() => {});
+  }
   // Steam art for the pictures. A wide hero for the banner (with the store header as a fallback) and the Steam profile picture.
   const heroUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/library_hero.jpg`;
   const headerUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/header.jpg`;
@@ -2553,7 +2562,7 @@
       toast("Saved on this device.", "ok"); myPageView();
     } });
     box.replaceChildren(h("summary", { text: "Your pictures (banner and profile card picture)" }),
-      h("p", { class: "muted small", text: "Use images from any https address: a banner for this page and a picture for your profile card. They are loaded by your browser from that site, which can see your address, so use hosts you trust. They stay on this device and are never uploaded or shown to anyone else. A picture the host does not allow for downloads is skipped on the saved card." }),
+      h("p", { class: "muted small", text: "Use images from any https address: a banner for this page and a picture for your profile card. They are loaded by your browser from that site, which can see your address, so use hosts you trust. Only the links are saved (with your account, for /profilecard); no image is uploaded. A picture the host does not allow for downloads is skipped on the saved card." }),
       h("div", { class: "row" }, field("Banner", banner), field("Profile card picture", avatar)), apply);
   }
 
@@ -2561,11 +2570,20 @@
   function profileCardPanel() {
     const KEY = "svc_profilecard";
     let opt = { games: true, finished: true, hours: true, saved: true, streak: true, badges: true, genres: true, theme: "steam" };
+    let platforms = [];
     try { Object.assign(opt, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch { /* defaults */ }
     const THEMES = { steam: ["#1b2838", "#66c0f4"], night: ["#14151a", "#b388ff"], forest: ["#13241c", "#5fd38d"], sunset: ["#2a1620", "#ff9a62"] };
     const out = h("div", { class: "muted", text: "Loading…" });
     const wrap = h("div", { class: "panel" }, h("h3", { text: "Profile card" }), out);
     api("/api/profile/card").then(d => {
+      // What is saved with the account wins, so the card here and /profilecard match.
+      const sp = d.prefs || {};
+      if (sp.show) Object.assign(opt, sp.show);
+      if (sp.theme) opt.theme = sp.theme;
+      platforms = (sp.platforms || []).map(p => ({ id: p.id, name: p.name }));
+      const labels = Object.fromEntries((d.platforms || []).map(p => [p.id, p.label]));
+      const pushCard = patch => api("/api/profile/card-settings", patch).catch(e => toast(e.message, "error"));
+      { const have = loadMyArt(); if ((have.avatar || "") !== (sp.avatar || "") || (have.banner || "") !== (sp.banner || "")) { if (have.avatar || have.banner) pushCard({ avatar: have.avatar, banner: have.banner }); } }
       const canvas = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": "Your profile card" });
       let pic = null, banner = null;
       const loadImg = (src, done, fallback) => { const im = new Image(); im.crossOrigin = "anonymous"; im.referrerPolicy = "no-referrer"; im.onload = () => { done(im); draw(); }; im.onerror = () => { if (fallback) loadImg(fallback, done); }; im.src = src; };
@@ -2611,38 +2629,63 @@
         if (opt.finished) stats.push([String(d.finished), "finished"]);
         if (opt.hours && d.hours) stats.push([d.hours.toLocaleString() + " h", "played"]);
         if (opt.saved && d.savedPct !== null) stats.push([d.savedPct + "%", "saved vs full price"]);
-        if (opt.streak && d.bestStreak) stats.push([d.streak + " / " + d.bestStreak, "month streak / best"]);
-        const n = stats.length, gap = 18, left = 60, tw = n ? (1080 - gap * (n - 1)) / n : 0, ty = 340, th = 150;
+        if (opt.streak && d.bestStreak) stats.push([d.streak + " / " + d.bestStreak, "streak / best"]);
+        const n = stats.length, gap = 18, left = 60, tw = n ? (1080 - gap * (n - 1)) / n : 0, ty = 330, th = 136;
         stats.forEach(([v, k], i) => {
           const tx = left + i * (tw + gap);
           rr(x, tx, ty, tw, th, 18); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill();
           x.strokeStyle = "rgba(255,255,255,0.10)"; x.lineWidth = 1.5; x.stroke();
-          x.fillStyle = ac; rr(x, tx + 22, ty + 20, 34, 5, 2.5); x.fill();
-          x.fillStyle = "#fff"; x.font = `700 ${n > 4 ? 46 : 56}px system-ui, sans-serif`; x.fillText(v, tx + 22, ty + 90, tw - 40);
-          x.fillStyle = "#9fb3c4"; x.font = "22px system-ui, sans-serif"; x.fillText(k, tx + 22, ty + 124, tw - 40);
+          x.fillStyle = ac; rr(x, tx + 22, ty + 18, 34, 5, 2.5); x.fill();
+          x.fillStyle = "#fff"; x.font = `700 ${n > 4 ? 44 : 54}px system-ui, sans-serif`; x.fillText(v, tx + 22, ty + 82, tw - 40);
+          x.fillStyle = "#9fb3c4"; x.font = "21px system-ui, sans-serif"; x.fillText(k, tx + 22, ty + 114, tw - 40);
         });
-        // Badges and genres.
-        const by = 518;
+        // Trophies (by name) on the left, top genres on the right, then the gaming names they added.
+        const by = 484, cut = (t, m) => (t.length > m ? t.slice(0, m - 1) + "…" : t);
         if (opt.badges && d.badges.length) {
-          const icons = d.badges.slice(0, 8), bw = 24 + icons.length * 52;
-          rr(x, 60, by, bw, 56, 28); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke();
-          x.font = "30px system-ui, sans-serif"; x.fillStyle = "#fff"; icons.forEach((b, i) => x.fillText(b.icon, 78 + i * 52, by + 39));
+          x.font = "600 20px system-ui, sans-serif"; let bx = 60;
+          for (const b of d.badges.slice(0, 4)) { const label = cut(b.name, 16), w = x.measureText(label).width + 36; if (bx + w > 700) break; rr(x, bx, by + 8, w, 40, 20); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke(); x.fillStyle = "#fff"; x.fillText(label, bx + 18, by + 35); bx += w + 10; }
         }
         if (opt.genres && d.genres.length) {
           x.font = "600 21px system-ui, sans-serif"; let gx = 1140;
           for (const gname of [...d.genres].slice(0, 3).reverse()) { const w = x.measureText(gname).width + 34; gx -= w; rr(x, gx, by + 8, w, 40, 20); x.fillStyle = ac + "26"; x.fill(); x.strokeStyle = ac + "66"; x.stroke(); x.fillStyle = ac; x.fillText(gname, gx + 17, by + 35); gx -= 12; }
         }
-        x.fillStyle = "#5c7080"; x.font = "17px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 614);
+        { let px = 60; const py = 548;
+          for (let i = 0; i < platforms.length; i++) {
+            const p = platforms[i], label = labels[p.id] || p.id, name = cut(p.name, 22);
+            x.font = "18px system-ui, sans-serif"; const lw = x.measureText(label).width; x.font = "700 18px system-ui, sans-serif"; const w = lw + x.measureText(name).width + 40, more = platforms.length - i - 1;
+            if (px + w > 1140 - (more > 0 ? 90 : 0)) { const t = "+" + (platforms.length - i) + " more"; x.font = "600 18px system-ui, sans-serif"; const w2 = x.measureText(t).width + 28; rr(x, px, py, w2, 36, 18); x.fillStyle = "rgba(255,255,255,0.04)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke(); x.fillStyle = "#9fb3c4"; x.fillText(t, px + 14, py + 25); break; }
+            rr(x, px, py, w, 36, 18); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke();
+            x.font = "18px system-ui, sans-serif"; x.fillStyle = "#9fb3c4"; x.fillText(label, px + 18, py + 25); x.font = "700 18px system-ui, sans-serif"; x.fillStyle = "#fff"; x.fillText(name, px + 18 + lw + 8, py + 25);
+            px += w + 10;
+          } }
+        x.fillStyle = "#5c7080"; x.font = "16px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 616);
       };
       const box = (key, label) => { const c = h("input", { type: "checkbox", checked: opt[key] }); c.addEventListener("change", () => { opt[key] = c.checked; keep(); draw(); }); return h("label", { class: "check" }, c, label); };
-      const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(opt)); } catch { /* per-device */ } };
+      let timer = null;
+      const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(opt)); } catch { /* per-device */ } clearTimeout(timer); timer = setTimeout(() => pushCard({ theme: opt.theme, show: { games: opt.games, finished: opt.finished, hours: opt.hours, saved: opt.saved, streak: opt.streak, badges: opt.badges, genres: opt.genres } }), 600); };
       const theme = select(Object.keys(THEMES).map(k => [k, k[0].toUpperCase() + k.slice(1)]), opt.theme);
       theme.addEventListener("change", () => { opt.theme = theme.value; keep(); draw(); });
       const save = h("button", { class: "btn blue", text: "Save as image", onclick: () => canvas.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: "my-game-profile.png" }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }) });
+      // Gaming names: pick a platform, type your name there, add. They show as small tags on the card.
+      const plat = select((d.platforms || []).map(p => [p.id, p.label]), "steam");
+      const pname = h("input", { type: "text", maxlength: "40", placeholder: "Your name or ID there" });
+      const tags = h("div", { class: "chips" });
+      const paintTags = () => tags.replaceChildren(...platforms.map(p => h("span", { class: "chip dim plat-chip" }, (labels[p.id] || p.id) + ": " + p.name + " ",
+        h("button", { class: "chip-x", type: "button", title: "Remove", "aria-label": "Remove " + (labels[p.id] || p.id), text: "✕", onclick: () => { platforms = platforms.filter(q => q.id !== p.id); paintTags(); draw(); pushCard({ platforms }); } }))));
+      const addPlat = () => {
+        const name = pname.value.trim(); if (!name) return toast("Type your name or ID for " + (labels[plat.value] || "that platform") + " first.", "error");
+        platforms = [...platforms.filter(q => q.id !== plat.value), { id: plat.value, name }]; pname.value = ""; paintTags(); draw();
+        pushCard({ platforms }).then(r => { if (r) toast("Added to your card.", "ok"); });
+      };
+      pname.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPlat(); } });
+      paintTags();
       out.className = "";
-      out.replaceChildren(h("p", { class: "muted small", text: "Drawn on your device from your library, hours, challenge and badges. Choose what to show, then save the image to share." }),
+      out.replaceChildren(h("p", { class: "muted small", text: "Drawn from your library, hours, challenge and badges. Choose what to show, add your gaming names, then save the image, or post it in Discord with /profilecard. Your choices are saved with your account." }),
         h("div", { class: "row" }, box("games", "Games"), box("finished", "Finished"), box("hours", "Hours"), box("saved", "Percent saved"), box("streak", "Streak"), box("badges", "Badges"), box("genres", "Top genres")),
-        field("Colour", theme), canvas, save);
+        field("Colour", theme),
+        h("h4", { text: "Your gaming names" }),
+        h("div", { class: "row plat-row" }, field("Platform", plat), field("Name or ID", pname), h("button", { class: "btn gray shrink", type: "button", text: "Add", onclick: addPlat })),
+        tags, canvas, save);
       draw();
     }).catch(e => out.replaceChildren(h("div", { class: "notice warn", text: e.message })));
     return wrap;

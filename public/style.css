@@ -575,3 +575,10 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .game-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .game-line:first-of-type { border-top: 0; padding-top: 0; }
 .game-line:last-child { padding-bottom: 2px; }
+
+/* Gaming names on the profile card */
+.plat-row { align-items: flex-end; }
+.plat-row .btn { align-self: flex-end; }
+.plat-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.chip-x { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 12px; padding: 0 2px; opacity: .7; }
+.chip-x:hover, .chip-x:focus-visible { opacity: 1; }

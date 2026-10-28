@@ -23,6 +23,8 @@ import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
+import { profileCardData, renderProfileCard, renderSteamValue } from "../cardimg.js";
+import { PLATFORMS, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { importLibrary, libraryView, leaderboard, finishedLeague, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
 import { compareLibraries } from "../compare.js";
@@ -67,7 +69,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000 };
+const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -688,23 +690,17 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
 
         "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },
-        // Everything the shareable profile card shows, from stored data only (no price lookups).
+        // Everything the shareable profile card shows, from stored data only (no price lookups), plus the choices saved for it.
         "GET /api/profile/card": async (req) => {
             const s = session(req); userRow(s);
-            const lib = db.listLibrary(s.userId);
-            const tc = trophyCase(db, s.userId);
-            const ch = challengeView(db, s.userId);
-            const snaps = db.listSnapshots(s.userId, 1);
-            const last = snaps[snaps.length - 1] ?? snaps[0] ?? null;
-            return {
-                name: s.username, games: lib.length, finished: lib.filter(g => g.status === "finished").length,
-                backlog: lib.filter(g => g.status === "backlog").length,
-                hours: Math.round(lib.reduce((t, g) => t + (g.minutes ?? 0), 0) / 60),
-                savedPct: last && last.msrp_paid > 0 ? Math.round((last.msrp_paid - last.paid) / last.msrp_paid * 100) : null,
-                streak: ch.streak, bestStreak: ch.best,
-                badges: tc.badges.filter(b => b.tier).map(b => ({ icon: b.icon, name: b.name, tier: b.tier })),
-                genres: tasteProfile(db, s.userId).genres.slice(0, 3).map(g => g.name)
-            };
+            return { ...profileCardData(db, s.userId, s.username), prefs: viewPrefs(db.getCardPrefs(s.userId)), platforms: PLATFORMS.map(([id, label]) => ({ id, label })) };
+        },
+        // Save what the card shows: gaming names, colour, picture links, which stats. Only the keys sent are changed.
+        "POST /api/profile/card-settings": async (req, body) => {
+            const s = session(req); userRow(s);
+            const prefs = mergePrefs(db.getCardPrefs(s.userId), body ?? {});
+            db.setCardPrefs(s.userId, prefs);
+            return { prefs: viewPrefs(prefs) };
         },
         "GET /api/library/badges": async (req) => { const s = session(req); userRow(s); return trophyCase(db, s.userId); },
         "GET /api/library/challenge": async (req) => { const s = session(req); return challengeView(db, s.userId); },
@@ -1539,6 +1535,19 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (key === "GET /auth/login") return await login(req, res);
             if (key === "GET /auth/callback") return await callback(req, res, url);
             if (key === "POST /auth/logout") { checkWrite(req); return logout(req, res); }
+
+            // The same pictures /profilecard and /steam value post in Discord. Saved straight from the website with a download name.
+            if (key === "GET /api/profile/card.png" || key === "GET /api/steam/value.png") {
+                const s = session(req); userRow(s);
+                const undo = cooldown(s.userId, "cardimg");
+                try {
+                    const png = key === "GET /api/profile/card.png"
+                        ? await renderProfileCard({ db, userId: s.userId, name: s.username, fetchImpl: steamFetch })
+                        : await renderSteamValue({ db, itad, userId: s.userId, fetchImpl: steamFetch });
+                    if (!png) throw new HttpError(404, "Link your Steam profile and sync first, so there is something to draw.");
+                    return send(res, 200, Buffer.from(png), { "Content-Type": "image/png", "Cache-Control": "no-store", "Content-Disposition": `inline; filename="${key.includes("card") ? "my-game-profile" : "steam-account-value"}.png"` });
+                } catch (err) { undo(); throw err; }
+            }
 
             if (key === "GET /api/mydata/download") {
                 const s = session(req);

@@ -9,6 +9,8 @@ import { UserError } from "./errors.js";
 import { ItadError } from "./itad.js";
 import { LibraryError } from "./library.js";
 import { money } from "./render.js";
+import { AttachmentBuilder } from "discord.js";
+import { renderSteamValue } from "./cardimg.js";
 
 const COOLDOWN_MS = 60_000;
 const last = new Map();
@@ -151,7 +153,15 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
                 const view = await libraryView(db, itad, db.getUser(i.user.id), { snapshot: false });
                 const rows = view.rows.filter(r => r.appid);
                 if (!rows.length) throw new UserError("No Steam games in your library yet. Run `/steam sync`.");
-                return void await i.editReply({ embeds: [valueEmbed({ value: steamValue(rows, view.currency), owned: link.games, currency: view.currency, link })] });
+                const value = steamValue(rows, view.currency);
+                // The same picture as the website's Steam page. If it cannot be drawn, the text version still goes out.
+                let png = null;
+                try { png = await renderSteamValue({ db, itad, userId: i.user.id, fetchImpl }); } catch (err) { console.error(`[steam value] ${err.name}: ${err.message}`); }
+                if (png) {
+                    const alt = `Estimated Steam account value: ${money(value.msrp, view.currency)} at full price, ${money(value.cheapest, view.currency)} at today's cheapest prices.`;
+                    return void await i.editReply({ content: alt, embeds: [], files: [new AttachmentBuilder(Buffer.from(png), { name: "steam-account-value.png", description: alt })] });
+                }
+                return void await i.editReply({ embeds: [valueEmbed({ value, owned: link.games, currency: view.currency, link })] });
             }
             if (sub === "view") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

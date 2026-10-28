@@ -15,7 +15,9 @@ export const CHANGELOG = [
         "Dashboard: a page for every game (click a wishlist title) and a Sale war room with a budget slider.",
         "Dashboard: a My page under Account lists every feature as a card with its status, switches for the simple ones, and links to set up the rest. Pin, reorder or hide cards.",
         "My page also has a Profile card: pick what to show (games, finished, hours, percent saved, streak, badges, genres), choose a colour and save it as an image.",
-        "My page pictures: add a banner and a profile card picture from any https image link. They stay on your device.",
+        "My page pictures: add a banner and a profile card picture from any https image link, or let a Steam link fill them in (your profile picture and the art of your most played game). They refresh each time you sync.",
+        "Profile card: add your gaming names (Steam, Xbox, PlayStation, Nintendo, Epic, GOG and more) and they show on the card. `/profilecard` posts the same card as a picture (add `public:true` to share it).",
+        "`/steam value` now answers with a picture that looks like the Steam page's account value panel. The Steam page has a Save as image button for it too.",
         "New: a short guided tour the first time you open the dashboard (replay it from My page), and a one-time quick start after your first command.",
         "Taste profile (`/steam taste`) suggests games from your own library's tags." ] },
     { version: "2026.10.28", date: "2026-10-28", title: "Steam library, bundles and looking for group", items: [
