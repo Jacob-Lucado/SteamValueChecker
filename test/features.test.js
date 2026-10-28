@@ -333,6 +333,27 @@ test("free games: one message per platform, Claim all for several, once per memb
     assert.deepEqual(t.db.listAlerts("u1").map(a => a.kind), ["free", "free", "free"]);
 });
 
+test("free games: a reminder goes out once when an announced giveaway is about to end", async () => {
+    const T0 = Date.UTC(2026, 0, 5, 12);
+    const g = { ...free("1", "Alpha", "Steam"), expiry: T0 + 20 * 3600_000 };
+    const far = { ...free("2", "Beta", "Steam"), expiry: T0 + 5 * 86400_000 };
+    const t = rig({ freeList: [g, far] });
+    t.db.ensureUser("u1", "g1"); t.db.updateUser("u1", { free: 1 });
+    const at = ms => ({ ...t, now: () => ms });
+    // it is announced as soon as it is first seen (here already inside the last day, so the announcement is the first message)
+    await runFreeGames(at(T0));
+    const first = t.sent.length;
+    const r1 = await runFreeGames(at(T0 + 1000));
+    assert.equal(r1.reminded, 1, "only the giveaway ending within a day");
+    assert.equal(t.sent.length, first + 1);
+    assert.match(t.sent.at(-1).p.content, /Last chance/);
+    assert.equal((await runFreeGames(at(T0 + 2000))).reminded, undefined, "never twice");
+    // after it ends it is not reminded
+    const t2 = rig({ freeList: [{ ...g, expiry: T0 - 1 }] });
+    t2.db.ensureUser("u1", "g1"); t2.db.updateUser("u1", { free: 1 }); t2.db.markSeen("u1", "free:1");
+    assert.equal((await runFreeGames({ ...t2, now: () => T0 })).reminded, undefined);
+});
+
 test("free games respect quiet hours and are sent afterwards", async () => {
     const t = rig({ freeList: [free("1", "Alpha", "Steam")] });
     t.db.ensureUser("u1", "g1");
@@ -366,7 +387,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "alerts/stores": "POST /api/settings", "alerts/quiethours": "POST /api/settings", "alerts/digest": "POST /api/settings", "alerts/bundles": "POST /api/settings",
         "alerts/freegames": "POST /api/settings", "alerts/mute": "POST /api/settings", "alerts/language": "POST /api/settings", changelog: "GET /api/changelog", "alerts/share": "POST /api/settings",
         "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
-        "alertchannel/group": "POST /api/servers/group", "alertchannel/feed": "POST /api/servers/feed", "serverstats": "GET /api/servers/stats",
+        "alertchannel/group": "POST /api/servers/group", "alertchannel/feed": "POST /api/servers/feed", "alertchannel/digest": "POST /api/servers/digest", "serverstats": "GET /api/servers/stats",
         "library/add": "POST /api/library/add", "library/trend": "GET /api/library", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/grabber": "POST /api/grabber/token", "library/remove": "POST /api/library/remove", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
         "serverlist/add": "POST /api/servers/list/add", "serverlist/view": "GET /api/servers/list", "serverlist/vote": "POST /api/servers/list/vote", "serverlist/remove": "POST /api/servers/list/remove",
         leaderboard: "GET /api/servers/leaderboard",
@@ -652,6 +673,33 @@ test("public wishlist page: off by default, unique names, shows only games and p
     assert.equal(JSON.stringify(page).includes("p1"), false);
     setProfile(t.db, "p1", { enabled: false });
     assert.equal(await publicWishlist(t.db, itad, "jacob"), null);
+});
+
+test("weekly server digest: Fridays only, once a week, cheap shared games and free games, never a member's name", async () => {
+    const { runServerDigests } = await import("../src/poller.js");
+    const { digestIsDue } = await import("../src/serverdigest.js");
+    const FRI = Date.UTC(2026, 0, 9, 18), THU = Date.UTC(2026, 0, 8, 18);
+    assert.equal(digestIsDue(null, FRI), true); assert.equal(digestIsDue(null, THU), false);
+    assert.equal(digestIsDue(null, Date.UTC(2026, 0, 9, 12)), false, "not before 17:00 UTC");
+    assert.equal(digestIsDue(FRI - 3600_000, FRI), false, "not twice in a week");
+    const t = rig({});
+    t.db.setGuildChannel("g1", "c1", "u1"); t.db.setWeeklyDigest("g1", true);
+    t.db.ensureUser("s1", "g1"); t.db.updateUser("s1", { share: 1 });
+    t.db.ensureUser("s2", "g1");
+    t.db.addItems("s1", [{ itad_id: "a", title: "Hades" }]);
+    t.db.addItems("s2", [{ itad_id: "b", title: "Private Game" }]);
+    const deal = (price, regular) => ({ deals: [{ price: { amount: price, currency: "USD" }, regular: { amount: regular }, cut: Math.round((1 - price / regular) * 100), shop: { name: "Steam" }, url: "https://x.example/" }] });
+    const itad = { getPrices: async ids => new Map(ids.map(id => [id, deal(5, 20)])), getGiveawayList: async () => [free("1", "Alpha", "Steam")] };
+    const posts = [];
+    const notifier = { postGuild: async (g, p) => { posts.push(p); return true; } };
+    assert.equal((await runServerDigests({ db: t.db, itad, notifier, now: () => THU })).due, 0);
+    const r = await runServerDigests({ db: t.db, itad, notifier, now: () => FRI, names: () => "Test Server" });
+    assert.equal(r.posted, 1);
+    const text = JSON.stringify(posts[0]);
+    assert.match(text, /Hades/); assert.match(text, /Alpha/);
+    assert.equal(text.includes("Private Game"), false, "only games of members who chose to share");
+    assert.equal(text.includes("s1"), false);
+    assert.equal((await runServerDigests({ db: t.db, itad, notifier, now: () => FRI + 60_000 })).due, 0, "once a week");
 });
 
 test("server free feed posts games once per server, never DLC; stats are counts only", async () => {

@@ -899,6 +899,11 @@
             try { const r = await api("/api/servers/feed", { guild_id: g.id, enabled: feedOn.checked }); g.freeFeed = r.freeFeed; toast(r.freeFeed ? "Free game feed on." : "Free game feed off.", "ok"); }
             catch (e) { feedOn.checked = !feedOn.checked; toast(e.message, "error"); }
           });
+          const digestOn = h("input", { type: "checkbox", checked: Boolean(g.weeklyDigest) });
+          digestOn.addEventListener("change", async () => {
+            try { const r = await api("/api/servers/digest", { guild_id: g.id, enabled: digestOn.checked }); g.weeklyDigest = r.weeklyDigest; toast(r.weeklyDigest ? "Weekly digest on." : "Weekly digest off.", "ok"); }
+            catch (e) { digestOn.checked = !digestOn.checked; toast(e.message, "error"); }
+          });
           const min = h("input", { type: "number", min: "0", max: "20", value: String(g.groupMin || 0) });
           const setMin = h("button", { class: "btn gray", text: "Save" });
           setMin.addEventListener("click", () => busy(setMin, async () => {
@@ -912,6 +917,9 @@
             h("div", { class: "panel" }, h("h3", { text: "Free game feed" }),
               h("p", { class: "muted", text: "Post new free games (not DLC) in the alert channel for everyone, once each. Needs an alert channel." }),
               h("div", { class: "rule inline" }, feedOn, feedLabel)),
+            h("div", { class: "panel" }, h("h3", { text: "Weekly digest" }),
+              h("p", { class: "muted", text: "On Fridays, post cheap games that opted-in members watch (never who), the free games on now and the week's server events. Needs an alert channel." }),
+              h("div", { class: "rule inline" }, digestOn, h("label", { text: "Post the weekly digest" }))),
             h("div", { class: "panel" }, h("h3", { text: "Group alerts" }),
               h("p", { class: "muted", text: "Post in the channel when this many opted-in members watch the same game and it hits their alert. 0 turns it off. Needs an alert channel." }),
               h("div", { class: "rule inline" }, min, setMin)));

@@ -329,6 +329,8 @@ const alertchannel = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("show").setDescription("Show the current alert channel"))
     .addSubcommand(s => s.setName("feed").setDescription("Post new free games in the alert channel for everyone (games only, no DLC)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
+    .addSubcommand(s => s.setName("digest").setDescription("Post a weekly round-up on Fridays: cheap games members watch, free games and events")
+        .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("group").setDescription("Post when several opted-in members watch the same game and it hits their alert")
         .addIntegerOption(o => o.setName("minimum").setDescription("How many members (2 to 20). 0 turns it off").setRequired(true).setMinValue(0).setMaxValue(20)));
 

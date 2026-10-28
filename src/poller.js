@@ -7,7 +7,8 @@ import { protonTier } from "./proton.js";
 import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
-import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload } from "./render.js";
+import { digestIsDue, buildServerDigest } from "./serverdigest.js";
+import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload, lastChancePayload } from "./render.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
 import { libraryView } from "./library.js";
@@ -193,6 +194,8 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
  * One message per platform, so several free games from one store are grouped with a "Claim all" button.
  * Each giveaway is announced once per member.
  */
+const LAST_CHANCE_MS = 24 * 3600_000;
+
 export async function runFreeGames({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
     const stats = { found: 0, delivered: 0, failed: 0, deferred: 0 };
     const users = db.freeUsers();
@@ -202,6 +205,23 @@ export async function runFreeGames({ db, itad, notifier, now = () => Date.now(),
     catch (err) { log(`free game lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; return stats; }
 
     for (const user of users) {
+        // Last chance: a giveaway they were already told about, ending within a day, gets one reminder.
+        const soon = list.filter(g => g.url && g.expiry && g.expiry > now() && g.expiry - now() <= LAST_CHANCE_MS
+            && db.hasSeen(user.discord_id, `free:${g.id}`) && !db.hasSeen(user.discord_id, `freelast:${g.id}`) && (user.free_dlc !== 0 || !isDlc(g)));
+        if (soon.length && !isQuiet(user, now())) {
+            const byShopSoon = new Map();
+            for (const g of soon) { if (!byShopSoon.has(g.shop)) byShopSoon.set(g.shop, []); byShopSoon.get(g.shop).push(g); }
+            for (const [shop, games] of byShopSoon) {
+                for (const part of chunked(games, 10)) {
+                    const payload = lastChancePayload(shop, part);
+                    if (!payload) { for (const g of part) db.markSeen(user.discord_id, `freelast:${g.id}`); continue; }
+                    const res = await notifier.deliver(user, payload, "free");
+                    if (!res.ok) { stats.failed += part.length; continue; }
+                    stats.reminded = (stats.reminded ?? 0) + part.length;
+                    for (const g of part) db.markSeen(user.discord_id, `freelast:${g.id}`);
+                }
+            }
+        }
         const fresh = list.filter(g => g.url && !db.hasSeen(user.discord_id, `free:${g.id}`) && (user.free_dlc !== 0 || !isDlc(g)));
         if (!fresh.length) continue;
         stats.found += fresh.length;
@@ -307,6 +327,21 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
     return stats;
 }
 
+
+/** The Friday server digest, for servers that turned it on. Posted once a week in the alert channel. */
+export async function runServerDigests({ db, itad, notifier, now = () => Date.now(), names = () => null, log = () => {} }) {
+    const stats = { due: 0, posted: 0, skipped: 0 };
+    for (const g of db.guildsWithDigest()) {
+        if (!digestIsDue(g.digest_at, now())) continue;
+        stats.due++;
+        try {
+            const embed = await buildServerDigest({ db, itad, guildId: g.guild_id, guildName: names(g.guild_id) ?? "this server", now: now() });
+            if (!embed) { db.markGuildDigest(g.guild_id); stats.skipped++; continue; }
+            if (await notifier.postGuild(g.guild_id, { embeds: [embed] })) { db.markGuildDigest(g.guild_id); stats.posted++; }
+        } catch (err) { log(`server digest failed: ${err.code ?? err.name}`); }
+    }
+    return stats;
+}
 
 /**
  * Release-day alerts for wishlisted games that were not out yet when they were added. Release dates are looked up in small

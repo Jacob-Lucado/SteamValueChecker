@@ -405,6 +405,12 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.setFreeFeed(i.guildId, on);
                 return eph(i, on ? "Free game feed on. New free games (not DLC) are posted in the alert channel, once each." : "Free game feed off.");
             }
+            case "digest": {
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                const on = i.options.getBoolean("enabled", true);
+                db.setWeeklyDigest(i.guildId, on);
+                return eph(i, on ? "Weekly digest on. Fridays the alert channel gets cheap games that opted-in members watch (never who), free games and the week's server events." : "Weekly digest off.");
+            }
             case "group": {
                 if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
                 const n = i.options.getInteger("minimum", true);

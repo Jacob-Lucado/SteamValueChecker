@@ -382,6 +382,14 @@ export function freeArt(g) {
 const SHOP_ICON = { steam: "🎮", epic: "🛒", gog: "🟣", itch: "🎲", humble: "💚", ubisoft: "🔷", amazon: "📦", prime: "📦" };
 export const shopIcon = shop => SHOP_ICON[Object.keys(SHOP_ICON).find(k => String(shop).toLowerCase().includes(k))] ?? "🎁";
 
+/** The same cards as a free-game alert, headed as a reminder that the offer is about to end. */
+export function lastChancePayload(shop, games) {
+    const p = freeGamesPayload(shop, games);
+    if (!p) return null;
+    p.content = `⏰ Last chance: ${games.length === 1 ? "a free game" : `${games.length} free games`} on ${shop} ending soon`;
+    return p;
+}
+
 export function freeGamesPayload(shop, games) {
     const list = games.filter(g => safeUrl(g.url)).slice(0, MAX_FREE_PER_MESSAGE);
     if (!list.length) return null;

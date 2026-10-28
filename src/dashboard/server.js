@@ -211,7 +211,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             .map(g => ({
                 id: g.id, name: g.name, icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
                 manageable: isManager(g), bot: botGuilds ? Boolean(botGuilds(g.id)) : null, freeFeed: Boolean(db.getGuild(g.id)?.free_feed), alertChannel: db.getGuild(g.id)?.channel_id ?? null,
-                groupMin: db.getGuild(g.id)?.group_min ?? 0
+                groupMin: db.getGuild(g.id)?.group_min ?? 0, weeklyDigest: Boolean(db.getGuild(g.id)?.weekly_digest)
             }))
             .sort((a, b) => Number(b.manageable) - Number(a.manageable) || a.name.localeCompare(b.name));
     }
@@ -763,6 +763,15 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
             db.setFreeFeed(g.id, Boolean(body.enabled));
             return { freeFeed: Boolean(body.enabled) };
+        },
+
+        "POST /api/servers/digest": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
+            db.setWeeklyDigest(g.id, Boolean(body.enabled));
+            return { weeklyDigest: Boolean(body.enabled) };
         },
 
         // The same checklist as /setup in Discord.

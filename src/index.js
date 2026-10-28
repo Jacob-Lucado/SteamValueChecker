@@ -23,7 +23,7 @@ import { createLogBuffer } from "./logbuffer.js";
 import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
-import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runGuildFeeds, schedule } from "./poller.js";
+import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runGuildFeeds, runServerDigests, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
@@ -179,6 +179,7 @@ client.once(Events.ClientReady, c => {
             try { result.releases = await runReleases({ db, itad, notifier, log }); } catch (err) { ops.error("releases", err); }
             try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
             try { result.feeds = await runGuildFeeds({ db, itad, notifier, log }); } catch (err) { ops.error("server feeds", err); }
+            try { result.serverDigests = await runServerDigests({ db, itad, notifier, names: id => client.guilds.cache.get(id)?.name, log }); } catch (err) { ops.error("server digests", err); }
             try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
             try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); } catch (err) { ops.error("cleanup", err); }

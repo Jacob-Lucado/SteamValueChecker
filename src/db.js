@@ -201,6 +201,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "playing", "INTEGER");
     addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("guilds", "group_min", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("guilds", "weekly_digest", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("guilds", "digest_at", "INTEGER");
 
     const run = (sql, ...p) => db.prepare(sql).run(...p);
     const get = (sql, ...p) => db.prepare(sql).get(...p);
@@ -424,6 +426,14 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     });
 
     // ---------- server settings: group pings ----------
+    const setWeeklyDigest = (guildId, on) => run("UPDATE guilds SET weekly_digest = ? WHERE guild_id = ?", on ? 1 : 0, guildId).changes > 0;
+    const guildsWithDigest = () => all("SELECT * FROM guilds WHERE weekly_digest = 1").map(clean);
+    const markGuildDigest = guildId => run("UPDATE guilds SET digest_at = ? WHERE guild_id = ?", now(), guildId);
+    /** Games watched by at least one opted-in member of the server, with how many. Never says who. */
+    const sharedWatchedItems = guildId => all(`SELECT i.itad_id AS itad_id, MIN(i.title) AS title, COUNT(DISTINCT u.discord_id) AS watchers
+                          FROM items i JOIN users u ON u.discord_id = i.discord_id
+                          WHERE u.share = 1 AND u.guild_id = ? AND i.source != 'watch'
+                          GROUP BY i.itad_id ORDER BY watchers DESC, title LIMIT 60`, guildId).map(clean);
     const setGroupMin = (guildId, min) => run("UPDATE guilds SET group_min = ? WHERE guild_id = ?", min, guildId).changes > 0;
     // Game night nudges in voice channels (a per-server switch; kept in the small key/value table).
     const sharingMembers = guildId => all("SELECT discord_id FROM users WHERE share = 1 AND guild_id = ?", guildId).map(r => r.discord_id);
@@ -534,7 +544,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
-        sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
+        sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...lfg, close: () => db.close()
     };
