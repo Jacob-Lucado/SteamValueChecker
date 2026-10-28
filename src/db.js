@@ -416,6 +416,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
           WHERE u.share = 1 AND u.guild_id = ?
             AND s.day = (SELECT MAX(day) FROM library_snapshots WHERE discord_id = u.discord_id)`, guildId).map(clean);
 
+    /** Games finished in a time window by members who opted in, for the backlog league. */
+    const sharedFinished = (guildId, from, to) => all(
+        `SELECT u.discord_id, COUNT(*) AS done FROM users u JOIN library l ON l.discord_id = u.discord_id
+          WHERE u.share = 1 AND u.guild_id = ? AND l.status = 'finished' AND l.status_at >= ? AND l.status_at < ?
+          GROUP BY u.discord_id ORDER BY done DESC`, guildId, from, to).map(clean);
+
     // ---------- server settings: free game feed and stats ----------
     const setFreeFeed = (guildId, on) => run("UPDATE guilds SET free_feed = ? WHERE guild_id = ?", on ? 1 : 0, guildId).changes > 0;
     const guildsWithFreeFeed = () => all("SELECT * FROM guilds WHERE free_feed = 1").map(clean);
@@ -550,7 +556,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
-        countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard,
+        countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, backupTo, exportUser, deleteUser, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...lfg, close: () => db.close()

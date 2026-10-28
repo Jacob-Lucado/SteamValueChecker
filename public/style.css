@@ -511,3 +511,8 @@ input.short-num { width: 6em; }
 
 .game-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted, #888); }
 .game-link:hover { color: var(--accent, #4da3ff); }
+
+.badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.badge { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); opacity: .55; }
+.badge.earned { opacity: 1; border-color: var(--accent); }
+.badge-icon { font-size: 1.5rem; }

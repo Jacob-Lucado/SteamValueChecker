@@ -14,7 +14,7 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { CHANGELOG, LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
+import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, freeGamesPayload, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
@@ -24,7 +24,8 @@ import { buyOrWait } from "./advice.js";
 import { daysUntilBirthday } from "./friendstore.js";
 import { friendDeals, friendRows, saveFriend, birthdayEmbed } from "./friends.js";
 import { spendSummary, regionCurrency } from "./spend.js";
-import { importLibrary, libraryView, leaderboard, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
+import { trophyCase } from "./badges.js";
+import { importLibrary, libraryView, leaderboard, finishedLeague, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
@@ -465,6 +466,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                     "Making a new code replaces this one. `/library grabber action:Turn the link off` removes it."
                 ].join("\n"));
             }
+            if (sub === "badges") return void await i.reply({ embeds: [badgesEmbed(trophyCase(db, i.user.id))], flags: MessageFlags.Ephemeral });
             if (sub === "spend") {
                 return void await i.reply({ embeds: [spendEmbed(spendSummary(db.listLibrary(i.user.id), { currency: regionCurrency(user.region) }))], flags: MessageFlags.Ephemeral });
             }
@@ -555,7 +557,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     }
 
     async function handleLeaderboard(i) {
-        try { await i.reply({ embeds: [leaderboardEmbed(leaderboard(db, await homeGuild(i)))], allowedMentions: { parse: [] } }); }
+        try { await i.reply({ embeds: [(i.options.getString("board") === "finished" ? leagueEmbed(finishedLeague(db, await homeGuild(i))) : leaderboardEmbed(leaderboard(db, await homeGuild(i))))], allowedMentions: { parse: [] } }); }
         catch (err) { await eph(i, err instanceof UserError ? err.message : "Something went wrong. Try again in a moment."); }
     }
 

@@ -76,6 +76,7 @@ const library = new SlashCommandBuilder()
         .addStringOption(o => gameOption(o, true))
         .addStringOption(o => o.setName("state").setDescription("Where you are with it").setRequired(true).addChoices(
             { name: "Backlog (not started)", value: "backlog" }, { name: "Playing", value: "playing" }, { name: "Played (not finished)", value: "played" }, { name: "Finished", value: "finished" }, { name: "Dropped", value: "dropped" })))
+    .addSubcommand(s => s.setName("badges").setDescription("Your trophy case: badges earned from your library and challenge streak"))
     .addSubcommand(s => s.setName("spend").setDescription("What you have spent: by month, cost per hour played, and bought-but-unplayed"))
     .addSubcommand(s => s.setName("challenge").setDescription("Monthly backlog challenge: set a goal of games to finish, keep a streak")
         .addIntegerOption(o => o.setName("goal").setDescription("Games to finish this month (1 to 20). 0 clears it. Leave empty to see progress").setMinValue(0).setMaxValue(20)))
@@ -158,7 +159,9 @@ const serverlist = new SlashCommandBuilder()
 
 const leaderboard = new SlashCommandBuilder()
     .setName("leaderboard")
-    .setDescription("Who in this server has saved the most (members who opted in with /alerts share)");
+    .setDescription("Server boards for members who opted in with /alerts share")
+    .addStringOption(o => o.setName("board").setDescription("Which board (default: savings)")
+        .addChoices({ name: "Most saved vs MSRP", value: "savings" }, { name: "Backlog league: most finished this month", value: "finished" }));
 
 const giveawayOption = o => o.setName("giveaway").setDescription("Which giveaway").setRequired(true).setAutocomplete(true);
 const giveaway = new SlashCommandBuilder()

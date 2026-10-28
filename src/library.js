@@ -75,6 +75,13 @@ export function leaderboard(db, guildId, { limit = 10 } = {}) {
         .slice(0, limit);
 }
 
+/** Backlog league: who in the server finished the most games this month (opted-in members only). */
+export function finishedLeague(db, guildId, nowMs = Date.now(), { limit = 10 } = {}) {
+    const d = new Date(nowMs);
+    const from = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1), to = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+    return db.sharedFinished(guildId, from, to).slice(0, limit).map(r => ({ discord_id: r.discord_id, done: r.done }));
+}
+
 export const STATUSES = [["backlog", "Backlog"], ["playing", "Playing"], ["played", "Played"], ["finished", "Finished"], ["dropped", "Dropped"]];
 
 /** How much is sitting unplayed. Only games with a known price count toward the money. */

@@ -388,7 +388,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "alerts/freegames": "POST /api/settings", "alerts/mute": "POST /api/settings", "alerts/language": "POST /api/settings", changelog: "GET /api/changelog", "alerts/share": "POST /api/settings",
         "alertchannel/set": "POST /api/servers/channel", "alertchannel/clear": "POST /api/servers/channel", "alertchannel/show": "GET /api/servers/channels",
         "alertchannel/group": "POST /api/servers/group", "alertchannel/feed": "POST /api/servers/feed", "alertchannel/digest": "POST /api/servers/digest", "serverstats": "GET /api/servers/stats",
-        "library/add": "POST /api/library/add", "library/trend": "GET /api/library", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/grabber": "POST /api/grabber/token", "library/remove": "POST /api/library/remove", "library/challenge": "POST /api/library/challenge", "library/spend": "GET /api/library/spend", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
+        "library/add": "POST /api/library/add", "library/badges": "GET /api/library/badges", "library/trend": "GET /api/library", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/grabber": "POST /api/grabber/token", "library/remove": "POST /api/library/remove", "library/challenge": "POST /api/library/challenge", "library/spend": "GET /api/library/spend", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
         "serverlist/add": "POST /api/servers/list/add", "serverlist/view": "GET /api/servers/list", "serverlist/vote": "POST /api/servers/list/vote", "serverlist/remove": "POST /api/servers/list/remove",
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
@@ -774,4 +774,21 @@ test("friends: birthday maths, limits and a once-a-year reminder", async () => {
     assert.equal(db.listFriends("u1").length, 20);
     db.deleteUser("u1");
     assert.equal(db.listFriends("u1").length, 0);
+});
+
+test("backlog league ranks opted-in members by games finished this month; badges climb tiers", async () => {
+    const { finishedLeague } = await import("../src/library.js");
+    const { badgeList } = await import("../src/badges.js");
+    const db = openDb(":memory:");
+    for (const [id, share] of [["a", 1], ["b", 1], ["c", 0]]) { db.ensureUser(id, "g1"); db.updateUser(id, { share }); }
+    for (const [id, n] of [["a", 2], ["b", 1], ["c", 5]]) for (let k = 0; k < n; k++) { db.upsertLibrary(id, [{ itad_id: `x${k}`, title: `Game ${k}`, paid: 10 }]); db.setLibraryStatus(id, `x${k}`, "finished"); }
+    const board = finishedLeague(db, "g1");
+    assert.deepEqual(board.map(e => [e.discord_id, e.done]), [["a", 2], ["b", 1]], "c did not opt in");
+    assert.deepEqual(finishedLeague(db, "g1", Date.now() + 40 * 86400_000), [], "a new month starts empty");
+    const lib = Array.from({ length: 12 }, (_, n) => ({ title: "G" + n, paid: 10, status: n < 3 ? "finished" : "played", minutes: n === 0 ? 6000 : 0 }));
+    const b = Object.fromEntries(badgeList(lib, { best: 3 }).map(x => [x.id, x]));
+    assert.equal(b.collector.tier, "Bronze"); assert.equal(b.collector.next, 50);
+    assert.equal(b.finisher.tier, "Bronze"); assert.equal(b.streak.tier, "Silver");
+    assert.equal(b.marathon.tier, "Silver"); assert.equal(b.value.tier, "Bronze");
+    assert.equal(b.clean.tier, "Gold");
 });

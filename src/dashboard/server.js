@@ -22,7 +22,8 @@ import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
-import { importLibrary, libraryView, leaderboard, serverStats } from "../library.js";
+import { trophyCase } from "../badges.js";
+import { importLibrary, libraryView, leaderboard, finishedLeague, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
 import { compareLibraries } from "../compare.js";
 import { regionPrices } from "../regions.js";
@@ -669,6 +670,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
 
         "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },
+        "GET /api/library/badges": async (req) => { const s = session(req); userRow(s); return trophyCase(db, s.userId); },
         "GET /api/library/challenge": async (req) => { const s = session(req); return challengeView(db, s.userId); },
         "POST /api/library/challenge": async (req, body) => {
             const s = session(req);
@@ -835,7 +837,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/servers/leaderboard": async (req, _b, url) => {
             const s = session(req);
             const g = guildFor(s, url.searchParams.get("guild"));
-            const entries = leaderboard(db, g.id);
+            const finished = url.searchParams.get("board") === "finished";
+            const entries = finished ? finishedLeague(db, g.id, now()) : leaderboard(db, g.id);
             const t = now();
             const out = [];
             for (const e of entries) {
@@ -846,7 +849,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                     names.set(key, hit);
                     if (names.size > 2000) names.delete(names.keys().next().value);
                 }
-                out.push({ name: hit.name ?? "A member", savedPct: e.savedPct, games: e.games, you: e.discord_id === s.userId });
+                out.push({ name: hit.name ?? "A member", savedPct: e.savedPct, games: e.games, done: e.done, you: e.discord_id === s.userId });
             }
             return { entries: out, joined: Boolean(userRow(s).share) };
         },

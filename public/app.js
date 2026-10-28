@@ -999,7 +999,9 @@
 
   async function board(g, into) {
     const d = await api("/api/servers/leaderboard?guild=" + encodeURIComponent(g.id));
-    into.replaceChildren(h("div", { class: "subpanel" }, h("h4", { text: "Savings leaderboard" }),
+    const league = await api("/api/servers/leaderboard?board=finished&guild=" + encodeURIComponent(g.id)).catch(() => ({ entries: [] }));
+    into.replaceChildren(h("div", { class: "subpanel" }, h("h4", { text: "Backlog league: finished this month" }),
+      league.entries.length ? h("ol", { class: "board" }, league.entries.map(e => h("li", {}, h("strong", { text: e.name + (e.you ? " (you)" : "") }), ` ${e.done} finished`))) : h("div", { class: "empty", text: "Nobody has finished a game this month yet." })),h("div", { class: "subpanel" }, h("h4", { text: "Savings leaderboard" }),
       d.entries.length ? h("ol", { class: "board" }, d.entries.map(e => h("li", {}, h("strong", { text: e.name + (e.you ? " (you)" : "") }), ` ${Math.round(e.savedPct)}% saved across ${e.games} games`)))
         : h("div", { class: "empty", text: "Nobody has joined yet." }),
       h("p", { class: "muted small", text: d.joined ? "You are on the leaderboard. Change this on the Alerts page." : "You are not on it. Opt in on the Alerts page (“Share with your server”). Ranked by percent saved vs MSRP, since members shop in different currencies." })));
@@ -1430,6 +1432,17 @@
   }
 
   // Spend tracker: totals, the last 12 months and cost per hour, from the amounts you recorded.
+  function badgesPanel() {
+    const out = h("div", { class: "muted", text: "Loading…" });
+    api("/api/library/badges").then(tc => {
+      out.className = "";
+      out.replaceChildren(h("div", { class: "badge-grid" }, tc.badges.map(b => h("div", { class: "badge" + (b.tier ? " earned" : "") },
+        h("span", { class: "badge-icon", text: b.icon }), h("strong", { text: b.name }),
+        h("span", { class: "muted small", text: (b.tier ? b.tier + " · " : "Not yet · ") + b.value + " " + b.unit + (b.next ? " (next at " + b.next + ")" : "") })))));
+    }).catch(() => out.remove());
+    return h("div", { class: "panel" }, h("h3", { text: "Trophy case" }), out);
+  }
+
   function spendPanel() {
     const out = h("div", { class: "muted", text: "Loading…" });
     api("/api/library/spend").then(sp => {
@@ -1608,7 +1621,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
-          challengePanel(), spendPanel(), chart, backlogChart || "",
+          challengePanel(), badgesPanel(), spendPanel(), chart, backlogChart || "",
           h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }

@@ -354,6 +354,17 @@ export function leaderboardEmbed(entries) {
     return { color: COLOR, title: "Savings leaderboard", description: lines.join("\n"), footer: { text: "Only members who opted in. Ranked by percent saved vs MSRP." } };
 }
 
+export function leagueEmbed(entries) {
+    if (!entries.length) return { color: COLOR, title: "Backlog league", description: "Nobody has finished a game this month yet. Members opt in with `/alerts share`, then mark games finished with `/library`." };
+    const lines = entries.map((e, i) => `${i + 1}. <@${e.discord_id}>: **${e.done}** finished`);
+    return { color: COLOR, title: "Backlog league: finished this month", description: lines.join("\n"), footer: { text: "Only members who opted in. Resets on the 1st (UTC)." } };
+}
+
+export function badgesEmbed(tc) {
+    const lines = tc.badges.map(b => `${b.icon} **${b.name}** ${b.tier ? `· ${b.tier}` : "· not yet"} (${b.value} ${b.unit}${b.next ? `, next at ${b.next}` : ""})`);
+    return { color: COLOR, title: `Trophy case: ${tc.earned} of ${tc.total}`, description: lines.join("\n"), footer: { text: "Worked out from your library and monthly challenge." } };
+}
+
 /** The member's recent alerts. */
 export function alertHistoryEmbed(entries) {
     if (!entries.length) return { color: COLOR, title: "Recent alerts", description: "No alerts yet." };
