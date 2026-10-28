@@ -1418,7 +1418,7 @@
     const out = h("div");
     function draw(c) {
       const goal = h("input", { type: "number", min: "0", max: "20", value: String(c.goal || 3), class: "short-num", "aria-label": "Games to finish this month" });
-      const save = h("button", { class: "btn green small", text: c.goal ? "Change goal" : "Start the challenge" });
+      const save = h("button", { class: "btn green small shrink", text: c.goal ? "Change goal" : "Start the challenge" });
       save.addEventListener("click", () => busy(save, async () => { draw(await api("/api/library/challenge", { goal: Number(goal.value) })); toast("Saved.", "ok"); }));
       const pct = c.goal ? Math.min(100, Math.round(c.done / c.goal * 100)) : 0;
       out.replaceChildren(
@@ -1435,15 +1435,17 @@
   }
 
   // Spend tracker: totals, the last 12 months and cost per hour, from the amounts you recorded.
+  const nGames = n => n + (n === 1 ? " game" : " games");
+
   function badgesPanel() {
     const out = h("div", { class: "muted", text: "Loading…" });
     api("/api/library/badges").then(tc => {
       out.className = "";
-      out.replaceChildren(h("div", { class: "badge-grid" }, tc.badges.map(b => h("div", { class: "badge" + (b.tier ? " earned" : "") },
-        h("span", { class: "badge-icon", text: b.icon }), h("strong", { text: b.name }),
+      out.replaceChildren(h("div", { class: "trophy-grid" }, tc.badges.map(b => h("div", { class: "trophy" + (b.tier ? " earned" : "") },
+        h("span", { class: "trophy-icon", text: b.icon }), h("strong", { text: b.name }),
         h("span", { class: "muted small", text: (b.tier ? b.tier + " · " : "Not yet · ") + b.value + " " + b.unit + (b.next ? " (next at " + b.next + ")" : "") })))));
     }).catch(() => out.remove());
-    return h("div", { class: "panel" }, h("h3", { text: "Trophy case" }), out);
+    return h("details", { class: "panel" }, h("summary", { text: "🏅 Trophy case" }), out);
   }
 
   function spendPanel() {
@@ -1455,9 +1457,9 @@
       out.className = "";
       out.replaceChildren(
         h("div", { class: "grid four" },
-          h("div", { class: "tile" }, h("div", { class: "k", text: "All time" }), h("div", { class: "v", text: money(sp.total, c) }), h("div", { class: "s", text: sp.games + " games, about " + money(sp.avg, c) + " each" })),
-          h("div", { class: "tile" }, h("div", { class: "k", text: String(sp.year.year) }), h("div", { class: "v", text: money(sp.year.total, c) }), h("div", { class: "s", text: sp.year.games + " games" })),
-          h("div", { class: "tile" }, h("div", { class: "k", text: "Bought, not played" }), h("div", { class: "v", text: money(sp.unplayed.total, c) }), h("div", { class: "s", text: sp.unplayed.count + " games" }))),
+          h("div", { class: "tile" }, h("div", { class: "k", text: "All time" }), h("div", { class: "v", text: money(sp.total, c) }), h("div", { class: "s", text: nGames(sp.games) + ", about " + money(sp.avg, c) + " each" })),
+          h("div", { class: "tile" }, h("div", { class: "k", text: String(sp.year.year) }), h("div", { class: "v", text: money(sp.year.total, c) }), h("div", { class: "s", text: nGames(sp.year.games) })),
+          h("div", { class: "tile" }, h("div", { class: "k", text: "Bought, not played" }), h("div", { class: "v", text: money(sp.unplayed.total, c) }), h("div", { class: "s", text: nGames(sp.unplayed.count) }))),
         h("div", { class: "spend-bars", role: "img", "aria-label": "Spending per month, last 12 months" }, sp.months.map(m => {
           const bar = h("i"); bar.style.height = Math.max(m.total ? 4 : 1, Math.round(m.total / peak * 100)) + "%";
           return h("div", { class: "spend-col", title: `${m.month}: ${money(m.total, c)} (${m.games} game${m.games === 1 ? "" : "s"})` }, bar, h("span", { text: m.month.slice(5) }));
@@ -2113,7 +2115,7 @@
 
   function newsBanner() {
     if (!state.me || !state.me.news || currentView() === "changelog") return null;
-    return h("div", { class: "notice news" }, h("span", { text: "✨ New: support tickets, a notification center, snooze buttons and more. " }), h("a", { href: "#/changelog", text: "See what's new" }),
+    return h("div", { class: "notice news" }, h("span", { text: "✨ New: " + (state.me.newsTitle || "see what changed") + ". " }), h("a", { href: "#/changelog", text: "See what's new" }),
       h("button", { class: "btn gray small", text: "Dismiss", onclick: async e => { try { await api("/api/changelog/seen", {}); } catch {} state.me.news = null; e.currentTarget.parentElement.remove(); } }));
   }
 
@@ -2270,7 +2272,7 @@
   async function warRoomView() {
     const out = h("div", { class: "muted", text: "Checking your wishlist…" });
     const st = { rows: [], cur: "USD", picked: new Set(), budget: 0, sale: null };
-    const slider = h("input", { type: "range", min: "0", max: "500", step: "5", value: "0" });
+    const slider = h("input", { type: "range", class: "war-slider", min: "0", max: "500", step: "5", value: "0", "aria-label": "Budget" });
     const label = h("strong", { text: "" });
     const total = h("div", { class: "muted" });
     const list = h("div");
@@ -2284,6 +2286,7 @@
       label.textContent = "Budget: " + money(st.budget, st.cur);
       const spent = sum(), saved = st.rows.filter(r => st.picked.has(r.itad_id)).reduce((t, r) => t + Math.max(0, (r.regular ?? r.price) - r.price), 0);
       total.textContent = st.picked.size + " in the cart · " + money(spent, st.cur) + (spent > st.budget && st.budget > 0 ? " (over budget by " + money(spent - st.budget, st.cur) + ")" : "") + " · saves " + money(saved, st.cur);
+      if (!st.rows.length) return list.replaceChildren(h("div", { class: "empty", text: "Nothing on your wishlist is at or near a low right now. Games show up here as they drop." }));
       list.replaceChildren(...st.rows.map(r => {
         const box = h("input", { type: "checkbox", checked: st.picked.has(r.itad_id) });
         box.addEventListener("change", () => { if (box.checked) st.picked.add(r.itad_id); else st.picked.delete(r.itad_id); draw(); });
@@ -2325,16 +2328,20 @@
     ];
     document.getElementById("tour")?.remove();
     const root = h("div", { id: "tour", class: "tour", role: "dialog", "aria-modal": "false", "aria-labelledby": "tour-title" });
-    let n = 0, ringed = null;
+    let n = 0, ringed = null, shownMenu = null;
     const finish = () => {
-      root.remove(); document.removeEventListener("keydown", onKey, true); if (ringed) ringed.classList.remove("tour-ring");
+      root.remove(); document.removeEventListener("keydown", onKey, true); if (ringed) ringed.classList.remove("tour-ring"); if (shownMenu) shownMenu.hidden = true;
       if (state.me) { state.me.tour = false; api("/api/tour/done", {}).catch(() => {}); }
     };
     function show() {
       const s = steps[n];
       if (ringed) ringed.classList.remove("tour-ring");
+      if (shownMenu) { shownMenu.hidden = true; shownMenu = null; }
       const target = s.sel ? document.querySelector(s.sel) : s.href ? document.querySelector('#nav a[href="' + s.href + '"]') : null;
-      ringed = target; if (target) { target.classList.add("tour-ring"); target.scrollIntoView({ block: "nearest" }); }
+      ringed = target;
+      const menu = target && target.closest(".menu");
+      if (menu) { menu.hidden = false; shownMenu = menu; }
+      if (target) { target.classList.add("tour-ring"); target.scrollIntoView({ block: "nearest" }); }
       const back = h("button", { class: "btn gray small", type: "button", text: "Back", disabled: n === 0, onclick: () => { n--; show(); } });
       const next = h("button", { class: "btn blue small", type: "button", text: n === steps.length - 1 ? "Done" : "Next", onclick: () => { if (n === steps.length - 1) finish(); else { n++; show(); } } });
       const skip = h("button", { class: "btn gray small", type: "button", text: "Skip", onclick: finish });
@@ -2358,7 +2365,7 @@
     const grid = h("div", { class: "mp-grid" });
     const KEY = "svc_mypage";
     const art = loadMyArt();
-    const artBox = h("div", { class: "panel" });
+    const artBox = h("details", { class: "panel" });
     const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
     const save = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* per-device only */ } };
     const lay = Object.assign({ order: [], hidden: [], pinned: [] }, load());
@@ -2404,7 +2411,7 @@
         h("button", { class: "btn gray small", type: "button", "aria-label": "Move " + c.title + " earlier", text: "↑", onclick: () => move(c.id, -1) }),
         h("button", { class: "btn gray small", type: "button", "aria-label": "Move " + c.title + " later", text: "↓", onclick: () => move(c.id, 1) }),
         h("button", { class: "btn gray small", type: "button", text: hidden ? "Show" : "Hide", onclick: () => { lay.hidden = hidden ? lay.hidden.filter(x => x !== c.id) : [...lay.hidden, c.id]; persist(); draw(); } }));
-      const actions = h("div", { class: "row" });
+      const actions = h("div", { class: "mp-actions" });
       if (c.toggle) {
         const on = c.toggle.invert ? !st()[c.toggle.key] : Boolean(st()[c.toggle.key]);
         const b = h("button", { class: "btn small " + (on ? "red" : "green"), text: on ? "Turn off" : c.toggle.label, onclick: () => busy(b, async () => {
@@ -2412,7 +2419,7 @@
         }) });
         actions.append(b);
       }
-      actions.append(h("a", { class: "btn blue small", href: c.href, text: stt && stt[0] ? "Manage" : "Set up" }));
+      actions.append(h("a", { class: "btn blue small", href: c.href, text: !stt ? "Open" : stt[0] ? "Manage" : "Set up" }));
       return h("div", { class: "panel mp-card" + (hidden ? " mp-hidden" : "") },
         h("div", { class: "mp-head" }, h("span", { class: "mp-icon", text: c.icon }), h("strong", { text: c.title }), stt ? h("span", { class: "chip " + (stt[0] ? "ok" : "dim"), text: stt[1] }) : null),
         h("p", { class: "muted small", text: c.text }), actions, tools);
@@ -2424,7 +2431,7 @@
       grid.replaceChildren(...list.map(card));
       bar.replaceChildren(toggleHidden || "", reset);
     }
-    const bar = h("div", { class: "row" });
+    const bar = h("div", { class: "mp-bar" });
     const on = CARDS.filter(c => c.status && c.status()[0]).length, tot = CARDS.filter(c => c.status).length;
     const tourBtn = h("button", { class: "btn gray small", type: "button", text: "Take the tour", onclick: startTour });
     app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), tourBtn, myBanner(art), artBox, bar, grid);
@@ -2452,7 +2459,7 @@
       try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* per-device only */ }
       toast("Saved on this device.", "ok"); myPageView();
     } });
-    box.replaceChildren(h("h3", { text: "Your pictures" }),
+    box.replaceChildren(h("summary", { text: "Your pictures (banner and profile card picture)" }),
       h("p", { class: "muted small", text: "Use images from any https address: a banner for this page and a picture for your profile card. They are loaded by your browser from that site, which can see your address, so use hosts you trust. They stay on this device and are never uploaded or shown to anyone else. A picture the host does not allow for downloads is skipped on the saved card." }),
       h("div", { class: "row" }, field("Banner", banner), field("Profile card picture", avatar)), apply);
   }
@@ -2518,20 +2525,20 @@
       const { friends } = await api("/api/friends");
       if (!friends.length) return list.replaceChildren(h("div", { class: "empty", text: "No friends yet. Add a nickname, a birthday and their public wishlist page name; you get a reminder a week before with what is on sale for them." }));
       list.replaceChildren(...friends.map(f => {
-        const show = h("button", { class: "btn small", text: "On sale for them", disabled: !f.slug });
+        const show = h("button", { class: "btn blue small", text: "On sale for them", disabled: !f.slug });
         show.addEventListener("click", () => busy(show, async () => {
           const r = await api("/api/friends/deals?name=" + encodeURIComponent(f.name));
           deals.replaceChildren(h("h3", { text: "On sale for " + r.name }), r.deals.length ? h("div", {}, ...r.deals.map(d => h("div", { class: "row-line" }, h("a", { href: d.url || "#", target: "_blank", rel: "noopener", text: d.title }), h("span", { class: "muted", text: " " + money(d.price, d.currency || "USD") + (d.discount > 0 ? " (-" + d.discount + "%)" : "") + " at " + d.shop })))) : h("div", { class: "muted", text: "Nothing on their wishlist is on sale right now." }));
         }));
         const del = h("button", { class: "btn red small", text: "Remove" });
         del.addEventListener("click", () => busy(del, async () => { await api("/api/friends/remove", { name: f.name }); toast("Removed.", "ok"); load(); }));
-        return h("div", { class: "panel" }, h("strong", { text: f.name }), h("span", { class: "muted", text: f.birthday ? "  🎂 " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") : "" }), h("div", { class: "row" }, show, del));
+        return h("div", { class: "panel" }, h("strong", { text: f.name }), h("span", { class: "muted", text: f.birthday ? "  🎂 " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, show, del));
       }));
     }
-    const add = h("button", { class: "btn", text: "Save friend" });
+    const add = h("button", { class: "btn blue", text: "Save friend" });
     add.addEventListener("click", () => busy(add, async () => { await api("/api/friends/add", { name: name.value, birthday: bday.value, page: page.value }); toast("Saved.", "ok"); name.value = bday.value = page.value = ""; load(); }));
     app.replaceChildren(pageHead("Friends", "Birthdays and gift ideas. Only a nickname and the month and day are kept."),
-      h("div", { class: "panel" }, h("div", { class: "row" }, field("Nickname", name), field("Birthday", bday), field("Public page", page)), add), list, deals);
+      h("div", { class: "panel" }, h("div", { class: "row" }, field("Nickname", name), field("Birthday", bday), field("Public page", page)), h("div", { class: "mp-actions fr-actions" }, add)), list, deals);
     load().catch(e => list.replaceChildren(h("div", { class: "empty", text: e.message })));
   }
 

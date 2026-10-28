@@ -266,6 +266,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 library: db.countLibrary(s.userId),
                 unread: db.unreadNotifications(s.userId),
                 news: u.seen_version === LATEST ? null : LATEST,
+                newsTitle: CHANGELOG[0]?.title ?? null,
                 tour: !u.welcomed,
                 setup: setupSteps(s, u)
             };

@@ -14,10 +14,10 @@ export function badgeList(lib, { best = 0 } = {}) {
     const cheap = lib.filter(g => g.paid > 0 && hours(g) >= 10 && g.paid / hours(g) < 1).length;
     const longest = Math.max(0, ...lib.map(hours));
     const list = [
-        ladder("collector", "📚", "Collector", lib.length, [10, 50, 100, 250], "games"),
+        ladder("collector", "📚", "Collector", lib.length, [10, 50, 100, 250], "in your library"),
         ladder("finisher", "🏁", "Finisher", finished, [1, 10, 25, 50], "finished"),
         ladder("streak", "🔥", "Streak keeper", best, [2, 3, 6, 12], "months in a row"),
-        ladder("value", "💸", "Money's worth", cheap, [1, 5, 10, 25], "games under 1 per hour"),
+        ladder("value", "💸", "Money's worth", cheap, [1, 5, 10, 25], "cheap by the hour (under 1 per hour played)"),
         ladder("marathon", "⏱️", "Marathoner", Math.floor(longest), [50, 100, 250, 500], "hours in one game")
     ];
     const clean = lib.length >= 10 && backlog === 0;

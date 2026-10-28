@@ -512,10 +512,11 @@ input.short-num { width: 6em; }
 .game-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted, #888); }
 .game-link:hover { color: var(--accent, #4da3ff); }
 
-.badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
-.badge { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); opacity: .55; }
-.badge.earned { opacity: 1; border-color: var(--accent); }
-.badge-icon { font-size: 1.5rem; }
+.trophy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.trophy { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.trophy:not(.earned) .trophy-icon { filter: grayscale(1); opacity: .6; }
+.trophy.earned { border-color: var(--accent); }
+.trophy-icon { font-size: 1.5rem; }
 
 .mp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
 .mp-card { display: flex; flex-direction: column; gap: 6px; margin: 0; }
@@ -532,3 +533,13 @@ input.short-num { width: 6em; }
 .tour-card p { margin: 0 0 12px; }
 .tour-card .row > * { flex: 0 0 auto; }
 .tour-ring { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+
+.mp-actions, .mp-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.mp-bar { margin: 8px 0; }
+.mp-actions .btn { flex: 0 0 auto; }
+details.panel > summary { cursor: pointer; font-weight: 600; color: var(--white); }
+details.panel[open] > summary { margin-bottom: 10px; }
+
+.war-slider { width: 100%; margin: 8px 0; }
+.war-row { display: block; padding: 6px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.fr-actions { margin-top: 10px; }
