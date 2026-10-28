@@ -667,12 +667,26 @@
         h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away"),
         h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /freegames and the list below show)")),
-      freeNow, salesPanel(), publicPagePanel(),
+      freeNow, salesPanel(), pushPanel(), publicPagePanel(),
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
         h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
       h("p", { class: "muted", text: `Watching ${state.me.games} game${state.me.games === 1 ? "" : "s"}. Prices are checked about once an hour.` }),
       save, history);
+  }
+
+  function pushPanel() {
+    const cur = state.me.settings.push;
+    const link = h("input", { type: "url", maxlength: "300", placeholder: cur ? "Saved (" + cur + "). Paste a new link to replace it." : "https://ntfy.sh/your-topic" });
+    const status = h("p", { class: "muted small", text: cur ? "Alerts are also sent to " + cur + "." : "Off." });
+    const save = h("button", { class: "btn blue", text: "Save and send a test", onclick: () => busy(save, async () => {
+      const r = await api("/api/push", { url: link.value }); state.me.settings.push = r.push; link.value = "";
+      status.textContent = r.push ? "Alerts are also sent to " + r.push + "." : "Off."; toast(r.push ? "Saved. Check your phone." : "Turned off.", "ok");
+    }) });
+    const off = h("button", { class: "btn gray", text: "Turn off", onclick: () => busy(off, async () => { await api("/api/push", { url: "" }); state.me.settings.push = null; status.textContent = "Off."; toast("Turned off.", "ok"); }) });
+    return h("div", { class: "panel" }, h("h3", { text: "Phone alerts" }),
+      h("p", { class: "muted", text: "Get a copy of every alert on your phone. Use an ntfy.sh topic (install the free ntfy app and pick a long, hard-to-guess topic name), a Discord webhook or a Slack incoming webhook. Only those three are accepted. The link is stored privately and never shown again." }),
+      field("Link", link), status, h("div", { class: "row" }, save, off));
   }
 
   function publicPagePanel() {

@@ -336,6 +336,8 @@ alerts
         .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices({ name: "English", value: "en" }, { name: "Español", value: "es" }, { name: "Français", value: "fr" })))
     .addSubcommand(s => s.setName("share").setDescription("Count you in server group alerts and the leaderboard (off by default)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
+    .addSubcommand(s => s.setName("push").setDescription("Also send alerts to your phone (ntfy.sh, Discord or Slack webhook); leave empty to turn off")
+        .addStringOption(o => o.setName("link").setDescription("https://ntfy.sh/your-topic or a webhook link").setMaxLength(300)))
     .addSubcommand(s => s.setName("history").setDescription("Your recent alerts"));
 
 const alertchannel = new SlashCommandBuilder()

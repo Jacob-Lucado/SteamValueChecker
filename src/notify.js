@@ -1,3 +1,5 @@
+import { sendPush } from "./push.js";
+
 // Delivers alerts: DM first (default), then the server's alert channel as a fallback.
 // Users who choose "channel" delivery skip the DM and are mentioned in the server channel instead.
 // Discord is injected, so the logic can be tested without a connection.
@@ -8,7 +10,7 @@ export const MAX_DM_FAILURES_BEFORE_NOTE = 3;
  * `discord` needs: sendDm(userId, payload) and sendChannel(channelId, payload), both throwing on failure.
  * Returns { ok, via: "dm" | "channel" | null, reason? }.
  */
-export function createNotifier({ db, discord }) {
+export function createNotifier({ db, discord, push = sendPush }) {
     async function viaChannel(user, payload) {
         const guild = db.getGuild(user.guild_id);
         if (!guild) return { ok: false, via: null, reason: "no_channel" };
@@ -39,6 +41,10 @@ export function createNotifier({ db, discord }) {
         const muted = String(user.muted ?? "").split(",").includes(type);
         if (muted) { record(user, type, payload); return { ok: true, via: "inbox" }; }
         const r = await send(user, payload);
+        // An optional copy to the person's phone. It never decides whether the alert counts as delivered, except when Discord failed.
+        let pushed = false;
+        if (user.push_url) pushed = await push(user.push_url, payload).catch(() => false);
+        if (!r.ok && pushed) { record(user, type, payload); return { ok: true, via: "push" }; }
         if (r.ok) record(user, type, payload);
         return r;
     }

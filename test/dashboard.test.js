@@ -1029,3 +1029,20 @@ test("friends: add, list, deals and remove", async () => {
         assert.equal((await post("/api/friends/remove", { name: "Sam" })).status, 404);
     } finally { await t.close(); }
 });
+
+test("phone alerts: saving needs a reachable allowlisted link and never echoes it back", async () => {
+    const calls = [];
+    const t = await signedIn({ extra: { pushFetch: async u => { calls.push(u); return { status: 200 }; } } });
+    try {
+        const post = body => t.request("/api/push", { method: "POST", body });
+        assert.equal((await post({ url: "https://evil.example/hook" })).status, 400);
+        t.advance(11_000);
+        const r = await post({ url: "https://ntfy.sh/my-secret-topic-1" });
+        assert.equal(r.status, 200); assert.equal(r.data.push, "ntfy.sh");
+        assert.deepEqual(calls, ["https://ntfy.sh/my-secret-topic-1"]);
+        const me = await t.request("/api/me");
+        assert.equal(me.data.settings.push, "ntfy.sh");
+        assert.equal(JSON.stringify(me.data).includes("my-secret-topic"), false);
+        assert.equal((await post({ url: "" })).data.push, null);
+    } finally { await t.close(); }
+});

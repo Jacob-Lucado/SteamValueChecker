@@ -24,6 +24,7 @@ import { buyOrWait } from "./advice.js";
 import { daysUntilBirthday } from "./friendstore.js";
 import { friendDeals, friendRows, saveFriend, birthdayEmbed } from "./friends.js";
 import { spendSummary, regionCurrency } from "./spend.js";
+import { parsePushUrl, sendPush } from "./push.js";
 import { trophyCase } from "./badges.js";
 import { importLibrary, libraryView, leaderboard, finishedLeague, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
@@ -367,6 +368,18 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const lang = i.options.getString("language", true);
                 db.updateUser(user.discord_id, { lang });
                 return eph(i, lang === "es" ? "Listo. Los botones y mensajes clave ahora están en español." : lang === "fr" ? "C'est fait. Les boutons et messages clés sont maintenant en français." : "Done. Buttons and messages are in English.");
+            }
+            case "push": {
+                const link = (i.options.getString("link") ?? "").trim();
+                try {
+                    if (!link) { db.updateUser(user.discord_id, { push_url: null }); return eph(i, "Phone alerts are off."); }
+                    const p = parsePushUrl(link);
+                    await i.deferReply({ flags: MessageFlags.Ephemeral });
+                    const ok = await sendPush(p.url, { embeds: [{ title: "Steam Value Checker", description: "Phone alerts are on. This is a test." }] });
+                    if (!ok) return void await i.editReply({ content: `I could not reach ${p.host} with that link, so I did not save it. Check it and try again.` });
+                    db.updateUser(user.discord_id, { push_url: p.url });
+                    return void await i.editReply({ content: `Saved. Alerts now also go to ${p.host}. Your link is never shown again; run this command with no link to turn it off.` });
+                } catch (err) { return failed(i, "push", err); }
             }
             case "share": {
                 const on = i.options.getBoolean("enabled", true);
