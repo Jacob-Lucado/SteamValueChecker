@@ -134,3 +134,30 @@ test("announcement embed carries the banner and creator logo when a public url i
     assert.equal(e.thumbnail.url, "https://x.test/creator.png");
     assert.equal(noticeEmbed("T", "B").image, undefined);
 });
+
+test("purchase-history prices fill synced games without adding any, and report what is missing", async () => {
+    const { fillPrices, normTitle } = await import("../src/library.js");
+    assert.equal(normTitle("Call of Duty®: Modern Warfare® II"), "call of duty modern warfare ii");
+    assert.equal(normTitle("Call of Duty: Modern Warfare II"), "call of duty modern warfare ii");
+    const db = openDb(":memory:");
+    db.ensureUser("p1");
+    db.syncSteamGames("p1", [
+        { itad_id: "id-hades", title: "Hades", appid: 1145360, minutes: 60 },
+        { itad_id: "id-cod", title: "Call of Duty®: Modern Warfare® II", appid: 1938090, minutes: 0 },
+        { itad_id: "id-free", title: "Warframe", appid: 230410, minutes: 5 },
+        { itad_id: "id-celeste", title: "Celeste", appid: 504230, minutes: 5 }
+    ]);
+    const itad = { lookupTitles: async ts => ts.map(t => ({ title: t, id: t === "Celeste (2018)" ? "id-celeste" : null })) };
+    const r = await fillPrices(db, itad, "p1", [
+        { title: "Hades", paid: 12.5 }, { title: "Call of Duty: Modern Warfare II", paid: 59.99 },
+        { title: "Celeste (2018)", paid: 4 }, { title: "A Gift For A Friend", paid: 9.99 }
+    ]);
+    assert.equal(r.mode, "filled");
+    assert.equal(r.filled, 3);
+    assert.deepEqual(r.missing, ["A Gift For A Friend"]);
+    assert.deepEqual(r.unpriced, ["Warframe"]);
+    const rows = db.listLibrary("p1");
+    assert.equal(rows.length, 4); // nothing added
+    assert.equal(rows.find(x => x.title === "Hades").paid, 12.5);
+    assert.equal(rows.find(x => x.itad_id === "id-cod").paid, 59.99);
+});

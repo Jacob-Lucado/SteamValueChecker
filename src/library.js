@@ -63,6 +63,45 @@ export async function importLibrary(db, itad, userId, entries) {
     return { ...res, notFound };
 }
 
+/** Same game, different punctuation: "Call of Duty®: Modern Warfare® II" and "Call of Duty: Modern Warfare II" match. */
+export const normTitle = t => String(t ?? "").toLowerCase().normalize("NFKD").replace(/[®™©]/g, "").replace(/&/g, " and ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * Fills in what was paid for games already in the library (for example the ones a Steam sync brought in), without adding
+ * anything. Entries are { title, paid }. Returns { filled, missing: [titles not in the library], unpriced: [library games still without a price] }.
+ * A library with no Steam-synced games has nothing to fill, so those entries are added the normal way instead.
+ */
+export async function fillPrices(db, itad, userId, entries) {
+    const clean = entries.filter(e => e && String(e.title ?? "").trim() && Number.isFinite(e.paid) && e.paid >= 0);
+    if (!clean.length) throw new LibraryError("Nothing to fill in.");
+    const rows = db.listLibrary(userId);
+    if (!rows.some(r => r.appid)) {
+        const r = await importLibrary(db, itad, userId, clean);
+        return { mode: "added", added: r.added, filled: r.updated, missing: r.notFound, unpriced: [] };
+    }
+    const byTitle = new Map(rows.map(r => [normTitle(r.title), r]));
+    const byId = new Map(rows.map(r => [r.itad_id, r]));
+    const filledIds = new Set();
+    const pending = [];
+    let filled = 0;
+    const apply = (row, paid) => { if (filledIds.has(row.id)) return; db.setLibraryPaid(userId, row.id, paid); filledIds.add(row.id); filled++; };
+    for (const e of clean) {
+        const row = byTitle.get(normTitle(e.title));
+        if (row) apply(row, e.paid); else pending.push(e);
+    }
+    const missing = [];
+    if (pending.length) {
+        let resolved = [];
+        try { resolved = await itad.lookupTitles(pending.map(e => String(e.title).trim().slice(0, 120))); } catch { resolved = []; }
+        pending.forEach((e, i) => {
+            const row = resolved[i]?.id ? byId.get(resolved[i].id) : null;
+            if (row) apply(row, e.paid); else missing.push(String(e.title).trim());
+        });
+    }
+    const unpriced = rows.filter(r => r.appid && r.paid === null && !filledIds.has(r.id)).map(r => r.title);
+    return { mode: "filled", added: 0, filled, missing, unpriced };
+}
+
 /**
  * Who has saved the most of their MSRP, among members who opted in. Ranked by percent, because members
  * shop in different currencies. Returns [{ discord_id, savedPct, games }].
