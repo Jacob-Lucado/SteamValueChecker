@@ -1762,7 +1762,7 @@
       h("div", { class: "notice" }, "Want it filled in for you? ", h("a", { href: "#/steam", text: "Link your Steam profile" }), " to sync every game you own, with playtime. Steam does not share what you paid: the FanaticalGrabber extension fills it in from your Steam purchase history (see below)."),
       h("div", { class: "panel" }, h("h3", { text: "FanaticalGrabber one-click send" }), grabberOut,
         h("h4", { text: "Fill in what you paid, from Steam" }),
-        h("p", { class: "muted small", text: "With the extension (2.6 or newer) and the link code above saved in it, open your Steam purchase history and press Send what I paid. Single-game purchases get their real price. Cart and bundle purchases have one total for several games, so those are skipped; add them with the bundle tool on this page." }),
+        h("p", { class: "muted small", text: "With the extension (2.6 or newer) and the link code above saved in it, open your Steam purchase history and press Send what I paid. Single-game purchases get their real price. Cart and bundle purchases have one total for several games, so those are skipped; add them with the bundle tool on this page. For games you activated with a key, open store.steampowered.com/account/licenses and press Record retail prices for my keys: they get the retail price, and prices you already have are kept." }),
         h("a", { class: "btn blue small", href: "https://store.steampowered.com/account/history", target: "_blank", rel: "noopener noreferrer", text: "Open my Steam purchase history" })),
       body);
     grabberLoad();

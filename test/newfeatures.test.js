@@ -200,3 +200,23 @@ test("itad hot deals keep only Steam games at or above the discount", async () =
     const out = await itad.getHotDeals({ minCut: 75 });
     assert.deepEqual(out.map(d => [d.id, d.cut, d.appid]), [["g1", 90, 304430]]);
 });
+
+test("key activations get the retail price, only where nothing is recorded, and never add games", async () => {
+    const { fillRetail } = await import("../src/library.js");
+    const db = openDb(":memory:"); db.ensureUser("k1");
+    db.syncSteamGames("k1", [
+        { itad_id: "id-a", title: "Hades", appid: 1, minutes: 0 }, { itad_id: "id-b", title: "Celeste", appid: 2, minutes: 0 },
+        { itad_id: "id-c", title: "No Price Game", appid: 3, minutes: 0 }
+    ]);
+    db.upsertLibrary("k1", [{ itad_id: "id-b", title: "Celeste", paid: 3 }]); // a real price already recorded
+    const itad = {
+        lookupTitles: async ts => ts.map(t => ({ title: t, id: null })),
+        getPrices: async ids => new Map(ids.map(id => [id, id === "id-c" ? { deals: [] } : { deals: [{ shop: { name: "Steam" }, price: { amount: 10, currency: "USD" }, regular: { amount: 25, currency: "USD" }, cut: 60 }] }]))
+    };
+    const r = await fillRetail(db, itad, db.getUser("k1"), ["Hades", "Celeste", "No Price Game", "Not Mine"]);
+    assert.deepEqual([r.filled, r.alreadyPriced, r.noRetail, r.missing], [1, 1, ["No Price Game"], ["Not Mine"]]);
+    const rows = db.listLibrary("k1");
+    assert.equal(rows.length, 3);
+    assert.equal(rows.find(x => x.title === "Hades").paid, 25);
+    assert.equal(rows.find(x => x.title === "Celeste").paid, 3);
+});

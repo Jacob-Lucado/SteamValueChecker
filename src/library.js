@@ -103,6 +103,39 @@ export async function fillPrices(db, itad, userId, entries) {
 }
 
 /**
+ * Key activations have no price on Steam, so they get the retail (MSRP) price instead. Only games already in the library,
+ * and only ones without a price: a real amount paid is never replaced. Returns { filled, alreadyPriced, noRetail, missing }.
+ */
+export async function fillRetail(db, itad, user, titles) {
+    const wanted = [...new Set(titles.map(t => String(t ?? "").trim()).filter(Boolean))].slice(0, 500);
+    if (!wanted.length) throw new LibraryError("Nothing to fill in.");
+    const rows = db.listLibrary(user.discord_id);
+    const byTitle = new Map(rows.map(r => [normTitle(r.title), r]));
+    const byId = new Map(rows.map(r => [r.itad_id, r]));
+    const matched = new Map(); // row id -> row
+    const pending = [];
+    for (const t of wanted) { const row = byTitle.get(normTitle(t)); if (row) matched.set(row.id, row); else pending.push(t); }
+    const missing = [];
+    if (pending.length) {
+        let resolved = [];
+        try { resolved = await itad.lookupTitles(pending.map(t => t.slice(0, 120))); } catch { resolved = []; }
+        pending.forEach((t, i) => { const row = resolved[i]?.id ? byId.get(resolved[i].id) : null; if (row) matched.set(row.id, row); else missing.push(t); });
+    }
+    const todo = [...matched.values()].filter(r => r.paid === null);
+    const alreadyPriced = matched.size - todo.length;
+    const noRetail = [];
+    let filled = 0;
+    if (todo.length) {
+        const prices = await itad.getPrices(todo.map(r => r.itad_id), user.region);
+        for (const r of todo) {
+            const msrp = summarize(prices.get(r.itad_id), { majorOnly: user.stores === "major" }).msrp;
+            if (msrp !== null && msrp > 0) { db.setLibraryPaid(user.discord_id, r.id, msrp); filled++; } else noRetail.push(r.title);
+        }
+    }
+    return { filled, alreadyPriced, noRetail, missing };
+}
+
+/**
  * Who has saved the most of their MSRP, among members who opted in. Ranked by percent, because members
  * shop in different currencies. Returns [{ discord_id, savedPct, games }].
  */

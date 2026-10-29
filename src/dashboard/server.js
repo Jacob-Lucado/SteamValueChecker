@@ -28,7 +28,7 @@ import { PLATFORMS, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { goalProgress } from "../steamstore.js";
-import { fillPrices, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
+import { fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
 import { compareLibraries } from "../compare.js";
 import { regionPrices } from "../regions.js";
@@ -1723,6 +1723,12 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 const clean = sanitize(entries, { max: 500 }).entries;
                 if (!clean.length) throw new HttpError(400, "I need game titles, not keys.");
                 db.ensureUser(uid);
+                if (body.mode === "retail") {
+                    // Steam key activations: no price paid is known, so use the retail price, only where nothing is recorded yet.
+                    const r = await fillRetail(db, itad, db.getUser(uid), clean.map(e => e.title));
+                    db.noteGrabberUse(uid);
+                    return json(res, 200, { mode: "retail", filled: r.filled, updated: r.filled, alreadyPriced: r.alreadyPriced, notFound: r.missing.length, missing: r.missing.slice(0, 50), noRetail: r.noRetail.slice(0, 50), noRetailCount: r.noRetail.length });
+                }
                 if (body.mode === "prices") {
                     // Steam purchase history: fill in prices for games already in the library (a Steam sync's games), add nothing new.
                     const r = await fillPrices(db, itad, uid, clean.filter(e => e.paid !== null));
