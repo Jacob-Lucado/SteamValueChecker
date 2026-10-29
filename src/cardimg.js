@@ -6,6 +6,7 @@ import { libraryView } from "./library.js";
 import { playStats, fetchProfileCard, fmtHours } from "./steamlib.js";
 import { money } from "./render.js";
 import { THEMES, PLATFORM_LABEL, viewPrefs } from "./cardprefs.js";
+import { goalProgress } from "./steamstore.js";
 import { svgToPng, fetchImageDataUri } from "./imgrender.js";
 
 const W = 1200;
@@ -172,6 +173,54 @@ export function valueSvg({ stats, currency, link, card }, art = {}) {
     const H = panelTop + panelH + 44;
     o.push(`<text x="48" y="${H - 14}" font-size="14" fill="#5c7080">Steam Value Checker</text>`);
     return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${H}" viewBox="0 0 1200 ${H}"><rect width="1200" height="${H}" fill="${C.bg}"/>${o.join("\n")}</svg>`;
+}
+
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The year-in-review picture: hours this year, a bar per month, top games, the total since linking and the hours goal. */
+export function recapSvg({ rec, allTime, goal, name }, art = {}) {
+    const o = [];
+    const peak = Math.max(1, ...rec.months);
+    if (art.avatar) o.push(`<clipPath id="av"><circle cx="84" cy="84" r="34"/></clipPath><image href="${art.avatar}" x="50" y="50" width="68" height="68" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`);
+    o.push(`<text x="${art.avatar ? 136 : 56}" y="76" font-size="18" font-weight="700" fill="${C.accent}" letter-spacing="2">${esc(cut(String(name || "My").toUpperCase(), 24))} · HOURS PLAYED IN ${rec.year}</text>`);
+    o.push(`<text x="${art.avatar ? 136 : 56}" y="132" font-size="64" font-weight="700" fill="${C.text}">${esc(fmtHours(rec.totalMinutes))}</text>`);
+    o.push(`<text x="56" y="176" font-size="22" fill="${C.mute}">${esc(`${rec.games} game${rec.games === 1 ? "" : "s"} on ${rec.activeDays} day${rec.activeDays === 1 ? "" : "s"}` + (rec.busiestMonth !== null && rec.totalMinutes ? `, busiest in ${MON[rec.busiestMonth]}` : ""))}</text>`);
+    o.push(`<text x="56" y="212" font-size="20" font-weight="600" fill="#a4d007">${esc(fmtHours(allTime.totalMinutes) + " in total since linking Steam")}</text>`);
+    if (goal) {
+        o.push(`<rect x="56" y="236" width="440" height="12" rx="6" fill="${C.tile}"/><rect x="56" y="236" width="${Math.max(6, Math.round(440 * goal.pct / 100))}" height="12" rx="6" fill="${goal.reached ? "#a4d007" : C.accent}"/>`);
+        o.push(`<text x="56" y="272" font-size="16" fill="${C.mute}">${esc(`Goal: ${goal.done} of ${goal.goal} hours (${goal.pct}%)`)}</text>`);
+    }
+    // Month bars
+    rec.months.forEach((m, n) => {
+        const bh = Math.round(m / peak * 170), bx = 56 + n * 38;
+        o.push(`<rect x="${bx}" y="${520 - bh}" width="28" height="${Math.max(bh, 3)}" rx="4" fill="${m === peak && m > 0 ? "#a4d007" : C.accent}"/>`);
+        o.push(`<text x="${bx + 14}" y="546" font-size="13" text-anchor="middle" fill="${C.mute}">${MON[n]}</text>`);
+    });
+    // Top games
+    o.push(`<rect x="640" y="48" width="512" height="500" rx="14" fill="${C.panel}" stroke="${C.line}"/>`);
+    o.push(`<text x="664" y="86" font-size="15" font-weight="700" fill="${C.mute}" letter-spacing="1.5">TOP GAMES THIS YEAR</text>`);
+    rec.top.slice(0, 7).forEach((t, i) => {
+        const y = 128 + i * 56;
+        o.push(`<text x="664" y="${y}" font-size="22" font-weight="600" fill="${C.text}">${i + 1}. ${esc(cut(t.title, 28))}</text>`);
+        o.push(`<text x="1128" y="${y}" font-size="20" text-anchor="end" fill="${C.mute}">${esc(fmtHours(t.minutes))}</text>`);
+        const share = Math.max(0.02, t.minutes / Math.max(1, rec.top[0].minutes));
+        o.push(`<rect x="664" y="${y + 10}" width="464" height="6" rx="3" fill="${C.tile}"/><rect x="664" y="${y + 10}" width="${Math.round(464 * share)}" height="6" rx="3" fill="${C.accent}"/>`);
+    });
+    if (!rec.top.length) o.push(`<text x="664" y="130" font-size="20" fill="${C.mute}">Nothing tracked yet this year.</text>`);
+    o.push(`<text x="56" y="596" font-size="14" fill="#5c7080">Counted from when I linked Steam  ·  Steam Value Checker</text>`);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="${C.bg}"/>${o.join("\n")}</svg>`;
+}
+
+/** The year-in-review picture as a PNG buffer, or null when Steam is not linked or nothing is tracked. */
+export async function renderRecap({ db, userId, name, fetchImpl = fetch, now = Date.now() }) {
+    const link = db.getSteamLink(userId);
+    if (!link) return null;
+    const year = new Date(now).getUTCFullYear(), rec = db.playRecap(userId, year), allTime = db.playRecapAll(userId);
+    if (!allTime.totalMinutes) return null;
+    const goalHours = db.getHourGoal(userId);
+    const card = await fetchProfileCard(link.steamid, fetchImpl).catch(() => null);
+    const avatar = card?.avatar ? await fetchImageDataUri(card.avatar, { fetchImpl }) : null;
+    return svgToPng(recapSvg({ rec, allTime, goal: goalHours ? goalProgress(goalHours, rec.totalMinutes, now) : null, name: name || card?.name }, { avatar: avatar ?? undefined }));
 }
 
 // Pictures for a card: the member's own links first, then what Steam has for their linked profile.

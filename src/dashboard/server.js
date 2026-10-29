@@ -23,7 +23,7 @@ import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
-import { profileCardData, renderProfileCard, renderSteamValue } from "../cardimg.js";
+import { profileCardData, renderProfileCard, renderSteamValue, renderRecap } from "../cardimg.js";
 import { PLATFORMS, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { goalProgress } from "../steamstore.js";
@@ -1565,15 +1565,16 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (key === "POST /auth/logout") { checkWrite(req); return logout(req, res); }
 
             // The same pictures /profilecard and /steam value post in Discord. Saved straight from the website with a download name.
-            if (key === "GET /api/profile/card.png" || key === "GET /api/steam/value.png") {
+            if (key === "GET /api/profile/card.png" || key === "GET /api/steam/value.png" || key === "GET /api/steam/recap.png") {
                 const s = session(req); userRow(s);
                 const undo = cooldown(s.userId, "cardimg");
                 try {
                     const png = key === "GET /api/profile/card.png"
                         ? await renderProfileCard({ db, userId: s.userId, name: s.username, fetchImpl: steamFetch })
+                        : key === "GET /api/steam/recap.png" ? await renderRecap({ db, userId: s.userId, name: s.username, fetchImpl: steamFetch, now: now() })
                         : await renderSteamValue({ db, itad, userId: s.userId, fetchImpl: steamFetch });
                     if (!png) throw new HttpError(404, "Link your Steam profile and sync first, so there is something to draw.");
-                    return send(res, 200, Buffer.from(png), { "Content-Type": "image/png", "Cache-Control": "no-store", "Content-Disposition": `inline; filename="${key.includes("card") ? "my-game-profile" : "steam-account-value"}.png"` });
+                    return send(res, 200, Buffer.from(png), { "Content-Type": "image/png", "Cache-Control": "no-store", "Content-Disposition": `inline; filename="${key.includes("card") ? "my-game-profile" : key.includes("recap") ? "my-year-in-games" : "steam-account-value"}.png"` });
                 } catch (err) { undo(); throw err; }
             }
 

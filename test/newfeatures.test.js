@@ -84,3 +84,20 @@ test("minimum discount: validated, and sale alerts below it are held back withou
     await cycle(80); assert.equal(sent.length, 0);   // 20% off: below the minimum
     await cycle(40); assert.equal(sent.length, 1);   // 60% off: alerts, and the earlier hold did not mark it as sent
 });
+
+test("year-in-review picture is a real PNG, only when Steam is linked and hours are tracked", async () => {
+    const { renderRecap } = await import("../src/cardimg.js");
+    let clock = Date.UTC(2026, 2, 10);
+    const db = openDb(":memory:", { now: () => clock });
+    db.ensureUser("u1", "g1");
+    const fetchImpl = async () => { throw new Error("offline"); };
+    assert.equal(await renderRecap({ db, userId: "u1", fetchImpl, now: clock }), null);          // not linked
+    db.setSteamLink("u1", "76561198000000000");
+    assert.equal(await renderRecap({ db, userId: "u1", fetchImpl, now: clock }), null);          // nothing tracked
+    const g = m => [{ itad_id: "a", title: "A very long game title that has to be shortened to fit", appid: 1, minutes: m }];
+    db.syncSteamGames("u1", g(60)); clock = Date.UTC(2026, 2, 12); db.syncSteamGames("u1", g(900));
+    db.setHourGoal("u1", 100);
+    const png = await renderRecap({ db, userId: "u1", name: "Jacob", fetchImpl, now: clock });
+    assert.deepEqual([...png.slice(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+    assert.ok(png.length > 5000);
+});

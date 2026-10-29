@@ -11,7 +11,7 @@ import { ItadError } from "./itad.js";
 import { LibraryError } from "./library.js";
 import { money } from "./render.js";
 import { AttachmentBuilder } from "discord.js";
-import { renderSteamValue } from "./cardimg.js";
+import { renderSteamValue, renderRecap } from "./cardimg.js";
 
 const COOLDOWN_MS = 60_000;
 const last = new Map();
@@ -158,7 +158,18 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
                 const year = new Date().getUTCFullYear();
                 const shared = i.options.getBoolean("public") === true;
                 const all = db.playRecapAll(i.user.id);
-                return void await i.reply({ embeds: [recapEmbed({ ...db.playRecap(i.user.id, year), allTime: all })], ...(shared ? {} : { flags: MessageFlags.Ephemeral }) });
+                const rec = db.playRecap(i.user.id, year);
+                const flags = shared ? {} : { flags: MessageFlags.Ephemeral };
+                // A picture like the website's, when there is something to show. The text version is the fallback.
+                if (all.totalMinutes) {
+                    await i.deferReply(flags);
+                    let png = null;
+                    try { png = await renderRecap({ db, userId: i.user.id, name: i.member?.displayName ?? i.user.username, fetchImpl }); } catch (err) { console.error(`[steam recap] ${err.name}: ${err.message}`); }
+                    const alt = `Hours played in ${year}: ${fmtHours(rec.totalMinutes)}. Since linking Steam: ${fmtHours(all.totalMinutes)}.`;
+                    if (png) return void await i.editReply({ content: alt, files: [new AttachmentBuilder(Buffer.from(png), { name: "my-year-in-games.png", description: alt })] });
+                    return void await i.editReply({ embeds: [recapEmbed({ ...rec, allTime: all })] });
+                }
+                return void await i.reply({ embeds: [recapEmbed({ ...rec, allTime: all })], ...flags });
             }
             if (sub === "goal") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

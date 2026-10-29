@@ -1143,32 +1143,6 @@
   function recapPanel() {
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const out = h("div", { class: "muted", text: "Loading…" });
-    function drawCard(r) {
-      const c = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": `Hours tracked in ${r.year}: ${hoursText(r.totalMinutes)}. Since linking: ${hoursText(r.allTime.totalMinutes)}` });
-      const x = c.getContext("2d");
-      const g = x.createLinearGradient(0, 0, 1200, 630); g.addColorStop(0, "#1b2838"); g.addColorStop(1, "#2a475e");
-      x.fillStyle = g; x.fillRect(0, 0, 1200, 630);
-      x.fillStyle = "#66c0f4"; x.font = "600 30px system-ui, sans-serif"; x.fillText(`HOURS I TRACKED IN ${r.year}`, 60, 80);
-      x.fillStyle = "#fff"; x.font = "700 96px system-ui, sans-serif"; x.fillText(hoursText(r.totalMinutes), 60, 190);
-      x.fillStyle = "#c7d5e0"; x.font = "28px system-ui, sans-serif";
-      x.fillText(`${r.games} games on ${r.activeDays} days` + (r.busiestMonth !== null ? `, busiest in ${MON[r.busiestMonth]}` : ""), 60, 238);
-      x.fillStyle = "#a4d007"; x.font = "600 26px system-ui, sans-serif"; x.fillText(`${hoursText(r.allTime.totalMinutes)} in total since I linked`, 60, 284);
-      const peak = Math.max(1, ...r.months);
-      r.months.forEach((m, n) => {
-        const bh = Math.round(m / peak * 190), bx = 60 + n * 52;
-        x.fillStyle = m === peak && m > 0 ? "#a4d007" : "#66c0f4"; x.fillRect(bx, 520 - bh, 38, Math.max(bh, 3));
-        x.fillStyle = "#8ba4b6"; x.font = "16px system-ui, sans-serif"; x.fillText(MON[n], bx + 2, 548);
-      });
-      x.fillStyle = "#c7d5e0"; x.font = "600 26px system-ui, sans-serif"; x.fillText("TOP GAMES THIS YEAR", 740, 330);
-      x.fillStyle = "#fff"; x.font = "26px system-ui, sans-serif";
-      r.top.slice(0, 5).forEach((t, n) => {
-        const name = t.title.length > 24 ? t.title.slice(0, 23) + "…" : t.title;
-        x.fillText(`${n + 1}. ${name}`, 740, 375 + n * 46);
-        x.fillStyle = "#8ba4b6"; x.font = "20px system-ui, sans-serif"; x.fillText(hoursText(t.minutes), 1090, 375 + n * 46); x.fillStyle = "#fff"; x.font = "26px system-ui, sans-serif";
-      });
-      x.fillStyle = "#5c7080"; x.font = "18px system-ui, sans-serif"; x.fillText("Counted from when I linked Steam  •  Steam Value Checker", 60, 600);
-      return c;
-    }
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
     // A yearly hours goal: a bar, where this pace ends up, and a box to change it.
     function goalBox(g) {
@@ -1185,9 +1159,15 @@
       try {
         const r = await api("/api/steam/recap");
         if (!r.allTime.totalMinutes) { out.className = "muted"; out.replaceChildren(h("p", { text: "Nothing tracked yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." })); return; }
-        const card = drawCard(r);
-        const save = h("button", { class: "btn blue shrink", text: "Save as image" });
-        save.addEventListener("click", () => card.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: `my-${r.year}-hours-tracked.png` }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }));
+        const shot = h("div");
+        const make = h("button", { class: "btn blue shrink", text: "Make my year-in-review image" });
+        make.addEventListener("click", () => busy(make, async () => {
+          const res = await fetch("/api/steam/recap.png", { credentials: "same-origin" });
+          if (!res.ok) { let m = "Could not draw the picture."; try { m = (await res.json()).error || m; } catch { /* keep the default */ } throw new Error(m); }
+          const url = URL.createObjectURL(await res.blob());
+          shot.replaceChildren(h("img", { class: "recap-card", src: url, alt: `Hours played in ${r.year}: ${hoursText(r.totalMinutes)}` }), h("div", { class: "row" }, h("a", { class: "btn blue shrink", href: url, download: `my-${r.year}-in-games.png`, text: "Save image" })));
+        }));
+        const card = shot, save = make;
         out.className = "";
         out.replaceChildren(
           h("div", { class: "grid two" },
