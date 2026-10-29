@@ -1558,7 +1558,7 @@
   function spendPanel() {
     const out = h("div", { class: "muted", text: "Loading…" });
     api("/api/library/spend").then(sp => {
-      if (!sp.games) { out.className = ""; out.replaceChildren(h("p", { class: "muted", text: "No amounts recorded yet. Add what you paid in the table below, or import a FanaticalGrabber export that has prices." })); return; }
+      if (!sp.games) { out.className = ""; out.replaceChildren(h("p", { class: "muted", text: "No amounts recorded yet. Add what you paid in the table below, import a FanaticalGrabber export that has prices, or use the extension on your Steam purchase history (see the one-click send panel)." })); return; }
       const c = sp.currency, peak = Math.max(...sp.months.map(m => m.total), 1);
       const line = g => h("li", {}, h("b", { text: g.title }), ` ${money(g.paid, c)} for ${g.hours} h (${money(g.perHour, c)}/h)`);
       out.className = "";
@@ -1742,8 +1742,11 @@
       h("div", { class: "grid two" },
         h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), field("Paid", paid), h("p"), add),
         h("div", { class: "panel" }, h("h3", { text: "Import" }), field("FanaticalGrabber export (a Paid column is used)", file), h("p"), imp)),
-      h("div", { class: "notice" }, "Want it filled in for you? ", h("a", { href: "#/steam", text: "Link your Steam profile" }), " to sync every game you own, with playtime. It never changes what you paid."),
-      h("div", { class: "panel" }, h("h3", { text: "FanaticalGrabber one-click send" }), grabberOut),
+      h("div", { class: "notice" }, "Want it filled in for you? ", h("a", { href: "#/steam", text: "Link your Steam profile" }), " to sync every game you own, with playtime. Steam does not share what you paid: the FanaticalGrabber extension fills it in from your Steam purchase history (see below)."),
+      h("div", { class: "panel" }, h("h3", { text: "FanaticalGrabber one-click send" }), grabberOut,
+        h("h4", { text: "Fill in what you paid, from Steam" }),
+        h("p", { class: "muted small", text: "With the extension (2.6 or newer) and the link code above saved in it, open your Steam purchase history and press Send what I paid. Single-game purchases get their real price. Cart and bundle purchases have one total for several games, so those are skipped; add them with the bundle tool on this page." }),
+        h("a", { class: "btn blue small", href: "https://store.steampowered.com/account/history", target: "_blank", rel: "noopener noreferrer", text: "Open my Steam purchase history" })),
       body);
     grabberLoad();
     load();

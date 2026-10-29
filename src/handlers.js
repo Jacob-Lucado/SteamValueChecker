@@ -469,6 +469,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                     "Your FanaticalGrabber link code (shown once, keep it private; anyone with it can add games to your library):",
                     `\`${token}\``,
                     "Open the Grabber panel on Fanatical, choose **Send to Steam Value Checker**, and paste it when asked.",
+                    "To fill in **what you paid** for your Steam games, open your Steam purchase history (store.steampowered.com/account/history) and press **Send what I paid**.",
                     "Making a new code replaces this one. `/library grabber action:Turn the link off` removes it."
                 ].join("\n"));
             }

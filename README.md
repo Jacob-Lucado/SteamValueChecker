@@ -98,7 +98,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/wishlist cleanup` / `priority` | Remove wishlist games you already own; star a game so it is listed first and its alerts come through quiet hours |
 | `/publicpage reset_claims:true` | Visitors to your public page can mark a game as "I'm gifting this". You see only how many, never who; this clears them |
 | `/alertchannel digest` | Server admins: a Friday round-up in the alert channel of cheap games opted-in members watch (never who), free games and the week's events |
-| `/library grabber` | A link code for the FanaticalGrabber extension's **Send to Steam Value Checker** button. Only game titles are sent, never keys; the code is stored hashed and can be turned off |
+| `/library grabber` | A link code for the FanaticalGrabber extension's **Send to Steam Value Checker** button. Only game titles are sent, never keys; the code is stored hashed and can be turned off. The same code lets the extension's **Send what I paid** button (on your Steam purchase history) fill in what you paid |
 | `/currency [currency]` | Choose the currency prices are shown in (saved; the dashboard's top-bar picker is the same setting). With no option it shows yours |
 | `/mydata export\|delete` | Download or delete everything stored about you |
 

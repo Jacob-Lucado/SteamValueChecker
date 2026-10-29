@@ -562,7 +562,7 @@ export function challengeEmbed(c) {
 }
 
 export function spendEmbed(sp) {
-    if (!sp.games) return { color: 0xf0883e, title: "What you have spent", description: "No amounts recorded yet. Add what you paid with `/library add`, or import a FanaticalGrabber export that has prices, and I will add it up." };
+    if (!sp.games) return { color: 0xf0883e, title: "What you have spent", description: "No amounts recorded yet. Add what you paid with `/library add`, import a FanaticalGrabber export that has prices, or press **Send what I paid** on your Steam purchase history with the extension, and I will add it up." };
     const c = sp.currency, peak = Math.max(...sp.months.map(m => m.total), 1), bars = " ▁▂▃▄▅▆▇█";
     const spark = sp.months.map(m => bars[Math.round(m.total / peak * 8)]).join("");
     const line = g => `• **${g.title}** ${money(g.paid, c)} for ${g.hours} h (${money(g.perHour, c)}/h)`;
