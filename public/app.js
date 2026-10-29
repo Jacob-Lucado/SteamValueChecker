@@ -1776,7 +1776,6 @@
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
     const when = t => (t ? new Date(t).toLocaleString() : "never");
     const n0 = v => (v === null || v === undefined ? "–" : Number(v).toLocaleString());
-    const upText = sec => { if (!sec) return "–"; const dd = Math.floor(sec / 86400), hh = Math.floor(sec % 86400 / 3600), mm = Math.floor(sec % 3600 / 60); return dd ? `${dd}d ${hh}h` : hh ? `${hh}h ${mm}m` : `${mm}m`; };
     const table = (head, rows) => {
       if (!rows.length) return h("p", { class: "muted", text: "Nothing yet." });
       const th = head.map((c, i) => h("th", { class: i ? "num" : "", text: c }));
@@ -1792,7 +1791,7 @@
         tile("Alerts, last 24h", st.alerts24h), tile("DM delivery", st.dmUsers, `${st.channelUsers} use the channel`), tile("DMs failing", st.usersFailingDm, "3 or more failures in a row"),
         tile("New members, 7 days", sum(ins.signups.slice(-7)), `${sum(ins.signups)} in 30 days`)),
       h("div", { class: "panel" }, h("h3", { text: "The bot right now" }),
-        h("div", { class: "grid four" }, tile("Version", bot.version || "–", bot.node), tile("Uptime", upText(bot.uptime)), tile("Discord ping", bot.pingMs === null || bot.pingMs === undefined ? "–" : bot.pingMs + " ms"), tile("Servers", n0(bot.servers), "the bot is in"),
+        h("div", { class: "grid four" }, tile("Version", bot.version || "–", bot.node), tile("Uptime", bot.uptime || "–"), tile("Discord ping", bot.pingMs === null || bot.pingMs === undefined ? "–" : bot.pingMs + " ms"), tile("Servers", n0(bot.servers), "the bot is in"),
           tile("Memory", bot.rssMb + " MB"))),
       h("div", { class: "panel" }, h("h3", { text: "Alerts in the last 7 days" }),
         Object.keys(st.alerts7d).length ? h("p", { text: Object.entries(st.alerts7d).map(([k, n]) => `${k}: ${n}`).join("   ") }) : h("p", { class: "muted", text: "None." })),
