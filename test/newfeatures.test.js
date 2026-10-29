@@ -242,3 +242,15 @@ test("gifted games show retail as paid, are added when missing, and stay out of 
     assert.equal(t.paid, 10); // only the game that was bought
     if (spendSummary) assert.ok(true);
 });
+
+test("play next moves on each press and never offers the same game twice", async () => {
+    const { playNext } = await import("../src/library.js");
+    const rows = [
+        { itad_id: "a", title: "A", status: "playing" },
+        { itad_id: "b", title: "B", status: "backlog", paid: 30 }, { itad_id: "c", title: "C", status: "backlog", paid: 20 },
+        { itad_id: "d", title: "D", status: "finished" }
+    ];
+    const seen = [];
+    for (let i = 0; i < 5; i++) { const n = playNext(rows, { skip: seen, rand: () => 0 }); if (!n) break; seen.push(n.pick.itad_id); }
+    assert.deepEqual(seen, ["a", "b", "c"]);
+});

@@ -1636,11 +1636,18 @@
       } catch (e) { grabberOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
+    const offered = [];
     const nextOut = h("div");
     const nextBtn = h("button", { class: "btn green", text: "Pick for me", onclick: () => busy(nextBtn, async () => {
-      const d = await api("/api/library/next");
-      nextOut.replaceChildren(d.next ? h("div", { class: "panel" }, h("h3", { text: "🎯 Play next" }), h("p", {}, h("b", { text: d.next.pick.title })), h("p", { class: "muted", text: d.next.why }),
-        d.next.others.length ? h("p", { class: "muted small", text: "Also in the running: " + d.next.others.map(o => o.title).join(", ") }) : null) : h("div", { class: "notice warn", text: "Nothing in your backlog." }));
+      const d = await api("/api/library/next" + (offered.length ? "?skip=" + encodeURIComponent(offered.join(",")) : ""));
+      if (!d.next) { nextOut.replaceChildren(h("div", { class: "notice warn", text: offered.length ? "That is everything in your backlog. Press again to start over." : "Nothing in your backlog." })); offered.length = 0; nextBtn.textContent = "Pick for me"; return; }
+      const n = d.next;
+      offered.push(n.pick.itad_id);
+      nextBtn.textContent = "Pick another";
+      nextOut.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "🎯 Play next" }),
+        h("div", { class: "game-cell" }, (n.pick.appid || n.pick.itad_id) ? steamArt(n.pick.appid, "game-thumb", 92, 43, n.pick.itad_id) : null, h("div", {}, h("div", { class: "game-title", text: n.pick.title }), h("div", { class: "muted", text: n.why }))),
+        n.others.length ? h("p", { class: "muted small", text: "Also in the running: " + n.others.map(o => o.title).join(", ") }) : null,
+        h("p", { class: "muted small", text: n.remaining ? `${n.remaining} more to choose from.` : "That is everything left in your backlog." })));
     }) });
     const view = { q: "", status: "all", sort: "name", page: 0 };
     const picked = new Set(); // itad ids ticked for a bulk status change

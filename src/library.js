@@ -229,14 +229,17 @@ export function backlogStats(rows) {
  * What to play next. There is no game-length data here, so this goes by what you are already playing, then by the games
  * you spent the most on (the money is already spent, so those are worth getting your use from). Returns { pick, others, why }.
  */
-export function playNext(rows, { rand = Math.random } = {}) {
-    const playing = rows.filter(r => r.status === "playing");
-    if (playing.length) return { pick: playing[0], others: playing.slice(1, 3), why: "You are already playing this one. Finish it before starting something new." };
-    const open = rows.filter(r => r.status === "backlog").sort((a, b) => (b.paid ?? -1) - (a.paid ?? -1) || a.title.localeCompare(b.title));
+export function playNext(rows, { rand = Math.random, skip = [] } = {}) {
+    const skipped = new Set(skip);
+    const fresh = r => !skipped.has(r.itad_id);
+    const playing = rows.filter(r => r.status === "playing" && fresh(r));
+    // Each press moves on: games you are playing come first, then the backlog by what you spent, and nothing is offered twice.
+    if (playing.length) return { pick: playing[0], others: playing.slice(1, 3), remaining: Math.max(0, rows.filter(r => ["playing", "backlog"].includes(r.status) && fresh(r)).length - 1), why: "You are already playing this one. Finish it, or press Pick another to look at something new." };
+    const open = rows.filter(r => r.status === "backlog" && fresh(r)).sort((a, b) => (b.paid ?? -1) - (a.paid ?? -1) || (b.msrp ?? 0) - (a.msrp ?? 0) || a.title.localeCompare(b.title));
     if (!open.length) return null;
     const top = open.slice(0, Math.min(3, open.length));
     const pick = top[Math.floor(rand() * top.length)];
-    return { pick, others: open.filter(r => r !== pick).slice(0, 2), why: pick.paid ? `You paid ${pick.paid.toFixed(2)} for it and have not started it, the biggest unplayed spend in your library.` : "It has been waiting in your backlog." };
+    return { pick, others: open.filter(r => r !== pick).slice(0, 2), remaining: open.length - 1, why: pick.paid && !pick.gifted ? `You paid ${pick.paid.toFixed(2)} for it and have not started it, the biggest unplayed spend in your library.` : pick.msrp ? `It has been waiting in your backlog, and it is worth ${pick.msrp.toFixed(2)} at full price.` : "It has been waiting in your backlog." };
 }
 
 /** Aggregate server numbers for members who opted in. Counts and totals only. */

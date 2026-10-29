@@ -865,11 +865,12 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { ok: true, removed };
         },
 
-        "GET /api/library/next": async (req) => {
+        "GET /api/library/next": async (req, _body, url) => {
             const s = session(req);
+            const skip = String(url.searchParams.get("skip") ?? "").split(",").filter(x => /^[\w-]{1,64}$/.test(x)).slice(0, 500);
             const view = await libraryView(db, itad, userRow(s), { snapshot: false });
-            const n = playNext(view.rows);
-            return { next: n ? { pick: n.pick, others: n.others, why: n.why } : null, totals: view.totals, currency: view.currency };
+            const n = playNext(view.rows, { skip });
+            return { next: n ? { pick: n.pick, others: n.others, why: n.why, remaining: n.remaining } : null, totals: view.totals, currency: view.currency };
         },
 
         "POST /api/library/remove": async (req, body) => {
