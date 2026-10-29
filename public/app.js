@@ -1293,7 +1293,7 @@
           h("div", { class: "grid two" },
             st.mostPlayed.length ? h("div", { class: "panel" }, h("h3", { text: "Most played" }), list(st.mostPlayed, r => h("span", { class: "muted", text: hoursText(r.minutes) }))) : null,
             st.unplayedTop.length ? h("div", { class: "panel" }, h("h3", { text: "Biggest unplayed" }), list(st.unplayedTop, r => h("span", { class: "muted", text: r.msrp ? money(r.msrp, cur) : "no price" }))) : null),
-          h("p", { class: "muted small", text: "Last synced " + (d.link.synced_at ? new Date(d.link.synced_at).toLocaleString() : "never") + ". What you paid is never read from Steam; add it on the Library page." }),
+          h("p", { class: "muted small", text: "Last synced " + (d.link.synced_at ? new Date(d.link.synced_at).toLocaleString() : "never") + ". Steam does not share what you paid. The FanaticalGrabber extension can fill it in from your Steam purchase history (open store.steampowered.com/account/history and press Send what I paid), or add it on the Library page." }),
           h("div", { class: "panel" }, h("h3", { text: "Manage" }), h("div", { class: "row" }, sync), h("p"), h("label", { class: "check" }, unlinkGames, " Also remove the games that came from Steam"), h("p"), unlink));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
