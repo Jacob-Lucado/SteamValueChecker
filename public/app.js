@@ -1848,7 +1848,64 @@
         logPanel()];
     };
 
-    const TABS = [["overview", "Overview", overview], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["tools", "Tools and logs", tools]];
+    const announce = () => {
+      const title = h("input", { type: "text", maxlength: "100", placeholder: "Title (optional), e.g. Bot update tonight" });
+      const msg = h("textarea", { rows: "5", maxlength: "1500", placeholder: "The bot will be offline around 11pm Eastern for about 10 minutes for an update. Alerts will catch up afterwards.", "aria-label": "Message" });
+      const count = h("span", { class: "muted small", text: "0 / 1500" });
+      const who = h("select", { "aria-label": "Who gets it" });
+      const confirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
+      const preview = h("div", { class: "notice" });
+      const progress = h("div"), history = h("div");
+      const send = h("button", { class: "btn red", type: "button", text: "Send announcement" });
+      const test = h("button", { class: "btn gray", type: "button", text: "Send a test to me only" });
+      let info = null, timer = 0;
+      const box = h("div");
+      const paintPreview = () => {
+        count.textContent = msg.value.length + " / 1500";
+        preview.replaceChildren(h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "A notice from the bot owner. You can't reply here; use the Support page on the dashboard." }));
+      };
+      const paintWho = () => {
+        const c = info.counts;
+        who.replaceChildren(...[["dm", `DMs to members (${c.dm})`], ["channels", `Alert channels in servers (${c.channels})`], ["both", `Both (${c.dm + c.channels})`]].map(([v, t]) => h("option", { value: v, text: t })));
+      };
+      const paintProgress = cur => {
+        if (!cur) { progress.replaceChildren(); return; }
+        const done = cur.sent + cur.failed;
+        progress.replaceChildren(h("p", { text: `Sending #${cur.id}: ${done} of ${cur.total} (${cur.failed} could not be delivered)` }), (() => { const bar = h("div", { class: "bar" }); const f = h("div", { class: "fill" }); f.style.width = Math.round(done / Math.max(1, cur.total) * 100) + "%"; bar.append(f); return bar; })());
+      };
+      const paintHistory = () => {
+        history.replaceChildren(info.history.length ? table(["When", "Title", "To", "Delivered"], info.history.map(b => [new Date(b.at).toLocaleString(), b.title, b.audience === "me" ? "test" : b.audience, `${b.sent} of ${b.total}${b.failed ? " (" + b.failed + " failed)" : ""}${b.done ? "" : " …"}`])) : h("p", { class: "muted", text: "Nothing sent yet." }));
+      };
+      async function refresh() {
+        info = await api("/api/admin/broadcast");
+        const keep = who.value; paintWho(); if (keep) who.value = keep;
+        paintProgress(info.current); paintHistory();
+        clearTimeout(timer);
+        if (info.current && document.body.contains(box)) timer = setTimeout(() => refresh().catch(() => {}), 2500);
+      }
+      const go = async audience => {
+        const r = await api("/api/admin/broadcast", { title: title.value, body: msg.value, audience, confirm: confirm.value });
+        toast(audience === "me" ? "Test sent to you." : `Sending to ${r.total} places. You can leave this page.`, "ok");
+        if (audience !== "me") confirm.value = "";
+        await refresh();
+      };
+      test.addEventListener("click", () => busy(test, () => go("me")));
+      send.addEventListener("click", () => busy(send, () => go(who.value)));
+      for (const el of [title, msg]) el.addEventListener("input", paintPreview);
+      paintPreview();
+      refresh().then(() => {
+        box.replaceChildren(
+          h("div", { class: "panel" }, h("h3", { text: "Announce something" }),
+            h("p", { class: "muted small", text: "For things like downtime for an update. DMs go out about one a second, so a large list takes a while. Members whose DMs keep failing are skipped." }),
+            field("Title", title), field("Message", msg), count, h("h4", { text: "Preview" }), preview,
+            h("div", { class: "row" }, field("Send to", who), field("Type SEND to confirm", confirm)),
+            h("div", { class: "row" }, test, send)),
+          h("div", { class: "panel" }, h("h3", { text: "Progress" }), progress, h("h4", { text: "Recent announcements" }), history));
+      }).catch(e => box.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+      return [box];
+    };
+
+    const TABS = [["overview", "Overview", overview], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["tools", "Tools and logs", tools]];
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
     const body = h("div");

@@ -25,6 +25,7 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
 import { profileCardData, renderProfileCard, renderSteamValue, renderRecap } from "../cardimg.js";
 import { PLATFORMS, mergePrefs, viewPrefs } from "../cardprefs.js";
+import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { goalProgress } from "../steamstore.js";
 import { importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -71,7 +72,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000 };
+const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -190,6 +191,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     };
 
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId;
+    let broadcasterInstance = null;
+    const broadcaster = () => (broadcasterInstance ??= createBroadcaster({ db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
+        sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p) }));
 
     function managerGuild(s, id) {
         const g = guildFor(s, id);
@@ -1382,6 +1386,27 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const n = db.clearAllDmFailures();
             log(`owner ${s.userId} cleared DM failures for ${n} members`);
             return { cleared: n };
+        },
+
+        "GET /api/admin/broadcast": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const b = broadcaster();
+            return { counts: b.counts(), current: b.current(), history: db.listBroadcasts(8), maxBody: MAX_BODY, canSend: Boolean(dm) };
+        },
+        "POST /api/admin/broadcast": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            if (!dm) throw new HttpError(400, "Sending is not available here.");
+            const audience = String(body.audience ?? "");
+            // Test sends go only to the owner. Anything bigger needs the word SEND typed, so it cannot go out by accident.
+            if (audience !== "me" && body.confirm !== "SEND") throw new HttpError(400, "Type SEND to confirm.");
+            const undo = audience !== "me" ? cooldown(s.userId, "broadcast") : () => {};
+            try {
+                const r = broadcaster().start({ title: body.title, body: body.body, audience });
+                log(`owner ${s.userId} started broadcast #${r.id} to ${audience} (${r.total} targets)`);
+                return { ...r, current: broadcaster().current() };
+            } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
         },
 
         "GET /api/admin/logs": async (req, _b, url) => {

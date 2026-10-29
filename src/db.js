@@ -15,6 +15,7 @@ import { giftSchema, giftStore } from "./giftstore.js";
 import { friendSchema, friendStore } from "./friendstore.js";
 import { challengeSchema, challengeStore } from "./challengestore.js";
 import { bundleSchema, bundleStore } from "./bundlestore.js";
+import { broadcastSchema, broadcastStore } from "./broadcast.js";
 
 export const MAX_ITEMS_PER_USER = 200;
 export const MAX_LIBRARY_PER_USER = 1500;
@@ -160,6 +161,7 @@ ${giftSchema}
 ${friendSchema}
 ${challengeSchema}
 ${bundleSchema}
+${broadcastSchema}
 ${lfgSchema}`;
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
@@ -233,6 +235,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const friends = friendStore({ run, get, all, now });
     const challenges = challengeStore({ run, all });
     const bundles = bundleStore({ run, all, get, now });
+    const broadcasts = broadcastStore({ run, all, get, now });
     const steam = steamStore({ db, run, get, all, clean, now, maxLibrary: MAX_LIBRARY_PER_USER });
 
     function ensureUser(discordId, guildId = null) {
@@ -621,6 +624,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

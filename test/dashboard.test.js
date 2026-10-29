@@ -1163,3 +1163,30 @@ test("admin insights, member lookup and actions are owner only and show counts, 
     assert.equal(cleared.status, 200);
     await o.close();
 });
+
+test("admin broadcast: owner only, needs SEND for anything but a test, and sends to the right places", async () => {
+    const t = await signedIn();
+    assert.equal((await t.request("/api/admin/broadcast")).status, 403);
+    assert.equal((await t.request("/api/admin/broadcast", { method: "POST", body: { audience: "me", body: "hi" } })).status, 403);
+    await t.close();
+    const sent = [], posted = [];
+    const o = await signedIn({ config: { ownerId: "u1", broadcastDelayMs: 0 }, extra: () => ({ dm: async (id, p) => { sent.push([id, p.embeds[0].title]); } }) });
+    o.db.ensureUser("u1", "g1"); o.db.ensureUser("u2", "g1");
+    const info = await o.request("/api/admin/broadcast");
+    assert.equal(info.status, 200); assert.equal(info.data.counts.dm >= 2, true);
+    const post = body => o.request("/api/admin/broadcast", { method: "POST", body });
+    assert.equal((await post({ audience: "dm", body: "Down at 11pm" })).status, 400);               // no confirmation
+    assert.equal((await post({ audience: "dm", body: "Down at 11pm", confirm: "send" })).status, 400); // must be exactly SEND
+    assert.equal((await post({ audience: "me", body: "" })).status, 400);
+    const test = await post({ audience: "me", title: "Test", body: "just me" });
+    assert.equal(test.status, 200);
+    for (let i = 0; i < 40 && o.db.listBroadcasts(1)[0]?.done !== 1; i++) await new Promise(r => setTimeout(r, 10));
+    assert.deepEqual(sent, [["u1", "Test"]]);
+    const real = await post({ audience: "dm", body: "Down at 11pm", confirm: "SEND" });
+    assert.equal(real.status, 200);
+    for (let i = 0; i < 40 && o.db.listBroadcasts(1)[0]?.done !== 1; i++) await new Promise(r => setTimeout(r, 10));
+    assert.equal(sent.length, 3);                                                                    // test + both members
+    assert.equal((await post({ audience: "dm", body: "again", confirm: "SEND" })).status, 429);      // cooldown
+    assert.equal((await o.request("/api/admin/broadcast")).data.history.length, 2);
+    await o.close();
+});

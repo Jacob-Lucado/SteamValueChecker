@@ -101,3 +101,28 @@ test("year-in-review picture is a real PNG, only when Steam is linked and hours 
     assert.deepEqual([...png.slice(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
     assert.ok(png.length > 5000);
 });
+
+test("broadcast: validates, skips members whose DMs keep failing, runs one at a time and records the result", async () => {
+    const { createBroadcaster } = await import("../src/broadcast.js");
+    const db = openDb(":memory:");
+    for (const id of ["a", "b", "c"]) db.ensureUser(id, "g1");
+    db.updateUser("c", { dm_failures: 5 });
+    db.setGuildChannel("g1", "chan1", "a");
+    const dms = [], posts = []; let gate;
+    const b = createBroadcaster({ db, ownerId: "a", delayMs: 0, sleep: () => gate, sendDm: async (id) => { if (id === "b") throw new Error("closed"); dms.push(id); }, sendChannel: async (id) => { posts.push(id); } });
+    assert.deepEqual(b.counts(), { dm: 2, channels: 1 });
+    assert.throws(() => b.start({ title: "", body: "  ", audience: "dm" }), UserError);
+    assert.throws(() => b.start({ title: "", body: "x".repeat(1501), audience: "dm" }), UserError);
+    assert.throws(() => b.start({ title: "", body: "hi", audience: "everyone" }), UserError);
+    let release; gate = new Promise(r => { release = r; });
+    const r = b.start({ title: "Update", body: "Down at 11pm", audience: "both" });
+    assert.equal(r.total, 3);
+    assert.throws(() => b.start({ title: "", body: "again", audience: "dm" }), /still going out/);
+    release(); gate = Promise.resolve();
+    for (let i = 0; i < 50 && b.running(); i++) await new Promise(x => setTimeout(x, 5));
+    assert.deepEqual(dms, ["a"]); assert.deepEqual(posts, ["chan1"]);
+    const [row] = db.listBroadcasts(1);
+    assert.deepEqual([row.total, row.sent, row.failed, row.done, row.title], [3, 2, 1, 1, "Update"]);
+    const t = b.start({ title: "", body: "test", audience: "me" });
+    assert.equal(t.total, 1);
+});
