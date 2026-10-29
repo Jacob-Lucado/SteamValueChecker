@@ -99,7 +99,7 @@
   const fanaticalCard = () => state.cfg && h("a", { class: "card-link", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer" },
     h("span", { class: "icon", text: "🔑" }),
     h("span", {}, h("strong", { text: "FanaticalGrabber" }),
-      h("span", { class: "muted", text: "The browser extension that reveals and exports your Fanatical keys. Its CSV, JSON, TXT and Markdown exports work with the Value Checker." })));
+      h("span", { class: "muted", text: "The browser extension that reveals and exports your Fanatical keys, fills in what you paid from your Steam purchase history, and checks Fanatical bundles and your cart against Steam prices. Its exports work with the Value Checker." })));
 
   // ---------- theme ----------
   function themeButton() {
@@ -281,13 +281,17 @@
           feature("🎂", "Friends and gifts", "Keep friends' birthdays, see what is on sale on their public wishlist and get a reminder a week ahead. Visitors can mark gifts so nobody doubles up."),
           feature("🏅", "Trophies and leagues", "Earn badges from your library and monthly challenge streak, and compete in a server backlog league."),
           feature("📱", "Sale war room", "Plan a Steam sale cart with a budget slider."),
+          feature("🎮", "Your Steam library", "Link your public profile for hours played, what you never played, achievements and a Play next pick. Prices you paid fill in from Steam purchase history, and gifts are marked."),
+          feature("🔥", "Hot deals and sale starts", "Servers can get a post when a big deal appears or when a Steam sale begins, with a minimum discount you choose."),
+          feature("📦", "Bundle check", "See whether a bundle is worth it against what its games cost today, skipping ones you own."),
+          feature("🐞", "Bug reports and support", "Report a problem with /bug or open a ticket; the team answers in the same thread on Discord and here."),
           feature("📊", "A full dashboard", "Everything the commands do, in your browser: charts, price history, bulk actions and giveaway management."))),
 
       h("section", { class: "lp-section" },
         h("h2", { text: "Up and running in a minute" }),
         h("div", { class: "lp-grid three" },
           step("1", "Add the bot", "Invite it to your server. It only asks for permission to read, send messages and embed links."),
-          step("2", "Bring your games", "Import your Steam wishlist, upload a FanaticalGrabber export, or add games by name."),
+          step("2", "Bring your games", "Import your Steam wishlist, link your Steam profile, upload a FanaticalGrabber export, or add games by name."),
           step("3", "Get the good stuff", "Sale alerts in your DMs or a server channel, free game alerts, and giveaways your community will love."))),
 
       h("section", { class: "lp-section lp-split" },

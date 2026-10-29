@@ -118,6 +118,22 @@ The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, min
 
 Lists the games that are free to claim right now on Steam, Epic, GOG and other stores, with Claim buttons. Optional `store` filters to one store (e.g. `steam`) and `public` posts it for the whole channel. `/alerts freegames` pings you when new ones appear.
 
+### Steam library, gifts and Play next
+
+- `/steam link` reads your **public** Steam profile (hours, achievements). `/steam view`, `next` (Play next), `value`, `taste`, `recap`, `goal` (a finish-the-backlog target) and `unlink`.
+- With the FanaticalGrabber extension, **Send what I paid** (Steam purchase history) fills in prices on synced games, and **Record retail prices** (Steam licenses) records key activations and gifts at retail. Gifts show a `*` in `/library view` (and a Gifted tooltip on the dashboard) and are left out of spend and savings.
+- `/library bundle` records a bundle you bought (name, what you paid, the games; the price is split evenly) and `/library bundles` lists them. `/bundle` checks whether a bundle is worth it before you buy.
+
+### Hot deals, sale starts and alert settings
+
+- `/alertchannel hot` posts big deals in the channel, with a minimum discount; `/alertchannel sales` posts when a Steam sale starts. `/alertchannel feed`, `digest` and `group` cover free games, the weekly digest and group pings.
+- `/alerts mindiscount` hides your own alerts below a discount you choose.
+- `/bug` sends a problem report to the bot owner; `/support open type:bug` does the same through a ticket.
+
+### Network-wide giveaways (bot owner)
+
+The dashboard's **Admin > Giveaway** tab runs one giveaway across every server: it is posted in each server's giveaway channel (set with `/giveaway setup giveawaychannel`) and sent to opted-in members by DM, with one shared pool of entries and one draw.
+
 ### Giveaways (`/giveaway`)
 
 Server owners (Manage Server, or a role set with `/giveaway setup`) can give away game keys.

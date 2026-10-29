@@ -36,14 +36,14 @@ export function tableEmbed(rows, page, currency) {
         const store = r.best ? r.best.shop : "-";
         return `${fit(name, 24)} ${left(money(r.msrp, currency), 9)} ${left(money(r.steam, currency), 9)} ` +
             `${left(money(r.best?.price ?? null, currency), 9)} ${fit(store, 11)}` +
-            (showPaid ? ` ${left(money(r.paid, currency), 9)}` : "");
+            (showPaid ? ` ${left(money(r.paid, currency) + (r.gifted ? "*" : ""), 9)}` : "");
     });
 
     const pages = pageCount(rows);
     return {
         color: COLOR,
         description: fence([header, ...body]),
-        footer: { text: `Page ${page + 1}/${pages}  •  ~ = approximate title match  •  Prices by IsThereAnyDeal` }
+        footer: { text: `Page ${page + 1}/${pages}  •  ~ = approximate title match${rows.some(r => r.gifted) ? "  •  * = gift" : ""}  •  Prices by IsThereAnyDeal` }
     };
 }
 

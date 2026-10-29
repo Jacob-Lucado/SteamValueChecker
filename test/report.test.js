@@ -126,3 +126,12 @@ test("100 rows paginate and stay inside Discord limits", () => {
     const embed = tableEmbed(many, 0, "USD");
     assert.ok(embed.description.length < 4096, `description is ${embed.description.length} chars`);
 });
+
+test("table marks gifted games with * and explains it in the footer", () => {
+    const row = (title, gifted) => ({ found: true, title, msrp: 59.99, steam: 59.99, best: null, paid: 59.99, gifted });
+    const t = tableEmbed([row("Gift Game", true), row("Bought Game", false)], 0, "USD");
+    assert.match(t.description, /Gift Game.*\$59\.99\*/);
+    assert.doesNotMatch(t.description, /Bought Game.*\*/);
+    assert.match(t.footer.text, /\* = gift/);
+    assert.doesNotMatch(tableEmbed([row("Bought Game", false)], 0, "USD").footer.text, /= gift/);
+});

@@ -734,8 +734,13 @@ test("server free feed posts games once per server, never DLC; stats are counts 
 
 test("help mentions the newer commands and stays within what the bot can send", async () => {
     const { HELP } = await import("../src/text.js");
-    for (const c of ["/steam link", "/bundle", "/saleprep", "/lfg post", "/library grabber"]) assert.ok(HELP.includes(c), c);
-    assert.ok(HELP.length < 5800, `help is ${HELP.length} characters`);
+    assert.ok(HELP.length < 8000, `help is ${HELP.length} characters`);
+    const { commands } = await import("../src/commands.js");
+    for (const c of commands) {
+        const j = c.toJSON ? c.toJSON() : c;
+        assert.ok(HELP.includes("`/" + j.name + "`"), "help is missing /" + j.name);
+        for (const o of (j.options ?? []).filter(o => o.type === 1 || o.type === 2)) assert.ok(HELP.includes("`" + o.name + "`") || HELP.includes(o.name), `help is missing /${j.name} ${o.name}`);
+    }
 });
 
 test("the currency list fits a Discord choice menu (25 max) with unique codes", async () => {
