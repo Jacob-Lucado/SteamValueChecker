@@ -456,6 +456,21 @@ test("group alert minimum: managers only, needs an alert channel, 1 is not allow
     await t.close();
 });
 
+test("hot deals minimum and sale posts: managers only, need an alert channel, sane range", async () => {
+    const t = await signedIn();
+    const hot = n => ({ method: "POST", body: { guild_id: "g-admin", minimum: n } });
+    assert.equal((await t.request("/api/servers/hot", hot(75))).status, 400); // no alert channel yet
+    t.db.setGuildChannel("g-admin", "c1", "u1");
+    assert.equal((await t.request("/api/servers/hot", hot(75))).data.hotMin, 75);
+    assert.equal(t.db.getGuild("g-admin").hot_min, 75);
+    assert.equal((await t.request("/api/servers/hot", hot(10))).status, 400);
+    assert.equal((await t.request("/api/servers/hot", hot(0))).data.hotMin, 0);
+    assert.equal((await t.request("/api/servers/sales", { method: "POST", body: { guild_id: "g-admin", enabled: true } })).data.saleFeed, true);
+    assert.equal(t.db.getGuild("g-admin").sale_feed, 1);
+    assert.equal((await t.request("/api/servers/hot", { method: "POST", body: { guild_id: "g-member", minimum: 75 } })).status, 403);
+    await t.close();
+});
+
 test("alert history lists the member's own alerts", async () => {
     const t = await signedIn();
     t.db.ensureUser("u1"); t.db.ensureUser("other");

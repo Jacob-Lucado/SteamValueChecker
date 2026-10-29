@@ -577,3 +577,31 @@ export function spendEmbed(sp) {
         footer: { text: "Months follow when a game was added to your library. Games without an amount are not counted." }
     };
 }
+
+
+const hotMoney = (n, cur) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur || "USD" }).format(n); } catch { return `${Number(n).toFixed(2)} ${cur}`; } };
+/** Big Steam discounts for a server's feed: one embed per game, full-width art for the first few. */
+export function hotDealsPayload(deals) {
+    const list = deals.filter(d => safeUrl(d.url)).slice(0, 6);
+    if (!list.length) return null;
+    const embeds = list.map((d, n) => ({
+        color: 0xe74c3c, title: `🔥 ${d.title} is ${Math.round(d.cut)}% off`.slice(0, 256), url: safeUrl(d.url),
+        description: `**${hotMoney(d.price, d.currency)}** ~~${hotMoney(d.regular, d.currency)}~~ on Steam${d.storeLow !== null && d.price <= d.storeLow + 0.001 ? "  •  🏆 lowest price on Steam" : ""}${d.expiry ? `\nEnds ${stamp(d.expiry)}` : ""}`,
+        image: n < 3 ? { url: d.appid ? steamArt(d.appid) : itadArt(d.id) } : undefined,
+        thumbnail: n >= 3 ? { url: d.appid ? steamArt(d.appid) : itadArt(d.id) } : undefined,
+        footer: { text: "Big Steam discounts  •  prices in USD" }
+    }));
+    return { content: list.length === 1 ? "🔥 **Hot deal on Steam**" : `🔥 **${list.length} hot deals on Steam**`, embeds };
+}
+
+/** "A Steam sale just started", from the sale calendar. */
+export function saleStartPayload(ev) {
+    const t = (ms, f) => `<t:${Math.floor(ms / 1000)}:${f}>`;
+    const fest = ev.kind === "fest";
+    return { embeds: [{
+        color: 0x1b9aaa, title: `${fest ? "🎪" : "🏷️"} ${ev.name} has started!`,
+        url: "https://store.steampowered.com/",
+        description: `${fest ? "Steam's festival is on." : "Steam's sale is on."} It runs until ${t(ev.end, "f")} (${t(ev.end, "R")}).${ev.note ? "\n" + ev.note : ""}\nPrices are dropping now. Check your wishlist alerts with \`/wishlist\`.`,
+        footer: { text: "Dates from Valve's published schedule" }
+    }] };
+}

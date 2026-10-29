@@ -958,6 +958,17 @@
             try { const r = await api("/api/servers/feed", { guild_id: g.id, enabled: feedOn.checked }); g.freeFeed = r.freeFeed; toast(r.freeFeed ? "Free game feed on." : "Free game feed off.", "ok"); }
             catch (e) { feedOn.checked = !feedOn.checked; toast(e.message, "error"); }
           });
+          const hotMin = h("input", { type: "number", min: "0", max: "95", value: String(g.hotMin || 0), "aria-label": "Smallest discount to post, in percent" });
+          const setHot = h("button", { class: "btn gray", text: "Save" });
+          setHot.addEventListener("click", () => busy(setHot, async () => {
+            const r = await api("/api/servers/hot", { guild_id: g.id, minimum: Number(hotMin.value) });
+            g.hotMin = r.hotMin; toast(r.hotMin ? `Hot deals on from ${r.hotMin}% off.` : "Hot deals off.", "ok");
+          }));
+          const saleOn = h("input", { type: "checkbox", checked: Boolean(g.saleFeed) });
+          saleOn.addEventListener("change", async () => {
+            try { const r = await api("/api/servers/sales", { guild_id: g.id, enabled: saleOn.checked }); g.saleFeed = r.saleFeed; toast(r.saleFeed ? "Sale posts on." : "Sale posts off.", "ok"); }
+            catch (e) { saleOn.checked = !saleOn.checked; toast(e.message, "error"); }
+          });
           const digestOn = h("input", { type: "checkbox", checked: Boolean(g.weeklyDigest) });
           digestOn.addEventListener("change", async () => {
             try { const r = await api("/api/servers/digest", { guild_id: g.id, enabled: digestOn.checked }); g.weeklyDigest = r.weeklyDigest; toast(r.weeklyDigest ? "Weekly digest on." : "Weekly digest off.", "ok"); }
@@ -976,6 +987,12 @@
             h("div", { class: "panel" }, h("h3", { text: "Free game feed" }),
               h("p", { class: "muted", text: "Post new free games (not DLC) in the alert channel for everyone, once each. Needs an alert channel." }),
               h("div", { class: "rule inline" }, feedOn, feedLabel)),
+            h("div", { class: "panel" }, h("h3", { text: "Hot deals" }),
+              h("p", { class: "muted", text: "Post big Steam discounts in the alert channel, even for games nobody here watches, each deal once. Enter the smallest discount to post (30 to 95 percent). 0 turns it off. Needs an alert channel." }),
+              h("div", { class: "rule inline" }, hotMin, setHot)),
+            h("div", { class: "panel" }, h("h3", { text: "Steam sales" }),
+              h("p", { class: "muted", text: "Post once when a Steam sale or festival starts (from Valve's published calendar). If one is already running, it posts right away. Needs an alert channel." }),
+              h("div", { class: "rule inline" }, saleOn, h("label", { text: "Post when a Steam sale starts" }))),
             h("div", { class: "panel" }, h("h3", { text: "Weekly digest" }),
               h("p", { class: "muted", text: "On Fridays, post cheap games that opted-in members watch (never who), the free games on now and the week's server events. Needs an alert channel." }),
               h("div", { class: "rule inline" }, digestOn, h("label", { text: "Post the weekly digest" }))),

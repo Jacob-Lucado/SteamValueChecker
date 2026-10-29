@@ -199,6 +199,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("giveaways", "starts_at", "INTEGER");
     addColumn("giveaways", "duration_ms", "INTEGER");
     addColumn("guilds", "free_feed", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("guilds", "hot_min", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("guilds", "sale_feed", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE TABLE IF NOT EXISTS guild_seen (guild_id TEXT NOT NULL, key TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (guild_id, key))");
     addColumn("users", "min_discount", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "profile_slug", "TEXT");
@@ -444,6 +446,10 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     // ---------- server settings: free game feed and stats ----------
     const setFreeFeed = (guildId, on) => run("UPDATE guilds SET free_feed = ? WHERE guild_id = ?", on ? 1 : 0, guildId).changes > 0;
+    const setHotMin = (guildId, min) => run("UPDATE guilds SET hot_min = ? WHERE guild_id = ?", min, guildId).changes > 0;
+    const guildsWithHot = () => all("SELECT * FROM guilds WHERE hot_min > 0").map(clean);
+    const setSaleFeed = (guildId, on) => run("UPDATE guilds SET sale_feed = ? WHERE guild_id = ?", on ? 1 : 0, guildId).changes > 0;
+    const guildsWithSaleFeed = () => all("SELECT * FROM guilds WHERE sale_feed = 1").map(clean);
     const guildsWithFreeFeed = () => all("SELECT * FROM guilds WHERE free_feed = 1").map(clean);
     const guildHasSeen = (guildId, key) => Boolean(get("SELECT 1 AS x FROM guild_seen WHERE guild_id = ? AND key = ?", guildId, key));
     const guildMarkSeen = (guildId, key) => run("INSERT OR IGNORE INTO guild_seen (guild_id, key, at) VALUES (?,?,?)", guildId, key, now());
@@ -547,7 +553,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
                 ["Paused alerts", safe("SELECT COUNT(*) AS n FROM users WHERE paused = 1")]
             ],
             idle: { noWishlistOrLibrary: safe("SELECT COUNT(*) AS n FROM users u WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.discord_id = u.discord_id) AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = u.discord_id)"), dmFailing: safe("SELECT COUNT(*) AS n FROM users WHERE dm_failures >= 3") },
-            servers: all("SELECT g.guild_id AS id, g.free_feed, g.group_min, g.weekly_digest, (SELECT COUNT(*) FROM users u WHERE u.guild_id = g.guild_id) AS members FROM guilds g ORDER BY members DESC").map(clean)
+            servers: all("SELECT g.guild_id AS id, g.free_feed, g.hot_min, g.sale_feed, g.group_min, g.weekly_digest, (SELECT COUNT(*) FROM users u WHERE u.guild_id = g.guild_id) AS members FROM guilds g ORDER BY members DESC").map(clean)
         };
     }
 
@@ -623,7 +629,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
-        sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
+        sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };

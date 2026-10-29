@@ -161,3 +161,42 @@ test("purchase-history prices fill synced games without adding any, and report w
     assert.equal(rows.find(x => x.title === "Hades").paid, 12.5);
     assert.equal(rows.find(x => x.itad_id === "id-cod").paid, 59.99);
 });
+
+test("hot deals and sale-start posts go once per deal to servers that turned them on", async () => {
+    const { runHotDeals, runSaleStarts } = await import("../src/poller.js");
+    const db = openDb(":memory:");
+    db.setGuildChannel("g1", "c1", "u1"); db.setGuildChannel("g2", "c2", "u1");
+    db.setHotMin("g1", 75); db.setSaleFeed("g1", true);
+    const posts = [];
+    const notifier = { postGuild: async (id, p) => { posts.push([id, p]); return true; } };
+    const deal = (id, cut, price) => ({ id, title: "Game " + id, cut, price, regular: 24.99, currency: "USD", url: "https://store.steampowered.com/app/" + (100 + Number(id.slice(1))), appid: 100, since: 1, expiry: null, storeLow: null });
+    let deals = [deal("a1", 90, 2.49), deal("a2", 80, 4.99), deal("a3", 50, 12)];
+    const itad = { getHotDeals: async ({ minCut }) => deals.filter(d => d.cut >= minCut) };
+    let r = await runHotDeals({ db, itad, notifier });
+    assert.equal(r.guilds, 1);
+    assert.equal(posts.length, 1); assert.equal(posts[0][0], "g1"); assert.equal(posts[0][1].embeds.length, 2); // 50% is under g1's 75
+    r = await runHotDeals({ db, itad, notifier });
+    assert.equal(posts.length, 1); // nothing new, nothing posted
+    deals = [...deals, deal("a4", 95, 1.25)];
+    await runHotDeals({ db, itad, notifier });
+    assert.equal(posts.length, 2); assert.equal(posts[1][1].embeds.length, 1);
+
+    const during = Date.parse("2026-10-29T12:00:00Z"); // Steam Scream V Fest is on
+    const s1 = await runSaleStarts({ db, notifier, now: () => during });
+    assert.equal(s1.posted, 1);
+    assert.match(posts.at(-1)[1].embeds[0].title, /Scream V Fest has started/);
+    assert.equal((await runSaleStarts({ db, notifier, now: () => during })).posted, 0);
+    assert.equal((await runSaleStarts({ db, notifier, now: () => Date.parse("2026-11-20T12:00:00Z") })).posted, 0); // nothing live
+});
+
+test("itad hot deals keep only Steam games at or above the discount", async () => {
+    const { createItad } = await import("../src/itad.js");
+    const body = { list: [
+        { id: "g1", title: "Inside", type: "game", deal: { cut: 90, price: { amount: 2.49, currency: "USD" }, regular: { amount: 24.99 }, url: "https://store.steampowered.com/app/304430/INSIDE/", timestamp: "2026-10-28T10:00:00Z" } },
+        { id: "g2", title: "Some DLC", type: "dlc", deal: { cut: 95, price: { amount: 1 }, regular: { amount: 20 }, url: "https://store.steampowered.com/app/9/" } },
+        { id: "g3", title: "Meh", type: "game", deal: { cut: 40, price: { amount: 6 }, regular: { amount: 10 }, url: "https://store.steampowered.com/app/8/" } }
+    ] };
+    const itad = createItad({ apiKey: "k", fetchImpl: async () => ({ ok: true, status: 200, headers: new Map(), json: async () => body, text: async () => JSON.stringify(body) }) });
+    const out = await itad.getHotDeals({ minCut: 75 });
+    assert.deepEqual(out.map(d => [d.id, d.cut, d.appid]), [["g1", 90, 304430]]);
+});

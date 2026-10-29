@@ -8,7 +8,8 @@ import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
-import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload, lastChancePayload } from "./render.js";
+import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
+import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
 import { libraryView } from "./library.js";
@@ -329,6 +330,47 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
     return stats;
 }
 
+
+/**
+ * Servers that turned on hot deals get Steam discounts of at least their minimum percent posted in the alert channel,
+ * each deal once. A server's first run posts the best few and marks the rest as seen, so turning it on never floods the channel.
+ */
+export async function runHotDeals({ db, itad, notifier, log = () => {} }) {
+    const stats = { guilds: 0, posted: 0 };
+    const guilds = db.guildsWithHot();
+    if (!guilds.length) return stats;
+    let all;
+    try { all = await itad.getHotDeals({ minCut: Math.min(...guilds.map(g => g.hot_min)), limit: 100 }); }
+    catch (err) { log(`hot deals lookup failed: ${err.code ?? err.name}`); return stats; }
+    const keyOf = d => `hot:${d.id}:${d.since ?? d.price}`;
+    for (const guild of guilds) {
+        const fresh = all.filter(d => d.cut >= guild.hot_min && !db.guildHasSeen(guild.guild_id, keyOf(d)));
+        if (!fresh.length) continue;
+        const payload = hotDealsPayload(fresh);
+        if (!payload) { for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d)); continue; }
+        if (!(await notifier.postGuild(guild.guild_id, payload))) { log("hot deal post failed for a server"); continue; }
+        for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d));
+        stats.guilds++; stats.posted += Math.min(6, fresh.length);
+    }
+    return stats;
+}
+
+/** When a Steam sale or festival from the calendar is live, servers that asked get one post for it. */
+export async function runSaleStarts({ db, notifier, now = () => Date.now(), log = () => {} }) {
+    const stats = { posted: 0 };
+    const guilds = db.guildsWithSaleFeed();
+    if (!guilds.length) return stats;
+    const live = upcomingSales(now(), { limit: 6 }).filter(e => e.live);
+    for (const ev of live) {
+        const key = `salestart:${ev.name}:${ev.start}`;
+        for (const guild of guilds) {
+            if (db.guildHasSeen(guild.guild_id, key)) continue;
+            if (await notifier.postGuild(guild.guild_id, saleStartPayload(ev))) { db.guildMarkSeen(guild.guild_id, key); stats.posted++; }
+            else log("sale start post failed for a server");
+        }
+    }
+    return stats;
+}
 
 /** The Friday server digest, for servers that turned it on. Posted once a week in the alert channel. */
 export async function runServerDigests({ db, itad, notifier, now = () => Date.now(), names = () => null, log = () => {} }) {

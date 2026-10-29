@@ -419,6 +419,19 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.setFreeFeed(i.guildId, on);
                 return eph(i, on ? "Free game feed on. New free games (not DLC) are posted in the alert channel, once each." : "Free game feed off.");
             }
+            case "hot": {
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                const n = i.options.getInteger("minimum", true);
+                if (n !== 0 && n < 30) return eph(i, "Pick 30 or more, or 0 to turn it off. Below 30 would post nearly every sale.");
+                db.setHotMin(i.guildId, n);
+                return eph(i, n ? `Hot deals on. Steam discounts of ${n}% or more are posted in the alert channel, each deal once.` : "Hot deals off.");
+            }
+            case "sales": {
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                const on = i.options.getBoolean("enabled", true);
+                db.setSaleFeed(i.guildId, on);
+                return eph(i, on ? "Sale posts on. The alert channel gets one post when a Steam sale or festival starts (including one that is already running)." : "Sale posts off.");
+            }
             case "digest": {
                 if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
                 const on = i.options.getBoolean("enabled", true);

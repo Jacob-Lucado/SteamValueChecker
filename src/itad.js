@@ -327,6 +327,27 @@ export function createItad({
         return out;
     }
 
+    /** The deepest current Steam discounts: [{ id, title, cut, price, regular, currency, url, appid, since, storeLow }]. Cached for ten minutes. */
+    async function getHotDeals({ minCut = 75, limit = 40, country = "US" } = {}) {
+        const key = `hot:${country}`;
+        let list = getCached(key);
+        if (list === undefined) {
+            const data = await call("GET", "/deals/v2", { country, limit: 100, sort: "-cut", shops: "61", nondeals: "false", mature: "false" });
+            list = [];
+            for (const g of Array.isArray(data?.list) ? data.list : []) {
+                const d = g?.deal;
+                if (!g?.id || !d || (g.type && g.type !== "game")) continue;
+                const cut = Number(d.cut), price = Number(d.price?.amount), regular = Number(d.regular?.amount);
+                if (!Number.isFinite(cut) || !Number.isFinite(price) || !Number.isFinite(regular)) continue;
+                const url = typeof d.url === "string" ? d.url : null;
+                list.push({ id: String(g.id), title: String(g.title ?? "Game"), cut, price, regular, currency: d.price?.currency ?? "USD", url, appid: Number((url ?? "").match(/store\.steampowered\.com\/app\/(\d+)/)?.[1]) || null,
+                    since: isoOrNull(d.timestamp), expiry: isoOrNull(d.expiry), storeLow: d.storeLow?.amount != null ? Number(d.storeLow.amount) : null });
+            }
+            setCached(key, list);
+        }
+        return list.filter(d => d.cut >= minCut).slice(0, limit);
+    }
+
     /** Active giveaways by game, as Map(itadId -> [{ id, title, shop, url, expiry }]). */
     async function getGiveaways() {
         const out = new Map();
@@ -354,5 +375,5 @@ export function createItad({
         return points;
     }
 
-    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHistory, health, _cache: cache };
+    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getHistory, health, _cache: cache };
 }

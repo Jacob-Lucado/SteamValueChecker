@@ -235,7 +235,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         return s.guilds
             .map(g => ({
                 id: g.id, name: g.name, icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
-                manageable: isManager(g), bot: botGuilds ? Boolean(botGuilds(g.id)) : null, freeFeed: Boolean(db.getGuild(g.id)?.free_feed), alertChannel: db.getGuild(g.id)?.channel_id ?? null,
+                manageable: isManager(g), bot: botGuilds ? Boolean(botGuilds(g.id)) : null, freeFeed: Boolean(db.getGuild(g.id)?.free_feed), hotMin: db.getGuild(g.id)?.hot_min ?? 0, saleFeed: Boolean(db.getGuild(g.id)?.sale_feed), alertChannel: db.getGuild(g.id)?.channel_id ?? null,
                 groupMin: db.getGuild(g.id)?.group_min ?? 0, weeklyDigest: Boolean(db.getGuild(g.id)?.weekly_digest)
             }))
             .sort((a, b) => Number(b.manageable) - Number(a.manageable) || a.name.localeCompare(b.name));
@@ -945,6 +945,24 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { groupMin: n };
         },
 
+        "POST /api/servers/hot": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
+            const n = Math.round(Number(body.minimum));
+            if (!Number.isFinite(n) || n < 0 || n > 95 || (n !== 0 && n < 30)) throw new HttpError(400, "Pick 30 to 95, or 0 to turn it off.");
+            db.setHotMin(g.id, n);
+            return { hotMin: n };
+        },
+        "POST /api/servers/sales": async (req, body) => {
+            const s = session(req);
+            const g = guildFor(s, body.guild_id);
+            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
+            db.setSaleFeed(g.id, Boolean(body.enabled));
+            return { saleFeed: Boolean(body.enabled) };
+        },
         "POST /api/servers/feed": async (req, body) => {
             const s = session(req);
             const g = guildFor(s, body.guild_id);
