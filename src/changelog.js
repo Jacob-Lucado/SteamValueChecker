@@ -1,5 +1,13 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.10.30", date: "2026-10-30", title: "Goals, bundles, more leaderboards and a tidier menu", items: [
+        "`/steam goal`: set an hours goal for the year and see if you are on pace (also on the Steam page). `/steam recap` now posts a picture you can share, and the Steam page can make the same image.",
+        "`/library bundle` and `/library bundles`: record a bundle you bought and see what its games are worth, what each cost you and how much you have played.",
+        "`/leaderboard` has two more boards: hours played this year and biggest library. The dashboard shows all four in one picker.",
+        "`/alerts mindiscount`: only get sale alerts for a minimum percent off. Starred games still come through.",
+        "Dashboard menu: pages are grouped into Library, Prices, Friends, Servers, Account and Help, with each section's pages as tabs under the menu. Theme and contrast now share one Display menu.",
+        "FanaticalGrabber: bundle and cart pages on Fanatical now show how the price compares with Steam and whether it is worth buying.",
+    ] },
     { version: "2026.10.29", date: "2026-10-29", title: "Hours tracked, challenges, gifts and a Steam panel", items: [
         "`/steam recap` (and a card you can save as an image on the Steam page): the hours you add after linking Steam, for this year and in total since you linked, per month and per game. Steam only shares lifetime hours, so nothing from before you linked. Linked libraries now sync automatically every few hours.",
         "`/library challenge`: set a monthly goal of games to finish and keep a streak. It is on the Library page too.",

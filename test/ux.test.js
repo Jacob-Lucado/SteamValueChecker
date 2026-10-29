@@ -81,7 +81,7 @@ test("giveaway templates are per server and prizes for a winner never include ke
 test("changelog has a newest version and renders", () => {
     assert.equal(LATEST, CHANGELOG[0].version);
     assert.match(changelogEmbed().description, new RegExp(CHANGELOG[0].title.slice(0, 12)));
-    assert.match(changelogEmbed(2).description, /Steam library, bundles/);
+    assert.match(changelogEmbed(3).description, /Steam library, bundles/);
     assert.ok(changelogEmbed(99).description.length <= 4000);
 });
 

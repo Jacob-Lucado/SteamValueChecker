@@ -109,18 +109,24 @@
   }
 
   // ---------- chrome ----------
-  // Menu groups: a group with one visible page becomes a plain link, otherwise a dropdown.
+  // Menu sections. Each one is a single link in the top bar; its pages show as tabs just under it, so related pages sit together
+  // and the bar stays short.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "games", label: "Games", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["library", "Library"], ["redeem", "Batch redeem"], ["compare", "Compare"], ["calendar", "Calendar"], ["friends", "Friends"], ["steam", "Steam"], ["deals", "Deals"], ["free", "Free games"], ["warroom", "Sale war room"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
-    { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My Data"]] },
-    { id: "help", label: "Help", pages: [["support", "Support"], ["help", "Help"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
+    { id: "library", label: "Library", pages: [["library", "Library"], ["steam", "Steam"], ["redeem", "Batch redeem"]] },
+    { id: "prices", label: "Prices", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["deals", "Deals"], ["free", "Free games"], ["warroom", "Sale war room"]] },
+    { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
+    { id: "account", label: "Account", pages: [["mypage", "My page"], ["alerts", "Alert settings"], ["notifications", "Notifications"], ["mydata", "My Data"]] },
+    { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
   ];
+  // Pages that are not tabs themselves but belong to a section: one game's page sits under Prices.
+  const HUB_ALIAS = { g: "prices" };
   const PUBLIC_PAGES = new Set(["home", "help", "about", "status"]);
   function pageVisible(id) {
     const me = state.me;
+    if (id === "home" && me) return false; // the logo already goes home when signed in
     if (id === "admin") return Boolean(me && me.isOwner);
     if (id === "giveaways") return Boolean(me && me.giveaways && me.servers.some(g => g.manageable));
     if (id === "gamenight" || id === "compare") return Boolean(me && me.servers.some(g => g.bot !== false));
@@ -136,8 +142,8 @@
   const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
 
   const NAV_I18N = {
-    es: { games: "Juegos", account: "Cuenta", setup: "Configuración", wishlist: "Lista de deseos", library: "Biblioteca", alerts: "Alertas", support: "Soporte", notifications: "Avisos", servers: "Servidores", help: "Ayuda", mydata: "Mis datos" },
-    fr: { games: "Jeux", account: "Compte", setup: "Configuration", wishlist: "Liste de souhaits", library: "Bibliothèque", alerts: "Alertes", support: "Assistance", notifications: "Notifications", servers: "Serveurs", help: "Aide", mydata: "Mes données" }
+    es: { prices: "Precios", social: "Amigos", account: "Cuenta", setup: "Configuración", wishlist: "Lista de deseos", library: "Biblioteca", alerts: "Alertas", support: "Soporte", notifications: "Avisos", servers: "Servidores", help: "Ayuda", mydata: "Mis datos" },
+    fr: { prices: "Prix", social: "Amis", account: "Compte", setup: "Configuration", wishlist: "Liste de souhaits", library: "Bibliothèque", alerts: "Alertes", support: "Assistance", notifications: "Notifications", servers: "Serveurs", help: "Aide", mydata: "Mes données" }
   };
   const navText = (id, text) => (state.me && NAV_I18N[state.me.settings.lang] && NAV_I18N[state.me.settings.lang][id]) || text;
 
@@ -177,35 +183,30 @@
     const nav = document.getElementById("nav");
     const badge = n => (n ? h("span", { class: "badge-count", text: String(Math.min(99, n)) }) : null);
     closeMenu();
+    const hubOf = id => (HUB_ALIAS[id] ? NAV.find(g => g.id === HUB_ALIAS[id]) : NAV.find(g => g.pages.some(([p]) => p === id)));
+    const here = hubOf(view);
     nav.replaceChildren(...NAV.map(group => {
       const pages = group.pages.filter(([id]) => pageVisible(id));
       if (!pages.length) return null;
       const unread = group.id === "account" && state.me ? state.me.unread : 0;
-      if (pages.length === 1) {
-        const [id, text] = pages[0];
-        return h("a", { href: "#/" + id, class: view === id ? "active" : "", text: navText(id, text) });
-      }
-      const active = pages.some(([id]) => id === view);
-      const menu = h("div", { class: "menu", role: "menu", hidden: true },
-        ...pages.map(([id, text]) => h("a", { href: "#/" + id, role: "menuitem", class: view === id ? "active" : "" }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
-        group.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗") : null);
-      const btn = h("button", { type: "button", class: "nav-btn" + (active ? " active" : ""), "aria-haspopup": "true", "aria-expanded": "false" }, navText(group.id, group.label), " ▾", badge(unread));
-      const wrap = h("div", { class: "nav-group" }, btn, menu);
-      btn.addEventListener("click", e => {
-        e.stopPropagation();
-        const wasOpen = openMenu && openMenu.btn === btn;
-        closeMenu();
-        if (!wasOpen) { menu.hidden = false; btn.setAttribute("aria-expanded", "true"); openMenu = { wrap, btn, menu }; }
-      });
-      return wrap;
+      const active = group === here;
+      return h("a", { href: "#/" + pages[0][0], class: active ? "active" : "", "data-pages": pages.map(p => p[0]).join(" "), "aria-current": active ? "page" : null }, navText(group.id, group.label), badge(unread));
     }).filter(Boolean));
+    // The tabs for the section you are in (only when it has more than one page you can see).
+    let bar = document.getElementById("hubbar");
+    if (!bar) { bar = h("nav", { id: "hubbar", class: "hubbar", "aria-label": "Section pages" }); app.before(bar); }
+    const tabs = here ? here.pages.filter(([id]) => pageVisible(id)) : [];
+    bar.hidden = tabs.length < 2;
+    bar.replaceChildren(...(tabs.length < 2 ? [] : [
+      ...tabs.map(([id, text]) => h("a", { href: "#/" + id, class: "hubtab" + (view === id ? " active" : ""), "aria-current": view === id ? "page" : null }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
+      here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null].filter(Boolean)));
 
     const acct = document.getElementById("account");
     const links = state.me ? [] : [state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
     if (state.me) {
       acct.replaceChildren(...[...links,
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
-        currencyPicker(), contrastButton(), themeButton(),
+        currencyPicker(), displayMenu(),
         // The signed-in name and Log out always sit together, set slightly apart from the tools.
         h("div", { class: "user-chip" },
           state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
@@ -1158,7 +1159,7 @@
     const loadRecap = async () => {
       try {
         const r = await api("/api/steam/recap");
-        if (!r.allTime.totalMinutes) { out.className = "muted"; out.replaceChildren(h("p", { text: "Nothing tracked yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." })); return; }
+        if (!r.allTime.totalMinutes) { out.className = ""; out.replaceChildren(h("p", { class: "muted", text: "Nothing tracked yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." }), goalBox(r.goal)); return; }
         const shot = h("div");
         const make = h("button", { class: "btn blue shrink", text: "Make my year-in-review image" });
         make.addEventListener("click", () => busy(make, async () => {
@@ -1506,16 +1507,16 @@
   const nGames = n => n + (n === 1 ? " game" : " games");
 
   // Bundle tracker: add a bundle, see what its games are worth now and what each cost.
-  function bundlesPanel() {
+  function bundlesPanel(onChange) {
     const out = h("div", { class: "muted", text: "Loading…" });
     const name = h("input", { type: "text", maxlength: "80", placeholder: "Bundle name" });
     const paid = h("input", { type: "number", min: "0", max: "10000", step: "0.01", placeholder: "Paid", class: "short-num" });
-    const titles = h("textarea", { rows: "3", maxlength: "1500", placeholder: "Games in it, separated by commas" });
+    const titles = h("textarea", { rows: "2", maxlength: "1500", placeholder: "Games in it, separated by commas" });
     const add = h("button", { class: "btn green small shrink", text: "Add bundle" });
     add.addEventListener("click", () => busy(add, async () => {
       const r = await api("/api/library/bundle", { name: name.value, paid: Number(paid.value), titles: titles.value });
       toast(`Saved with ${r.matched} games.` + (r.notFound.length ? ` Not found: ${r.notFound.slice(0, 3).join(", ")}.` : ""), "ok");
-      name.value = ""; paid.value = ""; titles.value = ""; load();
+      name.value = ""; paid.value = ""; titles.value = ""; if (onChange) onChange(); else load();
     }));
     async function load() {
       try {
@@ -1533,7 +1534,7 @@
     load();
     return h("details", { class: "panel" }, h("summary", { text: "🎁 Bundles you bought" }), out,
       h("p", { class: "muted small", text: "The games are added to your library, with what you paid split evenly across them." }),
-      h("div", { class: "rule inline" }, field("Name", name), field("Paid", paid)), field("Games", titles), h("div", { class: "row" }, add));
+      h("div", { class: "bundle-form" }, h("div", { class: "rule inline" }, field("Name", name), field("Paid", paid)), field("Games", titles), h("div", { class: "row" }, add)));
   }
 
   function badgesPanel() {
@@ -1621,7 +1622,7 @@
       try {
         const d = await api("/api/library");
         state.me.library = d.rows.length;
-        if (!d.rows.length) { body.className = ""; body.replaceChildren(h("div", { class: "empty", text: "Your library is empty. Add games above, import a FanaticalGrabber export, or send results from the Value Checker." })); return; }
+        if (!d.rows.length) { body.className = ""; body.replaceChildren(h("div", { class: "empty", text: "Your library is empty. Add games above, import a FanaticalGrabber export, or send results from the Value Checker." }), bundlesPanel(() => load())); return; }
         const t = d.totals, cur = d.currency;
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
         const snaps = d.snapshots;
@@ -1725,7 +1726,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
-          challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(), chart, backlogChart || "",
+          challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(() => load()), chart, backlogChart || "",
           h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
@@ -2247,6 +2248,26 @@
   function contrastOn() { try { return localStorage.getItem("svc_contrast") === "1"; } catch { return false; } }
   function applyContrast(on) { document.documentElement.toggleAttribute("data-contrast", on); try { localStorage.setItem("svc_contrast", on ? "1" : "0"); } catch {} }
   applyContrast(contrastOn());
+  // One display menu instead of two separate buttons: theme and high contrast.
+  function displayMenu() {
+    const btn = h("button", { type: "button", class: "theme-btn", "aria-haspopup": "true", "aria-expanded": "false", text: "◐", title: "Display", "aria-label": "Display: theme and contrast" });
+    const light = () => window.svcTheme && window.svcTheme.current() === "light";
+    const themeItem = h("button", { type: "button", role: "menuitem" }), contrastItem = h("button", { type: "button", role: "menuitem" });
+    const paint = () => { themeItem.textContent = light() ? "☾ Switch to dark theme" : "☀ Switch to light theme"; contrastItem.textContent = (contrastOn() ? "✓ " : "") + "High contrast"; };
+    themeItem.addEventListener("click", () => { if (window.svcTheme) window.svcTheme.toggle(); paint(); });
+    contrastItem.addEventListener("click", () => { applyContrast(!contrastOn()); paint(); });
+    paint();
+    const menu = h("div", { class: "menu right", role: "menu", hidden: true }, themeItem, contrastItem);
+    const wrap = h("div", { class: "nav-group" }, btn, menu);
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const wasOpen = openMenu && openMenu.btn === btn;
+      closeMenu();
+      if (!wasOpen) { paint(); menu.hidden = false; btn.setAttribute("aria-expanded", "true"); openMenu = { wrap, btn, menu }; }
+    });
+    return wrap;
+  }
+
   function contrastButton() {
     const b = h("button", { class: "theme-btn", type: "button", text: "◐", title: "High contrast", "aria-label": "Toggle high contrast" });
     b.addEventListener("click", () => applyContrast(!contrastOn()));
@@ -2454,7 +2475,7 @@
   function startTour() {
     const steps = [
       { title: "Welcome", text: "A 30 second look around. Use the arrow keys or the buttons, and Esc to leave any time." },
-      { sel: "#nav", title: "The menu", text: "Pages are grouped: Games, Servers, Account and Help. Open a group to see what is inside." },
+      { sel: "#nav", title: "The menu", text: "Pages are grouped into Library, Prices, Friends, Servers, Account and Help. Pick one and its pages show as tabs just below the menu." },
       { href: "#/mypage", title: "My page", text: "Every feature as a card. Switch the simple ones on here, pin the ones you use and make a profile card." },
       { href: "#/wishlist", title: "Wishlist", text: "Import your Steam wishlist or add games. Pick the rule for each one: any sale, a percent off, a price or an all-time low." },
       { href: "#/library", title: "Library", text: "What you own and paid, your backlog, spend, challenge and trophies." },
@@ -2475,7 +2496,7 @@
       const s = steps[n];
       if (ringed) ringed.classList.remove("tour-ring");
       if (shownMenu) { shownMenu.hidden = true; shownMenu = null; }
-      const target = s.sel ? document.querySelector(s.sel) : s.href ? document.querySelector('#nav a[href="' + s.href + '"]') : null;
+      const target = s.sel ? document.querySelector(s.sel) : s.href ? document.querySelector('#nav a[data-pages~="' + s.href.replace("#/", "") + '"]') : null;
       ringed = target;
       const menu = target && target.closest(".menu");
       if (menu) { menu.hidden = false; shownMenu = menu; }
@@ -2983,7 +3004,7 @@
           h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
             h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/wishlist import" }), ", then star favorites with ", h("code", { text: "/wishlist priority" })),
             h("li", {}, "Price a library: ", h("code", { text: "/value" }), " or link Steam for hours, ", h("code", { text: "/steam recap" }), " and ", h("code", { text: "/library challenge" })),
-            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/library badges" }), " and ", h("code", { text: "/leaderboard board:finished" })), h("li", {}, "See events and release dates: ", h("code", { text: "/calendar view" })),
+            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/library badges" }), " and ", h("code", { text: "/leaderboard board:finished" })), h("li", {}, "Track bundles and hour goals: ", h("code", { text: "/library bundle" }), " and ", h("code", { text: "/steam goal" })), h("li", {}, "See events and release dates: ", h("code", { text: "/calendar view" })),
             h("li", {}, "Ask for help: ", h("code", { text: "/support open" })), h("li", {}, "Managers can run giveaways: ", h("code", { text: "/giveaway create" }))))].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
