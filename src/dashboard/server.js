@@ -192,7 +192,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
 
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId;
     let broadcasterInstance = null;
-    const broadcaster = () => (broadcasterInstance ??= createBroadcaster({ db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
+    const broadcaster = () => (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
         sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p) }));
 
     function managerGuild(s, id) {
@@ -283,6 +283,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 giveaways: Boolean(giveaways),
                 library: db.countLibrary(s.userId),
                 unread: db.unreadNotifications(s.userId),
+                bugsNew: isOwner(s) ? db.countNewBugs(Number(db.getMeta("bugs_seen") ?? 0)) : 0,
                 news: u.seen_version === LATEST ? null : LATEST,
                 newsTitle: CHANGELOG[0]?.title ?? null,
                 tour: !u.welcomed,
@@ -1409,6 +1410,20 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
         },
 
+        "GET /api/admin/bugs": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const seen = Number(db.getMeta("bugs_seen") ?? 0);
+            const bugs = db.listBugs({ limit: 100 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, user_id: t.user_id, user_name: t.user_name, created_at: t.created_at, updated_at: t.updated_at, text: String(t.first).slice(0, 600), replies: t.replies, isNew: t.created_at > seen && ["open", "waiting"].includes(t.status) }));
+            return { bugs, newCount: bugs.filter(b => b.isNew).length, open: bugs.filter(b => ["open", "waiting"].includes(b.status)).length };
+        },
+        "POST /api/admin/bugs/seen": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            db.setMeta("bugs_seen", Date.now()); // same clock the ticket store stamps with
+            return { ok: true };
+        },
+
         "GET /api/admin/logs": async (req, _b, url) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -1439,7 +1454,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "POST /api/tickets": async (req, body) => {
             const s = session(req); needTickets();
             const gid = body.guild_id && s.guilds.some(g => g.id === body.guild_id) ? body.guild_id : null;
-            return tickets.open({ userId: s.userId, userName: s.username ?? null, guildId: gid, subject: body.subject, body: body.body });
+            return tickets.open({ userId: s.userId, userName: s.username ?? null, guildId: gid, subject: body.subject, body: body.body, kind: body.kind === "bug" ? "bug" : "help" });
         },
         "POST /api/tickets/reply": async (req, body) => {
             const s = session(req); needTickets();

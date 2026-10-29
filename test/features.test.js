@@ -397,7 +397,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "steam/link": "POST /api/steam/link", "steam/sync": "POST /api/steam/sync", "steam/recap": "GET /api/steam/recap", "steam/taste": "GET /api/steam/taste", "steam/view": "GET /api/steam", "steam/next": "GET /api/steam/next", "steam/value": "GET /api/steam/value.png", "profilecard": "GET /api/profile/card.png", "steam/unlink": "POST /api/steam/unlink",
         "lfg/post": "POST /api/lfg", "lfg/list": "GET /api/lfg", "lfg/close": "POST /api/lfg/close",
         "bundle": "GET /api/bundles", "saleprep/plan": "GET /api/saleprep", "saleprep/recap": "GET /api/saleprep/recap",
-        "setup": "GET /api/servers/setup", "gamenight": "POST /api/gamenight", "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",
+        "setup": "GET /api/servers/setup", "gamenight": "POST /api/gamenight", "bug": "POST /api/tickets", "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
@@ -505,7 +505,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "bundle", "changelog", "currency", "freegames", "friendCmd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "currency", "freegames", "friendCmd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "compare", "gamenight", "giveaway", "lfgCmd", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);

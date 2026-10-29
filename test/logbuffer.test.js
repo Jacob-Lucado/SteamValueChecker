@@ -39,3 +39,11 @@ test("capture copies console output and still prints it", () => {
     assert.deepEqual(printed, ["[crash] bad"]);
     assert.equal(logs.recent({ level: "error" })[0].text, "[crash] bad");
 });
+
+test("node experimental and trace-warning lines are not kept", () => {
+    const logs = createLogBuffer({});
+    logs.add("warn", ["(node:1) ExperimentalWarning: SQLite is an experimental feature"]);
+    logs.add("warn", ["(Use `node --trace-warnings ...` to show where the warning was created)"]);
+    logs.add("warn", ["real problem"]);
+    assert.equal(logs.recent({ level: "all" }).length, 1);
+});

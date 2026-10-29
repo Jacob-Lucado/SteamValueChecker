@@ -597,3 +597,8 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .hubbar:not([hidden]) + .page { padding-top: 20px; }
 .bundle-form input[type=text] { min-width: min(320px, 100%); }
 .bundle-form textarea { min-height: 70px; height: 70px; }
+
+.bug-card { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; margin: 0 0 10px; display: grid; gap: 6px; }
+.bug-card.new { border-color: var(--warn, #f2b84b); }
+.bug-card .row { align-items: center; }
+.bug-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

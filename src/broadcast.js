@@ -30,9 +30,10 @@ export function broadcastStore({ run, all, get, now }) {
     return { startBroadcast, progressBroadcast, listBroadcasts, broadcastTargets };
 }
 
-export const noticeEmbed = (title, body) => ({ color: 0xfaa61a, title: title || "Steam Value Checker notice", description: body, footer: { text: "A notice from the bot owner. You can't reply here; use the Support page on the dashboard." } });
+export const noticeEmbed = (title, body, base = null) => ({ color: 0xfaa61a, title: title || "Steam Value Checker notice", description: body, footer: { text: "A notice from the bot owner. You can't reply here; use the Support page on the dashboard." },
+    ...(base ? { image: { url: `${base}/banner.png` }, thumbnail: { url: `${base}/creator.png` } } : {}) });
 
-export function createBroadcaster({ db, sendDm, sendChannel, ownerId, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
+export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     let running = null;
 
     function counts() {
@@ -52,7 +53,7 @@ export function createBroadcaster({ db, sendDm, sendChannel, ownerId, delayMs = 
         if (!AUDIENCES.includes(audience)) throw new UserError("Pick who gets it.");
         if (running) throw new UserError("A broadcast is still going out. Wait for it to finish.");
         const { t, b } = clean(title, body);
-        const embed = noticeEmbed(t, b);
+        const embed = noticeEmbed(t, b, publicUrl ? String(publicUrl).replace(/\/$/, "") : null);
         const targets = db.broadcastTargets();
         const dmIds = audience === "me" ? [ownerId] : audience === "dm" || audience === "both" ? targets.users : [];
         const chIds = audience === "channels" || audience === "both" ? [...new Set(targets.channels)] : [];

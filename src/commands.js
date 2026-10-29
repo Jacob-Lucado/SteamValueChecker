@@ -386,12 +386,15 @@ const gamenight = new SlashCommandBuilder().setName("gamenight")
 const setup = new SlashCommandBuilder().setName("setup").setDescription("Server managers: guided setup for alerts, support tickets and giveaways")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
+const bug = new SlashCommandBuilder().setName("bug").setDescription("Report a problem with the bot. It goes straight to the bot owner");
+
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
 
 const support = new SlashCommandBuilder()
     .setName("support")
     .setDescription("Get help from the bot's team")
-    .addSubcommand(s => s.setName("open").setDescription("Open a support ticket"))
+    .addSubcommand(s => s.setName("open").setDescription("Open a support ticket")
+        .addStringOption(o => o.setName("type").setDescription("What kind of ticket (default: help)").addChoices({ name: "I need help", value: "help" }, { name: "Report a bug", value: "bug" })))
     .addSubcommand(s => s.setName("mine").setDescription("See your tickets"))
     .addSubcommand(s => s.setName("setup").setDescription("Staff: choose the channel where tickets are posted")
         .addChannelOption(o => o.setName("channel").setDescription("Text channel").setRequired(true).addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
@@ -399,7 +402,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, changelog, mydata, help, about, privacy].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());

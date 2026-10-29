@@ -126,3 +126,11 @@ test("broadcast: validates, skips members whose DMs keep failing, runs one at a 
     const t = b.start({ title: "", body: "test", audience: "me" });
     assert.equal(t.total, 1);
 });
+
+test("announcement embed carries the banner and creator logo when a public url is set", async () => {
+    const { noticeEmbed } = await import("../src/broadcast.js");
+    const e = noticeEmbed("T", "B", "https://x.test");
+    assert.equal(e.image.url, "https://x.test/banner.png");
+    assert.equal(e.thumbnail.url, "https://x.test/creator.png");
+    assert.equal(noticeEmbed("T", "B").image, undefined);
+});

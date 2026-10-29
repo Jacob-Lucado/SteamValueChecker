@@ -1,3 +1,4 @@
+import { createTicketService } from "../src/tickets.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createDashboard } from "../src/dashboard/server.js";
@@ -1189,4 +1190,19 @@ test("admin broadcast: owner only, needs SEND for anything but a test, and sends
     assert.equal((await post({ audience: "dm", body: "again", confirm: "SEND" })).status, 429);      // cooldown
     assert.equal((await o.request("/api/admin/broadcast")).data.history.length, 2);
     await o.close();
+});
+
+test("bug reports reach the owner's admin page with a new count until seen", async () => {
+    const mk = () => signedIn({ config: { ownerId: "u1" }, extra: db => ({ tickets: createTicketService({ db, discord: { post: async () => ({ id: "1" }), edit: async () => {}, dm: async () => {} }, ownerId: "u1", publicUrl: "https://x.test" }) }) });
+    const o = await mk();
+    assert.equal((await o.request("/api/tickets", { method: "POST", body: { subject: "Broken", body: "It breaks", kind: "bug" } })).status, 200);
+    assert.equal((await o.request("/api/me")).data.bugsNew, 1);
+    const b = await o.request("/api/admin/bugs");
+    assert.equal(b.data.bugs.length, 1); assert.equal(b.data.bugs[0].isNew, true);
+    await o.request("/api/admin/bugs/seen", { method: "POST", body: {} });
+    assert.equal((await o.request("/api/me")).data.bugsNew, 0);
+    await o.close();
+    const u = await signedIn();
+    assert.equal((await u.request("/api/admin/bugs")).status, 403);
+    await u.close();
 });

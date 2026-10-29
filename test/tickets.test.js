@@ -68,3 +68,16 @@ test("tickets: tags are cleaned and the data export includes your tickets", asyn
     assert.deepEqual(db.getTicket(id).tags, ["key problem", "bxb"]);
     assert.equal(db.exportUser("u4").support_tickets[0].messages[0].body, "b");
 });
+
+test("bug tickets skip server routing, are tagged, and show up in the bug list", async () => {
+    const { db, svc } = setup();
+    db.setTicketSettings("*", { channelId: "100", staffRoleId: null });
+    const a = await svc.open({ userId: "u1", guildId: "g1", subject: "Crash", body: "It crashed", kind: "bug" });
+    assert.equal(db.getTicket(a.id).guild_id, null);
+    assert.equal(db.countNewBugs(0), 1);
+    const bugs = db.listBugs({ limit: 10 });
+    assert.equal(bugs.length, 1);
+    assert.equal(bugs[0].id, a.id);
+    await svc.open({ userId: "u1", guildId: "g1", subject: "Question", body: "How?" });
+    assert.equal(db.listBugs({ limit: 10 }).length, 1);
+});

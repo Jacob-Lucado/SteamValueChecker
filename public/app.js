@@ -188,7 +188,7 @@
     nav.replaceChildren(...NAV.map(group => {
       const pages = group.pages.filter(([id]) => pageVisible(id));
       if (!pages.length) return null;
-      const unread = group.id === "account" && state.me ? state.me.unread : 0;
+      const unread = state.me ? (group.id === "account" ? state.me.unread : group.id === "admin" ? state.me.bugsNew : 0) : 0;
       const active = group === here;
       return h("a", { href: "#/" + pages[0][0], class: active ? "active" : "", "data-pages": pages.map(p => p[0]).join(" "), "aria-current": active ? "page" : null }, navText(group.id, group.label), badge(unread));
     }).filter(Boolean));
@@ -1769,8 +1769,8 @@
   async function adminView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("Admin", "Only you, the bot owner, can see this."), holder);
-    let d, ins;
-    try { [d, ins] = await Promise.all([api("/api/admin/stats"), api("/api/admin/insights")]); }
+    let d, ins, bugData;
+    try { [d, ins, bugData] = await Promise.all([api("/api/admin/stats"), api("/api/admin/insights"), api("/api/admin/bugs")]); }
     catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
     const st = d.stats, hl = d.health || {}, bot = ins.bot || {};
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
@@ -1785,7 +1785,23 @@
     const daily = (rows, name, cls) => lineChart([{ name, cls, points: rows.map(r => ({ x: Date.parse(r.day + "T00:00:00Z"), y: r.n })) }], { format: v => (Number.isInteger(v) ? String(v) : ""), label: name + " per day, last 30 days" });
     const sum = rows => rows.reduce((t, r) => t + r.n, 0);
 
+    const bugs = () => {
+      const list = bugData.bugs;
+      const newOnes = new Set(list.filter(b => b.isNew).map(b => b.id));
+      // Opening this tab counts as reading them: the menu badge clears, while "New" stays on the cards until you leave.
+      if (bugData.newCount && state.me) { api("/api/admin/bugs/seen", {}).then(() => { state.me.bugsNew = 0; bugData.newCount = 0; renderChrome(); }).catch(() => {}); }
+      const ago = t => { const m = Math.max(1, Math.round((Date.now() - t) / 60000)); return m < 60 ? m + " min ago" : m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago"; };
+      return [h("div", { class: "panel" }, h("h3", { text: `Bug reports (${bugData.open} open)` }),
+        h("p", { class: "muted small", text: "Sent by members with /bug, /support open (type: bug) or the Support page. Open one to read the thread and reply." }),
+        list.length ? h("div", {}, list.map(b => h("div", { class: "bug-card" + (newOnes.has(b.id) ? " new" : "") },
+          h("div", { class: "row" }, h("strong", { text: `#${b.id} ${b.subject}` }), newOnes.has(b.id) ? h("span", { class: "badge-count", text: "NEW" }) : null, h("span", { class: "chip dim", text: b.status })),
+          h("div", { class: "muted small", text: `${b.user_name || b.user_id} · ${ago(b.created_at)}${b.replies ? " · " + b.replies + " repl" + (b.replies === 1 ? "y" : "ies") : ""}` }),
+          h("p", { class: "bug-text", text: b.text }),
+          h("a", { class: "btn gray small", href: "#/support/" + b.id, text: "Open ticket" })))) : h("p", { class: "muted", text: "No bug reports yet." }))];
+    };
+
     const overview = () => [
+      bugData.newCount ? h("div", { class: "notice warn" }, h("strong", { text: `${bugData.newCount} new bug report${bugData.newCount === 1 ? "" : "s"}. ` }), h("a", { href: "#/admin", onclick: e => { e.preventDefault(); current = "bugs"; show(); }, text: "Read them" })) : null,
       h("div", { class: "grid four" }, tile("Members", st.users, `${st.activeUsers} with alerts on`), tile("Wishlist games", st.wishlistGames, `${st.uniqueGames} different games`),
         tile("Library games", st.libraryGames), tile("Servers with a channel", st.serversWithChannel),
         tile("Alerts, last 24h", st.alerts24h), tile("DM delivery", st.dmUsers, `${st.channelUsers} use the channel`), tile("DMs failing", st.usersFailingDm, "3 or more failures in a row"),
@@ -1904,12 +1920,12 @@
       return [box];
     };
 
-    const TABS = [["overview", "Overview", overview], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["tools", "Tools and logs", tools]];
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["tools", "Tools and logs", tools]];
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
     const body = h("div");
     const show = () => {
-      tabBar.replaceChildren(...TABS.map(([id, label]) => h("button", { class: "tab" + (id === current ? " active" : ""), type: "button", text: label, onclick: () => { current = id; show(); } })));
+      tabBar.replaceChildren(...TABS.map(([id, label]) => h("button", { class: "tab" + (id === current ? " active" : ""), type: "button", onclick: () => { current = id; show(); } }, label, id === "bugs" && bugData.newCount ? h("span", { class: "badge-count", text: String(Math.min(99, bugData.newCount)) }) : null)));
       body.replaceChildren(...TABS.find(t => t[0] === current)[2]());
     };
     holder.className = "";
@@ -2208,8 +2224,9 @@
       const subject = h("input", { type: "text", maxlength: "100", placeholder: "What is this about?" });
       const body = h("textarea", { maxlength: "1500", placeholder: "Tell us what happened" });
       const guildSel = select([["", "The bot's team"], ...(state.me.servers || []).map(g => [g.id, g.name])], "");
+      const kindSel = select([["help", "I need help"], ["bug", "Report a bug (goes to the bot owner)"]], "help");
       const send = h("button", { class: "btn green", text: "Open ticket", onclick: () => busy(send, async () => {
-        const r = await api("/api/tickets", { subject: subject.value, body: body.value, guild_id: guildSel.value || null });
+        const r = await api("/api/tickets", { subject: subject.value, body: body.value, guild_id: kindSel.value === "bug" ? null : guildSel.value || null, kind: kindSel.value });
         toast(`Ticket #${r.id} opened.`); location.hash = "#/support/" + r.id;
       }) });
       const q = h("input", { type: "search", placeholder: "Search subject, tag or #id", value: filter.q });
@@ -2219,7 +2236,7 @@
       holder.className = "";
       holder.replaceChildren(...[
         h("div", { class: "panel" }, h("h3", { text: "Open a ticket" }),
-          h("div", { class: "row" }, field("Subject", subject), field("Send to", guildSel)), field("Details", body),
+          h("div", { class: "row" }, field("Type", kindSel), field("Subject", subject), field("Send to", guildSel)), field("Details", body),
           h("p", { class: "muted small", text: "Never include a game key here. Server staff cannot see keys." }), send),
         h("div", { class: "panel" }, h("h3", { text: "Your tickets" }),
           d.mine.length ? h("div", { class: "cards" }, ...d.mine.map(t => row(t, false))) : h("p", { class: "muted", text: "No tickets yet." })),

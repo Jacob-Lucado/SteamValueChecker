@@ -4,6 +4,8 @@
 import { appendFileSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
+// Node prints these on every start; they say nothing about a problem.
+const NOISE = /ExperimentalWarning|--trace-warnings|\(Use `node --trace/;
 const LEVELS = { log: "info", info: "info", warn: "warn", error: "error" };
 
 export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile = 300, now = () => Date.now() } = {}) {
@@ -15,7 +17,7 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
     let lines = [];
     if (file) {
         try {
-            lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).slice(-maxFile);
+            lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(l => !NOISE.test(l.text ?? "")).slice(-maxFile);
             lines.forEach(l => { l.earlier = true; });
         } catch { /* no file yet */ }
     }
@@ -23,7 +25,7 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
 
     function add(level, args) {
         const text = mask(args.map(a => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : safeJson(a))).join(" ")).slice(0, 4000);
-        if (/ExperimentalWarning: SQLite/.test(text)) return null; // harmless Node notice, not worth an admin entry
+        if (NOISE.test(text)) return null; // harmless Node notice, not worth an admin entry
         const entry = { at: now(), level, text };
         lines.push(entry);
         if (lines.length > max + maxFile) lines = lines.slice(-max - maxFile);

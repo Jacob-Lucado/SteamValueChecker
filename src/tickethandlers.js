@@ -4,7 +4,7 @@ import { UserError } from "./errors.js";
 import { TK } from "./tickets.js";
 
 const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
-const field = (id, label, style, max, placeholder = "") => ({ type: 1, components: [{ type: 4, custom_id: id, label, style, required: true, max_length: max, placeholder }] });
+const field = (id, label, style, max, placeholder = "", required = true) => ({ type: 1, components: [{ type: 4, custom_id: id, label, style, required, max_length: max, placeholder }] });
 
 export function createTicketHandlers({ db, tickets, ownerId = null, publicUrl = null }) {
     async function failed(i, err) {
@@ -36,11 +36,18 @@ export function createTicketHandlers({ db, tickets, ownerId = null, publicUrl = 
         components: [field("subject", "What is this about?", 1, 100, "e.g. My key did not work"), field("body", "Tell us what happened", 2, 1500)]
     });
 
+    // A bug report: always goes to the bot owner and shows on the Admin page.
+    const bugModal = i => i.showModal({
+        custom_id: TK.mBug, title: "Report a bug",
+        components: [field("subject", "Short title", 1, 100, "e.g. /steam recap shows no image"), field("body", "What happened?", 2, 1000, "What you did and what went wrong"), field("steps", "Steps to repeat it / what you expected", 2, 500, "Optional", false)]
+    });
+    async function handleBug(i) { try { return await bugModal(i); } catch (err) { await failed(i, err); } }
+
     // ---------- /support ----------
     async function handleCommand(i) {
         try {
             const sub = i.options.getSubcommand();
-            if (sub === "open") return await openModal(i);
+            if (sub === "open") return i.options.getString("type") === "bug" ? await bugModal(i) : await openModal(i);
             if (sub === "mine") {
                 const rows = db.listTickets({ userId: i.user.id, limit: 15 });
                 if (!rows.length) return eph(i, "You have no tickets. Use `/support open` if you need help.");
@@ -104,6 +111,13 @@ export function createTicketHandlers({ db, tickets, ownerId = null, publicUrl = 
                 const r = await tickets.open({ userId: i.user.id, userName: i.user.username, guildId: i.guildId, subject: i.fields.getTextInputValue("subject"), body: i.fields.getTextInputValue("body"), giveawayId });
                 return void await i.editReply(`Ticket **#${r.id}** is open. ${r.queued ? "The team has been told." : "Nobody has been notified yet because no support channel is set up, but your message is saved."} You will get replies here in your DMs${publicUrl ? ` and at ${publicUrl}/#/support/${r.id}` : ""}.`);
             }
+            if (kind === TK.mBug) {
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                const steps = i.fields.getTextInputValue("steps")?.trim();
+                const r = await tickets.open({ userId: i.user.id, userName: i.user.username, guildId: i.guildId, kind: "bug", subject: i.fields.getTextInputValue("subject"),
+                    body: i.fields.getTextInputValue("body") + (steps ? `\n\nSteps / expected:\n${steps}` : "") });
+                return void await i.editReply(`Thanks. Bug report **#${r.id}** is sent to the bot owner.${publicUrl ? ` You can follow it at ${publicUrl}/#/support/${r.id}.` : ""} You will get a DM if there is a reply.`);
+            }
             if (kind === TK.mReply) {
                 const t = needStaff(i, a);
                 await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -120,5 +134,5 @@ export function createTicketHandlers({ db, tickets, ownerId = null, publicUrl = 
         } catch (err) { await failed(i, err); }
     }
 
-    return { handleCommand, handleButton, handleModal };
+    return { handleCommand, handleBug, handleButton, handleModal };
 }

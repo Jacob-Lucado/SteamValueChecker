@@ -5,7 +5,7 @@
 import { UserError } from "./errors.js";
 
 export const TK = { reply: "tk_reply", assign: "tk_assign", resolve: "tk_resolve", ureply: "tk_ureply", rate: "tk_rate", open: "tk_open",
-    mReply: "tk_m_reply", mUreply: "tk_m_ureply", mOpen: "tk_m_open" };
+    mReply: "tk_m_reply", mUreply: "tk_m_ureply", mOpen: "tk_m_open", mBug: "tk_m_bug" };
 const MAX_BODY = 1500, MAX_SUBJECT = 100, MAX_OPEN = 5;
 const WAITING_TO_RESOLVED_MS = 7 * 86400_000, RESOLVED_TO_CLOSED_MS = 3 * 86400_000;
 const ICON = { open: "🟢", waiting: "🟡", resolved: "✅", closed: "⚫" };
@@ -73,14 +73,17 @@ export function createTicketService({ db, discord, ownerId = null, publicUrl = n
     }
 
     // ---------- open ----------
-    async function open({ userId, userName = null, guildId = null, subject, body, giveawayId = null, context = null }) {
+    async function open({ userId, userName = null, guildId = null, subject, body, giveawayId = null, context = null, kind = "help" }) {
         const sub = clip(subject, MAX_SUBJECT), text = clip(body, MAX_BODY);
         if (!sub) throw new UserError("Give the ticket a short subject.");
         if (!text) throw new UserError("Describe what you need help with.");
         if (db.countOpenTickets(userId) >= MAX_OPEN) throw new UserError(`You already have ${MAX_OPEN} open tickets. Close or resolve one first.`);
         // A server's own queue only if that server has set one up; otherwise it goes to the bot owner.
-        const routed = guildId && db.getTicketSettings(guildId).channel_id ? guildId : null;
-        const id = db.createTicket({ user_id: userId, user_name: userName, guild_id: routed, subject: sub, giveaway_id: giveawayId, context });
+        // Bug reports always go to the bot owner (and show on the Admin page), never to a server's own queue.
+        const bug = kind === "bug";
+        const routed = !bug && guildId && db.getTicketSettings(guildId).channel_id ? guildId : null;
+        const id = db.createTicket({ user_id: userId, user_name: userName, guild_id: routed, subject: sub, giveaway_id: giveawayId, context: bug ? { ...(context ?? {}), from_server: guildId ?? null } : context, tags: bug ? ["bug"] : [] });
+        if (bug) log(`[bug #${id}] ${sub} (from ${userName ?? userId})`);
         db.addTicketMessage(id, userId, "user", text);
         const t = db.getTicket(id);
         await syncStaffMessage(t);

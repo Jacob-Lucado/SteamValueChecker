@@ -129,7 +129,7 @@ const gwDiscord = {
     }
 };
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
-const tickets = createTicketService({ db, discord: gwDiscord, ownerId: cfg.ownerId, publicUrl: publicBase, log: m => console.log(`[tickets] ${m}`) });
+const tickets = createTicketService({ db, discord: gwDiscord, ownerId: cfg.ownerId, publicUrl: publicBase, log: m => (m.startsWith("[bug") ? console.error(m) : console.log(`[tickets] ${m}`)) });
 const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
 const setupUi = createSetupHandlers({ db, publicUrl: publicBase });
 const giveaways = cfg.keySecret
@@ -411,6 +411,7 @@ client.on(Events.InteractionCreate, async i => {
             case "freegames": return await handlers.handleFreeGames(i);
             case "status": return await handlers.handleStatus(i);
             case "support": return await ticketUi.handleCommand(i);
+            case "bug": return await ticketUi.handleBug(i);
             case "gamenight": return await handlers.handleGameNight(i);
             case "lfg": return await lfgUi.handleCommand(i);
             case "calendar": return await calendarUi.handle(i);

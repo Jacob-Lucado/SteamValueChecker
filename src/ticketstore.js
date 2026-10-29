@@ -52,8 +52,8 @@ export function ticketStore({ run, get, all, clean, now }) {
 
     function createTicket(t) {
         const r = run(
-            "INSERT INTO tickets (user_id, user_name, guild_id, subject, giveaway_id, context, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
-            t.user_id, t.user_name ?? null, t.guild_id ?? null, t.subject, t.giveaway_id ?? null, t.context ? JSON.stringify(t.context) : null, now(), now());
+            "INSERT INTO tickets (user_id, user_name, guild_id, subject, giveaway_id, context, tags, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            t.user_id, t.user_name ?? null, t.guild_id ?? null, t.subject, t.giveaway_id ?? null, t.context ? JSON.stringify(t.context) : null, (t.tags ?? []).join(","), now(), now());
         return Number(r.lastInsertRowid);
     }
     const getTicket = id => row(get("SELECT * FROM tickets WHERE id = ?", id));
@@ -82,6 +82,11 @@ export function ticketStore({ run, get, all, clean, now }) {
         if (q) { where.push("(subject LIKE ? OR tags LIKE ? OR CAST(id AS TEXT) = ?)"); args.push(`%${q}%`, `%${q}%`, q.replace("#", "")); }
         return all(`SELECT * FROM tickets ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY (status IN ('open','waiting')) DESC, updated_at DESC LIMIT ?`, ...args, limit).map(row);
     }
+    /** User-reported bugs (tickets tagged "bug"), newest first, with the first message of each. */
+    const BUG = "(',' || tags || ',') LIKE '%,bug,%'";
+    const listBugs = ({ limit = 100 } = {}) => all(`SELECT * FROM tickets WHERE ${BUG} ORDER BY created_at DESC LIMIT ?`, limit).map(row)
+        .map(t => ({ ...t, first: get("SELECT body FROM ticket_messages WHERE ticket_id = ? ORDER BY id LIMIT 1", t.id)?.body ?? "", replies: get("SELECT COUNT(*) AS n FROM ticket_messages WHERE ticket_id = ? AND role = 'staff'", t.id).n }));
+    const countNewBugs = since => get(`SELECT COUNT(*) AS n FROM tickets WHERE ${BUG} AND created_at > ? AND status IN ('open','waiting')`, since ?? 0).n;
     const staleWaiting = cutoff => all("SELECT * FROM tickets WHERE status = 'waiting' AND updated_at < ?", cutoff).map(row);
     const countOpenTickets = userId => get("SELECT COUNT(*) AS n FROM tickets WHERE user_id = ? AND status IN ('open','waiting')", userId).n;
     const purgeTickets = (olderThanMs = 180 * 86400_000) => run("DELETE FROM tickets WHERE status IN ('closed','resolved') AND closed_at < ?", now() - olderThanMs).changes;
@@ -97,7 +102,7 @@ export function ticketStore({ run, get, all, clean, now }) {
     const removeCanned = (scope, id) => run("DELETE FROM canned_replies WHERE scope = ? AND id = ?", scope, id).changes > 0;
 
     return {
-        createTicket, getTicket, addTicketMessage, listTicketMessages, setTicketStatus, setTicketAssignee, setTicketTags, setTicketMessage, setTicketRating,
+        createTicket, listBugs, countNewBugs, getTicket, addTicketMessage, listTicketMessages, setTicketStatus, setTicketAssignee, setTicketTags, setTicketMessage, setTicketRating,
         listTickets, staleWaiting, countOpenTickets, purgeTickets, deleteUserTickets, getTicketSettings, setTicketSettings, listCanned, addCanned, removeCanned
     };
 }
