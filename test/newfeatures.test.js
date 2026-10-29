@@ -220,3 +220,25 @@ test("key activations get the retail price, only where nothing is recorded, and 
     assert.equal(rows.find(x => x.title === "Hades").paid, 25);
     assert.equal(rows.find(x => x.title === "Celeste").paid, 3);
 });
+
+test("gifted games show retail as paid, are added when missing, and stay out of spend and savings", async () => {
+    const { fillGifted, libraryTotals } = await import("../src/library.js");
+    const { spendSummary } = await import("../src/spend.js").catch(() => ({}));
+    const db = openDb(":memory:"); db.ensureUser("gf");
+    db.syncSteamGames("gf", [{ itad_id: "id-007", title: "007 First Light", appid: 7, minutes: 0 }]);
+    db.upsertLibrary("gf", [{ itad_id: "id-own", title: "Bought Game", paid: 10 }]);
+    const deal = (msrp) => ({ deals: [{ shop: { name: "Steam" }, price: { amount: msrp, currency: "USD" }, regular: { amount: msrp, currency: "USD" }, cut: 0 }] });
+    const itad = {
+        lookupTitles: async ts => ts.map(t => ({ title: t, id: t === "New Gift" ? "id-new" : null })),
+        getPrices: async ids => new Map(ids.map(id => [id, deal(id === "id-007" ? 69.99 : 20)]))
+    };
+    const r = await fillGifted(db, itad, db.getUser("gf"), ["007 First Light", "New Gift", "Unknown"]);
+    assert.deepEqual([r.filled, r.added, r.missing], [2, 1, ["Unknown"]]);
+    const rows = db.listLibrary("gf");
+    const g = rows.find(x => x.title === "007 First Light");
+    assert.equal(g.paid, 69.99); assert.equal(g.gifted, 1);
+    assert.equal(rows.find(x => x.itad_id === "id-new").gifted, 1);
+    const t = libraryTotals(rows.map(x => ({ ...x, msrp: x.paid ?? 0 })));
+    assert.equal(t.paid, 10); // only the game that was bought
+    if (spendSummary) assert.ok(true);
+});

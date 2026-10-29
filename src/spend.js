@@ -20,7 +20,7 @@ export function grabberRegion(user, cc) {
 }
 
 export function spendSummary(lib, { now = Date.now(), currency = "USD" } = {}) {
-    const paid = lib.filter(g => Number.isFinite(g.paid) && g.paid > 0);
+    const paid = lib.filter(g => Number.isFinite(g.paid) && g.paid > 0 && !g.gifted); // gifts were not spent on
     const total = paid.reduce((a, g) => a + g.paid, 0);
     const year = new Date(now).getUTCFullYear();
     const byMonth = new Map();

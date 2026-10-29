@@ -1131,13 +1131,16 @@
 
   // ---------- steam link ----------
   // Steam game art. Newer games are not on the old path, so try the others in turn and show a quiet placeholder if none load.
-  function steamArt(appid, cls, w, ht) {
-    const urls = [
+  function steamArt(appid, cls, w, ht, itadId) {
+    const urls = [...(appid ? [
       `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`,
       `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appid}/header.jpg`,
       `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/capsule_231x87.jpg`,
-      `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`
-    ];
+      `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`,
+      `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/capsule_616x353.jpg`,
+      `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/library_hero.jpg`
+    ] : []), ...(itadId ? [`https://assets.isthereanydeal.com/${encodeURIComponent(itadId)}/banner400.jpg`] : [])];
+    if (!urls.length) return h("div", { class: cls + " art-missing", "aria-hidden": "true" });
     let i = 0;
     const img = h("img", { class: cls, src: urls[0], alt: "", loading: "lazy", ...(w ? { width: String(w), height: String(ht) } : {}) });
     img.addEventListener("error", () => {
@@ -1695,11 +1698,11 @@
             });
           });
           const game = h("div", { class: "game-cell" },
-            r.appid ? steamArt(r.appid, "game-thumb", 92, 43) : null,
+            (r.appid || r.itad_id) ? steamArt(r.appid, "game-thumb", 92, 43, r.itad_id) : null,
             h("div", {}, h("div", { class: "game-title", text: r.title }), (r.minutes || r.ach_total) ? h("div", { class: "muted small", text: [r.minutes ? hoursText(r.minutes) + " played" : null, r.ach_total ? `🏆 ${r.ach_done}/${r.ach_total}` : null].filter(Boolean).join(" · ") }) : null));
           const tick = h("input", { type: "checkbox", checked: picked.has(r.itad_id), "aria-label": "Select " + r.title });
           tick.addEventListener("change", () => { tick.checked ? picked.add(r.itad_id) : picked.delete(r.itad_id); drawBar(); });
-          return [h("tr", {}, h("td", { class: "tick" }, tick), h("td", {}, game), h("td", {}, stat), h("td", { class: "num", text: money(r.paid, cur) }), h("td", { class: "num", text: money(r.msrp, cur) }),
+          return [h("tr", {}, h("td", { class: "tick" }, tick), h("td", {}, game), h("td", {}, stat), h("td", { class: "num" }, money(r.paid, cur), r.gifted ? h("span", { class: "gift-tip", tabindex: "0", "data-tip": "Gifted", "aria-label": "Gifted", text: "🎁" }) : null), h("td", { class: "num", text: money(r.msrp, cur) }),
             h("td", { class: "num", text: money(r.best && r.best.price, cur) }),
             h("td", { class: "num", text: r.saved === null ? "–" : (r.saved >= 0 ? "+" : "−") + money(Math.abs(r.saved), cur) }), h("td", {}, h("div", { class: "row-actions" }, hist, rm))), holder];
         }

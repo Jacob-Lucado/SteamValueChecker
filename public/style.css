@@ -636,3 +636,8 @@ details.panel[open] > summary { margin-bottom: 10px; }
 textarea { min-height: 110px; }
 .rule.inline > div { flex: 1 1 200px; min-width: 0; }
 .rule.inline > div input:not([type=checkbox]), .rule.inline > div select { width: 100%; flex: none; }
+
+/* "Gifted" tooltip next to a price */
+.gift-tip { position: relative; margin-left: 6px; cursor: help; font-size: 12px; }
+.gift-tip::after { content: attr(data-tip); position: absolute; bottom: 130%; right: 0; background: var(--panel-2); color: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; font-size: 12px; font-weight: 600; white-space: nowrap; opacity: 0; pointer-events: none; transform: translateY(3px); transition: opacity .12s, transform .12s; box-shadow: var(--shadow); }
+.gift-tip:hover::after, .gift-tip:focus-visible::after { opacity: 1; transform: none; }

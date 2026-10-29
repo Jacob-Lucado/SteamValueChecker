@@ -6,7 +6,7 @@ const sum = (arr, f) => arr.reduce((t, x) => t + (Number.isFinite(f(x)) ? f(x) :
 
 /** Totals from library rows. "Saved" only counts games that have a paid price. */
 export function libraryTotals(rows) {
-    const withPaid = rows.filter(r => r.paid !== null);
+    const withPaid = rows.filter(r => r.paid !== null && !r.gifted); // a gift is shown at retail but was not paid for, so it stays out of spend and savings
     const paid = sum(withPaid, r => r.paid);
     const msrpPaid = sum(withPaid, r => r.msrp);
     return {
@@ -29,9 +29,9 @@ export async function libraryView(db, itad, user, { snapshot = true } = {}) {
     const rows = items.map(it => {
         const s = summarize(prices.get(it.itad_id), { majorOnly: user.stores === "major" });
         return {
-            itad_id: it.itad_id, title: it.title, paid: it.paid, currency: s.currency,
+            itad_id: it.itad_id, title: it.title, paid: it.paid, gifted: Boolean(it.gifted), currency: s.currency,
             msrp: s.msrp, best: s.best, atl: s.atl,
-            saved: it.paid !== null && s.msrp !== null ? s.msrp - it.paid : null,
+            saved: it.paid !== null && !it.gifted && s.msrp !== null ? s.msrp - it.paid : null,
             status: it.status ?? "backlog", minutes: it.minutes ?? 0, appid: it.appid ?? null, ach_done: it.ach_done ?? null, ach_total: it.ach_total ?? null
         };
     });
@@ -84,7 +84,7 @@ export async function fillPrices(db, itad, userId, entries) {
     const filledIds = new Set();
     const pending = [];
     let filled = 0;
-    const apply = (row, paid) => { if (filledIds.has(row.id)) return; db.setLibraryPaid(userId, row.id, paid); filledIds.add(row.id); filled++; };
+    const apply = (row, paid) => { if (filledIds.has(row.id) || row.gifted) return; db.setLibraryPaid(userId, row.id, paid); filledIds.add(row.id); filled++; };
     for (const e of clean) {
         const row = byTitle.get(normTitle(e.title));
         if (row) apply(row, e.paid); else pending.push(e);
@@ -133,6 +133,51 @@ export async function fillRetail(db, itad, user, titles) {
         }
     }
     return { filled, alreadyPriced, noRetail, missing };
+}
+
+/**
+ * Games someone gave you. Each is recorded at its retail price and marked gifted, so the Paid column shows the retail and the
+ * dashboard says "Gifted" on hover, while spend and savings totals leave it out. A game that is not in the library yet is added.
+ * Returns { filled, added, noRetail, missing }.
+ */
+export async function fillGifted(db, itad, user, titles) {
+    const wanted = [...new Set(titles.map(t => String(t ?? "").trim()).filter(Boolean))].slice(0, 500);
+    if (!wanted.length) throw new LibraryError("Nothing to fill in.");
+    const rows = db.listLibrary(user.discord_id);
+    const byTitle = new Map(rows.map(r => [normTitle(r.title), r]));
+    const byId = new Map(rows.map(r => [r.itad_id, r]));
+    const targets = []; // { row, itad_id, title }
+    const unknown = [];
+    for (const t of wanted) { const row = byTitle.get(normTitle(t)); if (row) targets.push({ row, itad_id: row.itad_id, title: row.title }); else unknown.push(t); }
+    const missing = [];
+    if (unknown.length) {
+        let resolved = [];
+        try { resolved = await itad.lookupTitles(unknown.map(t => t.slice(0, 120))); } catch { resolved = []; }
+        unknown.forEach((t, i) => {
+            const r = resolved[i];
+            if (!r?.id) { missing.push(t); return; }
+            const row = byId.get(r.id);
+            targets.push(row ? { row, itad_id: r.id, title: row.title } : { row: null, itad_id: r.id, title: r.approx ? r.matched : r.title });
+        });
+    }
+    const seen = new Set();
+    const uniq = targets.filter(x => (seen.has(x.itad_id) ? false : (seen.add(x.itad_id), true)));
+    const prices = uniq.length ? await itad.getPrices(uniq.map(x => x.itad_id), user.region) : new Map();
+    const noRetail = [];
+    let filled = 0, added = 0;
+    for (const x of uniq) {
+        const msrp = summarize(prices.get(x.itad_id), { majorOnly: user.stores === "major" }).msrp;
+        if (msrp === null || !(msrp > 0)) { noRetail.push(x.title); continue; }
+        let row = x.row;
+        if (!row) {
+            const r = db.upsertLibrary(user.discord_id, [{ itad_id: x.itad_id, title: x.title, paid: msrp }]);
+            if (!r.added) { noRetail.push(x.title); continue; }
+            row = db.listLibrary(user.discord_id).find(l => l.itad_id === x.itad_id);
+            added++;
+        }
+        if (row) { db.setLibraryPaid(user.discord_id, row.id, msrp, true); filled++; }
+    }
+    return { filled, added, noRetail, missing };
 }
 
 /**

@@ -198,6 +198,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("giveaways", "require_boost", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaways", "starts_at", "INTEGER");
     addColumn("giveaways", "duration_ms", "INTEGER");
+    addColumn("library", "gifted", "INTEGER NOT NULL DEFAULT 0");
     addColumn("guilds", "free_feed", "INTEGER NOT NULL DEFAULT 0");
     addColumn("guilds", "hot_min", "INTEGER NOT NULL DEFAULT 0");
     addColumn("guilds", "sale_feed", "INTEGER NOT NULL DEFAULT 0");
@@ -407,7 +408,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         } catch (err) { db.exec("ROLLBACK"); throw err; }
         return { added, updated, skippedForLimit };
     }
-    const setLibraryPaid = (discordId, id, paid) => run("UPDATE library SET paid = ? WHERE id = ? AND discord_id = ?", paid, id, discordId).changes;
+    const setLibraryPaid = (discordId, id, paid, gifted = null) => (gifted === null
+        ? run("UPDATE library SET paid = ? WHERE id = ? AND discord_id = ?", paid, id, discordId)
+        : run("UPDATE library SET paid = ?, gifted = ? WHERE id = ? AND discord_id = ?", paid, gifted ? 1 : 0, id, discordId)).changes;
     const setProfile = (id, { slug, isPublic }) => run("UPDATE users SET profile_slug = ?, profile_public = ? WHERE discord_id = ?", slug, isPublic ? 1 : 0, id);
     const getProfileBySlug = slug => clean(get("SELECT * FROM users WHERE profile_slug = ?", slug));
     const LIB_STATUSES = ["backlog", "playing", "played", "finished", "dropped"];
