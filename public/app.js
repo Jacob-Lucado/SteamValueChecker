@@ -1780,7 +1780,7 @@
       if (!rows.length) return h("p", { class: "muted", text: "Nothing yet." });
       const th = head.map((c, i) => h("th", { class: i ? "num" : "", text: c }));
       const trs = rows.map(r => h("tr", {}, r.map((c, i) => h("td", { class: i ? "num" : "", text: String(c) }))));
-      return h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, th)), h("tbody", {}, trs)));
+      return h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, th)), h("tbody", {}, trs)));
     };
     const daily = (rows, name, cls) => lineChart([{ name, cls, points: rows.map(r => ({ x: Date.parse(r.day + "T00:00:00Z"), y: r.n })) }], { format: v => (Number.isInteger(v) ? String(v) : ""), label: name + " per day, last 30 days" });
     const sum = rows => rows.reduce((t, r) => t + r.n, 0);
@@ -1793,7 +1793,7 @@
       const ago = t => { const m = Math.max(1, Math.round((Date.now() - t) / 60000)); return m < 60 ? m + " min ago" : m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago"; };
       return [h("div", { class: "panel" }, h("h3", { text: `Bug reports (${bugData.open} open)` }),
         h("p", { class: "muted small", text: "Sent by members with /bug, /support open (type: bug) or the Support page. Open one to read the thread and reply." }),
-        list.length ? h("div", {}, list.map(b => h("div", { class: "bug-card" + (newOnes.has(b.id) ? " new" : "") },
+        list.length ? h("div", { class: "scroll-y tall" }, list.map(b => h("div", { class: "bug-card" + (newOnes.has(b.id) ? " new" : "") },
           h("div", { class: "row" }, h("strong", { text: `#${b.id} ${b.subject}` }), newOnes.has(b.id) ? h("span", { class: "badge-count", text: "NEW" }) : null, h("span", { class: "chip dim", text: b.status })),
           h("div", { class: "muted small", text: `${b.user_name || b.user_id} · ${ago(b.created_at)}${b.replies ? " · " + b.replies + " repl" + (b.replies === 1 ? "y" : "ies") : ""}` }),
           h("p", { class: "bug-text", text: b.text }),
@@ -1824,19 +1824,19 @@
         h("div", { class: "panel" }, h("h3", { text: "Languages" }), table(["Language", "Members"], ins.languages.map(r => [r.k, r.n]))))];
 
     const features = () => [
-      h("div", { class: "panel" }, h("h3", { text: "Who uses what" }), table(["Feature", "Count"], ins.features.map(([k, v]) => [k, n0(v)]))),
+      h("div", { class: "panel" }, h("h3", { text: "Who uses what" }), h("div", { class: "kv" }, ins.features.map(([k, v]) => h("div", { class: v ? "" : "zero" }, h("span", { text: k }), h("b", { text: n0(v) }))))),
       h("div", { class: "panel" }, h("h3", { text: "Most watched games" }), table(["Game", "Members watching"], ins.watched.map(r => [r.title, r.n]))),
       h("div", { class: "panel" }, h("h3", { text: "Idle accounts" }),
-        h("p", { text: `${n0(ins.idle.noWishlistOrLibrary)} members have no wishlist and no library games.` }),
-        h("p", { text: `${n0(ins.idle.dmFailing)} members have DMs that keep failing.` }))];
+        h("p", { text: `${n0(ins.idle.noWishlistOrLibrary)} member${ins.idle.noWishlistOrLibrary === 1 ? " has" : "s have"} no wishlist and no library games.` }),
+        h("p", { text: `${n0(ins.idle.dmFailing)} member${ins.idle.dmFailing === 1 ? " has" : "s have"} DMs that keep failing.` }))];
 
     const servers = () => [h("div", { class: "panel" }, h("h3", { text: `Servers (${ins.servers.length})` }),
-      ins.servers.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Members", "Using the bot", "Alert channel", "Free feed", "Group alerts", "Digest"].map((c, i) => h("th", { class: i === 1 || i === 2 ? "num" : "", text: c })))),
+      ins.servers.length ? h("div", { class: "scroll-y tall" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Members", "Using the bot", "Alert channel", "Free feed", "Group alerts", "Digest"].map((c, i) => h("th", { class: i === 1 || i === 2 ? "num" : "", text: c })))),
         h("tbody", {}, ins.servers.map(g => h("tr", {}, h("td", {}, g.name || "Unknown server", h("div", { class: "muted small", text: g.id + (g.inServer === false ? " · bot has left" : "") })), h("td", { class: "num", text: n0(g.members) }), h("td", { class: "num", text: String(g.tracked) }),
           h("td", { text: g.channel ? "Yes" : "No" }), h("td", { text: g.freeFeed ? "On" : "Off" }), h("td", { text: g.groupMin ? "At " + g.groupMin : "Off" }), h("td", { text: g.digest ? "On" : "Off" })))))) : h("p", { class: "muted", text: "No servers yet." }))];
 
     const members = () => {
-      const id = h("input", { type: "text", inputmode: "numeric", placeholder: "Discord user ID", maxlength: "25", "aria-label": "Discord user ID" });
+      const id = h("input", { type: "text", inputmode: "numeric", placeholder: "Discord user ID (paste it, or a mention)", maxlength: "30", "aria-label": "Discord user ID" });
       const out = h("div");
       const draw = u => {
         const act = (label, action, cls = "gray") => { const b = h("button", { class: "btn " + cls + " small", text: label }); b.addEventListener("click", () => busy(b, async () => { draw(await api("/api/admin/user", { id: u.id, action })); toast("Done.", "ok"); })); return b; };
@@ -1846,9 +1846,11 @@
           h("div", { class: "row" }, act("Reset failed DMs", "reset_dm"), u.paused ? act("Resume alerts", "resume", "green") : act("Pause alerts", "pause"))));
       };
       const find = h("button", { class: "btn blue", text: "Look up" });
-      find.addEventListener("click", () => busy(find, async () => { try { draw(await api("/api/admin/user?id=" + encodeURIComponent(id.value.trim()))); } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); } }));
+      const go = () => busy(find, async () => { try { draw(await api("/api/admin/user?id=" + encodeURIComponent(id.value.replace(/\D/g, "")))); } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); } });
+      find.addEventListener("click", go);
+      id.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
       return [h("div", { class: "panel" }, h("h3", { text: "Look up a member" }),
-        h("p", { class: "muted small", text: "Counts and settings only. You can't see anyone's games, keys or messages from here." }), h("div", { class: "rule inline" }, id, find)), out];
+        h("p", { class: "muted small", text: "Counts and settings only. You can't see anyone's games, keys or messages from here." }), h("div", { class: "lookup-row" }, id, find)), out];
     };
 
     const tools = () => {
