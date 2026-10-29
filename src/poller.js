@@ -54,6 +54,8 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
         const result = evaluate(it, summarize(entry, { majorOnly: it.stores === "major" }));
         if (result.action === "reset") db.clearAlerted(it.id);
         if (result.action !== "alert") continue;
+        // A member can ask for sales of at least some percent. Starred games always come through, and nothing is marked as sent, so a deeper cut still alerts.
+        if (it.min_discount > 0 && !it.priority && (result.now.discount ?? 0) * 100 < it.min_discount - 0.001) continue;
         const hit = { item: it, now: result.now, reason: result.reason };
         eligible.push(hit);
         if (!perUser.has(it.discord_id)) perUser.set(it.discord_id, []);

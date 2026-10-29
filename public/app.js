@@ -625,6 +625,7 @@
     const qs = h("input", { type: "time", value: s.quiet_start || "" });
     const qe = h("input", { type: "time", value: s.quiet_end || "" });
     const tz = h("input", { type: "text", value: s.tz && s.tz !== "UTC" ? s.tz : myTz, maxlength: "60" });
+    const minDisc = h("input", { type: "number", min: "0", max: "90", step: "5", value: String(s.min_discount || 0), class: "short-num", "aria-label": "Minimum discount percent" });
     const digest = h("input", { type: "checkbox", checked: s.digest });
     const digestDay = select(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => [String(i), d]), String(s.digest_day));
     const bundles = h("input", { type: "checkbox", checked: s.bundles });
@@ -645,7 +646,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked
+        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       toast("Settings saved.", "ok");
@@ -657,6 +658,7 @@
         h("label", { class: "check" }, dm, "Direct message. If it cannot be delivered, the server alert channel is used as a fallback."),
         h("label", { class: "check" }, ch, "Server alert channel only. You are mentioned there, and everyone who can see the channel sees the game name."),
         field("Server for the alert channel", server), h("p", { class: "muted small", text: "Alerts that cannot be sent by DM go to this server's alert channel." }),
+        field("Only alert for sales of at least this percent off (0 = any; starred games always come through)", minDisc),
         h("label", { class: "check" }, paused, "Pause all alerts (your wishlist is kept)")),
       h("div", { class: "panel" },
         h("h3", { text: "Prices" }),
@@ -1017,13 +1019,23 @@
   }
 
   async function board(g, into) {
-    const d = await api("/api/servers/leaderboard?guild=" + encodeURIComponent(g.id));
-    const league = await api("/api/servers/leaderboard?board=finished&guild=" + encodeURIComponent(g.id)).catch(() => ({ entries: [] }));
-    into.replaceChildren(h("div", { class: "subpanel" }, h("h4", { text: "Backlog league: finished this month" }),
-      league.entries.length ? h("ol", { class: "board" }, league.entries.map(e => h("li", {}, h("strong", { text: e.name + (e.you ? " (you)" : "") }), ` ${e.done} finished`))) : h("div", { class: "empty", text: "Nobody has finished a game this month yet." })),h("div", { class: "subpanel" }, h("h4", { text: "Savings leaderboard" }),
-      d.entries.length ? h("ol", { class: "board" }, d.entries.map(e => h("li", {}, h("strong", { text: e.name + (e.you ? " (you)" : "") }), ` ${Math.round(e.savedPct)}% saved across ${e.games} games`)))
-        : h("div", { class: "empty", text: "Nobody has joined yet." }),
-      h("p", { class: "muted small", text: d.joined ? "You are on the leaderboard. Change this on the Alerts page." : "You are not on it. Opt in on the Alerts page (“Share with your server”). Ranked by percent saved vs MSRP, since members shop in different currencies." })));
+    const BOARDS = [["savings", "Most saved vs MSRP"], ["finished", "Backlog league (this month)"], ["hours", "Hours played this year"], ["games", "Biggest library"]];
+    const pick = h("select", { "aria-label": "Leaderboard" }, BOARDS.map(([v, t]) => h("option", { value: v, text: t })));
+    const list = h("div");
+    const note = h("p", { class: "muted small" });
+    async function load() {
+      const which = pick.value;
+      list.replaceChildren(h("div", { class: "muted", text: "Loading…" }));
+      try {
+        const d = await api("/api/servers/leaderboard?guild=" + encodeURIComponent(g.id) + (which === "savings" ? "" : "&board=" + which));
+        const text = e => which === "savings" ? `${Math.round(e.savedPct)}% saved across ${e.games} games` : which === "finished" ? `${e.done} finished` : e.label;
+        list.replaceChildren(d.entries.length ? h("ol", { class: "board" }, d.entries.map(e => h("li", {}, h("strong", { text: e.name + (e.you ? " (you)" : "") }), " " + text(e)))) : h("div", { class: "empty", text: "Nobody has joined yet." }));
+        note.textContent = (d.joined ? "You are on the boards. " : "You are not on them. Opt in on the Alerts page (“Share with your server”). ") + (which === "savings" ? "Ranked by percent saved vs MSRP, since members shop in different currencies." : which === "hours" ? "Counts hours tracked since each member linked Steam." : "Only members who opted in.");
+      } catch (e) { list.replaceChildren(h("div", { class: "empty", text: e.message })); }
+    }
+    pick.addEventListener("change", load);
+    into.replaceChildren(h("div", { class: "subpanel" }, h("h4", { text: "Leaderboards" }), h("div", { class: "rule inline" }, pick), list, note));
+    load();
   }
 
   // ---------- bundles and sale prep ----------
@@ -1158,7 +1170,18 @@
       return c;
     }
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
-    (async () => {
+    // A yearly hours goal: a bar, where this pace ends up, and a box to change it.
+    function goalBox(g) {
+      const input = h("input", { type: "number", min: "0", max: "5000", step: "1", placeholder: "Hours this year", value: g ? String(g.goal) : "", "aria-label": "Hours goal for this year" });
+      const save = h("button", { class: "btn blue shrink", text: g ? "Update goal" : "Set goal" });
+      save.addEventListener("click", () => busy(save, async () => { await api("/api/steam/goal", { hours: Number(input.value || 0) }); toast(Number(input.value) ? "Goal saved." : "Goal cleared.", "ok"); loadRecap(); }));
+      return h("div", { class: "subpanel" }, h("h4", { text: "🎯 Hours goal" }),
+        g ? h("div", {}, h("div", { class: "bar", role: "img", "aria-label": g.pct + "% of the goal" }, (() => { const f = h("div", { class: "fill" }); f.style.width = g.pct + "%"; return f; })()),
+          h("p", { class: "small", text: `${g.done} of ${g.goal} hours (${g.pct}%).` + (g.reached ? " Goal reached 🎉" : ` On this pace: about ${g.projected} by the end of the year${g.projected >= g.goal ? ", so you are on track" : ""}. You need about ${g.perWeek} hours a week.`) }))
+          : h("p", { class: "muted small", text: "Set a target for hours played this year and see if you are on pace." }),
+        h("div", { class: "rule inline" }, input, save));
+    }
+    const loadRecap = async () => {
       try {
         const r = await api("/api/steam/recap");
         if (!r.allTime.totalMinutes) { out.className = "muted"; out.replaceChildren(h("p", { text: "Nothing tracked yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." })); return; }
@@ -1170,9 +1193,10 @@
           h("div", { class: "grid two" },
             tile("This year (" + r.year + ")", hoursText(r.totalMinutes), `${r.games} game${r.games === 1 ? "" : "s"} on ${r.activeDays} day${r.activeDays === 1 ? "" : "s"}`),
             tile("Since you linked", hoursText(r.allTime.totalMinutes), `${r.allTime.games} game${r.allTime.games === 1 ? "" : "s"} on ${r.allTime.activeDays} day${r.allTime.activeDays === 1 ? "" : "s"}, from ${new Date(r.since).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`)),
-          card, h("div", { class: "row" }, save));
+          goalBox(r.goal), card, h("div", { class: "row" }, save));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    })();
+    };
+    loadRecap();
     return h("div", { class: "panel" }, h("h3", { text: "⏱️ Hours tracked since you linked" }),
       h("p", { class: "muted small", text: "Steam only tells us lifetime hours per game, not when you played them. So this counts the hours you add after linking, as your library syncs. It can't show anything from before you linked. Save it as an image to share." }),
       out);
@@ -1501,6 +1525,37 @@
   // Spend tracker: totals, the last 12 months and cost per hour, from the amounts you recorded.
   const nGames = n => n + (n === 1 ? " game" : " games");
 
+  // Bundle tracker: add a bundle, see what its games are worth now and what each cost.
+  function bundlesPanel() {
+    const out = h("div", { class: "muted", text: "Loading…" });
+    const name = h("input", { type: "text", maxlength: "80", placeholder: "Bundle name" });
+    const paid = h("input", { type: "number", min: "0", max: "10000", step: "0.01", placeholder: "Paid", class: "short-num" });
+    const titles = h("textarea", { rows: "3", maxlength: "1500", placeholder: "Games in it, separated by commas" });
+    const add = h("button", { class: "btn green small shrink", text: "Add bundle" });
+    add.addEventListener("click", () => busy(add, async () => {
+      const r = await api("/api/library/bundle", { name: name.value, paid: Number(paid.value), titles: titles.value });
+      toast(`Saved with ${r.matched} games.` + (r.notFound.length ? ` Not found: ${r.notFound.slice(0, 3).join(", ")}.` : ""), "ok");
+      name.value = ""; paid.value = ""; titles.value = ""; load();
+    }));
+    async function load() {
+      try {
+        const v = await api("/api/library/bundles");
+        out.className = "";
+        out.replaceChildren(v.bundles.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Bundle", "Paid", "Worth", "Each", "Played", ""].map((c, i) => h("th", { class: i && i < 4 ? "num" : "", text: c })))),
+          h("tbody", {}, v.bundles.map(b => {
+            const rm = h("button", { class: "btn gray small shrink", text: "Remove", "aria-label": "Remove " + b.name });
+            rm.addEventListener("click", () => busy(rm, async () => { await api("/api/library/bundle/remove", { id: b.id }); load(); }));
+            return h("tr", {}, h("td", {}, h("strong", { text: b.name }), h("div", { class: "muted small", text: b.verdict ? b.verdict.text : "" })), h("td", { class: "num", text: money(b.paid, v.currency) }), h("td", { class: "num", text: money(b.msrp, v.currency) }), h("td", { class: "num", text: money(b.perGame, v.currency) }), h("td", { text: `${b.played}/${b.games} · ${b.hours} h` }), h("td", {}, rm));
+          })))) : h("p", { class: "muted", text: "No bundles yet. Add one below." }),
+          v.bundles.length ? h("p", { class: "muted small", text: `Total paid ${money(v.totals.paid, v.currency)} for games worth ${money(v.totals.msrp, v.currency)} at full price.` }) : "");
+      } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    load();
+    return h("details", { class: "panel" }, h("summary", { text: "🎁 Bundles you bought" }), out,
+      h("p", { class: "muted small", text: "The games are added to your library, with what you paid split evenly across them." }),
+      h("div", { class: "rule inline" }, field("Name", name), field("Paid", paid)), field("Games", titles), h("div", { class: "row" }, add));
+  }
+
   function badgesPanel() {
     const out = h("div", { class: "muted", text: "Loading…" });
     api("/api/library/badges").then(tc => {
@@ -1690,7 +1745,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
-          challengePanel(), badgesPanel(), spendPanel(), chart, backlogChart || "",
+          challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(), chart, backlogChart || "",
           h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }

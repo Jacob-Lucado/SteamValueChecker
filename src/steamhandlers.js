@@ -3,6 +3,7 @@ import { MessageFlags } from "discord.js";
 import { libraryView } from "./library.js";
 import { viewRows } from "./wishlist.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "./taste.js";
+import { goalProgress } from "./steamstore.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext, steamValue, fmtHours } from "./steamlib.js";
 import { SteamError } from "./steam.js";
 import { UserError } from "./errors.js";
@@ -32,6 +33,17 @@ export function recapEmbed(r) {
             ...(r.allTime ? [{ name: "Since you linked", value: `**${fmtHours(r.allTime.totalMinutes)}** across **${r.allTime.games}** game${r.allTime.games === 1 ? "" : "s"}` }] : [])],
         footer: { text: "Steam only shares lifetime hours, so this counts what was added between syncs since you linked. It can't see earlier play." }
     };
+}
+
+export function goalEmbed(p) {
+    const filled = Math.round(p.pct / 10), bar = "▰".repeat(filled) + "▱".repeat(10 - filled);
+    const lines = [`\`${bar}\` **${p.done}** of **${p.goal}** hours (${p.pct}%)`];
+    if (p.reached) lines.push("🎉 Goal reached. Nice.");
+    else {
+        lines.push(`At this pace you will finish the year around **${p.projected}** hours${p.projected >= p.goal ? ", so you are on track." : "."}`);
+        if (p.daysLeft) lines.push(`To hit it, about **${p.perWeek}** hours a week for the ${p.daysLeft} days left.`);
+    }
+    return { color: 0x66c0f4, title: "Your hours goal for this year", description: lines.join("\n"), footer: { text: "Counts hours tracked since you linked Steam." } };
 }
 
 export function tasteEmbed(profile, picks, currency) {
@@ -147,6 +159,14 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
                 const shared = i.options.getBoolean("public") === true;
                 const all = db.playRecapAll(i.user.id);
                 return void await i.reply({ embeds: [recapEmbed({ ...db.playRecap(i.user.id, year), allTime: all })], ...(shared ? {} : { flags: MessageFlags.Ephemeral }) });
+            }
+            if (sub === "goal") {
+                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                const set = i.options.getInteger("hours");
+                if (set !== null) db.setHourGoal(i.user.id, set);
+                const goal = db.getHourGoal(i.user.id);
+                if (!goal) return void await i.reply({ content: set === 0 ? "Hours goal cleared." : "No hours goal yet. Set one with `/steam goal hours:300`.", flags: MessageFlags.Ephemeral });
+                return void await i.reply({ embeds: [goalEmbed(goalProgress(goal, db.playRecap(i.user.id, new Date().getUTCFullYear()).totalMinutes))], flags: MessageFlags.Ephemeral });
             }
             if (sub === "value") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

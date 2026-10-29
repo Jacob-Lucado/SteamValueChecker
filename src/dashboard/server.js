@@ -25,7 +25,9 @@ import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
 import { profileCardData, renderProfileCard, renderSteamValue } from "../cardimg.js";
 import { PLATFORMS, mergePrefs, viewPrefs } from "../cardprefs.js";
-import { importLibrary, libraryView, leaderboard, finishedLeague, serverStats } from "../library.js";
+import { addBundle, bundleView } from "../bundles.js";
+import { goalProgress } from "../steamstore.js";
+import { importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
 import { compareLibraries } from "../compare.js";
 import { regionPrices } from "../regions.js";
@@ -428,7 +430,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
             }
             patch.delivery = nextDelivery;
-            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "min_discount", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
             Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };
@@ -702,6 +704,19 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             db.setCardPrefs(s.userId, prefs);
             return { prefs: viewPrefs(prefs) };
         },
+        "GET /api/library/bundles": async (req) => { const s = session(req); return await bundleView(db, itad, userRow(s)); },
+        "POST /api/library/bundle": async (req, body) => {
+            const s = session(req);
+            cooldown(s.userId, "lib");
+            userRow(s);
+            try { return await addBundle(db, itad, s.userId, { name: body.name, paid: Number(body.paid), titles: body.titles }); }
+            catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+        },
+        "POST /api/library/bundle/remove": async (req, body) => {
+            const s = session(req);
+            if (!db.removeBundle(s.userId, Number(body.id))) throw new HttpError(404, "That bundle is not in your tracker.");
+            return { ok: true };
+        },
         "GET /api/library/badges": async (req) => { const s = session(req); userRow(s); return trophyCase(db, s.userId); },
         "GET /api/library/challenge": async (req) => { const s = session(req); return challengeView(db, s.userId); },
         "POST /api/library/challenge": async (req, body) => {
@@ -793,7 +808,18 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const year = Number(url.searchParams.get("year")) || new Date().getUTCFullYear();
             if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new HttpError(400, "Pick a year from 2020 on.");
             const all = db.playRecapAll(s.userId);
-            return { ...db.playRecap(s.userId, year), allTime: { totalMinutes: all.totalMinutes, games: all.games, activeDays: all.activeDays }, since: db.getSteamLink(s.userId).linked_at };
+            const goalHours = db.getHourGoal(s.userId), thisYear = year === new Date(now()).getUTCFullYear();
+            const rec = db.playRecap(s.userId, year);
+            return { ...rec, goal: goalHours && thisYear ? goalProgress(goalHours, rec.totalMinutes, now()) : null, allTime: { totalMinutes: all.totalMinutes, games: all.games, activeDays: all.activeDays }, since: db.getSteamLink(s.userId).linked_at };
+        },
+
+        "POST /api/steam/goal": async (req, body) => {
+            const s = session(req);
+            if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Link your Steam profile first.");
+            const hours = Number(body.hours);
+            if (!Number.isInteger(hours) || hours < 0 || hours > 5000) throw new HttpError(400, "Pick a whole number of hours from 1 to 5000 (0 clears it).");
+            db.setHourGoal(s.userId, hours);
+            return { ok: true };
         },
 
         "GET /api/steam/next": async (req, _body, url) => {
@@ -885,8 +911,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/servers/leaderboard": async (req, _b, url) => {
             const s = session(req);
             const g = guildFor(s, url.searchParams.get("guild"));
-            const finished = url.searchParams.get("board") === "finished";
-            const entries = finished ? finishedLeague(db, g.id, now()) : leaderboard(db, g.id);
+            const which = url.searchParams.get("board");
+            const finished = which === "finished";
+            const entries = finished ? finishedLeague(db, g.id, now()) : EXTRA_BOARDS[which] ? extraBoard(db, g.id, which, now()) : leaderboard(db, g.id);
             const t = now();
             const out = [];
             for (const e of entries) {
@@ -897,7 +924,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                     names.set(key, hit);
                     if (names.size > 2000) names.delete(names.keys().next().value);
                 }
-                out.push({ name: hit.name ?? "A member", savedPct: e.savedPct, games: e.games, done: e.done, you: e.discord_id === s.userId });
+                out.push({ name: hit.name ?? "A member", savedPct: e.savedPct, games: e.games, done: e.done, label: e.label, you: e.discord_id === s.userId });
             }
             return { entries: out, joined: Boolean(userRow(s).share) };
         },

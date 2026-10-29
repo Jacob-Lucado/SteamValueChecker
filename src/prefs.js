@@ -43,6 +43,11 @@ export function prefsPatch(input, user) {
         if (!Number.isInteger(d) || d < 0 || d > 6) throw new UserError("Pick a day of the week.");
         patch.digest_day = d;
     }
+    if (has("min_discount")) {
+        const d = Number(input.min_discount);
+        if (!Number.isInteger(d) || d < 0 || d > 90) throw new UserError("Pick a minimum discount from 0 to 90 percent (0 means any discount).");
+        patch.min_discount = d;
+    }
     if (has("bundles")) patch.bundles = input.bundles ? 1 : 0;
     if (has("share")) patch.share = input.share ? 1 : 0;
     if (has("free")) patch.free = input.free ? 1 : 0;
@@ -66,7 +71,7 @@ export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? "UTC",
         digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0,
-        muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
+        min_discount: u.min_discount ?? 0, muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
     };
 }
 

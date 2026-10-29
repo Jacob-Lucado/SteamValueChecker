@@ -14,7 +14,7 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
-import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
+import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
@@ -25,7 +25,8 @@ import { daysUntilBirthday } from "./friendstore.js";
 import { friendDeals, friendRows, saveFriend, birthdayEmbed } from "./friends.js";
 import { spendSummary, regionCurrency } from "./spend.js";
 import { trophyCase } from "./badges.js";
-import { importLibrary, libraryView, leaderboard, finishedLeague, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
+import { addBundle, bundleView } from "./bundles.js";
+import { importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
@@ -368,6 +369,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.updateUser(user.discord_id, { lang });
                 return eph(i, lang === "es" ? "Listo. Los botones y mensajes clave ahora están en español." : lang === "fr" ? "C'est fait. Les boutons et messages clés sont maintenant en français." : "Done. Buttons and messages are in English.");
             }
+            case "mindiscount": {
+                const pct = i.options.getInteger("percent", true);
+                try { db.updateUser(user.discord_id, prefsPatch({ min_discount: pct }, user)); } catch (err) { return failed(i, "alerts mindiscount", err); }
+                return eph(i, pct ? `Sale alerts now need at least **${pct}%** off. Games you starred still alert at any discount.` : "Sale alerts now fire for any discount that meets each game's own trigger.");
+            }
             case "share": {
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { share: on ? 1 : 0 });
@@ -466,6 +472,18 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                     "Making a new code replaces this one. `/library grabber action:Turn the link off` removes it."
                 ].join("\n"));
             }
+            if (sub === "bundle") {
+                cooldown(i, "lib");
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                const r = await addBundle(db, itad, i.user.id, { name: i.options.getString("name", true), paid: i.options.getNumber("paid", true), titles: i.options.getString("titles", true) });
+                return void await i.editReply(`Saved bundle **#${r.id}** with ${r.matched} games${r.newGames ? ` (${r.newGames} new in your library, paid split evenly)` : ""}.${r.notFound.length ? ` Not found: ${r.notFound.slice(0, 5).join(", ")}.` : ""} See it with \`/library bundles\`.`);
+            }
+            if (sub === "bundles") {
+                const rm = i.options.getInteger("remove");
+                if (rm !== null) return eph(i, db.removeBundle(i.user.id, rm) ? `Removed bundle #${rm}. The games stay in your library.` : "I could not find that bundle number.");
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                return void await i.editReply({ embeds: [bundlesEmbed(await bundleView(db, itad, user))] });
+            }
             if (sub === "badges") return void await i.reply({ embeds: [badgesEmbed(trophyCase(db, i.user.id))], flags: MessageFlags.Ephemeral });
             if (sub === "spend") {
                 return void await i.reply({ embeds: [spendEmbed(spendSummary(db.listLibrary(i.user.id), { currency: regionCurrency(user.region) }))], flags: MessageFlags.Ephemeral });
@@ -557,7 +575,13 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     }
 
     async function handleLeaderboard(i) {
-        try { await i.reply({ embeds: [(i.options.getString("board") === "finished" ? leagueEmbed(finishedLeague(db, await homeGuild(i))) : leaderboardEmbed(leaderboard(db, await homeGuild(i))))], allowedMentions: { parse: [] } }); }
+        try {
+            const board = i.options.getString("board"), guild = await homeGuild(i);
+            const embed = board === "finished" ? leagueEmbed(finishedLeague(db, guild))
+                : EXTRA_BOARDS[board] ? boardEmbed(EXTRA_BOARDS[board], extraBoard(db, guild, board), board === "hours" ? "Only members who opted in. Counts hours tracked since they linked Steam." : "Only members who opted in.")
+                : leaderboardEmbed(leaderboard(db, guild));
+            await i.reply({ embeds: [embed], allowedMentions: { parse: [] } });
+        }
         catch (err) { await eph(i, err instanceof UserError ? err.message : "Something went wrong. Try again in a moment."); }
     }
 

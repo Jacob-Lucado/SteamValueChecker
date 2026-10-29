@@ -360,6 +360,17 @@ export function leagueEmbed(entries) {
     return { color: COLOR, title: "Backlog league: finished this month", description: lines.join("\n"), footer: { text: "Only members who opted in. Resets on the 1st (UTC)." } };
 }
 
+export function bundlesEmbed(v) {
+    if (!v.bundles.length) return { color: COLOR, title: "Your bundles", description: "No bundles yet. Add one with `/library bundle` (name, what you paid and the games)." };
+    const lines = v.bundles.slice(0, 10).map(b => `**#${b.id} ${b.name}**: paid ${money(b.paid, v.currency)} for ${b.games} games worth ${money(b.msrp, v.currency)} (${money(b.perGame, v.currency)} each). ${b.verdict ? b.verdict.text + "." : ""} Played ${b.played} of ${b.games}, ${b.hours} hours.`);
+    return { color: COLOR, title: "Your bundles", description: lines.join("\n"), footer: { text: `Total paid ${money(v.totals.paid, v.currency)} for games worth ${money(v.totals.msrp, v.currency)} at full price.` } };
+}
+
+export function boardEmbed(title, entries, footer) {
+    if (!entries.length) return { color: COLOR, title, description: "Nobody has joined yet. Members can opt in with `/alerts share`.", footer: { text: footer } };
+    return { color: COLOR, title, description: entries.map((e, i) => `${i + 1}. <@${e.discord_id}>: **${e.label}**`).join("\n"), footer: { text: footer } };
+}
+
 export function badgesEmbed(tc) {
     const lines = tc.badges.map(b => `${b.icon} **${b.name}** ${b.tier ? `· ${b.tier}` : "· not yet"} (${b.value} ${b.unit}${b.next ? `, next at ${b.next}` : ""})`);
     return { color: COLOR, title: `Trophy case: ${tc.earned} of ${tc.total}`, description: lines.join("\n"), footer: { text: "Worked out from your library and monthly challenge." } };

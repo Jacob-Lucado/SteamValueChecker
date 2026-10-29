@@ -82,6 +82,12 @@ const library = new SlashCommandBuilder()
         .addIntegerOption(o => o.setName("goal").setDescription("Games to finish this month (1 to 20). 0 clears it. Leave empty to see progress").setMinValue(0).setMaxValue(20)))
     .addSubcommand(s => s.setName("trend").setDescription("How your library value and backlog have changed over time"))
     .addSubcommand(s => s.setName("backlog").setDescription("How much you have spent on games you have not played, and what to play next"))
+    .addSubcommand(s => s.setName("bundle").setDescription("Record a bundle you bought: the games go in your library and it tracks what you got for your money")
+        .addStringOption(o => o.setName("name").setDescription("Bundle name").setRequired(true).setMaxLength(80))
+        .addNumberOption(o => o.setName("paid").setDescription("What you paid for the whole bundle").setRequired(true).setMinValue(0).setMaxValue(10000))
+        .addStringOption(o => o.setName("titles").setDescription("The games in it, separated by commas").setRequired(true).setMaxLength(1500)))
+    .addSubcommand(s => s.setName("bundles").setDescription("Your bundles: what you paid, what the games are worth now and hours played")
+        .addIntegerOption(o => o.setName("remove").setDescription("A bundle number to remove from the tracker").setMinValue(1)))
     .addSubcommand(s => s.setName("remove").setDescription("Remove a game")
         .addStringOption(o => gameOption(o, true)));
 
@@ -94,6 +100,8 @@ const steam = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("taste").setDescription("Your taste in games from what you play, and wishlist picks that fit it"))
     .addSubcommand(s => s.setName("recap").setDescription("Hours tracked this year and since you linked Steam, per month, and your top games")
         .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it")))
+    .addSubcommand(s => s.setName("goal").setDescription("Set a goal for hours played this year and see how you are tracking")
+        .addIntegerOption(o => o.setName("hours").setDescription("Hours to play this year (1 to 5000). 0 clears it. Leave empty to see progress").setMinValue(0).setMaxValue(5000)))
     .addSubcommand(s => s.setName("view").setDescription("Your Steam library: games, hours played, what you never played and what it is worth"))
     .addSubcommand(s => s.setName("next").setDescription("What should I play next? A pick from your own library"))
     .addSubcommand(s => s.setName("value").setDescription("Your Steam account value as a picture: at full price, today's cheapest and all-time-low prices")
@@ -160,7 +168,7 @@ const leaderboard = new SlashCommandBuilder()
     .setName("leaderboard")
     .setDescription("Server boards for members who opted in with /alerts share")
     .addStringOption(o => o.setName("board").setDescription("Which board (default: savings)")
-        .addChoices({ name: "Most saved vs MSRP", value: "savings" }, { name: "Backlog league: most finished this month", value: "finished" }));
+        .addChoices({ name: "Most saved vs MSRP", value: "savings" }, { name: "Backlog league: most finished this month", value: "finished" }, { name: "Most hours played this year", value: "hours" }, { name: "Biggest library", value: "games" }));
 
 const giveawayOption = o => o.setName("giveaway").setDescription("Which giveaway").setRequired(true).setAutocomplete(true);
 const giveaway = new SlashCommandBuilder()
@@ -322,6 +330,8 @@ alerts
         .addIntegerOption(o => o.setName("day").setDescription("Day it is sent (from 9:00 your time)").addChoices(
             { name: "Sunday", value: 0 }, { name: "Monday", value: 1 }, { name: "Tuesday", value: 2 }, { name: "Wednesday", value: 3 },
             { name: "Thursday", value: 4 }, { name: "Friday", value: 5 }, { name: "Saturday", value: 6 })))
+    .addSubcommand(s => s.setName("mindiscount").setDescription("Only alert me for sales of at least this percent off (starred games always come through)")
+        .addIntegerOption(o => o.setName("percent").setDescription("0 to 90. 0 means any discount").setRequired(true).setMinValue(0).setMaxValue(90)))
     .addSubcommand(s => s.setName("bundles").setDescription("Alerts when a wishlist game is in a bundle or given away")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("freegames").setDescription("Get told when a game is free to claim on Steam, Epic, GOG and others")

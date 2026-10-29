@@ -23,7 +23,21 @@ CREATE TABLE IF NOT EXISTS app_tags (
     cats       TEXT NOT NULL DEFAULT '',
     fetched_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS hour_goals (
+    discord_id TEXT PRIMARY KEY REFERENCES users(discord_id) ON DELETE CASCADE,
+    year       INTEGER NOT NULL,
+    hours      INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS playtime_log_user ON playtime_log(discord_id, day);`;
+
+/** Progress toward a yearly hours goal: hours done, percent, where this pace ends up by Dec 31, and hours a week still needed. */
+export function goalProgress(goalHours, totalMinutes, nowMs = Date.now()) {
+    const d = new Date(nowMs), start = Date.UTC(d.getUTCFullYear(), 0, 1), end = Date.UTC(d.getUTCFullYear() + 1, 0, 1);
+    const dayOfYear = Math.max(1, Math.floor((nowMs - start) / 86400_000) + 1), daysLeft = Math.max(0, Math.ceil((end - nowMs) / 86400_000));
+    const done = totalMinutes / 60;
+    return { goal: goalHours, done: Math.round(done * 10) / 10, pct: Math.min(100, Math.round(done / goalHours * 100)), reached: done >= goalHours,
+        projected: Math.round(done / dayOfYear * (dayOfYear + daysLeft)), perWeek: done >= goalHours || !daysLeft ? 0 : Math.round((goalHours - done) / (daysLeft / 7) * 10) / 10, daysLeft };
+}
 
 /** Rows of { day, title, minutes } for one calendar year into a recap: totals, hours per month, top games. */
 export function recapSummary(rows, year) {
@@ -109,6 +123,9 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     const playRecap = (id, year) => recapSummary(playtimeLog(id), year);
     /** Everything tracked since the profile was linked, across all years (the per-month split is not meaningful here). */
     const playRecapAll = id => recapSummary(playtimeLog(id), null);
+    /** The member's hours goal for this year (a goal from an earlier year is ignored), or null. */
+    const getHourGoal = id => { const r = get("SELECT year, hours FROM hour_goals WHERE discord_id = ?", id); return r && r.year === new Date(now()).getUTCFullYear() ? r.hours : null; };
+    const setHourGoal = (id, hours) => hours ? run("INSERT INTO hour_goals (discord_id, year, hours) VALUES (?,?,?) ON CONFLICT(discord_id) DO UPDATE SET year = excluded.year, hours = excluded.hours", id, new Date(now()).getUTCFullYear(), hours) : run("DELETE FROM hour_goals WHERE discord_id = ?", id);
     const prunePlaytime = () => run("DELETE FROM playtime_log WHERE day < ?", new Date(now() - 3 * 366 * 86400_000).toISOString().slice(0, 10)).changes;
 
     // Genres and categories from Steam's public store data, shared by everyone (nothing about a member is stored here).
@@ -127,5 +144,5 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         `SELECT appid FROM (SELECT appid FROM library WHERE appid IS NOT NULL UNION SELECT appid FROM items WHERE appid IS NOT NULL)
          WHERE appid NOT IN (SELECT appid FROM app_tags WHERE fetched_at > ?) LIMIT ?`, now() - 30 * 86400_000, limit).map(r => r.appid);
 
-    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }
