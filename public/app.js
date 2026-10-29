@@ -5,6 +5,13 @@
   const state = { cfg: null, me: null };
   const app = document.getElementById("app");
 
+  // The browser turns null/undefined/false passed to replaceChildren/append/prepend into the words "null", "undefined", "false".
+  // Skip them instead, so an optional piece of a page can simply be null.
+  for (const name of ["replaceChildren", "append", "prepend"]) {
+    const native = Element.prototype[name];
+    Element.prototype[name] = function (...nodes) { return native.apply(this, nodes.flat(Infinity).filter(n => n !== null && n !== undefined && n !== false)); };
+  }
+
   // ---------- helpers ----------
   function h(tag, props, ...kids) {
     const el = document.createElement(tag);
@@ -1271,7 +1278,7 @@
             tile("Hours played", hoursText(st.totalMinutes)),
             st.value.achTotal ? tile("Achievements", `${st.value.achDone.toLocaleString()} / ${st.value.achTotal.toLocaleString()}`, `${Math.round(st.value.achDone / st.value.achTotal * 100)}% unlocked, ${st.value.achGames} games` + (st.completed ? `, ${st.completed} at 100%` : "")) : null,
             tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
-          h("div", { class: "panel" }, h("h3", { text: "💰 Estimated account value" }), valueImageBtn,
+          h("div", { class: "panel" }, h("div", { class: "panel-head" }, h("h3", { text: "💰 Estimated account value" }), valueImageBtn),
             h("div", { class: "grid four" },
               tile("At full price", money(st.value.msrp, cur), "list price today"),
               tile("At today's cheapest", money(st.value.cheapest, cur), "best current deal"),
@@ -3161,6 +3168,7 @@
   const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
+    if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
     renderChrome();
     const view = currentView();
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u") return landing();

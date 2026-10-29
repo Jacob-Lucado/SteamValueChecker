@@ -623,3 +623,16 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .kv > div.zero b { color: var(--muted); }
 .lookup-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .lookup-row input { flex: 1 1 260px; min-width: 0; width: auto; }
+
+/* Panel title with its action seated on the right */
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.panel-head h3 { margin: 0; }
+/* Text boxes beside a button get real room; number boxes stay compact but fit their hint */
+.rule.inline input:not([type=checkbox]):not([type=number]) { width: auto; flex: 1 1 240px; min-width: 0; }
+.rule.inline input[type=number] { width: 150px; }
+.wish .rule input[type=number] { width: 110px; }
+.rule.inline .field, .bundle-form .rule.inline > * { flex: 1 1 200px; }
+.rule.inline .field input { width: 100%; }
+textarea { min-height: 110px; }
+.rule.inline > div { flex: 1 1 200px; min-width: 0; }
+.rule.inline > div input:not([type=checkbox]), .rule.inline > div select { width: 100%; flex: none; }
