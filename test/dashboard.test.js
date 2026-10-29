@@ -1131,3 +1131,35 @@ test("first-login tour: offered until finished, then not again", async () => {
         assert.equal((await t.request("/api/me")).data.tour, false);
     } finally { await t.close(); }
 });
+
+test("admin insights, member lookup and actions are owner only and show counts, never contents", async () => {
+    const t = await signedIn();
+    for (const p of ["/api/admin/insights", "/api/admin/user?id=12345"]) assert.equal((await t.request(p)).status, 403);
+    assert.equal((await t.request("/api/admin/user", { method: "POST", body: { id: "u1", action: "pause" } })).status, 403);
+    assert.equal((await t.request("/api/admin/clear-dm-failures", { method: "POST", body: {} })).status, 403);
+    await t.close();
+
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ guildList: () => [{ id: "g1", name: "Mine", members: 42 }, { id: "g9", name: "Other", members: 7 }] }) });
+    o.db.ensureUser("m1000001", "g1"); o.db.updateUser("m1000001", { dm_failures: 4 });
+    o.db.addItems("m1000001", [{ itad_id: "id-hades", title: "Hades" }]);
+    o.db.setSteamLink("m1000001", "76561198000000000");
+    const ins = await o.request("/api/admin/insights");
+    assert.equal(ins.status, 200);
+    assert.equal(ins.data.signups.length, 30);
+    assert.equal(ins.data.watched[0].title, "Hades");
+    assert.ok(ins.data.features.some(([k, v]) => k === "Linked Steam" && v === 1));
+    assert.equal(ins.data.idle.dmFailing, 1);
+    assert.deepEqual(ins.data.servers.map(s => [s.id, s.members]), [["g1", 42], ["g9", 7]]);
+
+    assert.equal((await o.request("/api/admin/user?id=abc")).status, 400);
+    assert.equal((await o.request("/api/admin/user?id=99999999")).status, 404);
+    o.db.ensureUser("2000001", "g1"); o.db.updateUser("2000001", { dm_failures: 5 });
+    const got = await o.request("/api/admin/user?id=2000001");
+    assert.equal(got.status, 200); assert.equal(got.data.dmFailures, 5); assert.equal("items" in got.data, false);
+    assert.equal((await o.request("/api/admin/user", { method: "POST", body: { id: "2000001", action: "reset_dm" } })).data.dmFailures, 0);
+    assert.equal((await o.request("/api/admin/user", { method: "POST", body: { id: "2000001", action: "pause" } })).data.paused, true);
+    assert.equal((await o.request("/api/admin/user", { method: "POST", body: { id: "2000001", action: "nope" } })).status, 400);
+    const cleared = await o.request("/api/admin/clear-dm-failures", { method: "POST", body: {} });
+    assert.equal(cleared.status, 200);
+    await o.close();
+});

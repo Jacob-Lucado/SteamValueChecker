@@ -91,7 +91,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, lfg = null, calendar = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -1341,6 +1341,47 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             return { stats: db.stats(), health: ops ? ops.snapshot() : null };
+        },
+
+        "GET /api/admin/insights": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const ins = db.adminInsights(), info = botInfo ? botInfo() : null, mem = process.memoryUsage();
+            const live = guildList ? guildList() : [];
+            const byId = new Map(live.map(g => [g.id, g]));
+            // Every server the bot is in, with what has been set up there. Servers that never set anything are still listed.
+            const rows = new Map(ins.servers.map(r => [r.id, r]));
+            const servers = [...new Set([...live.map(g => g.id), ...rows.keys()])].map(id => ({ id, name: byId.get(id)?.name ?? null, members: byId.get(id)?.members ?? null, tracked: rows.get(id)?.members ?? 0, channel: rows.has(id), freeFeed: Boolean(rows.get(id)?.free_feed), groupMin: rows.get(id)?.group_min ?? 0, digest: Boolean(rows.get(id)?.weekly_digest), inServer: guildList ? byId.has(id) : null }))
+                .sort((a, b) => (b.members ?? 0) - (a.members ?? 0) || b.tracked - a.tracked);
+            return { ...ins, servers, bot: { version: info?.version ?? null, uptime: info?.uptime ?? null, pingMs: info?.pingMs ?? null, servers: info?.servers ?? null, rssMb: Math.round(mem.rss / 1048576), node: process.version } };
+        },
+        "GET /api/admin/user": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const id = String(url.searchParams.get("id") ?? "").trim();
+            if (!/^\d{5,25}$/.test(id)) throw new HttpError(400, "Paste a Discord user ID (numbers only).");
+            const u = db.adminUser(id);
+            if (!u) throw new HttpError(404, "Nobody with that ID has used the bot.");
+            return u;
+        },
+        "POST /api/admin/user": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const id = String(body.id ?? "").trim();
+            if (!/^\d{5,25}$/.test(id) || !db.getUser(id)) throw new HttpError(404, "Nobody with that ID has used the bot.");
+            if (body.action === "reset_dm") db.updateUser(id, { dm_failures: 0 });
+            else if (body.action === "pause") db.updateUser(id, { paused: 1 });
+            else if (body.action === "resume") db.updateUser(id, { paused: 0 });
+            else throw new HttpError(400, "Unknown action.");
+            log(`owner ${s.userId} ran ${body.action} on ${id}`);
+            return db.adminUser(id);
+        },
+        "POST /api/admin/clear-dm-failures": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const n = db.clearAllDmFailures();
+            log(`owner ${s.userId} cleared DM failures for ${n} members`);
+            return { cleared: n };
         },
 
         "GET /api/admin/logs": async (req, _b, url) => {

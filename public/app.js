@@ -1769,25 +1769,96 @@
   async function adminView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("Admin", "Only you, the bot owner, can see this."), holder);
-    try {
-      const d = await api("/api/admin/stats");
-      const st = d.stats, hl = d.health || {};
-      const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
-      const when = t => (t ? new Date(t).toLocaleString() : "never");
-      holder.className = "";
-      holder.replaceChildren(
-        h("div", { class: "grid four" }, tile("Members", st.users, `${st.activeUsers} with alerts on`), tile("Wishlist games", st.wishlistGames, `${st.uniqueGames} different games`),
-          tile("Library games", st.libraryGames), tile("Servers with a channel", st.serversWithChannel),
-          tile("Alerts, last 24h", st.alerts24h), tile("DM delivery", st.dmUsers, `${st.channelUsers} use the channel`), tile("DMs failing", st.usersFailingDm, "3 or more failures in a row")),
-        h("div", { class: "panel" }, h("h3", { text: "Alerts in the last 7 days" }),
-          Object.keys(st.alerts7d).length ? h("p", { text: Object.entries(st.alerts7d).map(([k, n]) => `${k}: ${n}`).join("   ") }) : h("p", { class: "muted", text: "None." })),
-        h("div", { class: "panel" }, h("h3", { text: "Health" }),
-          h("p", { text: "Last price check: " + when(hl.cycle && hl.cycle.at) }),
+    let d, ins;
+    try { [d, ins] = await Promise.all([api("/api/admin/stats"), api("/api/admin/insights")]); }
+    catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
+    const st = d.stats, hl = d.health || {}, bot = ins.bot || {};
+    const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
+    const when = t => (t ? new Date(t).toLocaleString() : "never");
+    const n0 = v => (v === null || v === undefined ? "–" : Number(v).toLocaleString());
+    const upText = sec => { if (!sec) return "–"; const dd = Math.floor(sec / 86400), hh = Math.floor(sec % 86400 / 3600), mm = Math.floor(sec % 3600 / 60); return dd ? `${dd}d ${hh}h` : hh ? `${hh}h ${mm}m` : `${mm}m`; };
+    const table = (head, rows) => {
+      if (!rows.length) return h("p", { class: "muted", text: "Nothing yet." });
+      const th = head.map((c, i) => h("th", { class: i ? "num" : "", text: c }));
+      const trs = rows.map(r => h("tr", {}, r.map((c, i) => h("td", { class: i ? "num" : "", text: String(c) }))));
+      return h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, th)), h("tbody", {}, trs)));
+    };
+    const daily = (rows, name, cls) => lineChart([{ name, cls, points: rows.map(r => ({ x: Date.parse(r.day + "T00:00:00Z"), y: r.n })) }], { format: v => (Number.isInteger(v) ? String(v) : ""), label: name + " per day, last 30 days" });
+    const sum = rows => rows.reduce((t, r) => t + r.n, 0);
+
+    const overview = () => [
+      h("div", { class: "grid four" }, tile("Members", st.users, `${st.activeUsers} with alerts on`), tile("Wishlist games", st.wishlistGames, `${st.uniqueGames} different games`),
+        tile("Library games", st.libraryGames), tile("Servers with a channel", st.serversWithChannel),
+        tile("Alerts, last 24h", st.alerts24h), tile("DM delivery", st.dmUsers, `${st.channelUsers} use the channel`), tile("DMs failing", st.usersFailingDm, "3 or more failures in a row"),
+        tile("New members, 7 days", sum(ins.signups.slice(-7)), `${sum(ins.signups)} in 30 days`)),
+      h("div", { class: "panel" }, h("h3", { text: "The bot right now" }),
+        h("div", { class: "grid four" }, tile("Version", bot.version || "–", bot.node), tile("Uptime", upText(bot.uptime)), tile("Discord ping", bot.pingMs === null || bot.pingMs === undefined ? "–" : bot.pingMs + " ms"), tile("Servers", n0(bot.servers), "the bot is in"),
+          tile("Memory", bot.rssMb + " MB"))),
+      h("div", { class: "panel" }, h("h3", { text: "Alerts in the last 7 days" }),
+        Object.keys(st.alerts7d).length ? h("p", { text: Object.entries(st.alerts7d).map(([k, n]) => `${k}: ${n}`).join("   ") }) : h("p", { class: "muted", text: "None." })),
+      h("div", { class: "panel" }, h("h3", { text: "Health" }),
+        h("p", { text: "Last price check: " + when(hl.cycle && hl.cycle.at) + (hl.cycle && hl.cycle.priceErrors ? ` (${hl.cycle.priceErrors} price errors)` : "") }),
+        h("p", { text: "Last backup: " + (hl.backup ? `${when(hl.backup.at)} (${hl.backup.ok ? "ok" : "FAILED"})` : "none yet") }),
+        h("p", { class: "muted small", text: "Recent errors: " + ((hl.errors || []).slice(0, 5).map(e => `${e.where} (${when(e.at)})`).join(", ") || "none") }))];
+
+    const growth = () => [
+      h("div", { class: "panel" }, h("h3", { text: "New members per day" }), daily(ins.signups, "New members", "s0")),
+      h("div", { class: "panel" }, h("h3", { text: "Alerts sent per day" }), daily(ins.alerts, "Alerts", "s1")),
+      h("div", { class: "grid two" },
+        h("div", { class: "panel" }, h("h3", { text: "Regions" }), table(["Region", "Members"], ins.regions.map(r => [r.k, r.n]))),
+        h("div", { class: "panel" }, h("h3", { text: "Languages" }), table(["Language", "Members"], ins.languages.map(r => [r.k, r.n]))))];
+
+    const features = () => [
+      h("div", { class: "panel" }, h("h3", { text: "Who uses what" }), table(["Feature", "Count"], ins.features.map(([k, v]) => [k, n0(v)]))),
+      h("div", { class: "panel" }, h("h3", { text: "Most watched games" }), table(["Game", "Members watching"], ins.watched.map(r => [r.title, r.n]))),
+      h("div", { class: "panel" }, h("h3", { text: "Idle accounts" }),
+        h("p", { text: `${n0(ins.idle.noWishlistOrLibrary)} members have no wishlist and no library games.` }),
+        h("p", { text: `${n0(ins.idle.dmFailing)} members have DMs that keep failing.` }))];
+
+    const servers = () => [h("div", { class: "panel" }, h("h3", { text: `Servers (${ins.servers.length})` }),
+      ins.servers.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Members", "Using the bot", "Alert channel", "Free feed", "Group alerts", "Digest"].map((c, i) => h("th", { class: i === 1 || i === 2 ? "num" : "", text: c })))),
+        h("tbody", {}, ins.servers.map(g => h("tr", {}, h("td", {}, g.name || "Unknown server", h("div", { class: "muted small", text: g.id + (g.inServer === false ? " · bot has left" : "") })), h("td", { class: "num", text: n0(g.members) }), h("td", { class: "num", text: String(g.tracked) }),
+          h("td", { text: g.channel ? "Yes" : "No" }), h("td", { text: g.freeFeed ? "On" : "Off" }), h("td", { text: g.groupMin ? "At " + g.groupMin : "Off" }), h("td", { text: g.digest ? "On" : "Off" })))))) : h("p", { class: "muted", text: "No servers yet." }))];
+
+    const members = () => {
+      const id = h("input", { type: "text", inputmode: "numeric", placeholder: "Discord user ID", maxlength: "25", "aria-label": "Discord user ID" });
+      const out = h("div");
+      const draw = u => {
+        const act = (label, action, cls = "gray") => { const b = h("button", { class: "btn " + cls + " small", text: label }); b.addEventListener("click", () => busy(b, async () => { draw(await api("/api/admin/user", { id: u.id, action })); toast("Done.", "ok"); })); return b; };
+        out.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Member " + u.id }),
+          h("div", { class: "grid four" }, tile("Joined", new Date(u.joined).toLocaleDateString()), tile("Wishlist", u.wishlist), tile("Library", u.library), tile("Alerts received", u.alerts)),
+          h("p", { text: `Region ${u.region} · delivery by ${u.delivery} · language ${u.lang} · ${u.paused ? "alerts paused" : "alerts on"} · ${u.dmFailures} failed DMs · ${u.share ? "on server boards" : "not on server boards"} · Steam ${u.steam ? "linked" : "not linked"} · grabber ${u.grabber ? "linked" : "not linked"} · ${u.tickets} support tickets` }),
+          h("div", { class: "row" }, act("Reset failed DMs", "reset_dm"), u.paused ? act("Resume alerts", "resume", "green") : act("Pause alerts", "pause"))));
+      };
+      const find = h("button", { class: "btn blue", text: "Look up" });
+      find.addEventListener("click", () => busy(find, async () => { try { draw(await api("/api/admin/user?id=" + encodeURIComponent(id.value.trim()))); } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); } }));
+      return [h("div", { class: "panel" }, h("h3", { text: "Look up a member" }),
+        h("p", { class: "muted small", text: "Counts and settings only. You can't see anyone's games, keys or messages from here." }), h("div", { class: "rule inline" }, id, find)), out];
+    };
+
+    const tools = () => {
+      const clear = h("button", { class: "btn gray small", text: "Reset failed DMs for everyone" });
+      clear.addEventListener("click", () => busy(clear, async () => { const r = await api("/api/admin/clear-dm-failures", {}); toast(`Reset for ${r.cleared} member${r.cleared === 1 ? "" : "s"}.`, "ok"); }));
+      return [
+        h("div", { class: "panel" }, h("h3", { text: "Backup" }),
           h("p", { text: "Last backup: " + (hl.backup ? `${when(hl.backup.at)} (${hl.backup.ok ? "ok" : "FAILED"})` : "none yet") }),
-          h("p", {}, h("a", { href: "/api/admin/backup", class: "btn gray small", download: "" }, "Download the latest backup"), h("span", { class: "muted small", text: "  (the whole database, including encrypted giveaway keys. Keep it private.)" })),
-          h("p", { class: "muted small", text: "Recent errors: " + ((hl.errors || []).slice(0, 5).map(e => `${e.where} (${when(e.at)})`).join(", ") || "none") })),
-        logPanel());
-    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+          h("p", {}, h("a", { href: "/api/admin/backup", class: "btn gray small", download: "" }, "Download the latest backup"), h("span", { class: "muted small", text: "  (the whole database, including encrypted giveaway keys. Keep it private.)" }))),
+        h("div", { class: "panel" }, h("h3", { text: "Maintenance" }),
+          h("p", { class: "muted small", text: "Members whose DMs failed 3 times in a row are skipped until they change something. This gives all of them another try." }), clear),
+        logPanel()];
+    };
+
+    const TABS = [["overview", "Overview", overview], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["tools", "Tools and logs", tools]];
+    let current = "overview";
+    const tabBar = h("div", { class: "tabs" });
+    const body = h("div");
+    const show = () => {
+      tabBar.replaceChildren(...TABS.map(([id, label]) => h("button", { class: "tab" + (id === current ? " active" : ""), type: "button", text: label, onclick: () => { current = id; show(); } })));
+      body.replaceChildren(...TABS.find(t => t[0] === current)[2]());
+    };
+    holder.className = "";
+    holder.replaceChildren(tabBar, body);
+    show();
   }
 
 

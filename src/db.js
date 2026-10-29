@@ -517,6 +517,48 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         };
     }
 
+    /** Owner-only numbers for the Admin page: growth per day, who uses which feature, what people watch and where they are. */
+    function adminInsights() {
+        const safe = (sql, ...p) => { try { return get(sql, ...p).n; } catch { return null; } };
+        const days = 30, start = new Date(now() - (days - 1) * 86400_000), first = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+        const perDay = (table, col) => {
+            const rows = new Map(all(`SELECT strftime('%Y-%m-%d', ${col} / 1000, 'unixepoch') AS d, COUNT(*) AS n FROM ${table} WHERE ${col} >= ? GROUP BY d`, first).map(r => [r.d, r.n]));
+            return Array.from({ length: days }, (_, i) => { const d = new Date(first + i * 86400_000).toISOString().slice(0, 10); return { day: d, n: rows.get(d) ?? 0 }; });
+        };
+        const thisMonth = new Date(now()).toISOString().slice(0, 7);
+        return {
+            signups: perDay("users", "created_at"), alerts: perDay("alert_log", "at"),
+            regions: all("SELECT region AS k, COUNT(*) AS n FROM users GROUP BY region ORDER BY n DESC LIMIT 8").map(clean),
+            languages: all("SELECT COALESCE(lang, 'en') AS k, COUNT(*) AS n FROM users GROUP BY k ORDER BY n DESC").map(clean),
+            watched: all("SELECT title, COUNT(DISTINCT discord_id) AS n FROM items GROUP BY itad_id ORDER BY n DESC, title LIMIT 10").map(clean),
+            features: [
+                ["Linked Steam", safe("SELECT COUNT(*) AS n FROM steam_links")], ["FanaticalGrabber link codes", safe("SELECT COUNT(*) AS n FROM grabber_links")],
+                ["Opted in to server boards", safe("SELECT COUNT(*) AS n FROM users WHERE share = 1")], ["Public wishlist pages", safe("SELECT COUNT(*) AS n FROM users WHERE profile_public = 1")],
+                ["Custom profile cards", safe("SELECT COUNT(*) AS n FROM card_prefs")], ["Bundles tracked", safe("SELECT COUNT(*) AS n FROM bundles_bought")],
+                ["Hours goals this year", safe("SELECT COUNT(*) AS n FROM hour_goals")], ["Backlog challenges this month", safe("SELECT COUNT(*) AS n FROM challenges WHERE month = ?", thisMonth)],
+                ["Friends added", safe("SELECT COUNT(*) AS n FROM friends")], ["Open looking-for-group posts", safe("SELECT COUNT(*) AS n FROM lfg_posts WHERE status = 'open'")],
+                ["Server calendar events", safe("SELECT COUNT(*) AS n FROM calendar_events")], ["Running giveaways", safe("SELECT COUNT(*) AS n FROM giveaways WHERE status = 'active'")],
+                ["Open support tickets", safe("SELECT COUNT(*) AS n FROM tickets WHERE status IN ('open','waiting')")], ["Weekly digest on", safe("SELECT COUNT(*) AS n FROM users WHERE digest = 1")],
+                ["Quiet hours set", safe("SELECT COUNT(*) AS n FROM users WHERE quiet_start IS NOT NULL")], ["Minimum discount set", safe("SELECT COUNT(*) AS n FROM users WHERE min_discount > 0")],
+                ["Paused alerts", safe("SELECT COUNT(*) AS n FROM users WHERE paused = 1")]
+            ],
+            idle: { noWishlistOrLibrary: safe("SELECT COUNT(*) AS n FROM users u WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.discord_id = u.discord_id) AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = u.discord_id)"), dmFailing: safe("SELECT COUNT(*) AS n FROM users WHERE dm_failures >= 3") },
+            servers: all("SELECT g.guild_id AS id, g.free_feed, g.group_min, g.weekly_digest, (SELECT COUNT(*) FROM users u WHERE u.guild_id = g.guild_id) AS members FROM guilds g ORDER BY members DESC").map(clean)
+        };
+    }
+
+    /** One member for the owner's lookup: counts and settings only, never keys or game lists. */
+    function adminUser(id) {
+        const u = getUser(id);
+        if (!u) return null;
+        const n = (sql) => get(sql, id).n;
+        return { id: u.discord_id, joined: u.created_at, region: u.region, delivery: u.delivery, paused: Boolean(u.paused), dmFailures: u.dm_failures, share: Boolean(u.share), lang: u.lang ?? "en",
+            wishlist: n("SELECT COUNT(*) AS n FROM items WHERE discord_id = ?"), library: n("SELECT COUNT(*) AS n FROM library WHERE discord_id = ?"),
+            steam: Boolean(get("SELECT 1 AS n FROM steam_links WHERE discord_id = ?", id)), grabber: Boolean(get("SELECT 1 AS n FROM grabber_links WHERE discord_id = ?", id)),
+            alerts: n("SELECT COUNT(*) AS n FROM alert_log WHERE discord_id = ?"), tickets: n("SELECT COUNT(*) AS n FROM tickets WHERE user_id = ?") };
+    }
+    const clearAllDmFailures = () => run("UPDATE users SET dm_failures = 0 WHERE dm_failures > 0").changes;
+
     /** Consistent copy of the whole database, safe while the bot is running. */
     function backupTo(path) {
         mkdirSync(dirname(path), { recursive: true });
@@ -579,6 +621,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...lfg, close: () => db.close()
     };
 }
