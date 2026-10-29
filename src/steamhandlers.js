@@ -22,13 +22,14 @@ const art = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIC
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export function recapEmbed(r) {
-    if (!r.totalMinutes) return { color: 0x66c0f4, title: `Hours tracked in ${r.year}`, description: "Nothing tracked for that year yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." };
+    if (!r.totalMinutes) return { color: 0x66c0f4, title: `Hours tracked in ${r.year}`, description: (r.allTime?.totalMinutes ? `Nothing tracked this year yet, but **${fmtHours(r.allTime.totalMinutes)}** since you linked. ` : "Nothing tracked yet. ") + "Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." };
     const peak = Math.max(...r.months), bars = " ▁▂▃▄▅▆▇█";
     const spark = r.months.map(m => bars[Math.round(m / peak * 8)]).join("");
     return {
         color: 0x66c0f4, title: `Hours tracked in ${r.year}`,
         description: `**${fmtHours(r.totalMinutes)}** across **${r.games}** game${r.games === 1 ? "" : "s"} on **${r.activeDays}** different day${r.activeDays === 1 ? "" : "s"}. Busiest month: **${MONTHS[r.busiestMonth]}**.\n\`${spark}\` Jan to Dec`,
-        fields: [{ name: "Top games", value: r.top.map((g, n) => `${n + 1}. **${g.title}** ${fmtHours(g.minutes)}`).join("\n") }],
+        fields: [{ name: "Top games", value: r.top.map((g, n) => `${n + 1}. **${g.title}** ${fmtHours(g.minutes)}`).join("\n") },
+            ...(r.allTime ? [{ name: "Since you linked", value: `**${fmtHours(r.allTime.totalMinutes)}** across **${r.allTime.games}** game${r.allTime.games === 1 ? "" : "s"}` }] : [])],
         footer: { text: "Steam only shares lifetime hours, so this counts what was added between syncs since you linked. It can't see earlier play." }
     };
 }
@@ -142,9 +143,10 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
             }
             if (sub === "recap") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");
-                const year = i.options.getInteger("year") ?? new Date().getUTCFullYear();
+                const year = new Date().getUTCFullYear();
                 const shared = i.options.getBoolean("public") === true;
-                return void await i.reply({ embeds: [recapEmbed(db.playRecap(i.user.id, year))], ...(shared ? {} : { flags: MessageFlags.Ephemeral }) });
+                const all = db.playRecapAll(i.user.id);
+                return void await i.reply({ embeds: [recapEmbed({ ...db.playRecap(i.user.id, year), allTime: all })], ...(shared ? {} : { flags: MessageFlags.Ephemeral }) });
             }
             if (sub === "value") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

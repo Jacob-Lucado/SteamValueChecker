@@ -30,7 +30,7 @@ export function recapSummary(rows, year) {
     const months = Array(12).fill(0), per = new Map(), days = new Set();
     let total = 0;
     for (const r of rows) {
-        if (!String(r.day).startsWith(String(year))) continue;
+        if (year !== null && !String(r.day).startsWith(String(year))) continue;
         const m = Number(String(r.day).slice(5, 7)) - 1;
         if (!(m >= 0 && m < 12)) continue;
         months[m] += r.minutes; total += r.minutes; days.add(r.day);
@@ -107,6 +107,8 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
 
     const playtimeLog = id => all("SELECT day, itad_id, title, minutes FROM playtime_log WHERE discord_id = ? ORDER BY day", id);
     const playRecap = (id, year) => recapSummary(playtimeLog(id), year);
+    /** Everything tracked since the profile was linked, across all years (the per-month split is not meaningful here). */
+    const playRecapAll = id => recapSummary(playtimeLog(id), null);
     const prunePlaytime = () => run("DELETE FROM playtime_log WHERE day < ?", new Date(now() - 3 * 366 * 86400_000).toISOString().slice(0, 10)).changes;
 
     // Genres and categories from Steam's public store data, shared by everyone (nothing about a member is stored here).
@@ -125,5 +127,5 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         `SELECT appid FROM (SELECT appid FROM library WHERE appid IS NOT NULL UNION SELECT appid FROM items WHERE appid IS NOT NULL)
          WHERE appid NOT IN (SELECT appid FROM app_tags WHERE fetched_at > ?) LIMIT ?`, now() - 30 * 86400_000, limit).map(r => r.appid);
 
-    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

@@ -1127,27 +1127,27 @@
       h("p", { class: "muted small", text: "Genres weighted by hours played, with wishlist games that fit. Genres come from Steam's public store pages." }), go, out);
   }
 
-  // Hours tracked: hours per month and top games, plus a card drawn on a canvas that can be saved as an image.
+  // Hours tracked: this year per month and top games, plus the total since linking, and a card drawn on a canvas that can be saved as an image.
   function recapPanel() {
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const year = h("input", { type: "number", min: "2020", max: "2100", value: String(new Date().getFullYear()), class: "short-num", "aria-label": "Year" });
-    const out = h("div");
+    const out = h("div", { class: "muted", text: "Loading…" });
     function drawCard(r) {
-      const c = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": `Hours tracked in ${r.year}: ${hoursText(r.totalMinutes)}` });
+      const c = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": `Hours tracked in ${r.year}: ${hoursText(r.totalMinutes)}. Since linking: ${hoursText(r.allTime.totalMinutes)}` });
       const x = c.getContext("2d");
       const g = x.createLinearGradient(0, 0, 1200, 630); g.addColorStop(0, "#1b2838"); g.addColorStop(1, "#2a475e");
       x.fillStyle = g; x.fillRect(0, 0, 1200, 630);
       x.fillStyle = "#66c0f4"; x.font = "600 30px system-ui, sans-serif"; x.fillText(`HOURS I TRACKED IN ${r.year}`, 60, 80);
       x.fillStyle = "#fff"; x.font = "700 96px system-ui, sans-serif"; x.fillText(hoursText(r.totalMinutes), 60, 190);
       x.fillStyle = "#c7d5e0"; x.font = "28px system-ui, sans-serif";
-      x.fillText(`${r.games} games on ${r.activeDays} days` + (r.busiestMonth !== null ? `, busiest in ${MON[r.busiestMonth]}` : ""), 60, 240);
+      x.fillText(`${r.games} games on ${r.activeDays} days` + (r.busiestMonth !== null ? `, busiest in ${MON[r.busiestMonth]}` : ""), 60, 238);
+      x.fillStyle = "#a4d007"; x.font = "600 26px system-ui, sans-serif"; x.fillText(`${hoursText(r.allTime.totalMinutes)} in total since I linked`, 60, 284);
       const peak = Math.max(1, ...r.months);
       r.months.forEach((m, n) => {
-        const bh = Math.round(m / peak * 200), bx = 60 + n * 52;
-        x.fillStyle = m === peak ? "#a4d007" : "#66c0f4"; x.fillRect(bx, 520 - bh, 38, Math.max(bh, 3));
+        const bh = Math.round(m / peak * 190), bx = 60 + n * 52;
+        x.fillStyle = m === peak && m > 0 ? "#a4d007" : "#66c0f4"; x.fillRect(bx, 520 - bh, 38, Math.max(bh, 3));
         x.fillStyle = "#8ba4b6"; x.font = "16px system-ui, sans-serif"; x.fillText(MON[n], bx + 2, 548);
       });
-      x.fillStyle = "#c7d5e0"; x.font = "600 26px system-ui, sans-serif"; x.fillText("TOP GAMES", 740, 330);
+      x.fillStyle = "#c7d5e0"; x.font = "600 26px system-ui, sans-serif"; x.fillText("TOP GAMES THIS YEAR", 740, 330);
       x.fillStyle = "#fff"; x.font = "26px system-ui, sans-serif";
       r.top.slice(0, 5).forEach((t, n) => {
         const name = t.title.length > 24 ? t.title.slice(0, 23) + "…" : t.title;
@@ -1157,19 +1157,25 @@
       x.fillStyle = "#5c7080"; x.font = "18px system-ui, sans-serif"; x.fillText("Counted from when I linked Steam  •  Steam Value Checker", 60, 600);
       return c;
     }
-    async function load() {
-      const r = await api("/api/steam/recap?year=" + encodeURIComponent(year.value));
-      if (!r.totalMinutes) { out.replaceChildren(h("p", { class: "muted", text: "Nothing tracked for that year yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." })); return; }
-      const card = drawCard(r);
-      const save = h("button", { class: "btn blue", text: "Save as image" });
-      save.addEventListener("click", () => card.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: `my-${r.year}-in-games.png` }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }));
-      out.replaceChildren(card, h("div", { class: "row" }, save));
-    }
-    const go = h("button", { class: "btn gray", text: "Show my hours" });
-    go.addEventListener("click", () => busy(go, load));
+    const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
+    (async () => {
+      try {
+        const r = await api("/api/steam/recap");
+        if (!r.allTime.totalMinutes) { out.className = "muted"; out.replaceChildren(h("p", { text: "Nothing tracked yet. Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." })); return; }
+        const card = drawCard(r);
+        const save = h("button", { class: "btn blue shrink", text: "Save as image" });
+        save.addEventListener("click", () => card.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: `my-${r.year}-hours-tracked.png` }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }));
+        out.className = "";
+        out.replaceChildren(
+          h("div", { class: "grid two" },
+            tile("This year (" + r.year + ")", hoursText(r.totalMinutes), `${r.games} game${r.games === 1 ? "" : "s"} on ${r.activeDays} day${r.activeDays === 1 ? "" : "s"}`),
+            tile("Since you linked", hoursText(r.allTime.totalMinutes), `${r.allTime.games} game${r.allTime.games === 1 ? "" : "s"} on ${r.allTime.activeDays} day${r.allTime.activeDays === 1 ? "" : "s"}, from ${new Date(r.since).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`)),
+          card, h("div", { class: "row" }, save));
+      } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    })();
     return h("div", { class: "panel" }, h("h3", { text: "⏱️ Hours tracked since you linked" }),
-      h("p", { class: "muted small", text: "Steam only tells us lifetime hours per game, not when you played them. So this counts the hours you add after linking, month by month, as your library syncs. It can't show anything from before you linked. Save it as an image to share." }),
-      h("div", { class: "row" }, year, go), out);
+      h("p", { class: "muted small", text: "Steam only tells us lifetime hours per game, not when you played them. So this counts the hours you add after linking, as your library syncs. It can't show anything from before you linked. Save it as an image to share." }),
+      out);
   }
 
   // A Steam profile card: picture, name, where and since when, and a link to the real profile. `actions` are extra buttons.

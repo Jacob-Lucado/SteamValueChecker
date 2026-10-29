@@ -309,3 +309,17 @@ test("the year recap: the first sync imports without counting, later syncs count
     const c = await runSteamAutoSync({ db, itad, fetchImpl: async () => res("<gamesList></gamesList>"), now: Date.now() + 14 * 3600_000 });
     assert.equal(c.failed, 1, "a private profile is skipped, not fatal");
 });
+
+test("hours tracked: this year and the total since linking, across years", async () => {
+    const { recapSummary } = await import("../src/steamstore.js");
+    const rows = [
+        { day: "2025-12-30", title: "A", minutes: 60 }, { day: "2026-01-02", title: "A", minutes: 30 }, { day: "2026-03-05", title: "B", minutes: 90 }
+    ];
+    const year = recapSummary(rows, 2026), all = recapSummary(rows, null);
+    assert.equal(year.totalMinutes, 120); assert.equal(year.games, 2);
+    assert.equal(all.totalMinutes, 180); assert.equal(all.games, 2); assert.equal(all.activeDays, 3);
+    const { recapEmbed } = await import("../src/steamhandlers.js");
+    const e = recapEmbed({ ...year, allTime: all });
+    assert.ok(e.fields.some(f => f.name === "Since you linked" && f.value.includes("3.0 h")), JSON.stringify(e.fields));
+    assert.match(recapEmbed({ ...recapSummary([], 2026), allTime: all }).description, /since you linked/i);
+});

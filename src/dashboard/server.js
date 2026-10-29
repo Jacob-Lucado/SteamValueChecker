@@ -792,7 +792,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Link your Steam profile first.");
             const year = Number(url.searchParams.get("year")) || new Date().getUTCFullYear();
             if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new HttpError(400, "Pick a year from 2020 on.");
-            return db.playRecap(s.userId, year);
+            const all = db.playRecapAll(s.userId);
+            return { ...db.playRecap(s.userId, year), allTime: { totalMinutes: all.totalMinutes, games: all.games, activeDays: all.activeDays }, since: db.getSteamLink(s.userId).linked_at };
         },
 
         "GET /api/steam/next": async (req, _body, url) => {
