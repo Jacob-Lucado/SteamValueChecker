@@ -2130,6 +2130,22 @@
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
   const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫" };
 
+  // Alert text is written for Discord (## headings, **bold**, <t:...> times). Show it as plain words on the website.
+  function plainDiscord(text) {
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    const rel = sec => {
+      const d = sec * 1000 - Date.now(), a = Math.abs(d);
+      for (const [ms, unit] of [[86400000 * 365, "year"], [86400000 * 30, "month"], [86400000, "day"], [3600000, "hour"], [60000, "minute"]]) if (a >= ms) return rtf.format(Math.round(d / ms), unit);
+      return rtf.format(0, "second");
+    };
+    return String(text)
+      .replace(/<t:(\d{1,12})(?::([a-zA-Z]))?>/g, (_m, t, f) => (f === "R" ? rel(Number(t)) : new Date(Number(t) * 1000).toLocaleString(undefined, f === "d" || f === "D" ? { dateStyle: "medium" } : f === "t" || f === "T" ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" })))
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, "$1")
+      .replace(/<a?:\w+:\d+>/g, "").replace(/<[@#][&!]?\d+>/g, "")
+      .replace(/^\s{0,3}#{1,3}\s+/gm, "").replace(/(\*\*|__|~~|`)/g, "").replace(/(^|\s)[*_](?=\S)|(?<=\S)[*_](?=\s|$)/g, "$1")
+      .replace(/\s*\n+\s*/g, " · ").replace(/\s{2,}/g, " ").trim();
+  }
+
   async function notificationsView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("Notifications", "A copy of every alert the bot sends you, so a missed DM is never lost. Muted kinds are kept here but not sent to Discord."), holder);
@@ -2155,7 +2171,7 @@
         h("div", { class: "panel" }, h("h3", { text: "Recent" }),
           d.items.length ? h("div", { class: "cards" }, ...d.items.map(n => h(n.url && /^https:\/\//.test(n.url) ? "a" : "div", { class: "card-link" + (n.read ? "" : " unread"), ...(n.url && /^https:\/\//.test(n.url) ? { href: n.url, target: "_blank", rel: "noopener noreferrer" } : {}) },
             h("span", { class: "icon", text: TYPE_ICON[n.type] || "🔔" }),
-            h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${new Date(n.at).toLocaleString()}${n.body ? " · " + n.body.replace(/[*_`]/g, "").slice(0, 140) : ""}` }))))) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." }))].filter(Boolean));
+            h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${new Date(n.at).toLocaleString()}${n.body ? " · " + plainDiscord(n.body).slice(0, 160) : ""}` }))))) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." }))].filter(Boolean));
       if (d.unread) { await api("/api/notifications/read", {}); state.me.unread = 0; renderChrome(); }
     } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
