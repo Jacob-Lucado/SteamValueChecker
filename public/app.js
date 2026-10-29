@@ -1959,7 +1959,54 @@
       return [box];
     };
 
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["tools", "Tools and logs", tools]];
+    const giveaway = () => {
+      const title = h("input", { type: "text", maxlength: "100", placeholder: "Title (optional, made from the prizes)", "aria-label": "Giveaway title" });
+      const game = h("input", { type: "text", maxlength: "100", placeholder: "Game name for the artwork (optional)", "aria-label": "Game name" });
+      const desc = h("textarea", { class: "short", rows: "3", maxlength: "1500", placeholder: "Extra text shown on the giveaway (optional)", "aria-label": "Description" });
+      const keys = h("textarea", { rows: "6", maxlength: "20000", autocomplete: "off", spellcheck: "false", placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", "aria-label": "Prize keys" });
+      const length = h("input", { type: "text", value: "24h", maxlength: "20", placeholder: "24h, 3d, 1w", "aria-label": "How long it runs" });
+      const claim = h("input", { type: "number", min: "1", max: "168", value: "48", "aria-label": "Hours to claim" });
+      const who = select([["both", "Every server's giveaway channel and DMs"], ["channels", "Server giveaway channels only"], ["dm", "DMs only"]], "both");
+      const confirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
+      const go = h("button", { class: "btn red", type: "button", text: "Start the giveaway" });
+      const box = h("div"), list = h("div");
+      let info = null, timer = 0;
+      const paintList = () => {
+        const when = t => new Date(t).toLocaleString();
+        list.replaceChildren(info.list.length ? table(["#", "Title", "Status", "Entries", "Shown in", "Ends"], info.list.map(g => [g.id, g.title, g.status, g.entries,
+          `${g.channels} server${g.channels === 1 ? "" : "s"}, ${g.dms} DM${g.dms === 1 ? "" : "s"}${g.spread && !g.spread.done ? ` (sending ${g.spread.sent + g.spread.failed}/${g.spread.total})` : g.spread && g.spread.failed ? ` (${g.spread.failed} failed)` : ""}`, when(g.ends_at)])) : h("p", { class: "muted", text: "No network-wide giveaways yet." }));
+        // End buttons sit under the table so the table helper stays plain text.
+        const active = info.list.filter(g => g.status === "active");
+        if (active.length) list.append(h("div", { class: "row" }, ...active.map(g => { const b = h("button", { class: "btn gray small", type: "button", text: `End #${g.id} now and draw` }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/admin/giveaways/end", { id: g.id }); toast(`Ended. ${r.winners} winner${r.winners === 1 ? "" : "s"} drawn.`, "ok"); await refresh(); })); return b; })));
+      };
+      async function refresh() {
+        info = await api("/api/admin/giveaways");
+        paintList();
+        clearTimeout(timer);
+        if (info.list.some(g => g.spread && !g.spread.done) && document.body.contains(box)) timer = setTimeout(() => refresh().catch(() => {}), 2500);
+      }
+      go.addEventListener("click", () => busy(go, async () => {
+        const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value });
+        toast(`Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. Sending it out to ${r.total} more place${r.total === 1 ? "" : "s"}.`, "ok");
+        confirm.value = ""; keys.value = "";
+        await refresh();
+      }));
+      refresh().then(() => {
+        if (!info.available) { box.replaceChildren(h("div", { class: "notice warn", text: "Giveaways are not set up on this bot (the owner needs to set KEY_ENCRYPTION_SECRET)." })); return; }
+        box.replaceChildren(
+          h("div", { class: "panel" }, h("h3", { text: "Network-wide giveaway" }),
+            h("p", { class: "muted small", text: `One giveaway, shown in every server's giveaway channel (or its alert channel if none is set) and in DMs. Entries from everywhere count together, and winners are drawn once. It is posted in ${info.destinations.length} server${info.destinations.length === 1 ? "" : "s"} and ${info.dm} member DM${info.dm === 1 ? "" : "s"}. Winners claim their key by DM.` }),
+            info.destinations.length ? null : h("div", { class: "notice warn", text: "No server has a giveaway or alert channel yet. Set one on the Giveaways page (Server settings) first." }),
+            field("Title", title), field("Game (for the artwork)", game), field("Description", desc), field("Prize keys, one per line (Game | KEY)", keys),
+            h("div", { class: "row" }, field("Runs for", length), field("Hours to claim a key", claim)),
+            h("div", { class: "row" }, field("Send to", who), field("Type SEND to confirm", confirm)),
+            go),
+          h("div", { class: "panel" }, h("h3", { text: "Your network-wide giveaways" }), list));
+      }).catch(e => box.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+      return [box];
+    };
+
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
     const body = h("div");
@@ -2125,9 +2172,11 @@
     function setupPanel(channels, roles, settings) {
       const vouch = select([["", "A channel named #vouches"], ...channels.map(c => [c.id, "#" + c.name])], settings.vouch_channel_id || "");
       const mgr = select([["", "Only people with Manage Server"], ...roles.map(r => [r.id, r.name])], settings.manager_role_id || "");
-      const save = h("button", { class: "btn gray", text: "Save", onclick: () => busy(save, async () => { await api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouch.value, manager_role_id: mgr.value }); toast("Saved.", "ok"); }) });
+      const gwCh = select([["", "The alert channel"], ...channels.map(c => [c.id, "#" + c.name])], settings.giveaway_channel_id || "");
+      const save = h("button", { class: "btn gray", text: "Save", onclick: () => busy(save, async () => { await api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouch.value, giveaway_channel_id: gwCh.value, manager_role_id: mgr.value }); toast("Saved.", "ok"); }) });
       return h("div", { class: "panel" }, h("h3", { text: "Server settings" }),
-        h("div", { class: "row" }, field("Vouches channel (winners' confirmations are posted here)", vouch), field("Role that can run giveaways in Discord", mgr)), h("p"), save);
+        h("div", { class: "row" }, field("Vouches channel (winners' confirmations are posted here)", vouch), field("Role that can run giveaways in Discord", mgr)),
+        h("div", { class: "row" }, field("Giveaway channel (network-wide giveaways from the bot owner appear here)", gwCh)), h("p"), save);
     }
 
     guild.addEventListener("change", load);

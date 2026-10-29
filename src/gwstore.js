@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS giveaway_excluded (
     discord_id TEXT NOT NULL,
     PRIMARY KEY (key_id, discord_id)
 );
+CREATE TABLE IF NOT EXISTS giveaway_mirrors (
+    giveaway_id INTEGER NOT NULL REFERENCES giveaways(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    channel_id  TEXT NOT NULL,
+    message_id  TEXT NOT NULL,
+    PRIMARY KEY (giveaway_id, channel_id, message_id)
+);
 CREATE TABLE IF NOT EXISTS giveaway_settings (
     guild_id        TEXT PRIMARY KEY,
     vouch_channel_id TEXT,
@@ -115,6 +122,15 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
             return id;
         } catch (err) { db.exec("ROLLBACK"); throw err; }
     }
+    const markGlobal = id => run("UPDATE giveaways SET is_global = 1 WHERE id = ?", id);
+    const addMirror = (id, kind, channelId, messageId) => run("INSERT OR IGNORE INTO giveaway_mirrors (giveaway_id, kind, channel_id, message_id) VALUES (?,?,?,?)", id, kind, String(channelId), String(messageId));
+    const listMirrors = id => all("SELECT kind, channel_id, message_id FROM giveaway_mirrors WHERE giveaway_id = ?", id).map(clean);
+    const listGlobalGiveaways = (limit = 20) => all("SELECT * FROM giveaways WHERE is_global = 1 ORDER BY id DESC LIMIT ?", limit).map(clean);
+    /** Every server that can take a global giveaway: its giveaway channel, or the alert channel when none is set. */
+    const giveawayDestinations = () => all(`
+        SELECT guild_id, giveaway_channel_id AS channel_id FROM giveaway_settings WHERE giveaway_channel_id IS NOT NULL
+        UNION
+        SELECT guild_id, channel_id FROM guilds WHERE channel_id IS NOT NULL AND guild_id NOT IN (SELECT guild_id FROM giveaway_settings WHERE giveaway_channel_id IS NOT NULL)`).map(clean);
     const setGiveawayMessage = (id, messageId) => run("UPDATE giveaways SET message_id = ? WHERE id = ?", messageId, id);
     const setAnnounceMessage = (id, messageId) => run("UPDATE giveaways SET announce_id = ? WHERE id = ?", messageId, id);
     const setGiveawayStatus = (id, status) => run("UPDATE giveaways SET status = ?, ended_at = ? WHERE id = ?", status, now(), id);
@@ -170,13 +186,13 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         run("DELETE FROM giveaways WHERE status IN ('ended','cancelled') AND ended_at < ?", now() - olderThanMs).changes;
 
     // server settings
-    const getGiveawaySettings = guildId => clean(get("SELECT * FROM giveaway_settings WHERE guild_id = ?", guildId)) ?? { guild_id: guildId, vouch_channel_id: null, manager_role_id: null };
+    const getGiveawaySettings = guildId => clean(get("SELECT * FROM giveaway_settings WHERE guild_id = ?", guildId)) ?? { guild_id: guildId, vouch_channel_id: null, manager_role_id: null, giveaway_channel_id: null };
     function setGiveawaySettings(guildId, patch) {
         const cur = getGiveawaySettings(guildId);
-        const next = { vouch_channel_id: cur.vouch_channel_id, manager_role_id: cur.manager_role_id, ...patch };
-        run(`INSERT INTO giveaway_settings (guild_id, vouch_channel_id, manager_role_id) VALUES (?,?,?)
-             ON CONFLICT(guild_id) DO UPDATE SET vouch_channel_id = excluded.vouch_channel_id, manager_role_id = excluded.manager_role_id`,
-            guildId, next.vouch_channel_id ?? null, next.manager_role_id ?? null);
+        const next = { vouch_channel_id: cur.vouch_channel_id, manager_role_id: cur.manager_role_id, giveaway_channel_id: cur.giveaway_channel_id ?? null, ...patch };
+        run(`INSERT INTO giveaway_settings (guild_id, vouch_channel_id, manager_role_id, giveaway_channel_id) VALUES (?,?,?,?)
+             ON CONFLICT(guild_id) DO UPDATE SET vouch_channel_id = excluded.vouch_channel_id, manager_role_id = excluded.manager_role_id, giveaway_channel_id = excluded.giveaway_channel_id`,
+            guildId, next.vouch_channel_id ?? null, next.manager_role_id ?? null, next.giveaway_channel_id ?? null);
         return getGiveawaySettings(guildId);
     }
 
@@ -209,7 +225,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
 
     return {
         listTemplates, saveTemplate, removeTemplate, prizesFor,
-        getGiveaway, listGiveaways, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
+        getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,
         listKeys, getKey, getKeyEnc, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,

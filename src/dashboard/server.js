@@ -1348,6 +1348,10 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 if (body.manager_role_id && !roles.some(r => r.id === body.manager_role_id)) throw new HttpError(400, "Pick a role from the list.");
                 patch.manager_role_id = body.manager_role_id || null;
             }
+            if (body.giveaway_channel_id !== undefined) {
+                if (body.giveaway_channel_id && !ids.has(body.giveaway_channel_id)) throw new HttpError(400, "Pick a text channel from the list.");
+                patch.giveaway_channel_id = body.giveaway_channel_id || null;
+            }
             return { settings: db.setGiveawaySettings(g.id, patch) };
         },
 
@@ -1441,6 +1445,54 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             db.setMeta("bugs_seen", Date.now()); // same clock the ticket store stamps with
             return { ok: true };
+        },
+
+        // ----- network-wide giveaways: one giveaway shown in every server's giveaway channel and in DMs -----
+        "GET /api/admin/giveaways": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const names = new Map((guildList?.() ?? []).map(g => [g.id, g.name]));
+            const dest = db.giveawayDestinations().map(d => ({ id: d.guild_id, name: names.get(d.guild_id) ?? d.guild_id, channel_id: d.channel_id }));
+            const list = db.listGlobalGiveaways(15).map(g => ({ id: g.id, title: g.title, status: g.status, ends_at: g.ends_at, entries: db.countEntries(g.id), prizes: db.listKeys(g.id).length,
+                channels: db.listMirrors(g.id).filter(m => m.kind === "channel").length + 1, dms: db.listMirrors(g.id).filter(m => m.kind === "dm").length, spread: giveaways?.spreadStatus(g.id) ?? null }));
+            return { available: Boolean(giveaways), destinations: dest, dm: db.broadcastTargets().users.length, list };
+        },
+        "POST /api/admin/giveaways/create": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            needGiveaways();
+            if (String(body.confirm ?? "").trim().toUpperCase() !== "SEND") throw new HttpError(400, "Type SEND to confirm.");
+            const audience = ["channels", "dm", "both"].includes(body.audience) ? body.audience : "both";
+            const dest = db.giveawayDestinations();
+            if (!dest.length) throw new HttpError(400, "No server has a giveaway or alert channel yet. Set one first.");
+            const home = dest.find(d => d.guild_id === body.home) ?? dest[0];
+            const undo = cooldown(s.userId, "broadcast");
+            try {
+                const text = v => (v === null || v === undefined || v === "" ? null : String(v));
+                const { keys, duplicates } = parseKeys(String(body.keys ?? "").slice(0, 20_000), text(body.game) ?? text(body.title) ?? "Prize");
+                const r = await giveaways.create({
+                    guild_id: home.guild_id, channel_id: home.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
+                    game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"),
+                    claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true
+                });
+                db.markGlobal(r.id);
+                const targets = db.broadcastTargets();
+                const sent = await giveaways.spread(r.id, {
+                    channelIds: audience === "dm" ? [] : dest.map(d => d.channel_id),
+                    dmUsers: audience === "channels" ? [] : targets.users, delayMs: config.broadcastDelayMs ?? 1100
+                });
+                log(`owner ${s.userId} started global giveaway #${r.id}`);
+                return { id: r.id, prizes: r.prizes, ends_at: r.ends_at, total: sent.total, duplicates };
+            } catch (err) { undo(); throw err; }
+        },
+        "POST /api/admin/giveaways/end": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            needGiveaways();
+            const g = db.getGiveaway(Number(body.id));
+            if (!g || !g.is_global) throw new HttpError(404, "That is not a network-wide giveaway.");
+            const r = await giveaways.end(g.id);
+            return { winners: r.winners.length };
         },
 
         "GET /api/admin/logs": async (req, _b, url) => {

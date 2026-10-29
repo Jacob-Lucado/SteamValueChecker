@@ -199,6 +199,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("giveaways", "starts_at", "INTEGER");
     addColumn("giveaways", "duration_ms", "INTEGER");
     addColumn("library", "gifted", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("giveaways", "is_global", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("giveaway_settings", "giveaway_channel_id", "TEXT");
     addColumn("guilds", "free_feed", "INTEGER NOT NULL DEFAULT 0");
     addColumn("guilds", "hot_min", "INTEGER NOT NULL DEFAULT 0");
     addColumn("guilds", "sale_feed", "INTEGER NOT NULL DEFAULT 0");

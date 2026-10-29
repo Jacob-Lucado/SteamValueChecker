@@ -115,7 +115,7 @@ const gwDiscord = {
         const m = await channel.messages.fetch(messageId);
         await m.edit(payload);
     },
-    dm: (userId, payload) => discord.sendDm(userId, payload),
+    dm: async (userId, payload) => { const user = await client.users.fetch(userId); const m = await user.send(payload); return { id: m.id, channelId: m.channelId }; },
     async memberOk(guildId, userId) {
         try { const g = await client.guilds.fetch(guildId); await g.members.fetch(userId); return true; }
         catch (e) { return !(e?.code === 10007 || e?.status === 404); } // false only for "Unknown Member"

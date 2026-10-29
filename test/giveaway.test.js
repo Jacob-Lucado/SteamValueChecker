@@ -414,3 +414,27 @@ test("booster-only giveaways turn away everyone else", async () => {
     assert.equal(ok.status, "entered");
     assert.match(giveawayPayload(t.db.getGiveaway(r.id), t.db.listKeys(r.id), 0, "active").embeds[0].fields.map(f => f.value).join(" "), /boosters only/);
 });
+
+test("a global giveaway is shown in other servers and DMs, draws from entrants anywhere, and closes every copy", async () => {
+    const r = rig({ gone: new Set(["from-elsewhere"]) }); // "gone" would fail a membership check in the home server
+    r.db.setGiveawaySettings("G2", { giveaway_channel_id: "C2" });
+    r.db.setGuildChannel("G3", "C3", "x");
+    const dests = r.db.giveawayDestinations().map(d => d.channel_id).sort();
+    assert.deepEqual(dests, ["C2", "C3"]);
+
+    const made = await r.make({ keys: [{ label: "Hades", key: "AAAAA-BBBBB-CCCCC" }] });
+    const done = r.svc.spread(made.id, { channelIds: ["C", "C2", "C3"], dmUsers: ["u1", "u2"], delayMs: 0, sleep: async () => {} });
+    assert.equal((await done).total, 4); // the home channel is skipped
+    await new Promise(res => setTimeout(res, 20));
+    assert.equal(r.svc.spreadStatus(made.id).sent, 4);
+    assert.equal(r.db.getGiveaway(made.id).is_global, 1);
+    assert.equal(r.posts.filter(p => p.channelId === "C2" || p.channelId === "C3").length, 2);
+    assert.equal(r.dms.length, 2);
+
+    await r.enterAll(made.id, ["from-elsewhere"]);
+    const ended = await r.svc.end(made.id);
+    assert.equal(ended.winners.length, 1);
+    assert.equal(ended.winners[0].userId, "from-elsewhere"); // not dropped by the home-server membership check
+    assert.ok(r.edits.length >= 3); // home post plus the copies were closed
+    assert.ok(r.posts.some(p => p.channelId === "C2" && p.payload.embeds)); // winners shown in the other server
+});

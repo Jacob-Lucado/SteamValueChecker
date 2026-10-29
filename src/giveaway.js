@@ -99,6 +99,47 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         }
     }
 
+    // ---------- global giveaways: the same giveaway shown in every server's giveaway channel and in DMs ----------
+    const spreads = new Map(); // giveaway id -> { total, sent, failed, done }
+    /**
+     * Copies a running giveaway's entry post to other servers' channels and to members' DMs. Entries from every copy count toward
+     * the same giveaway. Runs in the background (DMs go out slowly); `spreadStatus` shows progress.
+     */
+    async function spread(id, { channelIds = [], dmUsers = [], delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+        const g = must(id);
+        if (g.status !== "active") throw new UserError("Only a running giveaway can be sent out.");
+        db.markGlobal(g.id);
+        const channels = [...new Set(channelIds)].filter(c => c && c !== g.channel_id);
+        const users = [...new Set(dmUsers)].filter(u => u && u !== g.host_id);
+        const job = { total: channels.length + users.length, sent: 0, failed: 0, done: false };
+        spreads.set(g.id, job);
+        (async () => {
+            const row = db.getGiveaway(g.id);
+            const payload = () => giveawayPayload(row, db.listKeys(g.id), 0, "active");
+            for (const c of channels) {
+                try { const m = await discord.post(c, payload()); db.addMirror(g.id, "channel", c, m.id); job.sent++; } catch { job.failed++; }
+                await sleep(Math.min(delayMs, 400));
+            }
+            for (const u of users) {
+                try { const m = await discord.dm(u, payload()); if (m?.id && m?.channelId) db.addMirror(g.id, "dm", m.channelId, m.id); job.sent++; } catch { job.failed++; }
+                await sleep(delayMs);
+            }
+        })().catch(() => {}).finally(() => { job.done = true; });
+        return { total: job.total };
+    }
+    const spreadStatus = id => spreads.get(Number(id)) ?? null;
+
+    /** When a global giveaway ends: close every copy, and tell each server who won. */
+    async function closeMirrors(g, keys, hadWinners) {
+        for (const m of db.listMirrors(g.id)) {
+            try { await discord.edit(m.channel_id, m.message_id, giveawayPayload(g, keys, entryCount(g.id), "ended")); } catch { /* a deleted copy is fine */ }
+        }
+        if (!hadWinners) return;
+        for (const m of db.listMirrors(g.id).filter(x => x.kind === "channel")) {
+            try { await discord.post(m.channel_id, winnersPayload(g, keys)); } catch { /* ignore */ }
+        }
+    }
+
     // ---------- create ----------
     /**
      * Starts a giveaway now or later. `start_in_ms` delays the start; `rounds` with `repeat_ms` makes a weekly-style series:
@@ -205,7 +246,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const pool = db.listEntries(g.id).filter(e => !out.has(e.discord_id)).map(e => ({ id: e.discord_id, w: e.entries }));
         while (pool.length) {
             const p = pickOne(pool, rand);
-            if (await discord.memberOk(g.guild_id, p.id) !== false) return p.id;
+            if (g.is_global || await discord.memberOk(g.guild_id, p.id) !== false) return p.id; // a global giveaway has entrants from every server and DMs
         }
         return null;
     }
@@ -259,6 +300,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         } else {
             await announceNew(g, `**${g.title}** ended with no valid entries.`);
         }
+        if (g.is_global) await closeMirrors(g, keys, won.length > 0);
         const unused = await returnUnused(g, ["available"], won.length ? "Fewer people entered than there were prizes, so these prizes had no winner." : "Nobody entered.");
         await dmHost(g, hostNote(g, `Ended${by ? "" : " on schedule"}: ${won.length} of ${keys.length} prizes have a winner (${entryCount(g.id)} entries).` +
             (unused ? `\n${unused} unused prize key${unused === 1 ? " was" : "s were"} sent to you in a separate message.` : "") +
@@ -431,5 +473,5 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         return done;
     }
 
-    return { create, launch, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, tick, refresh };
+    return { spread, spreadStatus, create, launch, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, tick, refresh };
 }

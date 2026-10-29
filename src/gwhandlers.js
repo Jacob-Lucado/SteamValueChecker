@@ -170,15 +170,19 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         const vouch = i.options.getChannel("vouchchannel");
         const role = i.options.getRole("managerrole");
         const clear = i.options.getBoolean("clear");
+        const gwChannel = i.options.getChannel("giveawaychannel");
         if (vouch && ![0, 5].includes(vouch.type)) throw new UserError("The vouches channel must be a text channel.");
+        if (gwChannel && ![0, 5].includes(gwChannel.type)) throw new UserError("The giveaway channel must be a text channel.");
         const patch = {};
         if (vouch) patch.vouch_channel_id = vouch.id;
         if (role) patch.manager_role_id = role.id;
-        if (clear) { patch.vouch_channel_id = null; patch.manager_role_id = null; }
+        if (gwChannel) patch.giveaway_channel_id = gwChannel.id;
+        if (clear) { patch.vouch_channel_id = null; patch.manager_role_id = null; patch.giveaway_channel_id = null; }
         const s = Object.keys(patch).length ? db.setGiveawaySettings(i.guildId, patch) : db.getGiveawaySettings(i.guildId);
         return eph(i, [
             `Vouches channel: ${s.vouch_channel_id ? `<#${s.vouch_channel_id}>` : "a channel named #vouches, if there is one"}`,
-            `Giveaway manager role: ${s.manager_role_id ? `<@&${s.manager_role_id}>` : "none (only people with Manage Server)"}`
+            `Giveaway manager role: ${s.manager_role_id ? `<@&${s.manager_role_id}>` : "none (only people with Manage Server)"}`,
+            `Giveaway channel (network-wide giveaways from the bot owner): ${s.giveaway_channel_id ? `<#${s.giveaway_channel_id}>` : "the alert channel, if one is set"}`
         ].join("\n"));
     }
 

@@ -208,7 +208,8 @@ const giveaway = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("setup").setDescription("Vouches channel and who else can run giveaways")
         .addChannelOption(o => o.setName("vouchchannel").setDescription("Where confirmations are posted").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
         .addRoleOption(o => o.setName("managerrole").setDescription("Members with this role can run giveaways"))
-        .addBooleanOption(o => o.setName("clear").setDescription("Reset both settings")));
+        .addChannelOption(o => o.setName("giveawaychannel").setDescription("Where the bot owner's network-wide giveaways are shown").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addBooleanOption(o => o.setName("clear").setDescription("Reset these settings")));
 
 const freegames = new SlashCommandBuilder()
     .setName("freegames")

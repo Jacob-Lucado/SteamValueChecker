@@ -1221,3 +1221,15 @@ test("bug reports reach the owner's admin page with a new count until seen", asy
     assert.equal((await u.request("/api/admin/bugs")).status, 403);
     await u.close();
 });
+
+test("admin network-wide giveaway: owner only, needs a confirm and a destination channel", async () => {
+    const t = await signedIn();
+    assert.equal((await t.request("/api/admin/giveaways")).status, 403);
+    assert.equal((await t.request("/api/admin/giveaways/create", { method: "POST", body: { keys: "A | AAAAA-BBBBB", confirm: "SEND" } })).status, 403);
+    await t.close();
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const g = await o.request("/api/admin/giveaways");
+    assert.equal(g.status, 200); assert.deepEqual(g.data.list, []); assert.equal(g.data.available, false);
+    assert.equal((await o.request("/api/admin/giveaways/create", { method: "POST", body: { keys: "A | AAAAA-BBBBB", confirm: "SEND" } })).status, 503); // no giveaway service in this setup
+    await o.close();
+});
