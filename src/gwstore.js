@@ -76,6 +76,15 @@ CREATE TABLE IF NOT EXISTS giveaway_excluded (
     discord_id TEXT NOT NULL,
     PRIMARY KEY (key_id, discord_id)
 );
+CREATE TABLE IF NOT EXISTS giveaway_soon (
+    guild_id  TEXT NOT NULL,
+    itad_id   TEXT NOT NULL,
+    title     TEXT NOT NULL,
+    art       TEXT,
+    marked_by TEXT NOT NULL,
+    at        INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, itad_id)
+);
 CREATE TABLE IF NOT EXISTS giveaway_mirrors (
     giveaway_id INTEGER NOT NULL REFERENCES giveaways(id) ON DELETE CASCADE,
     kind        TEXT NOT NULL,
@@ -228,7 +237,26 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     const prizesFor = userId => all(`SELECT k.id, k.label, k.status, k.deadline, k.delivered_at, g.id AS giveaway_id, g.title, g.guild_id, g.channel_id, g.message_id
         FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id WHERE k.winner_id = ? ORDER BY k.assigned_at DESC LIMIT 50`, userId).map(clean);
 
+    /** Games staff flagged as "up for giveaway soon", so members know to watch for them. */
+    const SOON_MAX = 50;
+    const markSoon = (guildId, g, by, at = Date.now()) => {
+        if (isHidden(guildId)) return false;
+        if (!get("SELECT 1 AS x FROM giveaway_soon WHERE guild_id = ? AND itad_id = ?", guildId, g.itad_id)
+            && get("SELECT COUNT(*) AS n FROM giveaway_soon WHERE guild_id = ?", guildId).n >= SOON_MAX) return "full";
+        run("INSERT INTO giveaway_soon (guild_id, itad_id, title, art, marked_by, at) VALUES (?,?,?,?,?,?) ON CONFLICT(guild_id, itad_id) DO UPDATE SET title = excluded.title, art = excluded.art",
+            guildId, g.itad_id, String(g.title).slice(0, 120), g.art ?? null, by, at);
+        return true;
+    };
+    const unmarkSoon = (guildId, itadId) => run("DELETE FROM giveaway_soon WHERE guild_id = ? AND itad_id = ?", guildId, itadId).changes > 0;
+    const soonIds = guildId => new Set(all("SELECT itad_id FROM giveaway_soon WHERE guild_id = ?", guildId).map(r => r.itad_id));
+    const listSoon = guildIds => {
+        const ids = guildIds.filter(id => !isHidden(id));
+        if (!ids.length) return [];
+        return all(`SELECT guild_id, itad_id, title, art, at FROM giveaway_soon WHERE guild_id IN (${ids.map(() => "?").join(",")}) ORDER BY at DESC`, ...ids).map(clean);
+    };
+
     return {
+        markSoon, unmarkSoon, soonIds, listSoon,
         listTemplates, saveTemplate, removeTemplate, prizesFor,
         getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,

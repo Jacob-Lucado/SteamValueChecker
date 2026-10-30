@@ -47,6 +47,7 @@ import { calendarEntries, toIcs, KINDS } from "../calendar.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
+import { artUrl } from "../render.js";
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
@@ -203,6 +204,15 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         if (!s || s.expires < now()) throw new HttpError(401, "Please sign in with Discord.");
         return s;
     }
+
+    /** The signed-in session if there is one, otherwise null (for public pages that show a little more to staff). */
+    function softSession(req) {
+        const s = sessions.get(cookies(req)[COOKIE]);
+        return s && s.expires >= now() ? s : null;
+    }
+    const STAFF_PERMS = ["moderate", "kick", "ban", "manageMessages"];
+    /** Owner, Manage Server, Administrator or any moderator permission in that server. */
+    const isStaff = g => Boolean(g) && (isManager(g) || STAFF_PERMS.some(k => hasGuildPerm(g, k)));
 
     function checkWrite(req) {
         const type = String(req.headers["content-type"] ?? "");
@@ -1307,11 +1317,36 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return { ...r, cleared, claims: db.countGiftClaims(s.userId) };
         },
         // Public on purpose (anyone with the link), but only for members who switched their page on.
-        "GET /api/public/wishlist": async (_req, _b, url) => {
+        "GET /api/public/wishlist": async (req, _b, url) => {
             const t = url.searchParams.get("t");
             const page = await publicWishlist(db, itad, url.searchParams.get("slug"), GIFT_TOKEN.test(t ?? "") ? t : null);
             if (!page) throw new HttpError(404, "That page does not exist or is private.");
-            return page;
+            // Staff of the member's server get the "Up for giveaway" button; everyone else just sees which games are marked.
+            const s = softSession(req);
+            const canMark = Boolean(s && page.guild_id && !isHidden(page.guild_id) && isStaff(s.guilds.find(x => x.id === page.guild_id)));
+            const { guild_id: _g, ...rest } = page;
+            return { ...rest, canMark };
+        },
+        // Moderators and owners flag a wishlist game as "up for giveaway soon". It lives in the member's server, so only that server's staff can do it.
+        "POST /api/wishlist/soon": async (req, body) => {
+            const s = session(req);
+            const owner = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
+            if (!owner || !owner.profile_public || !owner.guild_id) throw new HttpError(404, "That page does not exist or is private.");
+            const g = s.guilds.find(x => x.id === owner.guild_id);
+            if (!isStaff(g) || isHidden(owner.guild_id)) throw new HttpError(403, "Only moderators and owners of this member's server can do that.");
+            const id = String(body.id ?? "");
+            const item = db.listItems(owner.discord_id).find(i => i.itad_id === id && i.source !== "watch");
+            if (!item) throw new HttpError(404, "That game is not on this list.");
+            if (body.on === false) { db.unmarkSoon(owner.guild_id, id); return { soon: false }; }
+            const r = db.markSoon(owner.guild_id, { itad_id: id, title: item.title, art: artUrl(item) ?? null }, s.userId);
+            if (r === "full") throw new HttpError(429, "You can mark up to 50 games as up for giveaway. Remove one first.");
+            return { soon: true };
+        },
+        // What members see: games their servers' staff marked for future giveaways.
+        "GET /api/giveaways/soon": async (req) => {
+            const s = session(req);
+            const names = new Map(s.guilds.map(g => [g.id, g.name]));
+            return { games: db.listSoon([...names.keys()]).map(x => ({ ...x, server: names.get(x.guild_id) })) };
         },
         // Anyone with the link can mark or unmark a gift. A made-up code from their browser is the only identity; the owner is never told who.
         "POST /api/public/gift": async (req, body) => {

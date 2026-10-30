@@ -806,6 +806,40 @@
     return wrap;
   }
 
+  // Staff of the member's server flag a game as "up for giveaway soon". Everyone else just sees the badge.
+  function soonControl(g, slug, canMark) {
+    const wrap = h("div", { class: "soon" });
+    const draw = () => {
+      const kids = [];
+      if (g.soon) kids.push(h("span", { class: "chip ok", text: "🎉 Up for giveaway soon" }));
+      if (canMark) {
+        const b = h("button", { class: "btn gray small", text: g.soon ? "Remove giveaway mark" : "🎉 Up for giveaway" });
+        b.addEventListener("click", () => busy(b, async () => {
+          try { const r = await api("/api/wishlist/soon", { slug, id: g.id, on: !g.soon }); g.soon = r.soon; toast(g.soon ? "Marked. Members can see it's coming up." : "Mark removed.", "ok"); }
+          catch (e) { toast(e.message, "error"); }
+          draw();
+        }));
+        kids.push(b);
+      }
+      wrap.replaceChildren(...kids);
+    };
+    draw();
+    return wrap;
+  }
+
+  // Members: games their servers' staff plan to give away.
+  function soonPanel() {
+    const panel = h("div", { class: "panel" }, h("h3", { text: "🎉 Up for giveaway soon" }), h("p", { class: "muted", text: "Loading…" }));
+    api("/api/giveaways/soon").then(d => {
+      panel.replaceChildren(h("h3", { text: "🎉 Up for giveaway soon" }),
+        h("p", { class: "muted small", text: "Games your servers' moderators plan to give away. Keep an eye on the giveaway channel." }),
+        d.games.length ? h("div", { class: "free-grid" }, d.games.map(g => h("div", { class: "free-card" },
+          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "🎮" }),
+          h("div", { class: "free-info" }, h("strong", { text: g.title }), h("span", { class: "muted small", text: g.server || "" }))))) : h("div", { class: "empty", text: "Nothing is marked right now." }));
+    }).catch(e => panel.replaceChildren(h("h3", { text: "🎉 Up for giveaway soon" }), h("div", { class: "notice warn", text: e.message })));
+    return panel;
+  }
+
   // One page per game: price, history and verdict, bundles, free offers and who in the server is watching it.
   async function gameView(id) {
     const holder = h("div", { class: "muted", text: "Loading…" });
@@ -848,7 +882,7 @@
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money2(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"), giftButton(g, d.slug))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
+            g.url && ext(g.url, "View deal", "btn green small"), soonControl(g, d.slug, d.canMark), giftButton(g, d.slug))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
@@ -906,7 +940,7 @@
       return h("label", { class: "check" }, c, " ", h("b", { text: label }), " ", h("span", { class: "muted small", text: hint })); };
     app.replaceChildren(pageHead("Free games", "Everything that is free to claim right now on Steam, Epic, GOG and more. Claiming happens on the store's site."),
       h("div", { class: "panel" }, sw("free", "Tell me when a game goes free", "(sent by DM or to your alert channel)"), h("p"), sw("free_dlc", "Show free DLC", "(also hides it from /freegames)")),
-      panel);
+      soonPanel(), panel);
     loadFree(panel);
   }
 

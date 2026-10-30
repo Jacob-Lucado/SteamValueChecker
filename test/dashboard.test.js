@@ -997,6 +997,32 @@ test("gift claims: visitors mark a game, others see it taken, the owner only see
     await t.close();
 });
 
+test("up for giveaway: only the member's server staff can mark a wishlist game, everyone sees the mark, members get a list", async () => {
+    const t = await signedIn();
+    await t.request("/api/wishlist/add", { method: "POST", body: { title: "Celeste" } });
+    await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
+    const id = (await t.request("/api/wishlist")).data.rows[0].itad_id;
+    const mark = body => t.request("/api/wishlist/soon", { method: "POST", body: { slug: "jacob", id, ...body } });
+    const page = () => t.request("/api/public/wishlist?slug=jacob");
+    // The owner's server is one where the signed-in person is only a member: no button, no marking.
+    t.db.ensureUser("u1", "g-member");
+    assert.equal((await page()).data.canMark, false);
+    assert.equal((await mark({ on: true })).status, 403);
+    // In a server they manage they can.
+    t.db.ensureUser("u1", "g-admin");
+    assert.equal((await page()).data.canMark, true);
+    assert.equal((await mark({ on: true })).data.soon, true);
+    assert.equal((await page()).data.games[0].soon, true);
+    assert.equal((await t.request("/api/wishlist/soon", { method: "POST", body: { slug: "jacob", id: "nope", on: true } })).status, 404);
+    assert.equal((await t.request("/api/wishlist/soon", { method: "POST", body: { slug: "nobody", id, on: true } })).status, 404);
+    const list = (await t.request("/api/giveaways/soon")).data.games;
+    assert.deepEqual(list.map(g => [g.title, g.server]), [["Celeste", "Mine"]]);
+    assert.equal((await mark({ on: false })).data.soon, false);
+    assert.equal((await page()).data.games[0].soon, false);
+    assert.equal((await t.request("/api/giveaways/soon")).data.games.length, 0);
+    await t.close();
+});
+
 test("backlog challenge from the dashboard: set a goal, see progress, bad goals refused", async () => {
     const t = await signedIn();
     const r0 = await t.request("/api/library/challenge");

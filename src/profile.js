@@ -30,12 +30,13 @@ export async function publicWishlist(db, itad, slug, token = null) {
     // Games the owner already has are not worth gifting, so they are left off the page.
     const owned = new Set(db.listLibrary(user.discord_id).map(x => x.itad_id));
     const claims = db.giftClaimMap(user.discord_id, token);
+    const soon = user.guild_id ? db.soonIds(user.guild_id) : new Set();
     const items = db.listItems(user.discord_id).filter(i => i.source !== "watch" && !owned.has(i.itad_id)).slice(0, 100);
     const prices = items.length ? await itad.getPrices(items.map(i => i.itad_id), user.region).catch(() => new Map()) : new Map();
     const games = items.map(it => {
         const s = summarize(prices.get(it.itad_id), { majorOnly: user.stores === "major" });
         const now = current(s);
-        return { id: it.itad_id, claim: claims.get(it.itad_id) ?? null, title: it.title, art: artUrl(it) ?? null, price: s.best?.price ?? null, shop: s.best?.shop ?? null, url: /^https:\/\//i.test(s.best?.url ?? "") ? s.best.url : null, discount: Math.round((now.discount ?? 0) * 100), currency: s.currency ?? "USD" };
+        return { id: it.itad_id, soon: soon.has(it.itad_id), claim: claims.get(it.itad_id) ?? null, title: it.title, art: artUrl(it) ?? null, price: s.best?.price ?? null, shop: s.best?.shop ?? null, url: /^https:\/\//i.test(s.best?.url ?? "") ? s.best.url : null, discount: Math.round((now.discount ?? 0) * 100), currency: s.currency ?? "USD" };
     }).sort((a, b) => b.discount - a.discount || a.title.localeCompare(b.title));
-    return { slug: user.profile_slug, games };
+    return { slug: user.profile_slug, guild_id: user.guild_id ?? null, games };
 }
