@@ -11,7 +11,7 @@ export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(
 const str = n => String(n);
 
 /** Permission number for the invite link: what the existing features need plus roles, invites, emojis and events. */
-export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14) | B(15) | B(16) | B(18) | B(28) | B(30) | B(33) | B(6) | B(1) | B(2) | B(13) | B(40) | B(17) | B(38));
+export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14) | B(15) | B(16) | B(18) | B(28) | B(30) | B(33) | B(6) | B(1) | B(2) | B(13) | B(40) | B(17) | B(38) | B(7) | B(22) | B(23) | B(24) | B(27)); // the last five are what the Moderator role is made with: a bot can only hand out permissions it holds itself
 
 /** The link that adds the bot to a server: the bot and slash-command scopes with every permission the features need. */
 export const botInviteUrl = clientId => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=bot%20applications.commands&permissions=${BOT_PERMISSIONS}`;
@@ -168,7 +168,15 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     for (const r of TEMPLATE.roles) {
         let ex = roleByName(r.name);
         if (!ex) {
-            ex = await guard(() => api.createRole(guildId, { name: r.name, color: r.color, hoist: Boolean(r.hoist), mentionable: Boolean(r.mentionable), permissions: str((r.permissions ?? []).reduce((a, b) => a | b, 0n)) }));
+            const make = permissions => api.createRole(guildId, { name: r.name, color: r.color, hoist: Boolean(r.hoist), mentionable: Boolean(r.mentionable), permissions });
+            const perms = str((r.permissions ?? []).reduce((a, b) => a | b, 0n));
+            // Discord refuses a role that grants permissions the bot does not hold itself. Make the role without them rather than stopping.
+            try { ex = await make(perms); }
+            catch (e) {
+                if (e?.status !== 403 || perms === "0") await guard(() => Promise.reject(e)); // turns a 403 into the friendly message, rethrows anything else
+                ex = await guard(() => make("0"));
+                notes.push(`The ${r.name} role was made without its permissions, because my own role does not hold them. Add the permissions to it by hand, or re-invite me with the dashboard link and run setup again.`);
+            }
             created.roles.push(r.name); await wait();
         }
         roleIds[r.key] = ex.id;

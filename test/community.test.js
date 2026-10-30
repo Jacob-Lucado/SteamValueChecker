@@ -22,7 +22,7 @@ function fakeApi({ channels = [], roles = [], deny = null } = {}) {
         editChannel: async (id, b) => { const c = state.channels.find(x => x.id === id); Object.assign(c, b); return c; },
         deleteChannel: async id => { state.deleted.push(id); },
         editRole: async (_g, id, b) => { if (state.denyEditRole) throw new DiscordApiError(403, "no"); Object.assign(state.roles.find(x => x.id === id), b); },
-        createRole: async (_g, b) => { const r = { id: String(++n), ...b }; state.roles.push(r); return r; },
+        createRole: async (_g, b) => { if (state.denyPermRoles && b.permissions !== "0") throw new DiscordApiError(403, "Missing Permissions"); const r = { id: String(++n), ...b }; state.roles.push(r); return r; },
         editGuild: async (_g, b) => { state.guildEdits.push(b); },
         sendMessage: async (id, p) => { state.sent.push({ id, p }); return { id: "m" + state.sent.length }; },
         editMessage: async (id, mid, p) => { if (state.denyEdit) throw new DiscordApiError(404, "gone"); state.edits = [...(state.edits ?? []), { id, mid, p }]; },
@@ -594,4 +594,12 @@ test("dashboard: managers set the leaderboard channel and hours and refresh it n
     assert.equal(ok.status, 200); assert.equal(ok.data.refreshed, true); assert.equal(t.db.getCommunity("g1").lb_hours, 3); assert.ok(t.db.getCommunity("g1").lb_message_id);
     assert.equal((await post({ refresh: true })).status, 429, "refresh cooldown");
     await t.close();
+});
+
+test("setup still builds the server when my role lacks the Moderator permissions, and the invite link asks for them", async () => {
+    for (const bit of [7, 22, 23, 24, 27]) assert.ok(BigInt(BOT_PERMISSIONS) & (1n << BigInt(bit)), `invite includes permission bit ${bit}`);
+    const api = fakeApi(); api.state.denyPermRoles = true;
+    const r = await communitySetup({ api, db: openDb(":memory:"), guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.ok(r.created.roles.includes("Moderator") && r.created.channels.length > 5);
+    assert.ok(r.notes.some(n => /Moderator role was made without its permissions/.test(n)));
 });
