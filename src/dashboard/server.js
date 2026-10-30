@@ -1596,14 +1596,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             else if (body.action === "pause") db.updateUser(id, { paused: 1 });
             else if (body.action === "resume") db.updateUser(id, { paused: 0 });
             else throw new HttpError(400, "Unknown action.");
-            log(`owner ${s.userId} ran ${body.action} on ${id}`);
+            log(`Bot owner ran "${body.action}" on member ${id}`);
             return db.adminUser(id);
         },
         "POST /api/admin/clear-dm-failures": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             const n = db.clearAllDmFailures();
-            log(`owner ${s.userId} cleared DM failures for ${n} members`);
+            log(`Bot owner cleared the DM failure count for ${n} member${n === 1 ? "" : "s"}`);
             return { cleared: n };
         },
 
@@ -1623,7 +1623,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const undo = audience !== "me" ? cooldown(s.userId, "broadcast") : () => {};
             try {
                 const r = broadcaster().start({ title: body.title, body: body.body, audience, promo: body.kind === "promo" });
-                log(`owner ${s.userId} started broadcast #${r.id} to ${audience} (${r.total} targets)`);
+                log(`Bot owner started broadcast #${r.id} to ${audience} (${r.total} recipient${r.total === 1 ? "" : "s"})`);
                 return { ...r, current: broadcaster().current() };
             } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
         },
@@ -1678,7 +1678,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                     channelIds: audience === "dm" ? [] : dest.map(d => d.channel_id),
                     dmUsers: audience === "channels" ? [] : targets.users, delayMs: config.broadcastDelayMs ?? 1100
                 });
-                log(`owner ${s.userId} started global giveaway #${r.id}`);
+                log(`Bot owner started global giveaway #${r.id}`);
                 return { id: r.id, prizes: r.prizes, ends_at: r.ends_at, total: sent.total, duplicates };
             } catch (err) { undo(); throw err; }
         },
@@ -1695,7 +1695,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/admin/logs": async (req, _b, url) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
-            const level = ["error", "warn", "all"].includes(url.searchParams.get("level")) ? url.searchParams.get("level") : "error";
+            const level = ["error", "warn", "activity", "all"].includes(url.searchParams.get("level")) ? url.searchParams.get("level") : "error";
             return { lines: logs ? logs.recent({ level, limit: 200 }) : [], available: Boolean(logs) };
         },
 
@@ -1828,7 +1828,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
 
         let who;
         try { who = await rest.login(code, linked ? { withToken: true } : undefined); }
-        catch (err) { log(`login failed: ${err.status ?? err.name}`); return send(res, 302, "", { Location: "/?error=login" }); }
+        catch (err) { log(`Discord sign-in failed (${err.status ?? err.name})`, "warn"); return send(res, 302, "", { Location: "/?error=login" }); }
 
         const name = who.user.global_name || who.user.username;
         const avatar = who.user.avatar ? `https://cdn.discordapp.com/avatars/${who.user.id}/${who.user.avatar}.png?size=64` : null;
@@ -1853,7 +1853,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 return send(res, 302, "", { Location: "/auth/steam" });
             }
             try { await rest.setRoleConnection(who.accessToken, connectionPayload(db, who.user.id)); db.bumpUsage("linked_roles_connected"); }
-            catch (err) { log(`linked roles failed: ${err.status ?? err.name}`); return send(res, 302, "", { Location: "/#/steam?roles=failed" }); }
+            catch (err) { log(`Could not link Discord roles for a Steam sign-in (${err.status ?? err.name})`, "warn"); return send(res, 302, "", { Location: "/#/steam?roles=failed" }); }
             return send(res, 302, "", { Location: "/#/steam?roles=1" });
         }
         send(res, 302, "", { Location: "/#/mypage" });
@@ -1944,7 +1944,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         if (err instanceof ValueError || err instanceof WishlistError || err instanceof UserError) return new HttpError(400, err.message);
         if (err instanceof SteamError) return new HttpError(err.code === "rate_limited" || err.code === "network" ? 503 : 400, err.message);
         if (err instanceof ItadError) return new HttpError(503, err.message);
-        log(`${err.name}: ${err.message}`); // never log request bodies
+        log(`Dashboard request failed with an unexpected error: ${err.name}: ${err.message}`, "error"); // never log request bodies
         return new HttpError(500, "Something went wrong. Try again in a moment.");
     }
 

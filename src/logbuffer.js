@@ -6,6 +6,7 @@ import { dirname } from "node:path";
 
 // Node prints these on every start; they say nothing about a problem.
 const NOISE = /ExperimentalWarning|--trace-warnings|\(Use `node --trace/;
+export const ACTIVITY = "[activity] ";
 const LEVELS = { log: "info", info: "info", warn: "warn", error: "error" };
 
 export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile = 300, now = () => Date.now() } = {}) {
@@ -18,14 +19,21 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
     if (file) {
         try {
             lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(l => !NOISE.test(l.text ?? "")).slice(-maxFile);
+            // Lines saved by older versions called restarts and owner actions "errors". Sort them out as they load.
+            lines = lines.filter(l => !/^\[exit\] code 0,/.test(l.text)).map(l => {
+                if (/^\[shutdown\] received|^\[dashboard\] owner \d+ (started|ran|cleared)/.test(l.text)) return { ...l, level: "activity", text: l.text.replace(/^\[shutdown\] received (\w+).*$/, "[restart] Bot stopped: the host sent $1 (a deploy or restart)").replace(/^\[dashboard\] owner \d+ /, "[dashboard] Bot owner ") };
+                return l;
+            });
             lines.forEach(l => { l.earlier = true; });
         } catch { /* no file yet */ }
     }
     let fileCount = lines.length;
 
     function add(level, args) {
-        const text = mask(args.map(a => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : safeJson(a))).join(" ")).slice(0, 4000);
+        let text = mask(args.map(a => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : safeJson(a))).join(" ")).slice(0, 4000);
         if (NOISE.test(text)) return null; // harmless Node notice, not worth an admin entry
+        // Things people did (a broadcast, a giveaway) and restarts are not problems: they get their own "activity" level.
+        if (level === "info" && text.startsWith(ACTIVITY)) { level = "activity"; text = text.slice(ACTIVITY.length); }
         const entry = { at: now(), level, text };
         lines.push(entry);
         if (lines.length > max + maxFile) lines = lines.slice(-max - maxFile);
@@ -55,9 +63,10 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
         }
     }
 
-    /** level: "error" = errors and crashes only, "warn" = warnings too, anything else = everything. Newest first. */
+    /** level: "error" = errors and crashes only, "warn" = warnings too, "activity" = what was done and restarts,
+     *  anything else = everything. Newest first. */
     function recent({ level = "error", limit = 200 } = {}) {
-        const keep = level === "error" ? ["error"] : level === "warn" ? ["error", "warn"] : ["error", "warn", "info"];
+        const keep = level === "error" ? ["error"] : level === "warn" ? ["error", "warn"] : level === "activity" ? ["activity"] : ["error", "warn", "activity", "info"];
         return lines.filter(l => keep.includes(l.level)).slice(-limit).reverse();
     }
 

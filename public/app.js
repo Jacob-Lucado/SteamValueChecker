@@ -1996,15 +1996,16 @@
   // Recent bot logs (errors and crashes by default), owner only.
   function logPanel() {
     const out = h("pre", { class: "logbox", text: "Loading…" });
-    const level = select([["error", "Errors and crashes"], ["warn", "Errors and warnings"], ["all", "Everything"]], "error");
-    const fmt = l => `${new Date(l.at).toLocaleString()}  ${l.level.toUpperCase().padEnd(5)} ${l.earlier ? "(before restart) " : ""}${l.text}`;
+    const level = select([["error", "Errors and crashes"], ["warn", "Errors and warnings"], ["activity", "Activity (what was done, restarts)"], ["all", "Everything"]], "error");
+    const LABEL = { error: "ERROR", warn: "WARN", activity: "ACTION", info: "INFO" };
+    const fmt = l => `${new Date(l.at).toLocaleString()}  ${(LABEL[l.level] ?? l.level.toUpperCase()).padEnd(6)} ${l.earlier ? "(earlier run) " : ""}${l.text}`;
     let lastText = "";
     async function load() {
       out.textContent = "Loading…";
       try {
         const d = await api("/api/admin/logs?level=" + encodeURIComponent(level.value));
         lastText = d.lines.map(fmt).join("\n\n");
-        out.textContent = d.available ? (lastText || "Nothing logged at this level. That is good news.") : "Logging is not turned on.";
+        out.textContent = d.available ? (lastText || (level.value === "activity" ? "No activity recorded yet." : "Nothing logged at this level. That is good news.")) : "Logging is not turned on.";
       } catch (e) { out.textContent = e.message; }
     }
     level.addEventListener("change", load);
@@ -2012,7 +2013,7 @@
     const copy = h("button", { class: "btn gray", text: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(lastText); toast("Copied.", "ok"); } catch { toast("Could not copy. Select the text instead.", "error"); } } });
     load();
     return h("div", { class: "panel" }, h("h3", { text: "Recent logs" }),
-      h("p", { class: "muted small", text: "Newest first. Errors and crashes are kept across restarts. Tokens and keys are hidden." }),
+      h("p", { class: "muted small", text: "Newest first. ERROR is something that broke, WARN is worth a look, ACTION is something you or the bot did (broadcasts, giveaways, restarts). All are kept across restarts. Tokens and keys are hidden." }),
       h("div", { class: "rule inline" }, level, refresh, copy), out);
   }
 

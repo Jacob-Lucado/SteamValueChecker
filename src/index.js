@@ -19,7 +19,7 @@ import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
 import { registerCommands } from "./registercmds.js";
-import { createLogBuffer } from "./logbuffer.js";
+import { createLogBuffer, ACTIVITY } from "./logbuffer.js";
 import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
@@ -302,7 +302,7 @@ const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral }
 const beat = { alerts: null, giveaways: null }; // when each background job last finished, for the status page
 const staleAfter = (at, everyMs) => (at === null ? Date.now() - STARTED_AT > everyMs * 3 : Date.now() - at > everyMs * 3);
 const status = createStatusMonitor({
-    db, log: m => console.error(`[status] ${m}`),
+    db, log: m => console.warn(`[status] ${m}`),
     notify: text => (cfg.ownerId ? discord.sendDm(cfg.ownerId, { content: text }) : null),
     probes: {
         gateway: { name: "Discord gateway and bot", desc: "Connection to Discord and slash command handling", critical: true, check: () => {
@@ -555,7 +555,7 @@ if (cfg.dashboard) {
     // One broadcaster for the dashboard's Admin page and /grabberad, so only one announcement or promotion goes out at a time.
 const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), sendChannel: (id, p) => discord.sendChannel(id, p),
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ broadcaster, db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+const dashboard = createDashboard({ broadcaster, db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {
@@ -564,9 +564,9 @@ const dashboard = createDashboard({ broadcaster, db, itad, rest, fx, dm: (id, pa
 
 // Breadcrumbs for the Admin log, so a restart is never silent: why it stopped, and how much memory it was using.
 const memNote = () => { const m = process.memoryUsage(); return `rss ${Math.round(m.rss / 1048576)} MB, heap ${Math.round(m.heapUsed / 1048576)} MB`; };
-console.log(`[boot] started, ${memNote()}, heap limit ${Math.round(v8.getHeapStatistics().heap_size_limit / 1048576)} MB`);
-for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { console.error(`[shutdown] received ${sig} (the host stopped the bot, e.g. a deploy or restart), ${memNote()}`); setTimeout(() => process.exit(0), 300); });
-process.on("exit", code => { try { console.error(`[exit] code ${code}, ${memNote()}`); } catch { /* nothing left to do */ } });
+console.log(`${ACTIVITY}[boot] Bot started, ${memNote()}, heap limit ${Math.round(v8.getHeapStatistics().heap_size_limit / 1048576)} MB`);
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { console.log(`${ACTIVITY}[restart] Bot stopping: the host sent ${sig} (a deploy or restart). Memory: ${memNote()}`); setTimeout(() => process.exit(0), 300); });
+process.on("exit", code => { try { if (code !== 0) console.error(`[exit] bot exited unexpectedly with code ${code}, ${memNote()}`); } catch { /* nothing left to do */ } });
 setInterval(() => { const m = process.memoryUsage(); if (m.rss > 380 * 1048576) console.error(`[memory] high usage: ${memNote()}`); }, 60_000).unref();
 
 process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.stack ?? err}`));
