@@ -19,6 +19,7 @@ import { ItadError } from "../itad.js";
 import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
+import { enrichFree, withOwnership } from "../freeinfo.js";
 import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
@@ -1236,12 +1237,12 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req);
             const showDlc = db.getUser(s.userId)?.free_dlc !== 0;
             const groups = new Map();
-            for (const g of await itad.getGiveawayList()) {
+            for (const g of withOwnership(await enrichFree(await itad.getGiveawayList()), db, s.userId)) {
                 if (!/^https:\/\//i.test(g.url ?? "")) continue;
                 const dlc = isDlc(g);
                 if (dlc && !showDlc) continue;
                 if (!groups.has(g.shop)) groups.set(g.shop, []);
-                groups.get(g.shop).push({ id: g.id, title: g.title, url: g.url, expiry: g.expiry, dlc, art: freeArt(g) ?? null });
+                groups.get(g.shop).push({ id: g.id, title: g.title, url: g.url, expiry: g.expiry, dlc, art: freeArt(g) ?? null, base: dlc && g.base ? g.base.name : null, baseOwned: dlc && g.base ? g.baseOwned ?? null : null });
             }
             return { showDlc, platforms: [...groups].map(([shop, games]) => ({ shop, games })) };
         },

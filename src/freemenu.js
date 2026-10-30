@@ -25,7 +25,6 @@ export function freeMenu(list, { cat = "games", store = "all", page = 0, showDlc
     let embed;
     if (g) {
         embed = { ...freeGamesPayload(g.shop, [g]).embeds[0] };
-        if (isDlc(g)) embed.title = embed.title.replace("🎁", "🧩");
         const next = rows.slice(page + 1, page + 4).map(x => `${isDlc(x) ? "🧩" : "🎮"} ${x.title}`.slice(0, 60));
         if (next.length) embed.fields = [...embed.fields, { name: "Up next", value: next.join("\n"), inline: false }];
         embed.footer = { text: `${page + 1} of ${rows.length}  •  ${CAT_NAME[cat]}  •  Data by IsThereAnyDeal` };

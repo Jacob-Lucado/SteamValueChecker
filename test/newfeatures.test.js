@@ -254,3 +254,42 @@ test("play next moves on each press and never offers the same game twice", async
     for (let i = 0; i < 5; i++) { const n = playNext(rows, { skip: seen, rand: () => 0 }); if (!n) break; seen.push(n.pick.itad_id); }
     assert.deepEqual(seen, ["a", "b", "c"]);
 });
+
+test("free DLC is spotted through Steam and says whether you own the base game", async () => {
+    const { enrichFree, withOwnership, _resetFreeInfo } = await import("../src/freeinfo.js");
+    const { freeGamesPayload } = await import("../src/render.js");
+    _resetFreeInfo();
+    const calls = [];
+    const fetchImpl = async url => {
+        calls.push(url);
+        const id = /appids=(\d+)/.exec(url)[1];
+        const data = id === "200" ? { type: "dlc", fullgame: { appid: 100, name: "Hunting Simulator 3" } } : { type: "game" };
+        return { ok: true, json: async () => ({ [id]: { success: true, data } }) };
+    };
+    const list = [
+        { id: "a", title: "Classic American Hunter Pack", shop: "Steam", url: "https://store.steampowered.com/app/200/x/", type: "game" },
+        { id: "b", title: "Some Game", shop: "Steam", url: "https://store.steampowered.com/app/300/y/", type: "game" },
+        { id: "c", title: "Epic Thing", shop: "Epic", url: "https://store.epicgames.com/p/z", type: "game" }
+    ];
+    const rich = await enrichFree(list, fetchImpl);
+    assert.equal(rich[0].type, "dlc"); assert.equal(rich[0].base.appid, 100);
+    assert.equal(rich[1].type, "game"); assert.equal(rich[2], list[2]);
+    await enrichFree(list, fetchImpl); assert.equal(calls.length, 2, "Steam answers are cached");
+
+    const lib = [{ appid: 100 }];
+    const db = { listLibrary: id => (id === "has" ? lib : id === "other" ? [{ appid: 5 }] : []) };
+    assert.equal(withOwnership(rich, db, "has")[0].baseOwned, true);
+    assert.equal(withOwnership(rich, db, "other")[0].baseOwned, false);
+    assert.equal(withOwnership(rich, db, "none")[0].baseOwned, null, "no synced library: unknown");
+
+    const yes = freeGamesPayload("Steam", withOwnership(rich, db, "has").slice(0, 1)).embeds[0];
+    assert.match(yes.title, /^🧩 /); assert.match(yes.description, /FREE DLC/); assert.match(yes.description, /🟢 You own the base game \(Hunting Simulator 3\)/);
+    const no = freeGamesPayload("Steam", withOwnership(rich, db, "other").slice(0, 1)).embeds[0];
+    assert.match(no.description, /🔴 You don't own the base game/); assert.equal(no.color, 0xed4245);
+    const unknown = freeGamesPayload("Steam", withOwnership(rich, db, "none").slice(0, 1)).embeds[0];
+    assert.match(unknown.description, /DLC for Hunting Simulator 3/);
+    assert.match(freeGamesPayload("Steam", [rich[1]]).embeds[0].title, /^🎁 /);
+
+    const failing = await enrichFree([{ id: "q", title: "Q", url: "https://store.steampowered.com/app/999/", type: "game" }], async () => { throw new Error("offline"); });
+    assert.equal(failing[0].type, "game", "a Steam outage never breaks the alert");
+});

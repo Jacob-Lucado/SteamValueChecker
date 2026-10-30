@@ -419,9 +419,11 @@ export function freeGamesPayload(shop, games) {
     const big = list.length <= 3; // full-width pictures for a few games, small ones when there are many
     const embeds = list.map((g, n) => {
         const art = freeArt(g);
+        const dlc = g.type === "dlc" || /\b(dlc|soundtrack|add-?on|season pass)\b/i.test(g.title ?? "");
+        const own = !dlc || !g.base ? "" : g.baseOwned === true ? `\n🟢 You own the base game (${g.base.name})` : g.baseOwned === false ? `\n🔴 You don't own the base game (${g.base.name})` : `\n🧩 DLC for ${g.base.name}`;
         return {
-            color: GREEN, title: `🎁 ${g.title}`.slice(0, 256), url: safeUrl(g.url),
-            description: `## FREE  •  ${shopIcon(shop)} ${shop}\n${g.expiry ? `Claim it ${stamp(g.expiry)} or it's gone.` : "Free to keep while the offer lasts."}`,
+            color: dlc && g.baseOwned === false ? 0xed4245 : GREEN, title: `${dlc ? "🧩" : "🎁"} ${g.title}`.slice(0, 256), url: safeUrl(g.url),
+            description: `## FREE${dlc ? " DLC" : ""}  •  ${shopIcon(shop)} ${shop}\n${g.expiry ? `Claim it ${stamp(g.expiry)} or it's gone.` : "Free to keep while the offer lasts."}${own}`,
             fields: [
                 { name: "Store", value: `${shopIcon(shop)} ${shop}`, inline: true },
                 { name: g.expiry ? "Ends" : "Status", value: g.expiry ? `${stamp(g.expiry)}\n<t:${Math.floor(g.expiry / 1000)}:f>` : "Limited time", inline: true },

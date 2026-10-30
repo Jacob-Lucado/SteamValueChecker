@@ -641,3 +641,8 @@ textarea { min-height: 110px; }
 .gift-tip { position: relative; margin-left: 6px; cursor: help; font-size: 12px; }
 .gift-tip::after { content: attr(data-tip); position: absolute; bottom: 130%; right: 0; background: var(--panel-2); color: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; font-size: 12px; font-weight: 600; white-space: nowrap; opacity: 0; pointer-events: none; transform: translateY(3px); transition: opacity .12s, transform .12s; box-shadow: var(--shadow); }
 .gift-tip:hover::after, .gift-tip:focus-visible::after { opacity: 1; transform: none; }
+
+.dlc-tag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--blue, #4aa3ff) 18%, transparent); }
+.own-note { font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 8px; }
+.own-note.yes { background: color-mix(in srgb, var(--good, #3fb950) 18%, transparent); color: var(--good, #3fb950); }
+.own-note.no { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }

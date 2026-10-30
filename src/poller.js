@@ -6,6 +6,7 @@ import { evaluate, describeTrigger, dealVerdict, meaningfulDrop } from "./alerts
 import { protonTier } from "./proton.js";
 import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
+import { enrichFree, withOwnership } from "./freeinfo.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
 import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
@@ -199,17 +200,18 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
  */
 const LAST_CHANCE_MS = 24 * 3600_000;
 
-export async function runFreeGames({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+export async function runFreeGames({ db, itad, notifier, now = () => Date.now(), log = () => {}, fetchImpl = globalThis.fetch }) {
     const stats = { found: 0, delivered: 0, failed: 0, deferred: 0 };
     const users = db.freeUsers();
     if (!users.length) return stats;
     let list;
-    try { list = await itad.getGiveawayList(); }
+    try { list = await enrichFree(await itad.getGiveawayList(), fetchImpl); }
     catch (err) { log(`free game lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; return stats; }
 
     for (const user of users) {
+        const mine = withOwnership(list, db, user.discord_id); // the same offers, with whether this member owns each DLC's base game
         // Last chance: a giveaway they were already told about, ending within a day, gets one reminder.
-        const soon = list.filter(g => g.url && g.expiry && g.expiry > now() && g.expiry - now() <= LAST_CHANCE_MS
+        const soon = mine.filter(g => g.url && g.expiry && g.expiry > now() && g.expiry - now() <= LAST_CHANCE_MS
             && db.hasSeen(user.discord_id, `free:${g.id}`) && !db.hasSeen(user.discord_id, `freelast:${g.id}`) && (user.free_dlc !== 0 || !isDlc(g)));
         if (soon.length && !isQuiet(user, now())) {
             const byShopSoon = new Map();
@@ -225,7 +227,7 @@ export async function runFreeGames({ db, itad, notifier, now = () => Date.now(),
                 }
             }
         }
-        const fresh = list.filter(g => g.url && !db.hasSeen(user.discord_id, `free:${g.id}`) && (user.free_dlc !== 0 || !isDlc(g)));
+        const fresh = mine.filter(g => g.url && !db.hasSeen(user.discord_id, `free:${g.id}`) && (user.free_dlc !== 0 || !isDlc(g)));
         if (!fresh.length) continue;
         stats.found += fresh.length;
         if (isQuiet(user, now())) { stats.deferred += fresh.length; continue; }
@@ -309,7 +311,7 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
     const guilds = db.guildsWithFreeFeed();
     if (!guilds.length) return stats;
     let list;
-    try { list = (await itad.getGiveawayList()).filter(g => g.url && !isDlc(g)); }
+    try { list = (await enrichFree(await itad.getGiveawayList())).filter(g => g.url && !isDlc(g)); }
     catch (err) { log(`feed lookup failed: ${err.code ?? err.name}`); return stats; }
     for (const guild of guilds) {
         const fresh = list.filter(g => !db.guildHasSeen(guild.guild_id, `free:${g.id}`));

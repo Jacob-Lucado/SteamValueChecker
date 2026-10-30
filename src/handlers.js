@@ -7,6 +7,7 @@ import {
 import { setProfile } from "./profile.js";
 import { salesEmbed, upcomingSales, salesBefore } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
+import { enrichFree, withOwnership } from "./freeinfo.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { gameNight, gameNightEmbed, gameNightButtons, pickGame } from "./gamenight.js";
@@ -606,7 +607,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         const share = i.options.getBoolean("public") === true;
         await i.deferReply(share ? {} : { flags: MessageFlags.Ephemeral });
         try {
-            const list = await itad.getGiveawayList();
+            const list = withOwnership(await enrichFree(await itad.getGiveawayList()), db, i.user.id);
             const showDlc = db.getUser(i.user.id)?.free_dlc !== 0;
             const shops = [...new Set(list.map(g => g.shop))];
             const wanted = store ? shops.find(s => String(s).toLowerCase().includes(store)) : null;
@@ -622,7 +623,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             if (i.isStringSelectMenu()) { [, cat] = i.customId.split(":"); store = i.values[0] ?? "all"; page = 0; }
             else { [, cat, store, page] = i.customId.split(":"); page = Number(page) || 0; }
             const showDlc = db.getUser(i.user.id)?.free_dlc !== 0;
-            const payload = freeMenu(await itad.getGiveawayList(), { cat, store, page, showDlc });
+            const payload = freeMenu(withOwnership(await enrichFree(await itad.getGiveawayList()), db, i.user.id), { cat, store, page, showDlc });
             const owner = i.message?.interactionMetadata?.user?.id ?? i.message?.interaction?.user?.id;
             if (owner && owner !== i.user.id) return await i.reply({ ...payload, flags: MessageFlags.Ephemeral }); // somebody else's public menu: give them their own
             await i.update(payload);
