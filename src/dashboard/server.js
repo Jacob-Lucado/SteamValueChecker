@@ -48,6 +48,7 @@ import { addToServerList, serverListView, vote, removeFromServerList } from "../
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { artUrl } from "../render.js";
+import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY as REQ_BODY, MAX_NOTE as REQ_NOTE } from "../requeststore.js";
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
@@ -89,7 +90,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
+const COOLDOWNS = { request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -1757,6 +1758,54 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (isOwner(s) && logs) out.errors = logs.recent({ level: "error", limit: 15 });
             return out;
         },
+        // ----- feature requests: members suggest and vote, the owner sets the status -----
+        "GET /api/requests": async (req, _b, url) => {
+            const s = session(req);
+            const status = url.searchParams.get("status");
+            return { requests: db.listRequests(s.userId, { status: REQUEST_STATUSES[status] ? status : null, sort: url.searchParams.get("sort") === "new" ? "new" : "votes" }),
+                statuses: REQUEST_STATUSES, counts: db.requestCounts(), max: MAX_OPEN_PER_USER, isOwner: isOwner(s) };
+        },
+        "POST /api/requests": async (req, body) => {
+            const s = session(req);
+            const title = String(body.title ?? "").replace(/\s+/g, " ").trim().slice(0, REQ_TITLE);
+            const text = String(body.body ?? "").trim().slice(0, REQ_BODY);
+            if (title.length < 4) throw new HttpError(400, "Give your idea a short title (at least 4 characters).");
+            if (db.openCountFor(s.userId) >= MAX_OPEN_PER_USER) throw new HttpError(429, `You can have ${MAX_OPEN_PER_USER} requests waiting at once. Vote on existing ones or wait for a reply.`);
+            const undo = cooldown(s.userId, "request");
+            try { return { id: db.addRequest({ userId: s.userId, userName: s.username ?? null, title, body: text }) }; } catch (e) { undo(); throw e; }
+        },
+        "POST /api/requests/vote": async (req, body) => {
+            const s = session(req); cooldown(s.userId, "requestvote");
+            const r = db.getRequest(Number(body.id));
+            if (!r) throw new HttpError(404, "I can't find that request.");
+            return { voted: db.toggleRequestVote(r.id, s.userId) };
+        },
+        // The bot owner moves a request along (in development, shipped, rejected…) with an optional note. The requester gets a DM.
+        "POST /api/admin/requests/status": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do that.");
+            const r = db.getRequest(Number(body.id));
+            if (!r) throw new HttpError(404, "I can't find that request.");
+            const status = String(body.status ?? "");
+            if (!REQUEST_STATUSES[status]) throw new HttpError(400, "Pick a valid status.");
+            const note = String(body.note ?? "").trim().slice(0, REQ_NOTE);
+            db.setRequestStatus(r.id, status, note);
+            let notified = false;
+            if (body.notify !== false && status !== r.status && r.user_id !== s.userId) {
+                try {
+                    await dm(r.user_id, { embeds: [{ color: status === "rejected" ? 0xed4245 : status === "shipped" ? 0x57f287 : 0x5865f2, title: `Your idea: ${r.title}`.slice(0, 250),
+                        description: `Status: **${REQUEST_STATUSES[status]}**${note ? `\n\n${note}` : ""}`, footer: { text: "Steam Value Checker feature requests" } }] });
+                    notified = true;
+                } catch { /* DMs closed: the status is still saved and visible on the page */ }
+            }
+            return { ok: true, notified };
+        },
+        "POST /api/admin/requests/delete": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do that.");
+            return { removed: db.deleteRequest(Number(body.id)) };
+        },
+
         "POST /api/tickets": async (req, body) => {
             const s = session(req); needTickets();
             const gid = body.guild_id && s.guilds.some(g => g.id === body.guild_id) ? body.guild_id : null;

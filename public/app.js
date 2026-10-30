@@ -125,7 +125,7 @@
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["alerts", "Alert settings"], ["notifications", "Notifications"], ["mydata", "My Data"]] },
-    { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
+    { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
   ];
   // Pages that are not tabs themselves but belong to a section: one game's page sits under Prices.
@@ -2341,7 +2341,8 @@
       return [box];
     };
 
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    const requestsTab = () => { const box = h("div", { class: "muted", text: "Loading…" }); requestList(box, { admin: true }).then(() => { box.className = ""; }); return [box]; };
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
     const body = h("div");
@@ -2697,6 +2698,61 @@
   // ---------- support tickets ----------
   const STATUS_ICON = { open: "🟢", waiting: "🟡", resolved: "✅", closed: "⚫" };
   const STATUS_CHIP = { open: "ok", waiting: "warn", resolved: "", closed: "dim" };
+
+  // ---------- feature requests ----------
+  const REQ_CHIP = { open: "dim", planned: "ok", in_development: "ok", shipped: "ok", rejected: "warn", duplicate: "dim", on_hold: "warn" };
+  const REQ_ICON = { open: "🗳️", planned: "📌", in_development: "🛠️", shipped: "🚀", rejected: "🚫", duplicate: "♻️", on_hold: "⏸️" };
+  /** One request: title, text, status chip, vote button; the owner also gets a status picker and note. */
+  function requestCard(r, d, reload, admin) {
+    const vote = h("button", { class: "btn " + (r.voted ? "green" : "gray") + " small", text: `${r.voted ? "▲ Voted" : "▲ Vote"} · ${r.votes}` });
+    vote.addEventListener("click", () => busy(vote, async () => { try { await api("/api/requests/vote", { id: r.id }); reload(); } catch (e) { toast(e.message, "error"); } }));
+    const kids = [h("div", { class: "chips" }, h("strong", { text: r.title }), h("span", { class: "chip " + (REQ_CHIP[r.status] || "dim"), text: `${REQ_ICON[r.status] || ""} ${d.statuses[r.status] || r.status}` })),
+      h("div", { class: "muted small", text: `${r.user_name || "A member"}${r.mine ? " (you)" : ""} · ${new Date(r.created_at).toLocaleDateString()}` })];
+    if (r.body) kids.push(h("p", { class: "bug-text", text: r.body }));
+    if (r.note) kids.push(h("div", { class: "notice" }, h("strong", { text: "From the developer: " }), r.note));
+    kids.push(h("div", { class: "chips" }, vote));
+    if (d.isOwner && admin) {
+      const st = select(Object.entries(d.statuses), r.status), note = h("input", { type: "text", maxlength: "500", placeholder: "Note for the requester (optional)", value: r.note || "" });
+      const save = h("button", { class: "btn blue small", text: "Save status", onclick: () => busy(save, async () => {
+        const x = await api("/api/admin/requests/status", { id: r.id, status: st.value, note: note.value });
+        toast(x.notified ? "Saved. The member was messaged." : "Saved.", "ok"); reload();
+      }) });
+      const del = h("button", { class: "btn red small", text: "Delete", onclick: () => { if (confirm("Delete this request?")) busy(del, async () => { await api("/api/admin/requests/delete", { id: r.id }); reload(); }); } });
+      kids.push(h("div", { class: "row" }, field("Status", st), field("Note", note)), h("div", { class: "chips" }, save, del));
+    }
+    return h("div", { class: "bug-card" }, ...kids);
+  }
+
+  /** The list with filters; `admin` shows it inside the Admin tab (same cards, no submit form). */
+  async function requestList(box, { admin = false } = {}) {
+    let status = "", sort = "votes";
+    async function load() {
+      const d = await api("/api/requests?sort=" + sort + (status ? "&status=" + status : ""));
+      const stSel = select([["", "All"], ...Object.entries(d.statuses)], status), sortSel = select([["votes", "Most votes"], ["new", "Newest"]], sort);
+      stSel.addEventListener("change", () => { status = stSel.value; load().catch(e => toast(e.message, "error")); });
+      sortSel.addEventListener("change", () => { sort = sortSel.value; load().catch(e => toast(e.message, "error")); });
+      const parts = [];
+      if (!admin) {
+        const title = h("input", { type: "text", maxlength: "100", placeholder: "What would you like the bot to do?" });
+        const body = h("textarea", { maxlength: "1000", placeholder: "More detail (optional): what problem does it solve?" });
+        const send = h("button", { class: "btn green", text: "Send request", onclick: () => busy(send, async () => { await api("/api/requests", { title: title.value, body: body.value }); toast("Thanks! Others can vote on it now.", "ok"); load().catch(() => {}); }) });
+        parts.push(h("div", { class: "panel" }, h("h3", { text: "Suggest a feature" }), field("Idea", title), field("Details", body),
+          h("p", { class: "muted small", text: `Check the list first and vote if it's already there. You can have ${d.max} requests waiting at once. You get a message when the status changes.` }), send));
+      }
+      parts.push(h("div", { class: "panel" }, h("h3", { text: `Requests (${Object.values(d.counts).reduce((a, b) => a + b, 0)})` }),
+        h("div", { class: "row" }, field("Show", stSel), field("Sort", sortSel)),
+        d.requests.length ? h("div", { class: "scroll-y tall" }, d.requests.map(r => requestCard(r, d, () => load().catch(e => toast(e.message, "error")), admin))) : h("p", { class: "muted", text: "Nothing here yet." })));
+      box.replaceChildren(...parts);
+    }
+    try { await load(); } catch (e) { box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  async function requestsView() {
+    const box = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Feature requests", "Suggest something for the bot, vote on ideas, and see what's planned or being built."), box);
+    await requestList(box);
+    box.className = "";
+  }
 
   async function supportView() {
     const id = currentParam();
@@ -4006,7 +4062,7 @@
     load();
   }
 
-  const VIEWS = { mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

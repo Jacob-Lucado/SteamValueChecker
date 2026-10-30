@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { giveawaySchema, giveawayStore } from "./gwstore.js";
 import { ticketSchema, ticketStore } from "./ticketstore.js";
+import { requestSchema, requestStore } from "./requeststore.js";
 import { steamSchema, steamStore } from "./steamstore.js";
 import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { redeemSchema, redeemStore } from "./redeemstore.js";
@@ -155,6 +156,7 @@ CREATE TABLE IF NOT EXISTS status_meta (
 );
 ${giveawaySchema}
 ${ticketSchema}
+${requestSchema}
 ${communitySchema}
 ${steamSchema}
 ${grabberSchema}
@@ -256,6 +258,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const clean = o => (o ? { ...o } : o); // node:sqlite rows have a null prototype
     const giveaways = giveawayStore({ db, run, get, all, clean, now });
     const tickets = ticketStore({ run, get, all, clean, now });
+    const requests = requestStore({ run, get, all, clean, now });
     const community = communityStore({ run, get, all, clean, now });
     const lfg = lfgStore({ db, run, get, all, clean, now });
     const grabber = grabberStore({ run, get, clean, now });
@@ -646,6 +649,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             calendar.forgetCalendarUser(discordId);
             lfg.forgetLfgUser(discordId);
             tickets.deleteUserTickets(discordId);
+            requests.forgetRequestUser(discordId);
             community.forgetCommunityUser(discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
@@ -683,6 +687,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

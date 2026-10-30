@@ -1023,6 +1023,40 @@ test("up for giveaway: only the member's server staff can mark a wishlist game, 
     await t.close();
 });
 
+test("feature requests: members suggest and vote, only the owner changes status, the requester is messaged", async () => {
+    const dms = [];
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ dm: async (id, p) => { dms.push([id, p.embeds[0].description]); } }) });
+    const req = (path, body) => o.request(path, { method: "POST", body });
+    assert.equal((await req("/api/requests", { title: "ab" })).status, 400, "too short");
+    o.db.ensureUser("u2");
+    const id = o.db.addRequest({ userId: "u2", userName: "Sam", title: "Dark mode for cards", body: "please" });
+    const list = (await o.request("/api/requests")).data;
+    assert.equal(list.requests.length, 1); assert.equal(list.requests[0].votes, 1); assert.equal(list.requests[0].voted, false);
+    assert.equal((await req("/api/requests/vote", { id })).data.voted, true);
+    assert.equal((await o.request("/api/requests")).data.requests[0].votes, 2);
+    o.advance(2_000);
+    assert.equal((await req("/api/requests/vote", { id })).data.voted, false, "voting again takes it back");
+    o.advance(2_000);
+    assert.equal((await req("/api/requests/vote", { id: 999 })).status, 404);
+    const mine = await req("/api/requests", { title: "Add a thing", body: "details" });
+    assert.equal(mine.status, 200);
+    assert.equal((await req("/api/requests", { title: "Another idea" })).status, 429, "slow down between requests");
+    // owner moves it along; the requester gets a DM
+    assert.equal((await req("/api/admin/requests/status", { id, status: "nonsense" })).status, 400);
+    const r = await req("/api/admin/requests/status", { id, status: "in_development", note: "Started this week" });
+    assert.equal(r.data.notified, true);
+    assert.deepEqual(dms[0][0], "u2"); assert.match(dms[0][1], /In development/); assert.match(dms[0][1], /Started this week/);
+    const after = (await o.request("/api/requests?status=in_development")).data.requests;
+    assert.deepEqual(after.map(x => [x.id, x.note]), [[id, "Started this week"]]);
+    assert.equal((await req("/api/admin/requests/delete", { id })).data.removed, true);
+    await o.close();
+    // a non-owner cannot change a status
+    const t = await signedIn();
+    const rid = t.db.addRequest({ userId: "u2", userName: "Sam", title: "Something nice" });
+    assert.equal((await t.request("/api/admin/requests/status", { method: "POST", body: { id: rid, status: "rejected" } })).status, 403);
+    await t.close();
+});
+
 test("backlog challenge from the dashboard: set a goal, see progress, bad goals refused", async () => {
     const t = await signedIn();
     const r0 = await t.request("/api/library/challenge");
