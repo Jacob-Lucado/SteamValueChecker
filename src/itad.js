@@ -348,6 +348,32 @@ export function createItad({
         return list.filter(d => d.cut >= minCut).slice(0, limit);
     }
 
+    /** A wide pool of current Steam discounts for personalised picks: up to `pages` x 100 deals, deepest cuts first. Cached for ten minutes. */
+    async function getDealsPool({ country = "US", pages = 3 } = {}) {
+        const key = `pool:${country}`;
+        const hit = getCached(key);
+        if (hit !== undefined) return hit;
+        const list = [], seen = new Set();
+        for (let page = 0; page < pages; page++) {
+            let data;
+            try { data = await call("GET", "/deals/v2", { country, limit: 100, offset: page * 100, sort: "-cut", shops: "61", nondeals: "false", mature: "false" }); }
+            catch (err) { if (page === 0) throw err; break; } // later pages are a bonus
+            const got = Array.isArray(data?.list) ? data.list : [];
+            for (const g of got) {
+                const d = g?.deal;
+                if (!g?.id || !d || seen.has(g.id) || (g.type && g.type !== "game")) continue;
+                const cut = Number(d.cut), price = Number(d.price?.amount), regular = Number(d.regular?.amount);
+                if (!Number.isFinite(cut) || !Number.isFinite(price) || !Number.isFinite(regular)) continue;
+                seen.add(g.id);
+                const url = typeof d.url === "string" ? d.url : null;
+                list.push({ id: String(g.id), title: String(g.title ?? "Game"), cut, price, regular, currency: d.price?.currency ?? "USD", url, appid: Number((url ?? "").match(/store\.steampowered\.com\/app\/(\d+)/i)?.[1]) || null });
+            }
+            if (got.length < 100) break;
+        }
+        setCached(key, list);
+        return list;
+    }
+
     /** Active giveaways by game, as Map(itadId -> [{ id, title, shop, url, expiry }]). */
     async function getGiveaways() {
         const out = new Map();
@@ -375,5 +401,5 @@ export function createItad({
         return points;
     }
 
-    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getHistory, health, _cache: cache };
+    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getDealsPool, getHistory, health, _cache: cache };
 }

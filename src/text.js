@@ -30,7 +30,7 @@ export const HELP = [
     "",
     "**Library and Steam**",
     "• `/library` `add`, `import`, `remove`, `view` (value and savings; a `*` marks a gift), `status` (backlog, playing, finished...), `backlog` (what to play next), `spend`, `trend`, `challenge`, `badges`, `bundle` / `bundles`, and `grabber` (a link code for the FanaticalGrabber extension).",
-    "• `/steam` `link` (sign in through Steam on the dashboard and it links itself; a pasted profile still works), `sync`, `view`, `next`, `value`, `taste`, `recap`, `goal`, `unlink`: hours played, what you never played and what it is worth.",
+    "• `/steam` `link` (sign in through Steam on the dashboard and it links itself; a pasted profile still works), `sync`, `view`, `next`, `foryou` (deals picked for you), `value`, `taste`, `recap`, `goal`, `unlink`: hours played, what you never played and what it is worth.",
     "• `/profilecard` makes a shareable picture of your profile. `/compare` lines your library up against a friend who opted in.",
     "• `/redeem` queues Steam keys; press Run on the dashboard's Batch redeem page and the results come back as a DM.",
     "",

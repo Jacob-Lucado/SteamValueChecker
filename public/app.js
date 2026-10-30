@@ -121,7 +121,7 @@
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
     { id: "library", label: "Library", pages: [["library", "Library"], ["steam", "Steam"], ["redeem", "Batch redeem"]] },
-    { id: "prices", label: "Prices", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["deals", "Deals"], ["free", "Free games"], ["warroom", "Sale war room"]] },
+    { id: "prices", label: "Prices", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Deals"], ["free", "Free games"], ["warroom", "Sale war room"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["alerts", "Alert settings"], ["notifications", "Notifications"], ["mydata", "My Data"]] },
@@ -325,6 +325,61 @@
       h("section", { class: "lp-final" },
         h("h2", { text: "Ready to find your next deal?" }),
         cta("center"))].filter(Boolean));
+  }
+
+  // ---------- for you: discounts ranked by your taste and wishlist ----------
+  async function forYouView() {
+    const host = h("div", { class: "muted", text: "Finding deals for you…" });
+    const st = { sort: "best", atl: false, great: false, wish: false, cut: 0, max: "any", shop: "all", page: 0 };
+    let data = null, tries = 0;
+    const PER = 24;
+    const sorters = { best: null, cut: (a, b) => b.cut - a.cut, price: (a, b) => a.price - b.price };
+    const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label }); b.addEventListener("click", fn); return b; };
+    function draw() {
+      const cur = data.currency;
+      const shops = [...new Set(data.deals.map(d => d.shop))].sort();
+      const maxN = st.max === "any" ? Infinity : Number(st.max);
+      let list = data.deals.filter(d => d.cut >= st.cut && d.price <= maxN && (!st.atl || d.atl) && (!st.great || (d.match || 0) >= 80) && (!st.wish || d.wishlist) && (st.shop === "all" || d.shop === st.shop));
+      if (sorters[st.sort]) list = [...list].sort(sorters[st.sort]);
+      const pages = Math.max(1, Math.ceil(list.length / PER));
+      st.page = Math.min(st.page, pages - 1);
+      const sort = select([["best", "Best for you"], ["cut", "Biggest discount"], ["price", "Lowest price"]], st.sort);
+      sort.addEventListener("change", () => { st.sort = sort.value; st.page = 0; draw(); });
+      const maxSel = select([["any", "Any"], ["5", "Under 5"], ["10", "Under 10"], ["20", "Under 20"], ["40", "Under 40"]], st.max);
+      maxSel.addEventListener("change", () => { st.max = maxSel.value; st.page = 0; draw(); });
+      const set = (k, v) => () => { st[k] = v; st.page = 0; draw(); };
+      const card = d => h("a", { class: "fy-card", href: d.url && /^https:\/\//.test(d.url) ? d.url : "#/foryou", target: "_blank", rel: "noopener noreferrer" },
+        h("div", { class: "fy-match" + (d.match === null ? " none" : ""), "aria-label": d.match === null ? "No match score yet" : d.match + " percent match" }, h("b", { text: d.match === null ? "–" : String(d.match) }), h("small", { text: "MATCH" })),
+        d.appid ? steamArt(d.appid, "fy-art", 460, 215, d.id) : h("div", { class: "fy-art art-missing" }),
+        h("div", { class: "fy-info" },
+          h("strong", { class: "fy-title", text: d.title }),
+          h("span", { class: "muted small", text: d.shop + (d.atl ? " · all-time low" : "") + (d.wishlist ? " · on your wishlist" : "") }),
+          d.genres.length ? h("span", { class: "fy-genres", text: d.genres.join(" · ") }) : null),
+        h("div", { class: "fy-price" }, h("span", { class: "fy-cut", text: "-" + d.cut + "%" }), h("b", { text: money(d.price, cur) }), h("s", { text: money(d.regular, cur) })));
+      const prev = h("button", { class: "pg-btn wide", text: "‹ Prev", onclick: () => { st.page--; draw(); host.scrollIntoView({ block: "start" }); } }); prev.disabled = st.page === 0;
+      const next = h("button", { class: "pg-btn wide", text: "Next ›", onclick: () => { st.page++; draw(); host.scrollIntoView({ block: "start" }); } }); next.disabled = st.page >= pages - 1;
+      host.className = "";
+      host.replaceChildren(
+        !data.personalised ? h("div", { class: "notice" }, "These are the best current discounts. ", h("a", { href: "#/steam", text: "Sign in through Steam" }), " (or add wishlist games) and they will be ranked for you.") : null,
+        h("div", { class: "panel fy-filters" },
+          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Sort" }), sort,
+            chip("All-time low", st.atl, set("atl", !st.atl)), chip("Great match 80+", st.great, set("great", !st.great)), chip("On wishlist", st.wish, set("wish", !st.wish))),
+          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Discount" }), ...[[0, "Any discount"], [25, "25%+"], [50, "50%+"], [75, "75%+"]].map(([n, t]) => chip(t, st.cut === n, set("cut", n))),
+            h("span", { class: "fy-lab", text: "Max price" }), maxSel),
+          shops.length > 1 ? h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Store" }), chip("All", st.shop === "all", set("shop", "all")), ...shops.slice(0, 12).map(x => chip(x, st.shop === x, set("shop", x)))) : null),
+        h("p", { class: "muted small", text: `${list.length} deals matched · ranked for you` + (data.pending ? ` · still reading genres for ${data.pending} games` : "") }),
+        list.length ? h("div", { class: "fy-grid" }, list.slice(st.page * PER, (st.page + 1) * PER).map(card)) : h("div", { class: "empty", text: "No deals match those filters." }),
+        h("div", { class: "lib-pager" }, h("div", { class: "pg-nav" }, prev, h("span", { class: "muted small", text: `Page ${st.page + 1} of ${pages}` }), next)));
+    }
+    async function load() {
+      try {
+        data = await api("/api/foryou");
+        draw();
+        if (data.pending && tries++ < 40) setTimeout(() => { if (host.isConnected) load(); }, 3500);
+      } catch (e) { host.className = ""; host.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    app.replaceChildren(pageHead("For you", "Live discounts ranked by how well each game fits your taste and wishlist. Games you already own are left out."), host);
+    load();
   }
 
   // ---------- value checker ----------
@@ -2933,6 +2988,7 @@
       { id: "public", icon: "🔗", title: "Public wishlist page", text: "A shareable page for gifts, where visitors can mark what they will buy.", href: "#/alerts", status: () => [Boolean(profile && profile.public), profile && profile.public ? "On" : "Off"] },
       { id: "redeem", icon: "🔑", title: "Batch redeem", text: "Redeem many Steam keys through the FanaticalGrabber extension.", href: "#/redeem", status: null },
       { id: "war", icon: "⚔️", title: "Sale war room", text: "Plan a sale cart with a budget slider.", href: "#/warroom", status: null },
+      { id: "foryou", icon: "✨", title: "For you", text: "Discounts ranked by your taste and wishlist.", href: "#/foryou", status: null },
       { id: "deals", icon: "🏷️", title: "Deals and bundles", text: "Bundle checks and sale prep.", href: "#/deals", status: null },
       { id: "calendar", icon: "📅", title: "Calendar", text: "Release dates, Steam sales and server events.", href: "#/calendar", status: null },
       { id: "compare", icon: "🆚", title: "Compare libraries", text: "See what you and a friend both own.", href: "#/compare", status: null },
@@ -3399,7 +3455,7 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

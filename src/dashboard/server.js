@@ -20,6 +20,7 @@ import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
+import { forYou } from "../foryou.js";
 import { libraryAnalytics } from "../analytics.js";
 import { steamLoginUrl, verifySteamLogin } from "../steamopenid.js";
 import { UserError } from "../errors.js";
@@ -76,7 +77,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending";
-const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500 };
+const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -824,6 +825,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (need.length) await refreshTags({ db, appids: need, fetchImpl: steamFetch ?? globalThis.fetch, delayMs: 150 });
             const w = await libraryView(db, itad, u, { snapshot: false });
             return { ...libraryAnalytics(db, s.userId, w.rows), currency: w.currency ?? "USD", pending: db.appsNeedingTags(s.userId, 500).length };
+        },
+
+        // Deals picked for you: discounts ranked by taste and wishlist. `pending` = games still waiting for genres; the page asks again.
+        "GET /api/foryou": async (req) => {
+            const s = session(req);
+            const u = userRow(s);
+            cooldown(s.userId, "foryou");
+            return await forYou({ db, itad, userId: s.userId, user: u, fetchImpl: steamFetch ?? globalThis.fetch });
         },
 
         "GET /api/steam/taste": async (req) => {

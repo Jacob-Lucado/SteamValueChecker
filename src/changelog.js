@@ -5,6 +5,7 @@ export const CHANGELOG = [
         "The Steam page has a new **Library analytics** view: games, hours, collection value, how much you have played, hours by genre, played versus backlog and your most played games.",
         "Free DLC is now labelled, and if your Steam library is synced the alert says whether you own the base game.",
         "FanaticalGrabber 2.7: press **Connect the extension** on the Library page and the code is handed over for you. The cart check now says why when it cannot read a cart, and \"You're seeing the best deals available\" when you are well under Steam.",
+        "**For you** page and `/steam foryou`: live deals ranked by a match score from your library taste and wishlist, with filters for all-time lows, discount, price and store.",
         "Home page: a live count of free offers and a feature ticker. `/help` is now a full command list."
     ] },
     { version: "2026.10.30", date: "2026-10-30", title: "Goals, bundles, more leaderboards and a tidier menu", items: [

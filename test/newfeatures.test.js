@@ -293,3 +293,33 @@ test("free DLC is spotted through Steam and says whether you own the base game",
     const failing = await enrichFree([{ id: "q", title: "Q", url: "https://store.steampowered.com/app/999/", type: "game" }], async () => { throw new Error("offline"); });
     assert.equal(failing[0].type, "game", "a Steam outage never breaks the alert");
 });
+
+test("For you ranks discounts by taste and wishlist, skips owned games and survives missing genres", async () => {
+    const { forYou } = await import("../src/foryou.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:");
+    db.ensureUser("u1");
+    db.syncSteamGames("u1", [{ itad_id: "own", title: "Owned", appid: 1, minutes: 6000, lastPlayed: null }, { itad_id: "act", title: "Action Fan", appid: 2, minutes: 3000, lastPlayed: null }], { track: false });
+    db.saveAppTags(1, ["Action", "Adventure"], []); db.saveAppTags(2, ["Action"], []);
+    db.saveAppTags(10, ["Action", "Adventure"], []); db.saveAppTags(11, ["Strategy"], []);
+    const pool = [
+        { id: "own", title: "Owned", cut: 80, price: 2, regular: 10, currency: "USD", url: "https://store.steampowered.com/app/1/", appid: 1 },
+        { id: "fit", title: "Fits", cut: 50, price: 10, regular: 20, currency: "USD", url: "https://store.steampowered.com/app/10/", appid: 10 },
+        { id: "off", title: "Off taste", cut: 60, price: 8, regular: 20, currency: "USD", url: "https://store.steampowered.com/app/11/", appid: 11 },
+        { id: "new", title: "No genres yet", cut: 40, price: 12, regular: 20, currency: "USD", url: "https://store.steampowered.com/app/12/", appid: 12 }
+    ];
+    const itad = {
+        getDealsPool: async () => pool,
+        getPrices: async ids => new Map(ids.map(id => [id, { deals: [{ shop: { name: "Steam" }, price: { amount: pool.find(p => p.id === id).price, currency: "USD" }, regular: { amount: pool.find(p => p.id === id).regular }, cut: 0, url: "https://s.example/" + id }, { shop: { name: "GOG" }, price: { amount: pool.find(p => p.id === id).price - 1, currency: "USD" }, regular: { amount: pool.find(p => p.id === id).regular }, url: "https://g.example/" + id }], historyLow: { all: { amount: id === "fit" ? 9 : 1 } } }]))
+    };
+    const r = await forYou({ db, itad, userId: "u1", user: db.getUser("u1"), fetchImpl: async () => { throw new Error("offline"); } });
+    const ids = r.deals.map(d => d.id);
+    assert.ok(!ids.includes("own"), "owned games are left out");
+    assert.equal(ids[0], "fit", "the game that fits your genres comes first");
+    const fit = r.deals[0];
+    assert.ok(fit.match >= 90, "strong fit, got " + fit.match);
+    assert.equal(fit.shop, "GOG"); assert.equal(fit.price, 9); assert.equal(fit.atl, true);
+    assert.equal(r.deals.find(d => d.id === "off").match < fit.match, true);
+    assert.equal(r.deals.find(d => d.id === "new").match, null, "no genres yet: no score, still listed");
+    assert.equal(r.pending, 1); assert.equal(r.personalised, true);
+});

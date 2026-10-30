@@ -2,6 +2,7 @@
 import { MessageFlags } from "discord.js";
 import { libraryView } from "./library.js";
 import { viewRows } from "./wishlist.js";
+import { forYou } from "./foryou.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "./taste.js";
 import { goalProgress } from "./steamstore.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext, steamValue, fmtHours } from "./steamlib.js";
@@ -141,6 +142,16 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
                 const n = steamNext(view.rows);
                 if (!n) throw new UserError("Nothing left to suggest. Everything from Steam is finished or dropped, or not synced yet (`/steam sync`).");
                 return void await i.editReply({ embeds: [nextEmbed(n, view.currency)] });
+            }
+            if (sub === "foryou") {
+                wait(i.user.id);
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                const r = await forYou({ db, itad, userId: i.user.id, user: db.getUser(i.user.id), fetchImpl, tagBudget: 25 });
+                const top = r.deals.filter(d => d.match === null || d.match >= 60).slice(0, 8);
+                if (!top.length) throw new UserError("No picks right now. Link Steam (`/steam link`) so I know your taste, then try again.");
+                const lines = top.map(d => `${d.match ? `**${d.match}%**` : "•"} [${d.title}](${d.url ?? "https://store.steampowered.com/"}): ${money(d.price, d.currency)} at ${d.shop} (-${d.cut}%)${d.atl ? " · all-time low" : ""}${d.wishlist ? " · on your wishlist" : ""}`);
+                return void await i.editReply({ embeds: [{ color: 0x4da3ff, title: "Deals picked for you", description: lines.join("\n").slice(0, 3900),
+                    footer: { text: (r.personalised ? `Based on your ${r.genres.slice(0, 3).join(", ")} games` : "Link Steam to personalise this") + (r.pending ? `  •  still reading genres for ${r.pending} games` : "") + "  •  Prices by IsThereAnyDeal" } }] });
             }
             if (sub === "taste") {
                 if (!link) throw new UserError("Link your profile first with `/steam link`.");

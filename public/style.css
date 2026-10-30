@@ -729,3 +729,24 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .pg-btn { min-width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; padding: 0 10px; }
 .pg-btn.on { background: var(--accent); color: #06121f; border-color: var(--accent); font-weight: 700; }
 .pg-btn:disabled { opacity: .45; cursor: default; }
+
+/* For you */
+.fy-filters { display: grid; gap: 12px; }
+.fy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fy-lab { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-right: 4px; }
+.fy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
+.fy-card { display: grid; grid-template-columns: auto 92px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); text-decoration: none; color: var(--text); transition: border-color .2s, transform .2s; }
+.fy-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.fy-match { width: 44px; text-align: center; border-radius: 8px; padding: 6px 0; background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); line-height: 1; }
+.fy-match b { display: block; font-size: 17px; }
+.fy-match small { font-size: 8.5px; font-weight: 700; letter-spacing: .08em; }
+.fy-match.none { background: var(--panel-2); color: var(--muted); }
+.fy-art { width: 92px; height: 43px; object-fit: cover; border-radius: 6px; display: block; background: var(--panel-2); }
+.fy-info { display: grid; gap: 2px; min-width: 0; }
+.fy-title { color: var(--white); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fy-genres { font-size: 11.5px; color: var(--accent); }
+.fy-price { display: grid; justify-items: end; gap: 1px; }
+.fy-price b { color: var(--good); font-size: 15px; }
+.fy-price s { color: var(--muted); font-size: 11.5px; }
+.fy-cut { font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: var(--panel-2); color: var(--white); }
+@media (max-width: 520px) { .fy-card { grid-template-columns: auto minmax(0, 1fr) auto; } .fy-art { display: none; } }
