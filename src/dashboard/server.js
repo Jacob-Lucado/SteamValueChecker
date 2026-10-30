@@ -36,6 +36,7 @@ import { trophyCase } from "../badges.js";
 import { profileCardData, renderProfileCard, renderSteamValue, renderRecap } from "../cardimg.js";
 import { PLATFORMS, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
+import { grabberPromo } from "../promo.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -75,6 +76,9 @@ const FILES = {
     "/creator-bg.webp": ["creator-bg.webp", "image/webp"],
     "/banner.png": ["banner.png", "image/png"],
     "/multikey.png": ["multikey.png", "image/png"],
+    "/grabber-ad-hero.png": ["grabber-ad-hero.png", "image/png"],
+    "/grabber-ad-cart.png": ["grabber-ad-cart.png", "image/png"],
+    "/grabber-ad-paid.png": ["grabber-ad-paid.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
     "/favicon.png": ["favicon.png", "image/png"]
 };
@@ -110,7 +114,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -223,8 +227,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
 
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
-    const broadcaster = () => (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
-        sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p) }));
+    const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
+        sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p), promoPayload: () => grabberPromo({ base: config.publicUrl, url: process.env.EXTENSION_STORE_URL || FANATICAL_GRABBER_URL, dashboardUrl: config.publicUrl }) }));
 
     function managerGuild(s, id) {
         const g = guildFor(s, id);
@@ -1618,7 +1622,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (audience !== "me" && body.confirm !== "SEND") throw new HttpError(400, "Type SEND to confirm.");
             const undo = audience !== "me" ? cooldown(s.userId, "broadcast") : () => {};
             try {
-                const r = broadcaster().start({ title: body.title, body: body.body, audience });
+                const r = broadcaster().start({ title: body.title, body: body.body, audience, promo: body.kind === "promo" });
                 log(`owner ${s.userId} started broadcast #${r.id} to ${audience} (${r.total} targets)`);
                 return { ...r, current: broadcaster().current() };
             } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }

@@ -431,6 +431,13 @@ const community = new SlashCommandBuilder()
         .addRoleOption(o => o.setName("role").setDescription("The reward role"))
         .addBooleanOption(o => o.setName("remove").setDescription("Remove the reward for this count")));
 
+const grabberAd = new SlashCommandBuilder()
+    .setName("grabberad")
+    .setDescription("Bot owner only: send the FanaticalGrabber advertisement")
+    .setDefaultMemberPermissions(0)
+    .addStringOption(o => o.setName("audience").setDescription("Who gets it").setRequired(true).addChoices({ name: "Only me (preview)", value: "me" }, { name: "Everyone the bot knows (DMs)", value: "dm" }, { name: "Every server's #announcements", value: "channels" }, { name: "Both", value: "both" }))
+    .addStringOption(o => o.setName("confirm").setDescription("Type SEND to send it to anyone but yourself"));
+
 const lbRefresh = new SlashCommandBuilder()
     .setName("leaderboardrefresh")
     .setDescription("Server managers: update the #leaderboard channel right now")
@@ -514,7 +521,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
+    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());

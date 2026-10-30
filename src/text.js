@@ -30,7 +30,7 @@ export const HELP = [
     "",
     "**Library and Steam**",
     "• `/library` `add`, `import`, `remove`, `view` (value and savings; a `*` marks a gift), `status` (backlog, playing, finished), `backlog` (play next), `spend`, `trend`, `challenge`, `badges`, `bundle` / `bundles`, `grabber` (link code for the FanaticalGrabber extension).",
-    "• `/steam` `link` (sign in through Steam on the dashboard and it links itself; a pasted profile still works), `sync`, `view`, `next`, `foryou` (deals picked for you), `verify` (Steam Verified role), `value`, `taste`, `recap`, `goal`, `unlink`: hours played, what you never played and what it is worth.",
+    "• `/steam` `link` (sign in through Steam on the dashboard and it links itself), `sync`, `view`, `next`, `foryou` (deals picked for you), `verify` (Steam Verified role), `value`, `taste`, `recap`, `goal`, `unlink`: hours played, what you never played and what it is worth.",
     "• `/profilecard` makes a shareable picture of your profile. `/compare` lines your library up against a friend who opted in.",
     "• `/redeem` queues Steam keys; press Run on the dashboard's Batch redeem page and the results come back as a DM.",
     "",
@@ -45,10 +45,10 @@ export const HELP = [
     "• Moderators: `/mod` `warn` / `warnings` / `clearwarns` / `timeout` / `untimeout` / `kick` / `ban` / `unban` / `purge` / `cases` / `log`. Actions are logged as cases in #mod-log.",
     "",
     "**Help and your data**",
-    "• `/support` `open` / `mine` / `setup` asks the team for help. `/bug` reports a problem to the bot owner. `/changelog` shows what is new. `/dashboard` (or `/dash`) links the website.",
-    "• `/mydata` `export` / `delete` everything stored about you. `/status` shows whether the bot is healthy. `/about` and `/privacy` explain the bot and your data.",
+    "• `/support` `open` / `mine` / `setup` asks the team for help. `/bug` reports a problem to the bot owner. `/changelog` shows what is new. `/dashboard` (or `/dash`) links the website. `/grabberad` is for the bot owner.",
+    "• `/mydata` `export` / `delete` your stored data. `/status` shows if the bot is healthy. `/about` and `/privacy` explain the bot and your data.",
     "",
-    "`/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight`, `/lfg` and `/mod` only work in a server. The bot ignores anything that looks like a key, except in the private giveaway form."
+    "`/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight`, `/lfg` and `/mod` only work in a server. The bot ignores anything that looks like a key outside the private giveaway form."
 ].join("\n");
 
 export const ABOUT = [

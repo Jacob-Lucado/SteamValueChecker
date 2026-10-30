@@ -110,7 +110,7 @@ test("broadcast: validates, skips members whose DMs keep failing, runs one at a 
     db.setGuildChannel("g1", "chan1", "a");
     const dms = [], posts = []; let gate;
     const b = createBroadcaster({ db, ownerId: "a", delayMs: 0, sleep: () => gate, sendDm: async (id) => { if (id === "b") throw new Error("closed"); dms.push(id); }, sendChannel: async (id) => { posts.push(id); } });
-    assert.deepEqual(b.counts(), { dm: 2, channels: 1 });
+    assert.deepEqual(b.counts(), { dm: 2, channels: 1, promoDm: 2 });
     assert.throws(() => b.start({ title: "", body: "  ", audience: "dm" }), UserError);
     assert.throws(() => b.start({ title: "", body: "x".repeat(1501), audience: "dm" }), UserError);
     assert.throws(() => b.start({ title: "", body: "hi", audience: "everyone" }), UserError);
@@ -356,4 +356,31 @@ test("deal links from ITAD are redirects, so Steam app ids come from a lookup (p
     // a failing lookup never breaks the list
     const broken = createItad({ apiKey: "k", fetchImpl: async (url) => String(url).includes("/lookup/") ? { ok: false, status: 500, headers: new Map(), json: async () => ({}), text: async () => "" } : fetchImpl(url) });
     assert.equal((await broken.getDealsPool({ pages: 1 })).length, 3);
+});
+
+test("FanaticalGrabber advertisement: features and images, a gallery of embeds, an opt-out, and only people who have not opted out", async () => {
+    const { grabberPromo, PROMO_OFF_ID } = await import("../src/promo.js");
+    const { createBroadcaster } = await import("../src/broadcast.js");
+    const p = grabberPromo({ base: "https://dash.test/", url: "https://store.test/x", dashboardUrl: "https://dash.test" });
+    assert.equal(p.embeds.length, 3);
+    assert.deepEqual(p.embeds.map(e => e.image.url), ["https://dash.test/grabber-ad-hero.png", "https://dash.test/grabber-ad-cart.png", "https://dash.test/grabber-ad-paid.png"]);
+    assert.ok(p.embeds.every(e => e.url === "https://store.test/x"), "same url makes one gallery");
+    assert.match(p.embeds[0].author.name, /developer/);
+    const text = JSON.stringify(p.embeds);
+    for (const f of ["Reveal", "Batch redeem", "Cart & bundle", "what you paid", "One-click connect", "Price overlay"]) assert.match(text, new RegExp(f, "i"));
+    assert.deepEqual(p.components[0].components.map(c => c.label ?? c.custom_id), ["Get FanaticalGrabber", "Open the dashboard", "No more promos"]);
+    assert.equal(p.components[0].components.at(-1).custom_id, PROMO_OFF_ID);
+    assert.equal(grabberPromo({}).embeds[0].image, undefined, "no images without a public address");
+    // sending: opted-out people and failing DMs are skipped; a normal announcement still reaches everyone
+    const db = openDb(":memory:");
+    for (const id of ["a", "b", "c", "d"]) db.ensureUser(id, "g1");
+    db.updateUser("b", { promo_off: 1 }); db.updateUser("c", { dm_failures: 5 });
+    const dms = [];
+    const b = createBroadcaster({ db, ownerId: "a", delayMs: 0, sleep: async () => {}, sendDm: async (id, payload) => { dms.push([id, payload.embeds.length]); }, sendChannel: async () => {}, promoPayload: () => p });
+    assert.deepEqual(b.counts(), { dm: 3, channels: 0, promoDm: 2 });
+    b.start({ audience: "dm", promo: true });
+    for (let i = 0; i < 50 && b.running(); i++) await new Promise(x => setTimeout(x, 5));
+    assert.deepEqual(dms, [["a", 3], ["d", 3]]);
+    assert.equal(db.listBroadcasts(1)[0].title, "FanaticalGrabber advertisement");
+    assert.throws(() => createBroadcaster({ db, ownerId: "a", sendDm: async () => {}, sendChannel: async () => {} }).start({ audience: "me", promo: true }), /not available/);
 });

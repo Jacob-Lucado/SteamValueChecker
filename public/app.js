@@ -2127,6 +2127,21 @@
       const test = h("button", { class: "btn gray", type: "button", text: "Send a test to me only" });
       let info = null, timer = 0;
       const box = h("div");
+      const promoPanel = () => {
+        const pWho = select([["me", "Only me (preview)"], ["dm", `DMs to members who have not opted out (${info.counts.promoDm})`], ["channels", `Every server's #announcements channel (${info.counts.channels})`], ["both", `Both (${info.counts.promoDm + info.counts.channels})`]], "me");
+        const pConfirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
+        const pBtn = h("button", { class: "btn red", type: "button", text: "Send the advertisement" });
+        pBtn.addEventListener("click", () => busy(pBtn, async () => {
+          const r = await api("/api/admin/broadcast", { kind: "promo", audience: pWho.value, confirm: pConfirm.value });
+          toast(pWho.value === "me" ? "Preview sent to your DMs." : `Sending to ${r.total} places. You can leave this page.`, "ok");
+          if (pWho.value !== "me") pConfirm.value = "";
+          await refresh();
+        }));
+        return h("div", { class: "panel" }, h("h3", { text: "Advertise FanaticalGrabber" }),
+          h("p", { class: "muted small", text: "A message from you (marked as from the bot developer) that lists the extension's features with example pictures, with Get it, Open the dashboard and No more promos buttons. Only people the bot already knows are messaged, and anyone who presses No more promos is skipped from then on. Always send yourself the preview first. /grabberad does the same in Discord." }),
+          h("div", { class: "grid three" }, ["hero", "cart", "paid"].map(n => h("img", { src: `/grabber-ad-${n}.png`, alt: "", loading: "lazy", width: "300", height: "158", class: "ad-thumb" }))),
+          h("div", { class: "row" }, field("Send to", pWho), field("Type SEND to confirm", pConfirm)), h("div", { class: "row" }, pBtn));
+      };
       const paintPreview = () => {
         count.textContent = msg.value.length + " / 1500";
         preview.replaceChildren(h("div", { class: "muted small", text: "📣 Official message from the Steam Value Checker developer" }), h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff." }));
@@ -2167,6 +2182,7 @@
             field("Title", title), field("Message", msg), count, h("h4", { text: "Preview" }), preview,
             h("div", { class: "row" }, field("Send to", who), field("Type SEND to confirm", confirm)),
             h("div", { class: "row" }, test, send)),
+          promoPanel(), 
           h("div", { class: "panel" }, h("h3", { text: "Progress" }), progress, h("h4", { text: "Recent announcements" }), history));
       }).catch(e => box.replaceChildren(h("div", { class: "notice warn", text: e.message })));
       return [box];

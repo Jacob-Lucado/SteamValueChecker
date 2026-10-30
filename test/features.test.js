@@ -402,7 +402,7 @@ test("every slash command has a dashboard counterpart", async () => {
         rank: "GET /api/community/rank", levels: "GET /api/community/leaderboard", "invites/me": "GET /api/community/invites", "invites/top": "GET /api/community/invites", "invites/link": "POST /api/community/invite-link", "emoji/import": "POST /api/community/emoji", "emoji/list": "GET /api/community/emoji",
         "mod/warn": "POST /api/mod/action", "mod/timeout": "POST /api/mod/action", "mod/untimeout": "POST /api/mod/action", "mod/kick": "POST /api/mod/action", "mod/ban": "POST /api/mod/action", "mod/unban": "POST /api/mod/action", "mod/purge": "POST /api/mod/action",
         "mod/warnings": "GET /api/mod/cases", "mod/cases": "GET /api/mod/cases", "mod/clearwarns": "POST /api/mod/clearwarns", "mod/log": "POST /api/mod/log",
-        leaderboardrefresh: "POST /api/community/leaderboard",
+        leaderboardrefresh: "POST /api/community/leaderboard", grabberad: "POST /api/admin/broadcast",
         dashboard: "GET /api/me", dash: "GET /api/me",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
@@ -511,7 +511,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "freegames", "friendCmd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "freegames", "friendCmd", "grabberAd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "modCmd", "rank", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);

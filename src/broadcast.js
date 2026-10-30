@@ -23,8 +23,9 @@ export function broadcastStore({ run, all, get, now }) {
     const progressBroadcast = (id, sent, failed, done) => run("UPDATE broadcasts SET sent = ?, failed = ?, done = ? WHERE id = ?", sent, failed, done ? 1 : 0, id);
     const listBroadcasts = (limit = 8) => all("SELECT id, at, title, body, audience, total, sent, failed, done FROM broadcasts ORDER BY id DESC LIMIT ?", limit);
     /** Members who can be DMed (not ones whose DMs keep failing) and servers with an alert channel. */
-    const broadcastTargets = () => ({
-        users: all("SELECT discord_id FROM users WHERE dm_failures < 3").map(r => r.discord_id),
+    const broadcastTargets = ({ promo = false } = {}) => ({
+        // Promotions skip anyone who pressed "No more promos".
+        users: all(`SELECT discord_id FROM users WHERE dm_failures < 3${promo ? " AND promo_off = 0" : ""}`).map(r => r.discord_id),
         // Each server's #announcements channel, or its alert channel if it has none.
         channels: all(`SELECT COALESCE(c.announce_channel, g.channel_id) AS ch FROM guilds g LEFT JOIN community c ON c.guild_id = g.guild_id
             UNION SELECT c.announce_channel FROM community c WHERE c.announce_channel IS NOT NULL`).map(r => r.ch).filter(Boolean)
@@ -36,12 +37,12 @@ export const noticeEmbed = (title, body, base = null) => ({ color: 0xfaa61a, aut
     footer: { text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff. Questions? Use the Support page on the dashboard." },
     ...(base ? { image: { url: `${base}/banner.png` }, thumbnail: { url: `${base}/creator.png` } } : {}) });
 
-export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
+export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, promoPayload = null, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     let running = null;
 
     function counts() {
-        const t = db.broadcastTargets();
-        return { dm: t.users.length, channels: [...new Set(t.channels)].length };
+        const t = db.broadcastTargets(), p = db.broadcastTargets({ promo: true });
+        return { dm: t.users.length, channels: [...new Set(t.channels)].length, promoDm: p.users.length };
     }
 
     function clean(title, body) {
@@ -52,12 +53,14 @@ export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, o
     }
 
     /** Starts sending and returns right away; progress is in status(). */
-    function start({ title, body, audience }) {
+    function start({ title, body, audience, promo = false }) {
         if (!AUDIENCES.includes(audience)) throw new UserError("Pick who gets it.");
         if (running) throw new UserError("A broadcast is still going out. Wait for it to finish.");
-        const { t, b } = clean(title, body);
-        const embed = noticeEmbed(t, b, publicUrl ? String(publicUrl).replace(/\/$/, "") : null);
-        const targets = db.broadcastTargets();
+        if (promo && !promoPayload) throw new UserError("The advertisement is not available here.");
+        const { t, b } = promo ? { t: "FanaticalGrabber advertisement", b: "(advertisement)" } : clean(title, body);
+        const embed = promo ? null : noticeEmbed(t, b, publicUrl ? String(publicUrl).replace(/\/$/, "") : null);
+        const payload = promo ? promoPayload() : { embeds: [embed], allowed_mentions: { parse: [] } };
+        const targets = db.broadcastTargets({ promo });
         const dmIds = audience === "me" ? [ownerId] : audience === "dm" || audience === "both" ? targets.users : [];
         const chIds = audience === "channels" || audience === "both" ? [...new Set(targets.channels)] : [];
         const total = dmIds.length + chIds.length;
@@ -67,8 +70,8 @@ export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, o
         running = job;
         (async () => {
             const step = async fn => { try { await fn(); job.sent++; } catch { job.failed++; } if ((job.sent + job.failed) % 10 === 0) db.progressBroadcast(id, job.sent, job.failed, false); await sleep(delayMs); };
-            for (const uid of dmIds) await step(() => sendDm(uid, { embeds: [embed] }));
-            for (const cid of chIds) await step(() => sendChannel(cid, { embeds: [embed], allowed_mentions: { parse: [] } }));
+            for (const uid of dmIds) await step(() => sendDm(uid, payload));
+            for (const cid of chIds) await step(() => sendChannel(cid, payload));
         })().catch(() => {}).finally(() => { job.done = true; db.progressBroadcast(id, job.sent, job.failed, true); running = null; });
         return { id, total };
     }

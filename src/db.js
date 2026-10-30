@@ -229,6 +229,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("community", "verified_role_id", "TEXT");
     addColumn("community", "mod_log_channel", "TEXT");
+    addColumn("users", "promo_off", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "announce_channel", "TEXT");
     addColumn("community", "rules_channel", "TEXT");
     addColumn("community", "rules_text", "TEXT");
@@ -273,7 +274,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free", "free_dlc", "min_discount"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free", "free_dlc", "min_discount", "promo_off"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {

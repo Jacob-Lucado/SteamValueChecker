@@ -53,6 +53,8 @@ import { startPresence } from "./presence.js";
 import { createModeration } from "./moderation.js";
 import { createModHandlers } from "./modhandlers.js";
 import { tickLeaderboards } from "./leaderboard.js";
+import { createBroadcaster } from "./broadcast.js";
+import { grabberPromo, PROMO_OFF_ID } from "./promo.js";
 import { communitySetup, isFreshGuild, brandBotRole } from "./community.js";
 import { registerLinkedRoles } from "./linkedroles.js";
 
@@ -230,6 +232,7 @@ client.once(Events.ClientReady, c => {
 
 // If the bot is removed from a server, forget that server's alert channel.
 // A short setup guide for whoever owns a server the bot just joined. Once per server; a closed DM is ignored.
+let adLast = 0;
 client.on(Events.GuildCreate, async guild => {
     try {
         if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
@@ -436,6 +439,10 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
     if (i.isButton() && i.customId.startsWith("lfg_")) return lfgUi.handleButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
+    if (i.isButton() && i.customId === PROMO_OFF_ID) {
+        db.ensureUser(i.user.id); db.updateUser(i.user.id, { promo_off: 1 }); db.bumpUsage("promo_opt_out");
+        return i.reply({ content: "Done. I won't send you promotions again. Alerts you set up yourself are not affected.", flags: MessageFlags.Ephemeral });
+    }
     if (i.isButton() && i.customId.startsWith("rr:")) return communityUi.roleButton(i);
     if (i.isButton() && i.customId === communityUi.verifyButtonId) return communityUi.verify(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
@@ -496,6 +503,19 @@ client.on(Events.InteractionCreate, async i => {
             case "status": return await handlers.handleStatus(i);
             case "support": return await ticketUi.handleCommand(i);
             case "bug": return await ticketUi.handleBug(i);
+            case "grabberad": {
+                const eph = content => i.reply({ content, flags: MessageFlags.Ephemeral });
+                if (!cfg.ownerId || i.user.id !== cfg.ownerId) return await eph("Only the bot owner can use this.");
+                const audience = i.options.getString("audience", true);
+                if (audience !== "me" && i.options.getString("confirm") !== "SEND") return await eph("To send it to other people, type SEND in the confirm option. Use audience \"Only me\" to preview it.");
+                if (audience !== "me" && Date.now() - adLast < 120_000) return await eph("You just sent one. Wait a couple of minutes.");
+                try {
+                    const r = broadcaster.start({ audience, promo: true });
+                    if (audience !== "me") adLast = Date.now();
+                    db.bumpUsage("cmd:grabberad/" + audience);
+                    return await eph(audience === "me" ? "Sent the preview to your DMs." : `Sending the FanaticalGrabber advertisement to ${r.total} places (about one a second). Follow progress on the dashboard's Admin page.`);
+                } catch (e) { return await eph(e.userFacing || e.name === "UserError" ? e.message : "I could not start that."); }
+            }
             case "gamenight": return await handlers.handleGameNight(i);
             case "lfg": return await lfgUi.handleCommand(i);
             case "calendar": return await calendarUi.handle(i);
@@ -532,7 +552,10 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    // One broadcaster for the dashboard's Admin page and /grabberad, so only one announcement or promotion goes out at a time.
+const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), sendChannel: (id, p) => discord.sendChannel(id, p),
+    promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || FANATICAL_GRABBER_URL, dashboardUrl: publicBase }) });
+const dashboard = createDashboard({ broadcaster, db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

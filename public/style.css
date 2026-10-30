@@ -109,6 +109,7 @@ code { background: var(--soft); padding: 1px 6px; border-radius: 6px; font-size:
 .grid.four { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 .grid.five { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .grid.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 /* forms */
 label { display: block; color: var(--muted); font-size: 12.5px; font-weight: 600; margin: 12px 0 6px; }
@@ -801,3 +802,5 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .dpreview .dp-image { max-width: 100%; border-radius: 4px; }
 .dpreview .dp-btn { background: #4e5058; color: #fff; padding: 5px 12px; border-radius: 3px; width: max-content; font-weight: 600; }
 .dpreview .dp-foot { color: #949ba4; }
+
+.ad-thumb { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); }
