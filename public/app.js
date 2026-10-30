@@ -350,7 +350,7 @@
       const set = (k, v) => () => { st[k] = v; st.page = 0; draw(); };
       const card = d => h("a", { class: "fy-card", href: d.url && /^https:\/\//.test(d.url) ? d.url : "#/foryou", target: "_blank", rel: "noopener noreferrer" },
         h("div", { class: "fy-match" + (d.match === null ? " none" : ""), "aria-label": d.match === null ? "No match score yet" : d.match + " percent match" }, h("b", { text: d.match === null ? "–" : String(d.match) }), h("small", { text: "MATCH" })),
-        d.appid ? steamArt(d.appid, "fy-art", 460, 215, d.id) : h("div", { class: "fy-art art-missing" }),
+        steamArt(d.appid, "fy-art", 460, 215, d.id),
         h("div", { class: "fy-info" },
           h("strong", { class: "fy-title", text: d.title }),
           h("span", { class: "muted small", text: d.shop + (d.atl ? " · all-time low" : "") + (d.wishlist ? " · on your wishlist" : "") }),

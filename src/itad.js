@@ -216,6 +216,35 @@ export function createItad({
         return out;
     }
 
+    /**
+     * Steam app ids for ITAD game ids, as Map(itadId -> appid|null). The deal links ITAD returns are redirects (itad.link), so the
+     * app id is not in the URL. Needed for the game's picture, genres (taste match) and "do you already own it". Never throws.
+     */
+    async function steamAppIds(ids) {
+        const out = new Map(), need = [];
+        for (const id of ids) {
+            const hit = getCached(`sapp:${id}`);
+            if (hit !== undefined) out.set(id, hit); else need.push(id);
+        }
+        for (const part of chunk(need, LOOKUP_CHUNK)) {
+            let data = null;
+            try { data = await call("POST", "/lookup/shop/61/id/v1", {}, part); } catch { /* pictures and match scores are a bonus: try again next time */ continue; }
+            for (const id of part) {
+                const app = (Array.isArray(data?.[id]) ? data[id] : []).map(x => /^app\/(\d+)$/.exec(String(x))?.[1]).find(Boolean);
+                const v = app ? Number(app) : null;
+                setCached(`sapp:${id}`, v); out.set(id, v);
+            }
+        }
+        return out;
+    }
+    const withAppIds = async list => {
+        const missing = list.filter(d => !d.appid).map(d => d.id);
+        if (!missing.length) return list;
+        const ids = await steamAppIds(missing);
+        for (const d of list) if (!d.appid) d.appid = ids.get(d.id) ?? null;
+        return list;
+    };
+
     /** Title (and Steam app id) for one ITAD id, or null when unknown. */
     async function getTitle(id) {
         const hit = getCached(`title:${id}`);
@@ -343,6 +372,7 @@ export function createItad({
                 list.push({ id: String(g.id), title: String(g.title ?? "Game"), cut, price, regular, currency: d.price?.currency ?? "USD", url, appid: Number((url ?? "").match(/store\.steampowered\.com\/app\/(\d+)/)?.[1]) || null,
                     since: isoOrNull(d.timestamp), expiry: isoOrNull(d.expiry), storeLow: d.storeLow?.amount != null ? Number(d.storeLow.amount) : null });
             }
+            await withAppIds(list);
             setCached(key, list);
         }
         return list.filter(d => d.cut >= minCut).slice(0, limit);
@@ -370,6 +400,7 @@ export function createItad({
             }
             if (got.length < 100) break;
         }
+        await withAppIds(list);
         setCached(key, list);
         return list;
     }
@@ -401,5 +432,5 @@ export function createItad({
         return points;
     }
 
-    return { lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getDealsPool, getHistory, health, _cache: cache };
+    return { steamAppIds, lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getDealsPool, getHistory, health, _cache: cache };
 }

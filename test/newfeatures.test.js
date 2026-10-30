@@ -332,3 +332,28 @@ test("library totals add a floor estimate for games with no price paid, never to
     assert.equal(t.paid, 10); assert.equal(t.estGames, 1); assert.equal(t.estPaid, 25);
     assert.equal(t.saved, 10);
 });
+
+test("deal links from ITAD are redirects, so Steam app ids come from a lookup (pool, hot deals), for pictures, taste and ownership", async () => {
+    const { createItad } = await import("../src/itad.js");
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+        const u = String(url);
+        calls.push(u);
+        const body = u.includes("/lookup/shop/61/id/v1")
+            ? { g1: ["app/304430", "sub/9"], g2: [], g3: ["app/777"] }
+            : { list: [
+                { id: "g1", title: "Inside", type: "game", deal: { cut: 90, price: { amount: 2.49, currency: "USD" }, regular: { amount: 24.99 }, url: "https://itad.link/g1/" } },
+                { id: "g2", title: "Nowhere", type: "game", deal: { cut: 80, price: { amount: 2 }, regular: { amount: 10 }, url: "https://itad.link/g2/" } },
+                { id: "g3", title: "Direct", type: "game", deal: { cut: 70, price: { amount: 3 }, regular: { amount: 10 }, url: "https://store.steampowered.com/app/555/X/" } }] };
+        return { ok: true, status: 200, headers: new Map(), json: async () => body, text: async () => JSON.stringify(body) };
+    };
+    const itad = createItad({ apiKey: "k", fetchImpl });
+    const pool = await itad.getDealsPool({ pages: 1 });
+    assert.deepEqual(pool.map(d => [d.id, d.appid]), [["g1", 304430], ["g2", null], ["g3", 555]]);
+    assert.equal(calls.filter(c => c.includes("/lookup/shop/61/id/v1")).length, 1);
+    const hot = await itad.getHotDeals({ minCut: 75 });
+    assert.equal(hot[0].appid, 304430);
+    // a failing lookup never breaks the list
+    const broken = createItad({ apiKey: "k", fetchImpl: async (url) => String(url).includes("/lookup/") ? { ok: false, status: 500, headers: new Map(), json: async () => ({}), text: async () => "" } : fetchImpl(url) });
+    assert.equal((await broken.getDealsPool({ pages: 1 })).length, 3);
+});
