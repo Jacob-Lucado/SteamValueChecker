@@ -603,3 +603,21 @@ test("setup still builds the server when my role lacks the Moderator permissions
     assert.ok(r.created.roles.includes("Moderator") && r.created.channels.length > 5);
     assert.ok(r.notes.some(n => /Moderator role was made without its permissions/.test(n)));
 });
+
+test("setup says exactly which permission my role is missing, before building anything", async () => {
+    const api = fakeApi({ roles: [{ id: "br", name: "Steam Value Checker", managed: true, permissions: String(1n << 4n) }] }); // Manage Channels, but not Manage Roles
+    api.getMember = async () => ({ roles: ["br"] });
+    await assert.rejects(() => communitySetup({ api, db: openDb(":memory:"), guildId: "G", botId: "bot", sleep: noSleep, pace: 0 }), e => e.userFacing && /missing: Manage Roles\b/.test(e.message) && /Steam Value Checker/.test(e.message));
+    assert.equal(api.state.channels.length, 0, "nothing was built");
+    // Administrator covers everything; a role that has both passes
+    const ok = fakeApi({ roles: [{ id: "br", name: "Bot", managed: true, permissions: String((1n << 4n) | (1n << 28n)) }] });
+    ok.getMember = async () => ({ roles: ["br"] });
+    const r = await communitySetup({ api: ok, db: openDb(":memory:"), guildId: "G", botId: "bot", sleep: noSleep, pace: 0 });
+    assert.ok(r.created.channels.length > 5);
+});
+
+test("a refused step is named, with what Discord said", async () => {
+    const api = fakeApi(); api.state.denyChannels = true;
+    api.createChannel = async () => { throw new DiscordApiError(403, "no", "Missing Permissions (code 50013)"); };
+    await assert.rejects(() => communitySetup({ api, db: openDb(":memory:"), guildId: "G", botId: "bot", sleep: noSleep, pace: 0 }), e => /could not create the .* category/.test(e.message) && /Missing Permissions \(code 50013\)/.test(e.message));
+});

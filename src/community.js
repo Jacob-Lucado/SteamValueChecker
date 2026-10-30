@@ -151,15 +151,29 @@ export function rolePanel(selfRoles) {
 export async function communitySetup({ api, db, guildId, botId, userId = null, fresh = false, baseUrl = null, sleep = sleepDefault, pace = 300 }) {
     const created = { roles: [], channels: [], categories: [] }, notes = [];
     const wait = () => sleep(pace);
-    const guard = async fn => {
+    const guard = async (fn, step = "do that") => {
         try { return await fn(); }
         catch (e) {
-            if (e?.status === 403) throw Object.assign(new Error("I need the Manage Channels and Manage Roles permissions. Give them to my role in Server Settings (or use the invite link from the dashboard, which asks for them), then run this again."), { userFacing: true });
+            if (e?.status === 403) throw Object.assign(new Error(`I could not ${step}. Discord said: ${e.detail ?? "forbidden"}. I need the Manage Channels and Manage Roles permissions, and my role has to sit above the roles I manage. Fix that in Server Settings, or use the invite link from the dashboard, then run this again.`), { userFacing: true });
             throw e;
         }
     };
-    const existingChannels = await guard(() => api.allChannels(guildId));
-    const existingRoles = await guard(() => api.allRoles(guildId));
+    // Say exactly which permission is missing before anything is built, rather than failing half way.
+    if (botId) {
+        try {
+            const [me, roles] = await Promise.all([api.getMember(guildId, botId), api.allRoles(guildId)]);
+            if (me) {
+                const mine = roles.filter(r => r.id === guildId || (me.roles ?? []).includes(r.id));
+                const have = mine.reduce((a, r) => a | BigInt(r.permissions ?? 0), 0n);
+                if (!(have & B(3))) { // Administrator covers everything
+                    const need = [[B(4), "Manage Channels"], [B(28), "Manage Roles"]].filter(([bit]) => !(have & bit)).map(([, n]) => n);
+                    if (need.length) throw Object.assign(new Error(`My role in this server is missing: ${need.join(" and ")}. I can see my roles here: ${mine.map(r => r.name).join(", ") || "none"}. Give the permission to my role in Server Settings → Roles (the one with the bot tag), then run this again.`), { userFacing: true });
+                }
+            }
+        } catch (e) { if (e?.userFacing) throw e; /* could not check: carry on and let the real calls say */ }
+    }
+    const existingChannels = await guard(() => api.allChannels(guildId), "read this server's channels");
+    const existingRoles = await guard(() => api.allRoles(guildId), "read this server's roles");
     const roleByName = n => existingRoles.find(r => r.name.toLowerCase() === n.toLowerCase() && !r.managed);
     const everyone = existingRoles.find(r => r.id === guildId)?.id ?? guildId;
 
@@ -173,8 +187,8 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
             // Discord refuses a role that grants permissions the bot does not hold itself. Make the role without them rather than stopping.
             try { ex = await make(perms); }
             catch (e) {
-                if (e?.status !== 403 || perms === "0") await guard(() => Promise.reject(e)); // turns a 403 into the friendly message, rethrows anything else
-                ex = await guard(() => make("0"));
+                if (e?.status !== 403 || perms === "0") await guard(() => Promise.reject(e), `create the ${r.name} role`); // turns a 403 into the friendly message, rethrows anything else
+                ex = await guard(() => make("0"), `create the ${r.name} role`);
                 notes.push(`The ${r.name} role was made without its permissions, because my own role does not hold them. Add the permissions to it by hand, or re-invite me with the dashboard link and run setup again.`);
             }
             created.roles.push(r.name); await wait();
@@ -184,7 +198,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     const selfRoles = [];
     for (const r of TEMPLATE.selfRoles) {
         let ex = roleByName(r.name);
-        if (!ex) { ex = await guard(() => api.createRole(guildId, { name: r.name, mentionable: true, permissions: "0" })); created.roles.push(r.name); await wait(); }
+        if (!ex) { ex = await guard(() => api.createRole(guildId, { name: r.name, mentionable: true, permissions: "0" }), `create the ${r.name} role`); created.roles.push(r.name); await wait(); }
         selfRoles.push({ role_id: ex.id, label: r.name, emoji: r.emoji });
     }
 
@@ -205,25 +219,25 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     for (const cat of TEMPLATE.categories) {
         let catCh = existingChannels.find(c => c.type === 4 && c.name.toLowerCase() === cat.name.toLowerCase());
         if (!catCh) {
-            catCh = await guard(() => api.createChannel(guildId, { name: cat.name, type: 4, ...(cat.staff ? { permission_overwrites: overwrites("staff") } : {}) }));
+            catCh = await guard(() => api.createChannel(guildId, { name: cat.name, type: 4, ...(cat.staff ? { permission_overwrites: overwrites("staff") } : {}) }), `create the ${cat.name} category`);
             created.categories.push(cat.name); await wait();
         }
         for (const c of cat.channels ?? []) {
             let ex;
             if (c.key === "general" && defaultText) { // the default #general becomes ours
-                ex = await guard(() => api.editChannel(defaultText.id, { parent_id: catCh.id, topic: c.topic })); await wait();
+                ex = await guard(() => api.editChannel(defaultText.id, { parent_id: catCh.id, topic: c.topic }), `move #${defaultText.name ?? "general"}`); await wait();
             } else ex = find(c.name, 0, catCh.id) ?? find(c.name, 0);
             if (!ex) {
-                ex = await guard(() => api.createChannel(guildId, { name: c.name, type: 0, parent_id: catCh.id, topic: c.topic, permission_overwrites: overwrites(cat.staff ? "staff" : c.readonly ? "readonly" : "open") }));
+                ex = await guard(() => api.createChannel(guildId, { name: c.name, type: 0, parent_id: catCh.id, topic: c.topic, permission_overwrites: overwrites(cat.staff ? "staff" : c.readonly ? "readonly" : "open") }), `create #${c.name}`);
                 created.channels.push(c.name); await wait();
             }
             chIds[c.key] = ex.id;
         }
         for (const v of cat.voice ?? []) {
             let ex;
-            if (v.key === "lobby" && defaultVoice) { ex = await guard(() => api.editChannel(defaultVoice.id, { name: v.name, parent_id: catCh.id })); await wait(); }
+            if (v.key === "lobby" && defaultVoice) { ex = await guard(() => api.editChannel(defaultVoice.id, { name: v.name, parent_id: catCh.id }), `move the ${v.name} voice channel`); await wait(); }
             else ex = find(v.name, 2, catCh.id) ?? find(v.name, 2);
-            if (!ex) { ex = await guard(() => api.createChannel(guildId, { name: v.name, type: 2, parent_id: catCh.id })); created.channels.push(v.name); await wait(); }
+            if (!ex) { ex = await guard(() => api.createChannel(guildId, { name: v.name, type: 2, parent_id: catCh.id }), `create the ${v.name} voice channel`); created.channels.push(v.name); await wait(); }
             chIds[v.key] = ex.id;
         }
     }

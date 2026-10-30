@@ -4,9 +4,10 @@
 const API = "https://discord.com/api/v10";
 
 export class DiscordApiError extends Error {
-    constructor(status, message) {
+    constructor(status, message, detail = null) {
         super(message);
         this.status = status;
+        this.detail = detail; // what Discord itself said, like "Missing Permissions (code 50013)"
     }
 }
 
@@ -24,7 +25,11 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
             await new Promise(r => setTimeout(r, Math.min(10, wait) * 1000 + 50));
             return call(path, { method, headers, body }, attempt + 1);
         }
-        if (!res.ok) throw new DiscordApiError(res.status, `Discord returned HTTP ${res.status}.`);
+        if (!res.ok) {
+            let detail = null;
+            try { const j = await res.json(); detail = j?.message ? `${j.message}${j.code ? ` (code ${j.code})` : ""}` : null; } catch { /* no body */ }
+            throw new DiscordApiError(res.status, `Discord returned HTTP ${res.status}.`, detail);
+        }
         return res.status === 204 ? null : res.json();
     }
 
