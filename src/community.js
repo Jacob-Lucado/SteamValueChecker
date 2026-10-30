@@ -16,26 +16,6 @@ export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14)
 /** The link that adds the bot to a server: the bot and slash-command scopes with every permission the features need. */
 export const botInviteUrl = clientId => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=bot%20applications.commands&permissions=${BOT_PERMISSIONS}`;
 
-export const BOT_ROLE_COLOR = 0x70a6d8;
-/**
- * Gives the bot its own role: light blue and shown in its own group in the member list ("display separately").
- * Edits the role Discord made for the bot when it was added; if Discord refuses (a bot cannot always edit its own role),
- * makes a plain "Steam Value Checker" role and puts the bot in it. Never throws; returns the role id or null.
- */
-export async function brandBotRole({ api, guildId, botId, name = "Steam Value Checker" }) {
-    try {
-        const roles = await api.allRoles(guildId);
-        const own = roles.find(r => r.tags?.bot_id === botId);
-        if (own && own.color === BOT_ROLE_COLOR && own.hoist) return own.id;
-        if (own) { try { await api.editRole(guildId, own.id, { color: BOT_ROLE_COLOR, hoist: true }); return own.id; } catch { /* fall through to a role of our own */ } }
-        let mine = roles.find(r => !r.managed && r.name === name);
-        if (!mine) mine = await api.createRole(guildId, { name, color: BOT_ROLE_COLOR, hoist: true, mentionable: false, permissions: "0" });
-        else if (mine.color !== BOT_ROLE_COLOR || !mine.hoist) await api.editRole(guildId, mine.id, { color: BOT_ROLE_COLOR, hoist: true });
-        await api.addRole(guildId, botId, mine.id);
-        return mine.id;
-    } catch { return null; }
-}
-
 /** The shape of a typical gaming community. Names are the lookup keys, so running setup twice never duplicates anything. */
 export const TEMPLATE = {
     roles: [
@@ -183,7 +163,6 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     const roleByName = n => existingRoles.find(r => r.name.toLowerCase() === n.toLowerCase() && !r.managed);
     const everyone = existingRoles.find(r => r.id === guildId)?.id ?? guildId;
 
-    await brandBotRole({ api, guildId, botId });
     // ---- roles ----
     const roleIds = {};
     for (const r of TEMPLATE.roles) {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { botInviteUrl, brandBotRole, rulesPayload, communitySetup, isFreshGuild, TEMPLATE, parseEmojis, importEmojis, renderWelcome, welcomePayload, findUsedInvite, messageXp, BOT_PERMISSIONS, rolePanel } from "../src/community.js";
+import { botInviteUrl, rulesPayload, communitySetup, isFreshGuild, TEMPLATE, parseEmojis, importEmojis, renderWelcome, welcomePayload, findUsedInvite, messageXp, BOT_PERMISSIONS, rolePanel } from "../src/community.js";
 import { levelFromXp, xpForNext } from "../src/communitystore.js";
 import { createCommunity } from "../src/communityservice.js";
 import { createDashboard } from "../src/dashboard/server.js";
@@ -541,29 +541,16 @@ test("people the bot owner invites get a green Beta Tester role, created if miss
     assert.equal(await other.onJoin({ guildId: "G", guildName: "T", count: 1, member: { id: "x", username: "x" } }).then(r => r.inviterId), null);
 });
 
-test("the add-to-server link has the bot scopes and every permission, and the bot gets its own light-blue separate role", async () => {
+test("the add-to-server link has the bot scopes and every permission, ", async () => {
     const u = new URL(botInviteUrl("123"));
     assert.equal(u.searchParams.get("scope"), "bot applications.commands"); assert.equal(u.searchParams.get("client_id"), "123");
     const bits = BigInt(u.searchParams.get("permissions"));
     for (const [name, bit] of [["View Channel", 10n], ["Send Messages", 11n], ["Embed Links", 14n], ["Manage Roles", 28n], ["Manage Channels", 4n], ["Kick", 1n], ["Ban", 2n], ["Manage Messages", 13n], ["Timeout", 40n], ["Mention Everyone", 17n], ["Manage Server", 5n]]) assert.ok(bits & (1n << bit), name);
-    // edits the role Discord made for the bot
-    let api = fakeApi({ roles: [{ id: "bot-role", name: "Steam Value Checker", managed: true, tags: { bot_id: "bot" }, color: 0, hoist: false }] });
-    assert.equal(await brandBotRole({ api, guildId: "G", botId: "bot" }), "bot-role");
-    const own = api.state.roles.find(r => r.id === "bot-role");
-    assert.equal(own.color, 0x70a6d8); assert.equal(own.hoist, true);
-    // Discord refuses the edit: make our own role and put the bot in it, once
-    api = fakeApi({ roles: [{ id: "bot-role", name: "Steam Value Checker", managed: true, tags: { bot_id: "bot" }, color: 0, hoist: false }] });
-    api.state.denyEditRole = true;
-    const id = await brandBotRole({ api, guildId: "G", botId: "bot" });
-    const made = api.state.roles.find(r => r.id === id);
-    assert.ok(made && !made.managed && made.color === 0x70a6d8 && made.hoist === true);
-    assert.deepEqual(api.state.added.at(-1), ["bot", id]);
-    assert.equal(await brandBotRole({ api, guildId: "G", botId: "bot" }), id, "reused");
-    assert.equal(api.state.roles.filter(r => r.name === "Steam Value Checker" && !r.managed).length, 1);
-    // setup does it too
-    const db = openDb(":memory:"); api = fakeApi({ roles: [{ id: "br", name: "Bot", managed: true, tags: { bot_id: "bot" }, color: 0, hoist: false }] });
+    // the bot never edits or makes a role for itself: Discord already makes the one for its integration
+    const db = openDb(":memory:"); const api = fakeApi({ roles: [{ id: "br", name: "Steam Value Checker", managed: true, tags: { bot_id: "bot" }, color: 0, hoist: false }] });
     await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
-    assert.equal(api.state.roles.find(r => r.id === "br").hoist, true);
+    assert.equal(api.state.roles.find(r => r.id === "br").hoist, false);
+    assert.equal(api.state.roles.filter(r => r.name === "Steam Value Checker").length, 1);
 });
 
 test("#leaderboard: made by setup, one message that is edited, refreshed when due, on demand, and re-posted if deleted", async () => {

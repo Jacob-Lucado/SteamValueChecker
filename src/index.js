@@ -55,7 +55,7 @@ import { createModHandlers } from "./modhandlers.js";
 import { tickLeaderboards } from "./leaderboard.js";
 import { createBroadcaster } from "./broadcast.js";
 import { grabberPromo, PROMO_OFF_ID } from "./promo.js";
-import { communitySetup, isFreshGuild, brandBotRole } from "./community.js";
+import { communitySetup, isFreshGuild } from "./community.js";
 import { registerLinkedRoles } from "./linkedroles.js";
 
 const MAX_TITLES = 100;
@@ -238,7 +238,6 @@ client.on(Events.GuildCreate, async guild => {
         if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
         if (db.getMeta(`welcomed:${guild.id}`)) return;
         db.setMeta(`welcomed:${guild.id}`, "1");
-        await brandBotRole({ api: botRest, guildId: guild.id, botId: client.user.id });
         // A brand-new server (only Discord's default channels) is built for them right away: the usual gaming layout, welcome, XP, and the bot's own channels.
         let auto = null, autoNote = null;
         try {
