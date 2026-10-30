@@ -66,7 +66,8 @@ export function createLfgService({ db, discord, now = () => Date.now(), log = ()
         if (startsAt > now() + MAX_AHEAD_MS) throw new UserError("Pick a time within the next 30 days.");
         if (db.countOpenLfgBy(guildId, creatorId) >= MAX_OPEN_PER_PERSON) throw new UserError(`You already have ${MAX_OPEN_PER_PERSON} open posts here. Close one first.`);
         const post = db.createLfg({ guild_id: guildId, channel_id: channelId, creator_id: creatorId, game, starts_at: Math.max(startsAt, now()), slots, note: String(note ?? "").trim().slice(0, 200) || null });
-        const msg = await discord.post(channelId, lfgPayload(post, db.lfgMembers(post.id)));
+        const pingRole = db.getCommunity?.(guildId)?.ping_lfg;
+        const msg = await discord.post(channelId, { ...lfgPayload(post, db.lfgMembers(post.id)), ...(pingRole ? { content: `<@&${pingRole}> **${post.game}**`, allowedMentions: { roles: [pingRole] } } : {}) });
         let eventId = null, eventError = null;
         if (event) {
             if (!discord.createEvent) eventError = "Events are not available here.";

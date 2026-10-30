@@ -58,11 +58,14 @@ export function createNotifier({ db, discord }) {
     }
 
     /** Posts to a server's alert channel without mentioning anyone. Returns true on success. */
-    async function postGuild(guildId, payload) {
+    async function postGuild(guildId, payload, pingKind = null) {
         const guild = db.getGuild(guildId);
         if (!guild) return false;
+        // Feeds can ping the server's own opt-in role (Free game pings, Deal pings). Nobody else is ever mentioned.
+        const role = pingKind ? db.getCommunity?.(guildId)?.[`ping_${pingKind}`] : null;
+        const out = role ? { ...payload, content: `<@&${role}>${payload.content ? " " + payload.content : ""}`, allowedMentions: { roles: [role] } } : { ...payload, allowedMentions: { parse: [] } };
         try {
-            await discord.sendChannel(guild.channel_id, { ...payload, allowedMentions: { parse: [] } });
+            await discord.sendChannel(guild.channel_id, out);
             return true;
         } catch {
             return false;

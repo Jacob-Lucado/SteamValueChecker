@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS self_roles (
 `;
 
 const SETTABLE = new Set(["welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
-    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel"]);
+    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg"]);
 
 /** XP needed to go from `level` to the next one. */
 export const xpForNext = level => 5 * level * level + 50 * level + 100;
@@ -102,7 +102,7 @@ export function levelFromXp(xp) {
 export function communityStore({ run, get, all, clean, now }) {
     const getCommunity = guildId => clean(get("SELECT * FROM community WHERE guild_id = ?", guildId))
         ?? { guild_id: guildId, welcome_on: 1, welcome_channel: null, welcome_msg: null, welcome_dm: 0, leave_on: 0, autorole_id: null, log_channel: null, xp_on: 1, xp_mult: 1,
-            levelup_mode: "same", levelup_channel: null, referral_xp: 100, mod_role_id: null, member_role_id: null, setup_at: null, verified_role_id: null, mod_log_channel: null };
+            levelup_mode: "same", levelup_channel: null, referral_xp: 100, mod_role_id: null, member_role_id: null, setup_at: null, verified_role_id: null, mod_log_channel: null, ping_deals: null, ping_free: null, ping_giveaway: null, ping_lfg: null };
     function setCommunity(guildId, patch) {
         run("INSERT OR IGNORE INTO community (guild_id) VALUES (?)", guildId);
         for (const [k, v] of Object.entries(patch)) {

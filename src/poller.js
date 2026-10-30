@@ -125,7 +125,7 @@ async function groupPings({ db, notifier, eligible, now }) {
             const deal = db.getGuildDeal(guild.guild_id, itadId);
             const fresh = !deal || meaningfulDrop(deal.last_price, best.now.price) || now() - deal.at > GROUP_REPING_MS;
             if (!fresh) continue;
-            if (await notifier.postGuild(guild.guild_id, { embeds: [groupEmbed(best.item.title, hits.length, best.now)] })) {
+            if (await notifier.postGuild(guild.guild_id, { embeds: [groupEmbed(best.item.title, hits.length, best.now)] }, "deals")) {
                 db.setGuildDeal(guild.guild_id, itadId, best.now.price);
                 posts++;
             }
@@ -322,7 +322,7 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
         for (const [shop, games] of byShop) {
             for (const part of chunked(games, 4)) {
                 const payload = freeGamesPayload(shop, part);
-                const ok = payload ? await notifier.postGuild(guild.guild_id, payload) : true;
+                const ok = payload ? await notifier.postGuild(guild.guild_id, payload, "free") : true;
                 if (!ok) { log(`feed post failed for a server`); continue; }
                 for (const g of part) db.guildMarkSeen(guild.guild_id, `free:${g.id}`);
                 stats.posted += part.length;
@@ -350,7 +350,7 @@ export async function runHotDeals({ db, itad, notifier, log = () => {} }) {
         if (!fresh.length) continue;
         const payload = hotDealsPayload(fresh);
         if (!payload) { for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d)); continue; }
-        if (!(await notifier.postGuild(guild.guild_id, payload))) { log("hot deal post failed for a server"); continue; }
+        if (!(await notifier.postGuild(guild.guild_id, payload, "deals"))) { log("hot deal post failed for a server"); continue; }
         for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d));
         stats.guilds++; stats.posted += Math.min(6, fresh.length);
     }
@@ -367,7 +367,7 @@ export async function runSaleStarts({ db, notifier, now = () => Date.now(), log 
         const key = `salestart:${ev.name}:${ev.start}`;
         for (const guild of guilds) {
             if (db.guildHasSeen(guild.guild_id, key)) continue;
-            if (await notifier.postGuild(guild.guild_id, saleStartPayload(ev))) { db.guildMarkSeen(guild.guild_id, key); stats.posted++; }
+            if (await notifier.postGuild(guild.guild_id, saleStartPayload(ev), "deals")) { db.guildMarkSeen(guild.guild_id, key); stats.posted++; }
             else log("sale start post failed for a server");
         }
     }

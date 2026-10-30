@@ -184,7 +184,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             guild_id: input.guild_id, channel_id: input.channel_id, host_id: input.host_id, title,
             description: cleanText(input.description, 1500), game_title: cleanText(input.game_title, 100),
             image_url: image, thumbnail_url: thumbnail, gallery, color: input.color ?? null, button_label: cleanText(input.button_label, 40),
-            ping_role_id: input.ping_role_id ?? null, require_role_id: input.require_role_id ?? null, bonus_role_id: input.bonus_role_id ?? null,
+            ping_role_id: input.ping_role_id ?? db.getCommunity?.(input.guild_id)?.ping_giveaway ?? null, require_role_id: input.require_role_id ?? null, bonus_role_id: input.bonus_role_id ?? null,
             bonus_entries: clampInt(input.bonus_entries, 1, 10, 1), min_account_days: clampInt(input.min_account_days, 0, 3650, 0),
             min_member_days: clampInt(input.min_member_days, 0, 3650, 0), claim_hours: clampInt(input.claim_hours, 1, 168, 48),
             vouch_channel_id: input.vouch_channel_id ?? null, require_boost: input.require_boost ? 1 : 0, duration_ms: input.duration_ms,

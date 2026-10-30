@@ -188,8 +188,12 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     // ---- connect the bot's own features ----
     db.setGuildChannel(guildId, chIds.deals, userId ?? botId); db.setFreeFeed(guildId, true);
     db.setGameNight(guildId, true);
+    db.setWeeklyDigest?.(guildId, true); db.setSaleFeed?.(guildId, true); // the Friday round-up and "a Steam sale just started" posts
+    if (!db.getGiveawaySettings(guildId).manager_role_id) db.setGiveawaySettings(guildId, { manager_role_id: roleIds.mod }); // moderators can run giveaways
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
+    const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
+    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings") });
     db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
@@ -206,6 +210,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/wishlist import` to get your own alerts." });
     await say(api, chIds.tickets, { content: "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
+    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}>, moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
     await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
 
     // ---- server settings (all best effort: a missing permission only skips that part) ----

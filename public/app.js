@@ -3585,6 +3585,12 @@
           h("p", { class: "muted", text: "Members prove their Steam account (they sign in on Steam's own page) and get this role from the button in #verify or /steam verify. Members who already verified get it the moment they join." }),
           field("Steam Verified role", vRole), h("div", { class: "row" }, save("Save", () => post("/api/community/verifyrole", { role_id: vRole.value }))),
           h("p", { class: "muted small", text: "Want Discord itself to require it? In Discord open Server Settings, Roles, pick the role, open Links, and add this bot's Steam Verified condition. That one step can only be done in Discord." }));
+        // ping roles
+        const pDeals = roSel(st.ping_deals, "Nobody"), pFree = roSel(st.ping_free, "Nobody"), pGw = roSel(st.ping_giveaway, "Nobody"), pLfg = roSel(st.ping_lfg, "Nobody");
+        const pings = h("div", { class: "panel" }, h("h3", { text: "Ping roles" }),
+          h("p", { class: "muted", text: "Members opt in to these roles in #roles. The bot pings them (and nobody else) when it posts." }),
+          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg),
+          h("div", { class: "row" }, save("Save ping roles", () => post("/api/community/pings", { free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value }))));
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),
@@ -3617,7 +3623,7 @@
           h("h4", { text: "Or add one image" }), h("p", { class: "muted small", text: "PNG, GIF, JPG or WebP under 256 KB. Square images work best." }), h("div", { class: "row" }, upFile, upName, upBtn),
           h("h4", { text: "This server's emoji" }), eList);
         loadEmoji();
-        box.replaceChildren(build, welcome, verify, referral, emoji);
+        box.replaceChildren(build, welcome, verify, pings, referral, emoji);
       })();
       return box;
     }

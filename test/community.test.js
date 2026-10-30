@@ -219,7 +219,7 @@ test("community data is exported and deleted with the person", () => {
 // ---------- the dashboard side ----------
 async function dashSetup() {
     const db = openDb(":memory:");
-    const api = fakeApi({ channels: [{ id: "c1", type: 0, name: "alerts" }] });
+    const api = fakeApi({ channels: [{ id: "c1", type: 0, name: "alerts" }], roles: [{ id: "r1", name: "A" }, { id: "r2", name: "B" }] });
     const community = createCommunity({ db, api });
     const connections = [];
     const rest = { authorizeUrl: (s, o) => `https://d.example/a?state=${s}${o?.linkedRoles ? "&linked=1" : ""}`, setRoleConnection: async (tok, body) => { connections.push({ tok, body }); }, login: async (_c, o) => ({ ...(o?.withToken ? { accessToken: "tok" } : {}), user: { id: "u1", username: "j", global_name: "J", avatar: null }, guilds: [{ id: "g1", name: "Mine", icon: null, owner: false, permissions: String(0x20) }, { id: "g2", name: "Other", icon: null, owner: false, permissions: "0" }] }),
@@ -418,4 +418,36 @@ test("new members get a private welcome with the bot's features and the dashboar
     assert.ok(db.usageCounts().welcome_dm_failed);
     assert.deepEqual(welcomeDmPayload({ server: "S" }).components, [], "no dashboard, no button");
     assert.ok(e.fields.every(f => f.name.length <= 256 && f.value.length <= 1024) && JSON.stringify(e).length < 6000);
+});
+
+test("everything setup offers is actually connected: ping roles, Friday digest, sale posts, giveaway managers and the bot log", async () => {
+    const { createNotifier } = await import("../src/notify.js");
+    const db = openDb(":memory:"), api = fakeApi();
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    const c = db.getCommunity("G");
+    const role = n => api.state.roles.find(x => x.name === n).id;
+    assert.deepEqual([c.ping_deals, c.ping_free, c.ping_giveaway, c.ping_lfg], [role("Deal pings"), role("Free game pings"), role("Giveaway pings"), role("LFG pings")]);
+    const g = db.getGuild("G");
+    assert.equal(g.weekly_digest, 1); assert.equal(g.sale_feed, 1); assert.equal(g.free_feed, 1); assert.equal(g.channel_id, r.channels.deals);
+    assert.equal(db.getGiveawaySettings("G").manager_role_id, r.roles.mod);
+    assert.ok(api.state.sent.some(m => m.id === r.channels.botlogs && /Setup finished/.test(m.p.content)), "bot notices channel is used");
+    // feeds ping only the opt-in role, and only for the kind that has one
+    const posts = [];
+    const n = createNotifier({ db, discord: { sendDm: async () => { }, sendChannel: async (id, p) => { posts.push({ id, p }); } } });
+    await n.postGuild("G", { embeds: [{ title: "Free" }] }, "free");
+    assert.equal(posts[0].p.content, `<@&${c.ping_free}>`); assert.deepEqual(posts[0].p.allowedMentions, { roles: [c.ping_free] });
+    await n.postGuild("G", { embeds: [{ title: "Digest" }] });
+    assert.equal(posts[1].p.content, undefined); assert.deepEqual(posts[1].p.allowedMentions, { parse: [] });
+    db.setCommunity("G", { ping_deals: null });
+    await n.postGuild("G", { embeds: [] }, "deals");
+    assert.deepEqual(posts[2].p.allowedMentions, { parse: [] }, "no role set means no ping");
+});
+
+test("the dashboard saves ping roles for managers and rejects roles that do not exist", async () => {
+    const t = await dashSetup();
+    const ok = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", free: "r1", lfg: "r2" } });
+    assert.equal(ok.status, 200); assert.equal(t.db.getCommunity("g1").ping_free, "r1");
+    const bad = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", free: "nope" } });
+    assert.equal(bad.status, 400);
+    await t.close();
 });

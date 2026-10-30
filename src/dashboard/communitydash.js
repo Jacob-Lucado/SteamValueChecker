@@ -96,6 +96,12 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         return { granted: true };
     }
     async function verifyRole(gid, b) { return db.setCommunity(gid, { verified_role_id: await roleOk(gid, b.role_id || null) }); }
+    /** The opt-in roles the bot pings: free-game posts, deal posts, new giveaways and looking-for-group posts. Empty means nobody is pinged. */
+    async function pings(gid, b) {
+        const patch = {};
+        for (const k of ["deals", "free", "giveaway", "lfg"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
+        return db.setCommunity(gid, patch);
+    }
     async function autorole(gid, b) { return db.setCommunity(gid, { autorole_id: await roleOk(gid, b.role_id || null) }); }
     async function xp(gid, b) {
         const patch = {};
@@ -147,5 +153,5 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, verify, verifyRole, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
+    return { overview, setup, welcome, autorole, verify, verifyRole, pings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
 }
