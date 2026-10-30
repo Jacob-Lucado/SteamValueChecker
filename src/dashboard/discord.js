@@ -127,6 +127,7 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
         bulkDelete: (channelId, ids) => call(`/channels/${encodeURIComponent(channelId)}/messages/bulk-delete`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify({ messages: ids }) }),
         deleteMessage: (channelId, messageId) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "DELETE", headers: bot }),
 
+        editMessage: (channelId, messageId, payload) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
         async sendMessage(channelId, payload) {
             return call(`/channels/${encodeURIComponent(channelId)}/messages`, {
                 method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload)

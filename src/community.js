@@ -4,6 +4,7 @@ import { levelFromXp, xpForNext } from "./communitystore.js";
 
 export { levelFromXp, xpForNext };
 
+import { refreshLeaderboard } from "./leaderboard.js";
 const B = n => 1n << BigInt(n);
 export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(10), sendMessages: B(11), manageMessages: B(13), addReactions: B(6), connect: B(20),
     speak: B(21), muteMembers: B(22), deafenMembers: B(23), moveMembers: B(24), manageNicknames: B(27), viewAuditLog: B(7), createThreads: B(35), createPrivateThreads: B(36), moderate: B(40) };
@@ -59,6 +60,7 @@ export const TEMPLATE = {
         { name: "💬 COMMUNITY", channels: [
             { key: "general", name: "general", topic: "Talk about anything" },
             { key: "introductions", name: "introductions", topic: "Tell us who you are and what you play" },
+            { key: "leaderboard", name: "leaderboard", topic: "Top members by XP. Updates itself every few hours", readonly: true },
             { key: "memes", name: "memes", topic: "Gaming memes" },
             { key: "clips", name: "clips-and-screenshots", topic: "Your best moments" },
             { key: "offtopic", name: "off-topic", topic: "Everything that is not games" },
@@ -253,7 +255,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
     db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings") });
-    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
+    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
     db.setReward(guildId, 5, roleIds.regular); // a first referral reward, change or remove it any time
@@ -269,11 +271,12 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.roles, rolePanel(selfRoles));
     await say(api, chIds.verify, verifyPanel(roleIds.verified));
     await say(api, chIds.welcome, { embeds: [{ color: 0x57f287, title: `Welcome to ${gname}`, description: `New here? Start with <#${chIds.rules}>, pick your roles in <#${chIds.roles}>, then say hi in <#${chIds.introductions}>.\n\nNew members are greeted in this channel.` }] });
+    await refreshLeaderboard({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not post the leaderboard (check my permissions in #leaderboard)."));
     await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts." });
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/wishlist import` to get your own alerts." });
     await say(api, chIds.tickets, { content: "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
-    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
+    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
     await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
 
     // ---- server settings (all best effort: a missing permission only skips that part) ----

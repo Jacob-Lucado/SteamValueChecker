@@ -24,7 +24,8 @@ function fakeApi({ channels = [], roles = [], deny = null } = {}) {
         editRole: async (_g, id, b) => { if (state.denyEditRole) throw new DiscordApiError(403, "no"); Object.assign(state.roles.find(x => x.id === id), b); },
         createRole: async (_g, b) => { const r = { id: String(++n), ...b }; state.roles.push(r); return r; },
         editGuild: async (_g, b) => { state.guildEdits.push(b); },
-        sendMessage: async (id, p) => { state.sent.push({ id, p }); return { id: "m" }; },
+        sendMessage: async (id, p) => { state.sent.push({ id, p }); return { id: "m" + state.sent.length }; },
+        editMessage: async (id, mid, p) => { if (state.denyEdit) throw new DiscordApiError(404, "gone"); state.edits = [...(state.edits ?? []), { id, mid, p }]; },
         addRole: async (g, u, r) => { state.added.push([u, r]); },
         removeRole: async () => {},
         listEmojis: async () => state.emojis,
@@ -563,4 +564,47 @@ test("the add-to-server link has the bot scopes and every permission, and the bo
     const db = openDb(":memory:"); api = fakeApi({ roles: [{ id: "br", name: "Bot", managed: true, tags: { bot_id: "bot" }, color: 0, hoist: false }] });
     await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
     assert.equal(api.state.roles.find(r => r.id === "br").hoist, true);
+});
+
+test("#leaderboard: made by setup, one message that is edited, refreshed when due, on demand, and re-posted if deleted", async () => {
+    const { tickLeaderboards, refreshLeaderboard, leaderboardEmbed } = await import("../src/leaderboard.js");
+    const db = openDb(":memory:"), api = fakeApi();
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0, baseUrl: "https://dash.test" });
+    const c = db.getCommunity("G");
+    assert.equal(c.lb_channel, r.channels.leaderboard); assert.equal(c.lb_hours, 5); assert.ok(c.lb_message_id, "first board posted");
+    const readonly = api.state.channels.find(x => x.id === r.channels.leaderboard);
+    assert.ok(BigInt(readonly.permission_overwrites[0].deny) & (1n << 11n), "members cannot post");
+    const first = api.state.sent.find(m => m.id === r.channels.leaderboard).p.embeds[0];
+    assert.match(first.title, /XP Leaderboard/); assert.match(first.footer.text, /every 5 hours/); assert.equal(first.thumbnail.url, "https://dash.test/logo.png");
+    // members rank: medals, level and XP, in order
+    db.addXp("G", "a", 500); db.addXp("G", "b", 90); db.recordJoin("G", "n1", "a", "c");
+    let t = 1_000_000_000_000; db.setCommunity("G", { lb_at: t });
+    assert.equal(await tickLeaderboards({ db, api, now: () => t + 4 * 3600_000, sleep: noSleep }), 0, "not due at 4 hours");
+    assert.equal(await tickLeaderboards({ db, api, now: () => t + 5 * 3600_000, sleep: noSleep }), 1, "due at 5 hours");
+    const edit = api.state.edits.at(-1);
+    assert.equal(edit.mid, c.lb_message_id, "edits the same message");
+    assert.match(edit.p.embeds[0].description, /🥇 \*\*Someone\*\*[\s\S]*🥈/); assert.ok(edit.p.embeds[0].fields.some(f => /Top inviters/.test(f.name)));
+    // the interval is per server
+    db.setCommunity("G", { lb_hours: 1, lb_at: t });
+    assert.equal(await tickLeaderboards({ db, api, now: () => t + 3600_000, sleep: noSleep }), 1);
+    // on demand, even when not due; message deleted -> posts a fresh one
+    api.state.denyEdit = true; const before = db.getCommunity("G").lb_message_id;
+    const out = await refreshLeaderboard({ db, api, guildId: "G" });
+    assert.equal(out.posted, true); assert.notEqual(db.getCommunity("G").lb_message_id, before);
+    // a server without a board is skipped, and a failing one does not stop the others
+    db.setCommunity("H", { welcome_on: 1 });
+    await assert.rejects(refreshLeaderboard({ db, api, guildId: "H" }), /No leaderboard channel/);
+    assert.equal(leaderboardEmbed({}).description, "Nobody has earned XP yet. Start chatting!");
+});
+
+test("dashboard: managers set the leaderboard channel and hours and refresh it now", async () => {
+    const t = await dashSetup();
+    const post = body => t.request("/api/community/leaderboard", { method: "POST", body: { guild_id: "g1", ...body } });
+    assert.equal((await t.request("/api/community/leaderboard", { method: "POST", body: { guild_id: "g2", hours: 3 } })).status, 403);
+    assert.equal((await post({ hours: 99 })).status, 400);
+    assert.equal((await post({ refresh: true })).status, 400, "needs a channel first");
+    const ok = await post({ channel_id: "c1", hours: 3, refresh: true });
+    assert.equal(ok.status, 200); assert.equal(ok.data.refreshed, true); assert.equal(t.db.getCommunity("g1").lb_hours, 3); assert.ok(t.db.getCommunity("g1").lb_message_id);
+    assert.equal((await post({ refresh: true })).status, 429, "refresh cooldown");
+    await t.close();
 });

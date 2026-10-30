@@ -2,6 +2,7 @@
 // No discord.js import: everything the handlers need comes from the interaction object and the shared REST helper.
 import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
 import { UserError } from "./errors.js";
+import { refreshLeaderboard } from "./leaderboard.js";
 
 const EPHEMERAL = 64;
 const BIT = { manageGuild: 1n << 5n, expressions: 1n << 30n };
@@ -103,6 +104,19 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             footer: { text: c.xp_on ? "Chat and join voice to earn XP" : "XP is off in this server" } }], allowedMentions: { parse: [] } });
     }
 
+    // ---- /leaderboardrefresh ----
+    const lbLast = new Map();
+    async function leaderboardRefresh(i) {
+        if (!i.inGuild()) return eph(i, "Use this in a server.");
+        if (!needManager(i)) return;
+        const wait = 30_000 - (Date.now() - (lbLast.get(i.guildId) ?? 0));
+        if (wait > 0) return eph(i, `The board was just refreshed. Try again in ${Math.ceil(wait / 1000)}s.`);
+        lbLast.set(i.guildId, Date.now());
+        await i.deferReply({ flags: EPHEMERAL });
+        try { await refreshLeaderboard({ db, api, guildId: i.guildId, base: publicUrl }); return i.editReply({ content: `Updated the leaderboard in <#${db.getCommunity(i.guildId).lb_channel}>. It also refreshes on its own every ${db.getCommunity(i.guildId).lb_hours} hours.` }); }
+        catch (e) { lbLast.delete(i.guildId); return i.editReply({ content: e instanceof UserError ? e.message : "I could not update it. Check my permissions in the leaderboard channel." }); }
+    }
+
     // ---- /levels ----
     async function levels(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server.");
@@ -189,6 +203,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             case "community": return community(i);
             case "rank": return rank(i);
             case "levels": return levels(i);
+            case "leaderboardrefresh": return leaderboardRefresh(i);
             case "invites": return invites(i);
             case "emoji": return emoji(i);
             default: throw new UserError("Unknown command");

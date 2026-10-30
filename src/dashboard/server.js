@@ -83,7 +83,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000 };
+const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -1214,6 +1214,11 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req), g = managerGuild(s, String(body.guild_id));
             const undo = cooldown(s.userId, "announce");
             try { return await comm(() => cd.announce(g.id, body, s.userId)); } catch (e) { undo(); throw e; }
+        },
+        "POST /api/community/leaderboard": async (req, body) => {
+            const s = session(req), g = managerGuild(s, String(body.guild_id));
+            const undo = body.refresh ? cooldown(s.userId, "lbrefresh") : () => {};
+            try { return await comm(() => cd.leaderboard(g.id, body)); } catch (e) { undo(); throw e; }
         },
         "POST /api/community/pings": async (req, body) => comm(() => cd.pings(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/autorole": async (req, body) => comm(() => cd.autorole(managerGuild(session(req), String(body.guild_id)).id, body)),

@@ -3698,8 +3698,15 @@
           field("Tickets channel (staff only)", tkCh), field("Role that answers tickets", tkRole),
           h("div", { class: "row" }, save("Save support", () => post("/api/community/support", { ticket_channel: tkCh.value, staff_role_id: tkRole.value }))));
         const announceP = announceDesigner({ chSel, roSel, defaultCh: st.announce_channel || (ch.channels.find(c => c.name === "announcements") || {}).id, history: d.announcements, roleName, chName: id => (ch.channels.find(c => c.id === id) || {}).name });
+        const lbCh = chSel(st.lb_channel), lbHours = h("input", { type: "number", min: "1", max: "48", value: String(st.lb_hours || 5), "aria-label": "Hours between refreshes" });
+        const lbP = h("div", { class: "panel" }, h("h3", { text: "XP leaderboard" }),
+          h("p", { class: "muted", text: "A read-only channel with the top members and top inviters. The bot edits the same message on a timer, so it never fills the channel. Members use /rank for their own place." }),
+          field("Leaderboard channel", lbCh), field("Refresh every (hours, 1 to 48)", lbHours),
+          h("p", { class: "muted small", text: st.lb_at ? "Last updated " + new Date(st.lb_at).toLocaleString() + "." : "Not posted yet." }),
+          h("div", { class: "row" }, save("Save", () => post("/api/community/leaderboard", { channel_id: lbCh.value, hours: lbHours.value })),
+            save("Save and refresh now", () => post("/api/community/leaderboard", { channel_id: lbCh.value, hours: lbHours.value, refresh: true }), "btn green small")));
         // group everything a manager can customise into tabs
-        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Emoji", [emoji]]];
+        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Emoji", [emoji]]];
         const tabBar = h("div", { class: "tabs" }), body = h("div");
         const show = n => { mgrTab = n; [...tabBar.children].forEach((b, k) => b.classList.toggle("active", k === n)); body.replaceChildren(...groups[n][1]); };
         groups.forEach(([label], n) => tabBar.append(h("button", { class: "tab small", type: "button", text: label, onclick: () => show(n) })));

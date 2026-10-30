@@ -52,6 +52,7 @@ import { dashPayload } from "./dashlink.js";
 import { startPresence } from "./presence.js";
 import { createModeration } from "./moderation.js";
 import { createModHandlers } from "./modhandlers.js";
+import { tickLeaderboards } from "./leaderboard.js";
 import { communitySetup, isFreshGuild, brandBotRole } from "./community.js";
 import { registerLinkedRoles } from "./linkedroles.js";
 
@@ -323,6 +324,10 @@ const status = createStatusMonitor({
 client.once(Events.ClientReady, () => { if (process.env.PRESENCE !== "off") startPresence({ client, db, supportUrl: cfg.creator?.url, log: m => console.log(m) }); });
 client.once(Events.ClientReady, () => { status.start(); registerLinkedRoles(botRest, cfg.dashboard?.publicUrl ?? null, m => console.log(m)).then(ok => ok && console.log("[linked roles] conditions registered")); });
 // Remember each server's invite counts so a join can be matched to the invite that was used.
+client.once(Events.ClientReady, () => { // refresh each server's #leaderboard when it is due
+    const tick = () => tickLeaderboards({ db, api: botRest, base: publicBase, has: id => client.guilds.cache.has(id), log: m => console.log(`[leaderboard] ${m}`) }).catch(() => {});
+    setTimeout(tick, 60_000).unref?.(); setInterval(tick, 10 * 60_000).unref?.();
+});
 client.once(Events.ClientReady, async () => { if (!MEMBERS_INTENT) return; for (const g of client.guilds.cache.values()) { await community.refreshInvites(g.id); await new Promise(r => setTimeout(r, 300)); } });
 const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
 /** Splits long text at line breaks so each piece fits one embed description (4096). Discord allows 6000 characters across a message's embeds. */
@@ -496,7 +501,7 @@ client.on(Events.InteractionCreate, async i => {
             case "calendar": return await calendarUi.handle(i);
             case "setup": return await setupUi.handleCommand(i);
             case "mod": return await modUi.handleCommand(i);
-            case "community": case "rank": case "levels": case "invites": case "emoji": return await communityUi.handleCommand(i);
+            case "community": case "rank": case "levels": case "leaderboardrefresh": case "invites": case "emoji": return await communityUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);

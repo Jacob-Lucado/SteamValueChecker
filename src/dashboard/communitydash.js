@@ -2,6 +2,7 @@
 import { xpForNext } from "../communitystore.js";
 import { buildAnnouncement } from "../announce.js";
 import { UserError } from "../errors.js";
+import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { DiscordApiError } from "./discord.js";
 
@@ -122,6 +123,20 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         if (b.rules_channel !== undefined) patch.rules_channel = await channelOk(gid, b.rules_channel || null);
         return db.setCommunity(gid, patch);
     }
+    /** The #leaderboard board: where it lives, how often it refreshes, and an immediate refresh. */
+    async function leaderboard(gid, b) {
+        const patch = {};
+        if (b.channel_id !== undefined) { patch.lb_channel = await channelOk(gid, b.channel_id || null); patch.lb_message_id = null; }
+        if (b.hours !== undefined) patch.lb_hours = int(b.hours, LB_MIN_HOURS, LB_MAX_HOURS, "The refresh time");
+        if (Object.keys(patch).length) db.setCommunity(gid, patch);
+        let refreshed = false;
+        if (b.refresh) {
+            try { await refreshLeaderboard({ db, api: rest, guildId: gid, base: publicUrl }); refreshed = true; }
+            catch (e) { if (e instanceof UserError) fail(400, e.message); throw e; }
+        }
+        const c = db.getCommunity(gid);
+        return { refreshed, lb_channel: c.lb_channel, lb_hours: c.lb_hours, lb_at: c.lb_at };
+    }
     /** Saves the rules text (empty means the standard rules) and, when asked, posts them in the rules channel. */
     async function rules(gid, b) {
         const text = String(b.text ?? "").trim();
@@ -201,5 +216,5 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
+    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, leaderboard, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
 }

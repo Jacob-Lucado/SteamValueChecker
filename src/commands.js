@@ -431,6 +431,11 @@ const community = new SlashCommandBuilder()
         .addRoleOption(o => o.setName("role").setDescription("The reward role"))
         .addBooleanOption(o => o.setName("remove").setDescription("Remove the reward for this count")));
 
+const lbRefresh = new SlashCommandBuilder()
+    .setName("leaderboardrefresh")
+    .setDescription("Server managers: update the #leaderboard channel right now")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+
 const rank = new SlashCommandBuilder().setName("rank").setDescription("Your level, XP and place in this server")
     .addUserOption(o => o.setName("member").setDescription("Look at someone else"));
 
@@ -510,6 +515,6 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
-    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd].map(serverOnly),
+    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
