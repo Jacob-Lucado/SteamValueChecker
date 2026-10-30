@@ -123,7 +123,7 @@
     { id: "library", label: "Library", pages: [["library", "Library"], ["steam", "Steam"], ["redeem", "Batch redeem"]] },
     { id: "prices", label: "Prices", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Deals"], ["free", "Free games"], ["warroom", "Sale war room"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["community", "Community"], ["xp", "Server XP"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["alerts", "Alert settings"], ["notifications", "Notifications"], ["mydata", "My Data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
@@ -136,7 +136,7 @@
     if (id === "home" && me) return false; // the logo already goes home when signed in
     if (id === "admin") return Boolean(me && me.isOwner);
     if (id === "giveaways") return Boolean(me && me.giveaways && me.servers.some(g => g.manageable));
-    if (id === "gamenight" || id === "compare") return Boolean(me && me.servers.some(g => g.bot !== false));
+    if (id === "gamenight" || id === "compare" || id === "community" || id === "xp") return Boolean(me && me.servers.some(g => g.bot !== false));
     if (id === "setup") return Boolean(me && me.servers.some(g => g.manageable));
     return Boolean(me) || PUBLIC_PAGES.has(id);
   }
@@ -2162,11 +2162,37 @@
       const who = select([["both", "Every server's giveaway channel and DMs"], ["channels", "Server giveaway channels only"], ["dm", "DMs only"]], "both");
       const confirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
       const go = h("button", { class: "btn red", type: "button", text: "Start the giveaway" });
+      // Who hosts it, and what people should do to be considered.
+      const hostKind = select([["network", "Me (cross-server giveaway hosted by you)"], ["partner", "A partner"]], "network");
+      const pName = h("input", { type: "text", maxlength: "60", placeholder: "Partner name", "aria-label": "Partner name" });
+      const pLogo = h("input", { type: "url", maxlength: "300", placeholder: "Logo image link (https, optional)", "aria-label": "Partner logo" });
+      const pWeb = h("input", { type: "url", maxlength: "300", placeholder: "https://partner-website.com", "aria-label": "Partner website" });
+      const pDiscord = h("input", { type: "url", maxlength: "300", placeholder: "https://discord.gg/invite", "aria-label": "Partner Discord" });
+      const pX = h("input", { type: "url", maxlength: "300", placeholder: "https://x.com/partner", "aria-label": "Partner X" });
+      const pOther = h("input", { type: "url", maxlength: "300", placeholder: "Another link (Twitch, YouTube, Steam page...)", "aria-label": "Another partner link" });
+      const partnerBox = h("div", { class: "panel", hidden: true }, h("h4", { text: "Partner" }), h("p", { class: "muted small", text: "The giveaway shows the partner as host, with these links. You still hold the keys and handle key problems." }),
+        h("div", { class: "grid two" }, field("Name", pName), field("Logo", pLogo), field("Website", pWeb), field("Discord", pDiscord), field("X (Twitter)", pX), field("Another link", pOther)));
+      hostKind.addEventListener("change", () => { partnerBox.hidden = hostKind.value !== "partner"; });
+      const stepRows = h("div"), stepList = [];
+      const addStep = (kind = "follow_x") => {
+        const kinds = (info && info.stepKinds) || [];
+        const sel = select(kinds.map(k => [k.id, k.label]), kind), url = h("input", { type: "url", maxlength: "300", placeholder: "https://…", "aria-label": "Step link" }), label = h("input", { type: "text", maxlength: "80", placeholder: "Button text (optional)", "aria-label": "Step text" });
+        const hint = h("span", { class: "muted small" });
+        const setHint = () => { const k = kinds.find(x => x.id === sel.value); hint.textContent = k ? k.hint : ""; };
+        sel.addEventListener("change", setHint); setHint();
+        const del = h("button", { class: "btn gray small", type: "button", text: "Remove" });
+        const row = h("div", { class: "setup-row" }, h("div", { class: "row" }, sel, label, url, del), hint);
+        const entry = { sel, url, label, row };
+        del.addEventListener("click", () => { stepList.splice(stepList.indexOf(entry), 1); row.remove(); });
+        stepList.push(entry); stepRows.append(row);
+      };
+      const addStepBtn = h("button", { class: "btn gray small", type: "button", text: "Add an entry step" });
+      addStepBtn.addEventListener("click", () => { if (stepList.length >= 8) { toast("Up to 8 steps.", "warn"); return; } addStep(); });
       const box = h("div"), list = h("div");
       let info = null, timer = 0;
       const paintList = () => {
         const when = t => new Date(t).toLocaleString();
-        list.replaceChildren(info.list.length ? table(["#", "Title", "Status", "Entries", "Shown in", "Ends"], info.list.map(g => [g.id, g.title, g.status, g.entries,
+        list.replaceChildren(info.list.length ? table(["#", "Title", "Host", "Status", "Entries", "Shown in", "Ends"], info.list.map(g => [g.id, g.title, g.host || "-", g.status, g.entries,
           `${g.channels} server${g.channels === 1 ? "" : "s"}, ${g.dms} DM${g.dms === 1 ? "" : "s"}${g.spread && !g.spread.done ? ` (sending ${g.spread.sent + g.spread.failed}/${g.spread.total})` : g.spread && g.spread.failed ? ` (${g.spread.failed} failed)` : ""}`, when(g.ends_at)])) : h("p", { class: "muted", text: "No network-wide giveaways yet." }));
         // End buttons sit under the table so the table helper stays plain text.
         const active = info.list.filter(g => g.status === "active");
@@ -2179,8 +2205,10 @@
         if (info.list.some(g => g.spread && !g.spread.done) && document.body.contains(box)) timer = setTimeout(() => refresh().catch(() => {}), 2500);
       }
       go.addEventListener("click", () => busy(go, async () => {
-        const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value });
-        toast(`Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. Sending it out to ${r.total} more place${r.total === 1 ? "" : "s"}.`, "ok");
+        const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value,
+          host: hostKind.value === "partner" ? { kind: "partner", name: pName.value, logo: pLogo.value, links: [["Website", pWeb.value], ["Discord", pDiscord.value], ["X", pX.value], ["", pOther.value]].filter(l => l[1].trim()).map(l => ({ label: l[0], url: l[1] })) } : { kind: "network" },
+          steps: stepList.map(e => ({ kind: e.sel.value, url: e.url.value, label: e.label.value })) });
+        toast(`Your giveaway is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. Sending it out to ${r.total} more place${r.total === 1 ? "" : "s"}.`, "ok");
         confirm.value = ""; keys.value = "";
         await refresh();
       }));
@@ -2191,6 +2219,8 @@
             h("p", { class: "muted small", text: `One giveaway, shown in every server's giveaway channel (or its alert channel if none is set) and in DMs. Entries from everywhere count together, and winners are drawn once. It is posted in ${info.destinations.length} server${info.destinations.length === 1 ? "" : "s"} and ${info.dm} member DM${info.dm === 1 ? "" : "s"}. Winners claim their key by DM.` }),
             info.destinations.length ? null : h("div", { class: "notice warn", text: "No server has a giveaway or alert channel yet. Set one on the Giveaways page (Server settings) first." }),
             field("Title", title), field("Game (for the artwork)", game), field("Description", desc), field("Prize keys, one per line (Game | KEY)", keys),
+            field("Hosted by", hostKind), partnerBox,
+            h("h4", { text: "Entry steps (optional)" }), h("p", { class: "muted small", text: "Ask people to do something first, like following a partner on X or joining their Discord. Each step shows as a numbered line and a link button on the giveaway. Discord cannot check these, so the post says winners may be checked." }), stepRows, addStepBtn,
             h("div", { class: "row" }, field("Runs for", length), field("Hours to claim a key", claim)),
             h("div", { class: "row" }, field("Send to", who), field("Type SEND to confirm", confirm)),
             go),
@@ -2199,7 +2229,33 @@
       return [box];
     };
 
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["growth", "Growth", growth], ["features", "Usage", features], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    // Community features across every server: what is built, what is used, and which giveaway partners ran what. Counts only.
+    const community = () => {
+      const box = h("div", { class: "muted", text: "Loading…" });
+      api("/api/admin/community").then(c => {
+        const t = c.totals, u = c.usage, g = c.giveaways;
+        const use = k => (u[k] ? u[k].n : 0);
+        const last = k => (u[k] && u[k].last_at ? new Date(u[k].last_at).toLocaleDateString() : "never");
+        const row = (label, key) => [label, n0(use(key)), last(key)];
+        box.className = "";
+        box.replaceChildren(
+          c.membersIntent ? null : h("div", { class: "notice warn", text: "Server Members Intent is off for the bot, so welcome messages and invite tracking are paused everywhere. Turn it on in the Discord Developer Portal (Bot, Privileged Gateway Intents) and restart." }),
+          h("div", { class: "grid four" }, tile("Servers using community", t.servers, `${t.built} built with /community setup`), tile("Welcome on", t.welcomeOn, "servers"), tile("XP on", t.xpOn, `${n0(t.xpMembers)} members earning`), tile("Total XP earned", n0(t.xpTotal)),
+            tile("Joins tracked", n0(t.joins), `${n0(t.referred)} through an invite`), tile("Personal invite links", n0(t.inviteLinks)), tile("Level rewards set", n0(t.levelRoles), `${n0(t.rewards)} referral rewards`), tile("Role picker roles", n0(t.selfRoles))),
+          h("div", { class: "panel" }, h("h3", { text: "Feature use" }),
+            table(["What", "Times", "Last used"], [row("Server built automatically (fresh server)", "setup_auto"), row("Server built with /community setup", "setup_manual"), row("Server built from the dashboard", "dash_setup"), row("Channels created", "channels_created"), row("Welcome messages posted", "welcomes"),
+              row("Joins tracked", "joins_tracked"), row("Referrals credited", "referrals"), row("Invite links made", "invite_links"), row("Level-ups", "level_ups"), row("Roles picked from the panel", "role_picks"), row("Emoji added", "emoji_added"), row("Emoji added from the dashboard", "dash_emoji"), row("Emoji images uploaded on the dashboard", "dash_emoji_upload"),
+              row("/rank used", "cmd:rank"), row("/levels used", "cmd:levels"), row("/invites me used", "cmd:invites/me"), row("/invites top used", "cmd:invites/top"), row("/invites link used", "cmd:invites/link"), row("/emoji import used", "cmd:emoji/import"), row("/emoji list used", "cmd:emoji/list"), row("/community used", "cmd:community/status")])),
+          h("div", { class: "panel" }, h("h3", { text: "Cross-server giveaways" }),
+            h("div", { class: "grid four" }, tile("Cross-server giveaways", g.crossServer), tile("Hosted by a partner", g.partner), tile("With entry steps", g.withSteps), tile("Entries", n0(g.crossEntries))),
+            h("h4", { text: "Partners" }), table(["Partner", "Giveaways", "Entries"], g.partners.map(p => [p.name, p.giveaways, n0(p.entries)]))),
+          h("div", { class: "panel" }, h("h3", { text: `Servers (${c.servers.length})` }),
+            table(["Server", "Built", "Welcome", "XP", "Members with XP", "XP total", "Joins", "Through an invite", "Level roles"], c.servers.map(r => [r.name || r.id, r.setup_at ? "Yes" : "No", r.welcome_on ? "On" : "Off", r.xp_on ? `On ×${r.xp_mult}` : "Off", n0(r.xp_members), n0(r.xp_total), n0(r.joins), n0(r.referred), r.level_roles]))));
+      }).catch(e => box.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+      return [box];
+    };
+
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "Members", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
     const body = h("div");
@@ -3438,7 +3494,178 @@
     load();
   }
 
-  const VIEWS = { gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  // ---------- community: welcome, levels, invites, emoji, and the one-click server build ----------
+  async function communityView() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const holder = h("div");
+    app.replaceChildren(pageHead("Community", "Welcome messages, levels, invites and emoji for your gaming server. In Discord: /community, /rank, /levels, /invites and /emoji."), holder);
+    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
+    const guild = serverPicker(servers, currentParam());
+    const GID = () => guild.value;
+    const post = (path, body) => api(path, { guild_id: GID(), ...body });
+    async function load() {
+      holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+      try {
+        const d = await api("/api/community?guild=" + encodeURIComponent(GID()));
+        const picker = servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null;
+        const intent = d.membersIntent ? null : h("div", { class: "notice warn", text: "Welcome messages and invite tracking are paused: turn on Server Members Intent for the bot in the Discord Developer Portal (Bot, Privileged Gateway Intents)." });
+        const nameOr = r => r.name || "Member";
+        const me = d.me;
+        const inv = me.invites;
+        const linkBtn = h("button", { class: "btn blue", text: inv.link ? "Copy my invite link" : "Get my invite link" });
+        linkBtn.addEventListener("click", () => busy(linkBtn, async () => {
+          const r = inv.link ? { link: inv.link } : await post("/api/community/invite-link", {});
+          try { await navigator.clipboard.writeText(r.link); toast("Link copied: " + r.link, "ok"); } catch { toast(r.link, "ok"); }
+          inv.link = r.link; linkBtn.textContent = "Copy my invite link";
+        }));
+        const standing = h("div", { class: "panel" }, h("h3", { text: "Your standing" }),
+          h("div", { class: "grid four" },
+            h("div", { class: "tile" }, h("div", { class: "k", text: "Level" }), h("div", { class: "v", text: String(me.level) }), h("div", { class: "s", text: me.rank ? `#${me.rank} of ${me.members}` : "not ranked yet" })),
+            h("div", { class: "tile" }, h("div", { class: "k", text: "XP" }), h("div", { class: "v", text: me.xp.toLocaleString() }), h("div", { class: "s", text: `${me.messages.toLocaleString()} messages` })),
+            h("div", { class: "tile" }, h("div", { class: "k", text: "Invited" }), h("div", { class: "v", text: String(inv.active) }), h("div", { class: "s", text: `${inv.total} joined, ${inv.left} left` })),
+            h("div", { class: "tile" }, h("div", { class: "k", text: "Voice" }), h("div", { class: "v", text: me.voiceMinutes + " min" }), h("div", { class: "s", text: "time in voice with others" }))),
+          h("p", { class: "muted small", text: `${me.into.toLocaleString()} of ${me.need.toLocaleString()} XP to level ${me.level + 1}` }), progressBar(me.into / me.need),
+          h("div", { class: "row" }, linkBtn), h("p", { class: "muted small", text: "Everyone who joins with your link counts for you. Chat and talk in voice to earn XP." }));
+        const board = (title, rows, line) => h("div", { class: "panel" }, h("h3", { text: title }),
+          rows.length ? h("ol", { class: "plain" }, rows.map((r, n) => h("li", {}, h("b", { text: `${n + 1}. ${nameOr(r)}` }), " ", h("span", { class: "muted", text: line(r) })))) : h("p", { class: "muted", text: "Nobody yet." }));
+        const rewards = d.rewards.length ? h("p", { class: "muted small", text: "Invite rewards: " + d.rewards.map(r => `${r.count} invited`).join(", ") }) : null;
+        const boards = h("div", { class: "grid two" }, board("Top inviters", d.inviteTop, r => `${r.active} here · ${r.total} joined`), h("div", { class: "panel" }, h("h3", { text: "Levels and XP" }), h("p", { class: "muted", text: `You are level ${me.level}${me.rank ? `, #${me.rank} in the server` : ""}.` }), h("a", { class: "btn blue", href: "#/xp/" + GID(), text: "Open the Server XP page" })));
+        holder.replaceChildren(...[picker, intent, standing, boards, rewards, d.manager ? manager(d) : null].filter(Boolean));
+      } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    function manager(d) {
+      const st = d.settings;
+      const box = h("div");
+      (async () => {
+        const [ch, ro] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(GID())).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(GID())).catch(() => ({ roles: [] }))]);
+        const chSel = cur => select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], cur || "");
+        const roSel = (cur, none = "No role") => select([["", none], ...ro.roles.map(r => [r.id, r.name])], cur || "");
+        const roleName = id => (ro.roles.find(r => r.id === id) || {}).name || "a role";
+        const save = (label, fn, cls = "btn blue small") => { const b = h("button", { class: cls, text: label }); b.addEventListener("click", () => busy(b, async () => { await fn(); toast("Saved.", "ok"); load(); })); return b; };
+        const toggle = (on, path, key, labelOn, labelOff) => { const b = h("button", { class: "btn small " + (on ? "red" : "green"), text: on ? labelOn : labelOff }); b.addEventListener("click", () => busy(b, async () => { await post(path, { [key]: !on }); load(); })); return b; };
+        // build
+        const build = h("div", { class: "panel" }, h("h3", { text: "Build my server" }),
+          h("p", { class: "muted", text: "Creates the usual gaming-server layout: Information (welcome, rules, announcements, roles), Community (general, introductions, memes, clips, off-topic, bot-commands), Gaming (looking-for-group, game-chat, game-night, wishlists), Deals and Giveaways, Voice lobbies and a private Staff area. Also creates Moderator, Member and level roles and a role picker, posts the rules and welcome, and connects deal alerts, giveaways, support tickets, welcome and XP. Anything that already exists is reused, so it is safe to run again. A brand-new server is built automatically when the bot joins." }),
+          (() => { const b = h("button", { class: "btn green", text: d.built ? "Run setup again" : "Set up this server" }); b.addEventListener("click", () => busy(b, async () => { const r = await post("/api/community/setup", {}); toast(`Done: ${r.created.channels.length} channels, ${r.created.roles.length} roles created.`, "ok"); load(); })); return b; })());
+        // welcome
+        const wCh = chSel(st.welcome_channel), logCh = chSel(st.log_channel), wMsg = h("textarea", { rows: "3", maxlength: "1000", placeholder: st.defaultWelcome }); wMsg.value = st.welcome_msg || "";
+        const auto = roSel(st.autorole_id, "No automatic role");
+        const welcome = h("div", { class: "panel" }, h("h3", { text: "Welcome new members" }),
+          h("div", { class: "row" }, toggle(st.welcome_on, "/api/community/welcome", "enabled", "Turn off", "Turn on"), toggle(st.welcome_dm, "/api/community/welcome", "dm", "Stop private welcome", "Also send a private welcome"), toggle(st.leave_on, "/api/community/welcome", "leave", "Stop leave notes", "Post a note when someone leaves")),
+          field("Welcome channel", wCh), field("Log channel (joins, who invited them)", logCh), field("Message", wMsg),
+          h("p", { class: "muted small", text: "Use " + st.fields.join(" ") + ". Leave empty for the default message." }),
+          h("div", { class: "row" }, save("Save welcome", () => post("/api/community/welcome", { channel_id: wCh.value, log_channel_id: logCh.value, message: wMsg.value }))),
+          field("Role every new member gets", auto), h("div", { class: "row" }, save("Save role", () => post("/api/community/autorole", { role_id: auto.value }))));
+        // referral
+        const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
+        const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),
+          h("p", { class: "muted", text: "Members get their own invite link (/invites link or the button above). Every member who joins with it counts for them, earns the inviter bonus XP, and can unlock a role." }),
+          field("Bonus XP for each new member they bring (0 for none)", bonus), h("div", { class: "row" }, save("Save bonus", () => post("/api/community/referral", { bonus: bonus.value }))),
+          d.rewards.length ? h("ul", { class: "plain" }, d.rewards.map(r => h("li", {}, `${r.count} invited: `, h("b", { text: roleName(r.role_id) }), " ", save("Remove", () => post("/api/community/referral", { count: r.count, remove: true }), "btn gray small")))) : h("p", { class: "muted", text: "No role rewards yet." }),
+          h("div", { class: "row" }, rCount, rRole, save("Add reward", () => post("/api/community/referral", { count: rCount.value, role_id: rRole.value }))));
+        // emoji
+        const eText = h("textarea", { rows: "3", placeholder: "Paste custom emoji or Discord emoji links, up to 20. Example: <:pog:123456789012345678>" }), eOut = h("div"), eList = h("div", { class: "emoji-grid" });
+        const loadEmoji = async () => { try { const r = await api("/api/community/emoji?guild=" + encodeURIComponent(GID())); eList.replaceChildren(...r.emojis.slice(0, 60).map(e => h("img", { src: e.url, alt: e.name, title: ":" + e.name + ":", width: "32", height: "32", loading: "lazy" }))); if (!r.emojis.length) eList.replaceChildren(h("span", { class: "muted", text: "No custom emoji yet." })); } catch { eList.replaceChildren(h("span", { class: "muted", text: "Could not read the emoji list." })); } };
+        const upName = h("input", { type: "text", maxlength: "32", placeholder: "Name for the emoji (letters, numbers, _)", "aria-label": "Emoji name" });
+        const upFile = h("input", { type: "file", accept: "image/png,image/gif,image/jpeg,image/webp", "aria-label": "Emoji image" });
+        upFile.addEventListener("change", () => { const f = upFile.files[0]; if (f && !upName.value) upName.value = f.name.replace(/\.[^.]+$/, "").replace(/[^A-Za-z0-9_]/g, "_").slice(0, 32); });
+        const upBtn = h("button", { class: "btn blue", text: "Upload as emoji" });
+        upBtn.addEventListener("click", () => busy(upBtn, async () => {
+          const f = upFile.files[0];
+          if (!f) { toast("Choose an image first.", "warn"); return; }
+          if (f.size > 256 * 1024) { toast("That image is over 256 KB. Make it smaller (128x128 is plenty).", "warn"); return; }
+          const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error("Could not read that file.")); r.readAsDataURL(f); });
+          const r = await post("/api/community/emoji", { image_data: data, name: upName.value });
+          toast("Added :" + r.added[0] + ":", "ok"); upFile.value = ""; upName.value = ""; loadEmoji();
+        }));
+        const emoji = h("div", { class: "panel" }, h("h3", { text: "Emoji import" }),
+          h("p", { class: "muted", text: "Copy emoji from other servers. Copy them from a message (they look like <:name:id>) and paste them here. Needs the Manage Expressions permission for the bot." }), eText,
+          h("div", { class: "row" }, (() => { const b = h("button", { class: "btn blue", text: "Add the emoji" }); b.addEventListener("click", () => busy(b, async () => {
+            const r = await post("/api/community/emoji", { text: eText.value });
+            eOut.replaceChildren(h("p", {}, r.added.length ? `Added ${r.added.length}: ${r.added.map(n => ":" + n + ":").join(" ")}` : "Nothing was added."), ...r.failed.map(f => h("p", { class: "muted small", text: `${f.name}: ${f.why}` })));
+            if (r.added.length) { eText.value = ""; loadEmoji(); }
+          })); return b; })()), eOut,
+          h("h4", { text: "Or add one image" }), h("p", { class: "muted small", text: "PNG, GIF, JPG or WebP under 256 KB. Square images work best." }), h("div", { class: "row" }, upFile, upName, upBtn),
+          h("h4", { text: "This server's emoji" }), eList);
+        loadEmoji();
+        box.replaceChildren(build, welcome, referral, emoji);
+      })();
+      return box;
+    }
+    guild.addEventListener("change", load);
+    load();
+  }
+
+  // ---------- server XP: leaderboard, your card, level rewards, how XP works, and the prize shop teaser ----------
+  async function xpView() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const holder = h("div");
+    app.replaceChildren(pageHead("Server XP", "Levels, the leaderboard and rewards for your server. In Discord: /rank and /levels."), holder);
+    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
+    const guild = serverPicker(servers, currentParam());
+    let page = 1;
+    async function load() {
+      holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+      try {
+        const d = await api("/api/community/xp?guild=" + encodeURIComponent(guild.value) + "&page=" + page);
+        const picker = servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null;
+        const me = d.me, t = d.totals;
+        const off = d.enabled ? null : h("div", { class: "notice warn", text: "XP is turned off in this server." + (d.manager ? " Turn it on below." : "") });
+        const tile = (k, v, s) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), s && h("div", { class: "s", text: s }));
+        const card = h("div", { class: "panel xp-card" }, h("div", { class: "xp-level" }, h("span", { class: "xp-lv-k", text: "LEVEL" }), h("b", { text: String(me.level) })),
+          h("div", { class: "xp-card-main" }, h("h3", { text: me.rank ? `You are #${me.rank} of ${me.members}` : "You have no XP yet" }),
+            h("p", { class: "muted small", text: `${me.into.toLocaleString()} / ${me.need.toLocaleString()} XP to level ${me.level + 1} · ${me.xp.toLocaleString()} XP in total` }), progressBar(me.into / me.need),
+            h("p", { class: "muted small", text: `${me.messages.toLocaleString()} messages · ${me.voiceMinutes.toLocaleString()} minutes in voice` })));
+        const stats = h("div", { class: "grid four" }, tile("Members with XP", t.members.toLocaleString()), tile("Total XP", t.xp.toLocaleString()), tile("Messages counted", t.messages.toLocaleString()), tile("Highest level", t.topLevel));
+        const medal = r => (r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : String(r));
+        const board = h("div", { class: "panel" }, h("h3", { text: "Leaderboard" }),
+          d.board.length ? h("div", { class: "scroll-y tall" }, h("table", { class: "xp-board" }, h("thead", {}, h("tr", {}, ["#", "Member", "Level", "XP", "Messages", "Voice"].map((c, i) => h("th", { class: i > 1 ? "num" : "", text: c })))),
+            h("tbody", {}, d.board.map(r => h("tr", {}, h("td", { text: medal(r.rank) }), h("td", { text: r.name || "Member" }), h("td", { class: "num", text: String(r.level) }), h("td", { class: "num", text: r.xp.toLocaleString() }), h("td", { class: "num", text: r.messages.toLocaleString() }), h("td", { class: "num", text: r.voice_minutes + " min" })))))) : h("p", { class: "muted", text: "Nobody has earned XP yet. Start chatting!" }),
+          d.pages > 1 ? h("div", { class: "row lib-pager" }, h("button", { class: "btn gray small", text: "Previous", disabled: d.page <= 1, onclick: () => { page = d.page - 1; load(); } }), h("span", { class: "muted", text: `Page ${d.page} of ${d.pages}` }), h("button", { class: "btn gray small", text: "Next", disabled: d.page >= d.pages, onclick: () => { page = d.page + 1; load(); } })) : null);
+        const rewards = h("div", { class: "panel" }, h("h3", { text: "Level rewards" }),
+          d.rewards.length ? h("ul", { class: "plain" }, d.rewards.map(r => h("li", {}, h("b", { text: "Level " + r.level }), " → ", r.name, me.level >= r.level ? " ✅" : ""))) : h("p", { class: "muted", text: "No level rewards yet." }),
+          h("p", { class: "muted small", text: "Reach the level and the bot gives you the role." }));
+        const how = h("div", { class: "panel" }, h("h3", { text: "How XP works" }), h("ul", {},
+          h("li", { text: `Chat: ${d.how.message[0]} to ${d.how.message[1]} XP for a message, at most once a minute.` }),
+          h("li", { text: `Voice: ${d.how.voicePerMinute} XP a minute in a voice channel with someone else (not muted or deafened, not in AFK).` }),
+          h("li", { text: d.how.referral ? `Invites: ${d.how.referral} XP each time someone joins through your invite link.` : "Invites: bring friends with your own link (/invites link)." }),
+          h("li", { text: d.multiplier === 1 ? "XP speed is normal." : `This server runs XP at ×${d.multiplier}.` })));
+        const curve = h("div", { class: "panel" }, h("h3", { text: "XP needed per level" }),
+          h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Level", "XP to reach it", "Total XP"].map((c, i) => h("th", { class: i ? "num" : "", text: c })))), h("tbody", {}, d.curve.map(c => h("tr", {}, h("td", { text: String(c.level) }), h("td", { class: "num", text: c.need.toLocaleString() }), h("td", { class: "num", text: c.total.toLocaleString() })))))));
+        const shop = h("div", { class: "panel shop-soon" }, h("div", { class: "shop-badge", text: "COMING SOON" }), h("h3", { text: "🎁 Prize shop" }),
+          h("p", { text: "Spend the XP you earn on rewards from your server's team. Game keys, roles, perks and more." }),
+          h("div", { class: "shop-ghosts", "aria-hidden": "true" }, [["🎮", "Game key"], ["👑", "Special role"], ["✨", "Server perk"]].map(([i, n]) => h("div", { class: "shop-ghost" }, h("span", { text: i }), h("b", { text: n }), h("small", { text: "??? XP" })))),
+          h("p", { class: "muted small", text: "Keep earning XP. Nothing you earn is lost when the shop opens." }));
+        holder.replaceChildren(...[picker, off, card, stats, h("div", { class: "grid two" }, board, h("div", {}, rewards, how)), shop, curve, d.manager ? manage(d) : null].filter(Boolean));
+      } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    function manage(d) {
+      const box = h("div");
+      (async () => {
+        const [ch, ro] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))]);
+        const post = (path, body) => api(path, { guild_id: guild.value, ...body });
+        const save = (label, fn, cls = "btn blue small") => { const b = h("button", { class: cls, text: label }); b.addEventListener("click", () => busy(b, async () => { await fn(); toast("Saved.", "ok"); load(); })); return b; };
+        const st = d.settings;
+        const mult = h("input", { type: "number", min: "0.1", max: "5", step: "0.1", value: String(st.xp_mult) });
+        const ann = select([["same", "In the channel where they chat"], ["channel", "In one channel"], ["off", "Nowhere"]], st.levelup_mode);
+        const annCh = select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], st.levelup_channel || "");
+        const lvlN = h("input", { type: "number", min: "1", max: "200", placeholder: "Level" }), lvlR = select([["", "Choose a role"], ...ro.roles.map(r => [r.id, r.name])], "");
+        const tog = h("button", { class: "btn small " + (st.xp_on ? "red" : "green"), text: st.xp_on ? "Turn XP off" : "Turn XP on" });
+        tog.addEventListener("click", () => busy(tog, async () => { await post("/api/community/xp", { enabled: !st.xp_on }); load(); }));
+        box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Manage XP" }), h("div", { class: "row" }, tog),
+          h("div", { class: "grid two" }, field("XP speed (1 is normal)", mult), field("Announce level-ups", ann)), field("Level-up channel", annCh),
+          h("div", { class: "row" }, save("Save XP settings", () => post("/api/community/xp", { multiplier: mult.value, announce: ann.value, channel_id: annCh.value }))),
+          h("h4", { text: "Level rewards" }),
+          d.rewards.length ? h("ul", { class: "plain" }, d.rewards.map(r => h("li", {}, `Level ${r.level}: `, h("b", { text: r.name }), " ", save("Remove", () => post("/api/community/levelrole", { level: r.level, remove: true }), "btn gray small")))) : h("p", { class: "muted", text: "No level rewards yet." }),
+          h("div", { class: "row" }, lvlN, lvlR, save("Add reward", () => post("/api/community/levelrole", { level: lvlN.value, role_id: lvlR.value })))));
+      })();
+      return box;
+    }
+    guild.addEventListener("change", () => { page = 1; load(); });
+    load();
+  }
+
+  const VIEWS = { xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

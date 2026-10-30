@@ -11,12 +11,18 @@ export class DiscordApiError extends Error {
 }
 
 export function createDiscordRest({ clientId, clientSecret, redirectUri, botToken, fetchImpl = globalThis.fetch }) {
-    async function call(path, { method = "GET", headers = {}, body } = {}) {
+    async function call(path, { method = "GET", headers = {}, body } = {}, attempt = 0) {
         let res;
         try {
             res = await fetchImpl(`${API}${path}`, { method, headers, body, signal: AbortSignal.timeout(15000) });
         } catch {
             throw new DiscordApiError(0, "Could not reach Discord.");
+        }
+        if (res.status === 429 && attempt < 3) { // rate limited: wait the time Discord asks for, then try again
+            let wait = Number(res.headers?.get?.("retry-after")) || 1;
+            try { wait = Number((await res.json())?.retry_after) || wait; } catch { /* keep the header value */ }
+            await new Promise(r => setTimeout(r, Math.min(10, wait) * 1000 + 50));
+            return call(path, { method, headers, body }, attempt + 1);
         }
         if (!res.ok) throw new DiscordApiError(res.status, `Discord returned HTTP ${res.status}.`);
         return res.status === 204 ? null : res.json();
@@ -79,6 +85,22 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
         async createChannel(guildId, body) {
             return call(`/guilds/${encodeURIComponent(guildId)}/channels`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) });
         },
+
+        // ---- community setup: the bot's own permissions, so these only work in servers it is in ----
+        allChannels: guildId => call(`/guilds/${encodeURIComponent(guildId)}/channels`, { headers: bot }),
+        allRoles: guildId => call(`/guilds/${encodeURIComponent(guildId)}/roles`, { headers: bot }),
+        getGuild: guildId => call(`/guilds/${encodeURIComponent(guildId)}?with_counts=true`, { headers: bot }),
+        editChannel: (channelId, body) => call(`/channels/${encodeURIComponent(channelId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+        deleteChannel: channelId => call(`/channels/${encodeURIComponent(channelId)}`, { method: "DELETE", headers: bot }),
+        createRole: (guildId, body) => call(`/guilds/${encodeURIComponent(guildId)}/roles`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+        editGuild: (guildId, body) => call(`/guilds/${encodeURIComponent(guildId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+        addRole: (guildId, userId, roleId) => call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`, { method: "PUT", headers: bot }),
+        removeRole: (guildId, userId, roleId) => call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`, { method: "DELETE", headers: bot }),
+        listEmojis: guildId => call(`/guilds/${encodeURIComponent(guildId)}/emojis`, { headers: bot }),
+        createEmoji: (guildId, body) => call(`/guilds/${encodeURIComponent(guildId)}/emojis`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+        createInvite: (channelId, body) => call(`/channels/${encodeURIComponent(channelId)}/invites`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+        listInvites: guildId => call(`/guilds/${encodeURIComponent(guildId)}/invites`, { headers: bot }),
+        editMessage: (channelId, messageId, payload) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
 
         async sendMessage(channelId, payload) {
             return call(`/channels/${encodeURIComponent(channelId)}/messages`, {

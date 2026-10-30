@@ -16,6 +16,7 @@ import { friendSchema, friendStore } from "./friendstore.js";
 import { challengeSchema, challengeStore } from "./challengestore.js";
 import { bundleSchema, bundleStore } from "./bundlestore.js";
 import { broadcastSchema, broadcastStore } from "./broadcast.js";
+import { communitySchema, communityStore } from "./communitystore.js";
 
 export const MAX_ITEMS_PER_USER = 200;
 export const MAX_LIBRARY_PER_USER = 1500;
@@ -153,6 +154,7 @@ CREATE TABLE IF NOT EXISTS status_meta (
 );
 ${giveawaySchema}
 ${ticketSchema}
+${communitySchema}
 ${steamSchema}
 ${grabberSchema}
 ${redeemSchema}
@@ -225,6 +227,11 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "backlog", "INTEGER");
     addColumn("library_snapshots", "playing", "INTEGER");
     addColumn("library_snapshots", "finished", "INTEGER");
+    addColumn("giveaways", "host_name", "TEXT");
+    addColumn("giveaways", "host_kind", "TEXT");
+    addColumn("giveaways", "host_links", "TEXT");
+    addColumn("giveaways", "host_logo", "TEXT");
+    addColumn("giveaways", "steps", "TEXT");
     addColumn("guilds", "group_min", "INTEGER NOT NULL DEFAULT 0");
     addColumn("guilds", "weekly_digest", "INTEGER NOT NULL DEFAULT 0");
     addColumn("guilds", "digest_at", "INTEGER");
@@ -235,6 +242,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const clean = o => (o ? { ...o } : o); // node:sqlite rows have a null prototype
     const giveaways = giveawayStore({ db, run, get, all, clean, now });
     const tickets = ticketStore({ run, get, all, clean, now });
+    const community = communityStore({ run, get, all, clean, now });
     const lfg = lfgStore({ db, run, get, all, clean, now });
     const grabber = grabberStore({ run, get, clean, now });
     const redeem = redeemStore({ run, get, all, clean, now });
@@ -551,7 +559,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             watched: all("SELECT title, COUNT(DISTINCT discord_id) AS n FROM items GROUP BY itad_id ORDER BY n DESC, title LIMIT 10").map(clean),
             features: [
                 ["Linked Steam", safe("SELECT COUNT(*) AS n FROM steam_links")], ["FanaticalGrabber link codes", safe("SELECT COUNT(*) AS n FROM grabber_links")],
-                ["Opted in to server boards", safe("SELECT COUNT(*) AS n FROM users WHERE share = 1")], ["Public wishlist pages", safe("SELECT COUNT(*) AS n FROM users WHERE profile_public = 1")],
+                ["Servers built with /community setup", safe("SELECT COUNT(*) AS n FROM community WHERE setup_at IS NOT NULL")], ["Members earning XP", safe("SELECT COUNT(*) AS n FROM member_xp WHERE xp > 0")], ["Members who joined through an invite", safe("SELECT COUNT(*) AS n FROM invite_joins WHERE inviter_id IS NOT NULL")], ["Cross-server giveaways", safe("SELECT COUNT(*) AS n FROM giveaways WHERE is_global = 1")], ["Opted in to server boards", safe("SELECT COUNT(*) AS n FROM users WHERE share = 1")], ["Public wishlist pages", safe("SELECT COUNT(*) AS n FROM users WHERE profile_public = 1")],
                 ["Custom profile cards", safe("SELECT COUNT(*) AS n FROM card_prefs")], ["Bundles tracked", safe("SELECT COUNT(*) AS n FROM bundles_bought")],
                 ["Hours goals this year", safe("SELECT COUNT(*) AS n FROM hour_goals")], ["Backlog challenges this month", safe("SELECT COUNT(*) AS n FROM challenges WHERE month = ?", thisMonth)],
                 ["Friends added", safe("SELECT COUNT(*) AS n FROM friends")], ["Open looking-for-group posts", safe("SELECT COUNT(*) AS n FROM lfg_posts WHERE status = 'open'")],
@@ -591,7 +599,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId) };
+        return { user: u, community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId) };
     }
 
     function deleteUser(discordId) {
@@ -603,6 +611,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             calendar.forgetCalendarUser(discordId);
             lfg.forgetLfgUser(discordId);
             tickets.deleteUserTickets(discordId);
+            community.forgetCommunityUser(discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");
@@ -639,6 +648,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

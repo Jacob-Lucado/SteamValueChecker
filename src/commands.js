@@ -392,6 +392,61 @@ const gamenight = new SlashCommandBuilder().setName("gamenight")
 const setup = new SlashCommandBuilder().setName("setup").setDescription("Server managers: guided setup for alerts, support tickets and giveaways")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
+const textChan = [ChannelType.GuildText, ChannelType.GuildAnnouncement];
+const community = new SlashCommandBuilder()
+    .setName("community")
+    .setDescription("Server managers: build and run your gaming community")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand(s => s.setName("setup").setDescription("Create the usual gaming-server channels and roles, with welcome messages and XP, and connect the bot"))
+    .addSubcommand(s => s.setName("status").setDescription("What is switched on in this server"))
+    .addSubcommand(s => s.setName("welcome").setDescription("Greet new members")
+        .addBooleanOption(o => o.setName("enabled").setDescription("Turn the welcome message on or off"))
+        .addChannelOption(o => o.setName("channel").setDescription("Where to greet them").addChannelTypes(...textChan))
+        .addStringOption(o => o.setName("message").setDescription("Use {user} {username} {server} {count} {inviter}").setMaxLength(1000))
+        .addBooleanOption(o => o.setName("dm").setDescription("Also send each new member a private welcome"))
+        .addBooleanOption(o => o.setName("leave").setDescription("Post a note when someone leaves"))
+        .addBooleanOption(o => o.setName("test").setDescription("Show a sample welcome here (only you see it)")))
+    .addSubcommand(s => s.setName("autorole").setDescription("The role every new member gets")
+        .addRoleOption(o => o.setName("role").setDescription("Role to give (leave empty with clear to stop)"))
+        .addBooleanOption(o => o.setName("clear").setDescription("Stop giving a role")))
+    .addSubcommand(s => s.setName("xp").setDescription("Levels and XP settings")
+        .addBooleanOption(o => o.setName("enabled").setDescription("Turn XP on or off"))
+        .addNumberOption(o => o.setName("multiplier").setDescription("XP speed, 1 is normal").setMinValue(0.1).setMaxValue(5))
+        .addStringOption(o => o.setName("announce").setDescription("Where level-ups are announced").addChoices({ name: "In the channel where they chat", value: "same" }, { name: "In one channel", value: "channel" }, { name: "Nowhere", value: "off" }))
+        .addChannelOption(o => o.setName("channel").setDescription("The channel for level-ups").addChannelTypes(...textChan)))
+    .addSubcommand(s => s.setName("levelrole").setDescription("A role members earn at a level")
+        .addIntegerOption(o => o.setName("level").setDescription("The level").setRequired(true).setMinValue(1).setMaxValue(200))
+        .addRoleOption(o => o.setName("role").setDescription("The role to give"))
+        .addBooleanOption(o => o.setName("remove").setDescription("Remove the reward for this level")))
+    .addSubcommand(s => s.setName("referral").setDescription("Referral rewards for inviting members")
+        .addIntegerOption(o => o.setName("bonus").setDescription("XP the inviter gets for each new member (0 for none)").setMinValue(0).setMaxValue(1000))
+        .addIntegerOption(o => o.setName("count").setDescription("Reward at this many invited members").setMinValue(1).setMaxValue(1000))
+        .addRoleOption(o => o.setName("role").setDescription("The reward role"))
+        .addBooleanOption(o => o.setName("remove").setDescription("Remove the reward for this count")));
+
+const rank = new SlashCommandBuilder().setName("rank").setDescription("Your level, XP and place in this server")
+    .addUserOption(o => o.setName("member").setDescription("Look at someone else"));
+
+const levels = new SlashCommandBuilder().setName("levels").setDescription("The most active members of this server");
+
+const invitesCmd = new SlashCommandBuilder()
+    .setName("invites")
+    .setDescription("Invite people to this server and see who joined through you")
+    .addSubcommand(s => s.setName("me").setDescription("How many people joined through your invites")
+        .addUserOption(o => o.setName("member").setDescription("Look at someone else")))
+    .addSubcommand(s => s.setName("top").setDescription("Who has brought in the most members"))
+    .addSubcommand(s => s.setName("link").setDescription("Get your own invite link. Everyone who joins with it counts for you"));
+
+const emojiCmd = new SlashCommandBuilder()
+    .setName("emoji")
+    .setDescription("Server managers: add custom emoji to this server")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuildExpressions)
+    .addSubcommand(s => s.setName("import").setDescription("Copy emoji from other servers, or add an image as an emoji")
+        .addStringOption(o => o.setName("emojis").setDescription("Paste custom emoji (up to 20) or Discord emoji links"))
+        .addAttachmentOption(o => o.setName("image").setDescription("An image to add (PNG, GIF or JPG, under 256 KB)"))
+        .addStringOption(o => o.setName("name").setDescription("Name for the image").setMinLength(2).setMaxLength(32)))
+    .addSubcommand(s => s.setName("list").setDescription("The custom emoji this server has and how many slots are left"));
+
 const bug = new SlashCommandBuilder().setName("bug").setDescription("Report a problem with the bot. It goes straight to the bot owner");
 
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
@@ -409,6 +464,6 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, changelog, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare].map(serverOnly),
+    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());

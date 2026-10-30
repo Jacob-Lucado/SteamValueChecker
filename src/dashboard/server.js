@@ -18,6 +18,9 @@ import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
 import { ItadError } from "../itad.js";
 import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
+import { createCommunityDash, CommunityError } from "./communitydash.js";
+import { BOT_PERMISSIONS } from "../community.js";
+import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
 import { forYou } from "../foryou.js";
@@ -77,7 +80,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending";
-const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500 };
+const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -97,7 +100,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, membersIntent = () => true, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -231,6 +234,13 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         return g;
     }
 
+    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, botId: config.clientId }) : null;
+    /** Community actions: the same Discord permissions as the commands. Errors from the helper become normal dashboard errors. */
+    const comm = async fn => {
+        if (!cd) throw new HttpError(503, "Community features are not available on this bot.");
+        try { return await fn(); } catch (e) { if (e instanceof CommunityError) throw new HttpError(e.status, e.message); throw e; }
+    };
+    const botIn = g => { if (botGuilds && !botGuilds(g.id)) throw new HttpError(400, "The bot is not in that server yet. Invite it first."); };
     const num = v => (v === null || v === undefined || v === "" ? null : Number(v));
     const userRow = s => db.ensureUser(s.userId);
     /** A pasted profile if there is one, else the Steam account the person signed in with. */
@@ -282,7 +292,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&integration_type=1&scope=applications.commands`
                 : null,
             inviteUrl: config.clientId
-                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=8589954064`
+                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=${BOT_PERMISSIONS}`
                 : null
         }),
 
@@ -1128,6 +1138,52 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             catch (e) { if (e.userFacing) throw new HttpError(400, e.message); if (e instanceof DiscordApiError && e.status === 403) throw new HttpError(400, "I need the Manage Channels permission to create channels."); throw e; }
         },
 
+        // ---- community: welcome, XP and levels, invites and referrals, emoji, one-click server build ----
+        "GET /api/community": async (req, _b, url) => {
+            const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
+            return comm(async () => ({ bot: botGuilds ? Boolean(botGuilds(g.id)) : null, ...(await cd.overview(g.id, s.userId, isManager(g))) }));
+        },
+        "GET /api/community/rank": async (req, _b, url) => {
+            const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
+            return comm(async () => { const o = await cd.overview(g.id, s.userId, false); return o.me; });
+        },
+        "GET /api/community/leaderboard": async (req, _b, url) => {
+            const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
+            return comm(async () => ({ top: (await cd.overview(g.id, s.userId, false)).xpTop }));
+        },
+        "GET /api/community/invites": async (req, _b, url) => {
+            const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
+            return comm(async () => { const o = await cd.overview(g.id, s.userId, false); return { me: o.me.invites, top: o.inviteTop, rewards: o.rewards }; });
+        },
+        "POST /api/community/invite-link": async (req, body) => {
+            const s = session(req); const g = guildFor(s, String(body.guild_id)); botIn(g);
+            cooldown(s.userId, "clink");
+            return comm(() => cd.inviteLink(g.id, s.userId));
+        },
+        "POST /api/community/setup": async (req, body) => {
+            const s = session(req); const g = managerGuild(s, String(body.guild_id)); botIn(g);
+            cooldown(s.userId, "csetup");
+            return comm(() => cd.setup(g.id, s.userId));
+        },
+        "POST /api/community/welcome": async (req, body) => comm(() => cd.welcome(managerGuild(session(req), String(body.guild_id)).id, body)),
+        "POST /api/community/autorole": async (req, body) => comm(() => cd.autorole(managerGuild(session(req), String(body.guild_id)).id, body)),
+        "POST /api/community/xp": async (req, body) => comm(() => cd.xp(managerGuild(session(req), String(body.guild_id)).id, body)),
+        "POST /api/community/levelrole": async (req, body) => comm(() => cd.levelrole(managerGuild(session(req), String(body.guild_id)).id, body)),
+        "POST /api/community/referral": async (req, body) => comm(() => cd.referral(managerGuild(session(req), String(body.guild_id)).id, body)),
+        "GET /api/community/emoji": async (req, _b, url) => comm(() => cd.emojiList(managerGuild(session(req), url.searchParams.get("guild")).id)),
+        "GET /api/community/xp": async (req, _b, url) => {
+            const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
+            return comm(async () => ({ bot: botGuilds ? Boolean(botGuilds(g.id)) : null, ...(await cd.xpPage(g.id, s.userId, isManager(g), url.searchParams.get("page"))) }));
+        },
+        "POST /api/community/emoji": async (req, body) => {
+            const s = session(req); const g = managerGuild(s, String(body.guild_id)); botIn(g);
+            const undo = cooldown(s.userId, "cemoji"); // a refused request does not use up the wait
+            try {
+                if (body.image_data) return await comm(() => cd.emojiUpload(g.id, body.name, body.image_data));
+                return await comm(() => cd.emojiImport(g.id, String(body.text ?? "").slice(0, 5000)));
+            } catch (e) { undo(); throw e; }
+        },
+
         "GET /api/servers/stats": async (req, _b, url) => {
             const s = session(req);
             const g = guildFor(s, url.searchParams.get("guild"));
@@ -1428,6 +1484,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 .sort((a, b) => (b.members ?? 0) - (a.members ?? 0) || b.tracked - a.tracked);
             return { ...ins, servers, bot: { version: info?.version ?? null, uptime: info?.uptime ?? null, pingMs: info?.pingMs ?? null, servers: info?.servers ?? null, rssMb: Math.round(mem.rss / 1048576), node: process.version } };
         },
+        // What the community features are being used for, across every server (counts only, never messages).
+        "GET /api/admin/community": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const live = new Map((guildList?.() ?? []).map(g => [g.id, g]));
+            const c = db.adminCommunity();
+            return { ...c, membersIntent: membersIntent(), servers: c.servers.map(r => ({ ...r, name: live.get(r.id)?.name ?? null, members: live.get(r.id)?.members ?? null })) };
+        },
         "GET /api/admin/user": async (req, _b, url) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -1498,9 +1562,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             const names = new Map((guildList?.() ?? []).map(g => [g.id, g.name]));
             const dest = db.giveawayDestinations().map(d => ({ id: d.guild_id, name: names.get(d.guild_id) ?? d.guild_id, channel_id: d.channel_id }));
-            const list = db.listGlobalGiveaways(15).map(g => ({ id: g.id, title: g.title, status: g.status, ends_at: g.ends_at, entries: db.countEntries(g.id), prizes: db.listKeys(g.id).length,
+            const list = db.listGlobalGiveaways(15).map(g => ({ id: g.id, title: g.title, host: g.host_name ?? null, steps: g.steps ? JSON.parse(g.steps).length : 0, status: g.status, ends_at: g.ends_at, entries: db.countEntries(g.id), prizes: db.listKeys(g.id).length,
                 channels: db.listMirrors(g.id).filter(m => m.kind === "channel").length + 1, dms: db.listMirrors(g.id).filter(m => m.kind === "dm").length, spread: giveaways?.spreadStatus(g.id) ?? null }));
-            return { available: Boolean(giveaways), destinations: dest, dm: db.broadcastTargets().users.length, list };
+            return { available: Boolean(giveaways), destinations: dest, dm: db.broadcastTargets().users.length, list, ownerName: config.creator?.name ?? "You", stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
         "POST /api/admin/giveaways/create": async (req, body) => {
             const s = session(req);
@@ -1515,12 +1579,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             try {
                 const text = v => (v === null || v === undefined || v === "" ? null : String(v));
                 const { keys, duplicates } = parseKeys(String(body.keys ?? "").slice(0, 20_000), text(body.game) ?? text(body.title) ?? "Prize");
+                let host, steps;
+                try { host = parseHost(body.host, config.creator?.name ?? "the bot owner"); steps = parseSteps(body.steps); }
+                catch (e) { if (e instanceof StepError) throw new HttpError(400, e.message); throw e; }
                 const r = await giveaways.create({
                     guild_id: home.guild_id, channel_id: home.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
                     game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"),
-                    claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true
+                    claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true, is_global: true, host, steps
                 });
-                db.markGlobal(r.id);
                 const targets = db.broadcastTargets();
                 const sent = await giveaways.spread(r.id, {
                     channelIds: audience === "dm" ? [] : dest.map(d => d.channel_id),
@@ -1945,7 +2011,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             let body = {};
             if (req.method === "POST") {
                 checkWrite(req);
-                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : 20_000);
+                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
             }
             json(res, 200, await handler(req, body, url));
         } catch (err) {

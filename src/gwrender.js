@@ -6,6 +6,7 @@ const GREEN = 0x57f287;
 const GREY = 0x8b95a5;
 const RED = 0xed4245;
 import { isVideoLink } from "./gwparse.js";
+import { crossServerParts, stepRows } from "./gwpartner.js";
 const GALLERY_URL = "https://store.steampowered.com/";
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 const ts = (ms, f = "R") => `<t:${Math.floor(ms / 1000)}:${f}>`;
@@ -36,16 +37,18 @@ function requirements(g) {
 /** The giveaway post. state: "active" | "ended" | "cancelled". */
 export function giveawayPayload(g, keys, entryCount, state = g.status) {
     const lines = prizeSummary(keys);
+    const cross = g.is_global && g.host_name ? crossServerParts(g) : null; // a cross-server giveaway says so and who hosts it
     const shown = lines.slice(0, 15);
     if (lines.length > shown.length) shown.push(`…and ${lines.length - shown.length} more`);
     const fields = [
         { name: keys.length === 1 ? "Prize" : `Prizes (${keys.length})`, value: shown.join("\n").slice(0, 1000) || "-" },
         { name: state === "active" ? "Ends" : "Ended", value: state === "active" ? `${ts(g.ends_at)} (${ts(g.ends_at, "f")})` : ts(g.ended_at ?? g.ends_at), inline: true },
-        { name: "Hosted by", value: g.host_id === "deleted" ? "-" : `<@${g.host_id}>`, inline: true },
+        { name: "Hosted by", value: cross ? cross.hostLine : g.host_id === "deleted" ? "-" : `<@${g.host_id}>`, inline: true },
         { name: "Entries", value: String(entryCount), inline: true }
     ];
     const req = requirements(g);
     if (req.length) fields.push({ name: "Requirements", value: req.join("\n").slice(0, 1000) });
+    if (cross?.howToEnter && state === "active") fields.push({ name: "How to enter", value: `${cross.howToEnter}\n\n${cross.stepsNote}`.slice(0, 1020) });
 
     // A video can't sit inside an embed, so its link goes in the message text where Discord plays it.
     const video = safeUrl(g.image_url) && isVideoLink(g.image_url);
@@ -56,7 +59,8 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
         fields,
         image: safeUrl(g.image_url) && !video ? { url: g.image_url } : undefined,
         thumbnail: safeUrl(g.thumbnail_url) && !isVideoLink(g.thumbnail_url) ? { url: g.thumbnail_url } : undefined,
-        footer: { text: `Giveaway #${g.id}${state === "active" ? "  •  Press the button to enter. Press it again to leave." : ""}` }
+        author: cross?.author,
+        footer: state === "active" ? { text: cross ? `${cross.footerNote}  •  Press the button to enter. Press it again to leave.` : "Press the button to enter. Press it again to leave." } : cross ? { text: cross.footerNote } : undefined
     };
     const enter = {
         type: 2, style: 3, custom_id: `${ID.enter}:${g.id}`, disabled: state !== "active",
@@ -70,7 +74,7 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
         embed.url = GALLERY_URL;
         for (const u of extra) embeds.push({ url: GALLERY_URL, image: { url: u } });
     }
-    const payload = { embeds, components: [{ type: 1, components: [enter] }] };
+    const payload = { embeds, components: [{ type: 1, components: [enter] }, ...(cross && state === "active" ? stepRows(cross.buttons) : [])] };
     const ping = state === "active" && g.ping_role_id ? role(g.ping_role_id) : null;
     const content = [ping, video ? g.image_url : null].filter(Boolean).join("\n");
     if (content) payload.content = content;
@@ -91,8 +95,9 @@ export function winnersPayload(g, keys) {
     const waiting = keys.some(k => ["assigned", "delivered", "problem"].includes(k.status) && k.winner_id);
     const embed = {
         color: GREEN, title: `Winners: ${g.title}`,
+        author: g.is_global && g.host_name ? { name: `🌐 Cross-server giveaway · hosted by ${g.host_name}` } : undefined,
         description: lines.join("\n").slice(0, 4000),
-        footer: { text: `Winners have ${g.claim_hours} hours to press Claim key  •  Giveaway #${g.id}` }
+        footer: { text: `Winners have ${g.claim_hours} hours to press Claim key` }
     };
     const payload = {
         content: mentions.length ? `🎉 Congratulations ${[...new Set(mentions)].slice(0, 30).map(id => `<@${id}>`).join(" ")}! Press **Claim key** below.` : undefined,
@@ -119,8 +124,7 @@ export function confirmPayload(g, key, { reminder = false } = {}) {
     return {
         embeds: [{
             color: COLOR, title: reminder ? "Reminder: did your key work?" : "Did your key work?",
-            description: `You won **${key.label}** in **${g.title}**. Once you have redeemed it, let us know. Confirming also posts a short thank-you in the server's vouches channel.`,
-            footer: { text: `Giveaway #${g.id}` }
+            description: `You won **${key.label}** in **${g.title}**. Once you have redeemed it, let us know. Confirming also posts a short thank-you in the server's vouches channel.`
         }],
         components: [{ type: 1, components: [
             { type: 2, style: 3, label: "Yes, it redeemed", custom_id: `${ID.confirm}:${key.id}` },
@@ -151,7 +155,7 @@ export function infoPayload(g, keys, entryCount) {
     const lines = keys.map(k => `${ICON[k.status] ?? "•"} **${k.position}. ${k.label}** ${k.winner_id ? `→ <@${k.winner_id}> ` : ""}(${STATUS[k.status] ?? k.status})`);
     return {
         embeds: [{
-            color: g.color ?? COLOR, title: `Giveaway #${g.id}: ${g.title}`,
+            color: g.color ?? COLOR, title: g.title,
             description: lines.join("\n").slice(0, 4000) || "No prizes.",
             fields: [
                 { name: "Status", value: g.status, inline: true }, { name: "Entries", value: String(entryCount), inline: true },
@@ -169,11 +173,10 @@ export function leftoverMessage(g, rows, why) {
     return {
         embeds: [{
             color: COLOR, title: `Unused prizes from "${g.title}"`,
-            description: `${why}\n\n\`\`\`\n${text.slice(0, 3500)}\n\`\`\`\nThe bot has deleted its copy.`,
-            footer: { text: `Giveaway #${g.id}` }
+            description: `${why}\n\n\`\`\`\n${text.slice(0, 3500)}\n\`\`\`\nThe bot has deleted its copy.`
         }]
     };
 }
 
-export const hostNote = (g, text) => ({ embeds: [{ color: COLOR, title: `Giveaway #${g.id}: ${g.title}`, description: text.slice(0, 3900), url: safeUrl(messageLink(g)) }] });
+export const hostNote = (g, text) => ({ embeds: [{ color: COLOR, title: g.title, description: text.slice(0, 3900), url: safeUrl(messageLink(g)) }] });
 export const redColor = RED;

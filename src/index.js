@@ -46,6 +46,9 @@ import { createTicketService } from "./tickets.js";
 import { createSetupHandlers } from "./setup.js";
 import { createTicketHandlers } from "./tickethandlers.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
+import { createCommunity } from "./communityservice.js";
+import { createCommunityHandlers, setupSummary } from "./communityhandlers.js";
+import { communitySetup, isFreshGuild } from "./community.js";
 
 const MAX_TITLES = 100;
 const COOLDOWN_MS = 15_000;
@@ -58,7 +61,18 @@ const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../packag
 const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey] });
 logs.capture();
 const itad = createItad({ apiKey: cfg.itadKey });
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+// Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
+// Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
+const MEMBERS_INTENT = await (async () => {
+    try {
+        const r = await fetch("https://discord.com/api/v10/applications/@me", { headers: { Authorization: `Bot ${cfg.token}` }, signal: AbortSignal.timeout(10_000) });
+        if (!r.ok) return false;
+        const { flags = 0 } = await r.json();
+        return Boolean(flags & ((1 << 14) | (1 << 15))); // GATEWAY_GUILD_MEMBERS or the limited version
+    } catch { return false; }
+})();
+console.log(MEMBERS_INTENT ? "[community] Server Members intent is on: welcome messages and invite tracking are active." : "[community] Server Members intent is off: turn it on in the Developer Portal (Bot > Privileged Gateway Intents) for welcome messages and invite tracking.");
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : [])] });
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
@@ -81,6 +95,10 @@ const discord = {
     }
 };
 const notifier = createNotifier({ db, discord });
+// Community features (welcome, XP, invites, emoji) use the bot's REST helper, the same one the dashboard uses.
+const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.dashboard?.clientSecret ?? "", botToken: cfg.token, redirectUri: "http://localhost/unused" });
+const community = createCommunity({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p) });
+const communityUi = createCommunityHandlers({ db, api: botRest, service: community, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
 // Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).
 const voiceMap = guildId => {
     const g = client.guilds.cache.get(guildId);
@@ -209,18 +227,64 @@ client.on(Events.GuildCreate, async guild => {
         if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
         if (db.getMeta(`welcomed:${guild.id}`)) return;
         db.setMeta(`welcomed:${guild.id}`, "1");
+        // A brand-new server (only Discord's default channels) is built for them right away: the usual gaming layout, welcome, XP, and the bot's own channels.
+        let auto = null, autoNote = null;
+        try {
+            const [channels, roles] = await Promise.all([botRest.allChannels(guild.id), botRest.allRoles(guild.id)]);
+            if (isFreshGuild({ channels, roles: roles.map(r => ({ ...r, guild_id: guild.id })), memberCount: guild.memberCount })) {
+                auto = await communitySetup({ api: botRest, db, guildId: guild.id, botId: client.user.id, userId: guild.ownerId, fresh: true });
+            }
+        } catch (e) { autoNote = e.userFacing ? e.message : "I tried to set the server up but hit a problem. Run /community setup to try again."; }
         const link = publicBase ? `${publicBase}/#/setup/${guild.id}` : null;
-        const embed = { color: 0xff9800, title: `Thanks for adding Steam Value Checker to ${guild.name}`,
+        let embed = { color: 0xff9800, title: `Thanks for adding Steam Value Checker to ${guild.name}`,
             description: ["It takes about a minute to set up:", "1. In your server, run **`/setup`** and press **Create the channels for me** (or pick existing channels from the menus).", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/wishlist import`, `/value` and `/support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };
-        const components = link ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open setup page", url: link }] }] : [];
-        await discord.sendDm(guild.ownerId, { embeds: [embed], components }).catch(async () => {
+        if (auto) embed = { ...setupSummary(auto, publicBase, guild.id, MEMBERS_INTENT), title: `${guild.name} is ready`, description: "This looked like a brand-new server, so I set it up for you.\n\n" + setupSummary(auto, publicBase, guild.id, MEMBERS_INTENT).description };
+        else if (autoNote) embed = { ...embed, description: embed.description + `\n\n⚠️ ${autoNote}` };
+        else embed = { ...embed, description: embed.description + "\n\nWant the full gaming-community layout (channels, roles, welcome, XP, invites)? Run **`/community setup`**." };
+        const comp = auto ? (publicBase ? [{ type: 1, components: [{ type: 2, style: 5, label: "Fine-tune on the dashboard", url: `${publicBase}/#/community/${guild.id}` }] }] : []) : (link ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open setup page", url: link }] }] : []);
+        await discord.sendDm(guild.ownerId, { embeds: [embed], components: comp }).catch(async () => {
             // DMs closed: leave a short note where managers will see it
             const ch = guild.systemChannel; if (ch) await ch.send({ content: "Thanks for adding me! A server manager can run `/setup` to get started.", allowedMentions: { parse: [] } });
         });
     } catch { /* the owner may have DMs closed */ }
 });
 
-client.on(Events.GuildDelete, guild => { if (guild.available !== false) db.clearGuildChannel(guild.id); });
+client.on(Events.GuildDelete, guild => { if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
+
+// ---- community: XP, welcome, invites ----
+client.on(Events.MessageCreate, async m => {
+    try {
+        if (!m.guildId || m.author.bot || m.webhookId || m.system) return;
+        const r = await community.onMessage({ guildId: m.guildId, userId: m.author.id });
+        if (!r?.leveled) return;
+        const c = db.getCommunity(m.guildId);
+        if (c.levelup_mode === "off") return;
+        const target = c.levelup_mode === "channel" && c.levelup_channel ? await client.channels.fetch(c.levelup_channel).catch(() => null) : m.channel;
+        await target?.send({ content: `🎉 <@${m.author.id}> reached **level ${r.level}**!`, allowedMentions: { users: [m.author.id] } }).catch(() => {});
+    } catch (err) { console.error(`[xp] ${err.name}: ${err.message}`); }
+});
+client.on(Events.GuildMemberAdd, async member => {
+    try { await community.onJoin({ guildId: member.guild.id, guildName: member.guild.name, count: member.guild.memberCount, member: { id: member.id, username: member.user.username, avatar: member.user.avatar, bot: member.user.bot } }); }
+    catch (err) { console.error(`[welcome] ${err.name}: ${err.message}`); }
+});
+client.on(Events.GuildMemberRemove, async member => {
+    try { await community.onLeave({ guildId: member.guild.id, member: { id: member.id, username: member.user?.username ?? "someone", bot: member.user?.bot } }); }
+    catch (err) { console.error(`[leave] ${err.name}: ${err.message}`); }
+});
+client.on(Events.InviteCreate, inv => { if (inv.guild) community.cacheInvite(inv.guild.id, { code: inv.code, uses: inv.uses ?? 0, max_uses: inv.maxUses ?? 0, inviter: inv.inviter ? { id: inv.inviter.id } : null }); });
+client.on(Events.InviteDelete, inv => { /* kept in the cache until the next join so a last-use invite can still be matched */ });
+// Voice XP: a few points a minute for people in a voice channel with someone else, not muted or deafened.
+setInterval(async () => {
+    try {
+        for (const g of client.guilds.cache.values()) {
+            if (!db.getCommunity(g.id).xp_on) continue;
+            const by = new Map();
+            for (const v of g.voiceStates.cache.values()) { if (!v.channelId || v.member?.user?.bot || v.channelId === g.afkChannelId) continue; if (!by.has(v.channelId)) by.set(v.channelId, []); by.get(v.channelId).push(v); }
+            const ids = [...by.values()].filter(a => a.length >= 2).flat().filter(v => !v.selfMute && !v.selfDeaf && !v.serverMute && !v.serverDeaf).map(v => v.id);
+            if (ids.length) await community.onVoiceMinute(g.id, ids);
+        }
+    } catch (err) { console.error(`[voice xp] ${err.message}`); }
+}, 60_000).unref();
 
 const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
 const beat = { alerts: null, giveaways: null }; // when each background job last finished, for the status page
@@ -249,6 +313,8 @@ const status = createStatusMonitor({
     }
 });
 client.once(Events.ClientReady, () => { status.start(); });
+// Remember each server's invite counts so a join can be matched to the invite that was used.
+client.once(Events.ClientReady, async () => { if (!MEMBERS_INTENT) return; for (const g of client.guilds.cache.values()) { await community.refreshInvites(g.id); await new Promise(r => setTimeout(r, 300)); } });
 const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
 /** Splits long text at line breaks so each piece fits one embed description (4096). Discord allows 6000 characters across a message's embeds. */
 export function chunkText(text, max = 3900) {
@@ -356,6 +422,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
     if (i.isButton() && i.customId.startsWith("lfg_")) return lfgUi.handleButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
+    if (i.isButton() && i.customId.startsWith("rr:")) return communityUi.roleButton(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
@@ -418,6 +485,7 @@ client.on(Events.InteractionCreate, async i => {
             case "lfg": return await lfgUi.handleCommand(i);
             case "calendar": return await calendarUi.handle(i);
             case "setup": return await setupUi.handleCommand(i);
+            case "community": case "rank": case "levels": case "invites": case "emoji": return await communityUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
@@ -447,7 +515,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

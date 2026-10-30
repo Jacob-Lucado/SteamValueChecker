@@ -115,6 +115,14 @@ If this policy changes, the date above will be updated.
 - **Server stats:** numbers for members who opted in with `/alerts share`. Counts and totals only; nobody is named for what they want.
 - **Status history:** the bot stores per-day uptime counts and a short log of outages. Nothing about people.
 
+## Community features (servers that use them)
+- **XP and levels:** per server, your Discord ID with your XP, level, a count of counted messages and minutes in voice. Message text is never read or stored; the bot only notes that you sent one. Shown on `/rank`, `/levels` and the dashboard to people in that server.
+- **Invites and referrals:** which invite you joined with, who it belonged to, and when you joined and left, so inviters can be credited. Shown as counts and names of inviters in that server. Your own invite link is stored if you make one with `/invites link`.
+- **Welcome and leave notes:** the bot posts your name and avatar link in the server's welcome channel when you join, and optionally when you leave.
+- **Emoji import:** the bot downloads the emoji or image you ask it to add from Discord's own servers and uploads it to your server. Nothing is kept.
+- **Control:** `/mydata export` includes this data and `/mydata delete` removes your XP, joins and links (invites you made stay as counts without your name). If the bot leaves a server, that server's community data is deleted.
+- **Cross-server giveaways:** the post shows the host (the bot owner or a partner) and the partner's public links, and optional steps such as following an account. The bot cannot see whether you did them.
+
 ## Support tickets, notifications and language
 - **Tickets:** what you write in a ticket and the replies are stored with your Discord ID and name. They are visible to you, to the bot owner, and, if you picked a server that set up a ticket channel, to that server's staff. Never put a game key in a ticket; staff cannot see giveaway keys. Closed tickets are deleted after 6 months, and `/mydata delete` removes yours. `/mydata export` includes them.
 - **Notification center:** a copy of the title and short text of each alert sent to you, kept 60 days, only visible to you.

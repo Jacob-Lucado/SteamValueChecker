@@ -4,6 +4,7 @@
 // Prize keys are encrypted by the vault and wiped when the winner confirms, the giveaway is cancelled, or they go unused for too long.
 
 import { randomInt } from "node:crypto";
+import { stepsOf } from "./gwpartner.js";
 import { UserError } from "./errors.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
@@ -187,6 +188,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             bonus_entries: clampInt(input.bonus_entries, 1, 10, 1), min_account_days: clampInt(input.min_account_days, 0, 3650, 0),
             min_member_days: clampInt(input.min_member_days, 0, 3650, 0), claim_hours: clampInt(input.claim_hours, 1, 168, 48),
             vouch_channel_id: input.vouch_channel_id ?? null, require_boost: input.require_boost ? 1 : 0, duration_ms: input.duration_ms,
+            is_global: input.is_global ? 1 : 0, host_name: input.host?.host_name ?? null, host_kind: input.host?.host_kind ?? null, host_links: input.host?.host_links ?? null, host_logo: input.host?.host_logo ?? null, steps: input.steps?.length ? JSON.stringify(input.steps) : null,
             status: startAt ? "scheduled" : "active", starts_at: startAt, ends_at: (startAt ?? now()) + input.duration_ms
         };
         const id = db.createGiveaway(g, input.keys.map(k => ({ label: k.label, enc: vault.encrypt(k.key) })));
@@ -218,7 +220,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         if (g.min_member_days && who.joinedAt && (now() - who.joinedAt) / 86400_000 < g.min_member_days) throw new UserError(`You need to have been in this server for at least ${g.min_member_days} days to enter.`);
         const entries = g.bonus_role_id && (who.roleIds ?? []).includes(g.bonus_role_id) ? g.bonus_entries : 1;
         db.addEntry(g.id, who.userId, entries);
-        return { status: "entered", entries, total: entryCount(g.id) };
+        return { status: "entered", entries, total: entryCount(g.id), steps: stepsOf(g), hostName: g.host_name ?? null };
     }
 
     /** Posts a scheduled giveaway when its time comes. If the channel can't be used it is cancelled and the host gets the keys back. */

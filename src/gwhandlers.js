@@ -214,7 +214,8 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
 
     async function enter(i, id) {
         const r = await giveaways.enter(id, who(i));
-        await eph(i, r.status === "left" ? "You left the giveaway." : `You're in!${r.entries > 1 ? ` You have ${r.entries} entries.` : ""} Press the button again to leave. Good luck!`);
+        const todo = r.steps?.length ? `\n\n**Before the draw, make sure you did these:**\n${r.steps.map((s, n) => `${n + 1}. [${s.label.replace(/[\[\]]/g, "")}](${s.url})`).join("\n")}\nWinners may be checked, and a new winner is drawn if a step was skipped.` : "";
+        await eph(i, r.status === "left" ? "You left the giveaway." : `You're in!${r.entries > 1 ? ` You have ${r.entries} entries.` : ""} Press the button again to leave. Good luck!${todo}`);
         const t = now();
         if (t - (lastRefresh.get(id) ?? 0) > REFRESH_EVERY_MS) { lastRefresh.set(id, t); giveaways.refresh(id).catch(() => {}); }
     }

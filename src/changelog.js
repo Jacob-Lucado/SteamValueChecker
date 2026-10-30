@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.01", date: "2026-11-01", title: "A full community bot", items: [
+        "**Brand-new servers are set up for you.** Add the bot to a fresh server and it builds the usual gaming layout (welcome, rules, general, gaming, deals, voice and a private staff area), with Moderator and Member roles, a role picker and the bot's own channels connected. Any other server can run `/community setup`.",
+        "**Welcome messages, levels and XP, invites and referrals.** New members are greeted with who invited them, chat and voice earn XP, `/rank` and `/levels` show where you stand, and `/invites link` gives you your own link with rewards for bringing people in.",
+        "**Emoji import:** `/emoji import` copies emoji from other servers or adds an image. The dashboard can paste emoji or upload an image too.",
+        "**Dashboard:** new **Community** and **Server XP** pages in the Servers menu (leaderboard, level rewards, how XP works, and a prize shop that is coming soon). The owner's Admin page has a **Community** tab showing what is used.",
+        "**Cross-server giveaways** now say they are cross-server and who hosts them, can be hosted by a partner with their links, and can ask for entry steps like following on X or joining a Discord. Giveaway numbers no longer show on posts."
+    ] },
     { version: "2026.10.31", date: "2026-10-31", title: "Sign in through Steam", items: [
         "**Sign in through Steam** on the dashboard: one click on Steam's own page and your library, hours and taste profile fill in. No profile links to paste. Wishlist import, `/wishlist import` and `/steam link` use the Steam account you signed in with.",
         "The Steam page has a new **Library analytics** view: games, hours, collection value, how much you have played, hours by genre, played versus backlog and your most played games.",

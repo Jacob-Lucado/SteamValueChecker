@@ -750,3 +750,29 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .fy-price s { color: var(--muted); font-size: 11.5px; }
 .fy-cut { font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: var(--panel-2); color: var(--white); }
 @media (max-width: 520px) { .fy-card { grid-template-columns: auto minmax(0, 1fr) auto; } .fy-art { display: none; } }
+.emoji-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.emoji-grid img { width: 32px; height: 32px; object-fit: contain; }
+
+/* Server XP page */
+.xp-card { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; background: linear-gradient(135deg, var(--panel-2), var(--panel)); }
+.xp-level { display: grid; place-items: center; width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, var(--accent), var(--accent-2)); color: var(--on-accent); box-shadow: 0 0 0 4px var(--soft), var(--shadow); flex: none; }
+.xp-level b { font-size: 34px; line-height: 1; letter-spacing: -.03em; }
+.xp-lv-k { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; margin-bottom: -10px; }
+.xp-card-main { flex: 1; min-width: 220px; }
+.xp-card-main h3 { margin: 0 0 4px; }
+.xp-board td, .xp-board th { padding: 8px 10px; }
+
+/* The prize shop teaser: loud on purpose, in the dashboard's own colours */
+.shop-soon { position: relative; overflow: hidden; text-align: center; padding: 28px 20px; border: 1px solid var(--accent-2);
+  background: radial-gradient(circle at 50% -20%, var(--glow-2), transparent 60%), linear-gradient(160deg, var(--panel-2), var(--panel)); }
+.shop-soon::before { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, var(--soft-2) 50%, transparent 65%); transform: translateX(-100%); animation: shop-shine 3.6s ease-in-out infinite; pointer-events: none; }
+.shop-badge { display: inline-block; padding: 7px 18px; border-radius: 999px; font-weight: 800; font-size: 14px; letter-spacing: .22em; color: var(--on-accent);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent)); background-size: 200% 100%; animation: shop-flow 3s linear infinite; box-shadow: 0 0 24px var(--glow-2), 0 4px 14px rgba(3, 8, 18, .35); }
+.shop-soon h3 { font-size: 28px; margin: 14px 0 6px; color: var(--white); }
+.shop-ghosts { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin: 18px 0; }
+.shop-ghost { display: grid; gap: 2px; justify-items: center; width: 150px; padding: 16px 10px; border-radius: 12px; background: var(--soft); border: 1px dashed var(--line); filter: saturate(.7); opacity: .85; }
+.shop-ghost span { font-size: 30px; }
+.shop-ghost small { color: var(--muted); letter-spacing: .08em; }
+@keyframes shop-shine { 0% { transform: translateX(-100%); } 55%, 100% { transform: translateX(100%); } }
+@keyframes shop-flow { to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .shop-soon::before, .shop-badge { animation: none; } }

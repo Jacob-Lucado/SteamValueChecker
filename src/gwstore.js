@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS giveaway_settings (
 const GIVEAWAY_FIELDS = [
     "guild_id", "channel_id", "host_id", "title", "description", "game_title", "image_url", "thumbnail_url", "color", "button_label",
     "ping_role_id", "require_role_id", "bonus_role_id", "bonus_entries", "min_account_days", "min_member_days", "claim_hours",
-    "vouch_channel_id", "ends_at", "gallery", "require_boost", "starts_at", "duration_ms", "status"
+    "vouch_channel_id", "ends_at", "gallery", "require_boost", "starts_at", "duration_ms", "status", "host_name", "host_kind", "host_links", "host_logo", "steps", "is_global"
 ];
 
 export function giveawayStore({ db, run, get, all, clean, now }) {
@@ -114,7 +114,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
             const cols = GIVEAWAY_FIELDS;
             const r = run(
                 `INSERT INTO giveaways (${cols.join(", ")}, created_at) VALUES (${cols.map(() => "?").join(", ")}, ?)`,
-                ...cols.map(c => g[c] ?? (c === "bonus_entries" ? 1 : c === "claim_hours" ? 48 : c === "min_account_days" || c === "min_member_days" || c === "require_boost" ? 0 : c === "status" ? "active" : null)), now()
+                ...cols.map(c => g[c] ?? (c === "bonus_entries" ? 1 : c === "claim_hours" ? 48 : c === "min_account_days" || c === "min_member_days" || c === "require_boost" || c === "is_global" ? 0 : c === "status" ? "active" : null)), now()
             );
             const id = Number(r.lastInsertRowid);
             keys.forEach((k, i) => run("INSERT INTO giveaway_keys (giveaway_id, position, label, key_enc) VALUES (?,?,?,?)", id, i + 1, k.label, k.enc));
