@@ -819,3 +819,18 @@ test("quick start tip: short, mentions the first steps and the dashboard only wh
     db.updateUser("u9", { tipped: 1 });
     assert.equal(db.getUser("u9").tipped, 1);
 });
+
+test("bot status rotates through servers, members, uptime and the support link, and skips what it does not know", async () => {
+    const { presenceLines, uptimeText, startPresence } = await import("../src/presence.js");
+    const lines = presenceLines({ servers: 3, members: 1200, users: 1, uptimeMs: 90 * 3600_000, supportUrl: "https://x.com/twit_user69" });
+    assert.deepEqual(lines.slice(0, 4), ["🌐 In 3 servers", "👥 1,200 members across servers", "💸 Watching deals for 1 player", "⏱️ Online for 3d 18h"]);
+    assert.ok(lines.at(-1).endsWith("x.com/twit_user69") && !lines.at(-1).includes("https://"));
+    assert.ok(lines.every(l => l.length <= 128));
+    assert.ok(!presenceLines({ servers: undefined, members: 0, users: 0, uptimeMs: 5000 }).some(l => /member|player|server/.test(l)));
+    assert.equal(uptimeText(30_000), "1m"); assert.equal(uptimeText(75 * 60_000), "1h 15m");
+    const sent = [];
+    const client = { guilds: { cache: { size: 2, reduce: (f, a) => [{ memberCount: 5 }, { memberCount: 7 }].reduce(f, a) } }, user: { setPresence: p => sent.push(p.activities[0].state) } };
+    const stop = startPresence({ client, db: { stats: () => ({ users: 9 }) }, supportUrl: "https://x.com/a", every: 5 });
+    await new Promise(r => setTimeout(r, 40)); stop();
+    assert.equal(sent[0], "🌐 In 2 servers"); assert.ok(sent.includes("👥 12 members across servers") && sent.length >= 3);
+});

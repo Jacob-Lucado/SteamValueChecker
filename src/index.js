@@ -48,6 +48,7 @@ import { createTicketHandlers } from "./tickethandlers.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
 import { createCommunity } from "./communityservice.js";
 import { createCommunityHandlers, setupSummary } from "./communityhandlers.js";
+import { startPresence } from "./presence.js";
 import { createModeration } from "./moderation.js";
 import { createModHandlers } from "./modhandlers.js";
 import { communitySetup, isFreshGuild } from "./community.js";
@@ -317,6 +318,7 @@ const status = createStatusMonitor({
         dashboard: { name: "Web dashboard", desc: "This website and its API", critical: false, check: () => ({ state: "operational" }) }
     }
 });
+client.once(Events.ClientReady, () => { if (process.env.PRESENCE !== "off") startPresence({ client, db, supportUrl: cfg.creator?.url, log: m => console.log(m) }); });
 client.once(Events.ClientReady, () => { status.start(); registerLinkedRoles(botRest, cfg.dashboard?.publicUrl ?? null, m => console.log(m)).then(ok => ok && console.log("[linked roles] conditions registered")); });
 // Remember each server's invite counts so a join can be matched to the invite that was used.
 client.once(Events.ClientReady, async () => { if (!MEMBERS_INTENT) return; for (const g of client.guilds.cache.values()) { await community.refreshInvites(g.id); await new Promise(r => setTimeout(r, 300)); } });
