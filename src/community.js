@@ -5,6 +5,7 @@ import { levelFromXp, xpForNext } from "./communitystore.js";
 export { levelFromXp, xpForNext };
 
 import { refreshLeaderboard } from "./leaderboard.js";
+import { forumTags, backfillForum } from "./requestsync.js";
 const B = n => 1n << BigInt(n);
 export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(10), sendMessages: B(11), manageMessages: B(13), addReactions: B(6), connect: B(20),
     speak: B(21), muteMembers: B(22), deafenMembers: B(23), moveMembers: B(24), manageNicknames: B(27), viewAuditLog: B(7), createThreads: B(35), createPrivateThreads: B(36), moderate: B(40) };
@@ -56,7 +57,8 @@ export const TEMPLATE = {
             { key: "vouches", name: "vouches", topic: "Winners confirm their keys worked", readonly: true }] },
         { name: "🆘 SUPPORT", channels: [
             { key: "help", name: "get-help", topic: "Need a hand? Open a private ticket with the moderators", readonly: true },
-            { key: "bugs", name: "report-a-bug", topic: "Found a problem with the bot? Report it straight to the developer", readonly: true }] },
+            { key: "bugs", name: "report-a-bug", topic: "Found a problem with the bot? Report it straight to the developer", readonly: true },
+            { key: "requests", name: "feature-requests", topic: "Ideas for the bot, with their status. Suggest and vote on the dashboard", forum: true }] },
         { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "afk", name: "AFK" }] },
         { name: "🛠️ STAFF", staff: true, channels: [
             { key: "staffchat", name: "staff-chat", topic: "Moderators only" },
@@ -206,6 +208,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     const overwrites = (kind) => {
         const bot = { id: botId, type: 1, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages | PERM.createInvite | B(14)), deny: "0" };
         const mod = { id: roleIds.mod, type: 0, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages), deny: "0" };
+        if (kind === "forum") return [{ id: everyone, type: 0, allow: "0", deny: str(PERM.createThreads) }, bot, mod]; // members read and reply; the bot makes the posts
         if (kind === "readonly") return [{ id: everyone, type: 0, allow: "0", deny: str(PERM.sendMessages | PERM.createThreads | PERM.createPrivateThreads) }, bot, mod];
         if (kind === "staff") return [{ id: everyone, type: 0, allow: "0", deny: str(PERM.viewChannel) }, bot, mod, ...(userId ? [{ id: userId, type: 1, allow: str(PERM.viewChannel | PERM.sendMessages), deny: "0" }] : [])];
         return [];
@@ -226,7 +229,14 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
             let ex;
             if (c.key === "general" && defaultText) { // the default #general becomes ours
                 ex = await guard(() => api.editChannel(defaultText.id, { parent_id: catCh.id, topic: c.topic }), `move #${defaultText.name ?? "general"}`); await wait();
-            } else ex = find(c.name, 0, catCh.id) ?? find(c.name, 0);
+            } else ex = c.forum ? (find(c.name, 15, catCh.id) ?? find(c.name, 15)) : (find(c.name, 0, catCh.id) ?? find(c.name, 0));
+            if (!ex && c.forum) {
+                // A forum channel: each feature request is a post, tagged with its status. If the server cannot have forums (not a Community server) it is skipped.
+                ex = await api.createChannel(guildId, { name: c.name, type: 15, parent_id: catCh.id, topic: c.topic, available_tags: forumTags(), default_reaction_emoji: { emoji_name: "👍" }, permission_overwrites: overwrites("forum") })
+                    .catch(e => { if (e?.status === 403) throw e; notes.push("Could not create the #feature-requests forum (forums need the server's Community features turned on)."); return null; });
+                if (ex) { created.channels.push(c.name); await wait(); }
+            }
+            if (c.forum) { if (ex) chIds[c.key] = ex.id; continue; }
             if (!ex) {
                 ex = await guard(() => api.createChannel(guildId, { name: c.name, type: 0, parent_id: catCh.id, topic: c.topic, permission_overwrites: overwrites(cat.staff ? "staff" : c.readonly ? "readonly" : "open") }), `create #${c.name}`);
                 created.channels.push(c.name); await wait();
@@ -256,7 +266,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
     db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings") });
-    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
+    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
     db.setReward(guildId, 5, roleIds.regular); // a first referral reward, change or remove it any time
@@ -267,6 +277,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     const rp = rulesPayload({ server: gname, base: baseUrl, rules: db.getCommunity(guildId).rules_text, helpChannel: chIds.help });
     await say(api, chIds.rules, rp);
     await say(api, chIds.help, helpPanel());
+    if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     await say(api, chIds.bugs, bugPanel());
     await say(api, chIds.announcements, { embeds: [{ color: 0x4d8cff, title: "📢 Announcements", description: "News from the staff lands here. Server managers can post announcements from the dashboard.\n\nMessages marked **Official message from the bot developer** come from the person who runs Steam Value Checker, for things like planned downtime." }] });
     await say(api, chIds.roles, rolePanel(selfRoles));

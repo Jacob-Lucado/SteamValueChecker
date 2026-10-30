@@ -3671,16 +3671,17 @@
             state.cfg && state.cfg.inviteUrl ? ext(state.cfg.inviteUrl, "Add to this server", "btn green") : null)].filter(Boolean));
           return;
         }
-        const [ch, ro] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))]);
+        const [ch, ro, fo] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] })), api("/api/servers/forums?guild=" + encodeURIComponent(guild.value)).catch(() => ({ forums: [] }))]);
+        const reqSel = select([["", "Not set"], ...fo.forums.map(c => [c.id, "#" + c.name])], st.requestsChannel || "");
         const chOpts = cur => select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], cur || "");
         const row = (step, title, help, ...controls) => h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (step.done ? "✅ " : step.optional ? "➖ " : "⬜ ") + title }), h("div", { class: "muted small", text: help })), ...controls.filter(Boolean));
         const save = (label, fn) => { const b = h("button", { class: "btn blue small", text: label }); b.addEventListener("click", () => busy(b, async () => { await fn(); toast("Saved.", "ok"); load(); })); return b; };
-        const [sAlert, sFeed, sSupport, sVouch] = st.steps;
+        const [sAlert, sFeed, sSupport, sVouch] = st.steps; // (the forum row finds its step by id)
         const alertSel = chOpts(st.alertChannel), supportSel = chOpts(st.supportChannel), vouchSel = chOpts(st.vouchChannel);
         const staffSel = select([["", "Only people with Manage Server"], ...ro.roles.map(r => [r.id, r.name])], st.staffRole || "");
         const done = st.steps.filter(x => x.done).length;
-        const auto = st.complete && st.vouchChannel ? null : h("div", { class: "panel" }, h("h3", { text: "Fastest way" }),
-          h("p", { class: "muted", text: "I can create a Steam Value Checker category with #deal-alerts, a private #support-tickets (only you and the bot) and #vouches, and connect them. Needs the Manage Channels permission." }),
+        const auto = st.complete && st.vouchChannel && st.requestsChannel ? null : h("div", { class: "panel" }, h("h3", { text: "Fastest way" }),
+          h("p", { class: "muted", text: "I can create a Steam Value Checker category with #deal-alerts, a private #support-tickets (only you and the bot), #vouches and a #feature-requests forum, and connect them. Needs the Manage Channels permission." }),
           (() => { const b = h("button", { class: "btn green", text: "Create the channels for me" }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/servers/setup/auto", { guild_id: guild.value, staff_role_id: staffSel.value || null }); toast(r.created.length ? "Channels created and connected." : r.note, "ok"); load(); })); return b; })());
         const feedBtn = h("button", { class: "btn small " + (st.feed ? "red" : "green"), text: st.feed ? "Stop the feed" : "Turn on the feed" });
         feedBtn.addEventListener("click", () => busy(feedBtn, async () => { await api("/api/servers/feed", { guild_id: guild.value, enabled: !st.feed }); load(); }));
@@ -3696,7 +3697,9 @@
           row(sSupport, "Support tickets", "Members use /support open. Tickets appear here with Reply, Assign and Resolve buttons, and in the Support page.",
             h("div", { class: "row" }, supportSel, staffSel, save("Save", () => api("/api/tickets/setup", { guild_id: guild.value, channel_id: supportSel.value, staff_role_id: staffSel.value })))),
           state.me.giveaways ? row(sVouch, "Giveaway vouches", "Winners' confirmations are posted here. Without one the bot looks for a channel named #vouches.",
-            h("div", { class: "row" }, vouchSel, save("Save", () => api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouchSel.value })))) : null),
+            h("div", { class: "row" }, vouchSel, save("Save", () => api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouchSel.value })))) : null,
+          row(st.steps.find(x => x.id === "requests"), "Feature requests forum", "Every idea members send in on the dashboard becomes a post here, tagged with its status (planned, in development, shipped…). Needs a forum channel, which Discord only offers on Community servers.",
+            fo.forums.length ? h("div", { class: "row" }, reqSel, save("Save", () => api("/api/community/places", { guild_id: guild.value, requests_channel: reqSel.value }))) : h("span", { class: "muted small", text: "No forum channel yet. \"Create the channels for me\" makes one, or add one in Discord." }))),
           h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
             h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/wishlist import" }), ", then star favorites with ", h("code", { text: "/wishlist priority" })),
             h("li", {}, "Price a library: ", h("code", { text: "/value" }), " or link Steam for hours, ", h("code", { text: "/steam recap" }), " and ", h("code", { text: "/library challenge" })),
@@ -3816,7 +3819,8 @@
       const st = d.settings;
       const box = h("div");
       (async () => {
-        const [ch, ro] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(GID())).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(GID())).catch(() => ({ roles: [] }))]);
+        const [ch, ro, fo] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(GID())).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(GID())).catch(() => ({ roles: [] })), api("/api/servers/forums?guild=" + encodeURIComponent(GID())).catch(() => ({ forums: [] }))]);
+        const forumSel = cur => select([["", "Not set"], ...fo.forums.map(c => [c.id, "#" + c.name])], cur || "");
         const chSel = cur => select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], cur || "");
         const roSel = (cur, none = "No role") => select([["", none], ...ro.roles.map(r => [r.id, r.name])], cur || "");
         const roleName = id => (ro.roles.find(r => r.id === id) || {}).name || "a role";
@@ -3880,9 +3884,11 @@
         loadEmoji();
         // rules, announcements, support: where things are posted and what they say
         const annCh = chSel(st.announce_channel || (ch.channels.find(c => c.name === "announcements") || {}).id), rulesCh = chSel(st.rules_channel || (ch.channels.find(c => c.name === "rules") || {}).id);
+        const reqCh = forumSel(st.requests_channel);
         const places = h("div", { class: "panel" }, h("h3", { text: "Where things are posted" }),
           field("Announcements channel (your announcements, and the bot developer's notices to all servers)", annCh), field("Rules channel", rulesCh),
-          h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value }))));
+          field("Feature requests forum (each idea is a post tagged with its status; needs a forum channel)", reqCh),
+          h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value, requests_channel: reqCh.value }))));
         const rText = h("textarea", { rows: "9", maxlength: "3000", placeholder: d.defaultRules }); rText.value = st.rules_text || "";
         const rulesP = h("div", { class: "panel" }, h("h3", { text: "Rules" }),
           h("p", { class: "muted", text: "Edit the rules shown in the rules channel. Leave it empty to use the standard community rules. The post comes with the bot logo and banner." }), field("Rules (Discord formatting works)", rText),

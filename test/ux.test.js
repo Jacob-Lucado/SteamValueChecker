@@ -96,6 +96,7 @@ test("setup checklist: tracks channels from every part of the bot and renders th
     db.setFreeFeed("g1", true);
     db.setGameNight("g1", true);
     db.setWeeklyDigest("g1", true);
+    db.setCommunity("g1", { requests_channel: "444" });
     st = setupStatus(db, "g1");
     assert.equal(st.complete, true);
     assert.ok(st.steps.every(x => x.done));
@@ -103,7 +104,7 @@ test("setup checklist: tracks channels from every part of the bot and renders th
     assert.match(e.description, /<#111>/);
     assert.match(e.description, /x\.test\/#\/setup\/g1/);
     const ids = setupComponents(st).flatMap(r => r.components).map(c => c.custom_id);
-    assert.deepEqual(ids, [SU.alert, SU.support, SU.vouch, SU.auto, SU.gn, SU.feed, SU.digest, SU.refresh]);
+    assert.deepEqual(ids, [SU.alert, SU.support, SU.vouch, SU.requests, SU.auto, SU.gn, SU.feed, SU.digest, SU.refresh]);
 });
 
 test("auto setup: creates the category and channels, keeps support private, skips what exists, explains a missing permission", async () => {
@@ -112,14 +113,17 @@ test("auto setup: creates the category and channels, keeps support private, skip
     const made = []; let n = 0;
     const api = { createChannel: async (g, body) => { made.push(body); return { id: String(++n) + "00000000000000000" }; }, sendMessage: async () => ({}) };
     const r = await autoSetup({ api, db, guildId: "g1", botId: "bot", userId: "owner", staffRoleId: "role" });
-    assert.deepEqual(made.map(m => m.name), ["Steam Value Checker", "deal-alerts", "support-tickets", "vouches"]);
+    assert.deepEqual(made.map(m => m.name), ["Steam Value Checker", "deal-alerts", "support-tickets", "vouches", "feature-requests"]);
     const support = made.find(m => m.name === "support-tickets");
     assert.ok(support.permission_overwrites.some(o => o.id === "g1" && BigInt(o.deny) & 1024n), "hidden from everyone");
     assert.ok(support.permission_overwrites.some(o => o.id === "role") && support.permission_overwrites.some(o => o.id === "owner"));
     assert.equal(made[1].parent_id, "100000000000000000");
     assert.equal(setupStatus(db, "g1").complete, true);
     assert.equal(db.getGuild("g1").free_feed, 1);
-    assert.equal(r.created.length, 3);
+    assert.equal(r.created.length, 4);
+    const forum = made.find(m => m.name === "feature-requests");
+    assert.equal(forum.type, 15); assert.ok(forum.available_tags.some(t => t.name === "In development"));
+    assert.ok(db.getCommunity("g1").requests_channel, "the forum is connected");
     made.length = 0;
     assert.match((await autoSetup({ api, db, guildId: "g1", botId: "bot", userId: "owner" })).note, /already/);
     assert.equal(made.length, 0);

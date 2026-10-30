@@ -75,6 +75,15 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
                 .map(c => ({ id: c.id, name: c.name }));
         },
 
+        /** Forum channels of a server the bot is in (for the feature requests forum). */
+        async listForums(guildId) {
+            const all = await call(`/guilds/${encodeURIComponent(guildId)}/channels`, { headers: bot });
+            return (Array.isArray(all) ? all : []).filter(c => c.type === 15).map(c => ({ id: c.id, name: c.name }));
+        },
+        getChannel: channelId => call(`/channels/${encodeURIComponent(channelId)}`, { headers: bot }),
+        /** A new post in a forum channel: { name, message: {...}, applied_tags }. */
+        createForumPost: (channelId, body) => call(`/channels/${encodeURIComponent(channelId)}/threads`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+
         /** Roles people can be given (not @everyone, not bot-managed roles). */
         async listRoles(guildId) {
             const all = await call(`/guilds/${encodeURIComponent(guildId)}/roles`, { headers: bot });

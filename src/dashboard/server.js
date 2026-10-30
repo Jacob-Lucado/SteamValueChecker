@@ -48,6 +48,7 @@ import { addToServerList, serverListView, vote, removeFromServerList } from "../
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { artUrl } from "../render.js";
+import { publishRequest, refreshRequest, removeRequestPosts } from "../requestsync.js";
 import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY as REQ_BODY, MAX_NOTE as REQ_NOTE } from "../requeststore.js";
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
@@ -1185,6 +1186,13 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 buy: r.buy.map(b => ({ title: b.title, wanters: b.wanters.map(n), price: b.now?.price ?? null, currency: b.now?.currency ?? "USD", shop: b.now?.shop ?? null, discount: b.now?.discount ?? 0 })) };
         },
 
+        "GET /api/servers/forums": async (req, _b, url) => {
+            const s = session(req);
+            const g = managerGuild(s, url.searchParams.get("guild"));
+            try { return { forums: await rest.listForums(g.id) }; }
+            catch (err) { if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first."); throw err; }
+        },
+
         "POST /api/servers/setup/auto": async (req, body) => {
             const s = session(req);
             const g = managerGuild(s, String(body.guild_id));
@@ -1772,7 +1780,10 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (title.length < 4) throw new HttpError(400, "Give your idea a short title (at least 4 characters).");
             if (db.openCountFor(s.userId) >= MAX_OPEN_PER_USER) throw new HttpError(429, `You can have ${MAX_OPEN_PER_USER} requests waiting at once. Vote on existing ones or wait for a reply.`);
             const undo = cooldown(s.userId, "request");
-            try { return { id: db.addRequest({ userId: s.userId, userName: s.username ?? null, title, body: text }) }; } catch (e) { undo(); throw e; }
+            let id;
+            try { id = db.addRequest({ userId: s.userId, userName: s.username ?? null, title, body: text }); } catch (e) { undo(); throw e; }
+            publishRequest({ db, api: rest, id, base: config.publicUrl }).catch(() => {}); // into each server's feature-requests forum, in the background
+            return { id };
         },
         "POST /api/requests/vote": async (req, body) => {
             const s = session(req); cooldown(s.userId, "requestvote");
@@ -1790,6 +1801,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             if (!REQUEST_STATUSES[status]) throw new HttpError(400, "Pick a valid status.");
             const note = String(body.note ?? "").trim().slice(0, REQ_NOTE);
             db.setRequestStatus(r.id, status, note);
+            refreshRequest({ db, api: rest, id: r.id, base: config.publicUrl }).catch(() => {}); // move the tag in each forum
             let notified = false;
             if (body.notify !== false && status !== r.status && r.user_id !== s.userId) {
                 try {
@@ -1803,7 +1815,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "POST /api/admin/requests/delete": async (req, body) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do that.");
-            return { removed: db.deleteRequest(Number(body.id)) };
+            const id = Number(body.id);
+            await removeRequestPosts({ db, api: rest, id }).catch(() => {});
+            return { removed: db.deleteRequest(id) };
         },
 
         "POST /api/tickets": async (req, body) => {

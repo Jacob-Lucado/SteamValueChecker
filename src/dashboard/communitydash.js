@@ -2,6 +2,7 @@
 import { xpForNext } from "../communitystore.js";
 import { buildAnnouncement } from "../announce.js";
 import { UserError } from "../errors.js";
+import { backfillForum } from "../requestsync.js";
 import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { DiscordApiError } from "./discord.js";
@@ -121,7 +122,15 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         const patch = {};
         if (b.announce_channel !== undefined) patch.announce_channel = await channelOk(gid, b.announce_channel || null);
         if (b.rules_channel !== undefined) patch.rules_channel = await channelOk(gid, b.rules_channel || null);
-        return db.setCommunity(gid, patch);
+        if (b.requests_channel !== undefined) {
+            const id = b.requests_channel || null;
+            if (id && !(await rest.listForums(gid).catch(() => fail(400, "The bot is not in that server yet. Invite it first."))).some(c => c.id === id)) fail(400, "That is not a forum channel I can see.");
+            if (id !== db.getCommunity(gid).requests_channel) db.dropForumPosts(gid); // a new forum starts clean
+            patch.requests_channel = id;
+        }
+        const row = db.setCommunity(gid, patch);
+        if (patch.requests_channel) backfillForum({ db, api: rest, guildId: gid, base: publicUrl }).catch(() => {}); // fill the forum with recent requests
+        return row;
     }
     /** The #leaderboard board: where it lives, how often it refreshes, and an immediate refresh. */
     async function leaderboard(gid, b) {

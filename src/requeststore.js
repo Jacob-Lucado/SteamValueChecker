@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS feature_votes (
     request_id INTEGER NOT NULL REFERENCES feature_requests(id) ON DELETE CASCADE,
     user_id    TEXT NOT NULL,
     PRIMARY KEY (request_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS feature_posts (
+    request_id INTEGER NOT NULL REFERENCES feature_requests(id) ON DELETE CASCADE,
+    guild_id   TEXT NOT NULL,
+    thread_id  TEXT NOT NULL,
+    PRIMARY KEY (request_id, guild_id)
 );`;
 
 export function requestStore({ run, get, all, clean, now }) {
@@ -50,5 +56,13 @@ export function requestStore({ run, get, all, clean, now }) {
     const deleteRequest = id => run("DELETE FROM feature_requests WHERE id = ?", id).changes > 0;
     const requestCounts = () => Object.fromEntries(all("SELECT status, COUNT(*) AS n FROM feature_requests GROUP BY status").map(r => [r.status, r.n]));
     const forgetRequestUser = userId => { run("DELETE FROM feature_votes WHERE user_id = ?", userId); run("DELETE FROM feature_requests WHERE user_id = ?", userId); };
-    return { getRequest, listRequests, openCountFor, addRequest, toggleRequestVote, setRequestStatus, deleteRequest, requestCounts, forgetRequestUser };
+    /** Servers that have a feature-requests forum, and the posts already made for a request. */
+    const requestForums = () => all("SELECT guild_id, requests_channel AS channel_id FROM community WHERE requests_channel IS NOT NULL").map(clean);
+    const requestPosts = id => all("SELECT guild_id, thread_id FROM feature_posts WHERE request_id = ?", id).map(clean);
+    const addRequestPost = (id, guildId, threadId) => run("INSERT OR REPLACE INTO feature_posts (request_id, guild_id, thread_id) VALUES (?,?,?)", id, guildId, threadId);
+    const dropRequestPost = (id, guildId) => run("DELETE FROM feature_posts WHERE request_id = ? AND guild_id = ?", id, guildId);
+    const dropForumPosts = guildId => run("DELETE FROM feature_posts WHERE guild_id = ?", guildId);
+    const recentRequests = (limit = 25) => all("SELECT * FROM feature_requests ORDER BY created_at DESC LIMIT ?", limit).map(clean);
+    const requestVotes = id => get("SELECT COUNT(*) AS n FROM feature_votes WHERE request_id = ?", id).n;
+    return { requestVotes, requestForums, requestPosts, addRequestPost, dropRequestPost, dropForumPosts, recentRequests, getRequest, listRequests, openCountFor, addRequest, toggleRequestVote, setRequestStatus, deleteRequest, requestCounts, forgetRequestUser };
 }

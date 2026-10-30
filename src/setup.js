@@ -3,26 +3,28 @@
 const EPHEMERAL = 64;
 const PermissionFlagsBits = { ManageGuild: 1n << 5n, ViewChannel: 1n << 10n, SendMessages: 1n << 11n, EmbedLinks: 1n << 14n };
 
-export const SU = { alert: "su_alert", support: "su_support", vouch: "su_vouch", feed: "su_feed", digest: "su_digest", gn: "su_gn", refresh: "su_refresh", auto: "su_auto" };
+import { forumTags, backfillForum } from "./requestsync.js";
+export const SU = { requests: "su_requests", alert: "su_alert", support: "su_support", vouch: "su_vouch", feed: "su_feed", digest: "su_digest", gn: "su_gn", refresh: "su_refresh", auto: "su_auto" };
 
 /** Where a server stands. Used by both sides so they always agree. */
 export function setupStatus(db, guildId) {
     const g = db.getGuild(guildId), t = db.getTicketSettings(guildId), gw = db.getGiveawaySettings(guildId);
-    const s = { alertChannel: g?.channel_id ?? null, feed: Boolean(g?.free_feed), supportChannel: t.channel_id ?? null, staffRole: t.staff_role_id ?? null, vouchChannel: gw.vouch_channel_id ?? null, gameNight: db.gameNightOn(guildId), weeklyDigest: Boolean(g?.weekly_digest) };
+    const s = { requestsChannel: db.getCommunity?.(guildId)?.requests_channel ?? null, alertChannel: g?.channel_id ?? null, feed: Boolean(g?.free_feed), supportChannel: t.channel_id ?? null, staffRole: t.staff_role_id ?? null, vouchChannel: gw.vouch_channel_id ?? null, gameNight: db.gameNightOn(guildId), weeklyDigest: Boolean(g?.weekly_digest) };
     const steps = [
         { id: "alert", text: "Alert channel (used when a DM fails, and for the free-games feed)", done: Boolean(s.alertChannel) },
         { id: "feed", text: "Post new free games for everyone (optional)", done: s.feed, optional: true },
         { id: "digest", text: "Friday round-up: cheap games members watch, free games and events (optional)", done: s.weeklyDigest, optional: true },
         { id: "support", text: "Support ticket channel for your members", done: Boolean(s.supportChannel) },
         { id: "gamenight", text: "Game night: nudge voice channels when a game they all want goes on sale (optional)", done: s.gameNight, optional: true },
-        { id: "vouch", text: "Vouches channel for giveaways (optional)", done: Boolean(s.vouchChannel), optional: true }
+        { id: "vouch", text: "Vouches channel for giveaways (optional)", done: Boolean(s.vouchChannel), optional: true },
+        { id: "requests", text: "Feature requests forum: ideas for the bot, tagged by status (optional)", done: Boolean(s.requestsChannel), optional: true }
     ];
     return { ...s, steps, complete: steps.filter(x => !x.optional).every(x => x.done) };
 }
 
 export function setupEmbed(st, dashboardUrl = null, guildId = null, note = null) {
     const mark = x => (x.done ? "✅" : x.optional ? "➖" : "⬜");
-    const where = { alert: st.alertChannel, support: st.supportChannel, vouch: st.vouchChannel };
+    const where = { alert: st.alertChannel, support: st.supportChannel, vouch: st.vouchChannel, requests: st.requestsChannel };
     return { color: 0xff9800, title: "Server setup",
         description: [...st.steps.map(x => `${mark(x)} ${x.text}${where[x.id] ? ` → <#${where[x.id]}>` : ""}`),
             "", st.complete ? "The essentials are done. Members can use `/wishlist import`, `/support open` and the rest." : "Pick channels below. Everything can be changed again any time with `/setup`.",
@@ -30,9 +32,9 @@ export function setupEmbed(st, dashboardUrl = null, guildId = null, note = null)
             note ? `\n${note}` : ""].join("\n").slice(0, 4000) };
 }
 
-const picker = (id, placeholder) => ({ type: 1, components: [{ type: 8, custom_id: id, placeholder, channel_types: [0, 5], min_values: 1, max_values: 1 }] });
+const picker = (id, placeholder, types = [0, 5]) => ({ type: 1, components: [{ type: 8, custom_id: id, placeholder, channel_types: types, min_values: 1, max_values: 1 }] });
 export function setupComponents(st) {
-    return [picker(SU.alert, "Choose the alert channel"), picker(SU.support, "Choose the support ticket channel"), picker(SU.vouch, "Choose the giveaway vouches channel"),
+    return [picker(SU.alert, "Choose the alert channel"), picker(SU.support, "Choose the support ticket channel"), picker(SU.vouch, "Choose the giveaway vouches channel"), picker(SU.requests, "Choose the feature requests forum", [15]),
         { type: 1, components: [
             { type: 2, style: 3, label: "Create the channels for me", custom_id: SU.auto },
             { type: 2, style: st.gameNight ? 4 : 2, label: st.gameNight ? "Stop game night nudges" : "Game night nudges", custom_id: SU.gn },
@@ -51,8 +53,8 @@ const ALLOW_BOT = String(OVERWRITE.view | OVERWRITE.send | OVERWRITE.embed);
  */
 export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId = null }) {
     const st = setupStatus(db, guildId), created = [];
-    const need = { alert: !st.alertChannel, support: !st.supportChannel, vouch: !st.vouchChannel };
-    if (!need.alert && !need.support && !need.vouch) return { created, note: "Everything is already set up." };
+    const need = { alert: !st.alertChannel, support: !st.supportChannel, vouch: !st.vouchChannel, requests: !st.requestsChannel };
+    if (!need.alert && !need.support && !need.vouch && !need.requests) return { created, note: "Everything is already set up." };
     const bot = { id: botId, type: 1, allow: ALLOW_BOT, deny: "0" };
     const readOnly = [{ id: guildId, type: 0, allow: String(OVERWRITE.view), deny: String(OVERWRITE.send) }, bot];
     const priv = [{ id: guildId, type: 0, allow: "0", deny: String(OVERWRITE.view) }, bot, { id: userId, type: 1, allow: String(OVERWRITE.view | OVERWRITE.send), deny: "0" },
@@ -81,7 +83,17 @@ export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId =
         const c = await make({ name: "vouches", type: 0, parent_id: cat.id, topic: "Giveaway winners confirm their keys worked", permission_overwrites: readOnly });
         db.setGiveawaySettings(guildId, { vouch_channel_id: c.id }); created.push({ id: c.id, role: "vouches" });
     }
-    return { created, note: `Created ${created.map(c => `<#${c.id}>`).join(", ")}. #support-tickets is private to you and the bot; add your staff to it.` };
+    let forumNote = "";
+    if (need.requests) {
+        // A forum needs the server's Community features; without them the rest of the setup still stands.
+        try {
+            const c = await api.createChannel(guildId, { name: "feature-requests", type: 15, parent_id: cat.id, topic: "Ideas for the bot, with their status. Suggest and vote on the dashboard", available_tags: forumTags(), default_reaction_emoji: { emoji_name: "👍" },
+                permission_overwrites: [{ id: guildId, type: 0, allow: "0", deny: String(1n << 35n) }, bot] });
+            db.setCommunity(guildId, { requests_channel: c.id }); created.push({ id: c.id, role: "requests" });
+            if (api.createForumPost) await backfillForum({ db, api, guildId }).catch(() => {});
+        } catch (e) { if (e?.status === 403) throw Object.assign(new Error("I need the Manage Channels permission to create channels. Give it to my role in Server Settings, or pick existing channels instead."), { userFacing: true }); forumNote = " The feature requests forum could not be made (forums need the server's Community features turned on)."; }
+    }
+    return { created, note: `Created ${created.map(c => `<#${c.id}>`).join(", ") || "nothing new"}.${need.support ? " #support-tickets is private to you and the bot; add your staff to it." : ""}${forumNote}` };
 }
 
 export function createSetupHandlers({ db, publicUrl = null }) {
@@ -109,16 +121,19 @@ export function createSetupHandlers({ db, publicUrl = null }) {
         let note = null;
         if (i.isChannelSelectMenu?.() || i.isAnySelectMenu?.()) {
             const channelId = i.values[0];
-            const problem = await canPost(i, channelId);
+            const problem = i.customId === SU.requests ? null : await canPost(i, channelId); // a forum is not posted into directly
             if (problem) return eph(i, problem);
             if (i.customId === SU.alert) db.setGuildChannel(i.guildId, channelId, i.user.id);
             else if (i.customId === SU.support) db.setTicketSettings(i.guildId, { channelId, staffRoleId: db.getTicketSettings(i.guildId).staff_role_id });
             else if (i.customId === SU.vouch) db.setGiveawaySettings(i.guildId, { vouch_channel_id: channelId });
+            else if (i.customId === SU.requests) db.setCommunity(i.guildId, { requests_channel: channelId });
         } else if (i.customId === SU.auto) {
             await i.deferUpdate();
             try {
                 const api = { createChannel: (g, body) => i.client.rest.post(`/guilds/${g}/channels`, { body }), // a DiscordAPIError carries status 403 when permission is missing
-                    sendMessage: (c, body) => i.client.rest.post(`/channels/${c}/messages`, { body }) };
+                    sendMessage: (c, body) => i.client.rest.post(`/channels/${c}/messages`, { body }),
+                    getChannel: c => i.client.rest.get(`/channels/${c}`), editChannel: (c, body) => i.client.rest.patch(`/channels/${c}`, { body }),
+                    createForumPost: (c, body) => i.client.rest.post(`/channels/${c}/threads`, { body }), editMessage: (c, m, body) => i.client.rest.patch(`/channels/${c}/messages/${m}`, { body }) };
                 const r = await autoSetup({ api, db, guildId: i.guildId, botId: i.client.user.id, userId: i.user.id });
                 note = r.note;
             } catch (e) { note = e.userFacing ? e.message : "I could not create the channels. Check my permissions and try again, or pick channels from the menus."; }

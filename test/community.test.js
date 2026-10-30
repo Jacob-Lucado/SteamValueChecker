@@ -427,6 +427,7 @@ test("everything setup offers is actually connected: ping roles, Friday digest, 
     const db = openDb(":memory:"), api = fakeApi();
     const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
     const c = db.getCommunity("G");
+    assert.ok(c.requests_channel, "the feature requests forum is connected");
     const role = n => api.state.roles.find(x => x.name === n).id;
     assert.deepEqual([c.ping_deals, c.ping_free, c.ping_giveaway, c.ping_lfg], [role("Deal pings"), role("Free game pings"), role("Giveaway pings"), role("LFG pings")]);
     const g = db.getGuild("G");
@@ -681,4 +682,47 @@ test("broadcast banner is drawn per server and falls back to the shared one on f
     const bad = await run(async () => { throw new Error("nope"); });
     assert.equal(bad.files, undefined);
     assert.equal(bad.embeds[0].image.url, "https://x.test/banner.png");
+});
+
+test("feature requests forum: posts per server with a status tag, kept in step, removed with the request", async () => {
+    const { openDb } = await import("../src/db.js");
+    const { publishRequest, refreshRequest, removeRequestPosts, backfillForum } = await import("../src/requestsync.js");
+    const db = openDb(":memory:");
+    db.setCommunity("g1", { requests_channel: "f1" }); db.setCommunity("g2", { requests_channel: "f2" }); db.setCommunity("g3", {});
+    const calls = [], tags = [{ id: "t1", name: "Under review" }]; let n = 0;
+    const api = {
+        getChannel: async () => ({ available_tags: tags }),
+        editChannel: async (id, body) => { calls.push(["edit", id, body]); if (body.available_tags) { const all = body.available_tags.map((t, i) => ({ id: t.id ?? "n" + i, name: t.name })); tags.splice(0, tags.length, ...all); return { available_tags: all }; } return {}; },
+        createForumPost: async (ch, body) => { calls.push(["post", ch, body]); return { id: "th" + ++n }; },
+        editMessage: async (c, m, body) => calls.push(["msg", c, m, body]),
+        deleteChannel: async id => calls.push(["del", id])
+    };
+    const opt = { db, api, sleep: async () => {}, base: "https://x.test" };
+    const id = db.addRequest({ userId: "u1", userName: "Sam", title: "Dark mode", body: "please" });
+    assert.equal(await publishRequest({ ...opt, id }), 2, "one post per server with a forum");
+    assert.equal(await publishRequest({ ...opt, id }), 0, "never twice");
+    const post = calls.find(c => c[0] === "post");
+    assert.equal(post[2].name, "Dark mode");
+    assert.deepEqual(post[2].applied_tags, ["t1"]);
+    assert.equal(post[2].message.embeds[0].fields[0].value, "Under review");
+    // a status change adds the missing tag, moves it, and rewrites the first message
+    db.setRequestStatus(id, "in_development", "Started");
+    assert.equal(await refreshRequest({ ...opt, id }), 2);
+    const moved = calls.filter(c => c[0] === "edit" && c[2].applied_tags);
+    assert.equal(moved.length, 2);
+    assert.notDeepEqual(moved[0][2].applied_tags, ["t1"]);
+    const rewritten = calls.filter(c => c[0] === "msg");
+    assert.match(rewritten[0][3].embeds[0].description, /Started/);
+    assert.equal(rewritten[0][1], rewritten[0][2], "a forum post's first message shares the post's id");
+    // a new forum gets recent requests
+    db.setCommunity("g4", { requests_channel: "f4" });
+    assert.equal(await backfillForum({ ...opt, guildId: "g4" }), 1);
+    await removeRequestPosts({ ...opt, id });
+    assert.equal(calls.filter(c => c[0] === "del").length, 3);
+});
+
+test("community setup template includes a feature requests forum", async () => {
+    const { TEMPLATE } = await import("../src/community.js");
+    const c = TEMPLATE.categories.flatMap(x => x.channels ?? []).find(x => x.key === "requests");
+    assert.ok(c && c.forum && c.name === "feature-requests");
 });
