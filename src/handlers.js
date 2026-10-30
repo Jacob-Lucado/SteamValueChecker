@@ -33,6 +33,8 @@ import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
 
 import { UserError } from "./errors.js";
+import { boardSvg, artFor } from "./communitycards.js";
+import { panelSvg, toPng, challengeSpec, spendSpec, trendSpec, compareSpec, badgesSpec, statusSpec, serverStatsSpec } from "./panelcards.js";
 export { UserError };
 
 const PAGE_TIMEOUT_MS = 10 * 60_000;
@@ -67,6 +69,12 @@ function pageButtons(page, pages) {
 }
 
 const deliveryText = u => (u.delivery === "channel" ? "the server alert channel (you are mentioned)" : "direct message");
+
+/** A picture card for a command, or the plain embed if the picture can't be drawn. */
+const withCard = (spec, name, alt, embed) => {
+    try { return { files: [{ attachment: Buffer.from(toPng(panelSvg(spec))), name, description: alt }] }; }
+    catch { return { embeds: [embed] }; }
+};
 
 export function createHandlers({ db, itad, publicUrl = null, getStatus = () => null, getAbout = () => null }) {
     // ---------- /wishlist ----------
@@ -502,14 +510,16 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 await i.deferReply({ flags: MessageFlags.Ephemeral });
                 return void await i.editReply({ embeds: [bundlesEmbed(await bundleView(db, itad, user))] });
             }
-            if (sub === "badges") return void await i.reply({ embeds: [badgesEmbed(trophyCase(db, i.user.id))], flags: MessageFlags.Ephemeral });
+            if (sub === "badges") return void await (async () => { const tc = trophyCase(db, i.user.id); return i.reply({ ...withCard(badgesSpec(tc), "trophy-case.png", `Trophy case: ${tc.earned} of ${tc.total}`, badgesEmbed(tc)), flags: MessageFlags.Ephemeral }); })();
             if (sub === "spend") {
-                return void await i.reply({ embeds: [spendEmbed(spendSummary(db.listLibrary(i.user.id), { currency: regionCurrency(user.region) }))], flags: MessageFlags.Ephemeral });
+                const sp = spendSummary(db.listLibrary(i.user.id), { currency: regionCurrency(user.region) });
+                return void await i.reply({ ...withCard(spendSpec(sp), "spend.png", "What you have spent", spendEmbed(sp)), flags: MessageFlags.Ephemeral });
             }
             if (sub === "challenge") {
                 const goal = i.options.getInteger("goal");
                 if (goal !== null) db.setChallenge(i.user.id, monthKey(Date.now()), Math.min(MAX_GOAL, Math.max(0, goal)));
-                return void await i.reply({ embeds: [challengeEmbed(challengeView(db, i.user.id))], flags: MessageFlags.Ephemeral });
+                const ch = challengeView(db, i.user.id);
+                return void await i.reply({ ...withCard(challengeSpec(ch), "challenge.png", "Your backlog challenge", challengeEmbed(ch)), flags: MessageFlags.Ephemeral });
             }
             cooldown(i, "lib");
             await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -523,7 +533,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
                 const tr = trendSummary(view.snapshots);
                 if (!tr) throw new UserError("A trend needs at least two days of data. I take a snapshot every day, so check back tomorrow.");
-                return void await i.editReply({ embeds: [trendEmbed(tr, view.currency, view.totals.backlogGames)] });
+                return void await i.editReply(withCard(trendSpec(tr, view.currency, view.totals.backlogGames), "trend.png", "Your library trend", trendEmbed(tr, view.currency, view.totals.backlogGames)));
             }
             if (sub === "add") {
                 const paid = i.options.getNumber("paid");
@@ -595,10 +605,22 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     async function handleLeaderboard(i) {
         try {
             const board = i.options.getString("board"), guild = await homeGuild(i);
-            const embed = board === "finished" ? leagueEmbed(finishedLeague(db, guild))
-                : EXTRA_BOARDS[board] ? boardEmbed(EXTRA_BOARDS[board], extraBoard(db, guild, board), board === "hours" ? "Only members who opted in. Counts hours tracked since they linked Steam." : "Only members who opted in.")
-                : leaderboardEmbed(leaderboard(db, guild));
-            await i.reply({ embeds: [embed], allowedMentions: { parse: [] } });
+            const finished = board === "finished", extra = EXTRA_BOARDS[board];
+            const entries = finished ? finishedLeague(db, guild) : extra ? extraBoard(db, guild, board) : leaderboard(db, guild);
+            const footer = board === "hours" ? "Only members who opted in. Counts hours tracked since they linked Steam." : "Only members who opted in.";
+            const embed = finished ? leagueEmbed(entries) : extra ? boardEmbed(extra, entries, footer) : leaderboardEmbed(entries);
+            // Names and pictures for the card. If anything goes wrong the plain embed answers instead.
+            try {
+                if (!entries.length) throw new Error("nothing to draw");
+                await i.deferReply();
+                const people = await Promise.all(entries.map(async e => { try { const u = await i.client.users.fetch(e.discord_id); return { name: u.globalName ?? u.username, url: u.displayAvatarURL?.({ extension: "png", size: 128 }) ?? null }; } catch { return { name: "Member", url: null }; } }));
+                const art = await artFor(people.map(p => p.url));
+                const title = finished ? "Backlog league" : extra ? extra : "Savings leaderboard";
+                const sub = finished ? "Games finished this month" : board === "hours" ? "Hours tracked since linking Steam" : extra ? "Only members who opted in" : "Percent saved vs full price";
+                const svg = boardSvg({ title, subtitle: sub, accent: "#f5c542", accent2: "#f0883e", rows: entries.map((e, n) => finished ? { name: people[n].name, art: art(people[n].url), big: `${e.done} finished` } : extra ? { name: people[n].name, art: art(people[n].url), big: String(e.label) } : { name: people[n].name, art: art(people[n].url), big: `${e.savedPct.toFixed(0)}% saved`, small: `across ${e.games} games` }) });
+                return void await i.editReply({ files: [{ attachment: Buffer.from(toPng(svg)), name: "leaderboard.png", description: title }] });
+            } catch { /* fall through to the embed */ }
+            await (i.deferred || i.replied ? i.editReply({ embeds: [embed], allowedMentions: { parse: [] } }) : i.reply({ embeds: [embed], allowedMentions: { parse: [] } }));
         }
         catch (err) { await eph(i, err instanceof UserError ? err.message : "Something went wrong. Try again in a moment."); }
     }
@@ -637,14 +659,16 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     async function handleStatus(i) {
         const st = getStatus();
         if (!st) return eph(i, "Status is not available right now.");
-        return i.reply({ embeds: [statusEmbed(st.snapshot(), getAbout(), publicUrl)], flags: MessageFlags.Ephemeral });
+        const snap = st.snapshot();
+        return i.reply({ ...withCard(statusSpec(snap, getAbout()), "status.png", "Bot status", statusEmbed(snap, getAbout(), publicUrl)), flags: MessageFlags.Ephemeral });
     }
 
     // ---------- /serverstats ----------
     async function handleServerStats(i) {
         try {
             await i.deferReply({ flags: MessageFlags.Ephemeral });
-            await i.editReply({ embeds: [serverStatsEmbed(serverStats(db, await homeGuild(i)))] });
+            const ss = serverStats(db, await homeGuild(i));
+            await i.editReply(withCard(serverStatsSpec(ss, i.guild?.name ?? ""), "server-stats.png", "Server stats", serverStatsEmbed(ss)));
         } catch (err) { await failed(i, "serverstats", err); }
     }
 
@@ -766,7 +790,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         const r = compareLibraries(db, i.user.id, friend.id);
         if (!r.a.games) return reply("Your library is empty. Use `/library add`, `/library import` or `/steam link` first.");
         if (!r.b.games) return reply(`${friend.displayName ?? friend.username} has no games in their library yet.`);
-        return i.reply({ embeds: [compareEmbed(r, "You", friend.displayName ?? friend.username)], ...(pub ? {} : { flags: MessageFlags.Ephemeral }) });
+        return i.reply({ ...withCard(compareSpec(r, "You", friend.displayName ?? friend.username), "compare.png", "Library comparison", compareEmbed(r, "You", friend.displayName ?? friend.username)), ...(pub ? {} : { flags: MessageFlags.Ephemeral }) });
     }
 
     return { handleFriend, handleCompare, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
