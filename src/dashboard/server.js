@@ -547,7 +547,10 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/library": async (req) => {
             const s = session(req);
             const u = userRow(s);
-            return await libraryView(db, itad, u);
+            const v = await libraryView(db, itad, u);
+            const tags = db.getAppTags(v.rows.map(r => r.appid).filter(Boolean)); // Steam's public genres, for the card view's tags and filter
+            for (const r of v.rows) r.genres = (tags.get(r.appid)?.genres ?? []).slice(0, 4);
+            return v;
         },
 
         "POST /api/library/add": async (req, body) => {
@@ -817,9 +820,9 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const u = userRow(s);
             if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Sign in through Steam first.");
             cooldown(s.userId, "analytics");
-            const need = db.appsNeedingTags(s.userId, 12);
-            if (need.length) await refreshTags({ db, appids: need, fetchImpl: steamFetch ?? globalThis.fetch, delayMs: 250 });
-            const w = await viewRows(db, itad, u);
+            const need = db.appsNeedingTags(s.userId, 25);
+            if (need.length) await refreshTags({ db, appids: need, fetchImpl: steamFetch ?? globalThis.fetch, delayMs: 150 });
+            const w = await libraryView(db, itad, u, { snapshot: false });
             return { ...libraryAnalytics(db, s.userId, w.rows), currency: w.currency ?? "USD", pending: db.appsNeedingTags(s.userId, 500).length };
         },
 

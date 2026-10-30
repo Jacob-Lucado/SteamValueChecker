@@ -1267,7 +1267,7 @@
               h("div", { class: "a-split" }, h("span", {}, h("b", { text: String(a.played) }), " played"), h("span", {}, h("b", { text: String(a.backlog) }), " in backlog")))),
           a.mostPlayed.length ? h("div", { class: "panel" }, h("h3", { text: "Most played" }),
             h("div", { class: "a-most" }, a.mostPlayed.map(g => h("div", { class: "a-game" }, steamArt(g.appid, "a-art", 460, 215, g.itad_id), h("div", { class: "a-cap" }, h("b", { text: g.title }), h("span", { text: g.hours.toLocaleString() + " hrs" })))))) : null);
-        if (a.pending && tries++ < 12) setTimeout(() => { if (box.isConnected) load(); }, 3000);
+        if (a.pending && tries++ < 80) setTimeout(() => { if (box.isConnected) load(); }, 3000);
       } catch (e) { box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     load();
@@ -1719,7 +1719,7 @@
         n.others.length ? h("p", { class: "muted small", text: "Also in the running: " + n.others.map(o => o.title).join(", ") }) : null,
         h("p", { class: "muted small", text: n.remaining ? `${n.remaining} more to choose from.` : "That is everything left in your backlog." })));
     }) });
-    const view = { q: "", status: "all", sort: "name", page: 0 };
+    const view = { q: "", status: "all", sort: "name", page: 0, mode: (() => { try { return localStorage.getItem("svc_libmode") === "list" ? "list" : "grid"; } catch { return "grid"; } })(), play: "all", genres: new Set(), filters: false };
     const picked = new Set(); // itad ids ticked for a bulk status change
     const STATUS_OPTIONS = [["backlog", "Backlog"], ["playing", "Playing"], ["played", "Played"], ["finished", "Finished"], ["dropped", "Dropped"]];
     async function load() {
@@ -1804,9 +1804,74 @@
             ...(n ? [bulkStatus, apply, none] : []));
         }
 
+        const PLAY = [["all", "All playtime"], ["never", "Never played"], ["light", "Under 10 hours"], ["mid", "10 to 100 hours"], ["heavy", "100+ hours"]];
+        const playOk = (r, f) => f === "all" || (f === "never" ? !r.minutes : f === "light" ? r.minutes > 0 && r.minutes < 600 : f === "mid" ? r.minutes >= 600 && r.minutes < 6000 : r.minutes >= 6000);
+        const allGenres = [...new Set(d.rows.flatMap(r => r.genres || []))].sort();
+        const GRID_PAGE = 12;
+
+        function cardFor(r) {
+          const stat = select(STATUS_OPTIONS, r.status || "backlog");
+          stat.className = "status-select";
+          stat.setAttribute("aria-label", "Status for " + r.title);
+          stat.addEventListener("change", async () => { try { await api("/api/library/status", { itad_id: r.itad_id, status: stat.value }); toast(`${r.title}: ${stat.value}.`, "ok"); load(); } catch (e) { toast(e.message, "error"); } });
+          const tick = h("input", { type: "checkbox", checked: picked.has(r.itad_id), "aria-label": "Select " + r.title });
+          tick.addEventListener("change", () => { tick.checked ? picked.add(r.itad_id) : picked.delete(r.itad_id); drawBar(); });
+          const holder = h("div", { class: "lib-hist", hidden: true });
+          const hist = h("button", { class: "btn gray small", text: "Price history" });
+          hist.addEventListener("click", () => {
+            if (!holder.hidden) { holder.hidden = true; return; }
+            busy(hist, async () => {
+              const h2 = await api("/api/wishlist/history?itad_id=" + encodeURIComponent(r.itad_id));
+              holder.replaceChildren(h2.points.length ? lineChart([{ name: "Price", cls: "s0", points: h2.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }) : h("p", { class: "muted small", text: "No price history yet." }));
+              holder.hidden = false;
+            });
+          });
+          const rm = h("button", { class: "btn red small", text: "Remove" });
+          rm.addEventListener("click", () => busy(rm, async () => { await api("/api/library/remove", { itad_id: r.itad_id }); load(); }));
+          const prices = [r.msrp != null ? ["MSRP", money(r.msrp, cur)] : null, r.best ? ["Cheapest", money(r.best.price, cur)] : null, r.paid != null ? [r.gifted ? "Gift" : "Paid", money(r.paid, cur)] : null].filter(Boolean);
+          return h("article", { class: "lib-card" + (picked.has(r.itad_id) ? " picked" : "") },
+            h("div", { class: "lib-art" },
+              (r.appid || r.itad_id) ? steamArt(r.appid, "lib-img", 460, 215, r.itad_id) : h("div", { class: "lib-img art-missing" }),
+              h("label", { class: "lib-tick", title: "Select" }, tick),
+              h("span", { class: "lib-badge " + (r.status || "backlog"), text: (STATUS_OPTIONS.find(o => o[0] === (r.status || "backlog")) || [0, "Backlog"])[1] }),
+              h("div", { class: "lib-title", text: r.title })),
+            h("div", { class: "lib-meta" },
+              h("span", { text: r.minutes ? "⏱ " + hoursText(r.minutes) : "Never played" }),
+              r.ach_total ? h("span", { text: `🏆 ${r.ach_done}/${r.ach_total}` }) : null,
+              r.saved != null && r.saved > 0 ? h("span", { class: "lib-save", text: "Saved " + money(r.saved, cur) }) : null),
+            prices.length ? h("div", { class: "lib-prices" }, prices.map(([k, v]) => h("span", {}, h("small", { text: k }), " " + v))) : null,
+            (r.genres || []).length ? h("div", { class: "lib-tags" }, r.genres.map(g => h("span", { class: "lib-tag", text: g }))) : null,
+            h("div", { class: "lib-actions" }, stat, hist, rm),
+            holder);
+        }
+
+        function pageList(pages) { // 1 2 … 43, always showing the first, last and the pages around this one
+          const set = [...new Set([0, 1, view.page - 1, view.page, view.page + 1, pages - 2, pages - 1].filter(n => n >= 0 && n < pages))].sort((a, b) => a - b);
+          const out = [];
+          set.forEach((n, i) => { if (i && n - set[i - 1] > 1) out.push(h("span", { class: "muted", text: "…" })); out.push(h("button", { class: "pg-btn" + (n === view.page ? " on" : ""), text: String(n + 1), "aria-current": n === view.page ? "page" : null, onclick: () => { view.page = n; drawTable(); tableHost.scrollIntoView({ block: "start" }); } })); });
+          return out;
+        }
+
         function drawTable() {
           const q = view.q.trim().toLowerCase();
-          const list = d.rows.filter(r => (view.status === "all" || (r.status || "backlog") === view.status) && (!q || r.title.toLowerCase().includes(q))).sort(sorters[view.sort] || sorters.name);
+          const list = d.rows.filter(r => (view.status === "all" || (r.status || "backlog") === view.status) && (!q || r.title.toLowerCase().includes(q)) && playOk(r, view.play) && (!view.genres.size || [...view.genres].every(g => (r.genres || []).includes(g)))).sort(sorters[view.sort] || sorters.name);
+          if (view.mode === "grid") {
+            matching = list;
+            const pages = Math.max(1, Math.ceil(list.length / GRID_PAGE));
+            view.page = Math.min(view.page, pages - 1);
+            const start = view.page * GRID_PAGE;
+            const prev = h("button", { class: "pg-btn wide", text: "‹ Previous", onclick: () => { view.page--; drawTable(); tableHost.scrollIntoView({ block: "start" }); } }); prev.disabled = view.page === 0;
+            const next = h("button", { class: "pg-btn wide", text: "Next ›", onclick: () => { view.page++; drawTable(); tableHost.scrollIntoView({ block: "start" }); } }); next.disabled = view.page >= pages - 1;
+            tableHost.replaceChildren(
+              list.length ? h("div", { class: "lib-grid" }, list.slice(start, start + GRID_PAGE).map(cardFor)) : h("div", { class: "empty", text: "No games match." }),
+              h("div", { class: "lib-pager" }, h("div", { class: "pg-nav" }, prev, ...pageList(pages), next), h("span", { class: "muted small", text: list.length ? `${start + 1}-${Math.min(list.length, start + GRID_PAGE)} of ${list.length} games` : "" })));
+            drawBar();
+            return;
+          }
+          return drawList(list);
+        }
+
+        function drawList(list) {
           matching = list;
           const pages = Math.max(1, Math.ceil(list.length / PAGE));
           view.page = Math.min(view.page, pages - 1);
@@ -1821,6 +1886,26 @@
             h("div", { class: "pager" }, h("span", { class: "muted small", text: list.length ? `Showing ${start + 1}–${Math.min(list.length, start + PAGE)} of ${list.length}` : "" }), pages > 1 ? h("span", { class: "row-actions" }, prev, h("span", { class: "muted small", text: `Page ${view.page + 1} of ${pages}` }), next) : null));
           drawBar();
         }
+        // Header with grid / list switch and a filter drawer (playtime, status and genre chips).
+        const modeBtn = (mode, label, icon) => { const b = h("button", { class: "icon-toggle" + (view.mode === mode ? " on" : ""), type: "button", title: label, "aria-label": label, "aria-pressed": String(view.mode === mode), text: icon }); b.addEventListener("click", () => { view.mode = mode; try { localStorage.setItem("svc_libmode", mode); } catch { /* optional */ } view.page = 0; syncHead(); drawTable(); }); return b; };
+        const gridBtn = modeBtn("grid", "Card view", "▦"), listBtn = modeBtn("list", "List view", "☰");
+        const filterBtn = h("button", { class: "icon-toggle" + (view.filters ? " on" : ""), type: "button", title: "Filters", "aria-label": "Filters", text: "⚲" });
+        const headCount = h("div", { class: "muted small" });
+        const libHead = h("div", { class: "lib-head" }, h("div", {}, h("h3", { text: "Your games" }), headCount), h("div", { class: "lib-toggles" }, gridBtn, listBtn, filterBtn));
+        const filterPanel = h("div", { class: "lib-filters", hidden: !view.filters });
+        function syncHead() {
+          for (const [b, m] of [[gridBtn, "grid"], [listBtn, "list"]]) { b.classList.toggle("on", view.mode === m); b.setAttribute("aria-pressed", String(view.mode === m)); }
+          filterBtn.classList.toggle("on", view.filters); filterPanel.hidden = !view.filters;
+          headCount.textContent = `${d.rows.length} games`;
+        }
+        filterBtn.addEventListener("click", () => { view.filters = !view.filters; syncHead(); });
+        const playSel = select(PLAY, view.play); playSel.addEventListener("change", () => { view.play = playSel.value; view.page = 0; drawTable(); });
+        const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label }); b.addEventListener("click", fn); return b; };
+        const drawFilters = () => filterPanel.replaceChildren(
+          h("div", { class: "row" }, field("Playtime", playSel)),
+          allGenres.length ? h("div", {}, h("div", { class: "muted small", text: "Genres (a game must match all you pick)" }), h("div", { class: "chips" }, allGenres.map(g => chip(g, view.genres.has(g), () => { view.genres.has(g) ? view.genres.delete(g) : view.genres.add(g); view.page = 0; drawFilters(); drawTable(); })))) : h("p", { class: "muted small", text: "Genres appear after your Steam library has been read once." }),
+          view.genres.size || view.play !== "all" ? h("button", { class: "btn gray small", type: "button", text: "Clear filters", onclick: () => { view.genres.clear(); view.play = "all"; playSel.value = "all"; view.page = 0; drawFilters(); drawTable(); } }) : null);
+        drawFilters(); syncHead();
         drawTable();
 
         body.className = "";
@@ -1831,7 +1916,7 @@
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
           challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(() => load()), chart, backlogChart || "",
-          h("div", { class: "panel" }, h("h3", { text: "Your games" }), h("div", { class: "library-controls" }, search, statusFilter, sortBy), bar, tableHost));
+          h("div", { class: "panel" }, libHead, h("div", { class: "library-controls" }, search, statusFilter, sortBy), filterPanel, bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
