@@ -556,6 +556,7 @@ if (cfg.dashboard) {
     });
     // One broadcaster for the dashboard's Admin page and /grabberad, so only one announcement or promotion goes out at a time.
 const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), sendChannel: (id, p) => discord.sendChannel(id, p),
+    guildInfo: id => { const g = client.guilds.cache.get(id); return g ? { name: g.name, icon: g.iconURL({ extension: "png", size: 256 }) } : null; },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
 const dashboard = createDashboard({ broadcaster, db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))

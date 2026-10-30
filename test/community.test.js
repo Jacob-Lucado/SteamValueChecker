@@ -647,3 +647,18 @@ test("/rank, /levels and /invites answer with picture cards, and fall back to th
     await h.handleCommand(broken);
     assert.match(broken.out.reply.embeds[0].title, /Level \d/);
 });
+
+test("broadcast posts to a server's channel are addressed to that server", async () => {
+    const { noticeEmbed, createBroadcaster } = await import("../src/broadcast.js");
+    const e = noticeEmbed("T", "B", "https://x.test", { name: "Friends Server", icon: "https://cdn.test/i.png" });
+    assert.match(e.author.name, /Friends Server/);
+    assert.match(e.footer.text, /Sent to Friends Server/);
+    assert.equal(e.thumbnail.url, "https://cdn.test/i.png");
+    const sent = [];
+    const db = { broadcastTargets: () => ({ users: [], channels: ["c1", "c2"] }), broadcastChannelGuilds: () => new Map([["c1", "g1"]]), startBroadcast: () => 1, progressBroadcast() {} };
+    const b = createBroadcaster({ publicUrl: "https://x.test", db, sendDm: async () => {}, sendChannel: async (id, p) => sent.push([id, p.embeds[0]]), ownerId: "o", guildInfo: id => (id === "g1" ? { name: "Friends Server" } : null), delayMs: 0, sleep: async () => {} });
+    b.start({ title: "T", body: "B", audience: "channels" });
+    for (let i = 0; i < 20 && sent.length < 2; i++) await new Promise(r => setTimeout(r, 5));
+    assert.match(sent.find(x => x[0] === "c1")[1].author.name, /Friends Server/);
+    assert.doesNotMatch(sent.find(x => x[0] === "c2")[1].author.name, /For /);
+});

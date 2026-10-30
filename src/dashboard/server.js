@@ -239,6 +239,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
     const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
+        guildInfo: id => { const g = (guildList ? guildList() : []).find(x => x.id === id); return g ? { name: g.name, icon: g.icon ?? null } : null; },
         sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p), promoPayload: () => grabberPromo({ base: config.publicUrl, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: config.publicUrl }) }));
 
     function managerGuild(s, id) {
