@@ -45,10 +45,10 @@ export const HELP = [
     "• Moderators: `/mod` `warn` / `warnings` / `clearwarns` / `timeout` / `untimeout` / `kick` / `ban` / `unban` / `purge` / `cases` / `log`. Actions are logged as cases in #mod-log.",
     "",
     "**Help and your data**",
-    "• `/support` `open` / `mine` / `setup` asks the team for help. `/bug` reports a problem to the bot owner. `/changelog` shows what is new. `/dashboard` (or `/dash`) links the website. `/grabberad` is for the bot owner.",
-    "• `/mydata` `export` / `delete` your stored data. `/status` shows if the bot is healthy. `/about` and `/privacy` explain the bot and your data.",
+    "• `/support` `open` / `mine` / `setup` asks the team for help. `/bug` reports a problem to the bot owner. `/feature` `request` / `list` / `vote` for ideas. `/changelog` shows what is new. `/dashboard` (or `/dash`) links the website. `/grabberad`: owner only.",
+    "• `/mydata` `export` / `delete` your data. `/status` shows bot health. `/about` and `/privacy` explain the bot and your data.",
     "",
-    "`/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight`, `/lfg` and `/mod` only work in a server. The bot ignores anything that looks like a key outside the private giveaway form."
+    "`/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight`, `/lfg` and `/mod` only work in a server. Anything that looks like a key is ignored outside the private giveaway form."
 ].join("\n");
 
 export const ABOUT = [

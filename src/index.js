@@ -46,6 +46,8 @@ import { createGiveawayService } from "./giveaway.js";
 import { createTicketService } from "./tickets.js";
 import { createSetupHandlers } from "./setup.js";
 import { createTicketHandlers } from "./tickethandlers.js";
+import { createRequestHandlers, FR } from "./requesthandlers.js";
+import { publishRequest } from "./requestsync.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
 import { createCommunity } from "./communityservice.js";
 import { createCommunityHandlers, setupSummary } from "./communityhandlers.js";
@@ -165,6 +167,7 @@ const gwDiscord = {
 };
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
 const tickets = createTicketService({ db, discord: gwDiscord, ownerId: cfg.ownerId, publicUrl: publicBase, log: m => (m.startsWith("[bug") ? console.error(m) : console.log(`[tickets] ${m}`)) });
+const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id => publishRequest({ db, api: botRest, id, base: publicBase }) });
 const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
 const setupUi = createSetupHandlers({ db, publicUrl: publicBase });
 const giveaways = cfg.keySecret
@@ -462,6 +465,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && i.customId === communityUi.verifyButtonId) return communityUi.verify(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
+    if (i.isModalSubmit() && i.customId === FR.modal) return requestUi.handleModal(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("gw_")) return gw.handleModal(i);
     if (i.isButton() && i.customId.startsWith(`${STOP_ID}:`)) {
@@ -518,6 +522,7 @@ client.on(Events.InteractionCreate, async i => {
             case "status": return await handlers.handleStatus(i);
             case "support": return await ticketUi.handleCommand(i);
             case "bug": return await ticketUi.handleBug(i);
+            case "feature": return await requestUi.handleCommand(i);
             case "grabberad": {
                 const eph = content => i.reply({ content, flags: MessageFlags.Ephemeral });
                 if (!cfg.ownerId || i.user.id !== cfg.ownerId) return await eph("Only the bot owner can use this.");

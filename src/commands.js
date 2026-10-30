@@ -507,6 +507,17 @@ const emojiCmd = new SlashCommandBuilder()
 
 const bug = new SlashCommandBuilder().setName("bug").setDescription("Report a problem with the bot. It goes straight to the bot owner");
 
+const feature = new SlashCommandBuilder()
+    .setName("feature")
+    .setDescription("Suggest a feature for the bot and vote on ideas")
+    .addSubcommand(s => s.setName("request").setDescription("Suggest something you would like the bot to do"))
+    .addSubcommand(s => s.setName("list").setDescription("See the ideas, most voted first")
+        .addStringOption(o => o.setName("status").setDescription("Only show one status").addChoices(
+            { name: "Under review", value: "open" }, { name: "Planned", value: "planned" }, { name: "In development", value: "in_development" },
+            { name: "Shipped", value: "shipped" }, { name: "Rejected", value: "rejected" }, { name: "On hold", value: "on_hold" })))
+    .addSubcommand(s => s.setName("vote").setDescription("Vote for an idea, or take your vote back")
+        .addIntegerOption(o => o.setName("id").setDescription("The number shown in /feature list").setRequired(true).setMinValue(1)));
+
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
 
 const support = new SlashCommandBuilder()
@@ -521,7 +532,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
+    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());

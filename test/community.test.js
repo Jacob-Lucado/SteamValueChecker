@@ -808,3 +808,32 @@ test("trap channel: made by setup with a warning notice and description; posting
     assert.equal(oapi.state.sent.length, sentBefore + 1, "only the warning notice is posted");
     assert.ok(old.getCommunity("H").honeypot_channel);
 });
+
+test("/feature: request opens a form, submitting saves and posts it, list and vote work, limits apply", async () => {
+    const { createRequestHandlers, FR } = await import("../src/requesthandlers.js");
+    const db = openDb(":memory:"), published = [];
+    const ui = createRequestHandlers({ db, publicUrl: "https://x.test", publish: async id => { published.push(id); } });
+    const replies = [];
+    const cmd = (sub, opts = {}) => ({ user: { id: "u1", username: "Sam" }, options: { getSubcommand: () => sub, getString: k => opts[k] ?? null, getInteger: k => opts[k] ?? null },
+        showModal: async m => replies.push(["modal", m]), reply: async r => replies.push(["reply", r]), deferred: false, replied: false });
+    await ui.handleCommand(cmd("request"));
+    assert.equal(replies[0][1].custom_id, FR.modal);
+    const modal = (title, body = "") => ({ user: { id: "u1", username: "Sam" }, fields: { getTextInputValue: k => (k === "title" ? title : body) }, deferReply: async function () { this.deferred = true; }, deferred: false, replied: false, editReply: async c => replies.push(["edit", c]) });
+    await ui.handleModal(modal("Dark mode for cards", "please"));
+    assert.match(replies.at(-1)[1], /request \*\*#1\*\*/); assert.deepEqual(published, [1]);
+    await ui.handleModal(modal("ab"));
+    assert.match(replies.at(-1)[1].content, /at least 4/);
+    for (let n = 0; n < 4; n++) await ui.handleModal(modal("Another idea " + n));
+    await ui.handleModal(modal("One too many"));
+    assert.match(replies.at(-1)[1].content, /waiting at once/);
+    // another member votes, list shows the count, voting again takes it back
+    const v = (id) => ({ ...cmd("vote", { id }), user: { id: "u2", username: "Riley" }, reply: async r => replies.push(["reply", r]) });
+    await ui.handleCommand(v(1)); assert.match(replies.at(-1)[1].content, /Voted/);
+    await ui.handleCommand({ ...cmd("list"), user: { id: "u2" } });
+    assert.match(replies.at(-1)[1].embeds[0].description, /#1\*\* Dark mode for cards\n└ Under review · ▲ 2 \(you voted\)/);
+    await ui.handleCommand(v(1)); assert.match(replies.at(-1)[1].content, /Took back/);
+    await ui.handleCommand(v(99)); assert.match(replies.at(-1)[1].content, /can't find/);
+    db.setRequestStatus(1, "shipped", "Live now");
+    await ui.handleCommand(cmd("list", { status: "shipped" }));
+    assert.match(replies.at(-1)[1].embeds[0].description, /Shipped/);
+});

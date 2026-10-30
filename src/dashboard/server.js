@@ -49,6 +49,7 @@ import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { artUrl } from "../render.js";
 import { publishRequest, refreshRequest, removeRequestPosts } from "../requestsync.js";
+import { cleanRequest, limitMessage } from "../requests.js";
 import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY as REQ_BODY, MAX_NOTE as REQ_NOTE } from "../requeststore.js";
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
@@ -1775,10 +1776,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
         "POST /api/requests": async (req, body) => {
             const s = session(req);
-            const title = String(body.title ?? "").replace(/\s+/g, " ").trim().slice(0, REQ_TITLE);
-            const text = String(body.body ?? "").trim().slice(0, REQ_BODY);
-            if (title.length < 4) throw new HttpError(400, "Give your idea a short title (at least 4 characters).");
-            if (db.openCountFor(s.userId) >= MAX_OPEN_PER_USER) throw new HttpError(429, `You can have ${MAX_OPEN_PER_USER} requests waiting at once. Vote on existing ones or wait for a reply.`);
+            const { title, body: text } = cleanRequest({ title: body.title, body: body.body });
+            if (db.openCountFor(s.userId) >= MAX_OPEN_PER_USER) throw new HttpError(429, limitMessage());
             const undo = cooldown(s.userId, "request");
             let id;
             try { id = db.addRequest({ userId: s.userId, userName: s.username ?? null, title, body: text }); } catch (e) { undo(); throw e; }
