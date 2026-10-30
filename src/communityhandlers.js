@@ -262,6 +262,9 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
 
 export function setupSummary(r, publicUrl, guildId, membersIntent) {
     const list = a => (a.length ? a.join(", ") : "nothing new, it was already there");
+    if (r.updated) return { color: 0x4d8cff, title: "Your community was updated",
+        description: [`**New channels:** ${list(r.created.channels)}`, "", "Only things that are new in the template were added. Channels and roles you renamed, moved, changed or deleted, and every setting you chose, were left alone, and nothing was posted twice.",
+            ...r.notes, publicUrl ? `\nFine-tune everything on the web: ${publicUrl}/#/community/${guildId}` : ""].join("\n").slice(0, 4000) };
     return { color: 0x57f287, title: "Your community is set up",
         description: [`**Categories:** ${list(r.created.categories)}`, `**Channels:** ${list(r.created.channels)}`, `**Roles:** ${list(r.created.roles)}`, "",
             "Welcome messages, XP and levels, invite tracking, the deal alerts, giveaways and support tickets are connected. Staff channels are only visible to the Moderator role and you.",

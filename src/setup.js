@@ -68,7 +68,9 @@ export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId =
     };
     const say = (id, content) => api.sendMessage(id, { content, allowed_mentions: { parse: [] } }).catch(() => {});
     db.setGameNight(guildId, true);
-    const cat = await make({ name: "Steam Value Checker", type: 4 });
+    // Reuse the category from an earlier run so a second run only adds what is missing.
+    const existing = await (api.allChannels ? api.allChannels(guildId).catch(() => []) : []);
+    const cat = (Array.isArray(existing) ? existing : []).find(c => c.type === 4 && c.name === "Steam Value Checker") ?? await make({ name: "Steam Value Checker", type: 4 });
     if (need.alert) {
         const c = await make({ name: "deal-alerts", type: 0, parent_id: cat.id, topic: "Sale alerts and free games from Steam Value Checker", permission_overwrites: readOnly });
         db.setGuildChannel(guildId, c.id, userId); db.setFreeFeed(guildId, true); created.push({ id: c.id, role: "alerts" });
@@ -132,7 +134,7 @@ export function createSetupHandlers({ db, publicUrl = null }) {
             try {
                 const api = { createChannel: (g, body) => i.client.rest.post(`/guilds/${g}/channels`, { body }), // a DiscordAPIError carries status 403 when permission is missing
                     sendMessage: (c, body) => i.client.rest.post(`/channels/${c}/messages`, { body }),
-                    getChannel: c => i.client.rest.get(`/channels/${c}`), editChannel: (c, body) => i.client.rest.patch(`/channels/${c}`, { body }),
+                    allChannels: g => i.client.rest.get(`/guilds/${g}/channels`), getChannel: c => i.client.rest.get(`/channels/${c}`), editChannel: (c, body) => i.client.rest.patch(`/channels/${c}`, { body }),
                     createForumPost: (c, body) => i.client.rest.post(`/channels/${c}/threads`, { body }), editMessage: (c, m, body) => i.client.rest.patch(`/channels/${c}/messages/${m}`, { body }) };
                 const r = await autoSetup({ api, db, guildId: i.guildId, botId: i.client.user.id, userId: i.user.id });
                 note = r.note;

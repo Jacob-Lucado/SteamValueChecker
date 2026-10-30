@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS self_roles (
 `;
 
 const SETTABLE = new Set(["welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
-    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "announce_channel", "rules_channel", "rules_text", "lb_channel", "requests_channel", "lb_message_id", "lb_hours", "lb_at"]);
+    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "announce_channel", "rules_channel", "rules_text", "lb_channel", "requests_channel", "setup_keys", "lb_message_id", "lb_hours", "lb_at"]);
 
 /** XP needed to go from `level` to the next one. */
 export const xpForNext = level => 5 * level * level + 50 * level + 100;

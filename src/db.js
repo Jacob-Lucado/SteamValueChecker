@@ -240,6 +240,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "rules_text", "TEXT");
     addColumn("community", "lb_channel", "TEXT");
     addColumn("community", "requests_channel", "TEXT");
+    addColumn("community", "setup_keys", "TEXT");
     addColumn("community", "lb_message_id", "TEXT");
     addColumn("community", "lb_hours", "INTEGER NOT NULL DEFAULT 5");
     addColumn("community", "lb_at", "INTEGER");

@@ -726,3 +726,45 @@ test("community setup template includes a feature requests forum", async () => {
     const c = TEMPLATE.categories.flatMap(x => x.channels ?? []).find(x => x.key === "requests");
     assert.ok(c && c.forum && c.name === "feature-requests");
 });
+
+test("running setup again on a built server adds only what is new and changes nothing else", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    // The server as it stood before the feature requests forum existed, then the owner made their own changes.
+    const forum = api.state.channels.find(c => c.name === "feature-requests");
+    api.state.channels.splice(api.state.channels.indexOf(forum), 1);
+    db.setCommunity("G", { requests_channel: null, setup_keys: null });
+    api.state.channels.find(c => c.name === "memes").name = "dank-memes";                 // renamed
+    api.state.channels.splice(api.state.channels.findIndex(c => c.name === "clips-and-screenshots"), 1); // deleted
+    const other = api.state.channels.find(c => c.name === "general").id;
+    db.setCommunity("G", { welcome_channel: other, xp_mult: 2 });                          // a setting they chose
+    const before = JSON.stringify(api.state.channels.map(c => [c.id, c.name, c.permission_overwrites]));
+    const sent = api.state.sent.length, roles = api.state.roles.length;
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.equal(r.updated, true);
+    assert.deepEqual(r.created.channels, ["feature-requests"]);
+    assert.equal(api.state.channels.find(c => c.name === "feature-requests").type, 15);
+    assert.equal(db.getCommunity("G").requests_channel, api.state.channels.find(c => c.name === "feature-requests").id);
+    assert.equal(db.getCommunity("G").welcome_channel, other, "their welcome channel stays");
+    assert.equal(db.getCommunity("G").xp_mult, 2);
+    assert.ok(!api.state.channels.some(c => c.name === "clips-and-screenshots" || c.name === "memes"), "renamed and deleted channels are not rebuilt");
+    assert.equal(JSON.stringify(api.state.channels.filter(c => c.name !== "feature-requests").map(c => [c.id, c.name, c.permission_overwrites])), before, "existing channels untouched");
+    assert.equal(api.state.sent.length, sent, "nothing is posted again");
+    assert.equal(api.state.roles.length, roles, "no roles added");
+    // and once it has been added, a third run changes nothing at all
+    const again = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.deepEqual(again.created.channels, []);
+    assert.match(again.notes.join(" "), /already there/);
+});
+
+test("/setup run again reuses its category and only adds the missing forum", async () => {
+    const { autoSetup } = await import("../src/setup.js");
+    const db = openDb(":memory:"), made = [], chans = []; let n = 0;
+    const api = { allChannels: async () => chans, createChannel: async (_g, b) => { made.push(b); const c = { id: String(++n), ...b }; chans.push(c); return c; }, sendMessage: async () => ({}) };
+    db.setGuildChannel("G", "a", "u"); db.setTicketSettings("G", { channelId: "t", staffRoleId: null }); db.setGiveawaySettings("G", { vouch_channel_id: "v" });
+    chans.push({ id: "cat", type: 4, name: "Steam Value Checker" });
+    const r = await autoSetup({ api, db, guildId: "G", botId: "bot", userId: "u" });
+    assert.deepEqual(made.map(m => m.name), ["feature-requests"], "no second category, no other channels");
+    assert.equal(made[0].parent_id, "cat");
+    assert.equal(r.created.length, 1);
+});

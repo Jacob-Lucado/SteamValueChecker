@@ -176,6 +176,10 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     }
     const existingChannels = await guard(() => api.allChannels(guildId), "read this server's channels");
     const existingRoles = await guard(() => api.allRoles(guildId), "read this server's roles");
+    // Running setup again on a server that was already built only adds what is new in the template. Channels and roles that exist, were renamed,
+    // moved or deleted, and every setting the owner changed, are left exactly as they are, and nothing is posted a second time.
+    const prev = db.getCommunity(guildId);
+    if (prev.setup_at) return await communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev, existingChannels, existingRoles, guard, wait, notes, created });
     const roleByName = n => existingRoles.find(r => r.name.toLowerCase() === n.toLowerCase() && !r.managed);
     const everyone = existingRoles.find(r => r.id === guildId)?.id ?? guildId;
 
@@ -295,9 +299,55 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.afk) await api.editGuild(guildId, { afk_channel_id: chIds.afk, afk_timeout: 900 }).catch(() => notes.push("Could not set the AFK channel (needs Manage Server)."));
     await api.editGuild(guildId, { system_channel_flags: 1 }).catch(() => {}); // stop Discord's own join message, the bot greets instead
 
+    db.setCommunity(guildId, { setup_keys: JSON.stringify(Object.keys(chIds)) });
     db.bumpUsage?.(fresh ? "setup_auto" : "setup_manual");
     db.bumpUsage?.("channels_created", created.channels.length);
     return { created, channels: chIds, roles: roleIds, notes };
+}
+
+/** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
+export const ADDED_LATER = new Set(["requests"]);
+const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
+
+/** What a second run does: create only the template channels this server has never been given. */
+async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev, existingChannels, existingRoles, guard, wait, notes, created }) {
+    let built;
+    try { built = new Set(JSON.parse(prev.setup_keys ?? "null") ?? []); } catch { built = new Set(); }
+    if (!prev.setup_keys) for (const k of channelKeys()) if (!ADDED_LATER.has(k)) built.add(k); // built before keys were recorded
+    const everyone = existingRoles.find(r => r.id === guildId)?.id ?? guildId;
+    const modRole = (prev.mod_role_id && existingRoles.some(r => r.id === prev.mod_role_id) ? prev.mod_role_id : null) ?? existingRoles.find(r => r.name.toLowerCase() === "moderator" && !r.managed)?.id ?? null;
+    const bot = { id: botId, type: 1, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages | PERM.createInvite | B(14)), deny: "0" };
+    const mod = modRole ? [{ id: modRole, type: 0, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages), deny: "0" }] : [];
+    const overwrites = kind => kind === "forum" ? [{ id: everyone, type: 0, allow: "0", deny: str(PERM.createThreads) }, bot, ...mod] : [];
+    const chIds = {};
+    for (const cat of TEMPLATE.categories) {
+        for (const c of cat.channels ?? []) {
+            if (built.has(c.key)) continue;
+            const type = c.forum ? 15 : 0;
+            let ex = existingChannels.find(x => x.type === type && x.name.toLowerCase() === c.name.toLowerCase());
+            if (!ex) {
+                let catCh = existingChannels.find(x => x.type === 4 && x.name.toLowerCase() === cat.name.toLowerCase());
+                if (!catCh) { catCh = await guard(() => api.createChannel(guildId, { name: cat.name, type: 4, ...(cat.staff ? { permission_overwrites: [{ id: everyone, type: 0, allow: "0", deny: str(PERM.viewChannel) }, bot, ...mod] } : {}) }), `create the ${cat.name} category`); created.categories.push(cat.name); existingChannels.push({ ...catCh, type: 4, name: cat.name }); await wait(); }
+                const body = c.forum
+                    ? { name: c.name, type: 15, parent_id: catCh.id, topic: c.topic, available_tags: forumTags(), default_reaction_emoji: { emoji_name: "👍" }, permission_overwrites: overwrites("forum") }
+                    : { name: c.name, type: 0, parent_id: catCh.id, topic: c.topic };
+                ex = await api.createChannel(guildId, body).catch(e => {
+                    if (e?.status === 403) throw Object.assign(new Error(`I could not create #${c.name}. I need the Manage Channels permission.`), { userFacing: true });
+                    notes.push(c.forum ? "Could not create the #feature-requests forum (forums need the server's Community features turned on)." : `Could not create #${c.name}.`); return null;
+                });
+                if (!ex) continue;
+                created.channels.push(c.name); await wait();
+            }
+            chIds[c.key] = ex.id;
+        }
+    }
+    // connect only what is new, and only where nothing is chosen yet
+    if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
+    if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
+    db.setCommunity(guildId, { setup_keys: JSON.stringify([...new Set([...built, ...Object.keys(chIds)])]) });
+    db.bumpUsage?.("setup_update");
+    if (!created.channels.length && !notes.length) notes.push("Everything in the template is already there. I did not change anything.");
+    return { created, channels: chIds, roles: {}, notes, updated: true };
 }
 
 // ---------- welcome messages ----------
