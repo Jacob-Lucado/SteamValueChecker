@@ -517,3 +517,24 @@ test("owner broadcasts go to each server's #announcements channel, falling back 
     const e = noticeEmbed("Downtime", "Tonight");
     assert.match(e.author.name, /developer/i); assert.match(e.footer.text, /not from this server/i);
 });
+
+test("people the bot owner invites get a green Beta Tester role, created if missing and reused after", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    const svc = createCommunity({ db, api, ownerId: "boss" });
+    const join = async (id, inviter, uses) => {
+        api.state.invites = [{ code: "k", uses: uses - 1, max_uses: 0, inviter: { id: inviter } }]; await svc.refreshInvites("G");
+        api.state.invites = [{ code: "k", uses, max_uses: 0, inviter: { id: inviter } }];
+        return svc.onJoin({ guildId: "G", guildName: "T", count: uses, member: { id, username: id } });
+    };
+    await join("friend1", "boss", 1);
+    const beta = api.state.roles.find(r => r.name === "Beta Tester");
+    assert.equal(beta.color, 0x2ecc71);
+    assert.ok(api.state.added.some(([u, r]) => u === "friend1" && r === beta.id));
+    await join("friend2", "boss", 2);
+    assert.equal(api.state.roles.filter(r => r.name === "Beta Tester").length, 1, "reused, not duplicated");
+    assert.ok(api.state.added.some(([u, r]) => u === "friend2" && r === beta.id));
+    await join("stranger", "someone-else", 3);
+    assert.ok(!api.state.added.some(([u]) => u === "stranger"), "only the owner's invites count");
+    const other = createCommunity({ db: openDb(":memory:"), api });
+    assert.equal(await other.onJoin({ guildId: "G", guildName: "T", count: 1, member: { id: "x", username: "x" } }).then(r => r.inviterId), null);
+});

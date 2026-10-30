@@ -2,9 +2,10 @@
 // (dashboard/discord.js), so it runs the same from a command, an event or a web request, and the tests use a fake.
 import { welcomeDmPayload, messageXp, XP_COOLDOWN_MS, VOICE_XP, rolesForLevel, welcomePayload, findUsedInvite, levelFromXp, xpForNext, bar } from "./community.js";
 
+export const BETA_ROLE = "Beta Tester", BETA_COLOR = 0x2ecc71;
 const avatarOf = u => (u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null);
 
-export function createCommunity({ db, api, dm = null, dashboardUrl = null, now = () => Date.now(), rng = Math.random }) {
+export function createCommunity({ db, api, dm = null, dashboardUrl = null, ownerId = null, now = () => Date.now(), rng = Math.random }) {
     const last = new Map();          // `${guild}:${user}` -> last time XP was earned from a message
     const invites = new Map();       // guildId -> Map(code -> { uses, maxUses, inviterId })
 
@@ -71,6 +72,18 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, now =
      * A member joined: work out who invited them, hand out the auto role, greet them, log it and pay the referral bonus.
      * `member` is { id, username, avatar, bot }.
      */
+    /** Anyone the bot's owner invites gets the Beta Tester role (created, green, the first time it is needed). Returns the role id or null. */
+    async function grantBeta(guildId, userId) {
+        try {
+            const roles = await api.allRoles(guildId);
+            let role = roles.find(r => !r.managed && String(r.name).toLowerCase() === BETA_ROLE.toLowerCase());
+            if (!role) role = await api.createRole(guildId, { name: BETA_ROLE, color: BETA_COLOR, hoist: false, mentionable: false, permissions: "0" });
+            await api.addRole(guildId, userId, role.id);
+            db.bumpUsage("beta_testers");
+            return role.id;
+        } catch { return null; }
+    }
+
     async function onJoin({ guildId, guildName, member, count }) {
         if (member.bot) return { skipped: "bot" };
         const c = db.getCommunity(guildId);
@@ -80,6 +93,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, now =
         db.recordJoin(guildId, member.id, inviterId, via?.code ?? null);
         db.bumpUsage("joins_tracked"); if (inviterId && !rejoin) db.bumpUsage("referrals");
         if (c.autorole_id) await api.addRole(guildId, member.id, c.autorole_id).catch(() => {});
+        const beta = ownerId && inviterId === ownerId ? await grantBeta(guildId, member.id) : null;
         if (c.verified_role_id && db.getSteamLink(member.id)?.verified) await api.addRole(guildId, member.id, c.verified_role_id).then(() => db.bumpUsage("steam_verified_roles")).catch(() => {});
         if (inviterId && !rejoin) {
             if (c.referral_xp > 0) { const r = db.addXp(guildId, inviterId, c.referral_xp); if (r.after > r.before) await syncLevelRoles(guildId, inviterId, r.after); }
@@ -90,7 +104,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, now =
             await api.sendMessage(c.welcome_channel, welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId })).catch(() => {});
         }
         if (c.welcome_dm && dm && !rejoin) { db.bumpUsage("welcome_dms"); await dm(member.id, welcomeDmPayload({ server: guildName, dashboardUrl })).catch(() => db.bumpUsage("welcome_dm_failed")); }
-        if (c.log_channel) await api.sendMessage(c.log_channel, { content: `📥 <@${member.id}> joined (member #${count}).${via ? ` Invite \`${via.code}\`${inviterId ? ` from <@${inviterId}>` : ""}.` : " The invite could not be told."}`, allowed_mentions: { parse: [] } }).catch(() => {});
+        if (c.log_channel) await api.sendMessage(c.log_channel, { content: `📥 <@${member.id}> joined (member #${count}).${via ? ` Invite \`${via.code}\`${inviterId ? ` from <@${inviterId}>` : ""}.${beta ? " Given the Beta Tester role." : ""}` : " The invite could not be told."}`, allowed_mentions: { parse: [] } }).catch(() => {});
         return { inviterId, code: via?.code ?? null, rejoin };
     }
 
