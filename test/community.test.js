@@ -502,6 +502,9 @@ test("dashboard: managers post announcements, set places, rules and support; oth
     assert.equal((await post("/api/community/places", { announce_channel: "c1", rules_channel: "c1" })).status, 200);
     assert.equal(t.db.getCommunity("g1").announce_channel, "c1");
     assert.equal((await post("/api/community/places", { announce_channel: "nope" })).status, 400);
+    assert.equal((await post("/api/community/places", { honeypot_channel: "nope" })).status, 400);
+    assert.equal((await post("/api/community/places", { honeypot_channel: "c1" })).status, 200);
+    assert.equal(t.db.getCommunity("g1").honeypot_channel, "c1");
     assert.equal((await post("/api/community/rules", { text: "**1.** Be nice", post: true })).data.posted, true);
     assert.equal((await post("/api/community/rules", { text: "x".repeat(3001) })).status, 400);
     assert.equal((await post("/api/community/support", { ticket_channel: "c1", staff_role_id: "r1" })).status, 200);
@@ -767,4 +770,41 @@ test("/setup run again reuses its category and only adds the missing forum", asy
     assert.deepEqual(made.map(m => m.name), ["feature-requests"], "no second category, no other channels");
     assert.equal(made[0].parent_id, "cat");
     assert.equal(r.created.length, 1);
+});
+
+test("trap channel: made by setup with a warning notice and description; posting there bans, staff and bots are spared", async () => {
+    const { honeypotHit, HONEYPOT_NAME } = await import("../src/honeypot.js");
+    const db = openDb(":memory:"), api = fakeApi();
+    await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    const ch = api.state.channels.find(c => c.name === HONEYPOT_NAME);
+    assert.ok(ch && /do NOT type here/.test(ch.topic) && /banned automatically/.test(ch.topic), "the description says it");
+    assert.equal(db.getCommunity("G").honeypot_channel, ch.id);
+    const notice = api.state.sent.find(x => x.id === ch.id);
+    assert.match(notice.p.embeds[0].title, /DO NOT TYPE/);
+    assert.match(notice.p.embeds[0].description, /banned automatically/);
+    // the trap
+    const bans = [];
+    const moderation = { ban: async a => { bans.push(a); } };
+    const hit = o => honeypotHit({ db, moderation, guildId: "G", botId: "bot", channelId: ch.id, userId: "spam", ...o });
+    assert.equal(await hit({}), "banned");
+    assert.deepEqual([bans[0].userId, bans[0].actorId, bans[0].deleteDays], ["spam", "bot", 1]);
+    assert.equal(await hit({ staff: true }), "ignored");
+    assert.equal(await hit({ isBot: true }), "ignored");
+    assert.equal(await hit({ channelId: "other" }), "ignored", "other channels are never touched");
+    assert.equal(bans.length, 1);
+    // a refused ban still removes the message
+    let removed = 0;
+    const refused = await honeypotHit({ db, moderation: { ban: async () => { throw new Error("hierarchy"); } }, guildId: "G", botId: "bot", channelId: ch.id, userId: "x", deleteMessage: async () => { removed++; } });
+    assert.equal(refused, "failed"); assert.equal(removed, 1);
+    // a server built earlier gets it from a second run, once, without other changes
+    const old = openDb(":memory:"), oapi = fakeApi();
+    await communitySetup({ api: oapi, db: old, guildId: "H", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    const trap = oapi.state.channels.find(c => c.name === HONEYPOT_NAME);
+    oapi.state.channels.splice(oapi.state.channels.indexOf(trap), 1);
+    old.setCommunity("H", { honeypot_channel: null, setup_keys: null });
+    const sentBefore = oapi.state.sent.length;
+    const r = await communitySetup({ api: oapi, db: old, guildId: "H", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.deepEqual(r.created.channels, [HONEYPOT_NAME]);
+    assert.equal(oapi.state.sent.length, sentBefore + 1, "only the warning notice is posted");
+    assert.ok(old.getCommunity("H").honeypot_channel);
 });

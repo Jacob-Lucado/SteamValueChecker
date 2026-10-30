@@ -3884,11 +3884,13 @@
         loadEmoji();
         // rules, announcements, support: where things are posted and what they say
         const annCh = chSel(st.announce_channel || (ch.channels.find(c => c.name === "announcements") || {}).id), rulesCh = chSel(st.rules_channel || (ch.channels.find(c => c.name === "rules") || {}).id);
-        const reqCh = forumSel(st.requests_channel);
+        const reqCh = forumSel(st.requests_channel), trapCh = chSel(st.honeypot_channel);
         const places = h("div", { class: "panel" }, h("h3", { text: "Where things are posted" }),
           field("Announcements channel (your announcements, and the bot developer's notices to all servers)", annCh), field("Rules channel", rulesCh),
           field("Feature requests forum (each idea is a post tagged with its status; needs a forum channel)", reqCh),
-          h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value, requests_channel: reqCh.value }))));
+          field("Trap channel for spam bots: anyone who types there is banned (staff are exempt)", trapCh),
+          h("p", { class: "muted small", text: "Pick a channel that members can see and write in, and let me post the warning there. Make sure my role has Ban Members and sits above the members. The warning notice and channel description are added when you save a new channel." }),
+          h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value, requests_channel: reqCh.value, honeypot_channel: trapCh.value }))));
         const rText = h("textarea", { rows: "9", maxlength: "3000", placeholder: d.defaultRules }); rText.value = st.rules_text || "";
         const rulesP = h("div", { class: "panel" }, h("h3", { text: "Rules" }),
           h("p", { class: "muted", text: "Edit the rules shown in the rules channel. Leave it empty to use the standard community rules. The post comes with the bot logo and banner." }), field("Rules (Discord formatting works)", rText),

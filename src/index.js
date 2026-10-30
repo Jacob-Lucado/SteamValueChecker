@@ -55,6 +55,7 @@ import { createModeration } from "./moderation.js";
 import { createModHandlers } from "./modhandlers.js";
 import { tickLeaderboards } from "./leaderboard.js";
 import { createBroadcaster } from "./broadcast.js";
+import { honeypotHit } from "./honeypot.js";
 import { guildBannerSvg, toPng, artFor } from "./communitycards.js";
 let logoUri;
 const brandLogo = () => { try { return (logoUri ??= "data:image/png;base64," + readFileSync(new URL("../public/logo.png", import.meta.url)).toString("base64")); } catch { return null; } };
@@ -272,6 +273,15 @@ client.on(Events.GuildDelete, guild => { if (guild.available !== false) { db.cle
 client.on(Events.MessageCreate, async m => {
     try {
         if (!m.guildId || m.author.bot || m.webhookId || m.system) return;
+        // The trap channel: anyone who talks there (other than staff) is banned, and never earns XP.
+        if (m.channelId === db.getCommunity(m.guildId).honeypot_channel) {
+            const p = m.member?.permissions;
+            const staff = m.guild?.ownerId === m.author.id || Boolean(p?.has?.(["Administrator"]) || p?.has?.(["BanMembers"]) || p?.has?.(["ManageMessages"]) || p?.has?.(["ModerateMembers"]));
+            const res = await honeypotHit({ db, moderation, guildId: m.guildId, channelId: m.channelId, userId: m.author.id, botId: client.user.id, staff,
+                deleteMessage: () => m.delete(), log: t => console.error(`[honeypot] ${t}`) });
+            if (res === "banned") await m.delete().catch(() => {});
+            return;
+        }
         const r = await community.onMessage({ guildId: m.guildId, userId: m.author.id });
         if (!r?.leveled) return;
         const c = db.getCommunity(m.guildId);

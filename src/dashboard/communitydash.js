@@ -3,6 +3,7 @@ import { xpForNext } from "../communitystore.js";
 import { buildAnnouncement } from "../announce.js";
 import { UserError } from "../errors.js";
 import { backfillForum } from "../requestsync.js";
+import { honeypotPayload, HONEYPOT_TOPIC } from "../honeypot.js";
 import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { DiscordApiError } from "./discord.js";
@@ -128,7 +129,16 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             if (id !== db.getCommunity(gid).requests_channel) db.dropForumPosts(gid); // a new forum starts clean
             patch.requests_channel = id;
         }
+        let trap = null;
+        if (b.honeypot_channel !== undefined) {
+            patch.honeypot_channel = await channelOk(gid, b.honeypot_channel || null);
+            if (patch.honeypot_channel && patch.honeypot_channel !== db.getCommunity(gid).honeypot_channel) trap = patch.honeypot_channel;
+        }
         const row = db.setCommunity(gid, patch);
+        if (trap) { // a newly chosen trap channel gets the warning notice and description straight away
+            await Promise.resolve(rest.editChannel?.(trap, { topic: HONEYPOT_TOPIC })).catch(() => {});
+            await rest.sendMessage(trap, { embeds: honeypotPayload().embeds, allowed_mentions: { parse: [] } }).catch(() => {});
+        }
         if (patch.requests_channel) backfillForum({ db, api: rest, guildId: gid, base: publicUrl }).catch(() => {}); // fill the forum with recent requests
         return row;
     }

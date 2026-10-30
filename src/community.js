@@ -6,6 +6,7 @@ export { levelFromXp, xpForNext };
 
 import { refreshLeaderboard } from "./leaderboard.js";
 import { forumTags, backfillForum } from "./requestsync.js";
+import { HONEYPOT_NAME, HONEYPOT_TOPIC, honeypotPayload } from "./honeypot.js";
 const B = n => 1n << BigInt(n);
 export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(10), sendMessages: B(11), manageMessages: B(13), addReactions: B(6), connect: B(20),
     speak: B(21), muteMembers: B(22), deafenMembers: B(23), moveMembers: B(24), manageNicknames: B(27), viewAuditLog: B(7), createThreads: B(35), createPrivateThreads: B(36), moderate: B(40) };
@@ -37,7 +38,8 @@ export const TEMPLATE = {
             { key: "rules", name: "rules", topic: "Read these first", readonly: true },
             { key: "announcements", name: "announcements", topic: "News from the staff", readonly: true },
             { key: "roles", name: "roles", topic: "Pick your platforms and pings", readonly: true },
-            { key: "verify", name: "verify", topic: "Prove your Steam account and get the Steam Verified role", readonly: true }] },
+            { key: "verify", name: "verify", topic: "Prove your Steam account and get the Steam Verified role", readonly: true },
+            { key: "honeypot", name: HONEYPOT_NAME, topic: HONEYPOT_TOPIC }] },
         { name: "💬 COMMUNITY", channels: [
             { key: "general", name: "general", topic: "Talk about anything" },
             { key: "introductions", name: "introductions", topic: "Tell us who you are and what you play" },
@@ -270,7 +272,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
     db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings") });
-    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
+    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, honeypot_channel: chIds.honeypot ?? db.getCommunity(guildId).honeypot_channel ?? null, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
     db.setReward(guildId, 5, roleIds.regular); // a first referral reward, change or remove it any time
@@ -281,6 +283,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     const rp = rulesPayload({ server: gname, base: baseUrl, rules: db.getCommunity(guildId).rules_text, helpChannel: chIds.help });
     await say(api, chIds.rules, rp);
     await say(api, chIds.help, helpPanel());
+    await say(api, chIds.honeypot, honeypotPayload());
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     await say(api, chIds.bugs, bugPanel());
     await say(api, chIds.announcements, { embeds: [{ color: 0x4d8cff, title: "📢 Announcements", description: "News from the staff lands here. Server managers can post announcements from the dashboard.\n\nMessages marked **Official message from the bot developer** come from the person who runs Steam Value Checker, for things like planned downtime." }] });
@@ -306,7 +309,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 }
 
 /** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
-export const ADDED_LATER = new Set(["requests"]);
+export const ADDED_LATER = new Set(["requests", "honeypot"]);
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
 
 /** What a second run does: create only the template channels this server has never been given. */
@@ -342,6 +345,10 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
         }
     }
     // connect only what is new, and only where nothing is chosen yet
+    if (chIds.honeypot) {
+        if (!db.getCommunity(guildId).honeypot_channel) db.setCommunity(guildId, { honeypot_channel: chIds.honeypot });
+        if (created.channels.includes(HONEYPOT_NAME)) await say(api, chIds.honeypot, honeypotPayload()); // only in a channel made just now
+    }
     if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     db.setCommunity(guildId, { setup_keys: JSON.stringify([...new Set([...built, ...Object.keys(chIds)])]) });
