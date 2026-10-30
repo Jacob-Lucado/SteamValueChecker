@@ -26,13 +26,13 @@ export function presenceLines({ servers, members, users, uptimeMs, supportUrl })
 
 /** Starts the rotation. Returns stop(). A failed update is skipped; the next one tries again. */
 export function startPresence({ client, db, supportUrl, startedAt = Date.now(), now = () => Date.now(), every = ROTATE_MS, log = () => {} }) {
-    let i = 0;
+    let i = 0, users, usersAt = -Infinity;
     const tick = () => {
         try {
             const guilds = client.guilds?.cache;
             const lines = presenceLines({
                 servers: guilds?.size, members: guilds ? guilds.reduce((n, g) => n + (g.memberCount ?? 0), 0) : undefined,
-                users: db?.stats?.().users, uptimeMs: now() - startedAt, supportUrl
+                users: (() => { if (now() - usersAt > 600_000) { usersAt = now(); try { users = db?.stats?.().users; } catch { /* keep the last number */ } } return users; })(), uptimeMs: now() - startedAt, supportUrl
             });
             const state = lines[i++ % lines.length];
             client.user?.setPresence({ status: "online", activities: [{ type: CUSTOM, name: "Custom Status", state }] });

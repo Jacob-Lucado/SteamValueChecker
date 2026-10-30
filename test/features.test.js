@@ -850,3 +850,26 @@ test("/dashboard and /dash give the dashboard link, to a known page only", async
     assert.ok(names.includes("dashboard") && names.includes("dash"));
     assert.ok(commands.find(c => c.name === "dash").options[0].choices.every(c => /^[a-z]+$/.test(c.value)));
 });
+
+test("dashboard files are sent compressed, with a validator so repeat visits are a 304, and plain when the browser asks for it", async () => {
+    const { createDashboard } = await import("../src/dashboard/server.js");
+    const http = await import("node:http");
+    const { gunzipSync, brotliDecompressSync } = await import("node:zlib");
+    const d = createDashboard({ db: openDb(":memory:"), itad: {}, rest: {}, config: { publicUrl: "http://x.example", port: 0, host: "127.0.0.1", clientId: "1", ownerId: "u" } });
+    const a = await d.listen(0, "127.0.0.1");
+    const raw = (path, h = {}) => new Promise(r => http.get({ host: "127.0.0.1", port: a.port, path, headers: h }, res => { const c = []; res.on("data", x => c.push(x)); res.on("end", () => r({ res, body: Buffer.concat(c) })); }));
+    try {
+        const plain = await raw("/app.js", { "Accept-Encoding": "identity" });
+        const br = await raw("/app.js", { "Accept-Encoding": "br, gzip" });
+        const gz = await raw("/app.js", { "Accept-Encoding": "gzip" });
+        assert.equal(br.res.headers["content-encoding"], "br"); assert.equal(gz.res.headers["content-encoding"], "gzip");
+        assert.ok(!plain.res.headers["content-encoding"]);
+        assert.ok(br.body.length < plain.body.length / 3, `br ${br.body.length} vs ${plain.body.length}`);
+        assert.ok(brotliDecompressSync(br.body).equals(plain.body) && gunzipSync(gz.body).equals(plain.body), "same bytes after decompressing");
+        assert.match(br.res.headers.vary, /Accept-Encoding/);
+        const again = await raw("/app.js", { "Accept-Encoding": "br", "If-None-Match": br.res.headers.etag });
+        assert.equal(again.res.statusCode, 304); assert.equal(again.body.length, 0);
+        const png = await raw("/logo.png", { "Accept-Encoding": "br" });
+        assert.ok(!png.res.headers["content-encoding"], "images are not compressed again");
+    } finally { await d.close(); }
+});

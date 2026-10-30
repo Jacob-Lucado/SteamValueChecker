@@ -5,7 +5,8 @@ import http from "node:http";
 import { gameNight } from "../gamenight.js";
 import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
+import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
 import { readdirSync, readFileSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { readFile } from "node:fs/promises";
@@ -135,7 +136,16 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         res.setHeader("Set-Cookie", [...(Array.isArray(prev) ? prev : [prev]), parts.join("; ")]);
     };
 
+    // Text is sent compressed to browsers that accept it: the page code is about a fifth of its size that way.
+    const COMPRESSIBLE = /^(text\/|application\/(json|javascript|xml)|image\/svg)/;
+    const encodingOf = req => { const a = String(req?.headers?.["accept-encoding"] ?? ""); return /\bbr\b/.test(a) ? "br" : /\bgzip\b/.test(a) ? "gzip" : null; };
+    const squeeze = (buf, enc, quality) => (enc === "br" ? brotliCompressSync(buf, { params: { [zc.BROTLI_PARAM_QUALITY]: quality } }) : gzipSync(buf, { level: Math.min(9, quality) }));
     const send = (res, status, body, headers = {}) => {
+        const type = String(headers["Content-Type"] ?? "");
+        if (COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && body && Buffer.byteLength(body) > 1024) {
+            const enc = encodingOf(res.req);
+            if (enc) { body = squeeze(Buffer.from(body), enc, 4); headers = { ...headers, "Content-Encoding": enc, Vary: "Accept-Encoding" }; }
+        }
         res.writeHead(status, {
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY",
@@ -1872,16 +1882,28 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     }
 
     // ---------- static ----------
+    const zcache = new Map(); // `${file}:${encoding}` -> the compressed page code, made once
     async function serveFile(res, path) {
         const [file, type] = FILES[path];
         let body = cache.get(file);
         if (!body) {
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return send(res, 404, "Not found", { "Content-Type": "text/plain" }); }
+            // The page's share-preview tags need the real public address, so it is filled in once here.
+            if (file === "index.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
             cache.set(file, body);
+            cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`);
         }
-        // The page's share-preview tags need the real public address, so it is filled in here.
-        if (file === "index.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
-        send(res, 200, body, { "Content-Type": type, "Cache-Control": /\.(js|css|html)$/.test(file) ? "no-cache" : "public, max-age=3600" });
+        const etag = cache.get(file + ":etag");
+        const text = /\.(js|css|html)$/.test(file);
+        const headers = { "Content-Type": type, "Cache-Control": text ? "no-cache" : "public, max-age=3600", ETag: etag };
+        if (res.req?.headers?.["if-none-match"] === etag) return send(res, 304, "", { ETag: etag, "Cache-Control": headers["Cache-Control"] });
+        const enc = COMPRESSIBLE.test(type) ? encodingOf(res.req) : null;
+        if (enc) {
+            let z = zcache.get(`${file}:${enc}`);
+            if (!z) zcache.set(`${file}:${enc}`, z = squeeze(body, enc, 9));
+            return send(res, 200, z, { ...headers, "Content-Encoding": enc, Vary: "Accept-Encoding" });
+        }
+        send(res, 200, body, headers);
     }
 
     // ---------- server ----------
