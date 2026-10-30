@@ -1,12 +1,13 @@
 // Slash commands for the community features: /community, /rank, /levels, /invites, /emoji, and the role-picker buttons.
 // No discord.js import: everything the handlers need comes from the interaction object and the shared REST helper.
-import { communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
+import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
 import { UserError } from "./errors.js";
 
 const EPHEMERAL = 64;
 const BIT = { manageGuild: 1n << 5n, expressions: 1n << 30n };
 const can = (i, bit) => Boolean(i.inGuild?.() && i.memberPermissions?.has(bit));
 const mention = id => `<@${id}>`;
+const LINKED_NOTE = "Optional: Discord can also require it for a role (Server Settings, Roles, the role, Links, then Steam Verified). That one step has to be done in Discord.";
 
 export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, fetchImpl = globalThis.fetch }) {
     const eph = (i, content) => i.reply({ content, flags: EPHEMERAL, allowedMentions: { parse: [] } });
@@ -45,6 +46,13 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             }
             const warn = membersIntent() ? "" : "\n⚠️ The bot cannot see new members yet: turn on **Server Members Intent** for the bot in the Discord Developer Portal.";
             return eph(i, `Welcome message is **${c.welcome_on ? "on" : "off"}**${c.welcome_channel ? ` in <#${c.welcome_channel}>` : " (no channel chosen yet)"}. Private welcome: ${c.welcome_dm ? "on" : "off"}. Leave notes: ${c.leave_on ? "on" : "off"}.\nFields you can use: ${WELCOME_FIELDS.map(f => `\`${f}\``).join(" ")}${warn}`);
+        }
+        if (sub === "verifyrole") {
+            const role = i.options.getRole("role");
+            if (i.options.getBoolean("clear")) { db.setCommunity(gid, { verified_role_id: null }); return eph(i, "Nobody will be given a Steam Verified role."); }
+            if (!role) return eph(i, db.getCommunity(gid).verified_role_id ? `Members who prove their Steam account get <@&${db.getCommunity(gid).verified_role_id}>.` : "No Steam Verified role is set. Pick one with the role option, or run `/community setup`.");
+            db.setCommunity(gid, { verified_role_id: role.id });
+            return eph(i, `Members who prove their Steam account will get **${role.name}** (they press the button in #verify or use /steam verify). My role must be above it.\n${LINKED_NOTE}`);
         }
         if (sub === "autorole") {
             const role = i.options.getRole("role");
@@ -161,6 +169,20 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         } catch { return eph(i, "I could not change that role. My role needs to be above it in Server Settings, Roles."); }
     }
 
+    // ---- Steam verification: /steam verify and the button in #verify ----
+    async function verify(i) {
+        if (!i.inGuild()) return eph(i, "Use this in a server.");
+        const base = publicUrl ? `${publicUrl}/auth/linked` : null;
+        const link = base ? [{ type: 1, components: [{ type: 2, style: 5, label: "Verify with Steam", url: base }] }] : [];
+        let r;
+        try { r = await service.grantVerified(i.guildId, i.user.id); }
+        catch { return eph(i, "I could not give the role. My role must be above Steam Verified in Server Settings, Roles."); }
+        if (r === "granted") return i.reply({ content: `You are verified ✅ and now have the Steam Verified role.${base ? `\nTip: press below to also show your Steam on your Discord profile (Linked Roles).` : ""}`, components: link, flags: EPHEMERAL });
+        if (r === "no_role") return eph(i, "This server has no Steam Verified role yet. A manager can run `/community setup` or `/community verifyrole`.");
+        if (!base) return eph(i, "Steam sign-in is not available on this bot right now.");
+        return i.reply({ content: "Sign in through Steam first. It takes a few seconds on Steam's own page, and the bot never sees your password. Then press the button again here (or run `/steam verify`).", components: link, flags: EPHEMERAL });
+    }
+
     async function handleCommand(i) {
         db.bumpUsage(`cmd:${i.commandName}${i.options?.getSubcommand?.(false) ? "/" + i.options.getSubcommand(false) : ""}`);
         switch (i.commandName) {
@@ -172,7 +194,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             default: throw new UserError("Unknown command");
         }
     }
-    return { handleCommand, roleButton };
+    return { handleCommand, roleButton, verify, verifyButtonId: VERIFY_ID };
 }
 
 export function setupSummary(r, publicUrl, guildId, membersIntent) {

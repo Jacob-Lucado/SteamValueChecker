@@ -221,7 +221,8 @@ async function dashSetup() {
     const db = openDb(":memory:");
     const api = fakeApi({ channels: [{ id: "c1", type: 0, name: "alerts" }] });
     const community = createCommunity({ db, api });
-    const rest = { authorizeUrl: s => `https://d.example/a?state=${s}`, login: async () => ({ user: { id: "u1", username: "j", global_name: "J", avatar: null }, guilds: [{ id: "g1", name: "Mine", icon: null, owner: false, permissions: String(0x20) }, { id: "g2", name: "Other", icon: null, owner: false, permissions: "0" }] }),
+    const connections = [];
+    const rest = { authorizeUrl: (s, o) => `https://d.example/a?state=${s}${o?.linkedRoles ? "&linked=1" : ""}`, setRoleConnection: async (tok, body) => { connections.push({ tok, body }); }, login: async (_c, o) => ({ ...(o?.withToken ? { accessToken: "tok" } : {}), user: { id: "u1", username: "j", global_name: "J", avatar: null }, guilds: [{ id: "g1", name: "Mine", icon: null, owner: false, permissions: String(0x20) }, { id: "g2", name: "Other", icon: null, owner: false, permissions: "0" }] }),
         listChannels: api.listChannels, listRoles: api.listRoles, memberName: api.memberName, sendMessage: api.sendMessage, allChannels: api.allChannels, allRoles: api.allRoles, getGuild: api.getGuild, listEmojis: api.listEmojis, createEmoji: api.createEmoji };
     const dash = createDashboard({ db, itad: {}, rest, community, membersIntent: () => false, botGuilds: () => true, config: { publicUrl: "http://localhost:3000", clientId: "bot", ownerId: "owner" } });
     const addr = await dash.listen(0, "127.0.0.1");
@@ -237,7 +238,7 @@ async function dashSetup() {
     const state = new URL(login.headers.get("location")).searchParams.get("state");
     const cb = await fetch(`http://127.0.0.1:${addr.port}/auth/callback?code=x&state=${state}`, { redirect: "manual", headers: { Cookie: (login.headers.getSetCookie?.() ?? []).map(c => c.split(";")[0]).join("; ") } });
     cookie = [...(login.headers.getSetCookie?.() ?? []), ...(cb.headers.getSetCookie?.() ?? [])].map(c => c.split(";")[0]).join("; ");
-    return { db, request, close: () => dash.close() };
+    return { db, request, connections, api, base: `http://127.0.0.1:${addr.port}`, close: () => dash.close() };
 }
 
 test("dashboard community page: members see standing and boards, managers also get settings and can change them", async () => {
@@ -328,4 +329,71 @@ test("a partner giveaway shows the partner, their links, numbered steps and link
     assert.equal(ended.components.length, 1);
     assert.equal(ended.embeds[0].fields.some(f => f.name === "How to enter"), false);
     assert.equal(crossServerParts(g).buttons.length, 2);
+});
+
+// ---------- Steam verification and Linked Roles ----------
+test("Steam Verified: setup makes the role and #verify, and the role is only given to people who proved their Steam account", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.ok(api.state.roles.some(x => x.name === "Steam Verified"));
+    assert.ok(r.channels.verify);
+    assert.equal(db.getCommunity("G").verified_role_id, r.roles.verified);
+    const panel = api.state.sent.find(m => m.id === r.channels.verify).p;
+    assert.equal(panel.components[0].components[0].custom_id, "sv_verify");
+    const svc = createCommunity({ db, api });
+    db.ensureUser("u1");
+    assert.equal(await svc.grantVerified("G", "u1"), "not_verified");
+    db.setSteamLink("u1", "76561198000000001", { verified: false });
+    assert.equal(await svc.grantVerified("G", "u1"), "not_verified", "a pasted link is not proof");
+    db.setSteamLink("u1", "76561198000000001", { verified: true });
+    assert.equal(await svc.grantVerified("G", "u1"), "granted");
+    assert.ok(api.state.added.some(([u, role]) => u === "u1" && role === r.roles.verified));
+    // already verified people get it when they join
+    api.state.added.length = 0;
+    await svc.onJoin({ guildId: "G", guildName: "T", count: 3, member: { id: "u1", username: "j" } });
+    assert.ok(api.state.added.some(([u, role]) => u === "u1" && role === r.roles.verified));
+    assert.equal(await createCommunity({ db, api }).grantVerified("other", "u1"), "no_role");
+});
+
+test("Linked Roles: the member's Steam details are what Discord is told, and only a verified Steam link says verified", async () => {
+    const { connectionPayload, METADATA } = await import("../src/linkedroles.js");
+    const db = openDb(":memory:");
+    db.ensureUser("u1");
+    assert.equal(connectionPayload(db, "u1"), null);
+    db.setSteamLink("u1", "76561198000000001", { verified: true }); db.setSteamWho("u1", "Jacob Lucado", null);
+    db.syncSteamGames("u1", [{ itad_id: "a", title: "A", minutes: 600 }, { itad_id: "b", title: "B", minutes: 120 }], {});
+    const p = connectionPayload(db, "u1");
+    assert.equal(p.platform_name, "Steam"); assert.equal(p.platform_username, "Jacob Lucado");
+    assert.deepEqual(p.metadata, { steam_verified: true, games_owned: 2, hours_played: 12 });
+    db.setSteamLink("u1", "76561198000000002", { verified: false }); // a different, pasted ID is not proof
+    assert.equal(connectionPayload(db, "u1").metadata.steam_verified, false);
+    assert.deepEqual(METADATA.map(m => m.type), [7, 2, 2]);
+    assert.ok(METADATA.every(m => /^[a-z0-9_]{1,50}$/.test(m.key) && m.name.length <= 100 && m.description.length <= 200));
+});
+
+test("Linked Roles sign-in: no Steam proof sends them to Steam first, then the connection is made; the normal sign-in is unchanged", async () => {
+    const t = await dashSetup();
+    const jar = [];
+    const get = async (path, redirect = "manual") => { const res = await fetch(t.base + path, { redirect, headers: { Cookie: jar.join("; ") } }); for (const c of res.headers.getSetCookie?.() ?? []) { const [pair] = c.split(";"); const [k, v] = pair.split("="); const i = jar.findIndex(x => x.startsWith(k + "=")); if (i >= 0) jar.splice(i, 1); if (v) jar.push(pair); } return res; };
+    let res = await get("/auth/linked");
+    assert.equal(res.status, 302);
+    const loc = new URL(res.headers.get("location"));
+    assert.equal(loc.searchParams.get("linked"), "1", "asks for the extra permission");
+    res = await get(`/auth/callback?code=x&state=${loc.searchParams.get("state")}`);
+    assert.equal(res.headers.get("location"), "/auth/steam", "not proven yet: Steam first");
+    assert.equal(t.connections.length, 0);
+    // Steam proof arrives (the sign-in itself is covered elsewhere), then the flow is run again and connects
+    t.db.setSteamLink("u1", "76561198000000001", { verified: true });
+    res = await get("/auth/linked");
+    const loc2 = new URL(res.headers.get("location"));
+    res = await get(`/auth/callback?code=x&state=${loc2.searchParams.get("state")}`);
+    assert.equal(res.headers.get("location"), "/#/steam?roles=1");
+    assert.equal(t.connections[0].tok, "tok");
+    assert.equal(t.connections[0].body.metadata.steam_verified, true);
+    const status = await fetch(t.base + "/api/steam/linkedroles", { headers: { Cookie: jar.join("; ") } });
+    assert.equal((await status.json()).verified, true);
+    // a plain sign-in asks for no extra permission and makes no connection
+    const plain = await fetch(t.base + "/auth/login", { redirect: "manual" });
+    assert.equal(new URL(plain.headers.get("location")).searchParams.get("linked"), null);
+    await t.close();
 });

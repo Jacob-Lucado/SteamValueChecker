@@ -32,19 +32,19 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
     const bot = { Authorization: `Bot ${botToken}` };
 
     return {
-        authorizeUrl(state) {
+        authorizeUrl(state, { linkedRoles = false } = {}) {
             const u = new URL("https://discord.com/oauth2/authorize");
             u.searchParams.set("client_id", clientId);
             u.searchParams.set("response_type", "code");
             u.searchParams.set("redirect_uri", redirectUri);
-            u.searchParams.set("scope", "identify guilds");
+            u.searchParams.set("scope", linkedRoles ? "identify guilds role_connections.write" : "identify guilds");
             u.searchParams.set("state", state);
             u.searchParams.set("prompt", "none");
             return u.toString();
         },
 
         /** Code from the redirect -> { user, guilds }. The access token never leaves this function. */
-        async login(code) {
+        async login(code, { withToken = false } = {}) {
             const form = new URLSearchParams({
                 client_id: clientId, client_secret: clientSecret, grant_type: "authorization_code",
                 code, redirect_uri: redirectUri
@@ -56,7 +56,7 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
                 call("/users/@me", { headers: bearer(token.access_token) }),
                 call("/users/@me/guilds", { headers: bearer(token.access_token) })
             ]);
-            return { user, guilds };
+            return { user, guilds, ...(withToken ? { accessToken: token.access_token } : {}) };
         },
 
         /** Text and announcement channels of a server the bot is in. Throws DiscordApiError 403/404 otherwise. */
@@ -85,6 +85,13 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
         async createChannel(guildId, body) {
             return call(`/guilds/${encodeURIComponent(guildId)}/channels`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) });
         },
+
+        /** Linked Roles: shows a member's Steam details on their Discord profile, so server roles can require them. Uses the member's own token, once. */
+        setRoleConnection: (accessToken, body) => call(`/users/@me/applications/${encodeURIComponent(clientId)}/role-connection`, { method: "PUT", headers: { ...bearer(accessToken), "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+        /** The conditions a server can pick when it links a role to this bot. */
+        registerRoleMetadata: list => call(`/applications/${encodeURIComponent(clientId)}/role-connections/metadata`, { method: "PUT", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(list) }),
+        /** The address Discord opens from a server's "Link a connection" button. */
+        setVerificationUrl: url => call(`/applications/@me`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify({ role_connections_verification_url: url }) }),
 
         // ---- community setup: the bot's own permissions, so these only work in servers it is in ----
         allChannels: guildId => call(`/guilds/${encodeURIComponent(guildId)}/channels`, { headers: bot }),

@@ -1340,7 +1340,23 @@
       h("p", { class: "muted", text: "One click and your library, hours played and taste profile fill in on their own. You sign in on Steam's own page; the bot never sees your password and only keeps your public ID." }),
       h("div", { class: "row" }, steamLoginBtn("Sign in through Steam", "btn steam big")),
       h("p", { class: "muted small", text: "Set Game details to Public in Steam's privacy settings so your games can be read." }),
-      h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Steam profile", profile), h("p"), linkBtn));
+      h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Steam profile", profile), h("p"), linkBtn),
+      h("div", { class: "lr-option" }, h("b", { text: "Or connect it through Discord Linked Roles" }),
+        h("p", { class: "muted small", text: "Signs you in with Discord and Steam in one go, and shows Steam Verified, your games owned and hours on your Discord profile, so servers can give roles for it." }),
+        h("a", { class: "btn gray", href: "/auth/linked", text: "Connect with Linked Roles" })));
+    // Once Steam is linked: show what Discord will display, and let the member (re)connect it.
+    const linkedRolesPanel = () => {
+      const box = h("div", { class: "panel" }, h("h3", { text: "Discord Linked Roles" }), h("p", { class: "muted", text: "Loading…" }));
+      api("/api/steam/linkedroles").then(r => {
+        const pv = r.preview;
+        box.replaceChildren(h("h3", { text: "Discord Linked Roles" }),
+          h("p", { class: "muted", text: "Show your Steam on your Discord profile. Servers can then give roles to people who are Steam Verified, own enough games or have enough hours. Discord only shows what you connect here." }),
+          pv ? h("p", {}, h("b", { text: "What Discord will show: " }), `Steam Verified ${pv.steam_verified ? "✅" : "❌ (sign in through Steam to verify)"} · ${pv.games_owned.toLocaleString()} games · ${pv.hours_played.toLocaleString()} hours`) : null,
+          r.available ? h("div", { class: "row" }, h("a", { class: "btn blue", href: r.url, text: "Connect or update Linked Roles" })) : h("p", { class: "muted", text: "Linked Roles is not available on this bot." }),
+          h("p", { class: "muted small", text: "Press it again after a sync to refresh your games and hours on your profile. Your normal Steam link works the same either way." }));
+      }).catch(() => box.replaceChildren());
+      return box;
+    };
     const slot = h("div");
     async function load() {
       try {
@@ -1403,6 +1419,7 @@
           h("div", { class: "grid two" },
             st.unplayedTop.length ? h("div", { class: "panel" }, h("h3", { text: "Biggest unplayed" }), list(st.unplayedTop, r => h("span", { class: "muted", text: r.msrp ? money(r.msrp, cur) : "no price" }))) : null),
           h("p", { class: "muted small", text: "Last synced " + (d.link.synced_at ? new Date(d.link.synced_at).toLocaleString() : "never") + ". Steam does not share what you paid. The FanaticalGrabber extension can fill it in from your Steam purchase history (open store.steampowered.com/account/history and press Send what I paid), or add it on the Library page." }),
+          linkedRolesPanel(),
           h("div", { class: "panel" }, h("h3", { text: "Manage" }), h("div", { class: "row" }, sync), h("p"), h("label", { class: "check" }, unlinkGames, " Also remove the games that came from Steam"), h("p"), unlink));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
@@ -2244,7 +2261,7 @@
             tile("Joins tracked", n0(t.joins), `${n0(t.referred)} through an invite`), tile("Personal invite links", n0(t.inviteLinks)), tile("Level rewards set", n0(t.levelRoles), `${n0(t.rewards)} referral rewards`), tile("Role picker roles", n0(t.selfRoles))),
           h("div", { class: "panel" }, h("h3", { text: "Feature use" }),
             table(["What", "Times", "Last used"], [row("Server built automatically (fresh server)", "setup_auto"), row("Server built with /community setup", "setup_manual"), row("Server built from the dashboard", "dash_setup"), row("Channels created", "channels_created"), row("Welcome messages posted", "welcomes"),
-              row("Joins tracked", "joins_tracked"), row("Referrals credited", "referrals"), row("Invite links made", "invite_links"), row("Level-ups", "level_ups"), row("Roles picked from the panel", "role_picks"), row("Emoji added", "emoji_added"), row("Emoji added from the dashboard", "dash_emoji"), row("Emoji images uploaded on the dashboard", "dash_emoji_upload"),
+              row("Joins tracked", "joins_tracked"), row("Referrals credited", "referrals"), row("Invite links made", "invite_links"), row("Level-ups", "level_ups"), row("Roles picked from the panel", "role_picks"), row("Emoji added", "emoji_added"), row("Emoji added from the dashboard", "dash_emoji"), row("Emoji images uploaded on the dashboard", "dash_emoji_upload"), row("Steam Verified roles given", "steam_verified_roles"),
               row("/rank used", "cmd:rank"), row("/levels used", "cmd:levels"), row("/invites me used", "cmd:invites/me"), row("/invites top used", "cmd:invites/top"), row("/invites link used", "cmd:invites/link"), row("/emoji import used", "cmd:emoji/import"), row("/emoji list used", "cmd:emoji/list"), row("/community used", "cmd:community/status")])),
           h("div", { class: "panel" }, h("h3", { text: "Cross-server giveaways" }),
             h("div", { class: "grid four" }, tile("Cross-server giveaways", g.crossServer), tile("Hosted by a partner", g.partner), tile("With entry steps", g.withSteps), tile("Entries", n0(g.crossEntries))),
@@ -3529,8 +3546,13 @@
         const board = (title, rows, line) => h("div", { class: "panel" }, h("h3", { text: title }),
           rows.length ? h("ol", { class: "plain" }, rows.map((r, n) => h("li", {}, h("b", { text: `${n + 1}. ${nameOr(r)}` }), " ", h("span", { class: "muted", text: line(r) })))) : h("p", { class: "muted", text: "Nobody yet." }));
         const rewards = d.rewards.length ? h("p", { class: "muted small", text: "Invite rewards: " + d.rewards.map(r => `${r.count} invited`).join(", ") }) : null;
+        const vBtn = h("button", { class: "btn steam", text: "Verify me with Steam" });
+        vBtn.addEventListener("click", () => busy(vBtn, async () => { try { await post("/api/community/verify", {}); toast("You are verified ✅", "ok"); load(); } catch (e) { toast(e.message, "warn"); if (!d.verify.steamVerified) location.href = "/auth/linked"; } }));
+        const verifyPanel = d.verify.available ? h("div", { class: "panel" }, h("h3", { text: "Steam Verified" }),
+          h("p", { class: "muted", text: d.verify.steamVerified ? "Your Steam account is verified. Press the button to get the role in this server." : "Prove your Steam account to get the Steam Verified role. You sign in on Steam's own page." }),
+          h("div", { class: "row" }, vBtn, h("a", { class: "btn gray", href: "/auth/linked", text: "Connect Linked Roles" }))) : null;
         const boards = h("div", { class: "grid two" }, board("Top inviters", d.inviteTop, r => `${r.active} here · ${r.total} joined`), h("div", { class: "panel" }, h("h3", { text: "Levels and XP" }), h("p", { class: "muted", text: `You are level ${me.level}${me.rank ? `, #${me.rank} in the server` : ""}.` }), h("a", { class: "btn blue", href: "#/xp/" + GID(), text: "Open the Server XP page" })));
-        holder.replaceChildren(...[picker, intent, standing, boards, rewards, d.manager ? manager(d) : null].filter(Boolean));
+        holder.replaceChildren(...[picker, intent, standing, verifyPanel, boards, rewards, d.manager ? manager(d) : null].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     function manager(d) {
@@ -3556,6 +3578,11 @@
           h("p", { class: "muted small", text: "Use " + st.fields.join(" ") + ". Leave empty for the default message." }),
           h("div", { class: "row" }, save("Save welcome", () => post("/api/community/welcome", { channel_id: wCh.value, log_channel_id: logCh.value, message: wMsg.value }))),
           field("Role every new member gets", auto), h("div", { class: "row" }, save("Save role", () => post("/api/community/autorole", { role_id: auto.value }))));
+        const vRole = roSel(st.verified_role_id, "No Steam Verified role");
+        const verify = h("div", { class: "panel" }, h("h3", { text: "Steam verification" }),
+          h("p", { class: "muted", text: "Members prove their Steam account (they sign in on Steam's own page) and get this role from the button in #verify or /steam verify. Members who already verified get it the moment they join." }),
+          field("Steam Verified role", vRole), h("div", { class: "row" }, save("Save", () => post("/api/community/verifyrole", { role_id: vRole.value }))),
+          h("p", { class: "muted small", text: "Want Discord itself to require it? In Discord open Server Settings, Roles, pick the role, open Links, and add this bot's Steam Verified condition. That one step can only be done in Discord." }));
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),
@@ -3588,7 +3615,7 @@
           h("h4", { text: "Or add one image" }), h("p", { class: "muted small", text: "PNG, GIF, JPG or WebP under 256 KB. Square images work best." }), h("div", { class: "row" }, upFile, upName, upBtn),
           h("h4", { text: "This server's emoji" }), eList);
         loadEmoji();
-        box.replaceChildren(build, welcome, referral, emoji);
+        box.replaceChildren(build, welcome, verify, referral, emoji);
       })();
       return box;
     }

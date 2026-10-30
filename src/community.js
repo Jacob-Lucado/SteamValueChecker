@@ -17,6 +17,7 @@ export const TEMPLATE = {
     roles: [
         { key: "mod", name: "Moderator", color: 0x3498db, hoist: true, mentionable: true, permissions: [PERM.kick, PERM.ban, PERM.manageMessages, PERM.moderate, PERM.moveMembers, PERM.muteMembers, PERM.deafenMembers, PERM.manageNicknames, PERM.viewAuditLog] },
         { key: "member", name: "Member", color: 0x2ecc71 },
+        { key: "verified", name: "Steam Verified", color: 0x66c0f4 },
         { key: "regular", name: "Regular", color: 0x1abc9c, level: 5 },
         { key: "veteran", name: "Veteran", color: 0x9b59b6, level: 15 },
         { key: "legend", name: "Legend", color: 0xf1c40f, level: 30 }
@@ -30,7 +31,8 @@ export const TEMPLATE = {
             { key: "welcome", name: "welcome", topic: "Say hi to new members", readonly: true },
             { key: "rules", name: "rules", topic: "Read these first", readonly: true },
             { key: "announcements", name: "announcements", topic: "News from the staff", readonly: true },
-            { key: "roles", name: "roles", topic: "Pick your platforms and pings", readonly: true }] },
+            { key: "roles", name: "roles", topic: "Pick your platforms and pings", readonly: true },
+            { key: "verify", name: "verify", topic: "Prove your Steam account and get the Steam Verified role", readonly: true }] },
         { name: "💬 COMMUNITY", channels: [
             { key: "general", name: "general", topic: "Talk about anything" },
             { key: "introductions", name: "introductions", topic: "Tell us who you are and what you play" },
@@ -62,6 +64,17 @@ export const TEMPLATE = {
         "**5. Listen to the moderators.** If something is wrong, tell a moderator."
     ]
 };
+
+export const VERIFY_ID = "sv_verify";
+/** The post in #verify: one button that checks the member's Steam sign-in and gives the role. */
+export function verifyPanel(roleId) {
+    return {
+        embeds: [{ color: 0x66c0f4, title: "Verify your Steam account", description: [`Prove your Steam account and get the <@&${roleId}> role.`, "",
+            "1. Press **Verify with Steam**. You sign in on Steam's own page. The bot never sees your password.", "2. Come back and press the button again if it asks you to.", "",
+            "You can also connect it to your Discord profile (Linked Roles), so servers can see your Steam on your profile."].join("\n") }],
+        components: [{ type: 1, components: [{ type: 2, style: 1, label: "Verify with Steam", custom_id: VERIFY_ID }] }]
+    };
+}
 
 const sleepDefault = ms => new Promise(r => setTimeout(r, ms));
 
@@ -176,7 +189,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setGameNight(guildId, true);
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches });
-    db.setCommunity(guildId, { welcome_channel: chIds.welcome, log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, xp_on: 1, setup_at: Date.now() });
+    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
     db.setReward(guildId, 5, roleIds.regular); // a first referral reward, change or remove it any time
@@ -186,6 +199,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     const gname = guild?.name ?? "the server";
     await say(api, chIds.rules, { embeds: [{ color: 0xed4245, title: `${gname} rules`, description: TEMPLATE.rules.join("\n\n") }] });
     await say(api, chIds.roles, rolePanel(selfRoles));
+    await say(api, chIds.verify, verifyPanel(roleIds.verified));
     await say(api, chIds.welcome, { embeds: [{ color: 0x57f287, title: `Welcome to ${gname}`, description: `New here? Start with <#${chIds.rules}>, pick your roles in <#${chIds.roles}>, then say hi in <#${chIds.introductions}>.\n\nNew members are greeted in this channel.` }] });
     await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts." });
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/wishlist import` to get your own alerts." });

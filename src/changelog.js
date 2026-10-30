@@ -5,6 +5,7 @@ export const CHANGELOG = [
         "**Welcome messages, levels and XP, invites and referrals.** New members are greeted with who invited them, chat and voice earn XP, `/rank` and `/levels` show where you stand, and `/invites link` gives you your own link with rewards for bringing people in.",
         "**Emoji import:** `/emoji import` copies emoji from other servers or adds an image. The dashboard can paste emoji or upload an image too.",
         "**Dashboard:** new **Community** and **Server XP** pages in the Servers menu (leaderboard, level rewards, how XP works, and a prize shop that is coming soon). The owner's Admin page has a **Community** tab showing what is used.",
+        "**Steam Verified:** fresh servers get a Steam Verified role and a #verify channel. Press the button (or run `/steam verify`) after signing in through Steam. You can also add **Linked Roles** from the Steam page so your Steam shows on your Discord profile; the normal way to link still works.",
         "**Cross-server giveaways** now say they are cross-server and who hosts them, can be hosted by a partner with their links, and can ask for entry steps like following on X or joining a Discord. Giveaway numbers no longer show on posts."
     ] },
     { version: "2026.10.31", date: "2026-10-31", title: "Sign in through Steam", items: [

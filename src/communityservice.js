@@ -80,6 +80,7 @@ export function createCommunity({ db, api, dm = null, now = () => Date.now(), rn
         db.recordJoin(guildId, member.id, inviterId, via?.code ?? null);
         db.bumpUsage("joins_tracked"); if (inviterId && !rejoin) db.bumpUsage("referrals");
         if (c.autorole_id) await api.addRole(guildId, member.id, c.autorole_id).catch(() => {});
+        if (c.verified_role_id && db.getSteamLink(member.id)?.verified) await api.addRole(guildId, member.id, c.verified_role_id).then(() => db.bumpUsage("steam_verified_roles")).catch(() => {});
         if (inviterId && !rejoin) {
             if (c.referral_xp > 0) { const r = db.addXp(guildId, inviterId, c.referral_xp); if (r.after > r.before) await syncLevelRoles(guildId, inviterId, r.after); }
             await checkRewards(guildId, inviterId);
@@ -121,5 +122,15 @@ export function createCommunity({ db, api, dm = null, now = () => Date.now(), rn
         return { ...db.inviteStats(guildId, userId), link: db.getInviteLink(guildId, userId) ? `https://discord.gg/${db.getInviteLink(guildId, userId)}` : null, rewards: db.listRewards(guildId), by: db.whoInvited(guildId, userId)?.inviter_id ?? null };
     }
 
-    return { onMessage, onVoiceMinute, rankOf, refreshInvites, cacheInvite, dropInvite, attribute, onJoin, onLeave, inviteLinkFor, inviteSummary, syncLevelRoles, checkRewards, _invites: invites, xpForNext };
+    /** Gives the Steam Verified role when this person has proven their Steam account. Returns "granted", "no_role" or "not_verified". */
+    async function grantVerified(guildId, userId) {
+        const c = db.getCommunity(guildId);
+        if (!c.verified_role_id) return "no_role";
+        if (!db.getSteamLink(userId)?.verified) return "not_verified";
+        await api.addRole(guildId, userId, c.verified_role_id);
+        db.bumpUsage("steam_verified_roles");
+        return "granted";
+    }
+
+    return { grantVerified, onMessage, onVoiceMinute, rankOf, refreshInvites, cacheInvite, dropInvite, attribute, onJoin, onLeave, inviteLinkFor, inviteSummary, syncLevelRoles, checkRewards, _invites: invites, xpForNext };
 }

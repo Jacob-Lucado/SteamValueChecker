@@ -20,6 +20,7 @@ import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { createCommunityDash, CommunityError } from "./communitydash.js";
 import { BOT_PERMISSIONS } from "../community.js";
+import { connectionPayload } from "../linkedroles.js";
 import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -79,7 +80,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending";
+const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", NEXT_COOKIE = "svc_next";
 const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
@@ -826,6 +827,12 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         // What to play next from the Steam library. `skip` (comma-separated ids already offered) makes "pick another" fresh.
         // Library analytics: tiles, hours by genre, played vs backlog, most played. Genre tags are fetched a few at a time, so
         // `pending` says how many games are still waiting; the page asks again until it is 0.
+        // Discord Linked Roles: show Steam on your Discord profile. The same as /steam verify.
+        "GET /api/steam/linkedroles": async (req) => {
+            const s = session(req); userRow(s);
+            const p = connectionPayload(db, s.userId);
+            return { available: Boolean(config.clientId), verified: Boolean(p?.metadata.steam_verified), preview: p ? { name: p.platform_username, ...p.metadata } : null, url: "/auth/linked" };
+        },
         "GET /api/steam/analytics": async (req) => {
             const s = session(req);
             const u = userRow(s);
@@ -1165,6 +1172,11 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             cooldown(s.userId, "csetup");
             return comm(() => cd.setup(g.id, s.userId));
         },
+        "POST /api/community/verify": async (req, body) => {
+            const s = session(req); const g = guildFor(s, String(body.guild_id)); botIn(g);
+            return comm(() => cd.verify(g.id, s.userId));
+        },
+        "POST /api/community/verifyrole": async (req, body) => comm(() => cd.verifyRole(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/welcome": async (req, body) => comm(() => cd.welcome(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/autorole": async (req, body) => comm(() => cd.autorole(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/xp": async (req, body) => comm(() => cd.xp(managerGuild(session(req), String(body.guild_id)).id, body)),
@@ -1712,8 +1724,20 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         send(res, 302, "", { Location: rest.authorizeUrl(state) });
     }
 
+    // Linked Roles: the same Discord sign-in, plus permission to show Steam on the member's Discord profile.
+    const linkedStates = new Set();
+    async function linkedStart(req, res) {
+        sweep();
+        const state = randomBytes(24).toString("hex");
+        states.set(state, now() + 10 * 60_000);
+        linkedStates.add(state);
+        setCookie(res, STATE_COOKIE, state, 600);
+        send(res, 302, "", { Location: rest.authorizeUrl(state, { linkedRoles: true }) });
+    }
+
     async function callback(req, res, url) {
         const state = url.searchParams.get("state");
+        const linked = linkedStates.delete(state);
         const code = url.searchParams.get("code");
         const ok = state && states.has(state) && states.get(state) > now() && cookies(req)[STATE_COOKIE] === state;
         states.delete(state);
@@ -1721,7 +1745,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         if (!ok || !code) return send(res, 302, "", { Location: "/?error=login" });
 
         let who;
-        try { who = await rest.login(code); }
+        try { who = await rest.login(code, linked ? { withToken: true } : undefined); }
         catch (err) { log(`login failed: ${err.status ?? err.name}`); return send(res, 302, "", { Location: "/?error=login" }); }
 
         const name = who.user.global_name || who.user.username;
@@ -1738,9 +1762,18 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         if (pend && pend.exp > now()) {
             db.setSteamLink(who.user.id, pend.steamid, { verified: true });
             db.setSteamWho(who.user.id, name, avatar);
-            return send(res, 302, "", { Location: "/#/steam?linked=1" });
+            if (!linked) return send(res, 302, "", { Location: "/#/steam?linked=1" });
         }
         if (db.getSteamLink(who.user.id)?.verified) db.setSteamWho(who.user.id, name, avatar); // keep the Steam sign-in's name and picture fresh
+        if (linked) {
+            if (!db.getSteamLink(who.user.id)?.verified) { // prove the Steam account first, then this flow comes straight back
+                setCookie(res, NEXT_COOKIE, "linked", 600);
+                return send(res, 302, "", { Location: "/auth/steam" });
+            }
+            try { await rest.setRoleConnection(who.accessToken, connectionPayload(db, who.user.id)); db.bumpUsage("linked_roles_connected"); }
+            catch (err) { log(`linked roles failed: ${err.status ?? err.name}`); return send(res, 302, "", { Location: "/#/steam?roles=failed" }); }
+            return send(res, 302, "", { Location: "/#/steam?roles=1" });
+        }
         send(res, 302, "", { Location: "/#/mypage" });
     }
 
@@ -1776,6 +1809,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             db.ensureUser(s.userId);
             db.setSteamLink(s.userId, steamid, { verified: true });
             db.setSteamWho(s.userId, s.username, s.avatar);
+            if (cookies(req)[NEXT_COOKIE] === "linked") { setCookie(res, NEXT_COOKIE, "", 0); return send(res, 302, "", { Location: "/auth/linked" }); } // back to finish connecting Linked Roles
             return send(res, 302, "", { Location: "/#/steam?linked=1" });
         }
         const known = db.findVerifiedSteamUser(steamid);
@@ -1876,6 +1910,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             }
             if (key === "GET /auth/login") return await login(req, res);
             if (key === "GET /auth/callback") return await callback(req, res, url);
+            if (key === "GET /auth/linked") return await linkedStart(req, res);
             if (key === "GET /auth/steam") return await steamLogin(req, res);
             if (key === "GET /auth/steam/return") return await steamReturn(req, res, url);
             if (key === "POST /auth/logout") { checkWrite(req); return logout(req, res); }

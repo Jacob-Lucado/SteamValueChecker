@@ -31,7 +31,8 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             membersIntent: membersIntent(), manager,
             me: { ...me, invites: inv },
             xpTop: await named(gid, db.xpTop(gid, 10)), inviteTop: await named(gid, db.inviteTop(gid, 10)),
-            rewards: db.listRewards(gid), levelRoles: db.listLevelRoles(gid)
+            rewards: db.listRewards(gid), levelRoles: db.listLevelRoles(gid),
+            verify: { available: Boolean(db.getCommunity(gid).verified_role_id), steamVerified: Boolean(db.getSteamLink(userId)?.verified) }
         };
         if (manager) {
             const c = db.getCommunity(gid);
@@ -87,6 +88,14 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         if (b.log_channel_id !== undefined) patch.log_channel = await channelOk(gid, b.log_channel_id || null);
         return db.setCommunity(gid, patch);
     }
+    /** "Verify me": gives the Steam Verified role if this person has proven their Steam account. */
+    async function verify(gid, userId) {
+        const r = await community.grantVerified(gid, userId).catch(() => fail(400, "I could not give the role. My role must be above Steam Verified in Server Settings, Roles."));
+        if (r === "no_role") fail(400, "This server has no Steam Verified role yet. A manager can build it with Build my server.");
+        if (r === "not_verified") fail(400, "Sign in through Steam first (the Connect Steam button, or the Steam page), then press Verify me again.");
+        return { granted: true };
+    }
+    async function verifyRole(gid, b) { return db.setCommunity(gid, { verified_role_id: await roleOk(gid, b.role_id || null) }); }
     async function autorole(gid, b) { return db.setCommunity(gid, { autorole_id: await roleOk(gid, b.role_id || null) }); }
     async function xp(gid, b) {
         const patch = {};
@@ -138,5 +147,5 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
+    return { overview, setup, welcome, autorole, verify, verifyRole, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
 }

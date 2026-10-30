@@ -49,6 +49,7 @@ import { createGiveawayHandlers } from "./gwhandlers.js";
 import { createCommunity } from "./communityservice.js";
 import { createCommunityHandlers, setupSummary } from "./communityhandlers.js";
 import { communitySetup, isFreshGuild } from "./community.js";
+import { registerLinkedRoles } from "./linkedroles.js";
 
 const MAX_TITLES = 100;
 const COOLDOWN_MS = 15_000;
@@ -312,7 +313,7 @@ const status = createStatusMonitor({
         dashboard: { name: "Web dashboard", desc: "This website and its API", critical: false, check: () => ({ state: "operational" }) }
     }
 });
-client.once(Events.ClientReady, () => { status.start(); });
+client.once(Events.ClientReady, () => { status.start(); registerLinkedRoles(botRest, cfg.dashboard?.publicUrl ?? null, m => console.log(m)).then(ok => ok && console.log("[linked roles] conditions registered")); });
 // Remember each server's invite counts so a join can be matched to the invite that was used.
 client.once(Events.ClientReady, async () => { if (!MEMBERS_INTENT) return; for (const g of client.guilds.cache.values()) { await community.refreshInvites(g.id); await new Promise(r => setTimeout(r, 300)); } });
 const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
@@ -423,6 +424,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && i.customId.startsWith("lfg_")) return lfgUi.handleButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
     if (i.isButton() && i.customId.startsWith("rr:")) return communityUi.roleButton(i);
+    if (i.isButton() && i.customId === communityUi.verifyButtonId) return communityUi.verify(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
@@ -470,7 +472,7 @@ client.on(Events.InteractionCreate, async i => {
             }
             case "redeem": return await redeemUi.handle(i);
             case "compare": return await handlers.handleCompare(i);
-            case "steam": return await steamUi.handle(i);
+            case "steam": return i.options.getSubcommand() === "verify" ? await communityUi.verify(i) : await steamUi.handle(i);
             case "profilecard": return await cardUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
             case "regions": return await dealUi.handleRegions(i);
