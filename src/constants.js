@@ -34,4 +34,6 @@ export const ALERT_TYPES = [
     { name: "All-time low", value: "atl" }
 ];
 
+/** The newest FanaticalGrabber release that members can get. Raise it once the Chrome Web Store has approved the new version (EXTENSION_LATEST overrides it). */
+export const EXTENSION_LATEST = "2.7.0";
 export const FANATICAL_GRABBER_URL = "https://jacob-lucado.github.io/FanaticalGrabber/";

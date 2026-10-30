@@ -1502,6 +1502,8 @@
           ext = m.version; extFound = true;
           extState.className = "notice ok";
           extState.textContent = `FanaticalGrabber ${ext} is ready. Make sure you are logged into Steam in this browser.`;
+          const newest = state.cfg && state.cfg.extension && state.cfg.extension.latest;
+          if (newest && versionLess(ext, newest)) { extState.className = "notice warn"; extState.replaceChildren(`FanaticalGrabber ${ext} is ready. A newer version (${newest}) is out with fixes and new features: update it from the Chrome Web Store, or use the latest .zip. `, getLink()); }
         }
         refresh();
         if (ext) window.postMessage({ svc: "page", type: "vault" }, location.origin);

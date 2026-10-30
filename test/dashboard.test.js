@@ -1321,3 +1321,11 @@ test("a pasted Steam ID can never be used to sign in as someone else", async () 
     assert.equal((await t.request("/api/me")).status, 401);
     await t.close();
 });
+
+test("the extension can ask which version is newest without signing in, and the dashboard config says it too", async () => {
+    const t = await setup();
+    const r = await t.request("/api/extension/latest");
+    assert.equal(r.status, 200); assert.match(r.data.latest, /^\d+\.\d+\.\d+$/); assert.match(r.data.url, /^https:\/\//);
+    assert.equal((await t.request("/api/config")).data.extension.latest, r.data.latest);
+    await t.close();
+});
