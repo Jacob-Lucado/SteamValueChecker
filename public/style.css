@@ -789,3 +789,15 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 
 .case-row { padding: 8px 0; border-bottom: 1px solid var(--line, rgba(128,128,128,.2)); }
 .case-row:last-child { border-bottom: 0; }
+
+.dpreview { background: #313338; color: #dbdee1; border-radius: 8px; padding: 12px; font-size: 14px; }
+.dpreview .dp-ping { color: #c9cdfb; background: rgba(88,101,242,.3); display: inline-block; padding: 0 3px; border-radius: 3px; margin-bottom: 6px; }
+.dpreview .dp-card { background: #2b2d31; border-left: 4px solid #4d8cff; border-radius: 4px; padding: 10px 14px; display: grid; gap: 6px; max-width: 480px; }
+.dpreview .dp-title { font-weight: 700; color: #fff; font-size: 16px; }
+.dpreview .dp-author { font-size: 12px; font-weight: 600; }
+.dpreview .dp-body, .dpreview .dp-field div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.dpreview .dp-fields { display: flex; flex-wrap: wrap; gap: 8px; }
+.dpreview .dp-field { flex: 1 1 100%; } .dpreview .dp-field.inline { flex: 1 1 30%; }
+.dpreview .dp-image { max-width: 100%; border-radius: 4px; }
+.dpreview .dp-btn { background: #4e5058; color: #fff; padding: 5px 12px; border-radius: 3px; width: max-content; font-weight: 600; }
+.dpreview .dp-foot { color: #949ba4; }

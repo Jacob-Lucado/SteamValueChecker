@@ -49,6 +49,9 @@ export const TEMPLATE = {
             { key: "deals", name: "deal-alerts", topic: "Sales and free games from Steam Value Checker", readonly: true },
             { key: "giveaways", name: "giveaways", topic: "Game key giveaways", readonly: true },
             { key: "vouches", name: "vouches", topic: "Winners confirm their keys worked", readonly: true }] },
+        { name: "🆘 SUPPORT", channels: [
+            { key: "help", name: "get-help", topic: "Need a hand? Open a private ticket with the moderators", readonly: true },
+            { key: "bugs", name: "report-a-bug", topic: "Found a problem with the bot? Report it straight to the developer", readonly: true }] },
         { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "afk", name: "AFK" }] },
         { name: "🛠️ STAFF", staff: true, channels: [
             { key: "staffchat", name: "staff-chat", topic: "Moderators only" },
@@ -58,13 +61,45 @@ export const TEMPLATE = {
             { key: "botlogs", name: "bot-logs", topic: "Bot notices" }] }
     ],
     rules: [
-        "**1. Be kind.** No harassment, hate or personal attacks.",
-        "**2. Keep it clean.** No NSFW, gore or spam.",
-        "**3. No cheating, cracked games or key trading.** Giveaway keys are given out by the bot only.",
-        "**4. Use the right channel.** Memes in #memes, group requests in #looking-for-group.",
-        "**5. Listen to the moderators.** If something is wrong, tell a moderator."
+        "**1. Be kind and respectful.** No harassment, hate speech, slurs or personal attacks. Disagree without being cruel.",
+        "**2. Keep it clean.** No NSFW, gore or shock content anywhere. Spoilers go behind spoiler tags.",
+        "**3. No spam or self-promotion.** No flooding, mass pings, unrequested ads or invite links without a moderator's OK.",
+        "**4. No cheating, cracked games or key trading.** Giveaway keys are handed out by the bot only. Never buy, sell or swap keys here.",
+        "**5. Use the right channel.** Memes in #memes, group requests in #looking-for-group, bot commands in #bot-commands.",
+        "**6. Protect your privacy.** Never share passwords, Steam logins or other people's personal information.",
+        "**7. Follow Discord's Terms and Community Guidelines.** Accounts must be 13 or older.",
+        "**8. Listen to the moderators.** Their word is final. Questions about a decision? Open a ticket in #get-help."
     ]
 };
+
+/** The post in #rules: the server's rules (or the standard set) with the bot's logo and banner. `base` is the dashboard address the images are served from. */
+export function rulesPayload({ server = "the server", base = null, rules = null, helpChannel = null } = {}) {
+    const list = (rules && String(rules).trim()) || TEMPLATE.rules.join("\n\n");
+    const root = base ? String(base).replace(/\/$/, "") : null;
+    return {
+        embeds: [{
+            color: 0xed4245, title: `📜  ${server} · Server Rules`,
+            description: `Welcome! To keep this a great place for everyone, please follow these rules.\n\n${list}`.slice(0, 4000),
+            fields: [
+                { name: "⚠️ What happens if you break them", value: "Warning → timeout → kick → ban. Serious breaks can skip straight to a ban.", inline: false },
+                { name: "🆘 Need help?", value: `Open a ticket in ${helpChannel ? `<#${helpChannel}>` : "#get-help"}`, inline: true },
+                { name: "✅ Next step", value: "Press **Verify** in the verify channel and pick your roles.", inline: true }
+            ],
+            footer: { text: "By staying here you agree to these rules · Steam Value Checker", ...(root ? { icon_url: `${root}/logo.png` } : {}) },
+            ...(root ? { thumbnail: { url: `${root}/logo.png` }, image: { url: `${root}/banner.png` } } : {})
+        }]
+    };
+}
+
+/** Posts in #get-help and #report-a-bug: one button each that opens the form. */
+export const helpPanel = () => ({
+    embeds: [{ color: 0x57f287, title: "🎫 Need help?", description: "Press the button to open a **private ticket**. Only you and the moderators can see it, and you get replies in your DMs.\n\nGood for: giveaway key problems, report a member, questions about the server." }],
+    components: [{ type: 1, components: [{ type: 2, style: 3, label: "Open a ticket", emoji: { name: "🎫" }, custom_id: "tk_open:0" }] }]
+});
+export const bugPanel = () => ({
+    embeds: [{ color: 0xfaa61a, title: "🐞 Found a bug?", description: "Press the button and tell us what went wrong with the bot. It goes straight to the bot's developer. You can also use `/bug` anywhere." }],
+    components: [{ type: 1, components: [{ type: 2, style: 4, label: "Report a bug", emoji: { name: "🐞" }, custom_id: "tk_bug" }] }]
+});
 
 export const VERIFY_ID = "sv_verify";
 /** The post in #verify: one button that checks the member's Steam sign-in and gives the role. */
@@ -108,7 +143,7 @@ export function rolePanel(selfRoles) {
  * `api` is the Discord REST helper (dashboard/discord.js). A 403 means a missing permission and is reported as a user-facing error.
  * With fresh = true the default #general and General voice channel are moved into the new layout and the empty default categories are removed.
  */
-export async function communitySetup({ api, db, guildId, botId, userId = null, fresh = false, sleep = sleepDefault, pace = 300 }) {
+export async function communitySetup({ api, db, guildId, botId, userId = null, fresh = false, baseUrl = null, sleep = sleepDefault, pace = 300 }) {
     const created = { roles: [], channels: [], categories: [] }, notes = [];
     const wait = () => sleep(pace);
     const guard = async fn => {
@@ -194,7 +229,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
     db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings") });
-    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
+    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
     db.setReward(guildId, 5, roleIds.regular); // a first referral reward, change or remove it any time
@@ -202,7 +237,11 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     // ---- the posts ----
     const guild = await api.getGuild(guildId).catch(() => null);
     const gname = guild?.name ?? "the server";
-    await say(api, chIds.rules, { embeds: [{ color: 0xed4245, title: `${gname} rules`, description: TEMPLATE.rules.join("\n\n") }] });
+    const rp = rulesPayload({ server: gname, base: baseUrl, rules: db.getCommunity(guildId).rules_text, helpChannel: chIds.help });
+    await say(api, chIds.rules, rp);
+    await say(api, chIds.help, helpPanel());
+    await say(api, chIds.bugs, bugPanel());
+    await say(api, chIds.announcements, { embeds: [{ color: 0x4d8cff, title: "📢 Announcements", description: "News from the staff lands here. Server managers can post announcements from the dashboard.\n\nMessages marked **Official message from the bot developer** come from the person who runs Steam Value Checker, for things like planned downtime." }] });
     await say(api, chIds.roles, rolePanel(selfRoles));
     await say(api, chIds.verify, verifyPanel(roleIds.verified));
     await say(api, chIds.welcome, { embeds: [{ color: 0x57f287, title: `Welcome to ${gname}`, description: `New here? Start with <#${chIds.rules}>, pick your roles in <#${chIds.roles}>, then say hi in <#${chIds.introductions}>.\n\nNew members are greeted in this channel.` }] });
@@ -210,7 +249,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/wishlist import` to get your own alerts." });
     await say(api, chIds.tickets, { content: "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
-    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}>, moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
+    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
     await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
 
     // ---- server settings (all best effort: a missing permission only skips that part) ----

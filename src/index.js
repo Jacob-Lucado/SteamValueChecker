@@ -239,7 +239,7 @@ client.on(Events.GuildCreate, async guild => {
         try {
             const [channels, roles] = await Promise.all([botRest.allChannels(guild.id), botRest.allRoles(guild.id)]);
             if (isFreshGuild({ channels, roles: roles.map(r => ({ ...r, guild_id: guild.id })), memberCount: guild.memberCount })) {
-                auto = await communitySetup({ api: botRest, db, guildId: guild.id, botId: client.user.id, userId: guild.ownerId, fresh: true });
+                auto = await communitySetup({ api: botRest, db, guildId: guild.id, botId: client.user.id, userId: guild.ownerId, fresh: true, baseUrl: publicBase });
             }
         } catch (e) { autoNote = e.userFacing ? e.message : "I tried to set the server up but hit a problem. Run /community setup to try again."; }
         const link = publicBase ? `${publicBase}/#/setup/${guild.id}` : null;

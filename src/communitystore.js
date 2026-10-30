@@ -77,6 +77,16 @@ CREATE TABLE IF NOT EXISTS mod_cases (
     cleared     INTEGER NOT NULL DEFAULT 0,
     created_at  INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS announcements (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id   TEXT NOT NULL,
+    user_id    TEXT,
+    channel_id TEXT NOT NULL,
+    message_id TEXT,
+    title      TEXT,
+    at         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS announcements_guild ON announcements (guild_id, id);
 CREATE INDEX IF NOT EXISTS mod_cases_guild ON mod_cases (guild_id, case_no);
 CREATE INDEX IF NOT EXISTS mod_cases_user ON mod_cases (guild_id, user_id);
 CREATE TABLE IF NOT EXISTS self_roles (
@@ -88,7 +98,7 @@ CREATE TABLE IF NOT EXISTS self_roles (
 `;
 
 const SETTABLE = new Set(["welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
-    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg"]);
+    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "announce_channel", "rules_channel", "rules_text"]);
 
 /** XP needed to go from `level` to the next one. */
 export const xpForNext = level => 5 * level * level + 50 * level + 100;
@@ -102,7 +112,7 @@ export function levelFromXp(xp) {
 export function communityStore({ run, get, all, clean, now }) {
     const getCommunity = guildId => clean(get("SELECT * FROM community WHERE guild_id = ?", guildId))
         ?? { guild_id: guildId, welcome_on: 1, welcome_channel: null, welcome_msg: null, welcome_dm: 0, leave_on: 0, autorole_id: null, log_channel: null, xp_on: 1, xp_mult: 1,
-            levelup_mode: "same", levelup_channel: null, referral_xp: 100, mod_role_id: null, member_role_id: null, setup_at: null, verified_role_id: null, mod_log_channel: null, ping_deals: null, ping_free: null, ping_giveaway: null, ping_lfg: null };
+            levelup_mode: "same", levelup_channel: null, referral_xp: 100, mod_role_id: null, member_role_id: null, setup_at: null, verified_role_id: null, mod_log_channel: null, ping_deals: null, ping_free: null, ping_giveaway: null, ping_lfg: null, announce_channel: null, rules_channel: null, rules_text: null };
     function setCommunity(guildId, patch) {
         run("INSERT OR IGNORE INTO community (guild_id) VALUES (?)", guildId);
         for (const [k, v] of Object.entries(patch)) {
@@ -212,6 +222,8 @@ export function communityStore({ run, get, all, clean, now }) {
         : get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ?", guildId)).n;
     const warnCount = (guildId, userId) => get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).n;
     const clearWarns = (guildId, userId) => run("UPDATE mod_cases SET cleared = 1 WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).changes;
+    const addAnnouncement = (guildId, userId, channelId, messageId, title) => Number(run("INSERT INTO announcements (guild_id, user_id, channel_id, message_id, title, at) VALUES (?,?,?,?,?,?)", guildId, userId, channelId, messageId, title || null, now()).lastInsertRowid);
+    const listAnnouncements = (guildId, limit = 10) => all("SELECT id, user_id, channel_id, message_id, title, at FROM announcements WHERE guild_id = ? ORDER BY id DESC LIMIT ?", guildId, limit).map(clean);
     const modCounts = guildId => Object.fromEntries(all("SELECT action, COUNT(*) AS n FROM mod_cases WHERE guild_id = ? GROUP BY action", guildId).map(r => [r.action, r.n]));
 
     const communityExport = userId => ({
@@ -227,11 +239,12 @@ export function communityStore({ run, get, all, clean, now }) {
         run("DELETE FROM invite_links WHERE user_id = ?", userId);
         run("DELETE FROM mod_cases WHERE user_id = ?", userId);
         run("UPDATE mod_cases SET mod_id = NULL WHERE mod_id = ?", userId);
+        run("UPDATE announcements SET user_id = NULL WHERE user_id = ?", userId);
     };
     /** Server gone: drop its community data. */
-    const forgetCommunityGuild = guildId => { for (const t of ["community", "member_xp", "level_roles", "invite_joins", "invite_links", "referral_rewards", "self_roles", "mod_cases"]) run(`DELETE FROM ${t} WHERE guild_id = ?`, guildId); };
+    const forgetCommunityGuild = guildId => { for (const t of ["community", "member_xp", "level_roles", "invite_joins", "invite_links", "referral_rewards", "self_roles", "mod_cases", "announcements"]) run(`DELETE FROM ${t} WHERE guild_id = ?`, guildId); };
 
     return { getCommunity, setCommunity, allCommunity, getXp, addXp, setXp, xpRank, xpTop, countXpMembers, listLevelRoles, setLevelRole, removeLevelRole,
         recordJoin, recordLeave, everJoined, inviteStats, inviteTop, whoInvited, getInviteLink, setInviteLink, inviteLinkOwner, listRewards, setReward, removeReward,
-        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, modCounts, communityExport, forgetCommunityUser, forgetCommunityGuild };
+        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, modCounts, addAnnouncement, listAnnouncements, communityExport, forgetCommunityUser, forgetCommunityGuild };
 }

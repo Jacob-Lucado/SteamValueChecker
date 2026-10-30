@@ -73,6 +73,7 @@ export function createTicketHandlers({ db, tickets, ownerId = null, publicUrl = 
         const [kind, a, b] = i.customId.split(":");
         try {
             if (kind === TK.open) return await openModal(i, Number(a) || 0);
+            if (kind === TK.bug) return await bugModal(i);
             if (kind === TK.reply) {
                 needStaff(i, a);
                 return await i.showModal({ custom_id: `${TK.mReply}:${a}`, title: `Reply to ticket #${a}`, components: [field("body", "Your reply", 2, 1500)] });

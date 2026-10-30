@@ -229,6 +229,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("community", "verified_role_id", "TEXT");
     addColumn("community", "mod_log_channel", "TEXT");
+    addColumn("community", "announce_channel", "TEXT");
+    addColumn("community", "rules_channel", "TEXT");
+    addColumn("community", "rules_text", "TEXT");
     for (const c of ["ping_deals", "ping_free", "ping_giveaway", "ping_lfg"]) addColumn("community", c, "TEXT");
     addColumn("giveaways", "host_name", "TEXT");
     addColumn("giveaways", "host_kind", "TEXT");

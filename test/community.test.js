@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { communitySetup, isFreshGuild, TEMPLATE, parseEmojis, importEmojis, renderWelcome, welcomePayload, findUsedInvite, messageXp, BOT_PERMISSIONS, rolePanel } from "../src/community.js";
+import { rulesPayload, communitySetup, isFreshGuild, TEMPLATE, parseEmojis, importEmojis, renderWelcome, welcomePayload, findUsedInvite, messageXp, BOT_PERMISSIONS, rolePanel } from "../src/community.js";
 import { levelFromXp, xpForNext } from "../src/communitystore.js";
 import { createCommunity } from "../src/communityservice.js";
 import { createDashboard } from "../src/dashboard/server.js";
@@ -450,4 +450,70 @@ test("the dashboard saves ping roles for managers and rejects roles that do not 
     const bad = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", free: "nope" } });
     assert.equal(bad.status, 400);
     await t.close();
+});
+
+test("setup builds the support channels, a branded rules post, and points announcements at #announcements", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0, baseUrl: "https://dash.test/" });
+    assert.ok(r.channels.help && r.channels.bugs && r.channels.announcements);
+    const at = id => api.state.sent.filter(m => m.id === id).map(m => m.p);
+    assert.equal(at(r.channels.help)[0].components[0].components[0].custom_id, "tk_open:0");
+    assert.equal(at(r.channels.bugs)[0].components[0].components[0].custom_id, "tk_bug");
+    const rules = at(r.channels.rules)[0].embeds[0];
+    assert.equal(rules.thumbnail.url, "https://dash.test/logo.png"); assert.equal(rules.image.url, "https://dash.test/banner.png");
+    assert.ok(rules.description.split("**").length > 14, "has the common rules");
+    assert.match(rules.fields[1].value, new RegExp(r.channels.help));
+    const c = db.getCommunity("G");
+    assert.equal(c.announce_channel, r.channels.announcements); assert.equal(c.rules_channel, r.channels.rules);
+    assert.equal(db.getTicketSettings("G").channel_id, r.channels.tickets);
+    assert.equal(rulesPayloadNoBase().embeds[0].image, undefined);
+    assert.ok(api.state.sent.some(m => m.id === r.channels.botlogs && /report-a-bug|bug reports/.test(m.p.content)));
+    function rulesPayloadNoBase() { return rulesPayload({ server: "X" }); }
+});
+
+test("announcement designer: validates, builds the embed, and only pings what was chosen", async () => {
+    const { buildAnnouncement } = await import("../src/announce.js");
+    assert.throws(() => buildAnnouncement({}), /title or a message/);
+    assert.throws(() => buildAnnouncement({ title: "x", image: "http://insecure.test/a.png" }), /https/);
+    assert.throws(() => buildAnnouncement({ title: "x", button_label: "Go" }), /button/);
+    assert.throws(() => buildAnnouncement({ title: "x", ping: "role" }), /role/);
+    assert.throws(() => buildAnnouncement({ title: "x", color: "nope" }), /colour/);
+    const a = buildAnnouncement({ title: "Hello", body: "World", color: "#ff0000", footer: "f", author: "a", ping: "role", role_id: "77", button_label: "Go", button_url: "https://x.test", thumbnail: "server",
+        fields: [{ name: "n", value: "v", inline: true }, { name: "", value: "skip" }], timestamp: true }, { serverIcon: "https://i.test/i.png" });
+    const e = a.payload.embeds[0];
+    assert.equal(e.color, 0xff0000); assert.equal(e.thumbnail.url, "https://i.test/i.png"); assert.equal(e.fields.length, 1); assert.ok(e.timestamp);
+    assert.equal(a.payload.content, "<@&77>"); assert.deepEqual(a.payload.allowed_mentions, { roles: ["77"] });
+    assert.equal(a.payload.components[0].components[0].url, "https://x.test/");
+    assert.deepEqual(buildAnnouncement({ body: "hi" }).payload.allowed_mentions, { parse: [] });
+    assert.deepEqual(buildAnnouncement({ body: "hi", ping: "everyone" }).payload.allowed_mentions, { parse: ["everyone"] });
+});
+
+test("dashboard: managers post announcements, set places, rules and support; others cannot", async () => {
+    const t = await dashSetup();
+    const post = (path, body) => t.request(path, { method: "POST", body: { guild_id: "g1", ...body } });
+    assert.equal((await t.request("/api/community/announce", { method: "POST", body: { guild_id: "g2", title: "x", channel_id: "c1" } })).status, 403);
+    assert.equal((await post("/api/community/announce", { title: "x" })).status, 400, "needs a channel");
+    const ok = await post("/api/community/announce", { title: "Maintenance", body: "Tonight", channel_id: "c1", color: "#00ff00" });
+    assert.equal(ok.status, 200); assert.equal(ok.data.history[0].title, "Maintenance");
+    assert.equal((await post("/api/community/announce", { title: "again", channel_id: "c1" })).status, 429);
+    assert.equal((await post("/api/community/places", { announce_channel: "c1", rules_channel: "c1" })).status, 200);
+    assert.equal(t.db.getCommunity("g1").announce_channel, "c1");
+    assert.equal((await post("/api/community/places", { announce_channel: "nope" })).status, 400);
+    assert.equal((await post("/api/community/rules", { text: "**1.** Be nice", post: true })).data.posted, true);
+    assert.equal((await post("/api/community/rules", { text: "x".repeat(3001) })).status, 400);
+    assert.equal((await post("/api/community/support", { ticket_channel: "c1", staff_role_id: "r1" })).status, 200);
+    assert.equal(t.db.getTicketSettings("g1").staff_role_id, "r1");
+    const ov = (await t.request("/api/community?guild=g1")).data;
+    assert.equal(ov.support.ticket_channel, "c1"); assert.equal(ov.announcements.length, 1); assert.ok(ov.defaultRules);
+    await t.close();
+});
+
+test("owner broadcasts go to each server's #announcements channel, falling back to its alert channel, and say who they are from", async () => {
+    const { noticeEmbed } = await import("../src/broadcast.js");
+    const db = openDb(":memory:");
+    db.setGuildChannel("A", "alert-a", "u"); db.setGuildChannel("B", "alert-b", "u");
+    db.setCommunity("B", { announce_channel: "ann-b" }); db.setCommunity("C", { announce_channel: "ann-c" });
+    assert.deepEqual(db.broadcastTargets().channels.sort(), ["alert-a", "ann-b", "ann-c"]);
+    const e = noticeEmbed("Downtime", "Tonight");
+    assert.match(e.author.name, /developer/i); assert.match(e.footer.text, /not from this server/i);
 });

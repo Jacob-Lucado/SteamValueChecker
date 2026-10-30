@@ -4,7 +4,7 @@
 // sides see the same thread, and each reply is also delivered to the other side.
 import { UserError } from "./errors.js";
 
-export const TK = { reply: "tk_reply", assign: "tk_assign", resolve: "tk_resolve", ureply: "tk_ureply", rate: "tk_rate", open: "tk_open",
+export const TK = { reply: "tk_reply", assign: "tk_assign", resolve: "tk_resolve", ureply: "tk_ureply", rate: "tk_rate", open: "tk_open", bug: "tk_bug",
     mReply: "tk_m_reply", mUreply: "tk_m_ureply", mOpen: "tk_m_open", mBug: "tk_m_bug" };
 const MAX_BODY = 1500, MAX_SUBJECT = 100, MAX_OPEN = 5;
 const WAITING_TO_RESOLVED_MS = 7 * 86400_000, RESOLVED_TO_CLOSED_MS = 3 * 86400_000;

@@ -24,7 +24,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             try {
                 const [channels, roles, guild] = await Promise.all([api.allChannels(gid), api.allRoles(gid), api.getGuild(gid).catch(() => null)]);
                 const fresh = isFreshGuild({ channels, roles: roles.map(r => ({ ...r, guild_id: gid })), memberCount: guild?.approximate_member_count ?? 0 });
-                const r = await communitySetup({ api, db, guildId: gid, botId: i.client.user.id, userId: i.user.id, fresh });
+                const r = await communitySetup({ api, db, guildId: gid, botId: i.client.user.id, userId: i.user.id, fresh, baseUrl: publicUrl });
                 return i.editReply({ embeds: [setupSummary(r, publicUrl, gid, membersIntent())] });
             } catch (e) {
                 return i.editReply({ content: e.userFacing ? e.message : "I could not finish the setup. Check my permissions (Manage Channels, Manage Roles) and try again; anything already built is kept." });

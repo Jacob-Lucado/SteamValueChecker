@@ -25,12 +25,15 @@ export function broadcastStore({ run, all, get, now }) {
     /** Members who can be DMed (not ones whose DMs keep failing) and servers with an alert channel. */
     const broadcastTargets = () => ({
         users: all("SELECT discord_id FROM users WHERE dm_failures < 3").map(r => r.discord_id),
-        channels: all("SELECT channel_id FROM guilds WHERE channel_id IS NOT NULL").map(r => r.channel_id)
+        // Each server's #announcements channel, or its alert channel if it has none.
+        channels: all(`SELECT COALESCE(c.announce_channel, g.channel_id) AS ch FROM guilds g LEFT JOIN community c ON c.guild_id = g.guild_id
+            UNION SELECT c.announce_channel FROM community c WHERE c.announce_channel IS NOT NULL`).map(r => r.ch).filter(Boolean)
     });
     return { startBroadcast, progressBroadcast, listBroadcasts, broadcastTargets };
 }
 
-export const noticeEmbed = (title, body, base = null) => ({ color: 0xfaa61a, title: title || "Steam Value Checker notice", description: body, footer: { text: "A notice from the bot owner. You can't reply here; use the Support page on the dashboard." },
+export const noticeEmbed = (title, body, base = null) => ({ color: 0xfaa61a, author: { name: "📣 Official message from the Steam Value Checker developer" }, title: title || "Steam Value Checker notice", description: body,
+    footer: { text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff. Questions? Use the Support page on the dashboard." },
     ...(base ? { image: { url: `${base}/banner.png` }, thumbnail: { url: `${base}/creator.png` } } : {}) });
 
 export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {

@@ -2127,11 +2127,11 @@
       const box = h("div");
       const paintPreview = () => {
         count.textContent = msg.value.length + " / 1500";
-        preview.replaceChildren(h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "A notice from the bot owner. You can't reply here; use the Support page on the dashboard." }));
+        preview.replaceChildren(h("div", { class: "muted small", text: "📣 Official message from the Steam Value Checker developer" }), h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff." }));
       };
       const paintWho = () => {
         const c = info.counts;
-        who.replaceChildren(...[["dm", `DMs to members (${c.dm})`], ["channels", `Alert channels in servers (${c.channels})`], ["both", `Both (${c.dm + c.channels})`]].map(([v, t]) => h("option", { value: v, text: t })));
+        who.replaceChildren(...[["dm", `DMs to members (${c.dm})`], ["channels", `Every server's #announcements channel (${c.channels})`], ["both", `Both (${c.dm + c.channels})`]].map(([v, t]) => h("option", { value: v, text: t })));
       };
       const paintProgress = cur => {
         if (!cur) { progress.replaceChildren(); return; }
@@ -3557,6 +3557,66 @@
         holder.replaceChildren(...[picker, intent, standing, verifyPanel, boards, rewards, d.manager ? manager(d) : null].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
+    let mgrTab = 0;
+    /** The announcement designer: every part of the embed is editable, with a live preview that looks like Discord. */
+    function announceDesigner({ chSel, roSel, defaultCh, history, roleName, chName }) {
+      const inp = (ph, max = 256, type = "text") => h("input", { type, maxlength: String(max), placeholder: ph, "aria-label": ph });
+      const ch = chSel(defaultCh), title = inp("Title", 256), body = h("textarea", { rows: "6", maxlength: "4000", placeholder: "Message (Discord formatting works: **bold**, *italic*, > quote)", "aria-label": "Message" });
+      const color = h("input", { type: "color", value: "#4d8cff", "aria-label": "Colour" });
+      const author = inp("Small text above the title (optional)", 100), footer = inp("Footer text (optional)", 200), image = inp("Big image link, https (optional)", 500, "url");
+      const thumbKind = select([["", "No small image"], ["server", "This server's icon"], ["url", "A link"]], ""), thumb = inp("Small image link, https", 500, "url");
+      const linkUrl = inp("Make the title a link (optional)", 500, "url"), bLabel = inp("Button text (optional)", 40), bUrl = inp("Button link, https", 500, "url");
+      const stamp = h("input", { type: "checkbox" }), ping = select([["none", "Nobody"], ["everyone", "@everyone"], ["here", "@here"], ["role", "A role"]], "none"), pingRole = roSel("", "Choose a role");
+      pingRole.hidden = true;
+      const fieldRows = [], fieldBox = h("div"), addField = h("button", { class: "btn gray small", type: "button", text: "Add a field" });
+      const addRow = () => {
+        if (fieldRows.length >= 5) return;
+        const n = inp("Field title", 100), v = inp("Field text", 500), inl = h("input", { type: "checkbox" });
+        const row = { n, v, inl }; fieldRows.push(row);
+        const rm = h("button", { class: "btn gray small", type: "button", text: "Remove" });
+        const el = h("div", { class: "row" }, n, v, h("label", { class: "muted small" }, inl, " side by side"), rm);
+        rm.addEventListener("click", () => { fieldRows.splice(fieldRows.indexOf(row), 1); el.remove(); paint(); });
+        fieldBox.append(el); [n, v, inl].forEach(x => x.addEventListener("input", paint)); paint();
+      };
+      addField.addEventListener("click", addRow);
+      const pv = h("div", { class: "dpreview" });
+      function paint() {
+        const parts = [];
+        if (author.value.trim()) parts.push(h("div", { class: "dp-author", text: author.value.trim() }));
+        if (title.value.trim()) parts.push(h("div", { class: "dp-title", text: title.value.trim() }));
+        if (body.value.trim()) parts.push(h("div", { class: "dp-body", text: body.value.trim() }));
+        const fl = fieldRows.filter(r => r.n.value.trim() && r.v.value.trim());
+        if (fl.length) parts.push(h("div", { class: "dp-fields" }, fl.map(r => h("div", { class: "dp-field" + (r.inl.checked ? " inline" : "") }, h("b", { text: r.n.value.trim() }), h("div", { text: r.v.value.trim() })))));
+        if (/^https:\/\//.test(image.value.trim())) parts.push(h("img", { class: "dp-image", src: image.value.trim(), alt: "", referrerpolicy: "no-referrer" }));
+        if (bLabel.value.trim()) parts.push(h("div", { class: "dp-btn", text: bLabel.value.trim() + " ↗" }));
+        if (footer.value.trim() || stamp.checked) parts.push(h("div", { class: "dp-foot muted small", text: [footer.value.trim(), stamp.checked ? "Today" : ""].filter(Boolean).join(" · ") }));
+        const pre = ping.value === "everyone" ? "@everyone" : ping.value === "here" ? "@here" : ping.value === "role" && pingRole.value ? "@" + roleName(pingRole.value) : "";
+        pv.replaceChildren(...(pre ? [h("div", { class: "dp-ping", text: pre })] : []), h("div", { class: "dp-card" }, ...(parts.length ? parts : [h("div", { class: "muted", text: "Your announcement shows here." })])));
+        pv.firstElementChild && pv.lastElementChild.style.setProperty("border-left-color", color.value);
+      }
+      ping.addEventListener("change", () => { pingRole.hidden = ping.value !== "role"; sendBtn.textContent = "Post announcement"; armed = false; paint(); });
+      [title, body, color, author, footer, image, thumb, linkUrl, bLabel, bUrl, stamp, pingRole].forEach(x => x.addEventListener("input", paint));
+      thumbKind.addEventListener("change", () => { thumb.hidden = thumbKind.value !== "url"; }); thumb.hidden = true;
+      const sendBtn = h("button", { class: "btn green", type: "button", text: "Post announcement" });
+      let armed = false;
+      const hist = h("div");
+      const paintHist = rows => hist.replaceChildren(rows.length ? h("ul", { class: "plain" }, rows.map(r => h("li", {}, h("b", { text: r.title || "Announcement" }), h("span", { class: "muted small", text: ` · ${new Date(r.at).toLocaleString()} · #${chName(r.channel_id) || "channel"}` })))) : h("p", { class: "muted small", text: "Nothing posted yet." }));
+      paintHist(history || []);
+      sendBtn.addEventListener("click", () => busy(sendBtn, async () => {
+        if ((ping.value === "everyone" || ping.value === "here") && !armed) { armed = true; sendBtn.textContent = "Click again to ping " + (ping.value === "here" ? "@here" : "@everyone"); return; }
+        armed = false; sendBtn.textContent = "Post announcement";
+        const r = await api("/api/community/announce", { guild_id: GID(), channel_id: ch.value, title: title.value, body: body.value, color: color.value, author: author.value, footer: footer.value, image: image.value, thumbnail: thumbKind.value === "server" ? "server" : thumbKind.value === "url" ? thumb.value : "",
+          link_url: linkUrl.value, button_label: bLabel.value, button_url: bUrl.value, timestamp: stamp.checked, ping: ping.value, role_id: pingRole.value, fields: fieldRows.map(x => ({ name: x.n.value, value: x.v.value, inline: x.inl.checked })) });
+        paintHist(r.history); toast("Announcement posted.", "ok");
+      }));
+      paint();
+      return h("div", { class: "panel" }, h("h3", { text: "Announcements" }),
+        h("p", { class: "muted", text: "Design a message and post it as an embed. Needs the bot to have Send Messages and Embed Links in the channel (and Mention Everyone to ping @everyone)." }),
+        h("div", { class: "grid two" }, h("div", {}, field("Post in", ch), field("Title", title), field("Message", body), h("div", { class: "row" }, field("Colour", color), field("Ping", ping), pingRole),
+          field("Small text above the title", author), field("Footer", footer), h("label", { class: "muted small" }, stamp, " Show the time"), field("Big image", image), field("Small image", thumbKind), thumb, field("Title link", linkUrl),
+          h("div", { class: "row" }, field("Button text", bLabel), field("Button link", bUrl)), h("h4", { text: "Fields" }), fieldBox, addField),
+          h("div", {}, h("h4", { text: "Preview" }), pv, h("div", { class: "row" }, sendBtn), h("h4", { text: "Recently posted" }), hist)));
+    }
     function manager(d) {
       const st = d.settings;
       const box = h("div");
@@ -3569,7 +3629,7 @@
         const toggle = (on, path, key, labelOn, labelOff) => { const b = h("button", { class: "btn small " + (on ? "red" : "green"), text: on ? labelOn : labelOff }); b.addEventListener("click", () => busy(b, async () => { await post(path, { [key]: !on }); load(); })); return b; };
         // build
         const build = h("div", { class: "panel" }, h("h3", { text: "Build my server" }),
-          h("p", { class: "muted", text: "Creates the usual gaming-server layout: Information (welcome, rules, announcements, roles), Community (general, introductions, memes, clips, off-topic, bot-commands), Gaming (looking-for-group, game-chat, game-night, wishlists), Deals and Giveaways, Voice lobbies and a private Staff area. Also creates Moderator, Member and level roles and a role picker, posts the rules and welcome, and connects deal alerts, giveaways, support tickets, welcome and XP. Anything that already exists is reused, so it is safe to run again. A brand-new server is built automatically when the bot joins." }),
+          h("p", { class: "muted", text: "Creates the usual gaming-server layout: Information (welcome, rules, announcements, roles), Community (general, introductions, memes, clips, off-topic, bot-commands), Gaming (looking-for-group, game-chat, game-night, wishlists), Deals and Giveaways, Support (get-help tickets and report-a-bug), Voice lobbies and a private Staff area. Also creates Moderator, Member and level roles and a role picker, posts the rules (with the bot logo), the support buttons and the welcome, and connects deal alerts, giveaways, support tickets, welcome and XP. Anything that already exists is reused, so it is safe to run again. A brand-new server is built automatically when the bot joins." }),
           (() => { const b = h("button", { class: "btn green", text: d.built ? "Run setup again" : "Set up this server" }); b.addEventListener("click", () => busy(b, async () => { const r = await post("/api/community/setup", {}); toast(`Done: ${r.created.channels.length} channels, ${r.created.roles.length} roles created.`, "ok"); load(); })); return b; })());
         // welcome
         const wCh = chSel(st.welcome_channel), logCh = chSel(st.log_channel), wMsg = h("textarea", { rows: "3", maxlength: "1000", placeholder: st.defaultWelcome }); wMsg.value = st.welcome_msg || "";
@@ -3623,7 +3683,28 @@
           h("h4", { text: "Or add one image" }), h("p", { class: "muted small", text: "PNG, GIF, JPG or WebP under 256 KB. Square images work best." }), h("div", { class: "row" }, upFile, upName, upBtn),
           h("h4", { text: "This server's emoji" }), eList);
         loadEmoji();
-        box.replaceChildren(build, welcome, verify, pings, referral, emoji);
+        // rules, announcements, support: where things are posted and what they say
+        const annCh = chSel(st.announce_channel || (ch.channels.find(c => c.name === "announcements") || {}).id), rulesCh = chSel(st.rules_channel || (ch.channels.find(c => c.name === "rules") || {}).id);
+        const places = h("div", { class: "panel" }, h("h3", { text: "Where things are posted" }),
+          field("Announcements channel (your announcements, and the bot developer's notices to all servers)", annCh), field("Rules channel", rulesCh),
+          h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value }))));
+        const rText = h("textarea", { rows: "9", maxlength: "3000", placeholder: d.defaultRules }); rText.value = st.rules_text || "";
+        const rulesP = h("div", { class: "panel" }, h("h3", { text: "Rules" }),
+          h("p", { class: "muted", text: "Edit the rules shown in the rules channel. Leave it empty to use the standard community rules. The post comes with the bot logo and banner." }), field("Rules (Discord formatting works)", rText),
+          h("div", { class: "row" }, save("Save", () => post("/api/community/rules", { text: rText.value })), save("Save and post in the rules channel", () => post("/api/community/rules", { text: rText.value, post: true }), "btn green small")));
+        const tkCh = chSel(d.support.ticket_channel), tkRole = roSel(d.support.staff_role_id, "Server managers only");
+        const supportP = h("div", { class: "panel" }, h("h3", { text: "Support tickets" }),
+          h("p", { class: "muted", text: "Members press Open a ticket in #get-help (or use /support open). Tickets land in the channel below with Reply, Assign me and Resolve buttons. Bug reports go to the bot's developer instead." }),
+          field("Tickets channel (staff only)", tkCh), field("Role that answers tickets", tkRole),
+          h("div", { class: "row" }, save("Save support", () => post("/api/community/support", { ticket_channel: tkCh.value, staff_role_id: tkRole.value }))));
+        const announceP = announceDesigner({ chSel, roSel, defaultCh: st.announce_channel || (ch.channels.find(c => c.name === "announcements") || {}).id, history: d.announcements, roleName, chName: id => (ch.channels.find(c => c.id === id) || {}).name });
+        // group everything a manager can customise into tabs
+        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Emoji", [emoji]]];
+        const tabBar = h("div", { class: "tabs" }), body = h("div");
+        const show = n => { mgrTab = n; [...tabBar.children].forEach((b, k) => b.classList.toggle("active", k === n)); body.replaceChildren(...groups[n][1]); };
+        groups.forEach(([label], n) => tabBar.append(h("button", { class: "tab small", type: "button", text: label, onclick: () => show(n) })));
+        box.replaceChildren(h("h2", { text: "Server settings" }), h("p", { class: "muted", text: "Everything you can customise for this server, in one place." }), tabBar, body);
+        show(Math.min(mgrTab, groups.length - 1));
       })();
       return box;
     }

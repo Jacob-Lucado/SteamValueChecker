@@ -1,11 +1,13 @@
 // What the dashboard's Community page does. server.js checks who may do it (member or Manage Server) and calls these.
 import { xpForNext } from "../communitystore.js";
-import { communitySetup, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
+import { buildAnnouncement } from "../announce.js";
+import { UserError } from "../errors.js";
+import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { DiscordApiError } from "./discord.js";
 
 export class CommunityError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
-export function createCommunityDash({ db, rest, community, membersIntent = () => true, botId, fetchImpl = globalThis.fetch }) {
+export function createCommunityDash({ db, rest, community, membersIntent = () => true, botId, publicUrl = null, fetchImpl = globalThis.fetch }) {
     const fail = (status, m) => { throw new CommunityError(status, m); };
     const nameOf = async (gid, id) => (await rest.memberName(gid, id).catch(() => null)) ?? "Member";
     const named = (gid, rows) => Promise.all(rows.map(async r => ({ ...r, name: await nameOf(gid, r.user_id) })));
@@ -39,6 +41,10 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             out.settings = { ...c, welcome_msg: c.welcome_msg ?? "", defaultWelcome: DEFAULT_WELCOME, fields: WELCOME_FIELDS };
             out.selfRoles = db.listSelfRoles(gid);
             out.built = Boolean(c.setup_at);
+            const tk = db.getTicketSettings(gid);
+            out.support = { ticket_channel: tk.channel_id, staff_role_id: tk.staff_role_id };
+            out.announcements = db.listAnnouncements(gid, 8);
+            out.defaultRules = TEMPLATE.rules.join("\n\n");
         }
         return out;
     }
@@ -68,7 +74,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try {
             const [channels, roles, guild] = await Promise.all([rest.allChannels(gid), rest.allRoles(gid), rest.getGuild(gid).catch(() => null)]);
             const fresh = isFreshGuild({ channels, roles: roles.map(r => ({ ...r, guild_id: gid })), memberCount: guild?.approximate_member_count ?? 0 });
-            const r = await communitySetup({ api: rest, db, guildId: gid, botId, userId, fresh });
+            const r = await communitySetup({ api: rest, db, guildId: gid, botId, userId, fresh, baseUrl: publicUrl });
             db.bumpUsage("dash_setup");
             return { created: r.created, notes: r.notes, fresh };
         } catch (e) {
@@ -101,6 +107,48 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         const patch = {};
         for (const k of ["deals", "free", "giveaway", "lfg"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
         return db.setCommunity(gid, patch);
+    }
+    /** Support: where member tickets go and who answers them. */
+    async function support(gid, b) {
+        const channel = b.ticket_channel !== undefined ? await channelOk(gid, b.ticket_channel || null) : db.getTicketSettings(gid).channel_id;
+        const role = b.staff_role_id !== undefined ? await roleOk(gid, b.staff_role_id || null) : db.getTicketSettings(gid).staff_role_id;
+        db.setTicketSettings(gid, { channelId: channel, staffRoleId: role });
+        return { ticket_channel: channel, staff_role_id: role };
+    }
+    /** Where announcements and the rules are posted. */
+    async function places(gid, b) {
+        const patch = {};
+        if (b.announce_channel !== undefined) patch.announce_channel = await channelOk(gid, b.announce_channel || null);
+        if (b.rules_channel !== undefined) patch.rules_channel = await channelOk(gid, b.rules_channel || null);
+        return db.setCommunity(gid, patch);
+    }
+    /** Saves the rules text (empty means the standard rules) and, when asked, posts them in the rules channel. */
+    async function rules(gid, b) {
+        const text = String(b.text ?? "").trim();
+        if (text.length > 3000) fail(400, "Keep the rules under 3000 characters.");
+        const c = db.setCommunity(gid, { rules_text: text || null });
+        let posted = false;
+        if (b.post) {
+            if (!c.rules_channel) fail(400, "Choose the rules channel first.");
+            const guild = await rest.getGuild(gid).catch(() => null);
+            await rest.sendMessage(c.rules_channel, { allowed_mentions: { parse: [] }, ...rulesPayload({ server: guild?.name ?? "the server", base: publicUrl, rules: c.rules_text, helpChannel: (await rest.listChannels(gid).catch(() => [])).find(c => c.name === "get-help")?.id ?? null }) })
+                .catch(() => fail(400, "I could not post there. Give me Send Messages and Embed Links in that channel."));
+            posted = true;
+        }
+        return { posted, rules_text: c.rules_text };
+    }
+    /** Builds and posts a server announcement. Returns the new row. */
+    async function announce(gid, b, userId) {
+        const channel = await channelOk(gid, b.channel_id || db.getCommunity(gid).announce_channel) ?? fail(400, "Choose the channel to post in.");
+        if (b.ping === "role") await roleOk(gid, b.role_id);
+        const guild = await rest.getGuild(gid).catch(() => null);
+        let built;
+        try { built = buildAnnouncement(b, { serverName: guild?.name ?? "", serverIcon: guild?.icon ? `https://cdn.discordapp.com/icons/${gid}/${guild.icon}.png?size=256` : null }); }
+        catch (e) { if (e instanceof UserError) fail(400, e.message); throw e; }
+        const msg = await rest.sendMessage(channel, built.payload).catch(() => fail(400, "I could not post there. Give me View Channel, Send Messages and Embed Links in that channel."));
+        const id = db.addAnnouncement(gid, userId, channel, msg?.id ?? null, built.title);
+        db.bumpUsage("dash_announce");
+        return { id, channel_id: channel, message_id: msg?.id ?? null, history: db.listAnnouncements(gid, 8) };
     }
     async function autorole(gid, b) { return db.setCommunity(gid, { autorole_id: await roleOk(gid, b.role_id || null) }); }
     async function xp(gid, b) {
@@ -153,5 +201,5 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, verify, verifyRole, pings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
+    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
 }
