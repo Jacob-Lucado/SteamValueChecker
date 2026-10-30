@@ -12,7 +12,7 @@ import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
 import { collectAbout } from "./about.js";
-import { FANATICAL_GRABBER_URL, REGIONS } from "./constants.js";
+import { FANATICAL_GRABBER_URL, EXTENSION_STORE_URL, REGIONS } from "./constants.js";
 import { readFileSync } from "node:fs";
 import { HELP, ABOUT, PRIVACY, quickStart } from "./text.js";
 import { openDb } from "./db.js";
@@ -554,7 +554,7 @@ if (cfg.dashboard) {
     });
     // One broadcaster for the dashboard's Admin page and /grabberad, so only one announcement or promotion goes out at a time.
 const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), sendChannel: (id, p) => discord.sendChannel(id, p),
-    promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || FANATICAL_GRABBER_URL, dashboardUrl: publicBase }) });
+    promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
 const dashboard = createDashboard({ broadcaster, db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));

@@ -36,4 +36,6 @@ export const ALERT_TYPES = [
 
 /** The newest FanaticalGrabber release that members can get. Raise it once the Chrome Web Store has approved the new version (EXTENSION_LATEST overrides it). */
 export const EXTENSION_LATEST = "2.7.0";
+/** Where people install FanaticalGrabber: the Chrome Web Store only. */
+export const EXTENSION_STORE_URL = "https://chromewebstore.google.com/detail/fanaticalgrabber/kmbpdeglijkfbkifilcckkeljagcdbnb";
 export const FANATICAL_GRABBER_URL = "https://jacob-lucado.github.io/FanaticalGrabber/";

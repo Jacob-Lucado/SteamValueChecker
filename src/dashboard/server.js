@@ -12,7 +12,7 @@ import { join as joinPath } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, EXTENSION_LATEST } from "../constants.js";
+import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
 import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
@@ -228,7 +228,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
     const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
-        sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p), promoPayload: () => grabberPromo({ base: config.publicUrl, url: process.env.EXTENSION_STORE_URL || FANATICAL_GRABBER_URL, dashboardUrl: config.publicUrl }) }));
+        sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p), promoPayload: () => grabberPromo({ base: config.publicUrl, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: config.publicUrl }) }));
 
     function managerGuild(s, id) {
         const g = guildFor(s, id);
@@ -320,7 +320,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     // ---------- API ----------
     const routes = {
         // The extension asks this (no sign-in, nothing sent about the person) to remind its users to update.
-        "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || FANATICAL_GRABBER_URL }),
+        "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
         "GET /api/config": async () => ({
             regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
             help: HELP, about: ABOUT, extension: { latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST },
