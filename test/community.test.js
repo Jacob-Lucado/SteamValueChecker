@@ -662,3 +662,23 @@ test("broadcast posts to a server's channel are addressed to that server", async
     assert.match(sent.find(x => x[0] === "c1")[1].author.name, /Friends Server/);
     assert.doesNotMatch(sent.find(x => x[0] === "c2")[1].author.name, /For /);
 });
+
+test("broadcast banner is drawn per server and falls back to the shared one on failure", async () => {
+    const { createBroadcaster } = await import("../src/broadcast.js");
+    const { guildBannerSvg, toPng } = await import("../src/communitycards.js");
+    assert.equal(toPng(guildBannerSvg({ name: "Game Junkies" })).subarray(1, 4).toString(), "PNG");
+    const run = async guildBanner => {
+        const sent = [];
+        const db = { broadcastTargets: () => ({ users: [], channels: ["c1"] }), broadcastChannelGuilds: () => new Map([["c1", "g1"]]), startBroadcast: () => 1, progressBroadcast() {} };
+        createBroadcaster({ publicUrl: "https://x.test", db, sendDm: async () => {}, sendChannel: async (_i, p) => sent.push(p), ownerId: "o", guildInfo: () => ({ name: "Game Junkies" }), guildBanner, delayMs: 0, sleep: async () => {} })
+            .start({ title: "T", body: "B", audience: "channels" });
+        for (let i = 0; i < 20 && !sent.length; i++) await new Promise(r => setTimeout(r, 5));
+        return sent[0];
+    };
+    const ok = await run(async () => ({ attachment: Buffer.from("x"), name: "for-your-server.png" }));
+    assert.equal(ok.files[0].name, "for-your-server.png");
+    assert.equal(ok.embeds[0].image.url, "attachment://for-your-server.png");
+    const bad = await run(async () => { throw new Error("nope"); });
+    assert.equal(bad.files, undefined);
+    assert.equal(bad.embeds[0].image.url, "https://x.test/banner.png");
+});

@@ -44,7 +44,7 @@ export const noticeEmbed = (title, body, base = null, guild = null) => ({ color:
         : "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff. Questions? Use the Support page on the dashboard." },
     ...(base ? { image: { url: `${base}/banner.png` }, thumbnail: { url: guild?.icon || `${base}/creator.png` } } : {}) });
 
-export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, promoPayload = null, guildInfo = null, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
+export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, promoPayload = null, guildInfo = null, guildBanner = null, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     let running = null;
 
     function counts() {
@@ -68,9 +68,14 @@ export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, o
         const base = publicUrl ? String(publicUrl).replace(/\/$/, "") : null;
         const payload = promo ? promoPayload() : { embeds: [noticeEmbed(t, b, base)], allowed_mentions: { parse: [] } };
         const chGuild = !promo && guildInfo ? db.broadcastChannelGuilds() : new Map();
-        const payloadFor = cid => {
+        const payloadFor = async cid => {
             const info = chGuild.has(cid) ? guildInfo(chGuild.get(cid)) : null;
-            return info?.name ? { embeds: [noticeEmbed(t, b, base, info)], allowed_mentions: { parse: [] } } : payload;
+            if (!info?.name) return payload;
+            const embed = noticeEmbed(t, b, base, info);
+            // A picture made for this server; if it cannot be drawn the shared banner stays.
+            const file = guildBanner ? await guildBanner(info).catch(() => null) : null;
+            if (file) { embed.image = { url: `attachment://${file.name}` }; return { embeds: [embed], files: [file], allowed_mentions: { parse: [] } }; }
+            return { embeds: [embed], allowed_mentions: { parse: [] } };
         };
         const targets = db.broadcastTargets({ promo });
         const dmIds = audience === "me" ? [ownerId] : audience === "dm" || audience === "both" ? targets.users : [];
@@ -83,7 +88,7 @@ export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, o
         (async () => {
             const step = async fn => { try { await fn(); job.sent++; } catch { job.failed++; } if ((job.sent + job.failed) % 10 === 0) db.progressBroadcast(id, job.sent, job.failed, false); await sleep(delayMs); };
             for (const uid of dmIds) await step(() => sendDm(uid, payload));
-            for (const cid of chIds) await step(() => sendChannel(cid, payloadFor(cid)));
+            for (const cid of chIds) await step(async () => sendChannel(cid, await payloadFor(cid)));
         })().catch(() => {}).finally(() => { job.done = true; db.progressBroadcast(id, job.sent, job.failed, true); running = null; });
         return { id, total };
     }

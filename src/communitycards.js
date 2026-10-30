@@ -92,6 +92,20 @@ export function inviteCardSvg(d) {
   ${rewards}`, "#57f287", "#70a6d8");
 }
 
+/** The announcement banner for one server: the bot's brand beside that server's own icon and name. d: { name, art, logo } */
+export function guildBannerSvg(d) {
+    const name = cut(d.name ?? "your server", 30), size = name.length > 22 ? 40 : 50;
+    return frame(1200, 400, `
+  <circle cx="1020" cy="200" r="150" fill="none" stroke="#26324d" stroke-width="2"/><circle cx="1020" cy="200" r="190" fill="none" stroke="#1c2740" stroke-width="2"/>
+  ${d.logo ? `<image href="${d.logo}" x="64" y="64" width="84" height="84"/>` : ""}
+  <text x="${d.logo ? 168 : 64}" y="100" font-size="22" font-weight="700" fill="#9fb2d6" letter-spacing="3">STEAM VALUE CHECKER</text>
+  <text x="${d.logo ? 168 : 64}" y="138" font-size="20" font-weight="600" fill="#70a6d8">Works with FanaticalGrabber exports</text>
+  <text x="64" y="244" font-size="24" font-weight="600" fill="#7f93ba" letter-spacing="2">A MESSAGE FOR</text>
+  <text x="64" y="${244 + size + 12}" font-size="${size}" font-weight="700" fill="#f3f6fc">${esc(name)}</text>
+  <rect x="64" y="336" width="220" height="6" rx="3" fill="url(#acc)"/>
+  ${avatar(1020, 200, 110, d.art, d.name, "#70a6d8")}`, "#70a6d8", "#8b7cf6");
+}
+
 /** Rough text width in px for pills. */
 function tw(s, size) { return [...String(s)].reduce((t, c) => t + (c === " " ? 0.28 : /[A-Z0-9MW#]/.test(c) ? 0.7 : /[il.,'|:]/.test(c) ? 0.28 : 0.56), 0) * size; }
 
