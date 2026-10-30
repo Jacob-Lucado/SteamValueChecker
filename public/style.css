@@ -100,6 +100,7 @@ code { background: var(--soft); padding: 1px 6px; border-radius: 6px; font-size:
 .grid .panel { margin-bottom: 0; }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .grid.four { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.grid.five { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .grid.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 /* forms */

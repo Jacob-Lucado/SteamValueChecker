@@ -1965,7 +1965,8 @@
 
         body.className = "";
         body.replaceChildren(
-          h("div", { class: "grid four" }, tile("Games", String(t.games), t.paidGames < t.games ? `${t.paidGames} with what you paid` : ""), tile("You paid", money(t.paid, cur)),
+          h("div", { class: "grid five" }, tile("Games", String(t.games), t.paidGames < t.games ? `${t.paidGames} with what you paid` : ""), tile("You paid", money(t.paid, cur), t.paidGames ? `real prices, ${t.paidGames} games` : "no prices logged yet"),
+            tile("Estimated paid", (t.estGames ? "~" : "") + money(t.estPaid, cur), t.estGames ? `${t.estGames} games guessed at their lowest-ever price. Log real prices with the extension.` : "every game has a real price"),
             tile("Worth at MSRP", money(t.msrp, cur)), tile("Saved vs MSRP", money(t.saved, cur), t.msrpPaid > 0 ? Math.round(t.savedPct) + "% off" : "add prices to see savings")),
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),

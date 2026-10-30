@@ -9,7 +9,11 @@ export function libraryTotals(rows) {
     const withPaid = rows.filter(r => r.paid !== null && !r.gifted); // a gift is shown at retail but was not paid for, so it stays out of spend and savings
     const paid = sum(withPaid, r => r.paid);
     const msrpPaid = sum(withPaid, r => r.msrp);
+    // Steam never tells anyone what you paid, so games without a price get an honest floor: their all-time low, the least anyone could have paid.
+    const guess = rows.filter(r => r.paid === null && !r.gifted && Number.isFinite(r.atl) && r.atl > 0);
     return {
+        estGames: guess.length,
+        estPaid: paid + sum(guess, r => r.atl),
         games: rows.length,
         paidGames: withPaid.length,
         paid,

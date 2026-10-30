@@ -323,3 +323,12 @@ test("For you ranks discounts by taste and wishlist, skips owned games and survi
     assert.equal(r.deals.find(d => d.id === "new").match, null, "no genres yet: no score, still listed");
     assert.equal(r.pending, 1); assert.equal(r.personalised, true);
 });
+
+test("library totals add a floor estimate for games with no price paid, never touching real savings", async () => {
+    const { libraryTotals } = await import("../src/library.js");
+    const t = libraryTotals([
+        { paid: 10, msrp: 20, atl: 8, gifted: false }, { paid: null, msrp: 60, atl: 15, gifted: false },
+        { paid: null, msrp: 30, atl: 5, gifted: true }, { paid: null, msrp: 0, atl: 0, gifted: false }]);
+    assert.equal(t.paid, 10); assert.equal(t.estGames, 1); assert.equal(t.estPaid, 25);
+    assert.equal(t.saved, 10);
+});
