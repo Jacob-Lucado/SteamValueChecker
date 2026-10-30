@@ -101,6 +101,7 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
         getGuild: guildId => call(`/guilds/${encodeURIComponent(guildId)}?with_counts=true`, { headers: bot }),
         editChannel: (channelId, body) => call(`/channels/${encodeURIComponent(channelId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
         deleteChannel: channelId => call(`/channels/${encodeURIComponent(channelId)}`, { method: "DELETE", headers: bot }),
+        editRole: (guildId, roleId, body) => call(`/guilds/${encodeURIComponent(guildId)}/roles/${encodeURIComponent(roleId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
         createRole: (guildId, body) => call(`/guilds/${encodeURIComponent(guildId)}/roles`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
         editGuild: (guildId, body) => call(`/guilds/${encodeURIComponent(guildId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
         addRole: (guildId, userId, roleId) => call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`, { method: "PUT", headers: bot }),

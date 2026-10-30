@@ -21,7 +21,7 @@ import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { createCommunityDash, CommunityError } from "./communitydash.js";
 import { createModDash, ModDashError } from "./moddash.js";
-import { BOT_PERMISSIONS } from "../community.js";
+import { botInviteUrl } from "../community.js";
 import { connectionPayload } from "../linkedroles.js";
 import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
@@ -322,7 +322,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&integration_type=1&scope=applications.commands`
                 : null,
             inviteUrl: config.clientId
-                ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(config.clientId)}&scope=bot%20applications.commands&permissions=${BOT_PERMISSIONS}`
+                ? botInviteUrl(config.clientId)
                 : null
         }),
 
