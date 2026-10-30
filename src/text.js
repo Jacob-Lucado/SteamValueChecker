@@ -14,7 +14,7 @@ export function quickStart(dashboardUrl = null) {
 }
 
 export const HELP = [
-    "**Every command, and what it does** (`/help`). Most work in a DM too. Replies are private. Never post game keys in chat or a ticket.",
+    "**Every command** (`/help`). Most work in a DM too. Replies are private. Never post game keys in chat or a ticket.",
     "",
     "**Prices and wishlist**",
     "• `/value` prices a list of games (typed, or a FanaticalGrabber export in `file`): MSRP, Steam price, cheapest now, and savings if you give `paid`.",
@@ -36,16 +36,16 @@ export const HELP = [
     "",
     "**Servers**",
     "• `/serverlist` `add` / `view` / `vote` / `remove`: a wishlist your server shares. `/leaderboard` and `/serverstats` show boards and numbers for members who opted in.",
-    "• `/gamenight` (in a voice channel) shows what everyone owns and what to buy together. `/lfg` `post` / `list` / `close` finds players. `/calendar` `view` / `add` / `remove` / `feed` shows releases, sales and events.",
-    "• Managers: `/setup` is a guided setup. `/alertchannel` `set` / `clear` / `show` / `feed` / `hot` / `sales` / `digest` / `group` picks where alerts go. `/giveaway` `create` / `list` / `info` / `end` / `cancel` / `reroll` / `replace` / `setup` runs key giveaways.",
+    "• `/gamenight` (in voice) shows what everyone owns and what to buy together. `/lfg` `post` / `list` / `close` finds players. `/calendar` `view` / `add` / `remove` / `feed` shows releases, sales and events.",
+    "• Managers: `/setup` is a guided setup. `/alertchannel` `set` / `clear` / `show` / `feed` / `hot` / `sales` / `digest` / `group` picks where alerts go. `/giveaway` `create` / `list` / `info` / `end` / `cancel` / `reroll` / `replace` / `setup` runs giveaways.",
     "",
     "**Community**",
     "• `/rank` your level and place. `/levels` the top members. `/invites` `me` / `top` / `link` shows who joined through you and gives you an invite link.",
-    "• Managers: `/community` `setup` builds the usual gaming-server channels, roles, welcome and XP (a brand-new server is built when the bot joins); `welcome`, `autorole`, `verifyrole`, `xp`, `levelrole`, `referral`, `status` tune it. `/emoji` `import` / `list` adds emoji.",
+    "• Managers: `/community` `setup` builds the usual gaming-server channels, roles, welcome and XP (built automatically in a brand-new server); `welcome`, `autorole`, `verifyrole`, `xp`, `levelrole`, `referral`, `status` tune it. `/emoji` `import` / `list` adds emoji.",
     "• Moderators: `/mod` `warn` / `warnings` / `clearwarns` / `timeout` / `untimeout` / `kick` / `ban` / `unban` / `purge` / `cases` / `log`. Every action is a numbered case in #mod-log.",
     "",
     "**Help and your data**",
-    "• `/support` `open` / `mine` / `setup` asks the team for help. `/bug` reports a problem to the bot owner. `/changelog` shows what is new.",
+    "• `/support` `open` / `mine` / `setup` asks the team for help. `/bug` reports a problem to the bot owner. `/changelog` shows what is new. `/dashboard` (or `/dash`) links the website.",
     "• `/mydata` `export` / `delete` everything stored about you. `/status` shows whether the bot is healthy. `/about` and `/privacy` explain the bot and your data.",
     "",
     "`/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight`, `/lfg` and `/mod` only work in a server. The bot ignores anything that looks like a key, except in the private giveaway form."
@@ -66,5 +66,5 @@ export const PRIVACY = [
     "**Storage:** `/value` saves nothing. Prices are cached in memory for 30 minutes and results are not logged. Your reply is visible only to you.",
     "**Wishlist alerts and library:** if you use them, the bot stores your Discord ID, wishlist, alert rules, settings, library and what you paid, 90 days of alert history, server list votes and (if you import or link) your public Steam ID and playtime, an optional hashed FanaticalGrabber link code, any looking-for-group posts, friend nicknames with a birthday month and day (only if you add them). Sharing with your server (group alerts, leaderboard) is off until you opt in. It sends alerts by DM, or in the server alert channel if a DM fails or you choose that, where the game name is visible to the channel and you are mentioned. `/mydata export` and `/mydata delete` give you control. Support tickets (your messages and the replies) are kept until they have been closed for 6 months, are shared only with the bot owner or, if you chose a server, that server's staff, and are deleted by `/mydata delete`. A copy of each alert is kept 60 days in your notification center. If the web dashboard is on, signing in shares only your Discord name, avatar and server list, kept in memory for the session.",
     "",
-    "Full text: https://github.com/Jacob-Lucado/SteamValueChecker/blob/main/PRIVACY.md"
+    "The full text is on the dashboard under Help."
 ].join("\n");

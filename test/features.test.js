@@ -402,6 +402,7 @@ test("every slash command has a dashboard counterpart", async () => {
         rank: "GET /api/community/rank", levels: "GET /api/community/leaderboard", "invites/me": "GET /api/community/invites", "invites/top": "GET /api/community/invites", "invites/link": "POST /api/community/invite-link", "emoji/import": "POST /api/community/emoji", "emoji/list": "GET /api/community/emoji",
         "mod/warn": "POST /api/mod/action", "mod/timeout": "POST /api/mod/action", "mod/untimeout": "POST /api/mod/action", "mod/kick": "POST /api/mod/action", "mod/ban": "POST /api/mod/action", "mod/unban": "POST /api/mod/action", "mod/purge": "POST /api/mod/action",
         "mod/warnings": "GET /api/mod/cases", "mod/cases": "GET /api/mod/cases", "mod/clearwarns": "POST /api/mod/clearwarns", "mod/log": "POST /api/mod/log",
+        dashboard: "GET /api/me", dash: "GET /api/me",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
@@ -509,7 +510,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "currency", "freegames", "friendCmd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "freegames", "friendCmd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "levels", "lfgCmd", "modCmd", "rank", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);
@@ -833,4 +834,19 @@ test("bot status rotates through servers, members, uptime and the support link, 
     const stop = startPresence({ client, db: { stats: () => ({ users: 9 }) }, supportUrl: "https://x.com/a", every: 5 });
     await new Promise(r => setTimeout(r, 40)); stop();
     assert.equal(sent[0], "🌐 In 2 servers"); assert.ok(sent.includes("👥 12 members across servers") && sent.length >= 3);
+});
+
+test("/dashboard and /dash give the dashboard link, to a known page only", async () => {
+    const { dashLink, dashPayload } = await import("../src/dashlink.js");
+    assert.equal(dashLink("https://x.example/", null), "https://x.example");
+    assert.equal(dashLink("https://x.example", "library"), "https://x.example/#/library");
+    assert.equal(dashLink("https://x.example", "../evil"), "https://x.example", "unknown pages are ignored");
+    assert.equal(dashLink(null), null);
+    const p = dashPayload("https://x.example", "xp");
+    assert.equal(p.flags, 64); assert.equal(p.components[0].components[0].url, "https://x.example/#/xp");
+    assert.match(dashPayload(null).content, /not turned on/);
+    const { commands } = await import("../src/commands.js");
+    const names = commands.map(c => c.name);
+    assert.ok(names.includes("dashboard") && names.includes("dash"));
+    assert.ok(commands.find(c => c.name === "dash").options[0].choices.every(c => /^[a-z]+$/.test(c.value)));
 });

@@ -1,7 +1,5 @@
 // Numbers and wording for /about and the dashboard's About panel. Aggregate only: no names, IDs or keys.
 
-const FALLBACK_ASSETS = "https://raw.githubusercontent.com/Jacob-Lucado/SteamValueChecker/main/public";
-
 /** "3d 4h", "5h 12m", "42s": the two biggest units. */
 export function formatDuration(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
@@ -10,8 +8,8 @@ export function formatDuration(ms) {
     return shown.join(" ") || "0s";
 }
 
-/** Where Discord (or the dashboard) can fetch the logos: the dashboard's own address, else GitHub. */
-export const assetBase = cfg => cfg.dashboard?.publicUrl ?? FALLBACK_ASSETS;
+/** Where Discord (or the dashboard) can fetch the logos: the dashboard's own address. Without one there are no images. */
+export const assetBase = cfg => cfg.dashboard?.publicUrl ?? null;
 
 /**
  * Collects the live numbers. `client` is the discord.js client (or null on the dashboard-only path).
@@ -37,9 +35,9 @@ export function collectAbout({ client = null, db, cfg, startedAt, version = "1.0
         redeemed: totals.redeemed,
         version,
         node: process.version,
-        creator: { ...cfg.creator, logo: `${base}/creator.png` },
-        logo: `${base}/logo.png`,
-        banner: `${base}/banner.png`,
+        creator: { ...cfg.creator, logo: base ? `${base}/creator.png` : null },
+        logo: base ? `${base}/logo.png` : null,
+        banner: base ? `${base}/banner.png` : null,
         dashboardUrl: cfg.dashboard?.publicUrl ?? null,
         userInstallUrl: cfg.clientId ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(cfg.clientId)}&integration_type=1&scope=applications.commands` : null
     };

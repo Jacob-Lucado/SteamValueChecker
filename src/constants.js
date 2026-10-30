@@ -35,4 +35,3 @@ export const ALERT_TYPES = [
 ];
 
 export const FANATICAL_GRABBER_URL = "https://jacob-lucado.github.io/FanaticalGrabber/";
-export const REPO_URL = "https://github.com/Jacob-Lucado/SteamValueChecker";

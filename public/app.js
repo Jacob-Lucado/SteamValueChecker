@@ -3780,13 +3780,13 @@
     renderChrome();
     const view = currentView();
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u") return landing();
-    if (view === "u" && currentParam()) { publicWishlistView(currentParam()); window.scrollTo(0, 0); return; }
-    if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo(0, 0); return; }
-    if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo(0, 0); return; }
+    if (view === "u" && currentParam()) { publicWishlistView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
+    if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
+    if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     (VIEWS[view] || (state.me ? valueView : landing))();
     const nb = newsBanner();
     if (nb && view !== "home") app.prepend(nb);
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   async function boot() {

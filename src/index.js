@@ -48,6 +48,7 @@ import { createTicketHandlers } from "./tickethandlers.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
 import { createCommunity } from "./communityservice.js";
 import { createCommunityHandlers, setupSummary } from "./communityhandlers.js";
+import { dashPayload } from "./dashlink.js";
 import { startPresence } from "./presence.js";
 import { createModeration } from "./moderation.js";
 import { createModHandlers } from "./modhandlers.js";
@@ -503,6 +504,7 @@ client.on(Events.InteractionCreate, async i => {
             case "friend": return await handlers.handleFriend(i);
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await embedReply(i, HELP);
+            case "dashboard": case "dash": return await i.reply(dashPayload(cfg.dashboard?.publicUrl ?? null, i.options.getString("page")));
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
             case "privacy": return await embedReply(i, PRIVACY);
         } })();

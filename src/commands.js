@@ -220,6 +220,9 @@ const freegames = new SlashCommandBuilder()
     .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so everyone can see (default: only you)"));
 
 const help = new SlashCommandBuilder().setName("help").setDescription("How to use Steam Value Checker");
+const DASH_PAGES = [["Library", "library"], ["Steam", "steam"], ["Value checker", "value"], ["Wishlist", "wishlist"], ["For you", "foryou"], ["Free games", "free"], ["Servers", "servers"], ["Community", "community"], ["Server XP", "xp"], ["Moderation", "mod"], ["Alert settings", "alerts"], ["Help", "help"]];
+const dashCmd = name => new SlashCommandBuilder().setName(name).setDescription("Get the link to the dashboard")
+    .addStringOption(o => o.setName("page").setDescription("Open a specific page").addChoices(...DASH_PAGES.map(([n, v]) => ({ name: n, value: v }))));
 const about = new SlashCommandBuilder().setName("about").setDescription("About this bot and its price data");
 const privacy = new SlashCommandBuilder().setName("privacy").setDescription("What the bot does and does not do with your data");
 
@@ -506,7 +509,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, changelog, mydata, help, about, privacy].map(everywhere),
+    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
