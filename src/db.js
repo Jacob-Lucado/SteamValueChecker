@@ -11,6 +11,7 @@ import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { redeemSchema, redeemStore } from "./redeemstore.js";
 import { calendarSchema, calendarStore } from "./calendarstore.js";
 import { lfgSchema, lfgStore } from "./lfgstore.js";
+import { hiddenGuilds, isHidden } from "./hidden.js";
 import { giftSchema, giftStore } from "./giftstore.js";
 import { friendSchema, friendStore } from "./friendstore.js";
 import { challengeSchema, challengeStore } from "./challengestore.js";
@@ -165,6 +166,7 @@ ${challengeSchema}
 ${bundleSchema}
 ${broadcastSchema}
 ${lfgSchema}`;
+
 
 export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.now() } = {}) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -480,7 +482,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const guildsWithSaleFeed = () => all("SELECT * FROM guilds WHERE sale_feed = 1").map(clean);
     const guildsWithFreeFeed = () => all("SELECT * FROM guilds WHERE free_feed = 1").map(clean);
     const guildHasSeen = (guildId, key) => Boolean(get("SELECT 1 AS x FROM guild_seen WHERE guild_id = ? AND key = ?", guildId, key));
-    const guildMarkSeen = (guildId, key) => run("INSERT OR IGNORE INTO guild_seen (guild_id, key, at) VALUES (?,?,?)", guildId, key, now());
+    const guildMarkSeen = (guildId, key) => isHidden(guildId) ? undefined : run("INSERT OR IGNORE INTO guild_seen (guild_id, key, at) VALUES (?,?,?)", guildId, key, now());
     const pruneGuildSeen = (olderThanMs = 120 * 86400_000) => run("DELETE FROM guild_seen WHERE at < ?", now() - olderThanMs).changes;
     /** Aggregate numbers for members who opted in to sharing in this server. Counts only, never who wants what. */
     const guildStats = guildId => ({
@@ -535,21 +537,42 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
     const removeServerGame = listId => run("DELETE FROM server_list WHERE id = ?", listId).changes > 0;
 
+    /**
+     * Deletes everything that records what happened in a hidden test server: moderation cases, join history, XP, announcements,
+     * support tickets, giveaways, game-night and deal history. Its settings (channels, roles) stay so the bot keeps working there.
+     * Safe to run over and over. Returns how many rows went.
+     */
+    function purgeHiddenGuilds() {
+        let gone = 0;
+        for (const id of hiddenGuilds()) {
+            for (const sql of [
+                "DELETE FROM mod_cases WHERE guild_id = ?", "DELETE FROM invite_joins WHERE guild_id = ?", "DELETE FROM member_xp WHERE guild_id = ?",
+                "DELETE FROM announcements WHERE guild_id = ?", "DELETE FROM guild_seen WHERE guild_id = ?", "DELETE FROM guild_deals WHERE guild_id = ?",
+                "DELETE FROM referral_rewards WHERE guild_id = ?", "DELETE FROM lfg_posts WHERE guild_id = ?", "DELETE FROM calendar_events WHERE guild_id = ?",
+                "DELETE FROM tickets WHERE guild_id = ?", "DELETE FROM giveaways WHERE guild_id = ?"
+            ]) { try { gone += Number(run(sql, id).changes); } catch { /* a table this build does not have */ } }
+        }
+        return gone;
+    }
+
     // ---------- owner stats, backups ----------
+    // Test servers (see hidden.js) are left out of every count. Ids are digits only, so they are safe to write into the query.
+    const hiddenIds = () => [...hiddenGuilds()].filter(x => /^\d+$/.test(x)).map(x => `'${x}'`).join(",") || "''";
     function stats() {
+        const hu = `(SELECT discord_id FROM users WHERE guild_id IN (${hiddenIds()}))`;
         const n = (sql, ...p) => get(sql, ...p).n;
         const since = ms => now() - ms;
         const byKind = Object.fromEntries(all("SELECT kind, COUNT(*) AS n FROM alert_log WHERE at > ? GROUP BY kind", since(7 * 86400_000)).map(r => [r.kind, r.n]));
         return {
-            users: n("SELECT COUNT(*) AS n FROM users"),
-            activeUsers: n("SELECT COUNT(DISTINCT u.discord_id) AS n FROM users u JOIN items i ON i.discord_id = u.discord_id WHERE u.paused = 0"),
-            dmUsers: n("SELECT COUNT(*) AS n FROM users WHERE delivery = 'dm'"),
-            channelUsers: n("SELECT COUNT(*) AS n FROM users WHERE delivery = 'channel'"),
-            wishlistGames: n("SELECT COUNT(*) AS n FROM items"),
-            uniqueGames: n("SELECT COUNT(DISTINCT itad_id) AS n FROM items"),
-            libraryGames: n("SELECT COUNT(*) AS n FROM library"),
-            serversWithChannel: n("SELECT COUNT(*) AS n FROM guilds"),
-            alerts24h: n("SELECT COUNT(*) AS n FROM alert_log WHERE at > ?", since(86400_000)),
+            users: n(`SELECT COUNT(*) AS n FROM users WHERE discord_id NOT IN ${hu}`),
+            activeUsers: n(`SELECT COUNT(DISTINCT u.discord_id) AS n FROM users u JOIN items i ON i.discord_id = u.discord_id WHERE u.paused = 0 AND u.discord_id NOT IN ${hu}`),
+            dmUsers: n(`SELECT COUNT(*) AS n FROM users WHERE delivery = 'dm' AND discord_id NOT IN ${hu}`),
+            channelUsers: n(`SELECT COUNT(*) AS n FROM users WHERE delivery = 'channel' AND discord_id NOT IN ${hu}`),
+            wishlistGames: n(`SELECT COUNT(*) AS n FROM items WHERE discord_id NOT IN ${hu}`),
+            uniqueGames: n(`SELECT COUNT(DISTINCT itad_id) AS n FROM items WHERE discord_id NOT IN ${hu}`),
+            libraryGames: n(`SELECT COUNT(*) AS n FROM library WHERE discord_id NOT IN ${hu}`),
+            serversWithChannel: n(`SELECT COUNT(*) AS n FROM guilds WHERE guild_id NOT IN (${hiddenIds()})`),
+            alerts24h: n(`SELECT COUNT(*) AS n FROM alert_log WHERE at > ? AND discord_id NOT IN ${hu}`, since(86400_000)),
             alerts7d: byKind,
             usersFailingDm: n("SELECT COUNT(*) AS n FROM users WHERE dm_failures >= 3")
         };
@@ -581,7 +604,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
                 ["Paused alerts", safe("SELECT COUNT(*) AS n FROM users WHERE paused = 1")]
             ],
             idle: { noWishlistOrLibrary: safe("SELECT COUNT(*) AS n FROM users u WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.discord_id = u.discord_id) AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = u.discord_id)"), dmFailing: safe("SELECT COUNT(*) AS n FROM users WHERE dm_failures >= 3") },
-            servers: all("SELECT g.guild_id AS id, g.free_feed, g.hot_min, g.sale_feed, g.group_min, g.weekly_digest, (SELECT COUNT(*) FROM users u WHERE u.guild_id = g.guild_id) AS members FROM guilds g ORDER BY members DESC").map(clean)
+            servers: all("SELECT g.guild_id AS id, g.free_feed, g.hot_min, g.sale_feed, g.group_min, g.weekly_digest, (SELECT COUNT(*) FROM users u WHERE u.guild_id = g.guild_id) AS members FROM guilds g WHERE g.guild_id NOT IN (" + hiddenIds() + ") ORDER BY members DESC").map(clean)
         };
     }
 
@@ -658,7 +681,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
-        sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
+        purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };

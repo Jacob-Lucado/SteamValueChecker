@@ -1,6 +1,8 @@
 // Database tables and queries for server giveaways. Prize keys are stored encrypted (see vault.js) and wiped as soon as
 // they are no longer needed. Key values never appear in any query result except `key_enc`, which only giveaway.js reads.
 
+import { isHidden, hiddenGuilds } from "./hidden.js";
+
 export const MAX_ACTIVE_GIVEAWAYS = 10;
 export const MAX_KEYS = 50;
 
@@ -130,7 +132,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     const giveawayDestinations = () => all(`
         SELECT guild_id, giveaway_channel_id AS channel_id FROM giveaway_settings WHERE giveaway_channel_id IS NOT NULL
         UNION
-        SELECT guild_id, channel_id FROM guilds WHERE channel_id IS NOT NULL AND guild_id NOT IN (SELECT guild_id FROM giveaway_settings WHERE giveaway_channel_id IS NOT NULL)`).map(clean);
+        SELECT guild_id, channel_id FROM guilds WHERE channel_id IS NOT NULL AND guild_id NOT IN (SELECT guild_id FROM giveaway_settings WHERE giveaway_channel_id IS NOT NULL)`).map(clean).filter(d => !isHidden(d.guild_id));
     const setGiveawayMessage = (id, messageId) => run("UPDATE giveaways SET message_id = ? WHERE id = ?", messageId, id);
     const setAnnounceMessage = (id, messageId) => run("UPDATE giveaways SET announce_id = ? WHERE id = ?", messageId, id);
     const setGiveawayStatus = (id, status) => run("UPDATE giveaways SET status = ?, ended_at = ? WHERE id = ?", status, now(), id);
@@ -209,10 +211,13 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         run("UPDATE giveaways SET status = 'cancelled', ended_at = COALESCE(ended_at, ?), host_id = 'deleted' WHERE host_id = ?", now(), userId);
     }
     /** Bot-wide counts for the About page. Nothing personal. */
-    const giveawayTotals = () => ({
-        giveaways: get("SELECT COUNT(*) AS n FROM giveaways").n,
-        redeemed: get("SELECT COUNT(*) AS n FROM giveaway_keys WHERE status = 'confirmed'").n
-    });
+    const giveawayTotals = () => {
+        const hide = [...hiddenGuilds()], ph = hide.map(() => "?").join(",");
+        return {
+            giveaways: get(`SELECT COUNT(*) AS n FROM giveaways WHERE guild_id NOT IN (${ph})`, ...hide).n,
+            redeemed: get(`SELECT COUNT(*) AS n FROM giveaway_keys WHERE status = 'confirmed' AND giveaway_id NOT IN (SELECT id FROM giveaways WHERE guild_id IN (${ph}))`, ...hide).n
+        };
+    };
     const hasGiveawayData = userId => Boolean(get("SELECT 1 AS x FROM giveaway_entries WHERE discord_id = ? UNION SELECT 1 FROM giveaway_keys WHERE winner_id = ? UNION SELECT 1 FROM giveaways WHERE host_id = ?", userId, userId, userId));
 
     // Saved form settings for a server (never prize keys).

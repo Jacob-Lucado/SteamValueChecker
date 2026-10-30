@@ -20,6 +20,7 @@ import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
 import { registerCommands } from "./registercmds.js";
 import { createLogBuffer, ACTIVITY } from "./logbuffer.js";
+import { isHidden } from "./hidden.js";
 import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
@@ -83,6 +84,8 @@ console.log(MEMBERS_INTENT ? "[community] Server Members intent is on: welcome m
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : [])] });
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
+try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
+setInterval(() => { try { db.purgeHiddenGuilds(); } catch { /* try again next time */ } }, 30 * 60_000).unref();
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });

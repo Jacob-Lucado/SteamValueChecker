@@ -2,10 +2,13 @@
 // (dashboard/discord.js), so it runs the same from a command, an event or a web request, and the tests use a fake.
 import { welcomeDmPayload, messageXp, XP_COOLDOWN_MS, VOICE_XP, rolesForLevel, welcomePayload, findUsedInvite, levelFromXp, xpForNext, bar } from "./community.js";
 
+import { isHidden } from "./hidden.js";
+
 export const BETA_ROLE = "Beta Tester", BETA_COLOR = 0x2ecc71;
 const avatarOf = u => (u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null);
 
 export function createCommunity({ db, api, dm = null, dashboardUrl = null, ownerId = null, now = () => Date.now(), rng = Math.random }) {
+    const bump = (guildId, key) => { if (!isHidden(guildId)) db.bumpUsage(key); }; // feature counters never include a hidden test server
     const last = new Map();          // `${guild}:${user}` -> last time XP was earned from a message
     const invites = new Map();       // guildId -> Map(code -> { uses, maxUses, inviterId })
 
@@ -23,7 +26,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         last.set(key, now());
         if (last.size > 50_000) for (const k of [...last.keys()].slice(0, 10_000)) last.delete(k);
         const r = db.addXp(guildId, userId, messageXp(c.xp_mult, rng), { message: true });
-        if (r.after > r.before) { await syncLevelRoles(guildId, userId, r.after); db.bumpUsage("level_ups"); return { leveled: true, level: r.after, xp: r.xp }; }
+        if (r.after > r.before) { await syncLevelRoles(guildId, userId, r.after); bump(guildId, "level_ups"); return { leveled: true, level: r.after, xp: r.xp }; }
         return { leveled: false, level: r.after, xp: r.xp };
     }
 
@@ -79,7 +82,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
             let role = roles.find(r => !r.managed && String(r.name).toLowerCase() === BETA_ROLE.toLowerCase());
             if (!role) role = await api.createRole(guildId, { name: BETA_ROLE, color: BETA_COLOR, hoist: false, mentionable: false, permissions: "0" });
             await api.addRole(guildId, userId, role.id);
-            db.bumpUsage("beta_testers");
+            bump(guildId, "beta_testers");
             return role.id;
         } catch { return null; }
     }
@@ -91,19 +94,19 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         const via = await attribute(guildId);
         const inviterId = via?.inviterId && via.inviterId !== member.id ? via.inviterId : null;
         db.recordJoin(guildId, member.id, inviterId, via?.code ?? null);
-        db.bumpUsage("joins_tracked"); if (inviterId && !rejoin) db.bumpUsage("referrals");
+        bump(guildId, "joins_tracked"); if (inviterId && !rejoin) bump(guildId, "referrals");
         if (c.autorole_id) await api.addRole(guildId, member.id, c.autorole_id).catch(() => {});
         const beta = ownerId && inviterId === ownerId ? await grantBeta(guildId, member.id) : null;
-        if (c.verified_role_id && db.getSteamLink(member.id)?.verified) await api.addRole(guildId, member.id, c.verified_role_id).then(() => db.bumpUsage("steam_verified_roles")).catch(() => {});
+        if (c.verified_role_id && db.getSteamLink(member.id)?.verified) await api.addRole(guildId, member.id, c.verified_role_id).then(() => bump(guildId, "steam_verified_roles")).catch(() => {});
         if (inviterId && !rejoin) {
             if (c.referral_xp > 0) { const r = db.addXp(guildId, inviterId, c.referral_xp); if (r.after > r.before) await syncLevelRoles(guildId, inviterId, r.after); }
             await checkRewards(guildId, inviterId);
         }
         if (c.welcome_on && c.welcome_channel) {
-            db.bumpUsage("welcomes");
+            bump(guildId, "welcomes");
             await api.sendMessage(c.welcome_channel, welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId })).catch(() => {});
         }
-        if (c.welcome_dm && dm && !rejoin) { db.bumpUsage("welcome_dms"); await dm(member.id, welcomeDmPayload({ server: guildName, dashboardUrl })).catch(() => db.bumpUsage("welcome_dm_failed")); }
+        if (c.welcome_dm && dm && !rejoin) { bump(guildId, "welcome_dms"); await dm(member.id, welcomeDmPayload({ server: guildName, dashboardUrl })).catch(() => bump(guildId, "welcome_dm_failed")); }
         if (c.log_channel) await api.sendMessage(c.log_channel, { content: `📥 <@${member.id}> joined (member #${count}).${via ? ` Invite \`${via.code}\`${inviterId ? ` from <@${inviterId}>` : ""}.${beta ? " Given the Beta Tester role." : ""}` : " The invite could not be told."}`, allowed_mentions: { parse: [] } }).catch(() => {});
         return { inviterId, code: via?.code ?? null, rejoin };
     }
@@ -127,7 +130,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         let inv;
         try { inv = await api.createInvite(channelId, { max_age: 0, max_uses: 0, unique: true }); }
         catch (e) { throw Object.assign(new Error(e?.status === 403 ? "I need the Create Invite permission to make your link." : "I could not make an invite link right now."), { userFacing: true }); }
-        db.setInviteLink(guildId, userId, inv.code); db.bumpUsage("invite_links");
+        db.setInviteLink(guildId, userId, inv.code); bump(guildId, "invite_links");
         cacheInvite(guildId, { code: inv.code, uses: 0, max_uses: 0 });
         return `https://discord.gg/${inv.code}`;
     }
@@ -142,7 +145,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         if (!c.verified_role_id) return "no_role";
         if (!db.getSteamLink(userId)?.verified) return "not_verified";
         await api.addRole(guildId, userId, c.verified_role_id);
-        db.bumpUsage("steam_verified_roles");
+        bump(guildId, "steam_verified_roles");
         return "granted";
     }
 

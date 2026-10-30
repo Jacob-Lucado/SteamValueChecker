@@ -1,6 +1,8 @@
 // Community tables: per-server settings, XP and levels, invite tracking and referrals, self-assign roles.
 // Member data here is only Discord ids, XP counters and which invite a member joined with (listed in PRIVACY.md).
 
+import { isHidden } from "./hidden.js";
+
 export const communitySchema = `
 CREATE TABLE IF NOT EXISTS community (
     guild_id        TEXT PRIMARY KEY,
@@ -127,6 +129,7 @@ export function communityStore({ run, get, all, clean, now }) {
     const getXp = (guildId, userId) => clean(get("SELECT * FROM member_xp WHERE guild_id = ? AND user_id = ?", guildId, userId));
     /** Adds XP and returns { before, after, xp, messages }. */
     function addXp(guildId, userId, amount, { message = false, voiceMinutes = 0 } = {}) {
+        if (isHidden(guildId)) return { before: 0, after: 0, xp: 0 }; // a hidden test server keeps no history
         const cur = getXp(guildId, userId);
         const before = cur ? cur.level : 0;
         const xp = Math.max(0, (cur?.xp ?? 0) + Math.round(amount));
@@ -154,6 +157,7 @@ export function communityStore({ run, get, all, clean, now }) {
 
     // ---- invites and referrals ----
     const recordJoin = (guildId, userId, inviterId, code) => {
+        if (isHidden(guildId)) return 0;
         run("UPDATE invite_joins SET left_at = ? WHERE guild_id = ? AND user_id = ? AND left_at IS NULL", now(), guildId, userId);
         return Number(run("INSERT INTO invite_joins (guild_id, user_id, inviter_id, code, joined_at) VALUES (?,?,?,?,?)", guildId, userId, inviterId ?? null, code ?? null, now()).lastInsertRowid);
     };
@@ -209,6 +213,7 @@ export function communityStore({ run, get, all, clean, now }) {
     /** What a member can see and delete about themselves. */
     // ---- moderation cases: one row per warning, timeout, kick, ban and so on ----
     function addCase(guildId, { userId = null, modId = null, action, reason = null, durationS = null }) {
+        if (isHidden(guildId)) return { guild_id: guildId, case_no: 0, user_id: userId, mod_id: modId, action, reason, duration_s: durationS, created_at: now() }; // acted on, never recorded
         const no = (get("SELECT MAX(case_no) AS n FROM mod_cases WHERE guild_id = ?", guildId)?.n ?? 0) + 1;
         run("INSERT INTO mod_cases (guild_id, case_no, user_id, mod_id, action, reason, duration_s, created_at) VALUES (?,?,?,?,?,?,?,?)", guildId, no, userId, modId, action, reason, durationS, now());
         return getCase(guildId, no);
@@ -222,7 +227,7 @@ export function communityStore({ run, get, all, clean, now }) {
         : get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ?", guildId)).n;
     const warnCount = (guildId, userId) => get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).n;
     const clearWarns = (guildId, userId) => run("UPDATE mod_cases SET cleared = 1 WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).changes;
-    const addAnnouncement = (guildId, userId, channelId, messageId, title) => Number(run("INSERT INTO announcements (guild_id, user_id, channel_id, message_id, title, at) VALUES (?,?,?,?,?,?)", guildId, userId, channelId, messageId, title || null, now()).lastInsertRowid);
+    const addAnnouncement = (guildId, userId, channelId, messageId, title) => isHidden(guildId) ? 0 : Number(run("INSERT INTO announcements (guild_id, user_id, channel_id, message_id, title, at) VALUES (?,?,?,?,?,?)", guildId, userId, channelId, messageId, title || null, now()).lastInsertRowid);
     const listAnnouncements = (guildId, limit = 10) => all("SELECT id, user_id, channel_id, message_id, title, at FROM announcements WHERE guild_id = ? ORDER BY id DESC LIMIT ?", guildId, limit).map(clean);
     const modCounts = guildId => Object.fromEntries(all("SELECT action, COUNT(*) AS n FROM mod_cases WHERE guild_id = ? GROUP BY action", guildId).map(r => [r.action, r.n]));
 

@@ -3,6 +3,7 @@
 // database, so they are still there after the bot restarts. Secrets are masked before a line is stored.
 import { appendFileSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { mentionsHidden } from "./hidden.js";
 
 // Node prints these on every start; they say nothing about a problem.
 const NOISE = /ExperimentalWarning|--trace-warnings|\(Use `node --trace/;
@@ -18,7 +19,7 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
     let lines = [];
     if (file) {
         try {
-            lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(l => !NOISE.test(l.text ?? "")).slice(-maxFile);
+            lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(l => !NOISE.test(l.text ?? "") && !mentionsHidden(l.text)).slice(-maxFile);
             // Lines saved by older versions called restarts and owner actions "errors". Sort them out as they load.
             lines = lines.filter(l => !/^\[exit\] code 0,/.test(l.text)).map(l => {
                 if (/^\[shutdown\] received|^\[dashboard\] owner \d+ (started|ran|cleared)/.test(l.text)) return { ...l, level: "activity", text: l.text.replace(/^\[shutdown\] received (\w+).*$/, "[restart] Bot stopped: the host sent $1 (a deploy or restart)").replace(/^\[dashboard\] owner \d+ /, "[dashboard] Bot owner ") };
@@ -32,6 +33,7 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
     function add(level, args) {
         let text = mask(args.map(a => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : safeJson(a))).join(" ")).slice(0, 4000);
         if (NOISE.test(text)) return null; // harmless Node notice, not worth an admin entry
+        if (mentionsHidden(text)) return null; // a hidden test server (hidden.js) is never logged
         // Things people did (a broadcast, a giveaway) and restarts are not problems: they get their own "activity" level.
         if (level === "info" && text.startsWith(ACTIVITY)) { level = "activity"; text = text.slice(ACTIVITY.length); }
         const entry = { at: now(), level, text };
@@ -59,7 +61,10 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
     function capture(target = console) {
         for (const [method, level] of Object.entries(LEVELS)) {
             const original = target[method].bind(target);
-            target[method] = (...args) => { try { add(level, args); } catch { /* ignore */ } original(...args); };
+            target[method] = (...args) => {
+                try { if (args.some(a => mentionsHidden(typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : safeJson(a)))) return; add(level, args); } catch { /* ignore */ }
+                original(...args);
+            };
         }
     }
 

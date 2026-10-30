@@ -62,6 +62,7 @@ import { salePrep, saleRecap } from "../saleprep.js";
 import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
+import { isHidden } from "../hidden.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
 import { MAX_KEYS } from "../gwstore.js";
 
@@ -1562,10 +1563,10 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             const ins = db.adminInsights(), info = botInfo ? botInfo() : null, mem = process.memoryUsage();
-            const live = guildList ? guildList() : [];
+            const live = (guildList ? guildList() : []).filter(g => !isHidden(g.id));
             const byId = new Map(live.map(g => [g.id, g]));
             // Every server the bot is in, with what has been set up there. Servers that never set anything are still listed.
-            const rows = new Map(ins.servers.map(r => [r.id, r]));
+            const rows = new Map(ins.servers.filter(r => !isHidden(r.id)).map(r => [r.id, r]));
             const servers = [...new Set([...live.map(g => g.id), ...rows.keys()])].map(id => ({ id, name: byId.get(id)?.name ?? null, members: byId.get(id)?.members ?? null, tracked: rows.get(id)?.members ?? 0, channel: rows.has(id), freeFeed: Boolean(rows.get(id)?.free_feed), groupMin: rows.get(id)?.group_min ?? 0, digest: Boolean(rows.get(id)?.weekly_digest), inServer: guildList ? byId.has(id) : null }))
                 .sort((a, b) => (b.members ?? 0) - (a.members ?? 0) || b.tracked - a.tracked);
             return { ...ins, servers, bot: { version: info?.version ?? null, uptime: info?.uptime ?? null, pingMs: info?.pingMs ?? null, servers: info?.servers ?? null, rssMb: Math.round(mem.rss / 1048576), node: process.version } };
@@ -1574,7 +1575,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/admin/community": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
-            const live = new Map((guildList?.() ?? []).map(g => [g.id, g]));
+            const live = new Map((guildList?.() ?? []).filter(g => !isHidden(g.id)).map(g => [g.id, g]));
             const c = db.adminCommunity();
             return { ...c, membersIntent: membersIntent(), servers: c.servers.map(r => ({ ...r, name: live.get(r.id)?.name ?? null, members: live.get(r.id)?.members ?? null })) };
         },

@@ -1,5 +1,7 @@
 // Numbers and wording for /about and the dashboard's About panel. Aggregate only: no names, IDs or keys.
 
+import { isHidden } from "./hidden.js";
+
 /** "3d 4h", "5h 12m", "42s": the two biggest units. */
 export function formatDuration(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
@@ -18,7 +20,7 @@ export const assetBase = cfg => cfg.dashboard?.publicUrl ?? null;
 export function collectAbout({ client = null, db, cfg, startedAt, version = "1.0.0", now = () => Date.now() }) {
     const stats = db.stats();
     const totals = db.giveawayTotals?.() ?? { giveaways: 0, redeemed: 0 };
-    const guilds = client?.guilds?.cache;
+    const guilds = client?.guilds?.cache ? { size: [...client.guilds.cache.values()].filter(g => !isHidden(g.id)).length, values: () => [...client.guilds.cache.values()].filter(g => !isHidden(g.id)) } : undefined;
     const ping = client?.ws?.ping;
     const base = assetBase(cfg);
     return {
