@@ -30,6 +30,8 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
 
     const bearer = token => ({ Authorization: `Bearer ${token}` });
     const bot = { Authorization: `Bot ${botToken}` };
+    /** Discord's audit log shows this text next to the action. */
+    const audit = reason => (reason ? { "X-Audit-Log-Reason": encodeURIComponent(String(reason).slice(0, 400)) } : {});
 
     return {
         authorizeUrl(state, { linkedRoles = false } = {}) {
@@ -108,6 +110,21 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
         createInvite: (channelId, body) => call(`/channels/${encodeURIComponent(channelId)}/invites`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
         listInvites: guildId => call(`/guilds/${encodeURIComponent(guildId)}/invites`, { headers: bot }),
         editMessage: (channelId, messageId, payload) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
+
+        // ---- moderation (the bot's own permissions) ----
+        /** A server member, or null when they are not in the server. */
+        async getMember(guildId, userId) {
+            try { return await call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`, { headers: bot }); }
+            catch (e) { if (e?.status === 404) return null; throw e; }
+        },
+        /** Time a member out until an ISO date, or lift it with null. */
+        timeoutMember: (guildId, userId, untilIso, reason) => call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`, { method: "PATCH", headers: { ...bot, ...audit(reason), "Content-Type": "application/json" }, body: JSON.stringify({ communication_disabled_until: untilIso }) }),
+        kickMember: (guildId, userId, reason) => call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`, { method: "DELETE", headers: { ...bot, ...audit(reason) } }),
+        banMember: (guildId, userId, { deleteSeconds = 0, reason } = {}) => call(`/guilds/${encodeURIComponent(guildId)}/bans/${encodeURIComponent(userId)}`, { method: "PUT", headers: { ...bot, ...audit(reason), "Content-Type": "application/json" }, body: JSON.stringify({ delete_message_seconds: deleteSeconds }) }),
+        unbanMember: (guildId, userId, reason) => call(`/guilds/${encodeURIComponent(guildId)}/bans/${encodeURIComponent(userId)}`, { method: "DELETE", headers: { ...bot, ...audit(reason) } }),
+        getMessages: (channelId, limit = 100) => call(`/channels/${encodeURIComponent(channelId)}/messages?limit=${Math.min(100, Math.max(1, limit))}`, { headers: bot }),
+        bulkDelete: (channelId, ids) => call(`/channels/${encodeURIComponent(channelId)}/messages/bulk-delete`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify({ messages: ids }) }),
+        deleteMessage: (channelId, messageId) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "DELETE", headers: bot }),
 
         async sendMessage(channelId, payload) {
             return call(`/channels/${encodeURIComponent(channelId)}/messages`, {

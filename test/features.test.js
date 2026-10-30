@@ -400,6 +400,8 @@ test("every slash command has a dashboard counterpart", async () => {
         "setup": "GET /api/servers/setup", "gamenight": "POST /api/gamenight", "bug": "POST /api/tickets", "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",
         "community/setup": "POST /api/community/setup", "community/status": "GET /api/community", "community/welcome": "POST /api/community/welcome", "community/autorole": "POST /api/community/autorole", "community/xp": "POST /api/community/xp", "community/levelrole": "POST /api/community/levelrole", "community/referral": "POST /api/community/referral",
         rank: "GET /api/community/rank", levels: "GET /api/community/leaderboard", "invites/me": "GET /api/community/invites", "invites/top": "GET /api/community/invites", "invites/link": "POST /api/community/invite-link", "emoji/import": "POST /api/community/emoji", "emoji/list": "GET /api/community/emoji",
+        "mod/warn": "POST /api/mod/action", "mod/timeout": "POST /api/mod/action", "mod/untimeout": "POST /api/mod/action", "mod/kick": "POST /api/mod/action", "mod/ban": "POST /api/mod/action", "mod/unban": "POST /api/mod/action", "mod/purge": "POST /api/mod/action",
+        "mod/warnings": "GET /api/mod/cases", "mod/cases": "GET /api/mod/cases", "mod/clearwarns": "POST /api/mod/clearwarns", "mod/log": "POST /api/mod/log",
         help: "cfg.help", about: "GET /api/about", privacy: "cfg.privacy"
     };
     // Read command names from the source so this runs without discord.js installed.
@@ -508,7 +510,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "currency", "freegames", "friendCmd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "levels", "lfgCmd", "rank", "setup"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "levels", "lfgCmd", "modCmd", "rank", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);
     assert.match(src, /const serverOnly = b => b[\s\S]*?setContexts\(InteractionContextType\.Guild\);/, "server-only commands stay out of DMs");
@@ -736,7 +738,7 @@ test("server free feed posts games once per server, never DLC; stats are counts 
 
 test("help mentions the newer commands and stays within what the bot can send", async () => {
     const { HELP } = await import("../src/text.js");
-    assert.ok(HELP.length < 8000, `help is ${HELP.length} characters`);
+    assert.ok(HELP.length <= 4096, `help is ${HELP.length} characters (Discord embeds hold 4096)`);
     const { commands } = await import("../src/commands.js");
     for (const c of commands) {
         const j = c.toJSON ? c.toJSON() : c;

@@ -65,6 +65,20 @@ CREATE TABLE IF NOT EXISTS community_usage (
     n       INTEGER NOT NULL DEFAULT 0,
     last_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS mod_cases (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id    TEXT NOT NULL,
+    case_no     INTEGER NOT NULL,
+    user_id     TEXT,
+    mod_id      TEXT,
+    action      TEXT NOT NULL,
+    reason      TEXT,
+    duration_s  INTEGER,
+    cleared     INTEGER NOT NULL DEFAULT 0,
+    created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mod_cases_guild ON mod_cases (guild_id, case_no);
+CREATE INDEX IF NOT EXISTS mod_cases_user ON mod_cases (guild_id, user_id);
 CREATE TABLE IF NOT EXISTS self_roles (
     guild_id TEXT NOT NULL,
     role_id  TEXT NOT NULL,
@@ -74,7 +88,7 @@ CREATE TABLE IF NOT EXISTS self_roles (
 `;
 
 const SETTABLE = new Set(["welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
-    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id"]);
+    "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel"]);
 
 /** XP needed to go from `level` to the next one. */
 export const xpForNext = level => 5 * level * level + 50 * level + 100;
@@ -88,7 +102,7 @@ export function levelFromXp(xp) {
 export function communityStore({ run, get, all, clean, now }) {
     const getCommunity = guildId => clean(get("SELECT * FROM community WHERE guild_id = ?", guildId))
         ?? { guild_id: guildId, welcome_on: 1, welcome_channel: null, welcome_msg: null, welcome_dm: 0, leave_on: 0, autorole_id: null, log_channel: null, xp_on: 1, xp_mult: 1,
-            levelup_mode: "same", levelup_channel: null, referral_xp: 100, mod_role_id: null, member_role_id: null, setup_at: null, verified_role_id: null };
+            levelup_mode: "same", levelup_channel: null, referral_xp: 100, mod_role_id: null, member_role_id: null, setup_at: null, verified_role_id: null, mod_log_channel: null };
     function setCommunity(guildId, patch) {
         run("INSERT OR IGNORE INTO community (guild_id) VALUES (?)", guildId);
         for (const [k, v] of Object.entries(patch)) {
@@ -167,8 +181,8 @@ export function communityStore({ run, get, all, clean, now }) {
         const servers = all(`SELECT c.guild_id AS id, c.setup_at, c.welcome_on, c.welcome_dm, c.leave_on, c.xp_on, c.xp_mult, c.autorole_id IS NOT NULL AS autorole,
             (SELECT COUNT(*) FROM member_xp m WHERE m.guild_id = c.guild_id AND m.xp > 0) AS xp_members, (SELECT COALESCE(SUM(xp),0) FROM member_xp m WHERE m.guild_id = c.guild_id) AS xp_total,
             (SELECT COUNT(*) FROM invite_joins j WHERE j.guild_id = c.guild_id) AS joins, (SELECT COUNT(*) FROM invite_joins j WHERE j.guild_id = c.guild_id AND j.inviter_id IS NOT NULL) AS referred,
-            (SELECT COUNT(*) FROM level_roles l WHERE l.guild_id = c.guild_id) AS level_roles, (SELECT COUNT(*) FROM referral_rewards r WHERE r.guild_id = c.guild_id) AS rewards
-            FROM community c ORDER BY xp_total DESC LIMIT 100`).map(r => ({ ...clean(r), xp_members: Number(r.xp_members), xp_total: Number(r.xp_total), joins: Number(r.joins), referred: Number(r.referred) }));
+            (SELECT COUNT(*) FROM level_roles l WHERE l.guild_id = c.guild_id) AS level_roles, (SELECT COUNT(*) FROM referral_rewards r WHERE r.guild_id = c.guild_id) AS rewards, (SELECT COUNT(*) FROM mod_cases x WHERE x.guild_id = c.guild_id) AS mod_cases
+            FROM community c ORDER BY xp_total DESC LIMIT 100`).map(r => ({ ...clean(r), xp_members: Number(r.xp_members), xp_total: Number(r.xp_total), joins: Number(r.joins), referred: Number(r.referred), mod_cases: Number(r.mod_cases) }));
         const gw = {
             crossServer: n("SELECT COUNT(*) AS n FROM giveaways WHERE is_global = 1"), partner: n("SELECT COUNT(*) AS n FROM giveaways WHERE host_kind = 'partner'"),
             withSteps: n("SELECT COUNT(*) AS n FROM giveaways WHERE steps IS NOT NULL"), crossEntries: n("SELECT COUNT(*) AS n FROM giveaway_entries e JOIN giveaways g ON g.id = e.giveaway_id WHERE g.is_global = 1"),
@@ -177,13 +191,31 @@ export function communityStore({ run, get, all, clean, now }) {
         return {
             totals: { servers: servers.length, built: servers.filter(s => s.setup_at).length, welcomeOn: servers.filter(s => s.welcome_on).length, xpOn: servers.filter(s => s.xp_on).length,
                 xpMembers: n("SELECT COUNT(*) AS n FROM member_xp WHERE xp > 0"), xpTotal: n("SELECT COALESCE(SUM(xp),0) AS n FROM member_xp"), joins: n("SELECT COUNT(*) AS n FROM invite_joins"),
-                referred: n("SELECT COUNT(*) AS n FROM invite_joins WHERE inviter_id IS NOT NULL"), inviteLinks: n("SELECT COUNT(*) AS n FROM invite_links"), levelRoles: n("SELECT COUNT(*) AS n FROM level_roles"), rewards: n("SELECT COUNT(*) AS n FROM referral_rewards"), selfRoles: n("SELECT COUNT(*) AS n FROM self_roles") },
+                referred: n("SELECT COUNT(*) AS n FROM invite_joins WHERE inviter_id IS NOT NULL"), inviteLinks: n("SELECT COUNT(*) AS n FROM invite_links"), levelRoles: n("SELECT COUNT(*) AS n FROM level_roles"), rewards: n("SELECT COUNT(*) AS n FROM referral_rewards"), selfRoles: n("SELECT COUNT(*) AS n FROM self_roles"), modCases: n("SELECT COUNT(*) AS n FROM mod_cases"), modServers: n("SELECT COUNT(DISTINCT guild_id) AS n FROM mod_cases"), activeWarnings: n("SELECT COUNT(*) AS n FROM mod_cases WHERE action = 'warn' AND cleared = 0") },
             usage: usageCounts(), servers, giveaways: gw
         };
     }
 
     /** What a member can see and delete about themselves. */
+    // ---- moderation cases: one row per warning, timeout, kick, ban and so on ----
+    function addCase(guildId, { userId = null, modId = null, action, reason = null, durationS = null }) {
+        const no = (get("SELECT MAX(case_no) AS n FROM mod_cases WHERE guild_id = ?", guildId)?.n ?? 0) + 1;
+        run("INSERT INTO mod_cases (guild_id, case_no, user_id, mod_id, action, reason, duration_s, created_at) VALUES (?,?,?,?,?,?,?,?)", guildId, no, userId, modId, action, reason, durationS, now());
+        return getCase(guildId, no);
+    }
+    const getCase = (guildId, no) => clean(get("SELECT * FROM mod_cases WHERE guild_id = ? AND case_no = ?", guildId, no)) ?? null;
+    const listCases = (guildId, { userId = null, limit = 25, offset = 0 } = {}) => userId
+        ? all("SELECT * FROM mod_cases WHERE guild_id = ? AND user_id = ? ORDER BY case_no DESC LIMIT ? OFFSET ?", guildId, userId, limit, offset).map(clean)
+        : all("SELECT * FROM mod_cases WHERE guild_id = ? ORDER BY case_no DESC LIMIT ? OFFSET ?", guildId, limit, offset).map(clean);
+    const countCases = (guildId, userId = null) => (userId
+        ? get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND user_id = ?", guildId, userId)
+        : get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ?", guildId)).n;
+    const warnCount = (guildId, userId) => get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).n;
+    const clearWarns = (guildId, userId) => run("UPDATE mod_cases SET cleared = 1 WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).changes;
+    const modCounts = guildId => Object.fromEntries(all("SELECT action, COUNT(*) AS n FROM mod_cases WHERE guild_id = ? GROUP BY action", guildId).map(r => [r.action, r.n]));
+
     const communityExport = userId => ({
+        moderation: all("SELECT guild_id, case_no, action, reason, duration_s, cleared, created_at FROM mod_cases WHERE user_id = ?", userId).map(clean),
         xp: all("SELECT guild_id, xp, level, messages, voice_minutes FROM member_xp WHERE user_id = ?", userId).map(clean),
         joined_with: all("SELECT guild_id, inviter_id, code, joined_at, left_at FROM invite_joins WHERE user_id = ?", userId).map(clean),
         invited: all("SELECT guild_id, user_id, joined_at, left_at FROM invite_joins WHERE inviter_id = ?", userId).map(clean)
@@ -193,11 +225,13 @@ export function communityStore({ run, get, all, clean, now }) {
         run("DELETE FROM invite_joins WHERE user_id = ?", userId);
         run("UPDATE invite_joins SET inviter_id = NULL WHERE inviter_id = ?", userId);
         run("DELETE FROM invite_links WHERE user_id = ?", userId);
+        run("DELETE FROM mod_cases WHERE user_id = ?", userId);
+        run("UPDATE mod_cases SET mod_id = NULL WHERE mod_id = ?", userId);
     };
     /** Server gone: drop its community data. */
-    const forgetCommunityGuild = guildId => { for (const t of ["community", "member_xp", "level_roles", "invite_joins", "invite_links", "referral_rewards", "self_roles"]) run(`DELETE FROM ${t} WHERE guild_id = ?`, guildId); };
+    const forgetCommunityGuild = guildId => { for (const t of ["community", "member_xp", "level_roles", "invite_joins", "invite_links", "referral_rewards", "self_roles", "mod_cases"]) run(`DELETE FROM ${t} WHERE guild_id = ?`, guildId); };
 
     return { getCommunity, setCommunity, allCommunity, getXp, addXp, setXp, xpRank, xpTop, countXpMembers, listLevelRoles, setLevelRole, removeLevelRole,
         recordJoin, recordLeave, everJoined, inviteStats, inviteTop, whoInvited, getInviteLink, setInviteLink, inviteLinkOwner, listRewards, setReward, removeReward,
-        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, communityExport, forgetCommunityUser, forgetCommunityGuild };
+        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, modCounts, communityExport, forgetCommunityUser, forgetCommunityGuild };
 }

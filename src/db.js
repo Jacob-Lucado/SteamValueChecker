@@ -228,6 +228,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "playing", "INTEGER");
     addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("community", "verified_role_id", "TEXT");
+    addColumn("community", "mod_log_channel", "TEXT");
     addColumn("giveaways", "host_name", "TEXT");
     addColumn("giveaways", "host_kind", "TEXT");
     addColumn("giveaways", "host_links", "TEXT");

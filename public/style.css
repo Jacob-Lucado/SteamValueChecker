@@ -778,3 +778,6 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .shop-soon::before, .shop-badge { animation: none; } }
 .lr-option { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .lr-option p { margin: 4px 0 10px; }
+
+.case-row { padding: 8px 0; border-bottom: 1px solid var(--line, rgba(128,128,128,.2)); }
+.case-row:last-child { border-bottom: 0; }

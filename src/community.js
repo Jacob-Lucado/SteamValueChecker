@@ -10,7 +10,7 @@ export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(
 const str = n => String(n);
 
 /** Permission number for the invite link: what the existing features need plus roles, invites, emojis and events. */
-export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14) | B(15) | B(16) | B(18) | B(28) | B(30) | B(33) | B(6));
+export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14) | B(15) | B(16) | B(18) | B(28) | B(30) | B(33) | B(6) | B(1) | B(2) | B(13) | B(40));
 
 /** The shape of a typical gaming community. Names are the lookup keys, so running setup twice never duplicates anything. */
 export const TEMPLATE = {
@@ -52,7 +52,8 @@ export const TEMPLATE = {
         { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "afk", name: "AFK" }] },
         { name: "🛠️ STAFF", staff: true, channels: [
             { key: "staffchat", name: "staff-chat", topic: "Moderators only" },
-            { key: "modlog", name: "mod-log", topic: "Joins, leaves and who invited whom" },
+            { key: "modlog", name: "mod-log", topic: "Every warning, timeout, kick, ban and message cleanup" },
+            { key: "memberlog", name: "member-log", topic: "Joins, leaves and who invited whom" },
             { key: "tickets", name: "support-tickets", topic: "Member help tickets" },
             { key: "botlogs", name: "bot-logs", topic: "Bot notices" }] }
     ],
@@ -188,8 +189,8 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setGuildChannel(guildId, chIds.deals, userId ?? botId); db.setFreeFeed(guildId, true);
     db.setGameNight(guildId, true);
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
-    db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches });
-    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, xp_on: 1, setup_at: Date.now() });
+    db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
+    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
     db.setReward(guildId, 5, roleIds.regular); // a first referral reward, change or remove it any time
@@ -204,7 +205,8 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts." });
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/wishlist import` to get your own alerts." });
     await say(api, chIds.tickets, { content: "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons." });
-    await say(api, chIds.modlog, { content: "Joins, leaves and which invite each member used are logged here." });
+    await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
+    await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
 
     // ---- server settings (all best effort: a missing permission only skips that part) ----
     if (chIds.afk) await api.editGuild(guildId, { afk_channel_id: chIds.afk, afk_timeout: 900 }).catch(() => notes.push("Could not set the AFK channel (needs Manage Server)."));

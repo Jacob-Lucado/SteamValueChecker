@@ -48,6 +48,8 @@ import { createTicketHandlers } from "./tickethandlers.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
 import { createCommunity } from "./communityservice.js";
 import { createCommunityHandlers, setupSummary } from "./communityhandlers.js";
+import { createModeration } from "./moderation.js";
+import { createModHandlers } from "./modhandlers.js";
 import { communitySetup, isFreshGuild } from "./community.js";
 import { registerLinkedRoles } from "./linkedroles.js";
 
@@ -99,6 +101,8 @@ const notifier = createNotifier({ db, discord });
 // Community features (welcome, XP, invites, emoji) use the bot's REST helper, the same one the dashboard uses.
 const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.dashboard?.clientSecret ?? "", botToken: cfg.token, redirectUri: "http://localhost/unused" });
 const community = createCommunity({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p) });
+const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
+const modUi = createModHandlers({ db, mod: moderation });
 const communityUi = createCommunityHandlers({ db, api: botRest, service: community, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
 // Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).
 const voiceMap = guildId => {
@@ -487,6 +491,7 @@ client.on(Events.InteractionCreate, async i => {
             case "lfg": return await lfgUi.handleCommand(i);
             case "calendar": return await calendarUi.handle(i);
             case "setup": return await setupUi.handleCommand(i);
+            case "mod": return await modUi.handleCommand(i);
             case "community": case "rank": case "levels": case "invites": case "emoji": return await communityUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
             case "sales": return await handlers.handleSales(i);
@@ -517,7 +522,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
+    const dashboard = createDashboard({ db, itad, rest, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: m => console.error(`[dashboard] ${m}`) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

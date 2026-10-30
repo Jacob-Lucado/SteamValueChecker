@@ -441,6 +441,45 @@ const invitesCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("top").setDescription("Who has brought in the most members"))
     .addSubcommand(s => s.setName("link").setDescription("Get your own invite link. Everyone who joins with it counts for you"));
 
+const modCmd = new SlashCommandBuilder()
+    .setName("mod")
+    .setDescription("Moderators: warn, time out, kick, ban and clean up. Every action is logged")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addSubcommand(s => s.setName("warn").setDescription("Warn a member (they get a private message and it is logged)")
+        .addUserOption(o => o.setName("user").setDescription("Who to warn").setRequired(true))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400)))
+    .addSubcommand(s => s.setName("warnings").setDescription("A member's warnings and everything done to them")
+        .addUserOption(o => o.setName("user").setDescription("Who").setRequired(true))
+        .addIntegerOption(o => o.setName("page").setDescription("Page number").setMinValue(1)))
+    .addSubcommand(s => s.setName("clearwarns").setDescription("Clear a member's active warnings (the history stays)")
+        .addUserOption(o => o.setName("user").setDescription("Who").setRequired(true)))
+    .addSubcommand(s => s.setName("timeout").setDescription("Stop a member from talking for a while")
+        .addUserOption(o => o.setName("user").setDescription("Who").setRequired(true))
+        .addStringOption(o => o.setName("duration").setDescription("How long: 10m, 2h, 3d (1 minute to 28 days)").setRequired(true).setMaxLength(10))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400)))
+    .addSubcommand(s => s.setName("untimeout").setDescription("Lift a timeout")
+        .addUserOption(o => o.setName("user").setDescription("Who").setRequired(true))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400)))
+    .addSubcommand(s => s.setName("kick").setDescription("Remove a member (they can rejoin)")
+        .addUserOption(o => o.setName("user").setDescription("Who").setRequired(true))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400)))
+    .addSubcommand(s => s.setName("ban").setDescription("Ban a member")
+        .addUserOption(o => o.setName("user").setDescription("Who").setRequired(true))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400))
+        .addIntegerOption(o => o.setName("delete_days").setDescription("Also delete their messages from the last 0 to 7 days").setMinValue(0).setMaxValue(7)))
+    .addSubcommand(s => s.setName("unban").setDescription("Lift a ban")
+        .addStringOption(o => o.setName("user_id").setDescription("The banned person's user ID").setRequired(true).setMaxLength(25))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400)))
+    .addSubcommand(s => s.setName("purge").setDescription("Delete recent messages (newer than 14 days)")
+        .addIntegerOption(o => o.setName("amount").setDescription("How many, 1 to 100").setRequired(true).setMinValue(1).setMaxValue(100))
+        .addUserOption(o => o.setName("user").setDescription("Only this person's messages"))
+        .addChannelOption(o => o.setName("channel").setDescription("Which channel (default: this one)").addChannelTypes(...textChan)))
+    .addSubcommand(s => s.setName("cases").setDescription("Recent moderation actions in this server")
+        .addUserOption(o => o.setName("user").setDescription("Only this person"))
+        .addIntegerOption(o => o.setName("page").setDescription("Page number").setMinValue(1)))
+    .addSubcommand(s => s.setName("log").setDescription("Choose where moderation actions are logged (Manage Server)")
+        .addChannelOption(o => o.setName("channel").setDescription("The mod log channel").addChannelTypes(...textChan)));
+
 const emojiCmd = new SlashCommandBuilder()
     .setName("emoji")
     .setDescription("Server managers: add custom emoji to this server")
@@ -468,6 +507,6 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, changelog, mydata, help, about, privacy].map(everywhere),
-    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd].map(serverOnly),
+    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());

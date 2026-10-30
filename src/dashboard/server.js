@@ -19,6 +19,7 @@ import { ItadError } from "../itad.js";
 import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { createCommunityDash, CommunityError } from "./communitydash.js";
+import { createModDash, ModDashError } from "./moddash.js";
 import { BOT_PERMISSIONS } from "../community.js";
 import { connectionPayload } from "../linkedroles.js";
 import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
@@ -81,7 +82,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000 };
+const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -93,6 +94,13 @@ class HttpError extends Error {
     }
 }
 
+const MOD_PERMS = { moderate: { bit: 1n << 40n, text: "Moderate Members" }, kick: { bit: 1n << 1n, text: "Kick Members" }, ban: { bit: 1n << 2n, text: "Ban Members" }, manageMessages: { bit: 1n << 13n, text: "Manage Messages" }, manageGuild: { bit: MANAGE_GUILD, text: "Manage Server" } };
+const MOD_ACTION_PERM = { warn: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", purge: "manageMessages" };
+/** Does this person have the permission in that server (owner and Administrator have all of them)? */
+const hasGuildPerm = (g, need) => {
+    if (g.owner) return true;
+    try { const p = BigInt(g.permissions ?? "0"); return (p & ADMINISTRATOR) !== 0n || (p & MOD_PERMS[need].bit) !== 0n; } catch { return false; }
+};
 const isManager = g => {
     if (g.owner) return true;
     try {
@@ -101,7 +109,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, membersIntent = () => true, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -240,6 +248,17 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     const comm = async fn => {
         if (!cd) throw new HttpError(503, "Community features are not available on this bot.");
         try { return await fn(); } catch (e) { if (e instanceof CommunityError) throw new HttpError(e.status, e.message); throw e; }
+    };
+    const md = moderation ? createModDash({ db, rest, mod: moderation }) : null;
+    /** Moderation from the dashboard needs the same Discord permission the command does, on top of seeing the server. */
+    const modGuild = (s, id, need) => {
+        const g = guildFor(s, id);
+        if (!hasGuildPerm(g, need)) throw new HttpError(403, `You need the ${MOD_PERMS[need].text} permission there.`);
+        return g;
+    };
+    const modr = async fn => {
+        if (!md) throw new HttpError(503, "Moderation is not available on this bot.");
+        try { return await fn(); } catch (e) { if (e instanceof ModDashError) throw new HttpError(e.status, e.message); throw e; }
     };
     const botIn = g => { if (botGuilds && !botGuilds(g.id)) throw new HttpError(400, "The bot is not in that server yet. Invite it first."); };
     const num = v => (v === null || v === undefined || v === "" ? null : Number(v));
@@ -1186,6 +1205,29 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         "GET /api/community/xp": async (req, _b, url) => {
             const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
             return comm(async () => ({ bot: botGuilds ? Boolean(botGuilds(g.id)) : null, ...(await cd.xpPage(g.id, s.userId, isManager(g), url.searchParams.get("page"))) }));
+        },
+        "GET /api/mod": async (req, _b, url) => {
+            const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate"); botIn(g);
+            return modr(() => md.overview(g.id, { manager: isManager(g), perms: Object.keys(MOD_PERMS).filter(k => hasGuildPerm(g, k)) }));
+        },
+        "GET /api/mod/cases": async (req, _b, url) => {
+            const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate");
+            return modr(() => md.cases(g.id, url.searchParams.get("user"), url.searchParams.get("page")));
+        },
+        "POST /api/mod/action": async (req, body) => {
+            const s = session(req); const action = String(body.action ?? "");
+            if (!MOD_ACTION_PERM[action]) throw new HttpError(400, "Choose an action.");
+            const g = modGuild(s, String(body.guild_id), MOD_ACTION_PERM[action]); botIn(g);
+            const undo = cooldown(s.userId, "mod");
+            try { return await modr(() => md.act(g.id, s.userId, action, body)); } catch (e) { undo(); throw e; }
+        },
+        "POST /api/mod/clearwarns": async (req, body) => {
+            const s = session(req); const g = modGuild(s, String(body.guild_id), "moderate");
+            return modr(() => md.clearWarns(g.id, body.user));
+        },
+        "POST /api/mod/log": async (req, body) => {
+            const s = session(req); const g = modGuild(s, String(body.guild_id), "manageGuild"); botIn(g);
+            return modr(() => md.setLog(g.id, body.channel_id));
         },
         "POST /api/community/emoji": async (req, body) => {
             const s = session(req); const g = managerGuild(s, String(body.guild_id)); botIn(g);
