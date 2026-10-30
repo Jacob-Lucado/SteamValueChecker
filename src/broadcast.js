@@ -42,7 +42,7 @@ export const noticeEmbed = (title, body, base = null, guild = null) => ({ color:
     title: title || "Steam Value Checker notice", description: body,
     footer: { text: guild?.name ? `Sent to ${guild.name} by the bot's owner/developer. It is not from this server's staff. Questions? Use the Support page on the dashboard.`
         : "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff. Questions? Use the Support page on the dashboard." },
-    ...(base ? { image: { url: `${base}/banner.png` }, thumbnail: { url: guild?.icon || `${base}/creator.png` } } : {}) });
+    ...(base ? { image: { url: `${base}/banner.png` }, thumbnail: { url: `${base}/creator.png` } } : {}) });
 
 export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, promoPayload = null, guildInfo = null, guildBanner = null, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     let running = null;
