@@ -260,12 +260,15 @@
       h("section", { class: "lp-hero" },
         h("div", { class: "lp-hero-text" },
           failed && h("div", { class: "notice warn", text: "Sign-in did not work. Please try again." }),
-          h("div", { class: "lp-kicker", text: "Free Discord bot for PC gamers" }),
+          state.freeNow ? h("a", { class: "lp-live", href: state.me ? "#/free" : "/auth/login" }, h("i", { class: "lp-dot" }), `${state.freeNow} free offer${state.freeNow === 1 ? "" : "s"} live right now`) : h("div", { class: "lp-kicker", text: "Free Discord bot for PC gamers" }),
           h("h1", { text: "Know what your games are worth. Never miss a sale." }),
           h("p", { class: "lp-sub", text: "Price your whole library, watch your wishlist for deals, get told when games are free, and run key giveaways in your server. All from Discord, with a dashboard that does it all too." }),
           cta(),
           h("p", { class: "muted small", text: "No passwords, no game keys, no charge. Sign-in shares only your name, avatar and server list." })),
         h("div", { class: "lp-hero-art" }, mock)),
+
+      h("div", { class: "lp-ticker", "aria-hidden": "true" }, h("div", { class: "lp-ticker-track" },
+        ...[0, 1].flatMap(() => ["Library value", "Wishlist alerts", "Free game alerts", "Key giveaways", "Bundle check", "Play next", "Price history"].map(t => h("span", { text: t }))))),
 
       ab && (n(ab.servers) || n(ab.gamesWatched)) ? h("section", { class: "lp-stats" },
         stat("Servers", n(ab.servers)), stat("Games watched", n(ab.gamesWatched)), stat("Alerts in the last 24h", n(ab.alerts24h)), stat("Giveaway keys redeemed", n(ab.redeemed))) : null,
@@ -2264,7 +2267,7 @@
     app.replaceChildren(holder);
     try {
       const x = await api("/api/about");
-      state.about = x.about; state.creator = x.creator;
+      state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null;
       const ab = x.about, c = x.creator;
       const n = v => (v === null || v === undefined ? "-" : Number(v).toLocaleString());
       const tile = (icon, k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: `${icon} ${k}` }), h("div", { class: "v", text: String(v) }));
@@ -3267,7 +3270,7 @@
   async function boot() {
     try {
       if (!state.cfg) state.cfg = await api("/api/config");
-      try { const x = await api("/api/about"); state.about = x.about; state.creator = x.creator; } catch { state.about = null; state.creator = null; }
+      try { const x = await api("/api/about"); state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null; } catch { state.about = null; state.creator = null; }
       try { state.me = await api("/api/me"); } catch { state.me = null; }
     } catch (e) {
       app.replaceChildren(h("div", { class: "notice warn", text: e.message }));

@@ -1096,7 +1096,11 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
 
         // ----- free games right now, grouped by platform -----
         // Live numbers for the About panel. Aggregate only, so it is open to everyone like the Help page.
-        "GET /api/about": async () => ({ about: botInfo ? botInfo() : null, creator: config.creator ?? null }),
+        "GET /api/about": async () => {
+            let freeNow = null; // a count only: shown on the home page as "N free offers live right now"
+            try { freeNow = (await itad.getGiveawayList()).filter(g => /^https:\/\//i.test(g.url ?? "")).length; } catch { /* the page just leaves it out */ }
+            return { about: botInfo ? botInfo() : null, creator: config.creator ?? null, freeNow };
+        },
 
         // Public, like /about: aggregate health only, nothing about any person.
         "GET /api/status": async () => {
