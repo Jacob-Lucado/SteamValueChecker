@@ -1278,11 +1278,23 @@ test("Sign in through Steam: Steam's reply is verified, then a Discord sign-in a
     assert.equal((await t.request("/api/me")).status, 401);
     state = await start();
     const r2 = await t.request(`/auth/steam/return?${reply(state)}`);
-    assert.equal(r2.headers.get("location"), "/#/steam");
-    const me = await t.request("/api/me");
-    assert.equal(me.status, 200); assert.equal(me.data.steamOnly, true); assert.equal(me.data.isOwner, false);
-    assert.equal(me.data.steam.linked, true);
+    assert.equal(r2.headers.get("location"), "/auth/login", "Steam hands over to Discord, which says yes without asking");
+    assert.equal((await t.request("/api/me")).status, 401, "not signed in until Discord finishes");
+    await t.signIn();
+    let me = await t.request("/api/me");
+    assert.equal(me.status, 200); assert.equal(me.data.steamOnly, false, "a full Discord session, so servers and tools load"); assert.equal(me.data.steam.linked, true);
+    assert.equal((await t.request("/api/servers/list?guild=g-admin")).status, 200, "server tools load");
 
+    // If Discord will not finish silently, Steam alone still gets in (no servers), and the page offers the Discord half.
+    await t.request("/auth/logout", { method: "POST", body: {} });
+    state = await start();
+    await t.request(`/auth/steam/return?${reply(state)}`);
+    const lg = await t.request("/auth/login");
+    const dstate = new URL(lg.headers.get("location")).searchParams.get("state");
+    const back = await t.request(`/auth/callback?error=interaction_required&state=${dstate}`);
+    assert.equal(back.headers.get("location"), "/#/steam");
+    me = await t.request("/api/me");
+    assert.equal(me.status, 200); assert.equal(me.data.steamOnly, true); assert.equal(me.data.isOwner, false);
     // A state is single-use.
     assert.match((await t.request(`/auth/steam/return?${reply(state)}`)).headers.get("location"), /error=steam/);
 

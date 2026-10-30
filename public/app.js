@@ -2735,6 +2735,12 @@
       h("button", { class: "btn gray small", text: "Dismiss", onclick: async e => { const box = e.currentTarget.parentElement; state.me.news = null; box.remove(); try { await api("/api/changelog/seen", {}); } catch {} } }));
   }
 
+  /** A Steam-only session (Discord would not finish silently): the Discord half is one click away. */
+  function discordBanner() {
+    if (!state.me || !state.me.steamOnly) return null;
+    return h("div", { class: "notice warn" }, h("span", { text: "You are signed in with Steam only. Connect Discord to see your servers, run giveaways and manage alerts. " }), h("a", { class: "btn blue small", href: "/auth/login", text: "Connect Discord" }));
+  }
+
   function setupCard() {
     const steps = state.me && state.me.setup;
     if (!steps || steps.every(x => x.done)) return null;
@@ -3880,6 +3886,8 @@
     (VIEWS[view] || (state.me ? valueView : landing))();
     const nb = newsBanner();
     if (nb && view !== "home") app.prepend(nb);
+    const db = discordBanner();
+    if (db && view !== "home") app.prepend(db);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 

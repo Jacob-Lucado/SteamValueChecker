@@ -82,7 +82,7 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", NEXT_COOKIE = "svc_next";
+const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
@@ -115,6 +115,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     const secure = origin.startsWith("https://");
     const sessions = new Map();
     const states = new Map();
+    const steamKnown = new Map();   // one-time token -> { user, exp }: a Steam sign-in of a known member, waiting for the Discord half
     const steamPending = new Map(); // one-time token -> { steamid, exp }: a Steam sign-in that still needs a Discord account to attach to
     const lastRun = new Map();
     const cache = new Map();
@@ -188,6 +189,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         for (const [k, s] of sessions) if (s.expires < t) sessions.delete(k);
         for (const [k, exp] of states) if (exp < t) states.delete(k);
         for (const [k, p] of steamPending) if (p.exp < t) steamPending.delete(k);
+        for (const [k, p] of steamKnown) if (p.exp < t) steamKnown.delete(k);
         for (const [k, at] of lastRun) if (t - at > 120_000) lastRun.delete(k); // the longest cooldown is a minute
     }
 
@@ -1808,6 +1810,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         const ok = state && states.has(state) && states.get(state) > now() && cookies(req)[STATE_COOKIE] === state;
         states.delete(state);
         setCookie(res, STATE_COOKIE, "", 0);
+        // Signed in with Steam first, and Discord would not finish silently (not signed in to Discord here, or it was declined):
+        // keep the Steam session so nothing is lost, and the page offers the Discord half.
+        const kt = cookies(req)[STEAM_KNOWN_COOKIE], known = steamKnown.get(kt);
+        if (kt) { steamKnown.delete(kt); setCookie(res, STEAM_KNOWN_COOKIE, "", 0); }
+        if (ok && !code && known && known.exp > now()) {
+            startSession(res, { userId: known.user.discord_id, username: known.user.uname || "Steam player", avatar: known.user.avatar || null, guilds: [], steamOnly: true });
+            return send(res, 302, "", { Location: "/#/steam" });
+        }
         if (!ok || !code) return send(res, 302, "", { Location: "/?error=login" });
 
         let who;
@@ -1879,9 +1889,11 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             return send(res, 302, "", { Location: "/#/steam?linked=1" });
         }
         const known = db.findVerifiedSteamUser(steamid);
-        if (known) { // signed in before: straight back into that account (server tools need a Discord sign-in, so no servers here)
-            startSession(res, { userId: known.discord_id, username: known.uname || "Steam player", avatar: known.avatar || null, guilds: [], steamOnly: true });
-            return send(res, 302, "", { Location: "/#/steam" });
+        if (known) { // Steam proved who this is. Finish with Discord (it says yes without asking if they have signed in before) so servers, giveaways and admin work too.
+            const kt = randomBytes(24).toString("hex");
+            steamKnown.set(kt, { user: known, exp: now() + 10 * 60_000 });
+            setCookie(res, STEAM_KNOWN_COOKIE, kt, 600);
+            return send(res, 302, "", { Location: "/auth/login" });
         }
         const token = randomBytes(24).toString("hex");
         steamPending.set(token, { steamid, exp: now() + 15 * 60_000 });

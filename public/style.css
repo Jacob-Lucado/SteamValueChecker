@@ -660,7 +660,7 @@ textarea { min-height: 110px; }
 .lp-live:hover { border-color: var(--good); color: var(--white); }
 .lp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); animation: lp-ping 2s infinite; }
 @keyframes lp-ping { 0% { box-shadow: 0 0 0 0 var(--good); } 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-.lp-ticker { overflow: hidden; border-block: 1px solid var(--line); background: var(--panel); padding: 16px 0; margin: 10px 0 34px; }
+.lp-ticker { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); padding: 16px 0; margin: 10px 0 34px; }
 .lp-ticker-track { display: flex; width: max-content; animation: lp-slide 40s linear infinite; }
 .lp-ticker-track span { display: flex; align-items: center; font-size: 21px; font-weight: 800; letter-spacing: -.01em; color: var(--muted); white-space: nowrap; }
 .lp-ticker-track span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin: 0 30px; }
