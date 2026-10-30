@@ -190,7 +190,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setGameNight(guildId, true);
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
-    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, xp_on: 1, setup_at: Date.now() });
+    db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
     db.setReward(guildId, 5, roleIds.regular); // a first referral reward, change or remove it any time
@@ -218,6 +218,24 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 }
 
 // ---------- welcome messages ----------
+/** The private message a new member gets: what the bot does for them and where the dashboard is. */
+export function welcomeDmPayload({ server, dashboardUrl = null }) {
+    const embed = {
+        color: 0x4d8cff, title: `Welcome to ${server}!`,
+        description: "I'm **Steam Value Checker**, the bot that looks after games, deals and the community here. Here is what I can do for you:",
+        fields: [
+            { name: "💸 Sale alerts", value: "`/wishlist import` your Steam wishlist and I message you when a game drops in price. `/value` prices any list of games." },
+            { name: "🎁 Free games", value: "`/freegames` shows what is free to claim right now on Steam, Epic, GOG and more." },
+            { name: "🎮 Your library", value: "Sign in through Steam on the dashboard to see your library value, hours and what to play next." },
+            { name: "🏆 In this server", value: "Earn XP and levels by chatting and talking in voice (`/rank`, `/levels`), get your own invite link (`/invites link`), and prove your Steam account in #verify for the Steam Verified role." },
+            { name: "🔔 Control it", value: "`/alerts` sets quiet hours and how you get notified. `/help` lists every command. `/mydata delete` removes your data any time." }
+        ],
+        footer: { text: "You got this message because you joined a server that uses the bot. Replies here are not read." }
+    };
+    const components = dashboardUrl ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open the dashboard", url: dashboardUrl }] }] : [];
+    return { embeds: [embed], components, allowed_mentions: { parse: [] } };
+}
+
 export const DEFAULT_WELCOME = "Welcome to **{server}**, {user}! You are member #{count}. Check out the rules and pick your roles, then say hi!";
 export const WELCOME_FIELDS = ["{user}", "{username}", "{server}", "{count}", "{inviter}"];
 

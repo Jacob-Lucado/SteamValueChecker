@@ -102,7 +102,7 @@ const discord = {
 const notifier = createNotifier({ db, discord });
 // Community features (welcome, XP, invites, emoji) use the bot's REST helper, the same one the dashboard uses.
 const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.dashboard?.clientSecret ?? "", botToken: cfg.token, redirectUri: "http://localhost/unused" });
-const community = createCommunity({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p) });
+const community = createCommunity({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), dashboardUrl: cfg.dashboard?.publicUrl ?? null });
 const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
 const modUi = createModHandlers({ db, mod: moderation });
 const communityUi = createCommunityHandlers({ db, api: botRest, service: community, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });

@@ -397,3 +397,25 @@ test("Linked Roles sign-in: no Steam proof sends them to Steam first, then the c
     assert.equal(new URL(plain.headers.get("location")).searchParams.get("linked"), null);
     await t.close();
 });
+
+test("new members get a private welcome with the bot's features and the dashboard link, once, and a closed DM breaks nothing", async () => {
+    const { welcomeDmPayload } = await import("../src/community.js");
+    const db = openDb(":memory:"), api = fakeApi();
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.equal(db.getCommunity("G").welcome_dm, 1, "a built server sends the private welcome");
+    const dms = [];
+    const svc = createCommunity({ db, api, dm: async (id, p) => { dms.push({ id, p }); }, dashboardUrl: "https://dash.example" });
+    await svc.onJoin({ guildId: "G", guildName: "Test", count: 5, member: { id: "new1", username: "N" } });
+    assert.equal(dms.length, 1);
+    const e = dms[0].p.embeds[0];
+    assert.match(e.title, /Welcome to Test/); assert.ok(e.fields.length >= 4);
+    assert.equal(dms[0].p.components[0].components[0].url, "https://dash.example");
+    await svc.onLeave({ guildId: "G", member: { id: "new1", username: "N" } });
+    await svc.onJoin({ guildId: "G", guildName: "Test", count: 6, member: { id: "new1", username: "N" } });
+    assert.equal(dms.length, 1, "coming back does not repeat it");
+    const closed = createCommunity({ db, api, dm: async () => { throw new Error("Cannot send messages to this user"); } });
+    await closed.onJoin({ guildId: "G", guildName: "Test", count: 7, member: { id: "new2", username: "M" } });
+    assert.ok(db.usageCounts().welcome_dm_failed);
+    assert.deepEqual(welcomeDmPayload({ server: "S" }).components, [], "no dashboard, no button");
+    assert.ok(e.fields.every(f => f.name.length <= 256 && f.value.length <= 1024) && JSON.stringify(e).length < 6000);
+});

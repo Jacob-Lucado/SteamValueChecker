@@ -1,10 +1,10 @@
 // The community actions behind both the Discord commands and the dashboard. Everything talks to Discord through `api`
 // (dashboard/discord.js), so it runs the same from a command, an event or a web request, and the tests use a fake.
-import { messageXp, XP_COOLDOWN_MS, VOICE_XP, rolesForLevel, welcomePayload, findUsedInvite, levelFromXp, xpForNext, bar } from "./community.js";
+import { welcomeDmPayload, messageXp, XP_COOLDOWN_MS, VOICE_XP, rolesForLevel, welcomePayload, findUsedInvite, levelFromXp, xpForNext, bar } from "./community.js";
 
 const avatarOf = u => (u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null);
 
-export function createCommunity({ db, api, dm = null, now = () => Date.now(), rng = Math.random }) {
+export function createCommunity({ db, api, dm = null, dashboardUrl = null, now = () => Date.now(), rng = Math.random }) {
     const last = new Map();          // `${guild}:${user}` -> last time XP was earned from a message
     const invites = new Map();       // guildId -> Map(code -> { uses, maxUses, inviterId })
 
@@ -89,7 +89,7 @@ export function createCommunity({ db, api, dm = null, now = () => Date.now(), rn
             db.bumpUsage("welcomes");
             await api.sendMessage(c.welcome_channel, welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId })).catch(() => {});
         }
-        if (c.welcome_dm && dm) await dm(member.id, { content: `Welcome to **${guildName}**! Read the rules, pick your roles, and say hi. Use /rank in the server to see your level.` }).catch(() => {});
+        if (c.welcome_dm && dm && !rejoin) { db.bumpUsage("welcome_dms"); await dm(member.id, welcomeDmPayload({ server: guildName, dashboardUrl })).catch(() => db.bumpUsage("welcome_dm_failed")); }
         if (c.log_channel) await api.sendMessage(c.log_channel, { content: `📥 <@${member.id}> joined (member #${count}).${via ? ` Invite \`${via.code}\`${inviterId ? ` from <@${inviterId}>` : ""}.` : " The invite could not be told."}`, allowed_mentions: { parse: [] } }).catch(() => {});
         return { inviterId, code: via?.code ?? null, rejoin };
     }
