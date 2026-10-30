@@ -621,3 +621,29 @@ test("a refused step is named, with what Discord said", async () => {
     api.createChannel = async () => { throw new DiscordApiError(403, "no", "Missing Permissions (code 50013)"); };
     await assert.rejects(() => communitySetup({ api, db: openDb(":memory:"), guildId: "G", botId: "bot", sleep: noSleep, pace: 0 }), e => /could not create the .* category/.test(e.message) && /Missing Permissions \(code 50013\)/.test(e.message));
 });
+
+test("/rank, /levels and /invites answer with picture cards, and fall back to the plain embed when drawing fails", async () => {
+    const { createCommunityHandlers } = await import("../src/communityhandlers.js");
+    const { createCommunity } = await import("../src/communityservice.js");
+    const db = openDb(":memory:"), api = fakeApi();
+    const service = createCommunity({ db, api });
+    db.setCommunity?.("G", { xp_on: 1 });
+    db.addXp("G", "u1", 120, { message: true }); db.addXp("G", "u2", 60, { message: true });
+    const h = createCommunityHandlers({ db, api, service, fetchImpl: async () => { throw new Error("offline"); } });
+    const user = { id: "u1", username: "jacob", globalName: "Jacob", bot: false, displayAvatarURL: () => "https://cdn.discordapp.com/avatars/1/a.png" };
+    const mk = (commandName, sub = null, extra = {}) => { const out = {}; return { out, commandName, inGuild: () => true, guildId: "G", guild: { name: "Game Junkies", members: { cache: new Map() }, roles: { cache: new Map() } }, user, client: { users: { fetch: async id => ({ id, username: id, displayAvatarURL: () => null }) } },
+        options: { getUser: () => null, getSubcommand: () => sub }, deferred: false, replied: false,
+        deferReply: async () => { out.deferred = true; }, editReply: async p => { out.reply = p; }, reply: async p => { out.reply = p; }, ...extra }; };
+    for (const [cmd, sub, file] of [["rank", null, "rank.png"], ["levels", null, "leaderboard.png"], ["invites", "top", "top-inviters.png"], ["invites", "show", "invites.png"]]) {
+        const i = mk(cmd, sub); await h.handleCommand(i);
+        const f = i.out.reply.files?.[0];
+        assert.ok(f && f.name === file, `${cmd} ${sub} sent a picture`);
+        assert.equal(f.attachment.subarray(1, 4).toString(), "PNG");
+    }
+    // drawing breaks -> the plain embed still answers
+    const broken = mk("rank", null, { editReply: async () => { throw new Error("upload failed"); } });
+    broken.deferred = true; // the interaction is already acknowledged, so the fallback edits it
+    broken.editReply = async p => { if (p.files) throw new Error("upload failed"); broken.out.reply = p; };
+    await h.handleCommand(broken);
+    assert.match(broken.out.reply.embeds[0].title, /Level \d/);
+});

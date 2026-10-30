@@ -2,7 +2,9 @@
 // No discord.js import: everything the handlers need comes from the interaction object and the shared REST helper.
 import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
 import { UserError } from "./errors.js";
+import { isHidden } from "./hidden.js";
 import { refreshLeaderboard } from "./leaderboard.js";
+import { rankCardSvg, boardSvg, inviteCardSvg, toPng, artFor } from "./communitycards.js";
 
 const EPHEMERAL = 64;
 const BIT = { manageGuild: 1n << 5n, expressions: 1n << 30n };
@@ -13,6 +15,26 @@ const LINKED_NOTE = "Optional: Discord can also require it for a role (Server Se
 export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, fetchImpl = globalThis.fetch }) {
     const eph = (i, content) => i.reply({ content, flags: EPHEMERAL, allowedMentions: { parse: [] } });
     const needManager = i => { if (!can(i, BIT.manageGuild)) { eph(i, "Run this in your server with the Manage Server permission."); return false; } return true; };
+
+    // ---- picture cards: a drawing that fails never blocks the answer, the plain embed is the fallback ----
+    const avatarUrl = u => u?.displayAvatarURL?.({ extension: "png", size: 256 }) ?? null;
+    const reply = (i, payload) => (i.deferred || i.replied ? i.editReply(payload) : i.reply(payload));
+    const picture = (svg, name, description) => ({ files: [{ attachment: Buffer.from(toPng(svg)), name, description }] });
+    /** Name and picture for a member id: from the server first, then Discord. Never throws. */
+    async function whois(i, id) {
+        try {
+            const m = i.guild?.members?.cache?.get(id) ?? await i.guild?.members?.fetch?.(id).catch(() => null);
+            if (m) return { name: m.displayName ?? m.user?.globalName ?? m.user?.username, url: avatarUrl(m.user) };
+            const u = await i.client?.users?.fetch?.(id).catch(() => null);
+            if (u) return { name: u.globalName ?? u.username, url: avatarUrl(u) };
+        } catch { /* fall through */ }
+        return { name: "Unknown member", url: null };
+    }
+    async function board(i, { title, subtitle, list, big, small, accent, accent2 }) {
+        const people = await Promise.all(list.map(r => whois(i, r.user_id)));
+        const art = await artFor(people.map(p => p.url), fetchImpl);
+        return boardSvg({ title, subtitle, accent, accent2, rows: list.map((r, n) => ({ name: people[n].name, art: art(people[n].url), big: big(r), small: small(r) })) });
+    }
 
     // ---- /community ----
     async function community(i) {
@@ -97,11 +119,18 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         if (user.bot) return eph(i, "Bots do not earn XP.");
         const r = service.rankOf(i.guildId, user.id), c = db.getCommunity(i.guildId);
         const inv = db.inviteStats(i.guildId, user.id);
-        return i.reply({ embeds: [{ color: 0x5865f2, author: { name: user.username, icon_url: user.displayAvatarURL?.({ extension: "png", size: 64 }) },
+        const mm = i.guild?.members?.cache?.get(user.id);
+        const embed = { color: 0x5865f2, author: { name: user.username, icon_url: user.displayAvatarURL?.({ extension: "png", size: 64 }) },
             title: `Level ${r.level}`, description: `${r.bar}\n**${r.into.toLocaleString()}** / ${r.need.toLocaleString()} XP to level ${r.level + 1}`,
             fields: [{ name: "Rank", value: r.rank ? `#${r.rank} of ${r.members}` : "Not ranked yet", inline: true }, { name: "Total XP", value: r.xp.toLocaleString(), inline: true }, { name: "Messages", value: r.messages.toLocaleString(), inline: true },
                 { name: "Invited", value: `${inv.active} members`, inline: true }],
-            footer: { text: c.xp_on ? "Chat and join voice to earn XP" : "XP is off in this server" } }], allowedMentions: { parse: [] } });
+            footer: { text: c.xp_on ? "Chat and join voice to earn XP" : "XP is off in this server" } };
+        try {
+            await i.deferReply();
+            const url = avatarUrl(user), art = await artFor([url], fetchImpl);
+            const svg = rankCardSvg({ name: mm?.displayName ?? user.globalName ?? user.username, art: art(url), server: i.guild?.name, level: r.level, into: r.into, need: r.need, rank: r.rank, members: r.members, xp: r.xp, messages: r.messages, voice: r.voiceMinutes ?? 0, invited: inv.active });
+            return await i.editReply({ ...picture(svg, "rank.png", `${user.username} is level ${r.level}`), content: c.xp_on ? "" : "XP is off in this server, so this card will not grow.", allowedMentions: { parse: [] } });
+        } catch { return reply(i, { embeds: [embed], allowedMentions: { parse: [] } }); }
     }
 
     // ---- /leaderboardrefresh ----
@@ -122,8 +151,13 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         if (!i.inGuild()) return eph(i, "Use this in a server.");
         const top = db.xpTop(i.guildId, 10);
         const medal = n => ["🥇", "🥈", "🥉"][n] ?? `**${n + 1}.**`;
-        return i.reply({ embeds: [{ color: 0xfee75c, title: `${i.guild?.name ?? "Server"} leaderboard`, description: top.length ? top.map((r, n) => `${medal(n)} ${mention(r.user_id)} · level ${r.level} · ${r.xp.toLocaleString()} XP`).join("\n") : "Nobody has earned XP yet. Start chatting!",
-            footer: { text: publicUrl ? "Full board on the dashboard" : undefined } }], allowedMentions: { parse: [] } });
+        const embed = { color: 0xfee75c, title: `${i.guild?.name ?? "Server"} leaderboard`, description: top.length ? top.map((r, n) => `${medal(n)} ${mention(r.user_id)} · level ${r.level} · ${r.xp.toLocaleString()} XP`).join("\n") : "Nobody has earned XP yet. Start chatting!",
+            footer: { text: publicUrl ? "Full board on the dashboard" : undefined } };
+        try {
+            await i.deferReply();
+            const svg = await board(i, { title: `${i.guild?.name ?? "Server"} leaderboard`, subtitle: "Top members by XP", list: top, big: r => `Level ${r.level}`, small: r => `${r.xp.toLocaleString()} XP` });
+            return await i.editReply({ ...picture(svg, "leaderboard.png", `Top ${top.length} members by XP`), allowedMentions: { parse: [] } });
+        } catch { return reply(i, { embeds: [embed], allowedMentions: { parse: [] } }); }
     }
 
     // ---- /invites ----
@@ -137,13 +171,27 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         }
         if (sub === "top") {
             const top = db.inviteTop(i.guildId, 10);
-            return i.reply({ embeds: [{ color: 0x57f287, title: "Top inviters", description: top.length ? top.map((r, n) => `**${n + 1}.** ${mention(r.user_id)} · ${r.active} here (${r.total} joined)`).join("\n") : "Nobody has invited anyone yet. Get your link with `/invites link`." }], allowedMentions: { parse: [] } });
+            const embed = { color: 0x57f287, title: "Top inviters", description: top.length ? top.map((r, n) => `**${n + 1}.** ${mention(r.user_id)} · ${r.active} here (${r.total} joined)`).join("\n") : "Nobody has invited anyone yet. Get your link with `/invites link`." };
+            try {
+                await i.deferReply();
+                const svg = await board(i, { title: "Top inviters", subtitle: i.guild?.name ?? "", list: top, big: r => `${r.active} here`, small: r => `${r.total} joined in total`, accent: "#57f287", accent2: "#70a6d8", empty: "Nobody has invited anyone yet." });
+                return await i.editReply({ ...picture(svg, "top-inviters.png", "Top inviters"), allowedMentions: { parse: [] } });
+            } catch { return reply(i, { embeds: [embed], allowedMentions: { parse: [] } }); }
         }
         const user = i.options.getUser("member") ?? i.user;
         const s = service.inviteSummary(i.guildId, user.id);
         const rewards = s.rewards.map(r => `${s.active >= r.count ? "✅" : "⬜"} ${r.count} invited → <@&${r.role_id}>`).join("\n");
-        return i.reply({ embeds: [{ color: 0x57f287, title: `${user.username}'s invites`, description: `**${s.active}** members still here · ${s.total} joined in total · ${s.left} left`,
-            fields: [...(rewards ? [{ name: "Rewards", value: rewards }] : []), ...(s.by ? [{ name: "Joined through", value: mention(s.by), inline: true }] : []), ...(user.id === i.user.id ? [{ name: "Your link", value: s.link ?? "Get one with `/invites link`" }] : [])] }], flags: EPHEMERAL, allowedMentions: { parse: [] } });
+        const embed = { color: 0x57f287, title: `${user.username}'s invites`, description: `**${s.active}** members still here · ${s.total} joined in total · ${s.left} left`,
+            fields: [...(rewards ? [{ name: "Rewards", value: rewards }] : []), ...(s.by ? [{ name: "Joined through", value: mention(s.by), inline: true }] : []), ...(user.id === i.user.id ? [{ name: "Your link", value: s.link ?? "Get one with `/invites link`" }] : [])] };
+        try {
+            await i.deferReply({ flags: EPHEMERAL });
+            const url = avatarUrl(user), art = await artFor([url], fetchImpl), by = s.by ? await whois(i, s.by) : null;
+            const roleName = id => i.guild?.roles?.cache?.get(id)?.name ?? "Reward role";
+            const svg = inviteCardSvg({ name: i.guild?.members?.cache?.get(user.id)?.displayName ?? user.globalName ?? user.username, art: art(url), server: i.guild?.name, active: s.active, total: s.total, left: s.left, by: by?.name,
+                rewards: s.rewards.map(r => ({ count: r.count, done: s.active >= r.count, role: roleName(r.role_id) })) });
+            const link = user.id === i.user.id ? (s.link ? `Your link: ${s.link}` : "Get your link with `/invites link`.") : "";
+            return await i.editReply({ ...picture(svg, "invites.png", `${user.username}'s invites`), content: link, allowedMentions: { parse: [] } });
+        } catch { return reply(i, { embeds: [embed], flags: EPHEMERAL, allowedMentions: { parse: [] } }); }
     }
 
     // ---- /emoji ----
@@ -198,7 +246,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
     }
 
     async function handleCommand(i) {
-        db.bumpUsage(`cmd:${i.commandName}${i.options?.getSubcommand?.(false) ? "/" + i.options.getSubcommand(false) : ""}`);
+        if (!isHidden(i.guildId)) db.bumpUsage(`cmd:${i.commandName}${i.options?.getSubcommand?.(false) ? "/" + i.options.getSubcommand(false) : ""}`);
         switch (i.commandName) {
             case "community": return community(i);
             case "rank": return rank(i);
