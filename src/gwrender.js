@@ -7,6 +7,7 @@ const GREY = 0x8b95a5;
 const RED = 0xed4245;
 import { isVideoLink } from "./gwparse.js";
 import { crossServerParts, stepRows } from "./gwpartner.js";
+import { kindInfo, isCode, theme } from "./prizes.js";
 const GALLERY_URL = "https://store.steampowered.com/";
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 const ts = (ms, f = "R") => `<t:${Math.floor(ms / 1000)}:${f}>`;
@@ -16,55 +17,83 @@ export const ID = { enter: "gw_enter", claim: "gw_claim", confirm: "gw_confirm",
 
 export const messageLink = g => (g.message_id ? `https://discord.com/channels/${g.guild_id}/${g.channel_id}/${g.message_id}` : null);
 
-/** "Hades x2, Celeste" for the prize list, in the order the host listed them. */
+/** "🎮 **Hades** ×2" for the prize list, in the order the host listed them. Each prize type has its own icon. */
 export function prizeSummary(keys) {
     const order = [];
     const count = new Map();
-    for (const k of keys) { if (!count.has(k.label)) order.push(k.label); count.set(k.label, (count.get(k.label) ?? 0) + 1); }
-    return order.map((label, i) => `${i + 1}. **${label}**${count.get(label) > 1 ? ` ×${count.get(label)}` : ""}`);
+    const id = k => `${k.kind ?? "key"}\u0000${k.label}`;
+    for (const k of keys) { if (!count.has(id(k))) order.push(k); count.set(id(k), (count.get(id(k)) ?? 0) + 1); }
+    return order.map(k => `${kindInfo(k.kind).icon} **${k.label}**${count.get(id(k)) > 1 ? ` ×${count.get(id(k))}` : ""}`);
 }
 
 function requirements(g) {
     const r = [];
-    if (g.require_boost) r.push("Server boosters only");
-    if (g.require_role_id) r.push(`Must have ${role(g.require_role_id)}`);
-    if (g.min_account_days) r.push(`Discord account at least ${g.min_account_days} days old`);
-    if (g.min_member_days) r.push(`In this server at least ${g.min_member_days} days`);
-    if (g.bonus_role_id && g.bonus_entries > 1) r.push(`${role(g.bonus_role_id)} get ${g.bonus_entries} entries`);
+    if (g.require_boost) r.push("🚀 Server boosters only");
+    if (g.require_role_id) r.push(`🎭 Must have ${role(g.require_role_id)}`);
+    if (g.min_account_days) r.push(`🗓️ Discord account at least ${g.min_account_days} days old`);
+    if (g.min_member_days) r.push(`⏳ In this server at least ${g.min_member_days} days`);
+    if (g.bonus_role_id && g.bonus_entries > 1) r.push(`✨ ${role(g.bonus_role_id)} get ${g.bonus_entries} entries`);
     return r;
+}
+
+/** Who won what, for the finished giveaway post. */
+function winnerLines(keys) {
+    const won = keys.filter(k => k.winner_id && ["assigned", "delivered", "problem", "confirmed"].includes(k.status));
+    return won.map(k => `${kindInfo(k.kind).icon} **${k.label}** → <@${k.winner_id}>${k.status === "confirmed" ? " ✅" : ""}`);
 }
 
 /** The giveaway post. state: "active" | "ended" | "cancelled". */
 export function giveawayPayload(g, keys, entryCount, state = g.status) {
     const lines = prizeSummary(keys);
     const cross = g.is_global && g.host_name ? crossServerParts(g) : null; // a cross-server giveaway says so and who hosts it
-    const shown = lines.slice(0, 15);
+    const th = theme(keys);
+    const winners = state === "ended" ? winnerLines(keys) : [];
+    const shown = lines.slice(0, 12);
     if (lines.length > shown.length) shown.push(`…and ${lines.length - shown.length} more`);
-    const fields = [
-        { name: keys.length === 1 ? "Prize" : `Prizes (${keys.length})`, value: shown.join("\n").slice(0, 1000) || "-" },
-        { name: state === "active" ? "Ends" : "Ended", value: state === "active" ? `${ts(g.ends_at)} (${ts(g.ends_at, "f")})` : ts(g.ended_at ?? g.ends_at), inline: true },
-        { name: "Hosted by", value: cross ? cross.hostLine : g.host_id === "deleted" ? "-" : `<@${g.host_id}>`, inline: true },
-        { name: "Entries", value: String(entryCount), inline: true }
-    ];
+
+    // The prizes sit in a quote block under the host's own text, so the top of the post is the first thing people read.
+    const prizeBlock = shown.map(l => `> ${l}`).join("\n");
+    const description = [
+        g.description ?? null,
+        `**🏆 ${keys.length === 1 ? "PRIZE" : `PRIZES (${keys.length})`}**\n${prizeBlock}`.slice(0, 2600)
+    ].filter(Boolean).join("\n\n");
+
+    const fields = state === "active"
+        ? [
+            { name: "⏰ Ends", value: `${ts(g.ends_at)}\n${ts(g.ends_at, "f")}`, inline: true },
+            { name: "👑 Hosted by", value: cross ? cross.hostLine : g.host_id === "deleted" ? "-" : `<@${g.host_id}>`, inline: true },
+            { name: "🎟️ Entries", value: `**${entryCount}**`, inline: true }
+        ]
+        : [
+            { name: "⏰ Ended", value: ts(g.ended_at ?? g.ends_at), inline: true },
+            { name: "👑 Hosted by", value: cross ? cross.hostLine : g.host_id === "deleted" ? "-" : `<@${g.host_id}>`, inline: true },
+            { name: "🎟️ Entries", value: `**${entryCount}**`, inline: true }
+        ];
+    if (state === "ended") fields.push({ name: winners.length ? (winners.length === 1 ? "🎉 Winner" : `🎉 Winners (${winners.length})`) : "😔 No winner", value: (winners.join("\n") || "Nobody entered, so nobody won.").slice(0, 1000) });
     const req = requirements(g);
-    if (req.length) fields.push({ name: "Requirements", value: req.join("\n").slice(0, 1000) });
+    if (req.length && state === "active") fields.push({ name: "📋 To enter", value: req.join("\n").slice(0, 1000) });
     if (cross?.howToEnter && state === "active") fields.push({ name: "How to enter", value: `${cross.howToEnter}\n\n${cross.stepsNote}`.slice(0, 1020) });
 
     // A video can't sit inside an embed, so its link goes in the message text where Discord plays it.
     const video = safeUrl(g.image_url) && isVideoLink(g.image_url);
+    const headline = state === "cancelled" ? "🚫 CANCELLED" : state === "ended" ? (winners.length ? "🏁 GIVEAWAY ENDED" : "🏁 GIVEAWAY ENDED · NO WINNER") : `${th.icon} ${th.name}`;
     const embed = {
-        color: state === "cancelled" ? GREY : (g.color ?? COLOR),
+        color: state === "cancelled" ? GREY : state === "ended" ? (winners.length ? GREEN : GREY) : (g.color ?? th.color),
+        author: cross?.author ?? { name: headline },
         title: state === "cancelled" ? `${g.title} (cancelled)` : g.title,
-        description: g.description ?? undefined,
+        description,
         fields,
         image: safeUrl(g.image_url) && !video ? { url: g.image_url } : undefined,
         thumbnail: safeUrl(g.thumbnail_url) && !isVideoLink(g.thumbnail_url) ? { url: g.thumbnail_url } : undefined,
-        author: cross?.author,
-        footer: state === "active" ? { text: cross ? `${cross.footerNote}  •  Press the button to enter. Press it again to leave.` : "Press the button to enter. Press it again to leave." } : cross ? { text: cross.footerNote } : undefined
+        footer: { text: state === "active"
+            ? (cross ? `${cross.footerNote}  •  Press the button to enter, press it again to leave` : `Giveaway #${g.id}  •  Press the button to enter, press it again to leave`)
+            : (cross ? cross.footerNote : `Giveaway #${g.id}`) },
+        timestamp: state === "active" && g.ends_at ? new Date(g.ends_at).toISOString() : undefined
     };
     const enter = {
         type: 2, style: 3, custom_id: `${ID.enter}:${g.id}`, disabled: state !== "active",
-        label: state === "active" ? (g.button_label || "Enter giveaway") : state === "cancelled" ? "Cancelled" : "Ended"
+        label: state === "active" ? (g.button_label || "Enter giveaway") : state === "cancelled" ? "Cancelled" : "Ended",
+        emoji: { name: state === "active" ? "🎉" : state === "cancelled" ? "🚫" : "🏁" }
     };
     // Embeds that share a url are shown by Discord as one picture gallery, so extra prize art rides in extra embeds.
     const extra = [];
@@ -82,6 +111,8 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
     return payload;
 }
 
+/** Status wording that fits the prize: a code is "sent" and "redeemed", money is "on its way" and "received". */
+const statusText = k => (isCode(k.kind) ? STATUS[k.status] : ({ delivered: "host will send it", confirmed: "received" }[k.status] ?? STATUS[k.status])) ?? k.status;
 const ICON = { assigned: "⏳", delivered: "📨", confirmed: "✅", problem: "⚠️", available: "➖", expired: "⌛", returned: "➖" };
 const STATUS = { assigned: "waiting to claim", delivered: "key sent", confirmed: "redeemed", problem: "reported a problem", available: "no winner", expired: "expired", returned: "no winner" };
 
@@ -90,31 +121,37 @@ export function winnersPayload(g, keys) {
     const mentions = [];
     const lines = keys.map(k => {
         if (k.winner_id) mentions.push(k.winner_id);
-        return `${ICON[k.status] ?? "•"} **${k.label}** → ${k.winner_id ? `<@${k.winner_id}>` : "no winner"} (${STATUS[k.status] ?? k.status})`;
+        return `${ICON[k.status] ?? "•"} ${kindInfo(k.kind).icon} **${k.label}** → ${k.winner_id ? `<@${k.winner_id}>` : "no winner"} · *${statusText(k)}*`;
     });
     const waiting = keys.some(k => ["assigned", "delivered", "problem"].includes(k.status) && k.winner_id);
     const embed = {
-        color: GREEN, title: `Winners: ${g.title}`,
-        author: g.is_global && g.host_name ? { name: `🌐 Cross-server giveaway · hosted by ${g.host_name}` } : undefined,
+        color: GREEN, title: `🏆 Winners: ${g.title}`,
+        author: g.is_global && g.host_name ? { name: `🌐 Cross-server giveaway · hosted by ${g.host_name}` } : { name: "🎉 CONGRATULATIONS" },
         description: lines.join("\n").slice(0, 4000),
-        footer: { text: `Winners have ${g.claim_hours} hours to press Claim key` }
+        thumbnail: safeUrl(g.thumbnail_url) && !isVideoLink(g.thumbnail_url) ? { url: g.thumbnail_url } : undefined,
+        footer: { text: `${g.is_global ? "" : `Giveaway #${g.id}  •  `}Winners have ${g.claim_hours} hours to press Claim prize` }
     };
     const payload = {
-        content: mentions.length ? `🎉 Congratulations ${[...new Set(mentions)].slice(0, 30).map(id => `<@${id}>`).join(" ")}! Press **Claim key** below.` : undefined,
+        content: mentions.length ? `🎉 Congratulations ${[...new Set(mentions)].slice(0, 30).map(id => `<@${id}>`).join(" ")}! Press **Claim prize** below.` : undefined,
         embeds: [embed], allowedMentions: { users: [...new Set(mentions)].slice(0, 30) },
-        components: waiting ? [{ type: 1, components: [{ type: 2, style: 3, label: "Claim key", custom_id: `${ID.claim}:${g.id}` }] }] : []
+        components: waiting ? [{ type: 1, components: [{ type: 2, style: 3, label: "Claim prize", emoji: { name: "🎁" }, custom_id: `${ID.claim}:${g.id}` }] }] : []
     };
     return payload;
 }
 
-/** The private message that carries the key. */
-export function keyMessage(g, label, plain, { fallback = false } = {}) {
+/** The private message that carries the key, or tells the winner what happens next for a prize the host sends themselves. */
+export function keyMessage(g, label, plain, { fallback = false, kind = "key" } = {}) {
+    const info = kindInfo(kind);
+    const host = g.host_id && g.host_id !== "deleted" ? `<@${g.host_id}>` : "the host";
+    const manual = !isCode(kind);
     return {
-        content: fallback ? "Your DMs are closed, Here's your prize:" : undefined,
+        content: fallback ? "Your DMs are closed, so here's your prize:" : undefined,
         embeds: [{
-            color: GREEN, title: `Your prize: ${label}`,
-            description: `From **${g.title}**\n\n\`\`\`\n${plain}\n\`\`\``,
-            footer: { text: "Keep this private. After you redeem it you will be asked to confirm. You can press Claim key again if you lose this message." }
+            color: GREEN, title: `${info.icon} Your prize: ${label}`,
+            description: manual
+                ? `From **${g.title}**\n\n${host} will send this to you directly, so keep an eye on your DMs and make sure you can receive messages from them.${plain && plain !== "-" ? `\n\n**Note from the host:**\n${plain}` : ""}`
+                : `From **${g.title}**\n\n\`\`\`\n${plain}\n\`\`\`${kind === "nitro" ? "\nOpen the link while signed in to Discord to claim your Nitro." : ""}`,
+            footer: { text: manual ? "When it arrives you will be asked to confirm. You can press Claim prize again to see this message." : "Keep this private. After you redeem it you will be asked to confirm. You can press Claim prize again if you lose this message." }
         }]
     };
 }
@@ -123,12 +160,12 @@ export function keyMessage(g, label, plain, { fallback = false } = {}) {
 export function confirmPayload(g, key, { reminder = false } = {}) {
     return {
         embeds: [{
-            color: COLOR, title: reminder ? "Reminder: did your key work?" : "Did your key work?",
-            description: `You won **${key.label}** in **${g.title}**. Once you have redeemed it, let us know. Confirming also posts a short thank-you in the server's vouches channel.`
+            color: COLOR, title: isCode(key.kind) ? (reminder ? "Reminder: did your key work?" : "Did your key work?") : (reminder ? "Reminder: did your prize arrive?" : "Did your prize arrive?"),
+            description: `You won **${key.label}** in **${g.title}**. ${isCode(key.kind) ? "Once you have redeemed it" : "Once you have received it"}, let us know. Confirming also posts a short thank-you in the server's vouches channel.`
         }],
         components: [{ type: 1, components: [
-            { type: 2, style: 3, label: "Yes, it redeemed", custom_id: `${ID.confirm}:${key.id}` },
-            { type: 2, style: 4, label: "It didn't work", custom_id: `${ID.problem}:${key.id}` }
+            { type: 2, style: 3, label: isCode(key.kind) ? "Yes, it redeemed" : "Yes, I got it", custom_id: `${ID.confirm}:${key.id}` },
+            { type: 2, style: 4, label: isCode(key.kind) ? "It didn't work" : "Not yet", custom_id: `${ID.problem}:${key.id}` }
         ] }]
     };
 }
@@ -139,7 +176,7 @@ export function vouchPayload(g, key, winnerId) {
     return {
         embeds: [{
             color: GREEN, title: "✅ Verified",
-            description: `<@${winnerId}> confirmed that their **${key.label}** key redeemed successfully.`,
+            description: `<@${winnerId}> confirmed that their ${kindInfo(key.kind).icon} **${key.label}** ${isCode(key.kind) ? "key redeemed successfully" : "prize arrived"}.`,
             fields: [
                 { name: "Giveaway", value: link ? `[${g.title}](${link})` : g.title, inline: true },
                 { name: "Hosted by", value: g.host_id === "deleted" ? "-" : `<@${g.host_id}>`, inline: true }
@@ -169,7 +206,7 @@ export function infoPayload(g, keys, entryCount) {
 
 /** Sent to the host with prizes nobody won (or that were cancelled). */
 export function leftoverMessage(g, rows, why) {
-    const text = rows.map(r => `${r.label} | ${r.plain}`).join("\n");
+    const text = rows.map(r => (isCode(r.kind) ? `${r.label} | ${r.plain}` : `${r.label} | (nothing to send back, you pay this one yourself)`)).join("\n");
     return {
         embeds: [{
             color: COLOR, title: `Unused prizes from "${g.title}"`,

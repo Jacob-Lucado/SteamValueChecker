@@ -306,11 +306,11 @@
           h("p", { class: "lp-sub", text: "Prize keys are encrypted the moment they are saved and sent only to the winner. When the winner confirms the key worked, it is wiped and a public vouch goes up automatically." }),
           h("ul", { class: "lp-list" },
             h("li", { text: "Add many keys to one giveaway, grouped neatly on the post" }),
-            h("li", { text: "Winner presses Claim key. If DMs are closed, they get the key privately in the channel" }),
+            h("li", { text: "Winner presses Claim prize. If DMs are closed, they get the key privately in the channel" }),
             h("li", { text: "Unclaimed prizes are redrawn. Unused keys come back to you" }),
             h("li", { text: "Custom art, GIFs or video, role requirements, bonus entries and more" }))),
         h("div", { class: "lp-flow" },
-          ...[["🎉", "Giveaway ends", "Winners are drawn and announced"], ["🔑", "Claim key", "The key arrives by DM"], ["✅", "Confirm it worked", "One button for the winner"], ["📣", "Vouch posted", "Automatic, in your vouches channel"]]
+          ...[["🎉", "Giveaway ends", "Winners are drawn and announced"], ["🔑", "Claim prize", "The key arrives by DM"], ["✅", "Confirm it worked", "One button for the winner"], ["📣", "Vouch posted", "Automatic, in your vouches channel"]]
             .map(([i, t, s]) => h("div", { class: "lp-flow-step" }, h("span", { class: "lp-flow-icon", text: i }), h("div", {}, h("b", { text: t }), h("div", { class: "muted small", text: s })))))),
 
       fanaticalCard(),
@@ -2196,6 +2196,12 @@
       const keys = h("textarea", { rows: "6", maxlength: "20000", autocomplete: "off", spellcheck: "false", placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", "aria-label": "Prize keys" });
       const length = h("input", { type: "text", value: "24h", maxlength: "20", placeholder: "24h, 3d, 1w", "aria-label": "How long it runs" });
       const claim = h("input", { type: "number", min: "1", max: "168", value: "48", "aria-label": "Hours to claim" });
+      const gImage = h("input", { type: "url", maxlength: "500", placeholder: "https://… (picture, GIF or video)", "aria-label": "Big picture link" });
+      const gThumb = h("input", { type: "url", maxlength: "500", placeholder: "https://… (small picture or GIF)", "aria-label": "Small picture link" });
+      const gColor = h("input", { type: "text", maxlength: "8", placeholder: "#ff9800", "aria-label": "Colour" });
+      const gLabel = h("input", { type: "text", maxlength: "40", placeholder: "Enter giveaway", "aria-label": "Enter button text" });
+      const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: gImage.value, thumb: gThumb.value, color: gColor.value, label: gLabel.value.trim(), length: length.value.trim(), host: "you" }));
+      for (const el of [title, desc, keys, gImage, gThumb, gColor, gLabel, length]) el.addEventListener("input", gp.paint);
       const who = select([["both", "Every server's giveaway channel and DMs"], ["channels", "Server giveaway channels only"], ["dm", "DMs only"]], "both");
       const confirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
       const go = h("button", { class: "btn red", type: "button", text: "Start the giveaway" });
@@ -2242,7 +2248,7 @@
         if (info.list.some(g => g.spread && !g.spread.done) && document.body.contains(box)) timer = setTimeout(() => refresh().catch(() => {}), 2500);
       }
       go.addEventListener("click", () => busy(go, async () => {
-        const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value,
+        const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, image: gImage.value, thumbnail: gThumb.value, color: gColor.value, button_label: gLabel.value, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value,
           host: hostKind.value === "partner" ? { kind: "partner", name: pName.value, logo: pLogo.value, links: [["Website", pWeb.value], ["Discord", pDiscord.value], ["X", pX.value], ["", pOther.value]].filter(l => l[1].trim()).map(l => ({ label: l[0], url: l[1] })) } : { kind: "network" },
           steps: stepList.map(e => ({ kind: e.sel.value, url: e.url.value, label: e.label.value })) });
         toast(`Your giveaway is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. Sending it out to ${r.total} more place${r.total === 1 ? "" : "s"}.`, "ok");
@@ -2255,7 +2261,15 @@
           h("div", { class: "panel" }, h("h3", { text: "Network-wide giveaway" }),
             h("p", { class: "muted small", text: `One giveaway, shown in every server's giveaway channel (or its alert channel if none is set) and in DMs. Entries from everywhere count together, and winners are drawn once. It is posted in ${info.destinations.length} server${info.destinations.length === 1 ? "" : "s"} and ${info.dm} member DM${info.dm === 1 ? "" : "s"}. Winners claim their key by DM.` }),
             info.destinations.length ? null : h("div", { class: "notice warn", text: "No server has a giveaway or alert channel yet. Set one on the Giveaways page (Server settings) first." }),
-            field("Title", title), field("Game (for the artwork)", game), field("Description", desc), field("Prize keys, one per line (Game | KEY)", keys),
+            field("Title", title), field("Game (for the artwork)", game), field("Description", desc),
+            field("Prizes (one per line)", keys), prizeButtons(keys, gp.paint),
+            h("p", { class: "muted small", text: "Game keys, Nitro links and gift card codes are handed out by the Claim button. Money and other prizes have no code: you get a DM when a winner claims one and you send it yourself." }),
+            h("h4", { text: "Look" }),
+            h("div", { class: "grid two" }, h("div", {},
+              h("div", { class: "row" }, field("Big picture, GIF or video link", gImage), field("Small picture or GIF link", gThumb)),
+              h("div", { class: "row" }, field("Colour", gColor), field("Enter button text", gLabel)),
+              h("p", { class: "muted small", text: "Leave the big picture empty to use the game's artwork. Use a direct, permanent link to a picture (.png, .jpg, .gif, .webp)." })),
+              h("div", {}, h("b", { text: "Preview" }), gp.el)),
             field("Hosted by", hostKind), partnerBox,
             h("h4", { text: "Entry steps (optional)" }), h("p", { class: "muted small", text: "Ask people to do something first, like following a partner on X or joining their Discord. Each step shows as a numbered line and a link button on the giveaway. Discord cannot check these, so the post says winners may be checked." }), stepRows, addStepBtn,
             h("div", { class: "row" }, field("Runs for", length), field("Hours to claim a key", claim)),
@@ -2308,6 +2322,65 @@
 
 
   // ---------- giveaways ----------
+  // ---------- giveaway designer pieces, shared by the server form and the owner form ----------
+  const PRIZE_TYPES = [
+    ["key", "🎮", "Game key", "Hades | AAAAA-BBBBB-CCCCC"],
+    ["nitro", "💎", "Discord Nitro", "nitro: Discord Nitro (1 month) | https://discord.gift/xxxxxxxx"],
+    ["giftcard", "🎁", "Gift card", "giftcard: $20 Steam gift card | XXXX-XXXX-XXXX"],
+    ["money", "💰", "Money", "money: $25 PayPal | sent by PayPal after the draw"],
+    ["other", "🏅", "Other", "other: Signed poster | I will ship it, send me your address"]
+  ];
+  /** Buttons that add a prize line of each type, so nobody has to remember the format. */
+  function prizeButtons(area, after) {
+    return h("div", { class: "chips" }, h("span", { class: "muted small", text: "Add a prize: " }),
+      PRIZE_TYPES.map(([, icon, name, line]) => h("button", { type: "button", class: "tab small", text: `${icon} ${name}`, onclick: () => {
+        area.value = (area.value && !area.value.endsWith("\n") ? area.value + "\n" : area.value) + line + "\n"; area.focus(); if (after) after();
+      } })));
+  }
+  /** Reads the prize box the way the bot does, only enough to draw the preview. */
+  function readPrizes(text) {
+    const out = [];
+    for (const raw of String(text || "").split(/\r?\n/)) {
+      let line = raw.trim(); if (!line) continue;
+      let kind = "key";
+      const m = /^([a-z]+)\s*:\s*(.*)$/i.exec(line);
+      if (m && PRIZE_TYPES.some(t => t[0] === m[1].toLowerCase())) { kind = m[1].toLowerCase(); line = m[2]; }
+      const bar = line.lastIndexOf("|");
+      const label = (bar >= 0 ? line.slice(0, bar) : (kind === "key" ? "Your game" : line)).trim() || (kind === "nitro" ? "Discord Nitro" : kind === "giftcard" ? "Gift card" : "Prize");
+      out.push({ kind, label });
+    }
+    return out;
+  }
+  /** A Discord-style preview of the giveaway post that follows the form. get() returns the current values. */
+  function giveawayPreview(get) {
+    const pv = h("div", { class: "dpreview" });
+    const THEME = { key: ["#ff9800", "🎮", "GIVEAWAY"], nitro: ["#5865f2", "💎", "DISCORD NITRO GIVEAWAY"], giftcard: ["#eb459e", "🎁", "GIFT CARD GIVEAWAY"], money: ["#2ecc71", "💰", "MONEY GIVEAWAY"], other: ["#fee75c", "🏅", "OTHER PRIZE GIVEAWAY"] };
+    const icon = k => (PRIZE_TYPES.find(t => t[0] === k) || PRIZE_TYPES[0])[1];
+    function paint() {
+      const v = get(), prizes = readPrizes(v.keys);
+      const kinds = [...new Set(prizes.map(p => p.kind))];
+      const th = kinds.length === 1 ? THEME[kinds[0]] : ["#ff9800", "🎉", "GIVEAWAY"];
+      const counts = new Map(); for (const p of prizes) { const id = p.kind + p.label; counts.set(id, (counts.get(id) || 0) + 1); }
+      const lines = [...new Map(prizes.map(p => [p.kind + p.label, p])).values()].map(p => `${icon(p.kind)} ${p.label}${counts.get(p.kind + p.label) > 1 ? " ×" + counts.get(p.kind + p.label) : ""}`);
+      const color = /^#?[0-9a-f]{6}$/i.test((v.color || "").trim()) ? "#" + v.color.trim().replace(/^#/, "") : th[0];
+      const ok = u => /^https:\/\//i.test((u || "").trim());
+      const card = h("div", { class: "dp-card" },
+        h("div", { class: "dp-author", text: `${th[1]} ${th[2]}` }),
+        h("div", { class: "dp-title", text: v.title || (prizes[0] ? prizes[0].label + (prizes.length > 1 ? ` + ${prizes.length - 1} more` : "") : "Your giveaway") }),
+        v.desc ? h("div", { class: "dp-body", text: v.desc }) : null,
+        h("div", { class: "dp-body" }, h("b", { text: `🏆 ${prizes.length === 1 ? "PRIZE" : `PRIZES (${prizes.length || 0})`}` }), h("div", { class: "dp-quote", text: lines.join("\n") || "Add a prize above" })),
+        h("div", { class: "dp-fields" }, [["⏰ Ends", "in " + (v.length || "24h")], ["👑 Hosted by", v.host || "you"], ["🎟️ Entries", "0"]].map(([a, b]) => h("div", { class: "dp-field inline" }, h("b", { text: a }), h("div", { text: b })))),
+        ok(v.image) ? h("img", { class: "dp-image", src: v.image.trim(), alt: "", referrerpolicy: "no-referrer" }) : (v.artUrl ? h("img", { class: "dp-image", src: v.artUrl, alt: "", referrerpolicy: "no-referrer" }) : null),
+        h("div", { class: "dp-foot muted small", text: "Giveaway #1  •  Press the button to enter, press it again to leave" }),
+        h("div", { class: "dp-btn", text: "🎉 " + (v.label || "Enter giveaway") }));
+      if (ok(v.thumb)) card.classList.add("has-thumb"), card.append(h("img", { class: "dp-thumb", src: v.thumb.trim(), alt: "", referrerpolicy: "no-referrer" }));
+      card.style.borderLeftColor = color;
+      pv.replaceChildren(card);
+    }
+    paint();
+    return { el: pv, paint };
+  }
+
   async function giveawaysView() {
     const servers = state.me.servers.filter(g => g.manageable);
     const holder = h("div");
@@ -2354,7 +2427,7 @@
           if (!q || !auto.checked) { preview.replaceChildren(h("span", { text: "Artwork appears here once you add a prize." })); return; }
           if (q === previewKey) return; previewKey = q;
           preview.replaceChildren(h("span", { text: "Looking for artwork…" }));
-          try { const r = await api("/api/giveaways/art?game=" + encodeURIComponent(q)); preview.replaceChildren(r.image ? h("img", { src: r.image, alt: q }) : h("span", { text: "No artwork found. Paste an image link under Look and rules." })); }
+          try { const r = await api("/api/giveaways/art?game=" + encodeURIComponent(q)); preview.replaceChildren(r.image ? h("img", { src: r.image, alt: q }) : h("span", { text: "No artwork found. Paste an image link under Look and rules." })); gp.paint(); }
           catch { preview.replaceChildren(h("span", { text: "Could not look up artwork." })); }
         }, 500);
       };
@@ -2368,11 +2441,13 @@
       const startIn = text("Start later, e.g. 2h or 1d (blank = now)", 20), rounds = text("1", 2, "number"), repeatEvery = text("e.g. 7d", 20);
       const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
       for (const el of [keys, game, image]) el.addEventListener("input", refreshPreview);
+      const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), length: length.value.trim(), host: "@you", artUrl: preview.querySelector("img")?.src || "" }));
+      for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
       auto.addEventListener("change", () => { previewKey = ""; refreshPreview(); });
       // Templates keep everything except the prize keys.
       const FIELDS = { title, length, game, desc, image, thumb, auto, color, label, claim, acct, memb, bonusN, reqRole, bonusRole, pingRole, vouchSel, boosters, startIn, rounds, repeatEvery, chSel };
       const grab = () => Object.fromEntries(Object.entries(FIELDS).map(([k, el]) => [k, el.type === "checkbox" ? el.checked : el.value]));
-      const apply = data => { for (const [k, el] of Object.entries(FIELDS)) if (data[k] !== undefined) { if (el.type === "checkbox") el.checked = Boolean(data[k]); else el.value = data[k]; } previewKey = ""; refreshPreview(); };
+      const apply = data => { for (const [k, el] of Object.entries(FIELDS)) if (data[k] !== undefined) { if (el.type === "checkbox") el.checked = Boolean(data[k]); else el.value = data[k]; } previewKey = ""; refreshPreview(); gp.paint(); };
       let tpls = [];
       const tplSel = select([["", "Load a template…"]], "");
       const tplName = text("Template name", 40);
@@ -2396,16 +2471,21 @@
       }) });
       return h("div", { class: "panel" }, h("h3", { text: "Start a giveaway" }),
         h("div", { class: "row" }, field("Template", tplSel), field("Save these settings as", tplName), h("div", { class: "shrink" }, saveTpl, " ", delTpl)),
-        field("Prize keys (paste them, one per line: Name | KEY)", keys),
+        field("Prizes (one per line)", keys), prizeButtons(keys, gp.paint),
+        h("p", { class: "muted small", text: "Game keys, Discord Nitro links and gift card codes are kept encrypted and handed to the winner by the Claim button. Money and other prizes have no code: the bot tells you who won and you send it yourself." }),
         preview,
         h("div", { class: "row" }, field("Channel", chSel), field("Length", length)), presets,
         field("Title", title),
-        h("p", { class: "muted small", text: "Keys are encrypted as soon as they are saved. Each is deleted once the winner confirms it worked, and unused keys are sent back to you by DM. One winner per prize." }),
-        h("details", { class: "more" }, h("summary", { text: "Look and rules (all optional)" }),
-          h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color", color)),
+        h("p", { class: "muted small", text: "Codes are encrypted as soon as they are saved. Each is deleted once the winner confirms, and unused codes are sent back to you by DM. One winner per prize." }),
+        h("h4", { text: "Look" }),
+        h("div", { class: "grid two" }, h("div", {},
           field("Description", desc),
-          h("div", { class: "row" }, field("Image, GIF or video link", image), field("Small picture or GIF link", thumb)),
+          h("div", { class: "row" }, field("Big picture, GIF or video link (https)", image), field("Small picture or GIF link (https)", thumb)),
+          h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color (#ff9800)", color)),
           h("label", { class: "check" }, auto, "Find artwork automatically when I don't give an image"),
+          h("p", { class: "muted small", text: "Use a direct link to a picture (it ends in .png, .jpg, .gif or .webp). Links copied from a Discord message can expire, so host it somewhere permanent like Imgur." })),
+          h("div", {}, h("b", { text: "Preview" }), gp.el)),
+        h("details", { class: "more" }, h("summary", { text: "Rules, schedule and more (all optional)" }),
           h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN)),
           h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),
           h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb)),
@@ -2725,7 +2805,7 @@
       holder.className = "";
       holder.replaceChildren(...[
         prizes.length ? h("div", { class: "panel" }, h("h3", { text: "Your prizes" }),
-          h("p", { class: "muted small", text: "Press Claim key on the winners message in Discord. Keys are never shown here." }),
+          h("p", { class: "muted small", text: "Press Claim prize on the winners message in Discord. Keys are never shown here." }),
           ...prizes.map(p => h("div", { class: "kv" }, h("span", {}, h("b", { text: p.label + " " }), h("span", { class: "muted", text: `${p.title} · ${PRIZE_STATUS[p.status] || p.status}${p.status === "assigned" && p.deadline ? " · claim by " + new Date(p.deadline).toLocaleString() : ""}` })),
             p.link ? ext(p.link, "Open in Discord") : null))) : null,
         h("div", { class: "panel" }, h("h3", { text: "What gets sent to Discord" }), ...toggles),

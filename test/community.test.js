@@ -307,8 +307,8 @@ test("a cross-server giveaway says so, names the host, and no longer shows the g
     assert.equal(p.embeds[0].title, "Big Game Giveaway");
     assert.doesNotMatch(JSON.stringify(p), /Giveaway #/);
     const plain = giveawayPayload({ ...GW, is_global: 0, host_name: null }, KEYS, 0, "active");
-    assert.equal(plain.embeds[0].author, undefined);
-    assert.doesNotMatch(JSON.stringify(plain), /Giveaway #/);
+    assert.match(plain.embeds[0].author.name, /GIVEAWAY/);
+    assert.match(JSON.stringify(plain), /Giveaway #/); // a server's own giveaway keeps its number for /giveaway end and friends
     assert.doesNotMatch(JSON.stringify(winnersPayload(GW, KEYS)), /Giveaway #/);
 });
 
@@ -319,7 +319,7 @@ test("a partner giveaway shows the partner, their links, numbered steps and link
     const e = p.embeds[0];
     assert.match(e.author.name, /hosted by Cool Studio/);
     assert.equal(e.author.icon_url, "https://cool.example/l.png");
-    const hosted = e.fields.find(f => f.name === "Hosted by").value;
+    const hosted = e.fields.find(f => /Hosted by/.test(f.name)).value;
     assert.match(hosted, /\[Website\]\(https:\/\/cool\.example\)/); assert.match(hosted, /\[Discord\]/);
     const how = e.fields.find(f => f.name === "How to enter").value;
     assert.match(how, /1\. \[.*Follow @cool on X\]\(https:\/\/x\.com\/cool\)/); assert.match(how, /3\. Press \*\*Enter giveaway\*\*/); assert.match(how, /Winners may be checked/);

@@ -1,4 +1,4 @@
-// Discord side of giveaways: the /giveaway command, the Enter / Claim key / confirm buttons, and the key forms.
+// Discord side of giveaways: the /giveaway command, the Enter / Claim prize / confirm buttons, and the key forms.
 // Prize keys are typed into a private form (modal), never into a channel, and are encrypted before they are saved.
 
 import { randomBytes } from "node:crypto";
@@ -89,10 +89,10 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         const draft = readCreate(i.options, i);
         const nonce = stash({ draft, userId: i.user.id, guildId: i.guildId });
         await i.showModal({
-            custom_id: `${ID.keysModal}:${nonce}`, title: "Prize keys",
+            custom_id: `${ID.keysModal}:${nonce}`, title: "Prizes",
             components: [{ type: 1, components: [{
-                type: 4, custom_id: "keys", label: "One prize per line:  Name | KEY", style: 2, required: true, max_length: 4000,
-                placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)"
+                type: 4, custom_id: "keys", label: "One prize per line (Name | KEY)", style: 2, required: true, max_length: 4000,
+                placeholder: "Hades | KEY\nnitro: Discord Nitro | LINK\nmoney: $25 PayPal\nother: Signed poster"
             }] }]
         });
     }
@@ -153,7 +153,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             const d = take(i.customId.split(":")[1], i);
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const r = await giveaways.replaceKey(d.giveawayId, d.winner, i.fields.getTextInputValue("key"));
-            await i.editReply(`Replaced. <@${d.winner}> ${r.told ? "was told by DM" : "was told in the channel"} to press **Claim key** again.`);
+            await i.editReply(`Replaced. <@${d.winner}> ${r.told ? "was told by DM" : "was told in the channel"} to press **Claim prize** again.`);
         } catch (err) { await failed(i, err); }
     }
 
@@ -224,13 +224,13 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         const c = giveaways.prepareClaim(id, i.user.id);
         let sent = false;
-        try { await i.user.send(keyMessage(c.giveaway, c.key.label, c.plain)); sent = true; } catch { /* DMs are closed */ }
+        try { await i.user.send(keyMessage(c.giveaway, c.key.label, c.plain, { kind: c.key.kind })); sent = true; } catch { /* DMs are closed */ }
         if (sent) {
             await giveaways.delivered(c.key.id, "dm");
             await i.editReply("I sent your prize to your DMs. After you redeem it, I'll ask you to confirm.");
         } else {
             // Hand the key over here, visible only to the winner.
-            await i.editReply(keyMessage(c.giveaway, c.key.label, c.plain, { fallback: true }));
+            await i.editReply(keyMessage(c.giveaway, c.key.label, c.plain, { fallback: true, kind: c.key.kind }));
             await giveaways.delivered(c.key.id, "channel");
         }
     }
@@ -247,7 +247,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             }
             if (kind === ID.problem) {
                 const r = await giveaways.reportProblem(Number(rest), i.user.id);
-                return await i.update({ content: `Sorry about that. ${r.hostTold ? "The host has been told and will send a new key." : "I couldn't reach the host, so please message them directly."}`, embeds: [], components: [] });
+                return await i.update({ content: `Sorry about that. ${r.hostTold ? "The host has been told and will sort it out." : "I couldn't reach the host, so please message them directly."}`, embeds: [], components: [] });
             }
         } catch (err) { await failed(i, err); }
     }

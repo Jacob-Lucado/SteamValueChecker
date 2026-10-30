@@ -5,6 +5,7 @@
 
 import { randomInt } from "node:crypto";
 import { stepsOf } from "./gwpartner.js";
+import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
@@ -174,7 +175,8 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         let gallery = null;
         if (!image && input.auto_image !== false) {
             const given = cleanText(input.game_title, 100);
-            const names = given ? [given] : [...new Set(input.keys.map(k => k.label))].slice(0, 4);
+            const gameKeys = input.keys.filter(k => (k.kind ?? "key") === "key"); // Nitro, money and the like have no box art
+            const names = given ? [given] : gameKeys.length ? [...new Set(gameKeys.map(k => k.label))].slice(0, 4) : [];
             const found = (await Promise.all(names.map(n => autoImage(itad, n)))).filter(Boolean).map(a => a.image);
             const unique = [...new Set(found)];
             if (names.length > 1 && unique.length < 2 && multiBannerUrl) { image = multiBannerUrl; imageSource = "auto"; } // one picture can't stand for several games
@@ -191,7 +193,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             is_global: input.is_global ? 1 : 0, host_name: input.host?.host_name ?? null, host_kind: input.host?.host_kind ?? null, host_links: input.host?.host_links ?? null, host_logo: input.host?.host_logo ?? null, steps: input.steps?.length ? JSON.stringify(input.steps) : null,
             status: startAt ? "scheduled" : "active", starts_at: startAt, ends_at: (startAt ?? now()) + input.duration_ms
         };
-        const id = db.createGiveaway(g, input.keys.map(k => ({ label: k.label, enc: vault.encrypt(k.key) })));
+        const id = db.createGiveaway(g, input.keys.map(k => ({ label: k.label, kind: k.kind ?? "key", enc: vault.encrypt(k.key) })));
         if (startAt) return { id, ends_at: g.ends_at, starts_at: startAt, prizes: input.keys.length, imageSource, scheduled: true };
         try {
             const row = db.getGiveaway(id);
@@ -265,7 +267,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
     async function returnUnused(g, statuses, why) {
         const rows = db.listKeys(g.id).filter(k => statuses.includes(k.status) && k.has_key);
         if (!rows.length) return 0;
-        const plain = rows.map(k => ({ label: k.label, plain: vault.decrypt(db.getKeyEnc(k.id)), id: k.id })).filter(r => r.plain);
+        const plain = rows.map(k => ({ label: k.label, kind: k.kind, plain: vault.decrypt(db.getKeyEnc(k.id)), id: k.id })).filter(r => r.plain);
         if (!plain.length) return 0;
         if (!await dmHost(g, leftoverMessage(g, plain, why))) return 0;
         for (const r of plain) db.wipeKey(r.id, "returned");
@@ -306,7 +308,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const unused = await returnUnused(g, ["available"], won.length ? "Fewer people entered than there were prizes, so these prizes had no winner." : "Nobody entered.");
         await dmHost(g, hostNote(g, `Ended${by ? "" : " on schedule"}: ${won.length} of ${keys.length} prizes have a winner (${entryCount(g.id)} entries).` +
             (unused ? `\n${unused} unused prize key${unused === 1 ? " was" : "s were"} sent to you in a separate message.` : "") +
-            (won.length ? `\nWinners have ${g.claim_hours} hours to press **Claim key**.` : "")));
+            (won.length ? `\nWinners have ${g.claim_hours} hours to press **Claim prize**.` : "")));
         return { winners: won, unused };
     }
 
@@ -343,7 +345,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
     async function postReplacement(g, won, previous) {
         await refresh(g.id);
         const lines = won.map(w => `**${w.label}** → <@${w.userId}>`).join("\n");
-        await announceNew(g, `🎉 New winner${won.length > 1 ? "s" : ""} for **${g.title}**${previous ? ` (<@${previous}> did not claim)` : ""}:\n${lines}\nPress **Claim key** on the winners message above within ${g.claim_hours} hours.`, { users: won.map(w => w.userId) });
+        await announceNew(g, `🎉 New winner${won.length > 1 ? "s" : ""} for **${g.title}**${previous ? ` (<@${previous}> did not claim)` : ""}:\n${lines}\nPress **Claim prize** on the winners message above within ${g.claim_hours} hours.`, { users: won.map(w => w.userId) });
     }
 
     // ---------- cancel ----------
@@ -375,6 +377,12 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         db.markDelivered(keyId, via, now() + CONFIRM_FIRST_MS);
         const k = db.getKey(keyId);
         await refresh(k.giveaway_id);
+        // Money and other prizes are sent by the host, so they are told who is waiting.
+        if (!isCode(k.kind)) {
+            const g = db.getGiveaway(k.giveaway_id);
+            const note = vault.decrypt(db.getKeyEnc(k.id));
+            if (g) await dmHost(g, hostNote(g, `<@${k.winner_id}> claimed **${k.label}**. Please send it to them now (message them directly).${note && note !== "-" ? `\nYour note to them: ${note}` : ""}\nThey will be asked to confirm when it arrives.`));
+        }
     }
 
     /** The winner says the key worked. Wipes the key and posts to the vouches channel. */
@@ -382,7 +390,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const k = db.getKey(Number(keyId));
         if (!k || k.winner_id !== userId) throw new UserError("This confirmation is not for you.");
         if (k.status === "confirmed") throw new UserError("You already confirmed this one. Thank you!");
-        if (!["delivered", "problem"].includes(k.status)) throw new UserError("Press **Claim key** on the winners message first, then confirm once you have redeemed it.");
+        if (!["delivered", "problem"].includes(k.status)) throw new UserError("Press **Claim prize** on the winners message first, then confirm once you have redeemed it.");
         const g = must(k.giveaway_id);
         db.markConfirmed(k.id);
         await refresh(g.id);
@@ -397,7 +405,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
     async function reportProblem(keyId, userId) {
         const k = db.getKey(Number(keyId));
         if (!k || k.winner_id !== userId) throw new UserError("This is not for you.");
-        if (k.status !== "delivered") throw new UserError("There is nothing to report yet. Press **Claim key** first.");
+        if (k.status !== "delivered") throw new UserError("There is nothing to report yet. Press **Claim prize** first.");
         const g = must(k.giveaway_id);
         db.markProblem(k.id);
         await refresh(g.id);
@@ -406,23 +414,24 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             try { await tickets.open({ userId, guildId: g.guild_id, subject: `Key problem: ${k.label} (giveaway #${g.id})`, body: `The key for ${k.label} did not work. Giveaway #${g.id}.`, giveawayId: g.id }); }
             catch (e) { log(`could not open a ticket for a key problem: ${e?.message}`); }
         }
-        const told = await dmHost(g, hostNote(g, `<@${userId}> says the key for **${k.label}** did not work.\nSend a new one with the replace command: choose giveaway #${g.id} and the winner.`));
+        const told = await dmHost(g, hostNote(g, `<@${userId}> says ${isCode(k.kind) ? `the key for **${k.label}** did not work.\nSend a new one with the replace command: choose giveaway #${g.id} and the winner.` : `**${k.label}** has not reached them yet. Please check and message them.`}`));
         return { hostTold: told };
     }
 
-    /** Host swaps in a new key for a winner. The winner is told to press Claim key again. */
+    /** Host swaps in a new key for a winner. The winner is told to press Claim prize again. */
     async function replaceKey(id, userId, newKey) {
         const g = must(id);
         const k = db.keyForWinner(g.id, userId);
         if (!k) throw new UserError("That person did not win a prize in this giveaway.");
         if (k.status === "confirmed") throw new UserError("That winner already redeemed their prize.");
+        if (!isCode(k.kind)) throw new UserError(`${kindInfo(k.kind).name} prizes have no code to replace. You send those yourself.`);
         const clean = String(newKey ?? "").trim();
         if (!clean || /\s/.test(clean) || clean.length > 200) throw new UserError("Send a single key with no spaces.");
         db.replaceKeyEnc(k.id, vault.encrypt(clean), claimDeadline(g));
         await refresh(g.id);
         let told = true;
-        try { await discord.dm(userId, hostNote(g, `The host replaced your key for **${k.label}**. Press **Claim key** on the winners message to get it.`)); } catch { told = false; }
-        if (!told) await announceNew(g, `<@${userId}> your key for **${k.label}** was replaced. Press **Claim key** on the winners message.`, { users: [userId] });
+        try { await discord.dm(userId, hostNote(g, `The host replaced your key for **${k.label}**. Press **Claim prize** on the winners message to get it.`)); } catch { told = false; }
+        if (!told) await announceNew(g, `<@${userId}> your key for **${k.label}** was replaced. Press **Claim prize** on the winners message.`, { users: [userId] });
         return { told };
     }
 

@@ -1,33 +1,50 @@
 // Input parsing for giveaways: prize keys, durations, colors, image links.
 import { UserError } from "./errors.js";
 import { MAX_KEYS } from "./gwstore.js";
+import { KINDS } from "./prizes.js";
 
 const MAX_KEY_LENGTH = 200;
 const MAX_LABEL_LENGTH = 80;
 
 /**
- * One prize per line: `Label | KEY` or just `KEY` (then the giveaway's game name is the label).
- * Blank lines and exact duplicates are skipped. Returns { keys: [{ label, key }], duplicates }.
+ * One prize per line. A game key is `Label | KEY` or just `KEY` (then the giveaway's game name is the label).
+ * Other prizes start with their type: `nitro: Discord Nitro (1 month) | https://discord.gift/...`, `giftcard: $20 Steam card | CODE`,
+ * `money: $25 PayPal | optional note for the winner`, `other: Signed poster | optional note`.
+ * Money and other prizes have no code: the note (if any) is shown to the winner, and the host sends the prize themselves.
+ * Blank lines and exact duplicate codes are skipped. Returns { keys: [{ label, key, kind }], duplicates }.
  */
 export function parseKeys(text, defaultLabel) {
     const keys = [];
     const seen = new Set();
     let duplicates = 0;
     for (const raw of String(text ?? "").split(/\r?\n/)) {
-        const line = raw.trim();
+        let line = raw.trim();
         if (!line) continue;
+        let kind = "key";
+        const tag = /^([a-z]+)\s*:\s*(.*)$/i.exec(line);
+        if (tag && KINDS[tag[1].toLowerCase()] && !/^https?$/i.test(tag[1])) { kind = tag[1].toLowerCase(); line = tag[2].trim(); }
         const bar = line.lastIndexOf("|");
-        const label = (bar >= 0 ? line.slice(0, bar) : "").trim() || defaultLabel || "Prize";
-        const key = (bar >= 0 ? line.slice(bar + 1) : line).trim();
-        if (!key) continue;
-        if (key.length > MAX_KEY_LENGTH) throw new UserError(`One key is longer than ${MAX_KEY_LENGTH} characters. Put one prize per line as \`Name | KEY\`.`);
-        if (/\s/.test(key)) throw new UserError("A key contains a space. Put one prize per line as `Name | KEY`.");
-        if (seen.has(key)) { duplicates++; continue; }
-        seen.add(key);
-        keys.push({ label: label.slice(0, MAX_LABEL_LENGTH), key });
+        const head = (bar >= 0 ? line.slice(0, bar) : "").trim();
+        const tail = (bar >= 0 ? line.slice(bar + 1) : line).trim();
+        if (!KINDS[kind].code) {
+            const label = (bar >= 0 ? head : tail) || (kind === "key" ? defaultLabel : "") || "";
+            if (!label) throw new UserError(`Say what the ${KINDS[kind].name.toLowerCase()} prize is, like \`${kind}: $25 PayPal\`.`);
+            const note = bar >= 0 ? tail : "";
+            if (note.length > MAX_KEY_LENGTH) throw new UserError(`A prize note is longer than ${MAX_KEY_LENGTH} characters.`);
+            keys.push({ label: label.slice(0, MAX_LABEL_LENGTH), key: note || "-", kind });
+        } else {
+            const label = head || (kind === "nitro" ? "Discord Nitro" : kind === "giftcard" ? "Gift card" : defaultLabel) || "Prize";
+            const key = tail;
+            if (!key) continue;
+            if (key.length > MAX_KEY_LENGTH) throw new UserError(`One key is longer than ${MAX_KEY_LENGTH} characters. Put one prize per line as \`Name | KEY\`.`);
+            if (/\s/.test(key)) throw new UserError("A key contains a space. Put one prize per line as `Name | KEY`.");
+            if (seen.has(key)) { duplicates++; continue; }
+            seen.add(key);
+            keys.push({ label: label.slice(0, MAX_LABEL_LENGTH), key, kind });
+        }
         if (keys.length > MAX_KEYS) throw new UserError(`A giveaway can hold up to ${MAX_KEYS} prizes. Split it into two giveaways.`);
     }
-    if (!keys.length) throw new UserError("Add at least one prize key, one per line (`Name | KEY`).");
+    if (!keys.length) throw new UserError("Add at least one prize, one per line (`Name | KEY`, `nitro: Discord Nitro | LINK`, `money: $25 PayPal`).");
     return { keys, duplicates };
 }
 

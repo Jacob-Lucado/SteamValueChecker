@@ -1670,7 +1670,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 catch (e) { if (e instanceof StepError) throw new HttpError(400, e.message); throw e; }
                 const r = await giveaways.create({
                     guild_id: home.guild_id, channel_id: home.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
-                    game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"),
+                    game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
+                    color: parseColor(body.color), button_label: text(body.button_label),
                     claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true, is_global: true, host, steps
                 });
                 const targets = db.broadcastTargets();

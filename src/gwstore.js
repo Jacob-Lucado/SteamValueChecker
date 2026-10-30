@@ -96,7 +96,7 @@ const GIVEAWAY_FIELDS = [
 
 export function giveawayStore({ db, run, get, all, clean, now }) {
     // Rows handed out never carry the encrypted key unless asked for.
-    const KEY_COLS = "id, giveaway_id, position, label, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, (key_enc IS NOT NULL) AS has_key";
+    const KEY_COLS = "id, giveaway_id, position, label, kind, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, (key_enc IS NOT NULL) AS has_key";
 
     const getGiveaway = id => clean(get("SELECT * FROM giveaways WHERE id = ?", id));
     const listGiveaways = (guildId, { limit = 25 } = {}) =>
@@ -117,7 +117,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
                 ...cols.map(c => g[c] ?? (c === "bonus_entries" ? 1 : c === "claim_hours" ? 48 : c === "min_account_days" || c === "min_member_days" || c === "require_boost" || c === "is_global" ? 0 : c === "status" ? "active" : null)), now()
             );
             const id = Number(r.lastInsertRowid);
-            keys.forEach((k, i) => run("INSERT INTO giveaway_keys (giveaway_id, position, label, key_enc) VALUES (?,?,?,?)", id, i + 1, k.label, k.enc));
+            keys.forEach((k, i) => run("INSERT INTO giveaway_keys (giveaway_id, position, label, key_enc, kind) VALUES (?,?,?,?,?)", id, i + 1, k.label, k.enc, k.kind ?? "key"));
             db.exec("COMMIT");
             return id;
         } catch (err) { db.exec("ROLLBACK"); throw err; }

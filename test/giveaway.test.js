@@ -35,7 +35,7 @@ function rig({ dmFails = new Set(), gone = new Set(), vouches = "vouch-chan", it
 
 test("keys, durations, colors and links are parsed strictly", () => {
     const r = parseKeys("Hades | AAAAA-BBBBB\n\nBBBBB-CCCCC\nHades | AAAAA-BBBBB", "Default");
-    assert.deepEqual(r.keys, [{ label: "Hades", key: "AAAAA-BBBBB" }, { label: "Default", key: "BBBBB-CCCCC" }]);
+    assert.deepEqual(r.keys, [{ label: "Hades", key: "AAAAA-BBBBB", kind: "key" }, { label: "Default", key: "BBBBB-CCCCC", kind: "key" }]);
     assert.equal(r.duplicates, 1);
     assert.throws(() => parseKeys("", "x"), UserError);
     assert.throws(() => parseKeys("Hades KEY1 KEY2", "x"), UserError); // a space in a key
@@ -69,9 +69,9 @@ test("creating posts an orderly giveaway and never shows a key", async () => {
     assert.equal(r.prizes, 3);
     const post = t.posts[0].payload;
     const text = JSON.stringify(post);
-    assert.match(text, /Prizes \(3\)/);
-    assert.match(text, /1\. \*\*Hades\*\* ×2/);
-    assert.match(text, /2\. \*\*Celeste\*\*/);
+    assert.match(text, /PRIZES \(3\)/);
+    assert.match(text, /🎮 \*\*Hades\*\* ×2/);
+    assert.match(text, /🎮 \*\*Celeste\*\*/);
     assert.ok(!/K1|K2|K3/.test(text));
     assert.equal(post.components[0].components[0].custom_id, `gw_enter:${r.id}`);
     const raw = JSON.stringify(t.db.listKeys(r.id));
@@ -113,7 +113,7 @@ test("entering: toggle, role requirement, account age, host blocked, bonus entri
     await assert.rejects(() => t.svc.enter(id, { userId: "b", roleIds: ["R1"] }), /ended/);
 });
 
-test("ending draws one distinct winner per prize and posts the winners with a Claim key button", async () => {
+test("ending draws one distinct winner per prize and posts the winners with a Claim prize button", async () => {
     const t = rig();
     const { id } = await t.make();
     await t.enterAll(id, ["a", "b", "c"]);
@@ -124,7 +124,7 @@ test("ending draws one distinct winner per prize and posts the winners with a Cl
     assert.deepEqual(keys.map(k => k.status), ["assigned", "assigned"]);
     assert.equal(new Set(keys.map(k => k.winner_id)).size, 2);
     const winners = t.posts.at(-1).payload;
-    assert.equal(winners.components[0].components[0].label, "Claim key");
+    assert.equal(winners.components[0].components[0].label, "Claim prize");
     assert.match(winners.embeds[0].description, /Hades.*<@/);
     assert.ok(!/AAAAA|DDDDD/.test(JSON.stringify(t.posts)));
     assert.equal(t.db.getGiveaway(id).status, "ended");
@@ -193,7 +193,7 @@ test("claim: only winners, key handed over, follow-up scheduled; claiming again 
     const c = t.svc.prepareClaim(id, first.winner_id);
     assert.equal(c.plain, "AAAAA-BBBBB-CCCCC");
     assert.match(JSON.stringify(keyMessage(c.giveaway, c.key.label, c.plain)), /AAAAA-BBBBB-CCCCC/);
-    assert.equal(keyMessage(c.giveaway, "x", "k", { fallback: true }).content, "Your DMs are closed, Here's your prize:");
+    assert.equal(keyMessage(c.giveaway, "x", "k", { fallback: true }).content, "Your DMs are closed, so here's your prize:");
     await t.svc.delivered(c.key.id, "dm");
     assert.equal(t.db.getKey(c.key.id).status, "delivered");
     assert.equal(t.svc.prepareClaim(id, first.winner_id).plain, "AAAAA-BBBBB-CCCCC"); // lost the message? claim again
@@ -203,13 +203,13 @@ test("confirming wipes the key and posts a vouch in the vouches channel", async 
     const t = rig();
     const id = await won(t);
     const k = t.db.listKeys(id)[0];
-    await assert.rejects(() => t.svc.confirm(k.id, k.winner_id), /Claim key/); // must claim first
+    await assert.rejects(() => t.svc.confirm(k.id, k.winner_id), /Claim prize/); // must claim first
     await t.svc.delivered(k.id, "dm");
     await assert.rejects(() => t.svc.confirm(k.id, "someone-else"), /not for you/);
     const r = await t.svc.confirm(k.id, k.winner_id);
     assert.equal(r.vouched, true);
     const vouch = t.posts.find(p => p.channelId === "vouch-chan");
-    assert.match(vouch.payload.embeds[0].description, new RegExp(`<@${k.winner_id}> confirmed that their \\*\\*Hades\\*\\* key redeemed successfully`));
+    assert.match(vouch.payload.embeds[0].description, new RegExp(`<@${k.winner_id}> confirmed that their 🎮 \\*\\*Hades\\*\\* key redeemed successfully`));
     assert.deepEqual(vouch.payload.allowedMentions, { parse: [] });
     const after = t.db.getKey(k.id);
     assert.deepEqual([after.status, after.has_key], ["confirmed", false]);
@@ -437,4 +437,52 @@ test("a global giveaway is shown in other servers and DMs, draws from entrants a
     assert.equal(ended.winners[0].userId, "from-elsewhere"); // not dropped by the home-server membership check
     assert.ok(r.edits.length >= 3); // home post plus the copies were closed
     assert.ok(r.posts.some(p => p.channelId === "C2" && p.payload.embeds)); // winners shown in the other server
+});
+
+test("prize types: Nitro, gift cards, money and other parse and get their own icons", () => {
+    const r = parseKeys("Hades | AAAAA-BBBBB\nnitro: Discord Nitro (1 month) | https://discord.gift/abc\nnitro: https://discord.gift/xyz\nmoney: $25 PayPal | paid by PayPal\nother: Signed poster\ngiftcard: $20 Steam card | CODE-1", "Game");
+    assert.deepEqual(r.keys.map(k => [k.kind, k.label, k.key]), [
+        ["key", "Hades", "AAAAA-BBBBB"], ["nitro", "Discord Nitro (1 month)", "https://discord.gift/abc"], ["nitro", "Discord Nitro", "https://discord.gift/xyz"],
+        ["money", "$25 PayPal", "paid by PayPal"], ["other", "Signed poster", "-"], ["giftcard", "$20 Steam card", "CODE-1"]]);
+    assert.throws(() => parseKeys("money:", "x"), UserError);       // money needs to say what it is
+    assert.throws(() => parseKeys("nitro: Nitro | a b", "x"), UserError); // a code has no spaces
+    const post = giveawayPayload({ id: 1, status: "active", host_id: "h", title: "Mixed", ends_at: 2e12, claim_hours: 48 }, r.keys.map(k => ({ ...k, label: k.label })), 0, "active");
+    const text = post.embeds[0].description;
+    assert.match(text, /🎮 \*\*Hades\*\*/); assert.match(text, /💎 \*\*Discord Nitro \(1 month\)\*\*/); assert.match(text, /💰 \*\*\$25 PayPal\*\*/); assert.match(text, /🏅 \*\*Signed poster\*\*/); assert.match(text, /🎁 \*\*\$20 Steam card\*\*/);
+    assert.ok(!/discord\.gift|CODE-1|AAAAA/.test(JSON.stringify(post)), "no code is ever in the post");
+    const nitro = giveawayPayload({ id: 1, status: "active", host_id: "h", title: "N", ends_at: 2e12 }, [{ kind: "nitro", label: "Nitro" }], 0, "active");
+    assert.match(nitro.embeds[0].author.name, /NITRO GIVEAWAY/); assert.equal(nitro.embeds[0].color, 0x5865f2);
+});
+
+test("a money prize: no code is kept for the host to pay, the host is told who claimed, and nothing can be 'replaced'", async () => {
+    const t = rig();
+    const { id } = await t.make({ keys: [{ label: "$25 PayPal", key: "paid by PayPal", kind: "money" }, { label: "Nitro", key: "https://discord.gift/q", kind: "nitro" }], image_url: "https://img.example/a.png", thumbnail_url: "https://img.example/t.png" });
+    const post = t.posts[0].payload.embeds[0];
+    assert.equal(post.image.url, "https://img.example/a.png"); assert.equal(post.thumbnail.url, "https://img.example/t.png");
+    await t.enterAll(id, ["a", "b"]);
+    t.advance(3 * HOUR);
+    await t.svc.tick();
+    const ended = t.edits.at(-1).payload.embeds[0];
+    assert.match(ended.author.name, /GIVEAWAY ENDED/); assert.equal(ended.color, 0x57f287);
+    assert.match(ended.fields.find(f => /Winners/.test(f.name)).value, /💰 \*\*\$25 PayPal\*\* → <@a>/);
+    const money = t.db.listKeys(id).find(k => k.kind === "money");
+    const c = t.svc.prepareClaim(id, money.winner_id);
+    const msg = keyMessage(c.giveaway, c.key.label, c.plain, { kind: c.key.kind });
+    assert.match(msg.embeds[0].description, /will send this to you directly/); assert.match(msg.embeds[0].description, /paid by PayPal/);
+    assert.ok(!/```/.test(msg.embeds[0].description));
+    t.dms.length = 0;
+    await t.svc.delivered(money.id, "dm");
+    assert.match(t.dms.find(d => d.userId === "host").payload.embeds[0].description, /claimed \*\*\$25 PayPal\*\*/);
+    await assert.rejects(() => t.svc.replaceKey(id, money.winner_id, "NEWKEY"), /no code to replace/);
+    await t.svc.confirm(money.id, money.winner_id);
+    assert.equal(t.db.getKey(money.id).has_key, false);
+});
+
+test("a giveaway nobody entered ends greyed out and says so", async () => {
+    const t = rig();
+    const { id } = await t.make();
+    t.advance(3 * HOUR); await t.svc.tick();
+    const e = t.edits.at(-1).payload.embeds[0];
+    assert.match(e.author.name, /NO WINNER/); assert.equal(e.color, 0x8b95a5);
+    assert.match(e.fields.find(f => /No winner/.test(f.name)).value, /Nobody entered/);
 });
