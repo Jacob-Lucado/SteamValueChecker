@@ -831,7 +831,7 @@ test("bot status rotates through servers, members, uptime and the support link, 
     assert.ok(!presenceLines({ servers: undefined, members: 0, users: 0, uptimeMs: 5000 }).some(l => /member|player|server/.test(l)));
     assert.equal(uptimeText(30_000), "1m"); assert.equal(uptimeText(75 * 60_000), "1h 15m");
     const sent = [];
-    const client = { guilds: { cache: { size: 2, reduce: (f, a) => [{ memberCount: 5 }, { memberCount: 7 }].reduce(f, a) } }, user: { setPresence: p => sent.push(p.activities[0].state) } };
+    const client = { guilds: { cache: { size: 2, reduce: (f, a) => [{ memberCount: 5 }, { memberCount: 7 }].reduce(f, a) } }, user: { setPresence: p => sent.push(p.activities.find(a => a.type === 4).state) } };
     const stop = startPresence({ client, db: { stats: () => ({ users: 9 }) }, supportUrl: "https://x.com/a", every: 5 });
     await new Promise(r => setTimeout(r, 40)); stop();
     assert.equal(sent[0], "🌐 In 2 servers"); assert.ok(sent.includes("👥 12 members across servers") && sent.length >= 3);
@@ -873,4 +873,16 @@ test("dashboard files are sent compressed, with a validator so repeat visits are
         const png = await raw("/logo.png", { "Accept-Encoding": "br" });
         assert.ok(!png.res.headers["content-encoding"], "images are not compressed again");
     } finally { await d.close(); }
+});
+
+test("presence sends a Watching activity as well as the custom status", async () => {
+    const { startPresence } = await import("../src/presence.js");
+    const sent = [];
+    const client = { guilds: { cache: { size: 1, reduce: () => 3 } }, user: { setPresence: p => sent.push(p) } };
+    const stop = startPresence({ client, db: { stats: () => ({ users: 12 }) }, every: 1e9 });
+    stop();
+    const acts = sent[0].activities;
+    assert.equal(acts[0].type, 3);
+    assert.match(acts[0].name, /12 game libraries/);
+    assert.equal(acts[1].type, 4);
 });

@@ -1,6 +1,9 @@
 // The bot's Discord status: a line under its name that rotates through server and member counts, uptime and the owner's X link.
-// Bots cannot use Discord's Rich Presence images or Ask to Join (those belong to games), but a custom status can say all of this.
-const CUSTOM = 4; // Discord's "custom status" activity type
+// Discord only lets a bot set an activity's type, name and (for streaming) link. The Rich Presence extras (big images, buttons,
+// "Ask to Join", elapsed timers) are refused for bots. So the profile gets two lines that Discord does allow:
+// a real activity ("Watching ...", the card under the name) and the custom status line with the rotating facts.
+const WATCHING = 3, CUSTOM = 4; // Discord's activity types
+const WATCHING_NAMES = n => [`${n ? n.toLocaleString("en-US") + " " : ""}game ${n === 1 ? "library" : "libraries"} for deals`, "Steam prices drop", "free games go live", "wishlists for sales"];
 export const ROTATE_MS = 30_000;
 
 const plural = (n, one, many) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
@@ -35,7 +38,8 @@ export function startPresence({ client, db, supportUrl, startedAt = Date.now(), 
                 users: (() => { if (now() - usersAt > 600_000) { usersAt = now(); try { users = db?.stats?.().users; } catch { /* keep the last number */ } } return users; })(), uptimeMs: now() - startedAt, supportUrl
             });
             const state = lines[i++ % lines.length];
-            client.user?.setPresence({ status: "online", activities: [{ type: CUSTOM, name: "Custom Status", state }] });
+            const names = WATCHING_NAMES(users);
+            client.user?.setPresence({ status: "online", activities: [{ type: WATCHING, name: names[(i - 1) % names.length] }, { type: CUSTOM, name: "Custom Status", state }] });
         } catch (e) { log(`[presence] ${e.message}`); }
     };
     tick();
