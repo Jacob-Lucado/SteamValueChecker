@@ -2657,7 +2657,7 @@
   function newsBanner() {
     if (!state.me || !state.me.news || currentView() === "changelog") return null;
     return h("div", { class: "notice news" }, h("span", { text: "✨ New: " + (state.me.newsTitle || "see what changed") + ". " }), h("a", { href: "#/changelog", text: "See what's new" }),
-      h("button", { class: "btn gray small", text: "Dismiss", onclick: async e => { try { await api("/api/changelog/seen", {}); } catch {} state.me.news = null; e.currentTarget.parentElement.remove(); } }));
+      h("button", { class: "btn gray small", text: "Dismiss", onclick: async e => { const box = e.currentTarget.parentElement; state.me.news = null; box.remove(); try { await api("/api/changelog/seen", {}); } catch {} } }));
   }
 
   function setupCard() {
