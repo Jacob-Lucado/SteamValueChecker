@@ -199,6 +199,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("giveaways", "starts_at", "INTEGER");
     addColumn("giveaways", "duration_ms", "INTEGER");
     addColumn("library", "gifted", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("steam_links", "verified", "INTEGER NOT NULL DEFAULT 0"); // 1 once the owner proved the account through Steam's sign-in
+    addColumn("steam_links", "uname", "TEXT");
+    addColumn("steam_links", "avatar", "TEXT");
     addColumn("giveaways", "is_global", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaway_settings", "giveaway_channel_id", "TEXT");
     addColumn("guilds", "free_feed", "INTEGER NOT NULL DEFAULT 0");

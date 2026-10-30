@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.10.31", date: "2026-10-31", title: "Sign in through Steam", items: [
+        "**Sign in through Steam** on the dashboard: one click on Steam's own page and your library, hours and taste profile fill in. No profile links to paste. Wishlist import, `/wishlist import` and `/steam link` use the Steam account you signed in with.",
+        "The Steam page has a new **Library analytics** view: games, hours, collection value, how much you have played, hours by genre, played versus backlog and your most played games.",
+        "Free DLC is now labelled, and if your Steam library is synced the alert says whether you own the base game.",
+        "FanaticalGrabber 2.7: press **Connect the extension** on the Library page and the code is handed over for you. The cart check now says why when it cannot read a cart, and \"You're seeing the best deals available\" when you are well under Steam.",
+        "Home page: a live count of free offers and a feature ticker. `/help` is now a full command list."
+    ] },
     { version: "2026.10.30", date: "2026-10-30", title: "Goals, bundles, more leaderboards and a tidier menu", items: [
         "`/steam goal`: set an hours goal for the year and see if you are on pace (also on the Steam page). `/steam recap` now posts a picture you can share, and the Steam page can make the same image.",
         "`/library bundle` and `/library bundles`: record a bundle you bought and see what its games are worth, what each cost you and how much you have played.",

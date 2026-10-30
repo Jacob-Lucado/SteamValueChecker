@@ -145,6 +145,9 @@
   document.addEventListener("click", e => { if (openMenu && !openMenu.wrap.contains(e.target)) closeMenu(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && openMenu) { const b = openMenu.btn; closeMenu(); b.focus(); } });
   window.addEventListener("hashchange", closeMenu);
+  const STEAM_ICON = "M12 2a10 10 0 0 0-9.96 9.1l5.35 2.2a2.8 2.8 0 0 1 1.6-.5h.15l2.4-3.45v-.05a3.75 3.75 0 1 1 3.75 3.75h-.1l-3.4 2.45a2.8 2.8 0 0 1-5.55.45L2.3 14.2A10 10 0 1 0 12 2z";
+  const steamIcon = () => { const n = document.createElementNS("http://www.w3.org/2000/svg", "svg"); n.setAttribute("viewBox", "0 0 24 24"); n.setAttribute("width", "18"); n.setAttribute("height", "18"); n.setAttribute("aria-hidden", "true"); const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", STEAM_ICON); p.setAttribute("fill", "currentColor"); n.append(p); return n; };
+  const steamLoginBtn = (text = "Sign in through Steam", cls = "btn steam") => h("a", { class: cls, href: "/auth/steam" }, steamIcon(), " " + text);
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[0];
   const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
 
@@ -220,7 +223,7 @@
           h("span", { class: "who", text: state.me.user.username }),
           h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } }))].filter(Boolean));
     } else {
-      acct.replaceChildren(...[...links, themeButton(), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
+      acct.replaceChildren(...[...links, themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
@@ -237,7 +240,7 @@
     const cta = (extra = "") => h("div", { class: "lp-cta " + extra },
       invite && ext(invite, "Add to a server", "btn green big"),
       state.cfg && state.cfg.userInstallUrl && ext(state.cfg.userInstallUrl, "Add to your account", "btn blue big"),
-      state.me ? h("a", { class: "btn blue big", href: "#/value", text: "Open the dashboard" }) : h("a", { class: "btn blue big", href: "/auth/login", text: "Sign in with Discord" }));
+      state.me ? h("a", { class: "btn blue big", href: "#/value", text: "Open the dashboard" }) : [steamLoginBtn("Sign in through Steam", "btn steam big"), h("a", { class: "btn blue big", href: "/auth/login", text: "Sign in with Discord" })]);
 
     // A small mock of what a sale alert looks like in Discord.
     const mock = h("div", { class: "dc-card", "aria-hidden": "true" },
@@ -284,7 +287,7 @@
           feature("🎂", "Friends and gifts", "Keep friends' birthdays, see what is on sale on their public wishlist and get a reminder a week ahead. Visitors can mark gifts so nobody doubles up."),
           feature("🏅", "Trophies and leagues", "Earn badges from your library and monthly challenge streak, and compete in a server backlog league."),
           feature("📱", "Sale war room", "Plan a Steam sale cart with a budget slider."),
-          feature("🎮", "Your Steam library", "Link your public profile for hours played, what you never played, achievements and a Play next pick. Prices you paid fill in from Steam purchase history, and gifts are marked."),
+          feature("🎮", "Your Steam library", "Sign in through Steam for hours played, library analytics, what you never played, achievements and a Play next pick. Prices you paid fill in from Steam purchase history, and gifts are marked."),
           feature("🔥", "Hot deals and sale starts", "Servers can get a post when a big deal appears or when a Steam sale begins, with a minimum discount you choose."),
           feature("📦", "Bundle check", "See whether a bundle is worth it against what its games cost today, skipping ones you own."),
           feature("🐞", "Bug reports and support", "Report a problem with /bug or open a ticket; the team answers in the same thread on Discord and here."),
@@ -294,7 +297,7 @@
         h("h2", { text: "Up and running in a minute" }),
         h("div", { class: "lp-grid three" },
           step("1", "Add the bot", "Invite it to your server. It only asks for permission to read, send messages and embed links."),
-          step("2", "Bring your games", "Import your Steam wishlist, link your Steam profile, upload a FanaticalGrabber export, or add games by name."),
+          step("2", "Bring your games", "Sign in through Steam and your library and wishlist fill in on their own, or upload a FanaticalGrabber export, or add games by name."),
           step("3", "Get the good stuff", "Sale alerts in your DMs or a server channel, free game alerts, and giveaways your community will love."))),
 
       h("section", { class: "lp-section lp-split" },
@@ -508,7 +511,8 @@
   async function wishlistView() {
     const list = h("div", { class: "muted", text: "Loading prices…" });
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
-    const importBtn = h("button", { class: "btn green", text: "Import", onclick: () => busy(importBtn, async () => {
+    const linked = Boolean(state.me.steam && state.me.steam.linked);
+    const importBtn = h("button", { class: "btn green", text: linked ? "Import my Steam wishlist" : "Import", onclick: () => busy(importBtn, async () => {
       const r = await api("/api/wishlist/import", { profile: profile.value });
       const parts = [`Imported ${r.added} new game${r.added === 1 ? "" : "s"} (${r.existing} already listed).`];
       if (r.pruned) parts.push(`Removed ${r.pruned} that left your Steam wishlist.`);
@@ -582,7 +586,11 @@
     app.replaceChildren(
       pageHead("Wishlist", "Sales first. You are alerted according to each game's rule."),
       h("div", { class: "grid two" },
-        h("div", { class: "panel" }, h("h3", { text: "Import from Steam" }), field("Profile", profile), h("p", { class: "muted small", text: "Your wishlist must be public (Steam Profile > Edit Profile > Privacy Settings > Game details). No login needed. Run it again to sync." }), importBtn),
+        h("div", { class: "panel" }, h("h3", { text: "Import from Steam" }),
+          linked ? h("p", { class: "muted", text: "Uses the Steam account you signed in with. Your wishlist must be public (Steam Profile > Edit Profile > Privacy Settings > Game details). Run it again to sync." })
+            : h("p", { class: "muted", text: "Sign in through Steam once and the bot knows your account everywhere. No links to paste." }),
+          h("div", { class: "row" }, linked ? importBtn : steamLoginBtn()),
+          linked ? null : h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Profile", profile), importBtn)),
         h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField), h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("p", {}), addBtn)),
       list);
     loadList();
@@ -1230,6 +1238,42 @@
       h("div", { class: "sc-actions" }, h("a", { class: "btn gray small", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Open on Steam ↗" }), ...actions));
   }
 
+  // Library analytics for a synced Steam library: tiles, hours by genre, played vs backlog, most played.
+  function analyticsPanel(cur, st) {
+    const box = h("div", { class: "analytics" });
+    const tile = (k, v, sub, hot) => h("div", { class: "a-tile" + (hot ? " hot" : "") }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), h("div", { class: "s", text: sub || "" }));
+    let tries = 0;
+    async function load() {
+      try {
+        const a = await api("/api/steam/analytics");
+        const maxH = Math.max(1, ...a.genres.map(g => g.hours));
+        const bar = (pct, cls = "") => { const f = h("div", { class: "a-fill " + cls }); f.style.width = Math.max(1, Math.min(100, pct)) + "%"; return h("div", { class: "a-track" }, f); }; // set through the DOM: the CSP forbids style attributes
+        box.replaceChildren(
+          h("div", { class: "a-tiles" },
+            tile("Games", String(a.games), "in your library"),
+            tile("Hours played", a.hours.toLocaleString(), "lifetime"),
+            tile("Collection value", a.value ? money(a.value.msrp, a.currency) : "-", "est. retail"),
+            tile("Played", String(a.played), `of ${a.games} · ${a.playedPct}%`, true),
+            st && st.value && st.value.achTotal ? tile("Achievements", `${st.value.achDone.toLocaleString()}`, `of ${st.value.achTotal.toLocaleString()}`) : tile("Backlog", String(a.backlog), "never started")),
+          h("div", { class: "a-grid" },
+            h("div", { class: "panel" }, h("h3", { text: "Hours played by genre" }),
+              h("p", { class: "muted small", text: "Ranked by time played. Games can span several genres, so hours overlap." }),
+              a.genres.length ? a.genres.map(g => h("div", { class: "a-row" }, h("div", { class: "a-name", text: g.name }), h("div", { class: "a-meta", text: `${g.hours.toLocaleString()} hrs · ${g.games} games` }), bar(g.hours / maxH * 100)))
+                : h("p", { class: "muted", text: "Reading genres from Steam…" }),
+              a.pending ? h("p", { class: "muted small", text: `Still reading genres for ${a.pending} games…` }) : null),
+            h("div", { class: "panel" }, h("h3", { text: "Played vs backlog" }),
+              h("div", { class: "a-big", text: a.playedPct + "%" }), h("div", { class: "muted small", text: "of your library played" }),
+              bar(a.playedPct),
+              h("div", { class: "a-split" }, h("span", {}, h("b", { text: String(a.played) }), " played"), h("span", {}, h("b", { text: String(a.backlog) }), " in backlog")))),
+          a.mostPlayed.length ? h("div", { class: "panel" }, h("h3", { text: "Most played" }),
+            h("div", { class: "a-most" }, a.mostPlayed.map(g => h("div", { class: "a-game" }, steamArt(g.appid, "a-art", 460, 215, g.itad_id), h("div", { class: "a-cap" }, h("b", { text: g.title }), h("span", { text: g.hours.toLocaleString() + " hrs" })))))) : null);
+        if (a.pending && tries++ < 12) setTimeout(() => { if (box.isConnected) load(); }, 3000);
+      } catch (e) { box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    load();
+    return box;
+  }
+
   async function steamView() {
     const out = h("div", { class: "muted", text: "Loading…" });
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
@@ -1253,17 +1297,21 @@
     q.addEventListener("keydown", e => { if (e.key === "Enter") findBtn.click(); });
     const lookup = h("div", {}, h("div", { class: "panel" }, h("h3", { text: "Look up a profile" }), field("Any public Steam profile", q), h("p"), findBtn,
       h("p", { class: "muted small", text: "See someone's card, games and hours. Nothing is saved." })), found);
-    const linkPanel = h("div", { class: "panel" }, h("h3", { text: "Link a profile" }), field("Steam profile", profile), h("p"), linkBtn,
-      h("p", { class: "muted small", text: "Set Game details to Public in Steam's privacy settings. Only the public ID and your games with playtime are stored." }));
+    const linkPanel = h("div", { class: "panel steam-hero" }, h("h3", { text: "Sign in through Steam" }),
+      h("p", { class: "muted", text: "One click and your library, hours played and taste profile fill in on their own. You sign in on Steam's own page; the bot never sees your password and only keeps your public ID." }),
+      h("div", { class: "row" }, steamLoginBtn("Sign in through Steam", "btn steam big")),
+      h("p", { class: "muted small", text: "Set Game details to Public in Steam's privacy settings so your games can be read." }),
+      h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Steam profile", profile), h("p"), linkBtn));
     const slot = h("div");
     async function load() {
       try {
         const d = await api("/api/steam");
         state.steamLinked = !!d.link;
+        state.me.steam = d.link ? { linked: true, verified: Boolean(d.link.verified), synced: Boolean(d.link.synced_at) } : { linked: false };
         if (d.link && autoFillArt(d.card, d.stats, state.artForce)) toast("Updated your profile card picture and banner from Steam.", "ok");
         state.artForce = false;
         // Linked: the look-up takes the link box's place. Not linked: link first, look-up below.
-        slot.replaceChildren(...(d.link ? [lookup] : [linkPanel, lookup]));
+        slot.replaceChildren(...(d.link ? [d.link.verified ? null : h("div", { class: "notice" }, "This profile was added from a link. ", steamLoginBtn("Verify with Steam", "btn steam small"), " Verified accounts can sign in with Steam and need no links."), lookup].filter(Boolean) : [linkPanel, lookup]));
         if (!d.link) { out.className = ""; out.replaceChildren(h("div", { class: "empty", text: "No Steam profile linked yet. Your Game details must be public on Steam for this to work." })); return; }
         const st = d.stats, cur = d.currency;
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
@@ -1300,11 +1348,7 @@
         const quickUnlink = h("button", { class: "btn red small", type: "button", text: "Unlink", title: "Unlink this profile (your games stay unless you remove them under Manage)", onclick: () => { if (confirm("Unlink this Steam profile? Your library games stay.")) busy(quickUnlink, async () => { await api("/api/steam/unlink", { removeGames: false }); toast("Unlinked.", "ok"); load(); }); } });
         out.replaceChildren(
           d.card ? steamProfileCard(d.card, quickUnlink) : null,
-          h("div", { class: "grid four" },
-            tile("Games", String(st.games), st.playedGames + " played"),
-            tile("Hours played", hoursText(st.totalMinutes)),
-            st.value.achTotal ? tile("Achievements", `${st.value.achDone.toLocaleString()} / ${st.value.achTotal.toLocaleString()}`, `${Math.round(st.value.achDone / st.value.achTotal * 100)}% unlocked, ${st.value.achGames} games` + (st.completed ? `, ${st.completed} at 100%` : "")) : null,
-            tile("Barely played", String(st.unplayedCount), money(st.unplayedMsrp, cur) + " at full price")),
+          analyticsPanel(cur, st),
           h("div", { class: "panel" }, h("div", { class: "panel-head" }, h("h3", { text: "💰 Estimated account value" }), valueImageBtn),
             h("div", { class: "grid four" },
               tile("At full price", money(st.value.msrp, cur), "list price today"),
@@ -1324,9 +1368,14 @@
           h("div", { class: "panel" }, h("h3", { text: "Manage" }), h("div", { class: "row" }, sync), h("p"), h("label", { class: "check" }, unlinkGames, " Also remove the games that came from Steam"), h("p"), unlink));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
-    app.replaceChildren(pageHead("Steam", "Link your public Steam profile to fill your library automatically: your games, hours played, what you never played and what to play next."),
+    app.replaceChildren(pageHead("Steam", "Sign in through Steam to fill your library automatically: your games, hours played, what you never played and what to play next."),
       slot, out);
-    load();
+    if (/[?&]linked=1/.test(location.hash)) {
+      // Just came back from Steam: read the library straight away, then tidy the address.
+      history.replaceState(null, "", "#/steam");
+      out.className = "muted"; out.textContent = "Reading your Steam library…";
+      api("/api/steam/sync", {}).then(r => { state.artForce = true; state.me.steam = { linked: true, verified: true, synced: true }; toast(`Signed in. Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + ".", "ok"); }).catch(e => toast(e.message, "error")).finally(load);
+    } else load();
   }
 
   // ---------- batch redeem ----------
@@ -1636,10 +1685,24 @@
           grabberOut.replaceChildren(h("p", { class: "muted small", text: "Copy this now. It is shown once. Anyone with it can add games to your library." }), box,
             h("p", {}, h("button", { class: "btn gray small", text: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(token); toast("Copied.", "ok"); } catch { box.select(); toast("Press Ctrl+C to copy.", "error"); } } })));
         }));
+        // One click: the extension (2.7+) takes the code straight from this page, so there is nothing to paste.
+        const connect = h("button", { class: "btn green small", text: link ? "Reconnect the extension" : "Connect the extension" });
+        connect.addEventListener("click", () => busy(connect, async () => {
+          const ask = (type, extra = {}) => new Promise(res => {
+            const on = e => { if (e.source === window && e.data && e.data.svc === "ext" && (e.data.type === (type === "ping" ? "pong" : "connected"))) { window.removeEventListener("message", on); res(e.data); } };
+            window.addEventListener("message", on); window.postMessage({ svc: "page", type, ...extra }, location.origin);
+            setTimeout(() => { window.removeEventListener("message", on); res(null); }, 1500);
+          });
+          const here = await ask("ping");
+          if (!here) { toast("I can't see the extension. Install or update FanaticalGrabber (2.7 or newer), then reload this page.", "error"); return; }
+          const { token } = await api("/api/grabber/token", { action: "new" });
+          const done = await ask("connect", { token });
+          if (done && done.ok) { toast("Extension connected.", "ok"); grabberLoad(); } else toast("The extension did not accept the code. Update it to 2.7 or newer.", "error");
+        }));
         const off = link && h("button", { class: "btn red small", text: "Turn off" });
         if (off) off.addEventListener("click", () => busy(off, async () => { await api("/api/grabber/token", { action: "off" }); toast("Link turned off.", "ok"); grabberLoad(); }));
         grabberOut.className = "";
-        grabberOut.replaceChildren(h("p", { class: "muted small", text: link ? `Linked. ${link.sends} send${link.sends === 1 ? "" : "s"} so far${link.used_at ? `, last ${new Date(link.used_at).toLocaleDateString()}` : ""}.` : "Not linked. Make a code, then paste it into the FanaticalGrabber extension once." }), h("p", {}, make, " ", off));
+        grabberOut.replaceChildren(h("p", { class: "muted small", text: link ? `Linked. ${link.sends} send${link.sends === 1 ? "" : "s"} so far${link.used_at ? `, last ${new Date(link.used_at).toLocaleDateString()}` : ""}.` : "Not linked. Press Connect the extension and you are done, no code to paste." }), h("p", {}, connect, " ", h("details", { class: "paste" }, h("summary", { text: "Or make a code to paste by hand" }), h("p", {}, make, " ", off))));
       } catch (e) { grabberOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 

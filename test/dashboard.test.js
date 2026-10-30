@@ -1233,3 +1233,79 @@ test("admin network-wide giveaway: owner only, needs a confirm and a destination
     assert.equal((await o.request("/api/admin/giveaways/create", { method: "POST", body: { keys: "A | AAAAA-BBBBB", confirm: "SEND" } })).status, 503); // no giveaway service in this setup
     await o.close();
 });
+
+test("Sign in through Steam: Steam's reply is verified, then a Discord sign-in attaches it once, and later it signs in alone", async () => {
+    const { verifySteamLogin } = await import("../src/steamopenid.js");
+    const SID = "76561198000000001";
+    const reply = (state, extra = {}) => {
+        const q = new URLSearchParams({
+            "openid.ns": "http://specs.openid.net/auth/2.0", "openid.mode": "id_res", "openid.op_endpoint": "https://steamcommunity.com/openid/login",
+            "openid.claimed_id": `https://steamcommunity.com/openid/id/${SID}`, "openid.identity": `https://steamcommunity.com/openid/id/${SID}`,
+            "openid.return_to": `${ORIGIN}/auth/steam/return?state=${state}`, "openid.sig": "x", "openid.signed": "a", state, ...extra
+        });
+        return q;
+    };
+    let valid = true;
+    const steamFetch = async (url, init) => {
+        assert.match(String(init.body), /openid\.mode=check_authentication/);
+        return { ok: true, text: async () => `ns:http://specs.openid.net/auth/2.0\nis_valid:${valid}\n` };
+    };
+    const t = await setup({ extra: { steamFetch } });
+    const start = async () => {
+        const r = await t.request("/auth/steam");
+        assert.match(r.headers.get("location"), /^https:\/\/steamcommunity\.com\/openid\/login\?/);
+        return new URL(new URL(r.headers.get("location")).searchParams.get("openid.return_to")).searchParams.get("state");
+    };
+
+    // A forged reply (wrong state, or Steam says invalid) gets nowhere.
+    assert.match((await t.request(`/auth/steam/return?${reply("nope")}`)).headers.get("location"), /error=steam/);
+    let state = await start(); valid = false;
+    assert.match((await t.request(`/auth/steam/return?${reply(state)}`)).headers.get("location"), /error=steam/);
+    valid = true;
+
+    // New person: Steam is verified, then Discord is asked for once, and the accounts connect.
+    state = await start();
+    const r1 = await t.request(`/auth/steam/return?${reply(state)}`);
+    assert.equal(r1.headers.get("location"), "/auth/login");
+    const done = await t.signIn();
+    assert.equal(done.headers.get("location"), "/#/steam?linked=1");
+    assert.equal(t.db.getSteamLink("u1").steamid, SID);
+    assert.equal(t.db.getSteamLink("u1").verified, 1);
+    assert.equal((await t.request("/api/me")).data.steam.verified, true);
+
+    // Next time Steam alone is enough, but it is never an admin session.
+    await t.request("/auth/logout", { method: "POST", body: {} });
+    assert.equal((await t.request("/api/me")).status, 401);
+    state = await start();
+    const r2 = await t.request(`/auth/steam/return?${reply(state)}`);
+    assert.equal(r2.headers.get("location"), "/#/steam");
+    const me = await t.request("/api/me");
+    assert.equal(me.status, 200); assert.equal(me.data.steamOnly, true); assert.equal(me.data.isOwner, false);
+    assert.equal(me.data.steam.linked, true);
+
+    // A state is single-use.
+    assert.match((await t.request(`/auth/steam/return?${reply(state)}`)).headers.get("location"), /error=steam/);
+
+    // The verifier itself refuses a reply meant for another return address or another account format.
+    const p = reply("s1"); p.set("openid.return_to", "https://evil.example/");
+    await assert.rejects(verifySteamLogin(p, `${ORIGIN}/auth/steam/return?state=s1`, steamFetch), /steam_openid/);
+    const q = reply("s1"); q.set("openid.claimed_id", "https://evil.example/id/76561198000000001");
+    await assert.rejects(verifySteamLogin(q, `${ORIGIN}/auth/steam/return?state=s1`, steamFetch), /steam_openid/);
+    await t.close();
+});
+
+test("a pasted Steam ID can never be used to sign in as someone else", async () => {
+    const SID = "76561198000000002";
+    const steamFetch = async () => ({ ok: true, text: async () => "is_valid:true\n" });
+    const t = await setup({ extra: { steamFetch } });
+    await t.signIn(); // u1 pastes somebody's ID (unverified link)
+    t.db.setSteamLink("u1", SID);
+    await t.request("/auth/logout", { method: "POST", body: {} });
+    const r = await t.request("/auth/steam");
+    const state = new URL(new URL(r.headers.get("location")).searchParams.get("openid.return_to")).searchParams.get("state");
+    const q = new URLSearchParams({ "openid.ns": "http://specs.openid.net/auth/2.0", "openid.mode": "id_res", "openid.op_endpoint": "https://steamcommunity.com/openid/login", "openid.claimed_id": `https://steamcommunity.com/openid/id/${SID}`, "openid.identity": `https://steamcommunity.com/openid/id/${SID}`, "openid.return_to": `${ORIGIN}/auth/steam/return?state=${state}`, state });
+    const back = await t.request(`/auth/steam/return?${q}`);
+    assert.equal(back.headers.get("location"), "/auth/login", "unverified links do not count: Discord is asked for instead");
+    assert.equal((await t.request("/api/me")).status, 401);
+    await t.close();
+});

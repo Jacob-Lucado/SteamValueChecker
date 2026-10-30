@@ -20,6 +20,8 @@ import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
+import { libraryAnalytics } from "../analytics.js";
+import { steamLoginUrl, verifySteamLogin } from "../steamopenid.js";
 import { UserError } from "../errors.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
@@ -73,7 +75,8 @@ const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
-const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000 };
+const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending";
+const COOLDOWNS = { broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -98,6 +101,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
     const secure = origin.startsWith("https://");
     const sessions = new Map();
     const states = new Map();
+    const steamPending = new Map(); // one-time token -> { steamid, exp }: a Steam sign-in that still needs a Discord account to attach to
     const lastRun = new Map();
     const cache = new Map();
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
@@ -160,6 +164,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         const t = now();
         for (const [k, s] of sessions) if (s.expires < t) sessions.delete(k);
         for (const [k, exp] of states) if (exp < t) states.delete(k);
+        for (const [k, p] of steamPending) if (p.exp < t) steamPending.delete(k);
         for (const [k, at] of lastRun) if (t - at > 120_000) lastRun.delete(k); // the longest cooldown is a minute
     }
 
@@ -191,7 +196,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         return (config.trustProxy && fwd.length ? fwd[fwd.length - 1] : req.socket.remoteAddress) ?? "unknown";
     };
 
-    const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId;
+    const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
     const broadcaster = () => (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
         sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p) }));
@@ -227,6 +232,14 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
 
     const num = v => (v === null || v === undefined || v === "" ? null : Number(v));
     const userRow = s => db.ensureUser(s.userId);
+    /** A pasted profile if there is one, else the Steam account the person signed in with. */
+    const profileOrLinked = async (s, pasted) => {
+        const text = String(pasted ?? "").trim();
+        if (text) return text;
+        const link = db.getSteamLink(s.userId);
+        if (!link) throw new HttpError(400, "Sign in through Steam first.");
+        return link.steamid;
+    };
 
     function publicSettings(u) {
         return { region: u.region, stores: u.stores, delivery: u.delivery, paused: Boolean(u.paused), guild_id: u.guild_id, steam_id: u.steam_id, ...prefsView(u) };
@@ -281,6 +294,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 games: db.countItems(s.userId),
                 servers: serversFor(s, u),
                 isOwner: isOwner(s),
+                steamOnly: Boolean(s.steamOnly),
                 giveaways: Boolean(giveaways),
                 library: db.countLibrary(s.userId),
                 unread: db.unreadNotifications(s.userId),
@@ -288,6 +302,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
                 news: u.seen_version === LATEST ? null : LATEST,
                 newsTitle: CHANGELOG[0]?.title ?? null,
                 tour: !u.welcomed,
+                steam: (l => l ? { linked: true, verified: Boolean(l.verified), synced: Boolean(l.synced_at) } : { linked: false })(db.getSteamLink(s.userId)),
                 setup: setupSteps(s, u)
             };
         },
@@ -362,7 +377,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const undo = cooldown(s.userId, "import");
             userRow(s);
             try {
-                const r = await importWishlist(String(body.profile ?? ""), itad);
+                const r = await importWishlist(await profileOrLinked(s, body.profile), itad);
                 return applySteamImport(db, s.userId, r);
             } catch (err) {
                 undo();
@@ -795,6 +810,19 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         },
 
         // What to play next from the Steam library. `skip` (comma-separated ids already offered) makes "pick another" fresh.
+        // Library analytics: tiles, hours by genre, played vs backlog, most played. Genre tags are fetched a few at a time, so
+        // `pending` says how many games are still waiting; the page asks again until it is 0.
+        "GET /api/steam/analytics": async (req) => {
+            const s = session(req);
+            const u = userRow(s);
+            if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Sign in through Steam first.");
+            cooldown(s.userId, "analytics");
+            const need = db.appsNeedingTags(s.userId, 12);
+            if (need.length) await refreshTags({ db, appids: need, fetchImpl: steamFetch ?? globalThis.fetch, delayMs: 250 });
+            const w = await viewRows(db, itad, u);
+            return { ...libraryAnalytics(db, s.userId, w.rows), currency: w.currency ?? "USD", pending: db.appsNeedingTags(s.userId, 500).length };
+        },
+
         "GET /api/steam/taste": async (req) => {
             const s = session(req);
             const u = userRow(s);
@@ -842,7 +870,7 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             const undo = cooldown(s.userId, "steam");
             userRow(s);
             try {
-                const steamid = await resolveProfile(String(body.profile ?? ""), steamFetch);
+                const steamid = String(body.profile ?? "").trim() ? await resolveProfile(String(body.profile), steamFetch) : db.getSteamLink(s.userId)?.steamid ?? (() => { throw new HttpError(400, "Sign in through Steam first."); })();
                 return await syncSteamLibrary({ db, itad, userId: s.userId, steamid, apiKey: config.steamApiKey ?? null, fetchImpl: steamFetch });
             } catch (err) { undo(); throw err; }
         },
@@ -1618,18 +1646,69 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
         try { who = await rest.login(code); }
         catch (err) { log(`login failed: ${err.status ?? err.name}`); return send(res, 302, "", { Location: "/?error=login" }); }
 
+        const name = who.user.global_name || who.user.username;
+        const avatar = who.user.avatar ? `https://cdn.discordapp.com/avatars/${who.user.id}/${who.user.avatar}.png?size=64` : null;
+        startSession(res, {
+            userId: who.user.id, username: name, avatar,
+            guilds: (who.guilds ?? []).map(g => ({ id: g.id, name: g.name, icon: g.icon, owner: Boolean(g.owner), permissions: String(g.permissions ?? "0") }))
+        });
+        db.ensureUser(who.user.id);
+        // Came here from "Sign in through Steam" and had no account yet: attach the proven Steam account now.
+        const pend = steamPending.get(cookies(req)[STEAM_PENDING_COOKIE]);
+        steamPending.delete(cookies(req)[STEAM_PENDING_COOKIE]);
+        setCookie(res, STEAM_PENDING_COOKIE, "", 0);
+        if (pend && pend.exp > now()) {
+            db.setSteamLink(who.user.id, pend.steamid, { verified: true });
+            db.setSteamWho(who.user.id, name, avatar);
+            return send(res, 302, "", { Location: "/#/steam?linked=1" });
+        }
+        if (db.getSteamLink(who.user.id)?.verified) db.setSteamWho(who.user.id, name, avatar); // keep the Steam sign-in's name and picture fresh
+        send(res, 302, "", { Location: "/#/mypage" });
+    }
+
+    function startSession(res, data) {
         if (sessions.size >= MAX_SESSIONS) sweep();
         if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value);
         const id = randomBytes(32).toString("hex");
-        sessions.set(id, {
-            userId: who.user.id,
-            username: who.user.global_name || who.user.username,
-            avatar: who.user.avatar ? `https://cdn.discordapp.com/avatars/${who.user.id}/${who.user.avatar}.png?size=64` : null,
-            guilds: (who.guilds ?? []).map(g => ({ id: g.id, name: g.name, icon: g.icon, owner: Boolean(g.owner), permissions: String(g.permissions ?? "0") })),
-            expires: now() + SESSION_MS
-        });
+        sessions.set(id, { ...data, expires: now() + SESSION_MS });
         setCookie(res, COOKIE, id, SESSION_MS / 1000);
-        send(res, 302, "", { Location: "/#/mypage" });
+    }
+
+    // ---- Sign in through Steam (OpenID). Steam proves the account; a Discord account is what the bot's alerts attach to. ----
+    async function steamLogin(req, res) {
+        sweep();
+        const state = randomBytes(24).toString("hex");
+        states.set("steam:" + state, now() + 10 * 60_000);
+        setCookie(res, STEAM_STATE_COOKIE, state, 600);
+        send(res, 302, "", { Location: steamLoginUrl(`${origin}/auth/steam/return?state=${state}`, origin) });
+    }
+
+    async function steamReturn(req, res, url) {
+        const state = url.searchParams.get("state") ?? "";
+        const ok = state && states.get("steam:" + state) > now() && cookies(req)[STEAM_STATE_COOKIE] === state;
+        states.delete("steam:" + state);
+        setCookie(res, STEAM_STATE_COOKIE, "", 0);
+        if (!ok) return send(res, 302, "", { Location: "/?error=steam" });
+        let steamid;
+        try { steamid = await verifySteamLogin(url.searchParams, `${origin}/auth/steam/return?state=${state}`, steamFetch); }
+        catch { return send(res, 302, "", { Location: "/?error=steam" }); }
+
+        const s = sessions.get(cookies(req)[COOKIE]);
+        if (s && s.expires > now()) { // already signed in with Discord: this proves the Steam account is theirs
+            db.ensureUser(s.userId);
+            db.setSteamLink(s.userId, steamid, { verified: true });
+            db.setSteamWho(s.userId, s.username, s.avatar);
+            return send(res, 302, "", { Location: "/#/steam?linked=1" });
+        }
+        const known = db.findVerifiedSteamUser(steamid);
+        if (known) { // signed in before: straight back into that account (server tools need a Discord sign-in, so no servers here)
+            startSession(res, { userId: known.discord_id, username: known.uname || "Steam player", avatar: known.avatar || null, guilds: [], steamOnly: true });
+            return send(res, 302, "", { Location: "/#/steam" });
+        }
+        const token = randomBytes(24).toString("hex");
+        steamPending.set(token, { steamid, exp: now() + 15 * 60_000 });
+        setCookie(res, STEAM_PENDING_COOKIE, token, 900);
+        send(res, 302, "", { Location: "/auth/login" }); // one Discord sign-in connects it, once
     }
 
     function logout(req, res) {
@@ -1719,6 +1798,8 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             }
             if (key === "GET /auth/login") return await login(req, res);
             if (key === "GET /auth/callback") return await callback(req, res, url);
+            if (key === "GET /auth/steam") return await steamLogin(req, res);
+            if (key === "GET /auth/steam/return") return await steamReturn(req, res, url);
             if (key === "POST /auth/logout") { checkWrite(req); return logout(req, res); }
 
             // The same pictures /profilecard and /steam value post in Discord. Saved straight from the website with a download name.

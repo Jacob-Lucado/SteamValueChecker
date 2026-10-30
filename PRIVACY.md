@@ -20,6 +20,7 @@ Steam Value Checker is a Discord bot that prices a list of games and, if you cho
 ## What it does with the data
 
 - Game titles (and game IDs for wishlist alerts) are sent to **IsThereAnyDeal** (isthereanydeal.com) to look up prices. Their [privacy policy](https://isthereanydeal.com/privacy/) applies to that request. Nothing about you, other than the titles or game IDs, is sent.
+- If you use **Sign in through Steam**, you sign in on Steam's own page (steamcommunity.com). Steam tells the bot only your public SteamID64; the bot never sees your Steam password. It stores that ID, that it was verified, and your Discord name and picture so a later Steam sign-in can open your account.
 - When you run `/wishlist import`, the bot asks **Steam** (steampowered.com and steamcommunity.com) for the public wishlist of the profile you gave. Steam's own policies apply to that request.
 - Results are shown only to you (ephemeral replies) and are returned as an embed and a CSV file in that reply.
 

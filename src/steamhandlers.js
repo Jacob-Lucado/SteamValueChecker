@@ -100,7 +100,7 @@ export function nextEmbed(n, currency) {
     };
 }
 
-export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globalThis.fetch }) {
+export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null, fetchImpl = globalThis.fetch }) {
     const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
     async function failed(i, err) {
         const known = err instanceof UserError || err instanceof SteamError || err instanceof ItadError || err instanceof LibraryError;
@@ -207,8 +207,9 @@ export function createSteamHandlers({ db, itad, apiKey = null, fetchImpl = globa
             }
             wait(i.user.id);
             await i.deferReply({ flags: MessageFlags.Ephemeral });
-            const steamid = sub === "link" ? await resolveProfile(i.options.getString("profile", true), fetchImpl) : link?.steamid;
-            if (!steamid) throw new UserError("Link your profile first with `/steam link`.");
+            const pasted = sub === "link" ? (i.options.getString("profile") ?? "").trim() : "";
+            const steamid = pasted ? await resolveProfile(pasted, fetchImpl) : link?.steamid;
+            if (!steamid) throw new UserError(`Sign in through Steam and it links by itself, no profile link needed: ${publicUrl ? `${publicUrl}/auth/steam` : "open the dashboard and press Sign in through Steam"}`);
             const r = await syncSteamLibrary({ db, itad, userId: i.user.id, steamid, apiKey, fetchImpl });
             return void await i.editReply(summary(r));
         } catch (err) {

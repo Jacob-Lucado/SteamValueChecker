@@ -120,6 +120,7 @@ Lists the games that are free to claim right now on Steam, Epic, GOG and other s
 
 ### Steam library, gifts and Play next
 
+- **Sign in through Steam** (the button on the dashboard, uses Steam's own OpenID page, no API key and no password) links your account and syncs your library. After that `/steam link`, `/wishlist import` and the dashboard need no profile link. A pasted profile still works, but only a Steam sign-in counts as proof for signing in later (a Steam-only sign-in is never an admin session, and a Discord sign-in connects it once). The Steam page shows library analytics: games, hours, collection value, hours by genre, played vs backlog and most played.
 - `/steam link` reads your **public** Steam profile (hours, achievements). `/steam view`, `next` (Play next), `value`, `taste`, `recap`, `goal` (a finish-the-backlog target) and `unlink`.
 - With the FanaticalGrabber extension, **Send what I paid** (Steam purchase history) fills in prices on synced games, and **Record retail prices** (Steam licenses) records key activations and gifts at retail. Gifts show a `*` in `/library view` (and a Gifted tooltip on the dashboard) and are left out of spend and savings.
 - `/library bundle` records a bundle you bought (name, what you paid, the games; the price is split evenly) and `/library bundles` lists them. `/bundle` checks whether a bundle is worth it before you buy.

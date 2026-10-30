@@ -63,7 +63,7 @@ const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo() });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
-const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey });
+const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const cardUi = createCardHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const fx = createFx();
 const dealUi = createDealHandlers({ db, itad, fx });

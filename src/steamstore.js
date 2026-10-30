@@ -61,10 +61,16 @@ const startStatus = (g, lastPlayedMs, nowMs) => ((g.minutes ?? 0) < 60 ? "backlo
 
 export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     const getSteamLink = id => clean(get("SELECT * FROM steam_links WHERE discord_id = ?", id)) ?? null;
-    const setSteamLink = (id, steamid) => run(
-        `INSERT INTO steam_links (discord_id, steamid, linked_at) VALUES (?,?,?)
-         ON CONFLICT(discord_id) DO UPDATE SET steamid = excluded.steamid, linked_at = CASE WHEN steam_links.steamid = excluded.steamid THEN steam_links.linked_at ELSE excluded.linked_at END`,
-        id, steamid, now());
+    // `verified` means the owner signed in through Steam. A pasted profile stays unverified and can never be used to sign in.
+    const setSteamLink = (id, steamid, { verified = false } = {}) => run(
+        `INSERT INTO steam_links (discord_id, steamid, linked_at, verified) VALUES (?,?,?,?)
+         ON CONFLICT(discord_id) DO UPDATE SET
+           verified = CASE WHEN steam_links.steamid = excluded.steamid THEN MAX(steam_links.verified, excluded.verified) ELSE excluded.verified END,
+           steamid = excluded.steamid, linked_at = CASE WHEN steam_links.steamid = excluded.steamid THEN steam_links.linked_at ELSE excluded.linked_at END`,
+        id, steamid, now(), verified ? 1 : 0);
+    /** Who proved they own this Steam account (newest first). Only verified links count, so a pasted ID cannot take over a login. */
+    const findVerifiedSteamUser = steamid => clean(get("SELECT discord_id, uname, avatar FROM steam_links WHERE steamid = ? AND verified = 1 ORDER BY linked_at DESC LIMIT 1", steamid)) ?? null;
+    const setSteamWho = (id, uname, avatar) => run("UPDATE steam_links SET uname = ?, avatar = ? WHERE discord_id = ?", uname ?? null, avatar ?? null, id);
     const markSteamSynced = (id, { games, minutes }) => run("UPDATE steam_links SET synced_at = ?, games = ?, minutes = ? WHERE discord_id = ?", now(), games, minutes, id);
     const removeSteamLink = id => run("DELETE FROM steam_links WHERE discord_id = ?", id).changes > 0;
     const steamLinkedUsers = () => all("SELECT discord_id FROM steam_links").map(r => r.discord_id);
@@ -144,5 +150,5 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         `SELECT appid FROM (SELECT appid FROM library WHERE appid IS NOT NULL UNION SELECT appid FROM items WHERE appid IS NOT NULL)
          WHERE appid NOT IN (SELECT appid FROM app_tags WHERE fetched_at > ?) LIMIT ?`, now() - 30 * 86400_000, limit).map(r => r.appid);
 
-    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

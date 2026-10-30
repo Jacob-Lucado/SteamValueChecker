@@ -74,7 +74,10 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         const undo = cooldown(i, "import");
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         try {
-            const r = await importWishlist(i.options.getString("profile", true), itad);
+            const pasted = (i.options.getString("profile") ?? "").trim();
+            const linked = db.getSteamLink?.(i.user.id)?.steamid;
+            if (!pasted && !linked) { undo(); return void await i.editReply(`Sign in through Steam once and this works with no links: ${publicUrl ? `${publicUrl}/auth/steam` : "open the dashboard and press Sign in through Steam"}`); }
+            const r = await importWishlist(pasted || linked, itad);
             const res = applySteamImport(db, i.user.id, r);
             const pruned = res.pruned;
 
