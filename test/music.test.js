@@ -305,3 +305,11 @@ test("community setup gives music its own category, command channel and intro", 
     for (const w of ["/play", "playlist", "saveplaylist", "settings", "skip", "loop", "SoundCloud"]) assert.ok(text.includes(w), w);
     assert.ok(text.length < 5500 && e.fields.every(f => f.value.length <= 1024));
 });
+
+test("the voice encoder is raised to the channel's bitrate, capped at 128 kbps", async () => {
+    const { tuneEncoder } = await import("../src/music.js");
+    const seen = [];
+    const enc = { setBitrate: n => seen.push(n), setFEC: () => {}, setPLP: () => {} };
+    tuneEncoder({ encoder: enc }, 96_000); tuneEncoder({ encoder: enc }, 384_000); tuneEncoder({ encoder: enc }, null); tuneEncoder({}, 96_000);
+    assert.deepEqual(seen, [96_000, 128_000, 64_000]);
+});

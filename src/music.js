@@ -25,6 +25,14 @@ export const fmtTime = sec => {
  *  api      – bot REST: sendMessage(channelId, payload), editMessage(channelId, messageId, payload)
  */
 const LIVE_MS = 10_000;
+/** Discord plays Opus. Left alone the encoder picks a modest bitrate, so raise it to what the voice channel allows (SoundCloud itself tops out around 128 kbps, so more than that adds nothing). */
+export const MAX_BITRATE = 128_000;
+export function tuneEncoder(resource, channelBitrate) {
+    const enc = resource?.encoder;
+    if (!enc) return;
+    const target = Math.max(32_000, Math.min(MAX_BITRATE, Number(channelBitrate) || 64_000));
+    try { enc.setBitrate(target); enc.setFEC?.(false); enc.setPLP?.(0); } catch { /* an encoder without these controls keeps its defaults */ }
+}
 export function createMusic({ db, source, voice, getGuild, api = null, panel = null, log = () => {}, setTimer = setTimeout, clearTimer = clearTimeout }) {
     const guilds = new Map();
 
@@ -129,6 +137,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         g.stream = s; g.offset = seek; g.failures = 0;
         const resource = voice.createAudioResource(s.stream, { inputType: voice.StreamType.Raw, inlineVolume: true });
         resource.volume?.setVolume((g.volume ?? 50) / 100);
+        tuneEncoder(resource, getGuild(g.guildId)?.channelBitrate?.(g.voiceChannelId));
         g.resource = resource; g.playing = true; g.swapping = true;
         g.player.play(resource);
         g.swapping = false;

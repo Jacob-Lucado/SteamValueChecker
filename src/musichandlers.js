@@ -37,6 +37,7 @@ export function guildAdapter(client) {
                 return { id: ch.id, name: ch.name, canJoin: Boolean(p?.has(PermissionFlagsBits.Connect)) && !(ch.full && !p?.has(PermissionFlagsBits.MoveMembers)), canSpeak: ch.type === ChannelType.GuildStageVoice || Boolean(p?.has(PermissionFlagsBits.Speak)) };
             },
             humansIn(channelId) { const ch = guild.channels.cache.get(channelId); return ch ? ch.members.filter(m => !m.user.bot).size : 0; },
+            channelBitrate(channelId) { return guild.channels.cache.get(channelId)?.bitrate ?? null; },
             channelName(channelId) { return guild.channels.cache.get(channelId)?.name ?? null; }
         };
     };
