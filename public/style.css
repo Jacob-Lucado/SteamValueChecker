@@ -813,3 +813,16 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .lp-icon:empty, .lp-flow-icon:empty { display: none; }
 .sv-ico:empty, .free-noart:empty, .cal-ico:empty, .icon:empty { display: none; }
 .free-noart:empty { display: grid; }
+
+/* phones */
+@media (max-width: 520px) {
+  .topbar-inner { padding: 8px 14px; gap: 6px 10px; }
+  .topbar .brand span, .topbar .brand b { font-size: 14px; }
+  .lp-hero { padding: 24px 16px; border-radius: 18px; }
+  .lp-hero h1 { font-size: 27px; line-height: 1.12; }
+  .lp-sub { font-size: 16px; }
+  .lp-cta { flex-direction: column; align-items: stretch; }
+  .lp-cta .btn { width: 100%; text-align: center; justify-content: center; }
+  .lp-section h2 { font-size: 22px; }
+  #app { padding-left: 14px; padding-right: 14px; }
+}
