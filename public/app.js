@@ -264,10 +264,10 @@
         h("div", { class: "lp-hero-text" },
           failed && h("div", { class: "notice warn", text: "Sign-in did not work. Please try again." }),
           state.freeNow ? h("a", { class: "lp-live", href: state.me ? "#/free" : "/auth/login" }, h("i", { class: "lp-dot" }), `${state.freeNow} free offer${state.freeNow === 1 ? "" : "s"} live right now`) : h("div", { class: "lp-kicker", text: "Free Discord bot for PC gamers" }),
-          h("h1", { text: "Know what your games are worth. Never miss a sale." }),
-          h("p", { class: "lp-sub", text: "Price your whole library, watch your wishlist for deals, get told when games are free, and run key giveaways in your server. All from Discord, with a dashboard that does it all too." }),
+          h("h1", { text: "Prices for your PC game library, and alerts when games go on sale." }),
+          h("p", { class: "lp-sub", text: "A Discord bot that prices your game library, watches your wishlist for sales, announces free games and runs key giveaways. Everything is also on the web dashboard." }),
           cta(),
-          h("p", { class: "muted small", text: "No passwords, no game keys, no charge. Sign-in shares only your name, avatar and server list." })),
+          h("p", { class: "muted small", text: "It is free and never asks for passwords or game keys. Signing in shares only your name, avatar and server list." })),
         h("div", { class: "lp-hero-art" }, mock)),
 
       h("div", { class: "lp-ticker", "aria-hidden": "true" }, h("div", { class: "lp-ticker-track" },
@@ -277,53 +277,53 @@
         stat("Servers", n(ab.servers)), stat("Games watched", n(ab.gamesWatched)), stat("Alerts in the last 24h", n(ab.alerts24h)), stat("Giveaway keys redeemed", n(ab.redeemed))) : null,
 
       h("section", { class: "lp-section" },
-        h("h2", { text: "Everything a game buyer needs" }),
+        h("h2", { text: "What it does" }),
         h("div", { class: "lp-grid" },
-          feature("💸", "Library value", "MSRP, the current Steam price, the cheapest price right now across stores, and how much you really saved against what you paid."),
-          feature("🔔", "Wishlist sale alerts", "Import your public Steam wishlist. Choose any sale, a percent off, a price, or an all-time low. Alerts come with game art and a deal verdict."),
-          feature("🎁", "Free game alerts", "Hear when a game is free on Steam, Epic, GOG and more, with one-click Claim buttons. Or run /freegames any time."),
-          feature("🏆", "Key giveaways", "Server owners run giveaways with many keys, custom art, GIFs or video. Winners claim by button, confirm it worked, and a vouch is posted."),
-          feature("👥", "Server tools", "A shared server wishlist with votes, an opt-in savings leaderboard, and group pings when several members want the same deal."),
-          feature("🎂", "Friends and gifts", "Keep friends' birthdays, see what is on sale on their public wishlist and get a reminder a week ahead. Visitors can mark gifts so nobody doubles up."),
-          feature("🏅", "Trophies and leagues", "Earn badges from your library and monthly challenge streak, and compete in a server backlog league."),
-          feature("📱", "Sale war room", "Plan a Steam sale cart with a budget slider."),
-          feature("🎮", "Your Steam library", "Sign in through Steam for hours played, library analytics, what you never played, achievements and a Play next pick. Prices you paid fill in from Steam purchase history, and gifts are marked."),
-          feature("🔥", "Hot deals and sale starts", "Servers can get a post when a big deal appears or when a Steam sale begins, with a minimum discount you choose."),
-          feature("📦", "Bundle check", "See whether a bundle is worth it against what its games cost today, skipping ones you own."),
-          feature("🐞", "Bug reports and support", "Report a problem with /bug or open a ticket; the team answers in the same thread on Discord and here."),
-          feature("📊", "A full dashboard", "Everything the commands do, in your browser: charts, price history, bulk actions and giveaway management."))),
+          feature("", "Library value", "MSRP, the current Steam price, the cheapest price across stores right now, and how much you saved compared with what you paid."),
+          feature("", "Wishlist alerts", "Import your public Steam wishlist and pick when to be alerted: any sale, a percent off, a target price or an all-time low."),
+          feature("", "Free game alerts", "Get told when a game is free on Steam, Epic, GOG and other stores, with a Claim button. /freegames lists what is free now."),
+          feature("", "Giveaways", "Server owners can give away keys, Discord Nitro, gift cards, money or other prizes. Winners claim with a button, confirm it worked, and a vouch is posted."),
+          feature("", "Server tools", "A shared server wishlist with votes, an opt-in savings leaderboard, and a group ping when several members want the same deal."),
+          feature("", "Friends and gifts", "Save friends' birthdays and get a reminder a week ahead, with what is on sale from their public wishlist. Visitors can mark a game as a gift so nobody buys the same one."),
+          feature("", "Badges and leagues", "Badges for your library and your monthly challenge streak, and a backlog league for the server."),
+          feature("", "Sale war room", "Plan a Steam sale cart against a budget."),
+          feature("", "Steam library", "Sign in with Steam to see hours played, what you never played, achievements and a Play next pick. The prices you paid can be filled in from your Steam purchase history, with gifts marked."),
+          feature("", "Hot deals and sale starts", "A server can get a post when a big deal appears or a Steam sale starts, with a minimum discount you set."),
+          feature("", "Bundle check", "Compares a bundle with what its games cost today, leaving out the ones you own."),
+          feature("", "Support", "Report a problem with /bug or open a ticket. Replies show up in the same thread on Discord and on the dashboard."),
+          feature("", "Dashboard", "Everything the commands do, in your browser, plus charts, price history and giveaway management."))),
 
       h("section", { class: "lp-section" },
-        h("h2", { text: "Up and running in a minute" }),
+        h("h2", { text: "Getting started" }),
         h("div", { class: "lp-grid three" },
-          step("1", "Add the bot", "Invite it to your server. It only asks for permission to read, send messages and embed links."),
-          step("2", "Bring your games", "Sign in through Steam and your library and wishlist fill in on their own, or upload a FanaticalGrabber export, or add games by name."),
-          step("3", "Get the good stuff", "Sale alerts in your DMs or a server channel, free game alerts, and giveaways your community will love."))),
+          step("1", "Add the bot", "Invite it to your server. Alerts only need it to read and send messages. The community features also need channel and role permissions, which the invite screen lists."),
+          step("2", "Add your games", "Sign in with Steam to import your library and wishlist, upload a FanaticalGrabber export, or add games by name."),
+          step("3", "Choose your alerts", "Sale and free game alerts arrive by DM or in a server channel. Server managers can start giveaways."))),
 
       h("section", { class: "lp-section lp-split" },
         h("div", {},
-          h("h2", { text: "Giveaways people trust" }),
-          h("p", { class: "lp-sub", text: "Prize keys are encrypted the moment they are saved and sent only to the winner. When the winner confirms the key worked, it is wiped and a public vouch goes up automatically." }),
+          h("h2", { text: "Giveaways" }),
+          h("p", { class: "lp-sub", text: "Prize keys are encrypted when they are saved and only the winner receives them. When the winner confirms a key worked, it is wiped and a vouch is posted." }),
           h("ul", { class: "lp-list" },
-            h("li", { text: "Add many keys to one giveaway, grouped neatly on the post" }),
-            h("li", { text: "Winner presses Claim prize. If DMs are closed, they get the key privately in the channel" }),
-            h("li", { text: "Unclaimed prizes are redrawn. Unused keys come back to you" }),
-            h("li", { text: "Custom art, GIFs or video, role requirements, bonus entries and more" }))),
+            h("li", { text: "Several prizes in one giveaway" }),
+            h("li", { text: "The winner presses Claim prize. If their DMs are closed, the key is shown privately in the channel" }),
+            h("li", { text: "Unclaimed prizes are redrawn, and unused keys go back to the host" }),
+            h("li", { text: "Custom art, GIFs or video, role requirements and bonus entries" }))),
         h("div", { class: "lp-flow" },
-          ...[["🎉", "Giveaway ends", "Winners are drawn and announced"], ["🔑", "Claim prize", "The key arrives by DM"], ["✅", "Confirm it worked", "One button for the winner"], ["📣", "Vouch posted", "Automatic, in your vouches channel"]]
+          ...[["", "Giveaway ends", "Winners are drawn and announced"], ["", "Claim prize", "The key is sent by DM"], ["", "Confirm it worked", "The winner presses one button"], ["", "Vouch posted", "In your vouches channel"]]
             .map(([i, t, s]) => h("div", { class: "lp-flow-step" }, h("span", { class: "lp-flow-icon", text: i }), h("div", {}, h("b", { text: t }), h("div", { class: "muted small", text: s })))))),
 
       fanaticalCard(),
 
       h("section", { class: "lp-section lp-trust" },
-        h("h2", { text: "Built to respect your data" }),
+        h("h2", { text: "Your data" }),
         h("div", { class: "lp-grid three" },
-          feature("🔒", "No logins, ever", "The bot never asks for Steam, Fanatical or store passwords, and ignores anything that looks like a key in chat."),
-          feature("🧾", "Only what it needs", "Game titles go to IsThereAnyDeal for prices. Nothing else leaves the bot."),
-          feature("🗑️", "Yours to delete", "Export or delete everything stored about you with /mydata, or from the dashboard."))),
+          feature("", "No passwords", "The bot never asks for Steam, Fanatical or store passwords, and ignores anything in chat that looks like a key."),
+          feature("", "Limited sharing", "Game titles go to IsThereAnyDeal to look up prices. Nothing else leaves the bot."),
+          feature("", "Export or delete", "/mydata, or the dashboard, exports or deletes everything stored about you."))),
 
       h("section", { class: "lp-final" },
-        h("h2", { text: "Ready to find your next deal?" }),
+        h("h2", { text: "Add it to your server" }),
         cta("center"))].filter(Boolean));
   }
 
@@ -2665,7 +2665,7 @@
       state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null;
       const ab = x.about, c = x.creator;
       const n = v => (v === null || v === undefined ? "-" : Number(v).toLocaleString());
-      const tile = (icon, k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: `${icon} ${k}` }), h("div", { class: "v", text: String(v) }));
+      const tile = (icon, k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }));
       holder.className = "about-page";
       holder.replaceChildren(
         h("img", { class: "about-banner", src: "/banner.png", alt: "Steam Value Checker" }),

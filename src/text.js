@@ -3,13 +3,13 @@
 /** Shown once, after a person's first command: where to start. */
 export function quickStart(dashboardUrl = null) {
     return {
-        color: 0xff9800, title: "Welcome! Three good places to start",
+        color: 0xff9800, title: "Three places to start",
         description: [
             "1. **Watch games:** `/wishlist import` brings in your public Steam wishlist, and I tell you when something goes on sale.",
             "2. **Price your games:** `/steam link` fills your library with hours played and what it is worth.",
             "3. **See everything:** `/help` lists every command" + (dashboardUrl ? `, and the dashboard has a guided tour: ${dashboardUrl}/#/mypage` : ".")
         ].join("\n"),
-        footer: { text: "You will only see this once." }
+        footer: { text: "This message only shows once." }
     };
 }
 

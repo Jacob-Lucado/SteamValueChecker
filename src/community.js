@@ -88,7 +88,7 @@ export function rulesPayload({ server = "the server", base = null, rules = null,
     return {
         embeds: [{
             color: 0xed4245, title: `📜  ${server} · Server Rules`,
-            description: `Welcome! To keep this a great place for everyone, please follow these rules.\n\n${list}`.slice(0, 4000),
+            description: `Please follow these rules while you are here.\n\n${list}`.slice(0, 4000),
             fields: [
                 { name: "⚠️ What happens if you break them", value: "Warning → timeout → kick → ban. Serious breaks can skip straight to a ban.", inline: false },
                 { name: "🆘 Need help?", value: `Open a ticket in ${helpChannel ? `<#${helpChannel}>` : "#get-help"}`, inline: true },
@@ -361,8 +361,8 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
 /** The private message a new member gets: what the bot does for them and where the dashboard is. */
 export function welcomeDmPayload({ server, dashboardUrl = null }) {
     const embed = {
-        color: 0x4d8cff, title: `Welcome to ${server}!`,
-        description: "I'm **Steam Value Checker**, the bot that looks after games, deals and the community here. Here is what I can do for you:",
+        color: 0x4d8cff, title: `Welcome to ${server}`,
+        description: "I'm **Steam Value Checker**, the bot that handles game deals and the community here. What I can do for you:",
         fields: [
             { name: "💸 Sale alerts", value: "`/wishlist import` your Steam wishlist and I message you when a game drops in price. `/value` prices any list of games." },
             { name: "🎁 Free games", value: "`/freegames` shows what is free to claim right now on Steam, Epic, GOG and more." },

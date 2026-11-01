@@ -265,7 +265,7 @@ client.on(Events.GuildCreate, async guild => {
         const comp = auto ? (publicBase ? [{ type: 1, components: [{ type: 2, style: 5, label: "Fine-tune on the dashboard", url: `${publicBase}/#/community/${guild.id}` }] }] : []) : (link ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open setup page", url: link }] }] : []);
         await discord.sendDm(guild.ownerId, { embeds: [embed], components: comp }).catch(async () => {
             // DMs closed: leave a short note where managers will see it
-            const ch = guild.systemChannel; if (ch) await ch.send({ content: "Thanks for adding me! A server manager can run `/setup` to get started.", allowedMentions: { parse: [] } });
+            const ch = guild.systemChannel; if (ch) await ch.send({ content: "A server manager can run `/setup` to get started.", allowedMentions: { parse: [] } });
         });
     } catch { /* the owner may have DMs closed */ }
 });

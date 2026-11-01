@@ -145,7 +145,7 @@ export function keyMessage(g, label, plain, { fallback = false, kind = "key" } =
     const host = g.host_id && g.host_id !== "deleted" ? `<@${g.host_id}>` : "the host";
     const manual = !isCode(kind);
     return {
-        content: fallback ? "Your DMs are closed, so here's your prize:" : undefined,
+        content: fallback ? "Your DMs are closed, so the prize is posted here:" : undefined,
         embeds: [{
             color: GREEN, title: `${info.icon} Your prize: ${label}`,
             description: manual

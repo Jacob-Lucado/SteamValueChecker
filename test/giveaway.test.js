@@ -193,7 +193,7 @@ test("claim: only winners, key handed over, follow-up scheduled; claiming again 
     const c = t.svc.prepareClaim(id, first.winner_id);
     assert.equal(c.plain, "AAAAA-BBBBB-CCCCC");
     assert.match(JSON.stringify(keyMessage(c.giveaway, c.key.label, c.plain)), /AAAAA-BBBBB-CCCCC/);
-    assert.equal(keyMessage(c.giveaway, "x", "k", { fallback: true }).content, "Your DMs are closed, so here's your prize:");
+    assert.equal(keyMessage(c.giveaway, "x", "k", { fallback: true }).content, "Your DMs are closed, so the prize is posted here:");
     await t.svc.delivered(c.key.id, "dm");
     assert.equal(t.db.getKey(c.key.id).status, "delivered");
     assert.equal(t.svc.prepareClaim(id, first.winner_id).plain, "AAAAA-BBBBB-CCCCC"); // lost the message? claim again

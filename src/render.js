@@ -553,7 +553,7 @@ export function challengeEmbed(c) {
     const hist = c.history.filter(h => h.month !== c.month).map(h => `${h.done >= h.goal ? "✅" : "▫️"} ${h.month}: ${h.done}/${h.goal}`);
     return {
         color: 0xa4d007, title: `Backlog challenge, ${c.month}`,
-        description: `${bar(c.done, c.goal)} **${c.done}** of **${c.goal}** finished` + (met ? " 🎉 Goal met!" : ` · ${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left`),
+        description: `${bar(c.done, c.goal)} **${c.done}** of **${c.goal}** finished` + (met ? " Goal met." : ` · ${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left`),
         fields: [
             { name: "Streak", value: `🔥 **${c.streak}** month${c.streak === 1 ? "" : "s"} (best ${c.best})`, inline: true },
             ...(c.titles.length ? [{ name: "Finished this month", value: c.titles.map(t => `• ${t}`).join("\n").slice(0, 1000) }] : []),
@@ -601,7 +601,7 @@ export function saleStartPayload(ev) {
     const t = (ms, f) => `<t:${Math.floor(ms / 1000)}:${f}>`;
     const fest = ev.kind === "fest";
     return { embeds: [{
-        color: 0x1b9aaa, title: `${fest ? "🎪" : "🏷️"} ${ev.name} has started!`,
+        color: 0x1b9aaa, title: `${fest ? "🎪" : "🏷️"} ${ev.name} has started`,
         url: "https://store.steampowered.com/",
         description: `${fest ? "Steam's festival is on." : "Steam's sale is on."} It runs until ${t(ev.end, "f")} (${t(ev.end, "R")}).${ev.note ? "\n" + ev.note : ""}\nPrices are dropping now. Check your wishlist alerts with \`/wishlist\`.`,
         footer: { text: "Dates from Valve's published schedule" }
