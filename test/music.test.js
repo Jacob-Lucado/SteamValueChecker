@@ -284,3 +284,24 @@ test("playlist links: titles come from the link until the real ones are fetched,
     const order = [mix.m.status("g1").current, ...mix.m.status("g1").next].map(t => t.title);
     assert.equal(order.length, 30); assert.notDeepEqual(order, Array.from({ length: 30 }, (_, i) => `Track ${i}`));
 });
+
+test("short command replies become embeds, errors in red", async () => {
+    const { fancy } = await import("../src/musicrender.js");
+    const ok = fancy("⏸️ Paused by <@1>.");
+    assert.equal(ok.content, undefined); assert.match(ok.embeds[0].description, /Paused by/);
+    const bad = fancy({ content: "Nothing is playing." }, true);
+    assert.equal(bad.embeds[0].color, 0xed4245); assert.match(bad.embeds[0].description, /Nothing is playing/);
+    const keep = fancy({ embeds: [{ title: "x" }] });
+    assert.equal(keep.embeds[0].title, "x");
+});
+
+test("community setup gives music its own category, command channel and intro", async () => {
+    const { TEMPLATE, musicIntroPayload } = await import("../src/community.js");
+    const cat = TEMPLATE.categories.find(c => /MUSIC/.test(c.name));
+    assert.ok(cat && cat.channels.some(c => c.key === "music" && c.name === "music-commands") && cat.voice.length >= 1);
+    assert.ok(!TEMPLATE.categories.filter(c => c !== cat).some(c => (c.channels ?? []).some(x => x.key === "music")));
+    const e = musicIntroPayload().embeds[0];
+    const text = JSON.stringify(e);
+    for (const w of ["/play", "playlist", "saveplaylist", "settings", "skip", "loop", "SoundCloud"]) assert.ok(text.includes(w), w);
+    assert.ok(text.length < 5500 && e.fields.every(f => f.value.length <= 1024));
+});

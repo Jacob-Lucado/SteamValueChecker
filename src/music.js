@@ -24,6 +24,7 @@ export const fmtTime = sec => {
  *  getGuild – guildId => { id, voiceAdapterCreator, memberInfo(userId) -> {roleIds, isManager}, voiceChannelOf(userId) -> {id,name,humans,canJoin,canSpeak}, humansIn(channelId), channelName(id) } | null
  *  api      – bot REST: sendMessage(channelId, payload), editMessage(channelId, messageId, payload)
  */
+const LIVE_MS = 10_000;
 export function createMusic({ db, source, voice, getGuild, api = null, panel = null, log = () => {}, setTimer = setTimeout, clearTimer = clearTimeout }) {
     const guilds = new Map();
 
@@ -191,9 +192,16 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         retirePanel(g);
         if (!panel) return;
         const m = await say(g, panel(g.guildId, status(g.guildId)));
-        if (m?.id) g.panel = { channelId: g.textChannelId, messageId: m.id };
+        if (m?.id) { g.panel = { channelId: g.textChannelId, messageId: m.id }; live(g); }
+    }
+    /** Keeps the now-playing card moving: the progress bar is redrawn every few seconds while a song plays. */
+    function live(g) {
+        clearTimer(g.liveTimer);
+        g.liveTimer = setTimer(() => { g.liveTimer = null; if (!g.panel) return; if (g.playing && g.player?.state?.status === "playing") refreshPanel(g); live(g); }, LIVE_MS);
+        g.liveTimer?.unref?.();
     }
     function retirePanel(g) {
+        clearTimer(g.liveTimer); g.liveTimer = null;
         const p = g.panel; g.panel = null;
         if (p && api) api.editMessage(p.channelId, p.messageId, { components: [] }).catch(() => {});
     }

@@ -75,3 +75,16 @@ export function searchPayload(results, token, query) {
 export function playlistLine(p) {
     return `**${p.name}** · ${p.tracks.length} track${p.tracks.length === 1 ? "" : "s"}`;
 }
+
+/** Any short reply from a music command, as an embed. `bad` makes it red for problems. */
+export function noteEmbed(text, bad = false) {
+    const m = String(text).match(/^(\p{Extended_Pictographic}\uFE0F?)\s*(.*)$/su);
+    return { color: bad ? 0xed4245 : COLOR, description: bad ? `⚠️ ${text}` : (m ? `${m[1]}  ${m[2]}` : String(text)), footer: { text: "SoundCloud" } };
+}
+/** Turns a plain-text reply into an embed one; payloads that already have embeds pass through. */
+export function fancy(payload, bad = false) {
+    if (typeof payload === "string") payload = { content: payload };
+    if (payload.embeds || !payload.content) return payload;
+    const { content, ...rest } = payload;
+    return { ...rest, embeds: [noteEmbed(content, bad)] };
+}

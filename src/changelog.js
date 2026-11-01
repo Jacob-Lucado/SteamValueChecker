@@ -4,7 +4,7 @@ export const CHANGELOG = [
         "**SoundCloud music:** join a voice channel and use `/play` with a SoundCloud link, a playlist link or just words to search. There is a queue, skip (others vote), previous, loop, shuffle, seek, volume and a now-playing panel with buttons.",
         "**Playlists:** paste a SoundCloud playlist (up to 100 songs) and it queues the lot, or save your own with `/music saveplaylist` and load it in any server.",
         "**Dashboard:** a new **Music** page under Servers does all of it from the browser, and managers set a DJ role, starting volume, limits and where song messages go.",
-        "**Setup:** community setup adds a #music channel and a Music voice channel (run `/community setup` again on an existing server). The bot needs Connect and Speak permission, so servers that added it earlier may need to grant them."
+        "**Setup:** community setup adds a Music category with a #music-commands channel and two voice channels (run `/community setup` again on an existing server). The bot needs Connect and Speak permission, so servers that added it earlier may need to grant them."
     ] },
     { version: "2026.11.03", date: "2026-11-03", title: "Promo drops", items: [
         "**Alerts to your DMs:** `/alerts codes` messages you when a new game code drops (all games, or only the ones you pick), and `/alerts promos` does the same for giveaway and code news. Both are on the dashboard's Alerts page, show up in Notifications, can be muted, and only send what is new from the moment you turn them on.",

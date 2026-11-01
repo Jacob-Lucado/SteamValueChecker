@@ -2,9 +2,9 @@
 import { MessageFlags, PermissionFlagsBits, ChannelType } from "discord.js";
 import { UserError } from "./errors.js";
 import { fmtTime } from "./music.js";
-import { nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, playlistLine, QUEUE_PAGE } from "./musicrender.js";
+import { fancy, nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, playlistLine, QUEUE_PAGE } from "./musicrender.js";
 
-const eph = (i, payload) => i.reply({ ...(typeof payload === "string" ? { content: payload } : payload), flags: MessageFlags.Ephemeral });
+const eph = (i, payload, bad = false) => i.reply({ ...fancy(payload, bad), flags: MessageFlags.Ephemeral });
 
 /** "1:30", "90", "1m30s" or "1h2m" to seconds. NaN when it can't be read. */
 export function parseTime(text) {
@@ -58,7 +58,7 @@ export function createMusicHandlers({ db, music, adapter }) {
     const sweep = () => { const t = Date.now(); for (const [k, v] of picks) if (v.exp < t) picks.delete(k); };
     const managerOnly = i => { if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new UserError("You need the Manage Server permission to change this."); };
 
-    async function say(i, content) { return i.replied || i.deferred ? i.editReply({ content, allowedMentions: { parse: [] } }) : i.reply({ content, allowedMentions: { parse: [] } }); }
+    async function say(i, content) { const p = { ...fancy(content), allowedMentions: { parse: [] } }; return i.replied || i.deferred ? i.editReply(p) : i.reply(p); }
 
     async function handleCommand(i) {
         let deferred = false;
@@ -69,7 +69,7 @@ export function createMusicHandlers({ db, music, adapter }) {
             await adapter(gid)?.warm?.(uid);
             const slow = ["play", "search", "loadplaylist"].includes(sub);
             if (slow) { await i.deferReply(); deferred = true; }
-            const reply = async payload => (deferred ? i.editReply(payload) : i.reply(payload));
+            const reply = async payload => (deferred ? i.editReply(fancy(payload)) : i.reply(fancy(payload)));
 
             switch (sub) {
                 case "play": {
@@ -149,8 +149,8 @@ export function createMusicHandlers({ db, music, adapter }) {
             }
         } catch (err) {
             if (!(err instanceof UserError)) throw err;
-            if (deferred) { await i.deleteReply().catch(() => {}); return i.followUp({ content: err.message, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }); }
-            return eph(i, { content: err.message, allowedMentions: { parse: [] } });
+            if (deferred) { await i.deleteReply().catch(() => {}); return i.followUp({ ...fancy(err.message, true), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }); }
+            return eph(i, { ...fancy(err.message, true), allowedMentions: { parse: [] } });
         }
     }
 
@@ -179,7 +179,7 @@ export function createMusicHandlers({ db, music, adapter }) {
             music.refreshPanel(music.get(gid) ?? { panel: null });
         } catch (err) {
             if (!(err instanceof UserError)) throw err;
-            return eph(i, { content: err.message, allowedMentions: { parse: [] } });
+            return eph(i, { ...fancy(err.message, true), allowedMentions: { parse: [] } });
         }
     }
 
@@ -198,7 +198,7 @@ export function createMusicHandlers({ db, music, adapter }) {
             return await i.editReply({ embeds: [addedEmbed(r)], components: [], allowedMentions: { parse: [] } });
         } catch (err) {
             if (!(err instanceof UserError)) throw err;
-            return i.followUp({ content: err.message, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+            return i.followUp({ ...fancy(err.message, true), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
         }
     }
 

@@ -15,6 +15,25 @@ const str = n => String(n);
 /** Permission number for the invite link: what the existing features need plus roles, invites, emojis and events. */
 export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14) | B(15) | B(16) | B(18) | B(28) | B(30) | B(33) | B(6) | B(1) | B(2) | B(13) | B(40) | B(17) | B(38) | B(7) | B(22) | B(23) | B(24) | B(27) | B(20) | B(21)); // Connect and Speak are for music; the five before them are what the Moderator role is made with: a bot can only hand out permissions it holds itself
 
+/** The welcome post for the music command channel: what the music side supports and every command, grouped. */
+export function musicIntroPayload() {
+    return {
+        embeds: [{
+            color: 0xff5500, title: "🎵 Music is here", description: "Drop into a **Music** voice channel, then run the commands below in this channel. The bot plays **SoundCloud** and keeps a live now-playing card with buttons right here, so everyone can see what's on and what's next.",
+            fields: [
+                { name: "▶️ Play", value: "`/play` a SoundCloud link, a **playlist link** (up to 100 songs), or just words to search.\n`/music search` shows the top results to pick from.\nAdd `next` to jump the queue or `shuffle` to mix a playlist." },
+                { name: "🎛️ Control", value: "`/music pause` · `resume` · `skip` (others vote) · `skipto` · `previous` · `seek` · `stop` · `leave`\n`/music volume` · `loop` (song or whole queue) · `shuffle`" },
+                { name: "📜 Queue", value: "`/music nowplaying` · `queue` · `remove` · `move` · `clear`" },
+                { name: "💾 Your playlists", value: "`/music saveplaylist` saves what's queued to your account, `loadplaylist` brings it back in any server, plus `playlists` and `deleteplaylist`." },
+                { name: "🛠️ Managers", value: "`/music settings` sets a DJ role, starting volume, queue and song length limits, and where the now-playing card goes. It all lives on the dashboard's **Music** page too, along with a full player." },
+                { name: "✨ Good to know", value: "The now-playing card updates live and has buttons for pause, skip, loop, shuffle, volume and queue. Premium-only SoundCloud tracks can't be played. The bot leaves a few minutes after the queue ends or everyone leaves." }
+            ],
+            footer: { text: "Powered by SoundCloud" }
+        }],
+        allowed_mentions: { parse: [] }
+    };
+}
+
 /** The link that adds the bot to a server: the bot and slash-command scopes with every permission the features need. */
 export const botInviteUrl = clientId => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=bot%20applications.commands&permissions=${BOT_PERMISSIONS}`;
 
@@ -53,7 +72,6 @@ export const TEMPLATE = {
             { key: "lfg", name: "looking-for-group", topic: "Find people to play with. Try /lfg post" },
             { key: "gamechat", name: "game-chat", topic: "What are you playing?" },
             { key: "gamenight", name: "game-night", topic: "Plan the next session together" },
-            { key: "music", name: "music", topic: "Join the Music voice channel, then queue songs with /play. SoundCloud links and playlists work" },
             { key: "wishlists", name: "wishlists-and-deals", topic: "Share wishlists and sales. Try /wishlist import" }] },
         { name: "💸 DEALS & GIVEAWAYS", channels: [
             { key: "deals", name: "deal-alerts", topic: "Sales and free games from Steam Value Checker", readonly: true },
@@ -65,7 +83,10 @@ export const TEMPLATE = {
             { key: "help", name: "get-help", topic: "Need a hand? Open a private ticket with the moderators", readonly: true },
             { key: "bugs", name: "report-a-bug", topic: "Found a problem with the bot? Report it straight to the developer", readonly: true },
             { key: "requests", name: "feature-requests", topic: "Ideas for the bot, with their status. Suggest and vote on the dashboard", forum: true }] },
-        { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "music", name: "Music" }, { key: "afk", name: "AFK" }] },
+        { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "afk", name: "AFK" }] },
+        { name: "🎵 MUSIC", channels: [
+            { key: "music", name: "music-commands", topic: "Run /play and the other music commands here. Join a Music voice channel first. SoundCloud songs and playlists" }],
+            voice: [{ key: "music1", name: "Music 1" }, { key: "music2", name: "Music 2" }] },
         { name: "🛠️ STAFF", staff: true, channels: [
             { key: "staffchat", name: "staff-chat", topic: "Moderators only" },
             { key: "modlog", name: "mod-log", topic: "Every warning, timeout, kick, ban and message cleanup" },
@@ -309,6 +330,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.afk) await api.editGuild(guildId, { afk_channel_id: chIds.afk, afk_timeout: 900 }).catch(() => notes.push("Could not set the AFK channel (needs Manage Server)."));
     await api.editGuild(guildId, { system_channel_flags: 1 }).catch(() => {}); // stop Discord's own join message, the bot greets instead
 
+    if (chIds.music && created.channels.includes("music-commands")) await say(api, chIds.music, musicIntroPayload()); // only in a channel made just now
     if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
     if (chIds.drops && !db.getDropSettings(guildId).channel_id) db.setDropSettings(guildId, { channel_id: chIds.drops });
     db.setCommunity(guildId, { setup_keys: JSON.stringify(Object.keys(chIds)) });
