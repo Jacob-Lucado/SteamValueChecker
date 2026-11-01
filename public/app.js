@@ -2177,10 +2177,12 @@
     level.addEventListener("change", load);
     const refresh = h("button", { class: "btn gray", text: "Refresh", onclick: load });
     const copy = h("button", { class: "btn gray", text: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(lastText); toast("Copied.", "ok"); } catch { toast("Could not copy. Select the text instead.", "error"); } } });
+    const clear = h("button", { class: "btn red", text: "Clear logs" });
+    clear.addEventListener("click", () => { if (!confirm("Clear all saved logs? This can't be undone.")) return; busy(clear, async () => { const r = await api("/api/admin/logs/clear", {}); toast(`Cleared ${r.cleared} line${r.cleared === 1 ? "" : "s"}.`, "ok"); await load(); }); });
     load();
     return h("div", { class: "panel" }, h("h3", { text: "Recent logs" }),
       h("p", { class: "muted small", text: "Newest first. ERROR is something that broke, WARN is worth a look, ACTION is something you or the bot did (broadcasts, giveaways, restarts). All are kept across restarts. Tokens and keys are hidden." }),
-      h("div", { class: "rule inline" }, level, refresh, copy), out);
+      h("div", { class: "rule inline" }, level, refresh, copy, clear), out);
   }
 
   async function adminView() {

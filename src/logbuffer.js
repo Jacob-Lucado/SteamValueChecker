@@ -75,7 +75,15 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
         return lines.filter(l => keep.includes(l.level)).slice(-limit).reverse();
     }
 
-    return { add, capture, recent };
+    /** Wipes the list and the saved file (the owner's "Clear logs"). Returns how many lines went. */
+    function clear() {
+        const n = lines.length;
+        lines = []; fileCount = 0;
+        if (file) { try { writeFileSync(file, ""); } catch { /* nothing to clear on disk */ } }
+        return n;
+    }
+
+    return { add, capture, recent, clear };
 }
 
 function safeJson(v) { try { return typeof v === "object" ? JSON.stringify(v) : String(v); } catch { return String(v); } }

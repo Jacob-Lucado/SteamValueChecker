@@ -68,3 +68,19 @@ test("owner actions and restarts are activity, not errors; old saved lines are s
     assert.deepEqual(b.recent({ level: "error" }).map(l => l.text), ["[crash] real"]);
     assert.equal(b.recent({ level: "activity" }).length, 2);
 });
+
+test("clear wipes the list and the saved file, and stays cleared after a restart", async () => {
+    const { mkdtempSync, readFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const file = join(mkdtempSync(join(tmpdir(), "logs-")), "errors.jsonl");
+    const a = createLogBuffer({ file });
+    a.add("error", ["boom"]); a.add("warn", ["hmm"]);
+    assert.equal(a.recent({ level: "all" }).length, 2);
+    assert.equal(a.clear(), 2);
+    assert.equal(a.recent({ level: "all" }).length, 0);
+    assert.equal(readFileSync(file, "utf8"), "");
+    assert.equal(createLogBuffer({ file }).recent({ level: "all" }).length, 0);
+    a.add("error", ["after"]);
+    assert.equal(a.recent({ level: "error" }).length, 1);
+});

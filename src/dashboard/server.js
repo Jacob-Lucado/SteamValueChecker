@@ -1963,6 +1963,15 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
             return { lines: logs ? logs.recent({ level, limit: 200 }) : [], available: Boolean(logs) };
         },
 
+        "POST /api/admin/logs/clear": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!logs?.clear) throw new HttpError(503, "Logging is not turned on.");
+            const cleared = logs.clear();
+            log(`Bot owner cleared the logs (${cleared} lines)`);
+            return { cleared };
+        },
+
         // ----- support tickets (same thread as the Discord side) -----
         "GET /api/tickets": async (req, _b, url) => {
             const s = session(req); needTickets();
