@@ -243,7 +243,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             if (kind === ID.claim) return await claim(i, Number(rest));
             if (kind === ID.confirm) {
                 const r = await giveaways.confirm(Number(rest), i.user.id);
-                return await i.update({ content: `Confirmed.${r.vouched ? " It was posted in the vouches channel." : ""}`, embeds: [], components: [] });
+                return await i.update({ content: `Confirmed ✅${r.vouched ? " It was posted in the vouches channel." : ""}`, embeds: [], components: [] });
             }
             if (kind === ID.problem) {
                 const r = await giveaways.reportProblem(Number(rest), i.user.id);

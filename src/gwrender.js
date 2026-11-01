@@ -69,14 +69,14 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
             { name: "👑 Hosted by", value: cross ? cross.hostLine : g.host_id === "deleted" ? "-" : `<@${g.host_id}>`, inline: true },
             { name: "🎟️ Entries", value: `**${entryCount}**`, inline: true }
         ];
-    if (state === "ended") fields.push({ name: winners.length ? (winners.length === 1 ? "Winner" : `Winners (${winners.length})`) : "No winner", value: (winners.join("\n") || "Nobody entered, so nobody won.").slice(0, 1000) });
+    if (state === "ended") fields.push({ name: winners.length ? (winners.length === 1 ? "🎉 Winner" : `🎉 Winners (${winners.length})`) : "😔 No winner", value: (winners.join("\n") || "Nobody entered, so nobody won.").slice(0, 1000) });
     const req = requirements(g);
     if (req.length && state === "active") fields.push({ name: "📋 To enter", value: req.join("\n").slice(0, 1000) });
     if (cross?.howToEnter && state === "active") fields.push({ name: "How to enter", value: `${cross.howToEnter}\n\n${cross.stepsNote}`.slice(0, 1020) });
 
     // A video can't sit inside an embed, so its link goes in the message text where Discord plays it.
     const video = safeUrl(g.image_url) && isVideoLink(g.image_url);
-    const headline = state === "cancelled" ? "CANCELLED" : state === "ended" ? (winners.length ? "GIVEAWAY ENDED" : "GIVEAWAY ENDED · NO WINNER") : `${th.icon} ${th.name}`;
+    const headline = state === "cancelled" ? "🚫 CANCELLED" : state === "ended" ? (winners.length ? "🏁 GIVEAWAY ENDED" : "🏁 GIVEAWAY ENDED · NO WINNER") : `${th.icon} ${th.name}`;
     const embed = {
         color: state === "cancelled" ? GREY : state === "ended" ? (winners.length ? GREEN : GREY) : (g.color ?? th.color),
         author: cross?.author ?? { name: headline },
@@ -125,14 +125,14 @@ export function winnersPayload(g, keys) {
     });
     const waiting = keys.some(k => ["assigned", "delivered", "problem"].includes(k.status) && k.winner_id);
     const embed = {
-        color: GREEN, title: `Winners: ${g.title}`,
-        author: g.is_global && g.host_name ? { name: `Cross-server giveaway · hosted by ${g.host_name}` } : { name: "Winners" },
+        color: GREEN, title: `🏆 Winners: ${g.title}`,
+        author: g.is_global && g.host_name ? { name: `Cross-server giveaway · hosted by ${g.host_name}` } : { name: "🎉 Winners" },
         description: lines.join("\n").slice(0, 4000),
         thumbnail: safeUrl(g.thumbnail_url) && !isVideoLink(g.thumbnail_url) ? { url: g.thumbnail_url } : undefined,
         footer: { text: `${g.is_global ? "" : `Giveaway #${g.id}  •  `}Winners have ${g.claim_hours} hours to press Claim prize` }
     };
     const payload = {
-        content: mentions.length ? `Congratulations ${[...new Set(mentions)].slice(0, 30).map(id => `<@${id}>`).join(" ")}. Press **Claim prize** below.` : undefined,
+        content: mentions.length ? `🎉 Congratulations ${[...new Set(mentions)].slice(0, 30).map(id => `<@${id}>`).join(" ")}! Press **Claim prize** below.` : undefined,
         embeds: [embed], allowedMentions: { users: [...new Set(mentions)].slice(0, 30) },
         components: waiting ? [{ type: 1, components: [{ type: 2, style: 3, label: "Claim prize", emoji: { name: "🎁" }, custom_id: `${ID.claim}:${g.id}` }] }] : []
     };

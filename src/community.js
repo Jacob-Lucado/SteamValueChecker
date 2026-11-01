@@ -361,7 +361,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
 /** The private message a new member gets: what the bot does for them and where the dashboard is. */
 export function welcomeDmPayload({ server, dashboardUrl = null }) {
     const embed = {
-        color: 0x4d8cff, title: `Welcome to ${server}`,
+        color: 0x4d8cff, title: `Welcome to ${server} 👋`,
         description: "I'm **Steam Value Checker**. I handle the game deals and a few other things around here. Here's what I can do for you:",
         fields: [
             { name: "💸 Sale alerts", value: "Run `/wishlist import` and I'll message you when something on your Steam wishlist drops in price. `/value` prices any list of games." },
