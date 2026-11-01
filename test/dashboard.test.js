@@ -1420,3 +1420,32 @@ test("game codes: signed-in members see the list, managers set up their server, 
     assert.equal((await post("/api/admin/codes/poll", {})).status, 200);
     assert.ok(polled >= 2, "retiring and checking now both run a poll");
 });
+
+test("promo drops: managers set up their server, add and end a drop, members cannot", async () => {
+    let polled = 0;
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { drops: { poll: async () => { polled++; return {}; } } } });
+    const post = (path, body) => o.request(path, { method: "POST", body });
+    const s = (await o.request("/api/servers/drops?guild=g-admin")).data;
+    assert.equal(s.channels.length, 2); assert.deepEqual(s.drops, []);
+    assert.equal((await o.request("/api/servers/drops?guild=g-member")).status, 403);
+    assert.equal((await post("/api/servers/drops/add", { guild_id: "g-admin", title: "Key", code: "ABCD" })).status, 400, "channel first");
+    assert.equal((await post("/api/servers/drops", { guild_id: "g-admin", news: true })).status, 400, "blog watching needs a channel");
+    const saved = (await post("/api/servers/drops", { guild_id: "g-admin", channel_id: "c1", role_id: "r1", news: true })).data;
+    assert.equal(saved.settings.channel_id, "c1"); assert.equal(saved.settings.news, true);
+    assert.ok(o.sent.some(m => m.id === "c1"), "a confirmation is posted in the chosen channel");
+    assert.equal((await post("/api/servers/drops", { guild_id: "g-admin", channel_id: "nope" })).status, 400);
+    assert.equal((await post("/api/servers/drops", { guild_id: "g-admin", role_id: "nope" })).status, 400);
+    assert.equal((await post("/api/servers/drops", { guild_id: "g-member", channel_id: "c1" })).status, 403);
+    assert.equal((await post("/api/servers/drops/add", { guild_id: "g-admin", title: "Key", code: "has space" })).status, 400);
+    assert.equal((await post("/api/servers/drops/add", { guild_id: "g-admin", title: "Key", url: "http://x.test" })).status, 400);
+    assert.equal((await post("/api/servers/drops/add", { guild_id: "g-member", title: "Key", code: "ABCD" })).status, 403);
+    const added = (await post("/api/servers/drops/add", { guild_id: "g-admin", title: "Game On key", code: "ABCD-1234", days: 3, source: "SteelSeries" })).data;
+    const list = (await o.request("/api/servers/drops?guild=g-admin")).data;
+    assert.equal(list.drops.length, 1); assert.equal(list.drops[0].title, "Game On key"); assert.equal(list.drops[0].status, "active");
+    assert.equal((await post("/api/servers/drops/end", { guild_id: "g-member", id: added.id })).status, 403);
+    assert.equal((await post("/api/servers/drops/end", { guild_id: "g-admin", id: 999 })).status, 404);
+    assert.equal((await post("/api/servers/drops/end", { guild_id: "g-admin", id: added.id })).status, 200);
+    assert.equal((await post("/api/servers/drops/end", { guild_id: "g-admin", id: added.id })).status, 400);
+    assert.equal((await o.request("/api/servers/drops?guild=g-admin")).data.drops[0].status, "ended");
+    assert.ok(polled >= 3, "saving a channel, adding and ending each run a poll");
+});

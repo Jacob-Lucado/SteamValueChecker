@@ -1049,7 +1049,7 @@
     if (!g) { location.hash = "#/servers"; return; }
     const canUse = g.bot !== false;
     const body = h("div", { class: "sv-body" });
-    const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Alert channel", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["codes", "Game codes", true], ["stats", "Server stats"], ["giveaways", "Giveaways", true]] : [])]
+    const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Alert channel", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["codes", "Game codes", true], ["drops", "Promo drops", true], ["stats", "Server stats"], ["giveaways", "Giveaways", true]] : [])]
       .filter(([, , managerOnly]) => !managerOnly || g.manageable);
     let current = "overview";
     const tabs = h("div", { class: "tabs" }, sections.map(([key, label]) => h("button", { class: "tab" + (key === current ? " active" : ""), text: label, onclick: ev => {
@@ -1172,6 +1172,51 @@
       return [holder];
     }
 
+    function dropsPanel() {
+      const holder = h("div", { class: "muted", text: "Loading…" });
+      const reload = () => { const fresh = dropsPanel(); holder.replaceWith(...fresh); };
+      (async () => {
+        try {
+          const d = await api("/api/servers/drops?guild=" + encodeURIComponent(g.id));
+          const st = d.settings;
+          const chan = select([["", "No channel (off)"], ...d.channels.map(c => ["" + c.id, "#" + c.name])], st.channel_id || "");
+          const role = select([["", "Nobody"], ...d.roles.filter(r => r.name !== "@everyone").map(r => ["" + r.id, r.name])], st.role_id || "");
+          const news = h("input", { type: "checkbox", checked: Boolean(st.news) });
+          const save = h("button", { class: "btn green", text: "Save" });
+          save.addEventListener("click", () => busy(save, async () => {
+            await api("/api/servers/drops", { guild_id: g.id, channel_id: chan.value, role_id: role.value, news: news.checked });
+            toast(chan.value ? "Saved." : "Saved. Promo drops are off for this server.", "ok");
+          }));
+          const f = { title: h("input", { type: "text", maxlength: "100", placeholder: "SteelSeries Game On key" }), code: h("input", { type: "text", maxlength: "120", placeholder: "Optional" }),
+            url: h("input", { type: "text", maxlength: "300", placeholder: "https://… (optional)" }), source: h("input", { type: "text", maxlength: "60", placeholder: "SteelSeries" }),
+            days: h("input", { type: "number", min: "1", max: "365", placeholder: "Days until it ends (optional)" }), note: h("input", { type: "text", maxlength: "300", placeholder: "Region, one per account…" }) };
+          const add = h("button", { class: "btn blue", text: "Post it" });
+          add.addEventListener("click", () => busy(add, async () => {
+            await api("/api/servers/drops/add", { guild_id: g.id, title: f.title.value, code: f.code.value, url: f.url.value, source: f.source.value, days: f.days.value, note: f.note.value });
+            toast("Added. It goes out in the channel in a moment.", "ok"); reload();
+          }));
+          const rows = d.drops.map(x => {
+            const end = x.status === "active" ? h("button", { class: "btn red small", text: "Mark ended" }) : h("span", { class: "chip dim", text: "Ended" });
+            if (x.status === "active") end.addEventListener("click", () => busy(end, async () => { await api("/api/servers/drops/end", { guild_id: g.id, id: x.id }); toast("Marked as ended.", "ok"); reload(); }));
+            return h("div", { class: "rule" }, h("div", {}, h("strong", { text: x.title }), x.source ? h("span", { class: "muted", text: " · " + x.source }) : null,
+              x.code ? h("div", {}, h("code", { class: "code-text", text: x.code })) : null,
+              h("div", { class: "muted small", text: x.expiresAt ? "Ends " + new Date(x.expiresAt).toLocaleDateString() : "No end date" }), x.url ? ext(x.url, "Open link", "small") : null), end);
+          });
+          holder.className = "";
+          holder.replaceChildren(
+            h("div", { class: "panel" }, h("h3", { text: "Promo drops" }),
+              h("p", { class: "muted", text: "Key giveaways from SteelSeries, NVIDIA and others. Add a code or a link and it is posted once in your promo channel, then greyed out when it ends." }),
+              field("Channel", chan), field("Ping this role", role),
+              h("label", { class: "check" }, news, " Also post news that mentions a giveaway or a code: NVIDIA, SteelSeries and games like Dead by Daylight (new ones only)"),
+              h("div", { class: "row" }, save)),
+            h("div", { class: "panel" }, h("h3", { text: "Add a drop" }), field("Title", f.title), field("Code", f.code), field("Link", f.url), field("From", f.source), field("Days until it ends", f.days), field("Note", f.note), h("div", { class: "row" }, add)),
+            h("div", { class: "panel" }, h("h3", { text: "Your drops" }), rows.length ? h("div", {}, rows) : h("p", { class: "muted", text: "Nothing added yet." })),
+            d.news.length ? h("div", { class: "panel" }, h("h3", { text: "Spotted in the news lately" }), h("div", {}, d.news.map(n => h("div", { class: "rule" }, h("div", {}, ext(n.url, n.title, ""), h("div", { class: "muted small", text: n.source }))))), h("p", { class: "muted small", text: "Only news that mentions a giveaway or a code shows up here." })) : null);
+        } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+      })();
+      return [holder];
+    }
+
     function show() {
       body.replaceChildren();
       if (current === "overview") body.append(...overview());
@@ -1179,6 +1224,7 @@
       else if (current === "list") { const into = h("div"); body.append(into); sharedList(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
       else if (current === "board") { const into = h("div"); body.append(into); board(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
       else if (current === "codes") body.append(...codesPanel());
+      else if (current === "drops") body.append(...dropsPanel());
       else if (current === "stats") statsPanel(g, body);
       else if (current === "giveaways") { location.hash = "#/giveaways"; }
     }

@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.03", date: "2026-11-03", title: "Promo drops", items: [
+        "**Promo drops:** for key giveaways like SteelSeries or NVIDIA rewards. A server manager adds the code or link with `/promos add` (or on the dashboard under Servers, Promo drops) and the bot posts it once in the promo channel, then greys it out when it ends.",
+        "**News watching:** turn on `/promos news` and the bot also posts news that mentions a giveaway or a code: the NVIDIA and SteelSeries blogs, and the official Steam news for Dead by Daylight, Warframe, Destiny 2, Apex Legends, Rainbow Six Siege, Marvel Rivals, Wuthering Waves, Path of Exile and PUBG. It only posts new ones, and it can be wrong now and then, so each one links to the post.",
+        "**Where they go:** community setup adds a #promo-drops channel (run `/community setup` again to add it to an existing server)."
+    ] },
     { version: "2026.11.02", date: "2026-11-02", title: "Game codes", items: [
         "**Limited-time game codes:** the bot now watches for SHiFT codes (Borderlands 2, 3, 4, The Pre-Sequel, Wonderlands and the GOTY edition) plus redeem codes for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, and posts each one once, with the right game's art, the reward, the platform and when it ends. When a code runs out, its post is greyed out.",
         "**Where they go:** servers get a #game-codes channel from community setup (run `/community setup` again to add it to an existing server). Managers can pick the channel, which games to include and a role to ping with `/codes`, or on the dashboard under Servers, Game codes.",

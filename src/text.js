@@ -14,7 +14,7 @@ export function quickStart(dashboardUrl = null) {
 }
 
 export const HELP = [
-    "**Every command** (`/help`). Most work in a DM too. Replies are private. Never post game keys in chat.",
+    "**Every command** (`/help`). Most work in a DM too. Replies are private. Never post keys.",
     "",
     "**Prices and wishlist**",
     "• `/value` prices a list of games (typed, or a FanaticalGrabber export in `file`): MSRP, Steam price, cheapest now, and savings if you give `paid`.",
@@ -22,34 +22,34 @@ export const HELP = [
     "• `/watch` watches one game for a price drop without adding it to your wishlist.",
     "• `/regions` ranks one game's price across regions. `/currency` picks the currency (also used on the dashboard).",
     "• `/bundle` says if a bundle is worth it. `/saleprep` `plan` / `recap` readies your wishlist for a sale or shows what alerts caught.",
-    "• `/codes` `latest` lists working game codes. Managers: `channel` / `games` / `ping`.",
-    "• `/sales` shows upcoming Steam sales with countdowns. `/freegames` lists what is free to claim now on Steam, Epic, GOG and others.",
-    "• `/friend` `add` / `list` / `deals` / `remove`: friends' birthdays and sales on their wishlists. `/publicpage` makes a shareable wishlist page.",
+    "• `/codes` `latest` lists game codes (managers: `channel` / `games` / `ping`). `/promos` `list` shows key giveaways like SteelSeries or NVIDIA (managers: `add` / `end` / `channel` / `ping` / `news`).",
+    "• `/sales` shows upcoming Steam sales. `/freegames` lists what is free to claim now on Steam, Epic, GOG and others.",
+    "• `/friend` `add` / `list` / `deals` / `remove`: friends' birthdays and wishlist sales. `/publicpage` makes a shareable wishlist page.",
     "",
     "**Alerts**",
-    "• `/alerts` `status`, `delivery` (DM or channel), `pause` / `resume`, `region`, `stores`, `quiethours`, `digest` (weekly), `mindiscount`, `bundles`, `freegames`, `mute`, `language`, `share` (opt in to boards and comparisons) and `history`.",
+    "• `/alerts` `status`, `delivery` (DM or channel), `pause` / `resume`, `region`, `stores`, `quiethours`, `digest` (weekly), `mindiscount`, `bundles`, `freegames`, `mute`, `language`, `share` (opt in to boards) and `history`.",
     "",
     "**Library and Steam**",
     "• `/library` `add`, `import`, `remove`, `view` (value and savings; a `*` marks a gift), `status` (backlog, playing, finished), `backlog` (play next), `spend`, `trend`, `challenge`, `badges`, `bundle` / `bundles`, `grabber` (link code for the FanaticalGrabber extension).",
-    "• `/steam` `link` (sign in through Steam on the dashboard and it links itself), `sync`, `view`, `next`, `foryou` (deals picked for you), `verify` (Steam Verified role), `value`, `taste`, `recap`, `goal`, `unlink`: hours played, what you never played and what it is worth.",
-    "• `/profilecard` makes a shareable profile picture. `/compare` lines your library up against a friend's.",
+    "• `/steam` `link` (sign in through Steam on the dashboard and it links itself), `sync`, `view`, `next`, `foryou` (deals picked for you), `verify` (Steam Verified role), `value`, `taste`, `recap`, `goal`, `unlink`: hours played and what you never played.",
+    "• `/profilecard` makes a profile picture. `/compare` lines your library up against a friend's.",
     "• `/redeem` queues Steam keys; press Run on the dashboard's Batch redeem page.",
     "",
     "**Servers**",
     "• `/serverlist` `add` / `view` / `vote` / `remove`: a wishlist your server shares. `/leaderboard` and `/serverstats` show boards and numbers for members who opted in.",
-    "• `/gamenight` (in voice) shows what everyone owns. `/lfg` `post` / `list` / `close` finds players. `/calendar` `view` / `add` / `remove` / `feed` shows releases and events.",
+    "• `/gamenight` (in voice) shows what all own. `/lfg` `post` / `list` / `close` finds players. `/calendar` `view` / `add` / `remove` / `feed` shows releases and events.",
     "• Managers: `/setup` is a guided setup. `/alertchannel` `set` / `clear` / `show` / `feed` / `hot` / `sales` / `digest` / `group` picks where alerts go. `/giveaway` `create` / `list` / `info` / `end` / `cancel` / `reroll` / `replace` / `setup` runs giveaways.",
     "",
     "**Community**",
     "• `/rank` your level and place. `/levels` the top members. `/invites` `me` / `top` / `link` shows who joined through you and gives you an invite link.",
     "• Managers: `/community` `setup` builds the usual gaming-server channels, roles, welcome and XP; `welcome`, `autorole`, `verifyrole`, `xp`, `levelrole`, `referral`, `status` tune it. `/emoji` `import` / `list` adds emoji. `/leaderboardrefresh` updates #leaderboard.",
-    "• Moderators: `/mod` `warn` / `warnings` / `clearwarns` / `timeout` / `untimeout` / `kick` / `ban` / `unban` / `purge` / `cases` / `log`. Actions are logged as cases in #mod-log.",
+    "• Moderators: `/mod` `warn` / `warnings` / `clearwarns` / `timeout` / `untimeout` / `kick` / `ban` / `unban` / `purge` / `cases` / `log`. Actions are logged in #mod-log.",
     "",
     "**Help and your data**",
-    "• `/support` `open` / `mine` / `setup` asks the team for help. `/bug` reports a problem to the bot owner. `/feature` `request` / `list` / `vote` for ideas. `/changelog` shows what is new. `/dashboard` (or `/dash`) links the website. `/grabberad`: owner only.",
+    "• `/support` `open` / `mine` / `setup` asks for help. `/bug` reports a problem to the bot owner. `/feature` `request` / `list` / `vote` for ideas. `/changelog` shows what is new. `/dashboard` (or `/dash`) links the website. `/grabberad`: owner only.",
     "• `/mydata` `export` / `delete` your data. `/status` shows bot health. `/about` and `/privacy` explain both.",
     "",
-    "`/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/setup`, `/gamenight`, `/lfg` and `/mod` only work in a server. Anything that looks like a key is ignored outside the private giveaway form."
+    "`/serverlist`, `/leaderboard` and `/serverstats` use the server you last used the bot in; `/giveaway`, `/promos`, `/setup`, `/gamenight`, `/lfg` and `/mod` only work in a server. Anything that looks like a key is ignored outside the giveaway form."
 ].join("\n");
 
 export const ABOUT = [

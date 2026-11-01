@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeGames, codeView } from "../codes.js";
+import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
 import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
 import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
 import { ItadError } from "../itad.js";
@@ -120,7 +121,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, codes = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -240,6 +241,18 @@ export function createDashboard({ db, itad, rest, codes = null, ops = null, give
         return (config.trustProxy && fwd.length ? fwd[fwd.length - 1] : req.socket.remoteAddress) ?? "unknown";
     };
 
+    const managedGuild = (req, guildId) => {
+        const g = session(req).guilds.find(x => x.id === guildId);
+        if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+        return g;
+    };
+    async function guildChoices(guildId, withRoles = true) {
+        try { return { channels: await rest.listChannels(guildId), roles: withRoles ? await Promise.resolve(rest.listRoles?.(guildId) ?? []).catch(() => []) : [] }; }
+        catch (err) {
+            if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+            throw err;
+        }
+    }
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
     const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
@@ -595,6 +608,62 @@ export function createDashboard({ db, itad, rest, codes = null, ops = null, give
             if (!codes?.poll) throw new HttpError(400, "The code poll is not running on this bot.");
             const r = await codes.poll();
             return { result: r ?? { skipped: true } };
+        },
+
+        // ----- promo drops (SteelSeries, NVIDIA and the like) -----
+        "GET /api/servers/drops": async (req, _b, url) => {
+            const g = managedGuild(req, url.searchParams.get("guild"));
+            const { channels, roles } = await guildChoices(g.id);
+            const at = now();
+            db.expireDrops(at);
+            return { settings: db.getDropSettings(g.id), channels, roles, drops: db.listDrops(g.id, { limit: 25 }).map(d => dropView(d, at)), news: db.listNews(8) };
+        },
+        "POST /api/servers/drops": async (req, body) => {
+            const s = session(req);
+            const g = managedGuild(req, body.guild_id);
+            const patch = {};
+            if (body.channel_id !== undefined) {
+                if (body.channel_id) {
+                    const { channels } = await guildChoices(g.id, false);
+                    const channel = channels.find(c => c.id === body.channel_id);
+                    if (!channel) throw new HttpError(400, "Pick a text channel from the list.");
+                    if (channel.id !== db.getDropSettings(g.id).channel_id) {
+                        try { await rest.sendMessage(channel.id, { content: `Promo drops will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
+                        catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
+                    }
+                }
+                patch.channel_id = body.channel_id || null;
+            }
+            if (body.role_id !== undefined) {
+                if (body.role_id) {
+                    const { roles } = await guildChoices(g.id);
+                    if (!roles.some(r => r.id === body.role_id)) throw new HttpError(400, "Pick a role from the list.");
+                }
+                patch.role_id = body.role_id || null;
+            }
+            if (body.news !== undefined) patch.news = Boolean(body.news);
+            if (patch.news && !(patch.channel_id ?? db.getDropSettings(g.id).channel_id)) throw new HttpError(400, "Pick a channel first, then turn blog watching on.");
+            const settings = applyDropSettings(db, g.id, patch);
+            if (patch.channel_id) drops?.poll?.().catch(() => {});
+            return { settings };
+        },
+        "POST /api/servers/drops/add": async (req, body) => {
+            const s = session(req);
+            const g = managedGuild(req, body.guild_id);
+            let clean;
+            try { clean = cleanDrop(body, now()); } catch (err) { throw new HttpError(400, err.message); }
+            if (!db.getDropSettings(g.id).channel_id) throw new HttpError(400, "Pick a promo channel first, then add the drop.");
+            const id = db.addDrop({ guildId: g.id, ...clean, createdBy: s.userId });
+            drops?.poll?.().catch(() => {});
+            return { id };
+        },
+        "POST /api/servers/drops/end": async (req, body) => {
+            const g = managedGuild(req, body.guild_id);
+            const d = db.getDrop(Number(body.id));
+            if (!d || d.guild_id !== g.id) throw new HttpError(404, "No such drop in this server.");
+            if (!db.endDrop(d.id)) throw new HttpError(400, "That one has already ended.");
+            drops?.poll?.().catch(() => {});
+            return { id: d.id, status: "ended" };
         },
 
         "GET /api/servers/channels": async (req, _b, url) => {

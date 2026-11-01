@@ -48,6 +48,8 @@ import { createSetupHandlers } from "./setup.js";
 import { createTicketHandlers } from "./tickethandlers.js";
 import { createCodeHandlers } from "./codeshandlers.js";
 import { runCodes } from "./codes.js";
+import { createDropHandlers } from "./dropshandlers.js";
+import { runDrops } from "./drops.js";
 import { createRequestHandlers, FR } from "./requesthandlers.js";
 import { publishRequest } from "./requestsync.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
@@ -176,6 +178,13 @@ const pollCodes = async () => {
     try { return await runCodes({ db, api: botRest, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
 };
 const codeUi = createCodeHandlers({ db, runNow: pollCodes });
+let dropsBusy = false;
+const pollDrops = async () => {
+    if (dropsBusy) return null;
+    dropsBusy = true;
+    try { return await runDrops({ db, api: botRest, log: m => console.log(`[promos] ${m}`) }); } finally { dropsBusy = false; }
+};
+const dropUi = createDropHandlers({ db, runNow: pollDrops });
 const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id => publishRequest({ db, api: botRest, id, base: publicBase }) });
 const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
 const setupUi = createSetupHandlers({ db, publicUrl: publicBase });
@@ -221,6 +230,7 @@ client.once(Events.ClientReady, c => {
     schedule(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
     schedule(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
     schedule(async () => { await pollCodes(); }, 20 * 60_000, { onError: err => { console.error(`[codes] ${err.name}: ${err.message}`); ops.error("game codes", err); } });
+    schedule(async () => { await pollDrops(); }, 30 * 60_000, { onError: err => { console.error(`[promos] ${err.name}: ${err.message}`); ops.error("promo drops", err); } });
     schedule(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
 
     // Bundles, giveaways, weekly digests, library snapshots, cleanup and the daily backup
@@ -534,6 +544,7 @@ client.on(Events.InteractionCreate, async i => {
             case "bug": return await ticketUi.handleBug(i);
             case "feature": return await requestUi.handleCommand(i);
             case "codes": return await codeUi.handleCommand(i);
+            case "promos": return await dropUi.handleCommand(i);
             case "grabberad": {
                 const eph = content => i.reply({ content, flags: MessageFlags.Ephemeral });
                 if (!cfg.ownerId || i.user.id !== cfg.ownerId) return await eph("Only the bot owner can use this.");
@@ -591,7 +602,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ broadcaster, db, itad, rest, codes: { poll: pollCodes }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

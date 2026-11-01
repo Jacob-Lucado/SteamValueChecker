@@ -534,6 +534,27 @@ const codes = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("ping").setDescription("Server managers: a role to ping when a new code drops")
         .addRoleOption(o => o.setName("role").setDescription("Role to ping (leave empty to stop pinging)")));
 
+const promos = new SlashCommandBuilder()
+    .setName("promos")
+    .setDescription("Promo drops like SteelSeries or NVIDIA key giveaways, posted once each")
+    .addSubcommand(s => s.setName("list").setDescription("Promo drops that are still going in this server"))
+    .addSubcommand(s => s.setName("add").setDescription("Server managers: post a code or link that is being given away")
+        .addStringOption(o => o.setName("title").setDescription("Short name, like SteelSeries Game On key").setRequired(true).setMaxLength(100))
+        .addStringOption(o => o.setName("code").setDescription("The code, if there is one").setMaxLength(120))
+        .addStringOption(o => o.setName("link").setDescription("Where to claim it (https://...)").setMaxLength(300))
+        .addStringOption(o => o.setName("from").setDescription("Who is giving it away").setMaxLength(60))
+        .addIntegerOption(o => o.setName("days").setDescription("Days until it ends, if you know").setMinValue(1).setMaxValue(365))
+        .addStringOption(o => o.setName("note").setDescription("Anything people should know, like region or one per account").setMaxLength(300)))
+    .addSubcommand(s => s.setName("end").setDescription("Server managers: mark a drop as over")
+        .addIntegerOption(o => o.setName("id").setDescription("The number shown in /promos list").setRequired(true).setMinValue(1)))
+    .addSubcommand(s => s.setName("channel").setDescription("Server managers: where promo drops are posted")
+        .addChannelOption(o => o.setName("channel").setDescription("Text channel (leave empty to see the current setting)").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addBooleanOption(o => o.setName("clear").setDescription("Stop posting promo drops in this server")))
+    .addSubcommand(s => s.setName("ping").setDescription("Server managers: a role to ping for new drops")
+        .addRoleOption(o => o.setName("role").setDescription("Role to ping (leave empty to stop pinging)")))
+    .addSubcommand(s => s.setName("news").setDescription("Server managers: also post giveaway and code news (NVIDIA, SteelSeries, Dead by Daylight...)")
+        .addBooleanOption(o => o.setName("on").setDescription("On or off (leave empty to see the setting)")));
+
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
 
 const support = new SlashCommandBuilder()
@@ -549,6 +570,6 @@ const support = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
-    ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
