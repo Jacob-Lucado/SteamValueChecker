@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
+import { applyCodeSettings, codeGames, codeView } from "../codes.js";
 import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
 import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
 import { ItadError } from "../itad.js";
@@ -119,7 +120,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, codes = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -519,6 +520,81 @@ export function createDashboard({ db, itad, rest, ops = null, giveaways = null, 
             Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };
+        },
+
+
+        // ----- game codes (SHiFT and the like) -----
+        "GET /api/codes": async (req, _b, url) => {
+            session(req);
+            const game = url.searchParams.get("game") || null;
+            if (game && !codeGames().some(g => g.key === game)) throw new HttpError(400, "Unknown game.");
+            const status = url.searchParams.get("status") === "expired" ? "expired" : "active";
+            const at = now();
+            db.expireDue(at); // anything that ended since the last poll should not show as working
+            return { games: codeGames(), status, codes: db.listCodes({ status, game, limit: 100 }).map(c => codeView(c, at)), counts: db.codeCounts() };
+        },
+        "GET /api/servers/codes": async (req, _b, url) => {
+            const s = session(req);
+            const g = s.guilds.find(x => x.id === url.searchParams.get("guild"));
+            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            let channels, roles = [];
+            try { channels = await rest.listChannels(g.id); roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []); }
+            catch (err) {
+                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+                throw err;
+            }
+            return { settings: db.getCodeSettings(g.id), channels, roles, games: codeGames() };
+        },
+        "POST /api/servers/codes": async (req, body) => {
+            const s = session(req);
+            const g = s.guilds.find(x => x.id === body.guild_id);
+            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            const patch = {};
+            if (body.channel_id !== undefined) {
+                if (body.channel_id) {
+                    let channels;
+                    try { channels = await rest.listChannels(g.id); }
+                    catch (err) {
+                        if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+                        throw err;
+                    }
+                    const channel = channels.find(c => c.id === body.channel_id);
+                    if (!channel) throw new HttpError(400, "Pick a text channel from the list.");
+                    if (channel.id !== db.getCodeSettings(g.id).channel_id) {
+                        try { await rest.sendMessage(channel.id, { content: `Game codes will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
+                        catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
+                    }
+                }
+                patch.channel_id = body.channel_id || null;
+            }
+            if (body.role_id !== undefined) {
+                if (body.role_id) {
+                    const roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []);
+                    if (!roles.some(r => r.id === body.role_id)) throw new HttpError(400, "Pick a role from the list.");
+                }
+                patch.role_id = body.role_id || null;
+            }
+            if (body.games !== undefined) patch.games = body.games;
+            let settings;
+            try { settings = applyCodeSettings(db, g.id, patch); } catch (err) { throw new HttpError(400, err.message); }
+            if (patch.channel_id) codes?.poll?.().catch(() => {}); // post what is current right away
+            return { settings };
+        },
+        "POST /api/codes/retire": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const c = db.getCode(Number(body.id));
+            if (!c) throw new HttpError(404, "No such code.");
+            db.setCodeStatus(c.id, "expired");
+            codes?.poll?.().catch(() => {}); // edits the posts to show it ended
+            return { id: c.id, status: "expired" };
+        },
+        "POST /api/admin/codes/poll": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!codes?.poll) throw new HttpError(400, "The code poll is not running on this bot.");
+            const r = await codes.poll();
+            return { result: r ?? { skipped: true } };
         },
 
         "GET /api/servers/channels": async (req, _b, url) => {

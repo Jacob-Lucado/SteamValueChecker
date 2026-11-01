@@ -121,7 +121,7 @@
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
     { id: "library", label: "Library", pages: [["library", "Library"], ["steam", "Steam"], ["redeem", "Batch redeem"]] },
-    { id: "prices", label: "Prices", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Deals"], ["free", "Free games"], ["warroom", "Sale war room"]] },
+    { id: "prices", label: "Prices", pages: [["value", "Value Checker"], ["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Deals"], ["free", "Free games"], ["codes", "Game codes"], ["warroom", "Sale war room"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "Servers"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["setup", "Setup"], ["giveaways", "Giveaways"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["alerts", "Alert settings"], ["notifications", "Notifications"], ["mydata", "My Data"]] },
@@ -281,6 +281,7 @@
         h("div", { class: "lp-grid" },
           feature("", "Library value", "See the full price, what Steam charges today, the cheapest store right now, and how much you actually saved on what you paid."),
           feature("", "Wishlist alerts", "Bring in your public Steam wishlist and choose what counts as worth a ping: any sale, a certain percent off, a price you set, or an all-time low."),
+          feature("", "Game codes", "SHiFT codes for Borderlands and other limited-time game codes, posted once each with the right game and an end date, then greyed out when they run out."),
           feature("", "Free game alerts", "Get a message when a game goes free on Steam, Epic, GOG and others, with a button to grab it. /freegames shows what's free at the moment."),
           feature("", "Giveaways", "Hand out game keys, Nitro, gift cards or whatever else. Winners hit a button to claim, tell the bot if it worked, and a vouch gets posted for you."),
           feature("", "Server tools", "A wishlist the whole server shares and votes on, a savings leaderboard for people who opt in, and a ping when a few members are all waiting on the same deal."),
@@ -944,6 +945,41 @@
     loadFree(panel);
   }
 
+  // ---------- game codes ----------
+  async function codesView() {
+    const st = { game: "", status: "active" };
+    const list = h("div", { class: "muted", text: "Loading…" });
+    const head = h("div", { class: "chips" });
+    const owner = Boolean(state.me && state.me.isOwner);
+    const when = ms => { const d = ms - Date.now(); if (d < 0) return "ended"; const days = Math.floor(d / 86400_000); return days >= 1 ? `ends in ${days} day${days === 1 ? "" : "s"}` : `ends in ${Math.max(1, Math.round(d / 3600_000))} h`; };
+    async function load() {
+      const d = await api("/api/codes?status=" + st.status + (st.game ? "&game=" + encodeURIComponent(st.game) : ""));
+      head.replaceChildren(
+        h("button", { class: "tab small" + (!st.game ? " active" : ""), text: "All games", onclick: () => { st.game = ""; load().catch(fail); } }),
+        ...d.games.map(x => h("button", { class: "tab small" + (st.game === x.key ? " active" : ""), text: x.title, onclick: () => { st.game = x.key; load().catch(fail); } })),
+        h("button", { class: "tab small" + (st.status === "expired" ? " active" : ""), text: st.status === "expired" ? "Showing ended" : "Show ended", onclick: () => { st.status = st.status === "expired" ? "active" : "expired"; load().catch(fail); } }));
+      list.className = "";
+      list.replaceChildren(d.codes.length ? h("div", { class: "free-grid" }, d.codes.map(c => {
+        const copy = h("button", { class: "btn blue small", text: "Copy code" });
+        copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(c.code); toast("Copied.", "ok"); } catch { toast("Select the code and copy it by hand.", "warn"); } });
+        const retire = owner && c.status === "active" ? h("button", { class: "btn red small", text: "Mark ended" }) : null;
+        if (retire) retire.addEventListener("click", () => busy(retire, async () => { await api("/api/codes/retire", { id: c.id }); toast("Marked as ended. Server posts are being updated.", "ok"); await load(); }));
+        return h("div", { class: "free-card" + (c.status === "expired" ? " ended" : "") },
+          c.art ? h("img", { src: c.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
+          h("div", { class: "free-info" }, h("strong", { text: c.gameTitle }), h("div", { text: c.reward || "Unknown reward" }),
+            h("code", { class: "code-text", text: c.code }),
+            h("span", { class: "muted small", text: `${c.platform || "All platforms"} · ${c.expiresAt ? when(c.expiresAt) : "no end date listed"}` }),
+            c.note ? h("span", { class: "muted small", text: c.note + ". May only work on that region's account." }) : null,
+            h("div", { class: "row" }, c.status === "active" ? copy : null, c.status === "active" ? ext(c.redeemUrl, "Redeem on SHiFT", "btn gray small") : h("span", { class: "chip dim", text: "Ended" }), retire)));
+      })) : h("p", { class: "muted", text: st.status === "expired" ? "No ended codes in the last two weeks." : "No working codes right now. New ones show up here as soon as they are listed." }));
+    }
+    const fail = e => list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
+    const poll = owner ? h("button", { class: "btn gray small", text: "Check for new codes now" }) : null;
+    if (poll) poll.addEventListener("click", () => busy(poll, async () => { const r = await api("/api/admin/codes/poll", {}); toast(r.result.skipped ? "A check is already running." : `Checked: ${r.result.added} new, ${r.result.posted} posted.`, "ok"); await load(); }));
+    app.replaceChildren(pageHead("Game codes", "Limited-time codes for games, like SHiFT codes for Borderlands. Each one is listed once, with the right game and an end date when one is known. Servers can have them posted in a channel. The list comes from mentalmars.com, through a community mirror on GitHub."), poll && h("div", { class: "panel" }, poll), head, list);
+    load().catch(fail);
+  }
+
   // ---------- servers ----------
   const guildInvite = g => (state.cfg.inviteUrl ? `${state.cfg.inviteUrl}&guild_id=${encodeURIComponent(g.id)}&disable_guild_select=true` : null);
   const serverIcon = (g, cls) => (g.icon ? h("img", { class: cls, src: g.icon, alt: "" }) : h("div", { class: cls + " noicon", text: (g.name || "?").trim().charAt(0).toUpperCase() }));
@@ -1013,7 +1049,7 @@
     if (!g) { location.hash = "#/servers"; return; }
     const canUse = g.bot !== false;
     const body = h("div", { class: "sv-body" });
-    const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Alert channel", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["stats", "Server stats"], ["giveaways", "Giveaways", true]] : [])]
+    const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Alert channel", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["codes", "Game codes", true], ["stats", "Server stats"], ["giveaways", "Giveaways", true]] : [])]
       .filter(([, , managerOnly]) => !managerOnly || g.manageable);
     let current = "overview";
     const tabs = h("div", { class: "tabs" }, sections.map(([key, label]) => h("button", { class: "tab" + (key === current ? " active" : ""), text: label, onclick: ev => {
@@ -1108,12 +1144,41 @@
       return [holder];
     }
 
+    function codesPanel() {
+      const holder = h("div", { class: "muted", text: "Loading…" });
+      (async () => {
+        try {
+          const d = await api("/api/servers/codes?guild=" + encodeURIComponent(g.id));
+          const st = d.settings;
+          const chan = select([["", "No channel (off)"], ...d.channels.map(c => ["" + c.id, "#" + c.name])], st.channel_id || "");
+          const role = select([["", "Nobody"], ...d.roles.filter(r => r.name !== "@everyone").map(r => ["" + r.id, r.name])], st.role_id || "");
+          const picked = new Set(st.games.length ? st.games : d.games.map(x => x.key));
+          const boxes = d.games.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.title); });
+          const save = h("button", { class: "btn green", text: "Save" });
+          save.addEventListener("click", () => busy(save, async () => {
+            if (!picked.size) throw new Error("Keep at least one game ticked, or pick no channel to turn this off.");
+            await api("/api/servers/codes", { guild_id: g.id, channel_id: chan.value, role_id: role.value, games: [...picked] });
+            toast(chan.value ? "Saved. New codes will be posted there." : "Saved. Codes are off for this server.", "ok");
+          }));
+          holder.className = "";
+          holder.replaceChildren(
+            h("div", { class: "panel" }, h("h3", { text: "Game codes" }),
+              h("p", { class: "muted", text: "Limited-time codes, like SHiFT codes for Borderlands, posted once each in the channel you pick. When a code ends, its post is greyed out. The same list is on the Game codes page for everyone." }),
+              field("Channel", chan), field("Ping this role for new codes", role),
+              h("div", {}, h("label", { text: "Games" }), h("div", { class: "checks" }, boxes)),
+              h("div", { class: "row" }, save)));
+        } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+      })();
+      return [holder];
+    }
+
     function show() {
       body.replaceChildren();
       if (current === "overview") body.append(...overview());
       else if (current === "alerts") body.append(...alertsPanel());
       else if (current === "list") { const into = h("div"); body.append(into); sharedList(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
       else if (current === "board") { const into = h("div"); body.append(into); board(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
+      else if (current === "codes") body.append(...codesPanel());
       else if (current === "stats") statsPanel(g, body);
       else if (current === "giveaways") { location.hash = "#/giveaways"; }
     }
@@ -4070,7 +4135,7 @@
     load();
   }
 
-  const VIEWS = { mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

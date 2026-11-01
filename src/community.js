@@ -55,6 +55,7 @@ export const TEMPLATE = {
             { key: "wishlists", name: "wishlists-and-deals", topic: "Share wishlists and sales. Try /wishlist import" }] },
         { name: "💸 DEALS & GIVEAWAYS", channels: [
             { key: "deals", name: "deal-alerts", topic: "Sales and free games from Steam Value Checker", readonly: true },
+            { key: "codes", name: "game-codes", topic: "Limited-time game codes (SHiFT and more), posted once each and marked when they end", readonly: true },
             { key: "giveaways", name: "giveaways", topic: "Game key giveaways", readonly: true },
             { key: "vouches", name: "vouches", topic: "Winners confirm their keys worked", readonly: true }] },
         { name: "🆘 SUPPORT", channels: [
@@ -293,6 +294,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await refreshLeaderboard({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not post the leaderboard (check my permissions in #leaderboard)."));
     await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts." });
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/wishlist import` to get your own alerts." });
+    await say(api, chIds.codes, { content: "New limited-time game codes (SHiFT codes for Borderlands, for example) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/codes`, or on the dashboard." });
     await say(api, chIds.tickets, { content: "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
     await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
@@ -302,6 +304,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.afk) await api.editGuild(guildId, { afk_channel_id: chIds.afk, afk_timeout: 900 }).catch(() => notes.push("Could not set the AFK channel (needs Manage Server)."));
     await api.editGuild(guildId, { system_channel_flags: 1 }).catch(() => {}); // stop Discord's own join message, the bot greets instead
 
+    if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
     db.setCommunity(guildId, { setup_keys: JSON.stringify(Object.keys(chIds)) });
     db.bumpUsage?.(fresh ? "setup_auto" : "setup_manual");
     db.bumpUsage?.("channels_created", created.channels.length);
@@ -309,7 +312,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 }
 
 /** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
-export const ADDED_LATER = new Set(["requests", "honeypot"]);
+export const ADDED_LATER = new Set(["requests", "honeypot", "codes"]);
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
 
 /** What a second run does: create only the template channels this server has never been given. */
@@ -349,6 +352,8 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
         if (!db.getCommunity(guildId).honeypot_channel) db.setCommunity(guildId, { honeypot_channel: chIds.honeypot });
         if (created.channels.includes(HONEYPOT_NAME)) await say(api, chIds.honeypot, honeypotPayload()); // only in a channel made just now
     }
+    if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
+    if (chIds.codes && created.channels.includes("game-codes")) await say(api, chIds.codes, { content: "New limited-time game codes (SHiFT codes for Borderlands, for example) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/codes`, or on the dashboard." });
     if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     db.setCommunity(guildId, { setup_keys: JSON.stringify([...new Set([...built, ...Object.keys(chIds)])]) });

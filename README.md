@@ -68,6 +68,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/alerts freegames enabled:` | Get told when any game is free to claim. One message per store; several free games from the same store come with a **Claim all** button, a single game with **Claim game** |
 | `/watch title:` | Watch one game for a price drop without adding it to your wishlist. Removed after the alert, or after 30 days |
 | `/sales` | Upcoming Steam sales and festivals with countdowns (dates in `src/salescal.js`, update when Valve announces new ones) |
+| `/codes latest\|channel\|games\|ping` | Limited-time game codes (SHiFT codes for Borderlands). `latest` lists working codes. Managers pick the channel, the games and a role to ping; the same settings are on the dashboard under Servers, Game codes. Source: a community list on GitHub, checked every 20 minutes (`src/codesource.js`) |
 | `/publicpage enabled: name:` | A public, shareable page of your wishlist and best prices at `#/u/name`. Shows only game names, art and prices |
 | `/status` | Live health checks, uptime and incidents (the same data as the dashboard Status page) |
 | `/library status\|backlog` | Mark games backlog, playing, played, finished or dropped; see unplayed spend and what to play next |

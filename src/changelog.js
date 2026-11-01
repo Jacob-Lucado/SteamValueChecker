@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.02", date: "2026-11-02", title: "Game codes", items: [
+        "**Limited-time game codes:** the bot now watches for SHiFT codes (Borderlands 2, 3, 4, The Pre-Sequel, Wonderlands and the GOTY edition) and posts each one once, with the right game's art, the reward, the platform and when it ends. When a code runs out, its post is greyed out.",
+        "**Where they go:** servers get a #game-codes channel from community setup (run `/community setup` again to add it to an existing server). Managers can pick the channel, which games to include and a role to ping with `/codes`, or on the dashboard under Servers, Game codes.",
+        "**Dashboard:** a new **Game codes** page under Prices lists every working code with a copy button, and lets you look at ones that just ended. `/codes latest` shows the same list in Discord.",
+    ] },
     { version: "2026.11.01", date: "2026-11-01", title: "A full community bot", items: [
         "**Brand-new servers are set up for you.** Add the bot to a fresh server and it builds the usual gaming layout (welcome, rules, general, gaming, deals, voice and a private staff area), with Moderator and Member roles, a role picker and the bot's own channels connected. Any other server can run `/community setup`.",
         "**Welcome messages, levels and XP, invites and referrals.** New members are greeted with who invited them, chat and voice earn XP, `/rank` and `/levels` show where you stand, and `/invites link` gives you your own link with rewards for bringing people in.",

@@ -396,6 +396,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "freegames": "GET /api/free", "sales": "GET /api/sales", "status": "GET /api/status", "publicpage": "POST /api/profile", "friend/add": "POST /api/friends/add", "friend/list": "GET /api/friends", "friend/remove": "POST /api/friends/remove", "friend/deals": "GET /api/friends/deals", "watch": "POST /api/wishlist/add", "mydata/export": "GET /api/mydata/download", "mydata/delete": "POST /api/mydata/delete",
         "steam/link": "POST /api/steam/link", "steam/sync": "POST /api/steam/sync", "steam/recap": "GET /api/steam/recap", "steam/taste": "GET /api/steam/taste", "steam/view": "GET /api/steam", "steam/next": "GET /api/steam/next", "steam/foryou": "GET /api/foryou", "steam/verify": "GET /api/steam/linkedroles", "community/verifyrole": "POST /api/community/verifyrole", "steam/value": "GET /api/steam/value.png", "profilecard": "GET /api/profile/card.png", "steam/unlink": "POST /api/steam/unlink",
         "lfg/post": "POST /api/lfg", "lfg/list": "GET /api/lfg", "lfg/close": "POST /api/lfg/close",
+        "codes/latest": "GET /api/codes", "codes/channel": "POST /api/servers/codes", "codes/games": "POST /api/servers/codes", "codes/ping": "POST /api/servers/codes",
         "feature/request": "POST /api/requests", "feature/list": "GET /api/requests", "feature/vote": "POST /api/requests/vote",
         "bundle": "GET /api/bundles", "saleprep/plan": "GET /api/saleprep", "saleprep/recap": "GET /api/saleprep/recap",
         "setup": "GET /api/servers/setup", "gamenight": "POST /api/gamenight", "bug": "POST /api/tickets", "support/open": "POST /api/tickets", "support/mine": "GET /api/tickets", "support/setup": "POST /api/tickets/setup",
@@ -512,7 +513,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const block = src.slice(src.indexOf("export const commands"));
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
-    assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "feature", "freegames", "friendCmd", "grabberAd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
+    assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "codes", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "feature", "freegames", "friendCmd", "grabberAd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
     assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "modCmd", "rank", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);

@@ -826,3 +826,7 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .lp-section h2 { font-size: 22px; }
   #app { padding-left: 14px; padding-right: 14px; }
 }
+
+.code-text { font-size: 15px; letter-spacing: .02em; word-break: break-all; user-select: all; }
+.free-card.ended { opacity: .6; filter: grayscale(.6); }
+.checks { display: grid; gap: 6px; margin-top: 6px; }

@@ -1389,3 +1389,34 @@ test("the extension can ask which version is newest without signing in, and the 
     assert.equal((await t.request("/api/config")).data.extension.latest, r.data.latest);
     await t.close();
 });
+
+test("game codes: signed-in members see the list, managers set up their server, the owner can retire a code", async () => {
+    const { cleanEntry } = await import("../src/codesource.js");
+    const mk = (n, game) => cleanEntry({ code: `AAAA${n}-BBBBB-CCCCC-DDDDD-EEEEE`, type: "shift", game, platform: "universal", reward: "3 Golden Keys", expires: "Dec 5, 2026", archived: "2026-10-30 10:00:00+00:00" }, Date.UTC(2026, 9, 30));
+    let polled = 0;
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { codes: { poll: async () => { polled++; return { added: 0, posted: 0 }; } } } });
+    o.db.upsertCode(mk(1, "Borderlands 4")); o.db.upsertCode(mk(2, "Borderlands 2"));
+    const post = (path, body) => o.request(path, { method: "POST", body });
+    const list = (await o.request("/api/codes")).data;
+    assert.equal(list.codes.length, 2);
+    assert.ok(list.codes.every(c => c.art && c.redeemUrl && c.gameTitle));
+    assert.match(list.codes.find(c => c.game === "bl2").art, /\/apps\/49520\//, "each code shows its own game's art");
+    assert.equal((await o.request("/api/codes?game=bl2")).data.codes.length, 1);
+    assert.equal((await o.request("/api/codes?game=nope")).status, 400);
+    const s = (await o.request("/api/servers/codes?guild=g-admin")).data;
+    assert.equal(s.channels.length, 2); assert.equal(s.games.length, 6);
+    assert.equal((await o.request("/api/servers/codes?guild=g-member")).status, 403);
+    const saved = (await post("/api/servers/codes", { guild_id: "g-admin", channel_id: "c1", role_id: "r1", games: ["bl4"] })).data;
+    assert.equal(saved.settings.channel_id, "c1"); assert.deepEqual(saved.settings.games, ["bl4"]); assert.equal(saved.settings.role_id, "r1");
+    assert.ok(o.sent.some(m => m.id === "c1"), "a confirmation is posted in the chosen channel");
+    assert.equal((await post("/api/servers/codes", { guild_id: "g-admin", channel_id: "nope" })).status, 400);
+    assert.equal((await post("/api/servers/codes", { guild_id: "g-admin", role_id: "nope" })).status, 400);
+    assert.equal((await post("/api/servers/codes", { guild_id: "g-admin", games: ["zzz"] })).status, 400);
+    assert.equal((await post("/api/servers/codes", { guild_id: "g-member", channel_id: "c1" })).status, 403);
+    assert.equal((await post("/api/codes/retire", { id: 1 })).status, 200);
+    assert.equal(o.db.getCode(1).status, "expired");
+    assert.equal((await o.request("/api/codes")).data.codes.length, 1);
+    assert.equal((await o.request("/api/codes?status=expired")).data.codes.length, 1);
+    assert.equal((await post("/api/admin/codes/poll", {})).status, 200);
+    assert.ok(polled >= 2, "retiring and checking now both run a poll");
+});

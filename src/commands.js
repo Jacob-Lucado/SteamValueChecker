@@ -507,6 +507,8 @@ const emojiCmd = new SlashCommandBuilder()
 
 const bug = new SlashCommandBuilder().setName("bug").setDescription("Report a problem with the bot. It goes straight to the bot owner");
 
+const CODE_GAME_CHOICES = [{ name: "Borderlands 4", value: "bl4" }, { name: "Borderlands 3", value: "bl3" }, { name: "Tiny Tina's Wonderlands", value: "wonderlands" }, { name: "Borderlands: Game of the Year", value: "blgoty" }, { name: "Borderlands: The Pre-Sequel", value: "bltps" }, { name: "Borderlands 2", value: "bl2" }];
+
 const feature = new SlashCommandBuilder()
     .setName("feature")
     .setDescription("Suggest a feature for the bot and vote on ideas")
@@ -517,6 +519,20 @@ const feature = new SlashCommandBuilder()
             { name: "Shipped", value: "shipped" }, { name: "Rejected", value: "rejected" }, { name: "On hold", value: "on_hold" })))
     .addSubcommand(s => s.setName("vote").setDescription("Vote for an idea, or take your vote back")
         .addIntegerOption(o => o.setName("id").setDescription("The number shown in /feature list").setRequired(true).setMinValue(1)));
+
+const codes = new SlashCommandBuilder()
+    .setName("codes")
+    .setDescription("Limited-time game codes, like SHiFT codes for Borderlands")
+    .addSubcommand(s => s.setName("latest").setDescription("The newest codes that still work")
+        .addStringOption(o => o.setName("game").setDescription("Only one game").addChoices(...CODE_GAME_CHOICES)))
+    .addSubcommand(s => s.setName("channel").setDescription("Server managers: where new codes are posted")
+        .addChannelOption(o => o.setName("channel").setDescription("Text channel (leave empty to see the current setting)").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addBooleanOption(o => o.setName("clear").setDescription("Stop posting codes in this server")))
+    .addSubcommand(s => s.setName("games").setDescription("Server managers: choose which games' codes get posted")
+        .addStringOption(o => o.setName("game").setDescription("The game to turn on or off").addChoices(...CODE_GAME_CHOICES))
+        .addBooleanOption(o => o.setName("on").setDescription("On (default) or off")))
+    .addSubcommand(s => s.setName("ping").setDescription("Server managers: a role to ping when a new code drops")
+        .addRoleOption(o => o.setName("role").setDescription("Role to ping (leave empty to stop pinging)")));
 
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
 
@@ -532,7 +548,7 @@ const support = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("global").setDescription("Bot owner only: set the channel for tickets with no server queue")));
 
 export const commands = [
-    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
+    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
     ...[alertchannel, giveaway, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
