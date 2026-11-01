@@ -1,5 +1,6 @@
 // Game code posts: the embed, the poll that posts each code once per server, and the edit that marks a code as ended.
 import { fetchAllCodes, gameByKey, gameArt, redeemUrlFor, ALL_GAMES } from "./codesource.js";
+import { sendCodeAlerts } from "./dropalerts.js";
 
 const sleepDefault = ms => new Promise(r => setTimeout(r, ms));
 const ORANGE = 0xff9800, GREY = 0x6b7280;
@@ -54,7 +55,7 @@ export function pendingFor(db, guildId, settings) {
  * One poll: read the feed, store anything new, retire what ended, post what each server has not had, and edit old posts.
  * `fetchCodes` is injectable for tests. A failed fetch still lets the expiry and edit steps run.
  */
-export async function runCodes({ db, api, fetchCodes = fetchAllCodes, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
+export async function runCodes({ db, api, notifier = null, fetchCodes = fetchAllCodes, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
     const stats = { fetched: 0, added: 0, posted: 0, expired: 0, failed: 0, feedError: null };
     try {
         const got = await fetchCodes();
@@ -79,9 +80,10 @@ export async function runCodes({ db, api, fetchCodes = fetchAllCodes, now = Date
         const first = !db.hasAnyCodePost(gid);
         const toPost = first ? fresh.slice(0, FIRST_RUN_POSTS) : fresh.slice(0, MAX_PER_RUN);
         if (first) for (const c of fresh.slice(FIRST_RUN_POSTS)) db.addCodePost(c.id, gid, settings.channel_id, null); // seen, never posted
+        const ping = settings.role_id ?? db.getCommunity?.(gid)?.ping_codes ?? null; // the server's own "Game code pings" role is the default
         for (const c of [...toPost].reverse()) { // oldest first, so the newest ends up at the bottom of the channel
             try {
-                const msg = await api.sendMessage(settings.channel_id, { ...codeEmbed(c), content: settings.role_id ? `<@&${settings.role_id}>` : undefined, allowed_mentions: settings.role_id ? { roles: [settings.role_id] } : { parse: [] } });
+                const msg = await api.sendMessage(settings.channel_id, { ...codeEmbed(c), content: ping ? `<@&${ping}>` : undefined, allowed_mentions: ping ? { roles: [ping] } : { parse: [] } });
                 db.addCodePost(c.id, gid, settings.channel_id, msg?.id ?? null);
                 stats.posted++;
             } catch (err) {
@@ -91,6 +93,11 @@ export async function runCodes({ db, api, fetchCodes = fetchAllCodes, now = Date
             }
             await sleep(pace);
         }
+    }
+
+    if (notifier) {
+        try { const a = await sendCodeAlerts({ db, notifier, now, log }); stats.alerted = a.delivered; stats.failed += a.failed; }
+        catch (err) { log(`code alerts: ${err.message}`); }
     }
 
     for (const p of db.stalePosts()) {

@@ -49,8 +49,8 @@ export function codeStore({ run, get, all, clean, now }) {
             run("UPDATE promo_codes SET last_seen = ?, expires_at = COALESCE(?, expires_at) WHERE id = ?", t, c.expiresAt ?? null, have.id);
             return { id: Number(have.id), isNew: false };
         }
-        const r = run("INSERT INTO promo_codes (key, provider, code, game, platform, reward, note, expires_at, source_url, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            c.key, c.provider, c.code, c.game, c.platform ?? null, c.reward ?? null, c.note ?? null, c.expiresAt ?? null, c.sourceUrl ?? null, c.seenAt ?? t, t);
+        const r = run("INSERT INTO promo_codes (key, provider, code, game, platform, reward, note, expires_at, source_url, first_seen, last_seen, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            c.key, c.provider, c.code, c.game, c.platform ?? null, c.reward ?? null, c.note ?? null, c.expiresAt ?? null, c.sourceUrl ?? null, c.seenAt ?? t, t, t);
         return { id: Number(r.lastInsertRowid), isNew: true };
     }
 

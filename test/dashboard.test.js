@@ -1449,3 +1449,26 @@ test("promo drops: managers set up their server, add and end a drop, members can
     assert.equal((await o.request("/api/servers/drops?guild=g-admin")).data.drops[0].status, "ended");
     assert.ok(polled >= 3, "saving a channel, adding and ending each run a poll");
 });
+
+test("alert settings: members opt in to game code and promo DMs, with a game filter", async () => {
+    const o = await signedIn({});
+    const post = body => o.request("/api/alerts/codes", { method: "POST", body });
+    const first = (await o.request("/api/alerts/codes")).data;
+    assert.equal(first.codes, false); assert.equal(first.promos, false); assert.equal(first.allGames.length, 9);
+    const on = (await post({ codes: true, promos: true, games: ["genshin", "bl4"] })).data;
+    assert.equal(on.codes, true); assert.equal(on.promos, true); assert.deepEqual(on.games.sort(), ["bl4", "genshin"]);
+    assert.equal((await post({ games: ["nope"] })).status, 400);
+    assert.equal((await post({ games: [] })).status, 400);
+    assert.deepEqual((await post({ games: first.allGames.map(g => g.key) })).data.games, [], "every game ticked means no filter");
+    assert.equal((await post({ codes: false })).data.codes, false);
+});
+
+test("the Deals page can load its bundle and sale prep parts back to back without being told to slow down", async () => {
+    const o = await signedIn({});
+    const a = await o.request("/api/bundles");
+    const b = await o.request("/api/saleprep");
+    const c = await o.request("/api/regions?game=x");
+    assert.notEqual(a.status, 429); assert.notEqual(b.status, 429); assert.notEqual(c.status, 429);
+    // asking for the same thing twice in a row is still held back
+    assert.equal((await o.request("/api/saleprep")).status, 429);
+});

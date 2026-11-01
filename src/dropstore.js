@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS drop_news_posts (
     message_id TEXT,
     PRIMARY KEY (news_id, guild_id)
 );
+CREATE TABLE IF NOT EXISTS alert_subs (
+    discord_id   TEXT PRIMARY KEY,
+    codes        INTEGER NOT NULL DEFAULT 0,
+    promos       INTEGER NOT NULL DEFAULT 0,
+    games        TEXT,
+    codes_since  INTEGER,
+    promos_since INTEGER
+);
 `;
 
 const KEEP_ENDED_MS = 14 * 86400_000;
@@ -99,5 +107,23 @@ export function dropStore({ run, get, all, clean, now }) {
     const addNewsPost = (newsId, guildId, channelId, messageId) => run("INSERT OR REPLACE INTO drop_news_posts (news_id, guild_id, channel_id, message_id) VALUES (?, ?, ?, ?)", newsId, guildId, channelId ?? null, messageId ?? null);
     const hasAnyNewsPost = guildId => Boolean(get("SELECT 1 AS x FROM drop_news_posts WHERE guild_id = ? LIMIT 1", guildId));
 
-    return { addDrop, getDrop, listDrops, endDrop, expireDrops, pruneDrops, dropPost, addDropPost, markDropPostEnded, unpostedDrops, staleDropPosts, getDropSettings, setDropSettings, dropGuilds, upsertNews, listNews, unpostedNews, addNewsPost, hasAnyNewsPost };
+    // ----- personal alerts: members who want new game codes and promo news in their DMs -----
+    function getAlertSubs(id) {
+        const r = clean(get("SELECT * FROM alert_subs WHERE discord_id = ?", id));
+        let games = [];
+        try { games = JSON.parse(r?.games ?? "[]") ?? []; } catch { games = []; }
+        return { codes: Boolean(r?.codes), promos: Boolean(r?.promos), games: Array.isArray(games) ? games : [], codes_since: r?.codes_since ?? null, promos_since: r?.promos_since ?? null };
+    }
+    /** Turning something on starts from now, so nobody gets a pile of old codes the moment they opt in. */
+    function setAlertSubs(id, patch) {
+        const cur = getAlertSubs(id);
+        run("INSERT OR IGNORE INTO alert_subs (discord_id) VALUES (?)", id);
+        if (patch.codes !== undefined) run("UPDATE alert_subs SET codes = ?, codes_since = ? WHERE discord_id = ?", patch.codes ? 1 : 0, patch.codes && !cur.codes ? now() : cur.codes_since, id);
+        if (patch.promos !== undefined) run("UPDATE alert_subs SET promos = ?, promos_since = ? WHERE discord_id = ?", patch.promos ? 1 : 0, patch.promos && !cur.promos ? now() : cur.promos_since, id);
+        if (patch.games !== undefined) run("UPDATE alert_subs SET games = ? WHERE discord_id = ?", JSON.stringify([...new Set(patch.games)]), id);
+        return getAlertSubs(id);
+    }
+    const alertSubscribers = kind => all(`SELECT s.discord_id FROM alert_subs s JOIN users u ON u.discord_id = s.discord_id WHERE s.${kind === "promos" ? "promos" : "codes"} = 1 AND u.paused = 0`).map(r => ({ id: r.discord_id, ...getAlertSubs(r.discord_id) }));
+
+    return { getAlertSubs, setAlertSubs, alertSubscribers, addDrop, getDrop, listDrops, endDrop, expireDrops, pruneDrops, dropPost, addDropPost, markDropPostEnded, unpostedDrops, staleDropPosts, getDropSettings, setDropSettings, dropGuilds, upsertNews, listNews, unpostedNews, addNewsPost, hasAnyNewsPost };
 }

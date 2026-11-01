@@ -1,5 +1,6 @@
 // Promo drops: the posts, the blog watcher and the poll that puts each one in a server once.
 import { CodeFeedError } from "./codesource.js";
+import { sendNewsAlerts } from "./dropalerts.js";
 
 const sleepDefault = ms => new Promise(r => setTimeout(r, ms));
 const TEAL = 0x1abc9c, GREY = 0x6b7280, GREEN = 0x76b900;
@@ -93,15 +94,15 @@ export function newsEmbed(n) {
         components: [{ type: 1, components: [{ type: 2, style: 5, label: "Read the post", url: n.url }] }], allowed_mentions: { parse: [] } };
 }
 
-const mention = s => ({ content: s.role_id ? `<@&${s.role_id}>` : undefined, allowed_mentions: s.role_id ? { roles: [s.role_id] } : { parse: [] } });
+const mention = (s, role) => { const r = s.role_id ?? role ?? null; return { content: r ? `<@&${r}>` : undefined, allowed_mentions: r ? { roles: [r] } : { parse: [] } }; };
 
 /**
  * One pass: read the blogs, end what has run out, post what each server has not had, edit old posts.
  * `getNews` is injectable for tests.
  */
-export async function runDrops({ db, api, getNews = fetchNews, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
+export async function runDrops({ db, api, notifier = null, getNews = fetchNews, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
     const stats = { news: 0, posted: 0, ended: 0, failed: 0, feedError: null };
-    if (db.dropGuilds().some(s => s.news)) {
+    if (db.dropGuilds().some(s => s.news) || db.alertSubscribers("promos").length) {
         try {
             const r = await getNews();
             for (const n of r.items) if (db.upsertNews(n).isNew) stats.news++;
@@ -109,11 +110,15 @@ export async function runDrops({ db, api, getNews = fetchNews, now = Date.now, s
         } catch (err) { stats.feedError = err.message; log(`news: ${err.message}`); }
     }
     stats.ended += db.expireDrops(now()).length;
+    if (notifier) {
+        try { const a = await sendNewsAlerts({ db, notifier, now, log }); stats.alerted = a.delivered; stats.failed += a.failed; }
+        catch (err) { log(`promo alerts: ${err.message}`); }
+    }
 
     for (const s of db.dropGuilds()) {
         for (const d of db.unpostedDrops(s.guild_id)) {
             try {
-                const msg = await api.sendMessage(s.channel_id, { ...dropEmbed(d), ...mention(s) });
+                const msg = await api.sendMessage(s.channel_id, { ...dropEmbed(d), ...mention(s, db.getCommunity?.(s.guild_id)?.ping_promos) });
                 db.addDropPost(d.id, s.channel_id, msg?.id ?? null);
                 stats.posted++;
             } catch (err) { stats.failed++; log(`drop post failed (${err?.status ?? err?.name})`); break; }
@@ -125,7 +130,7 @@ export async function runDrops({ db, api, getNews = fetchNews, now = Date.now, s
         if (!db.hasAnyNewsPost(s.guild_id)) { for (const n of fresh) db.addNewsPost(n.id, s.guild_id, s.channel_id, null); continue; } // first time on: only future posts
         for (const n of fresh.slice(0, MAX_NEWS_PER_RUN).reverse()) {
             try {
-                const msg = await api.sendMessage(s.channel_id, { ...newsEmbed(n), ...mention(s) });
+                const msg = await api.sendMessage(s.channel_id, { ...newsEmbed(n), ...mention(s, db.getCommunity?.(s.guild_id)?.ping_promos) });
                 db.addNewsPost(n.id, s.guild_id, s.channel_id, msg?.id ?? null);
                 stats.posted++;
             } catch (err) { stats.failed++; log(`news post failed (${err?.status ?? err?.name})`); break; }

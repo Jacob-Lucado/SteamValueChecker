@@ -837,3 +837,28 @@ test("/feature: request opens a form, submitting saves and posts it, list and vo
     await ui.handleCommand(cmd("list", { status: "shipped" }));
     assert.match(replies.at(-1)[1].embeds[0].description, /Shipped/);
 });
+
+test("running setup again gives an older server the Game code and Promo drop ping roles, and re-posts the role picker", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    for (const n of ["Game code pings", "Promo drop pings"]) api.state.roles.splice(api.state.roles.findIndex(r => r.name === n), 1);
+    db.setCommunity("G", { ping_codes: null, ping_promos: null });
+    const sent = api.state.sent.length;
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.deepEqual(r.created.roles.sort(), ["Game code pings", "Promo drop pings"]);
+    const c = db.getCommunity("G");
+    assert.equal(api.state.roles.find(x => x.id === c.ping_codes).name, "Game code pings");
+    assert.equal(api.state.roles.find(x => x.id === c.ping_promos).name, "Promo drop pings");
+    const panel = api.state.sent.slice(sent).find(m => JSON.stringify(m.p).includes("Pick your roles"));
+    assert.ok(panel, "the picker is posted again with the new buttons");
+    assert.ok(JSON.stringify(panel.p).includes("Game code pings"));
+    // a code post pings that role when the server has not chosen another
+    const { runCodes } = await import("../src/codes.js");
+    const { cleanEntry } = await import("../src/codesource.js");
+    db.setCodeSettings("G", { channel_id: "c1" });
+    const sentCodes = [];
+    const code = cleanEntry({ code: "AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", type: "shift", game: "Borderlands 4", platform: "universal", reward: "3 Golden Keys", expires: "Dec 5, 2026", archived: "2026-11-01 11:00:00+00:00" }, Date.now());
+    await runCodes({ db, api: { sendMessage: async (ch, p) => { sentCodes.push(p); return { id: "m" }; }, editMessage: async () => ({}) }, fetchCodes: async () => [code], now: () => Date.now(), sleep: async () => {} });
+    assert.equal(sentCodes[0].content, `<@&${c.ping_codes}>`);
+    db.setCodeSettings("G", { role_id: "custom" });
+});

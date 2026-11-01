@@ -65,6 +65,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/wishlist check game:` | Is it a good deal right now? Price, 3-month, 1-year and all-time lows, a plain verdict, and a buy now or wait recommendation from a year of price history and the next Steam sale |
 | `/alerts delivery` | DM (default) or the server alert channel |
 | `/alerts quiethours`, `digest`, `bundles`, `freegames`, `share`, `history` | Hold alerts overnight (with your time zone), a weekly sales digest, bundle and giveaway alerts, opt in to server group alerts and the leaderboard, and your recent alerts |
+| `/alerts codes` / `promos` | DM when a new game code drops (all games or only some) or when NVIDIA, SteelSeries or a game's news mentions a giveaway or code. Only new ones from when you turn it on; also on the dashboard's Alerts page |
 | `/alerts freegames enabled:` | Get told when any game is free to claim. One message per store; several free games from the same store come with a **Claim all** button, a single game with **Claim game** |
 | `/watch title:` | Watch one game for a price drop without adding it to your wishlist. Removed after the alert, or after 30 days |
 | `/sales` | Upcoming Steam sales and festivals with countdowns (dates in `src/salescal.js`, update when Valve announces new ones) |

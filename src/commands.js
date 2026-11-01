@@ -306,6 +306,7 @@ const watch = new SlashCommandBuilder()
     .addStringOption(o => o.setName("title").setDescription("Game title").setRequired(true).setMaxLength(100))
     .addStringOption(alertType).addNumberOption(alertValue);
 
+const CODE_GAME_CHOICES = [{ name: "Borderlands 4", value: "bl4" }, { name: "Borderlands 3", value: "bl3" }, { name: "Tiny Tina's Wonderlands", value: "wonderlands" }, { name: "Borderlands: Game of the Year", value: "blgoty" }, { name: "Borderlands: The Pre-Sequel", value: "bltps" }, { name: "Borderlands 2", value: "bl2" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }];
 const alerts = new SlashCommandBuilder()
     .setName("alerts")
     .setDescription("How and where you get sale alerts")
@@ -343,9 +344,15 @@ alerts
     .addSubcommand(s => s.setName("freegames").setDescription("Get told when a game is free to claim on Steam, Epic, GOG and others")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true))
         .addBooleanOption(o => o.setName("dlc").setDescription("Also show free DLC and add-ons (default on)")))
+    .addSubcommand(s => s.setName("codes").setDescription("Get a DM when a new game code drops (Borderlands, Genshin, Star Rail, Zenless)")
+        .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true))
+        .addStringOption(o => o.setName("game").setDescription("Only some games: pick one to add or drop it").addChoices(...CODE_GAME_CHOICES))
+        .addBooleanOption(o => o.setName("on").setDescription("With game: include it (default) or leave it out")))
+    .addSubcommand(s => s.setName("promos").setDescription("Get a DM about giveaways and codes in NVIDIA, SteelSeries and game news")
+        .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("mute").setDescription("Stop DMs for one kind of alert (you can still read them on the dashboard's Notifications page)")
         .addStringOption(o => o.setName("type").setDescription("Which alerts").setRequired(true).addChoices(
-            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }, { name: "Friend birthday reminders", value: "friend" }))
+            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }, { name: "Friend birthday reminders", value: "friend" }, { name: "Game code alerts", value: "codes" }, { name: "Promo news alerts", value: "promo" }))
         .addBooleanOption(o => o.setName("muted").setDescription("True to mute, false to get them again").setRequired(true)))
     .addSubcommand(s => s.setName("language").setDescription("Language for the bot's buttons and messages")
         .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices({ name: "English", value: "en" }, { name: "Español", value: "es" }, { name: "Français", value: "fr" })))
@@ -507,7 +514,6 @@ const emojiCmd = new SlashCommandBuilder()
 
 const bug = new SlashCommandBuilder().setName("bug").setDescription("Report a problem with the bot. It goes straight to the bot owner");
 
-const CODE_GAME_CHOICES = [{ name: "Borderlands 4", value: "bl4" }, { name: "Borderlands 3", value: "bl3" }, { name: "Tiny Tina's Wonderlands", value: "wonderlands" }, { name: "Borderlands: Game of the Year", value: "blgoty" }, { name: "Borderlands: The Pre-Sequel", value: "bltps" }, { name: "Borderlands 2", value: "bl2" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }];
 
 const feature = new SlashCommandBuilder()
     .setName("feature")

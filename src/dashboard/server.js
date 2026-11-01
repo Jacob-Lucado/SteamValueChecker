@@ -94,7 +94,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, deals: 5_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
+const COOLDOWNS = { request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -745,6 +745,26 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
                 return { updated: targets.length, label: describeTrigger({ trigger_type: trig.type, trigger_value: trig.value }) };
             }
             throw new HttpError(400, "Unknown action.");
+        },
+
+        // game code and promo news alerts to your own DMs
+        "GET /api/alerts/codes": async (req) => {
+            const s = session(req); userRow(s);
+            return { ...db.getAlertSubs(s.userId), allGames: codeGames() };
+        },
+        "POST /api/alerts/codes": async (req, body) => {
+            const s = session(req); userRow(s);
+            const patch = {};
+            if (body.codes !== undefined) patch.codes = Boolean(body.codes);
+            if (body.promos !== undefined) patch.promos = Boolean(body.promos);
+            if (body.games !== undefined) {
+                const keys = codeGames().map(g => g.key);
+                const games = Array.isArray(body.games) ? body.games.map(String) : [];
+                if (games.some(g => !keys.includes(g))) throw new HttpError(400, "That is not a game I track codes for.");
+                if (!games.length) throw new HttpError(400, "Keep at least one game ticked, or turn code alerts off.");
+                patch.games = games.length === keys.length ? [] : games;
+            }
+            return { ...db.setAlertSubs(s.userId, patch), allGames: codeGames() };
         },
 
         "GET /api/alerts/history": async (req) => {
@@ -1522,7 +1542,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
 
         "GET /api/bundles": async (req, _b, url) => {
             const s = session(req);
-            cooldown(s.userId, "deals");
+            cooldown(s.userId, "bundles");
             const u = userRow(s);
             const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
             let gameIds;
@@ -1536,7 +1556,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
 
         "GET /api/regions": async (req, _b, url) => {
             const s = session(req);
-            cooldown(s.userId, "deals");
+            cooldown(s.userId, "regions");
             const u = userRow(s);
             const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
             if (!title) throw new HttpError(400, "Type a game title.");
@@ -1598,7 +1618,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
 
         "GET /api/saleprep": async (req, _b, url) => {
             const s = session(req);
-            cooldown(s.userId, "deals");
+            cooldown(s.userId, "saleprep");
             const budget = Number(url.searchParams.get("budget"));
             return await salePrep({ db, itad, user: userRow(s), budget: Number.isFinite(budget) && budget > 0 && budget <= 10_000 ? budget : null });
         },

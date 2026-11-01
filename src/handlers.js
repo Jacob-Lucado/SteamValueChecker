@@ -33,6 +33,8 @@ import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
 
 import { UserError } from "./errors.js";
+import { codeGames } from "./codes.js";
+import { gameByKey } from "./codesource.js";
 import { boardSvg, artFor } from "./communitycards.js";
 import { panelSvg, toPng, challengeSpec, spendSpec, trendSpec, compareSpec, badgesSpec, statusSpec, serverStatsSpec } from "./panelcards.js";
 export { UserError };
@@ -368,6 +370,26 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.updateUser(user.discord_id, { free: on ? 1 : 0, ...(dlc === null ? {} : { free_dlc: dlc ? 1 : 0 }) });
                 const dlcNote = dlc === null ? "" : dlc ? " Free DLC is included." : " Free DLC is hidden.";
                 return eph(i, (on ? "You will be told when a game is free to claim. Several free games from one store come in one message with a Claim all button." : "Free game alerts are off.") + dlcNote);
+            }
+            case "codes": {
+                const on = i.options.getBoolean("enabled", true);
+                const game = i.options.getString("game");
+                const keep = i.options.getBoolean("on");
+                let games = db.getAlertSubs(user.discord_id).games;
+                if (game) {
+                    const all = codeGames().map(g => g.key);
+                    const base = games.length ? games : all;
+                    games = keep === false ? base.filter(k => k !== game) : [...new Set([...base, game])];
+                    if (!games.length) throw new UserError("Keep at least one game, or turn code alerts off.");
+                    if (games.length === all.length) games = [];
+                }
+                const s = db.setAlertSubs(user.discord_id, { codes: on, ...(game ? { games } : {}) });
+                return eph(i, on ? `I'll message you when a new game code drops${s.games.length ? ` for ${s.games.map(k => gameByKey(k)?.title ?? k).join(", ")}` : " for any game"}. Only codes from now on, nothing old.` : "Game code alerts are off.");
+            }
+            case "promos": {
+                const on = i.options.getBoolean("enabled", true);
+                db.setAlertSubs(user.discord_id, { promos: on });
+                return eph(i, on ? "I'll message you when NVIDIA, SteelSeries or a game's news mentions a giveaway or a code. Only new posts, and it can be a false alarm now and then." : "Promo news alerts are off.");
             }
             case "mute": {
                 const type = i.options.getString("type", true), on = i.options.getBoolean("muted", true);

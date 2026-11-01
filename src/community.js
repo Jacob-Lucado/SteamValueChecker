@@ -30,7 +30,8 @@ export const TEMPLATE = {
     ],
     selfRoles: [
         { name: "PC", emoji: "🖥️" }, { name: "PlayStation", emoji: "🎮" }, { name: "Xbox", emoji: "🟩" }, { name: "Nintendo", emoji: "🔴" },
-        { name: "Deal pings", emoji: "💸" }, { name: "Free game pings", emoji: "🎁" }, { name: "Giveaway pings", emoji: "🎉" }, { name: "LFG pings", emoji: "🤝" }
+        { name: "Deal pings", emoji: "💸" }, { name: "Free game pings", emoji: "🎁" }, { name: "Giveaway pings", emoji: "🎉" }, { name: "LFG pings", emoji: "🤝" },
+        { name: "Game code pings", emoji: "🔑" }, { name: "Promo drop pings", emoji: "🎟️" }
     ],
     categories: [
         { name: "📢 INFORMATION", channels: [
@@ -273,7 +274,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
-    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings") });
+    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_promos: pingOf("Promo drop pings") });
     db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, honeypot_channel: chIds.honeypot ?? db.getCommunity(guildId).honeypot_channel ?? null, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
@@ -361,6 +362,24 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     if (chIds.drops && created.channels.includes("promo-drops")) await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/promos add` or on the dashboard, and can turn on news watching with `/promos news`." });
     if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
+    // the opt-in ping roles for codes and promos, for servers that were set up before they existed
+    const newPings = TEMPLATE.selfRoles.filter(r => ["Game code pings", "Promo drop pings"].includes(r.name));
+    const madeRoles = [];
+    for (const r of newPings) {
+        let ex = existingRoles.find(x => x.name.toLowerCase() === r.name.toLowerCase() && !x.managed);
+        if (!ex) {
+            ex = await api.createRole(guildId, { name: r.name, mentionable: true, permissions: "0" }).catch(() => { notes.push(`Could not create the ${r.name} role (I need Manage Roles).`); return null; });
+            if (!ex) continue;
+            created.roles.push(r.name); madeRoles.push(r); await wait();
+        }
+        db.addSelfRole(guildId, ex.id, r.name);
+        const col = r.name === "Game code pings" ? "ping_codes" : "ping_promos";
+        if (!db.getCommunity(guildId)[col]) db.setCommunity(guildId, { [col]: ex.id });
+    }
+    if (madeRoles.length) {
+        const rolesCh = existingChannels.find(x => x.type === 0 && x.name.toLowerCase() === "roles");
+        if (rolesCh) await say(api, rolesCh.id, rolePanel(db.listSelfRoles(guildId).map(r => ({ role_id: r.role_id, label: r.label, emoji: TEMPLATE.selfRoles.find(x => x.name === r.label)?.emoji })))).catch(() => {});
+    }
     db.setCommunity(guildId, { setup_keys: JSON.stringify([...new Set([...built, ...Object.keys(chIds)])]) });
     db.bumpUsage?.("setup_update");
     if (!created.channels.length && !notes.length) notes.push("Everything in the template is already there. I did not change anything.");

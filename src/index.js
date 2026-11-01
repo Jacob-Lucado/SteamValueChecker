@@ -175,14 +175,14 @@ let codesBusy = false;
 const pollCodes = async () => {
     if (codesBusy) return null;
     codesBusy = true;
-    try { return await runCodes({ db, api: botRest, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
+    try { return await runCodes({ db, api: botRest, notifier, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
 };
 const codeUi = createCodeHandlers({ db, runNow: pollCodes });
 let dropsBusy = false;
 const pollDrops = async () => {
     if (dropsBusy) return null;
     dropsBusy = true;
-    try { return await runDrops({ db, api: botRest, log: m => console.log(`[promos] ${m}`) }); } finally { dropsBusy = false; }
+    try { return await runDrops({ db, api: botRest, notifier, log: m => console.log(`[promos] ${m}`) }); } finally { dropsBusy = false; }
 };
 const dropUi = createDropHandlers({ db, runNow: pollDrops });
 const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id => publishRequest({ db, api: botRest, id, base: publicBase }) });

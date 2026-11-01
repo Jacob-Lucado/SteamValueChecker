@@ -712,9 +712,28 @@
     const free = h("input", { type: "checkbox", checked: s.free });
     const freeDlc = h("input", { type: "checkbox", checked: s.free_dlc !== false });
     const freeNow = h("div", { class: "panel" }, h("h3", { text: "Free right now" }), h("p", { class: "muted", text: "Everything that is free to claim today has its own page now." }), h("a", { class: "btn blue small", href: "#/free", text: "Open Free games" }));
+    function codeAlertsPanel() {
+      const box = h("div", { class: "panel" }, h("h3", { text: "Game codes and promos" }), h("p", { class: "muted", text: "Loading…" }));
+      api("/api/alerts/codes").then(d => {
+        const codes = h("input", { type: "checkbox", checked: d.codes }), promos = h("input", { type: "checkbox", checked: d.promos });
+        const picked = new Set(d.games.length ? d.games : d.allGames.map(x => x.key));
+        const boxes = d.allGames.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.title); });
+        const save = h("button", { class: "btn green", text: "Save" });
+        save.addEventListener("click", () => busy(save, async () => {
+          if (codes.checked && !picked.size) throw new Error("Keep at least one game ticked, or turn code alerts off.");
+          await api("/api/alerts/codes", { codes: codes.checked, promos: promos.checked, games: picked.size ? [...picked] : d.allGames.map(x => x.key) });
+          toast("Saved. Only new ones from now on.", "ok");
+        }));
+        box.replaceChildren(h("h3", { text: "Game codes and promos" }),
+          h("p", { class: "muted small", text: "A message when something new drops. Codes come from the Game codes page; promo news is giveaway and code news from NVIDIA, SteelSeries and games like Dead by Daylight. Only new ones from the moment you turn it on." }),
+          h("label", { class: "check" }, codes, "Tell me when a new game code drops, for these games:"), h("div", { class: "checks" }, boxes),
+          h("label", { class: "check" }, promos, "Tell me about giveaway and code news (can be a false alarm now and then)"), h("div", { class: "row" }, save));
+      }).catch(e => box.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+      return box;
+    }
     const history = h("div", { class: "panel" }, h("h3", { text: "Recent alerts" }), h("p", { class: "muted", text: "Loading…" }));
     api("/api/alerts/history").then(d => {
-      const kinds = { sale: "Sale", bundle: "Bundle", giveaway: "Free", group: "Group", digest: "Digest" };
+      const kinds = { sale: "Sale", bundle: "Bundle", giveaway: "Free", group: "Group", digest: "Digest", codes: "Code", promo: "Promo" };
       history.replaceChildren(h("h3", { text: "Recent alerts" }), d.alerts.length
         ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["When", "Type", "Game", "Price", "Store", "Sent by"].map((c, i) => h("th", { class: i === 3 ? "num" : "", text: c })))),
           h("tbody", {}, d.alerts.map(a => h("tr", {}, h("td", { text: new Date(a.at).toLocaleString() }), h("td", { text: kinds[a.kind] || a.kind }), h("td", { text: a.title }),
@@ -750,7 +769,7 @@
         h("label", { class: "check" }, bundles, "Tell me when a wishlist game is in a bundle or being given away"),
         h("label", { class: "check" }, free, "Tell me when any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /freegames and the list below show)")),
-      freeNow, salesPanel(), publicPagePanel(),
+      freeNow, codeAlertsPanel(), salesPanel(), publicPagePanel(),
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
         h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
@@ -2968,9 +2987,9 @@
   const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
 
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
-  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays" };
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
-  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫" };
+  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫", codes: "🔑", promo: "🎟️" };
 
   // Alert text is written for Discord (## headings, **bold**, <t:...> times). Show it as plain words on the website.
   function plainDiscord(text) {

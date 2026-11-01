@@ -200,3 +200,98 @@ test("promos: community setup includes a promo-drops channel that only adds to e
     assert.equal(ch?.name, "promo-drops"); assert.equal(ch.readonly, true);
     assert.ok(ADDED_LATER.has("drops"));
 });
+
+// ---------- alerts to a member's own DMs ----------
+import { sendCodeAlerts, sendNewsAlerts } from "../src/dropalerts.js";
+import { cleanEntry } from "../src/codesource.js";
+import { runCodes } from "../src/codes.js";
+
+const shiftCode = (n, game = "Borderlands 4", at = Date.now()) => cleanEntry({ code: `AAAA${n}-BBBBB-CCCCC-DDDDD-EEEEE`, type: "shift", game, platform: "universal", reward: "3 Golden Keys", expires: "Dec 5, 2026", archived: "2026-11-01 11:00:00+00:00" }, at);
+function fakeNotifier({ ok = true } = {}) {
+    const sent = [];
+    return { sent, deliver: async (user, payload, type) => { sent.push({ id: user.discord_id, payload, type }); return ok ? { ok: true, via: "dm" } : { ok: false, reason: "dm_failed_no_channel" }; } };
+}
+function dbWithUser(id = "u1") {
+    const db = openDb(":memory:");
+    db.ensureUser(id);
+    return db;
+}
+
+test("alerts: a member gets new codes once, only for the games they picked, and nothing from before they opted in", async () => {
+    const db = dbWithUser();
+    db.upsertCode(shiftCode(1)); // already there before they opt in
+    await new Promise(r => setTimeout(r, 5));
+    db.setAlertSubs("u1", { codes: true, games: ["bl4"] });
+    const n = fakeNotifier();
+    assert.equal((await sendCodeAlerts({ db, notifier: n, now: () => Date.now() })).delivered, 0);
+    await new Promise(r => setTimeout(r, 5));
+    db.upsertCode(shiftCode(2)); db.upsertCode(shiftCode(3, "Borderlands 2"));
+    const run = () => sendCodeAlerts({ db, notifier: n, now: () => Date.now() });
+    assert.equal((await run()).delivered, 1);
+    await run(); await run();
+    assert.equal(n.sent.length, 1, "once");
+    assert.equal(n.sent[0].type, "codes"); assert.match(n.sent[0].payload.embeds[0].description, /AAAA2/);
+    assert.equal(n.sent[0].payload.allowed_mentions, undefined);
+    // turning it off stops everything
+    db.setAlertSubs("u1", { codes: false });
+    db.upsertCode(shiftCode(4));
+    await run();
+    assert.equal(n.sent.length, 1);
+});
+
+test("alerts: paused members, failed deliveries and codes that already ended are handled", async () => {
+    const db = dbWithUser();
+    db.setAlertSubs("u1", { codes: true });
+    await new Promise(r => setTimeout(r, 5));
+    db.upsertCode(shiftCode(1));
+    const bad = fakeNotifier({ ok: false });
+    const r = await sendCodeAlerts({ db, notifier: bad, now: () => Date.now() });
+    assert.equal(r.failed, 1);
+    const good = fakeNotifier();
+    assert.equal((await sendCodeAlerts({ db, notifier: good, now: () => Date.now() })).delivered, 1, "a failed one is retried next time");
+    db.updateUser("u1", { paused: 1 });
+    db.upsertCode(shiftCode(2));
+    assert.equal((await sendCodeAlerts({ db, notifier: good, now: () => Date.now() })).delivered, 0, "paused means nothing is sent");
+    db.updateUser("u1", { paused: 0 });
+    const expired = shiftCode(9); db.upsertCode(expired); db.setCodeStatus(db.codeByKey(expired.key).id, "expired");
+    assert.equal(db.alertSubscribers("codes").length, 1);
+    await sendCodeAlerts({ db, notifier: good, now: () => Date.now() });
+    assert.ok(!good.sent.some(s => /AAAA9/.test(s.payload.embeds[0].description)), "an ended code is never sent");
+});
+
+test("alerts: promo news goes to members who asked, once, from when they turned it on", async () => {
+    const db = dbWithUser();
+    db.upsertNews({ key: "k0", source: "NVIDIA", kind: "blog", title: "Old giveaway", url: "https://blogs.nvidia.com/o/" });
+    await new Promise(r => setTimeout(r, 5));
+    db.setAlertSubs("u1", { promos: true });
+    await new Promise(r => setTimeout(r, 5));
+    db.upsertNews({ key: "k1", source: "Dead by Daylight", kind: "game", title: "Bloodpoint code", url: "https://steamstore-a.akamaihd.net/n/1" });
+    const n = fakeNotifier();
+    const run = () => sendNewsAlerts({ db, notifier: n });
+    await run(); await run();
+    assert.equal(n.sent.length, 1); assert.equal(n.sent[0].type, "promo"); assert.match(n.sent[0].payload.embeds[0].title, /Bloodpoint/);
+});
+
+test("alerts: the poll sends member alerts and reads the blogs even when no server asked for news", async () => {
+    const db = dbWithUser();
+    const { api } = fakeApi(); const n = fakeNotifier();
+    db.setAlertSubs("u1", { promos: true });
+    let read = 0;
+    const item = { key: "x1", source: "SteelSeries", kind: "blog", title: "Key Giveaway", url: "https://steelseries.com/blog/k", summary: "" };
+    await new Promise(r => setTimeout(r, 5));
+    await runDrops({ db, api, notifier: n, sleep: async () => {}, getNews: async () => { read++; return { items: [item], errors: [] }; } });
+    assert.equal(read, 1); assert.equal(n.sent.length, 1);
+    db.setAlertSubs("u1", { codes: true });
+    await new Promise(r => setTimeout(r, 5));
+    const code = shiftCode(7); 
+    await runCodes({ db, api, notifier: n, fetchCodes: async () => [code], now: () => Date.now(), sleep: async () => {} });
+    assert.equal(n.sent.filter(s => s.type === "codes").length, 1);
+});
+
+test("alerts: codes can be muted, and the settings are on the dashboard and command", async () => {
+    const { MUTABLE } = await import("../src/prefs.js");
+    assert.ok(MUTABLE.includes("codes") && MUTABLE.includes("promo"));
+    const { commands } = await import("../src/commands.js");
+    const al = commands.find(c => c.name === "alerts");
+    assert.ok(al.options.some(o => o.name === "codes") && al.options.some(o => o.name === "promos"));
+});
