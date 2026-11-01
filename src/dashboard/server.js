@@ -272,6 +272,14 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             throw err;
         }
     }
+    // The Music page refreshes every few seconds, so anything it asks Discord for is remembered for a while.
+    const memo = new Map();
+    const remember = async (key, ttl, fn) => {
+        const hit = memo.get(key);
+        if (hit && hit.until > Date.now()) return hit.value;
+        try { const value = await fn(); memo.set(key, { value, until: Date.now() + ttl }); if (memo.size > 2000) memo.delete(memo.keys().next().value); return value; }
+        catch (err) { if (hit) return hit.value; throw err; } // Discord is busy: show the last answer rather than an error
+    };
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
     const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
@@ -648,13 +656,13 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             await musicGuild?.(gid)?.warm?.(s.userId);
             const { autodj_playlist: _skip, ...settings } = db.getMusicSettings(gid);
             const subs = db.listSubmissions(gid);
-            const names = Object.fromEntries(await Promise.all([...new Set(subs.slice(0, 50).map(r => r.user_id))].map(async id => [id, (await rest.memberName?.(g.id, id).catch(() => null)) || "Member " + id.slice(-4)])));
+            const names = Object.fromEntries(await Promise.all([...new Set(subs.slice(0, 50).map(r => r.user_id))].map(async id => [id, (await remember("name:" + g.id + ":" + id, 10 * 60_000, () => rest.memberName(g.id, id)).catch(() => null)) || "Member " + id.slice(-4)])));
             const out = {
                 guild: { id: g.id, name: g.name }, settings, status: music.status(gid), access: { ...music.access(gid, s.userId), isBotOwner: isOwner(s) }, playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })),
                 autodj: { playlist: db.getAutoPlaylist(gid).slice(0, 100), count: db.getAutoPlaylist(gid).length },
                 submissions: subs.slice(0, 50).map(r => ({ id: r.id, userId: r.user_id, name: names[r.user_id], title: r.title, artist: r.artist, url: r.url, thumb: r.thumb, duration: r.duration, mine: r.user_id === s.userId }))
             };
-            if (isManager(g)) { const c = await guildChoices(gid); out.channels = c.channels; out.roles = c.roles; out.voiceChannels = await Promise.resolve(rest.listVoiceChannels?.(gid) ?? []).catch(() => []); }
+            if (isManager(g)) { const c = await remember("choices:" + gid, 60_000, () => guildChoices(gid)); out.channels = c.channels; out.roles = c.roles; out.voiceChannels = await remember("voice:" + gid, 60_000, () => Promise.resolve(rest.listVoiceChannels?.(gid) ?? [])).catch(() => []); }
             return out;
         },
         "GET /api/music/search": async (req, _b, url) => {
