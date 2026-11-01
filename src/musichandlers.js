@@ -56,7 +56,7 @@ export function settingsSummary(s) {
         s.channel_id ? `Now-playing messages go to <#${s.channel_id}>.` : "Now-playing messages go where `/play` was used.",
         `Up to **${s.max_queue}** songs in the queue${s.max_minutes ? `, **${s.max_minutes}** minutes max per song` : ""}.`,
         s.announce ? "I post a message when each song starts." : "No song-start messages.",
-        s.stay ? "I stay in the voice channel when the queue ends." : `I leave ${s.leave_minutes} minutes after the queue ends or everyone leaves.`,
+        s.stay ? "I wait in the last voice channel I was used in. When someone joins I go back to the last live station, or start the Auto DJ." : `I leave ${s.leave_minutes} minutes after the queue ends or everyone leaves.`,
         `Live radio links are **${s.radio ? "allowed" : "off"}**.`
     ].join("\n");
 }

@@ -25,7 +25,7 @@ export function musicIntroPayload() {
                 { name: "🎛️ Control", value: "`/music pause` · `resume` · `skip` (others vote) · `skipto` · `previous` · `seek` · `stop` · `leave`\n`/music volume` · `loop` (song or whole queue) · `shuffle`" },
                 { name: "📜 Queue", value: "`/music nowplaying` · `queue` · `remove` · `move` · `clear`" },
                 { name: "💾 Your playlists", value: "`/music saveplaylist` saves what's queued to your account, `loadplaylist` brings it back in any server, plus `playlists` and `deleteplaylist`." },
-                { name: "📻 Live radio & Auto DJ", value: "`/music live` lists radio stations on the air right now, or paste any stream link into `/play`.\nWith the **Auto DJ** on, the bot keeps playing a playlist when nobody has queued anything, and anyone can send requests with `/music autodj submit` (no voice channel needed)." },
+                { name: "📻 Live radio & Auto DJ", value: "`/music live` lists radio stations on the air right now, or paste any stream link into `/play`.\nWith the **Auto DJ** on, the bot keeps playing a playlist when nobody has queued anything, and anyone can send requests with `/music autodj submit` (no voice channel needed).\nManagers can also make the bot **stay** in its last voice channel: it waits there when everyone leaves, then goes back to the last live station (or the Auto DJ) as soon as someone joins." },
                 { name: "🛠️ Managers", value: "`/music settings` sets a DJ role, starting volume, queue and song length limits, and where the now-playing card goes. It all lives on the dashboard's **Music** page too, along with a full player." },
                 { name: "✨ Good to know", value: "The now-playing card updates live and has buttons for pause, skip, loop, shuffle, volume and queue. Premium-only SoundCloud tracks can't be played. The bot leaves a few minutes after the queue ends or everyone leaves." }
             ],
@@ -296,6 +296,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (!db.getGiveawaySettings(guildId).manager_role_id) db.setGiveawaySettings(guildId, { manager_role_id: roleIds.mod }); // moderators can run giveaways
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
     if (chIds.musiccmd && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.musiccmd }); // now-playing messages land in #music
+    if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
     db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_promos: pingOf("Promo drop pings") });
@@ -398,6 +399,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
         if (created.channels.includes(HONEYPOT_NAME)) await say(api, chIds.honeypot, honeypotPayload()); // only in a channel made just now
     }
     if (chIds.musiccmd && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.musiccmd });
+    if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins
     if (chIds.musiccmd && created.channels.includes("music-commands")) await say(api, chIds.musiccmd, musicIntroPayload());
     if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
     if (chIds.codes && created.channels.includes("game-codes")) await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });

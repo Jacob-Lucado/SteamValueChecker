@@ -424,3 +424,28 @@ test("the station list only shows stations that answer, and remembers the answer
     await st.working(); assert.equal(calls, 2, "cached");
     clock += 11 * 60_000; await st.working(); assert.equal(calls, 4, "checked again after ten minutes");
 });
+
+test("stay mode: the bot waits in its last channel, then goes back to the live station or the Auto DJ when someone joins", async () => {
+    const r = rig({ settings: { stay: 1 } });
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://radio.example.com/live.mp3" });
+    assert.equal(r.db.getMusicSettings("g1").home_channel_id, "c1");
+    r.humans.c1 = 0; r.m.onVoiceChange("g1");
+    assert.equal(r.m.status("g1").active, true, "still in the channel");
+    assert.equal(r.m.status("g1").current, null, "the stream stopped while nobody listens");
+    assert.ok(JSON.parse(r.db.getMusicSettings("g1").last_radio).url.includes("radio.example.com"));
+    r.humans.c1 = 1; r.m.onVoiceChange("g1");
+    await new Promise(res => setTimeout(res, 20));
+    assert.equal(r.m.status("g1").current?.live, true, "back on the station");
+    // no station to go back to: the Auto DJ starts instead
+    const d = rig({ settings: { stay: 1, autodj: 1 } });
+    d.db.setAutoPlaylist("g1", [T(7)], "x");
+    await d.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", tracks: [T(1)] });
+    d.m.stop?.("g1", "u1");
+    assert.equal(d.db.getMusicSettings("g1").last_radio, null);
+    d.humans.c1 = 0; d.m.onVoiceChange("g1"); d.humans.c1 = 1; d.m.onVoiceChange("g1");
+    await new Promise(res => setTimeout(res, 20));
+    assert.equal(d.m.status("g1").current?.auto, true, "the Auto DJ took over");
+    // leaving on purpose forgets the channel
+    d.m.leave("g1", "u1");
+    assert.equal(d.db.getMusicSettings("g1").home_channel_id, null);
+});

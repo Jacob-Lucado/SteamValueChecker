@@ -62,7 +62,7 @@ export const HELP_PAGES = [
             { name: "Controls", value: "`nowplaying`, `queue`, `pause`, `resume`, `skip`, `skipto`, `previous`, `seek`, `stop`, `leave`, `volume`, `loop`, `shuffle`, `remove`, `move`, `clear`." },
             { name: "Playlists", value: "`saveplaylist`, `loadplaylist`, `playlists`, `deleteplaylist` (yours, any server)." },
             { name: "Auto DJ", value: "`/music autodj` `submit` a request (no voice needed), `requests` to see them, `setup` (managers) picks the playlist, channel and idle time. It plays when nobody has queued anything." },
-            { name: "Managers", value: "`/music settings` sets the DJ role, volume, limits, announcements and whether radio links are allowed." }
+            { name: "Managers", value: "`/music settings` sets the DJ role, volume, limits, announcements and whether radio links are allowed. Turn on `stay` and the bot waits in its last voice channel, then goes back to the last live station (or the Auto DJ) when someone joins." }
         ] },
     { key: "manage", label: "Manage and community", emoji: "🛠", title: "/manage  ·  /mod",
         description: "Needs Manage Server (or the moderator role for `/mod`).",

@@ -908,5 +908,7 @@ test("community setup builds the music category, posts the intro there and point
     assert.ok(old.state.channels.some(c => c.name === "music-commands"));
     assert.equal(old.state.channels.filter(c => c.type === 2 && /^Music/.test(c.name)).length, 2);
     assert.equal(db2.getMusicSettings("H").channel_id, old.state.channels.find(c => c.name === "music-commands").id);
+    assert.equal(db2.getMusicSettings("H").home_channel_id, old.state.channels.find(c => c.name === "Music 1").id, "the bot waits in Music 1");
+    assert.equal(db2.getMusicSettings("H").stay, 1);
     assert.ok(old.state.sent.some(m => JSON.stringify(m.p).includes("Music is here")));
 });

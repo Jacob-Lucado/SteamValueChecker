@@ -59,7 +59,8 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     // ---------- reading ----------
     function status(gid) {
         const g = get(gid);
-        const auto = { on: autoOn(gid), mode: Boolean(g?.autoMode), pending: db.countSubmissions(gid), playlist: db.getAutoPlaylist(gid).length };
+        const waiting = Boolean(db.getMusicSettings(gid).stay && g?.connection && !g.playing && !g.queue.current);
+        const auto = { waiting, on: autoOn(gid), mode: Boolean(g?.autoMode), pending: db.countSubmissions(gid), playlist: db.getAutoPlaylist(gid).length };
         if (!g || !g.connection) return { active: false, playing: false, paused: false, current: null, next: [], total: 0, loop: "off", volume: db.getMusicSettings(gid).volume, position: 0, totalSeconds: 0, channelId: null, live: false, auto };
         const paused = g.player?.state?.status === "paused" || g.player?.state?.status === "autopaused";
         return {
@@ -123,6 +124,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         player.on("error", err => onPlayerError(g, err));
         g.connection = conn; g.player = player; g.voiceChannelId = w.vc.id;
         g.volume = g.volume ?? w.settings.volume;
+        if (w.settings.stay) db.setMusicSettings(g.guildId, { home_channel_id: w.vc.id });
         clearAlone(g);
     }
 
@@ -145,6 +147,12 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         try { g.stream?.kill(); } catch { /* */ }
         // Tracks that came from a playlist link only have a link until now. Fill in the title, length and picture.
         if (!track.live && (!track.duration || !track.thumb)) { try { Object.assign(track, withoutEmpty(await source.details(track)), { requestedBy: track.requestedBy }); } catch { /* the basics are enough */ } }
+        if (g.voiceChannelId && db.getMusicSettings(g.guildId).stay && db.getMusicSettings(g.guildId).home_channel_id !== g.voiceChannelId) db.setMusicSettings(g.guildId, { home_channel_id: g.voiceChannelId });
+        if (!resume && !track.auto) {
+            // what the bot goes back to when someone walks into an empty channel it is sitting in
+            const keep = track.live ? JSON.stringify({ url: track.url, title: track.title, artist: track.artist ?? null, genre: track.genre ?? null, live: true, radio: true }) : null;
+            if (keep !== db.getMusicSettings(g.guildId).last_radio) db.setMusicSettings(g.guildId, { last_radio: keep });
+        }
         const cap = db.getMusicSettings(g.guildId).max_minutes * 60;
         if (cap && track.duration && track.duration > cap) return failTrack(g, track, new Error(`longer than the ${cap / 60}-minute limit`), { quiet: false });
         let s;
@@ -355,7 +363,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         return seconds;
     }
     function stop(gid, userId) { const w = who(gid, userId); needDj(w); const g = get(gid); if (!g?.connection) throw new UserError("I'm not playing anything."); g.autoSuppressed = true; g.autoMode = false; g.queue.reset(); g.swapping = true; try { g.player.stop(true); } catch { /* */ } g.swapping = false; g.playing = false; g.resource = null; retirePanel(g); scheduleLeave(g); }
-    function leave(gid, userId) { const w = who(gid, userId); needDj(w); const g = get(gid); if (!g?.connection) throw new UserError("I'm not in a voice channel."); teardown(g); }
+    function leave(gid, userId) { const w = who(gid, userId); needDj(w); const g = get(gid); if (!g?.connection) throw new UserError("I'm not in a voice channel."); db.setMusicSettings(gid, { home_channel_id: null }); teardown(g); }
     function setVolume(gid, userId, v) { const w = who(gid, userId); needDj(w); const g = must(gid); const n = Math.round(Number(v)); if (!(n >= 1 && n <= 100)) throw new UserError("Volume is 1 to 100."); g.volume = n; g.resource?.volume?.setVolume(n / 100); refreshPanel(g); return n; }
     function setLoop(gid, userId, mode) { const w = who(gid, userId); needDj(w); const g = must(gid); if (!LOOP_MODES.includes(mode)) throw new UserError("Loop can be off, track or queue."); g.queue.setLoop(mode); refreshPanel(g); return mode; }
     function shuffle(gid, userId) { const w = who(gid, userId); needDj(w); const g = must(gid); if (g.queue.next.length < 2) throw new UserError("Need at least two upcoming tracks to shuffle."); const n = g.queue.shuffle(); refreshPanel(g); return n; }
@@ -400,24 +408,51 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         return true;
     }
 
-    /** Joins the server's Auto DJ channel when someone is in it and the bot isn't playing anywhere. */
-    async function autoJoin(guildId) {
+    /** Someone has walked into a channel the bot is sitting idle in: carry on with the last live station, or start the Auto DJ. */
+    async function wake(g) {
+        if (!g?.connection || g.playing || g.queue.current || g.waking) return false;
+        const s = db.getMusicSettings(g.guildId);
+        if (!s.enabled || (getGuild(g.guildId)?.humansIn(g.voiceChannelId) ?? 0) === 0) return false;
+        g.waking = true;
+        try {
+            g.autoSuppressed = false;
+            let station = null;
+            if (s.stay && s.radio && s.last_radio) { try { station = JSON.parse(s.last_radio); } catch { station = null; } }
+            if (station?.url) {
+                g.queue.add([{ ...station, requestedBy: null, resumed: true }]); g.queue.start(); g.autoMode = false;
+                g.textChannelId = s.channel_id ?? g.textChannelId;
+                await playCurrent(g);
+                if (g.playing) return true;
+                g.queue.reset(); g.autoSuppressed = false; g.failures = 0; // the station is down: fall back to the Auto DJ
+            }
+            return await startAuto(g);
+        } finally { g.waking = false; }
+    }
+
+    /** Joins the server's Auto DJ channel, or the channel it was last used in, when someone is in it and the bot isn't playing anywhere. */
+    async function autoJoin(guildId, { empty = false } = {}) {
         const s = db.getMusicSettings(guildId);
-        if (!s.enabled || !s.autodj || !s.autodj_channel_id || !autoHasContent(guildId)) return false;
+        if (!s.enabled) return false;
         const guild = getGuild(guildId);
-        const vc = guild?.voiceChannelInfo?.(s.autodj_channel_id);
-        if (!vc || (guild.humansIn(vc.id) ?? 0) === 0) return false;
+        const wanted = [];
+        if (s.autodj && s.autodj_channel_id && autoHasContent(guildId)) wanted.push(s.autodj_channel_id);
+        if (s.stay && s.home_channel_id) wanted.push(s.home_channel_id);
+        const vc = wanted.map(id => guild?.voiceChannelInfo?.(id)).find(c => c && (empty || (guild.humansIn(c.id) ?? 0) > 0));
+        if (!vc) return false;
         const g = state(guildId);
         if (g.connection || g.joining) return false;
         g.joining = true;
         try { await connect(g, { guild, settings: s, vc }); }
-        catch (err) { log(`auto dj couldn't join: ${err?.message}`); if (!g.connection) guilds.delete(g.guildId); return false; }
+        catch (err) { log(`auto join couldn't connect: ${err?.message}`); if (!g.connection) guilds.delete(g.guildId); return false; }
         finally { g.joining = false; }
         g.autoSuppressed = false;
-        return startAuto(g);
+        return wake(g);
     }
-    /** After a restart: join the Auto DJ channel of every server that has someone in it. */
-    async function autoBoot() { for (const r of db.autoChannelGuilds()) await autoJoin(r.guild_id).catch(() => {}); }
+    /** After a restart: join the Auto DJ channel of every server that has someone in it, and go back to the channel each "stay" server was last in. */
+    async function autoBoot() {
+        for (const r of db.autoChannelGuilds()) await autoJoin(r.guild_id).catch(() => {});
+        for (const r of db.homeGuilds()) await autoJoin(r.guild_id, { empty: true }).catch(() => {});
+    }
 
     /** A member asks for a song (or a whole playlist link) to be played by the Auto DJ. They don't need to be in the voice channel. */
     async function submit(gid, userId, { query = null, tracks = null } = {}) {
@@ -493,9 +528,25 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         const g = get(guildId);
         if (!g?.connection) { autoJoin(guildId).catch(err => log(`auto join failed: ${err?.message}`)); return; }
         const humans = getGuild(guildId)?.humansIn(g.voiceChannelId) ?? 0;
+        const s = db.getMusicSettings(guildId);
         if (humans === 0) {
-            if (!g.aloneTimer) { g.aloneTimer = setTimer(() => { g.aloneTimer = null; if ((getGuild(guildId)?.humansIn(g.voiceChannelId) ?? 0) === 0) teardown(g); }, Math.max(1, db.getMusicSettings(guildId).leave_minutes) * 60_000); g.aloneTimer.unref?.(); try { g.player?.pause(true); } catch { /* */ } }
-        } else clearAlone(g);
+            if (s.stay) {
+                // Sitting in the channel for good: a live stream just stops (it picks up again when someone returns), songs wait paused.
+                if (g.queue.current?.live && g.playing) {
+                    const t = g.queue.current;
+                    db.setMusicSettings(guildId, { last_radio: JSON.stringify({ url: t.url, title: t.title, artist: t.artist ?? null, genre: t.genre ?? null, live: true, radio: true }) });
+                    g.autoMode = false; g.queue.reset(); g.swapping = true; try { g.player.stop(true); } catch { /* */ } g.swapping = false; g.playing = false; g.resource = null; try { g.stream?.kill(); } catch { /* */ } g.stream = null; retirePanel(g);
+                } else if (g.autoMode && g.playing) {
+                    g.autoMode = false; g.queue.reset(); g.swapping = true; try { g.player.stop(true); } catch { /* */ } g.swapping = false; g.playing = false; g.resource = null; try { g.stream?.kill(); } catch { /* */ } g.stream = null; retirePanel(g);
+                } else { try { g.player?.pause(true); } catch { /* */ } }
+                return;
+            }
+            if (!g.aloneTimer) { g.aloneTimer = setTimer(() => { g.aloneTimer = null; if ((getGuild(guildId)?.humansIn(g.voiceChannelId) ?? 0) === 0) teardown(g); }, Math.max(1, s.leave_minutes) * 60_000); g.aloneTimer.unref?.(); try { g.player?.pause(true); } catch { /* */ } }
+        } else {
+            clearAlone(g);
+            try { g.player?.unpause(); } catch { /* */ }
+            if (!g.playing && !g.queue.current) wake(g).catch(err => log(`wake failed: ${err?.message}`));
+        }
     }
     function clearAlone(g) { if (g.aloneTimer) { clearTimer(g.aloneTimer); g.aloneTimer = null; try { g.player?.unpause(); } catch { /* */ } } }
     /** The bot was kicked from the channel, or the server removed it. */
