@@ -9,4 +9,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certi
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 COPY . .
-CMD ["node", "--disable-warning=ExperimentalWarning", "--max-old-space-size=400", "src/index.js"]
+CMD ["node", "--disable-warning=ExperimentalWarning", "--max-old-space-size=700", "src/index.js"]
