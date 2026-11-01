@@ -7,19 +7,19 @@ export function grabberPromo({ base = null, url = "https://jacob-lucado.github.i
     const page = url; // the same url on every embed makes Discord show them as one gallery
     const embeds = [
         { color: 0xff9800, url: page, author: { name: "A message from the Steam Value Checker developer" }, title: "Meet FanaticalGrabber", ...img("hero"),
-            description: "Got Fanatical bundles full of Steam keys? **FanaticalGrabber** is a free Chrome extension from the maker of Steam Value Checker. It reveals every key in one click, exports them, and redeems them on Steam in bulk.",
+            description: "Ever bought a Fanatical bundle and dreaded clicking Reveal on every single key? I made **FanaticalGrabber** for exactly that. It's a free Chrome extension that reveals all your keys at once, exports them, and can redeem them on Steam in bulk.",
             fields: [
-                { name: "🔓 Reveal & export", value: "Reveal all keys at once, then export to **TXT, CSV, JSON, Markdown, HTML or XLSX**, or copy them.", inline: false },
-                { name: "🎟️ Batch redeem on Steam", value: "Redeem a whole list on your own account, one by one. Already-used keys are remembered and skipped. Keys never leave your browser except to Steam.", inline: false },
-                { name: "🛒 Cart & bundle check", value: "See if a bundle is really worth it, and get warned at the Steam cart about games you already own or cheaper prices elsewhere.", inline: false }
+                { name: "🔓 Reveal & export", value: "Reveal everything in one go, then export to **TXT, CSV, JSON, Markdown, HTML or XLSX**, or just copy it.", inline: false },
+                { name: "🎟️ Batch redeem on Steam", value: "Redeem a whole list on your own account, one key at a time. It remembers keys you've already used and skips them. Your keys only ever go to Steam.", inline: false },
+                { name: "🛒 Cart & bundle check", value: "Find out if a bundle is actually worth it, and get a heads-up at the Steam cart if you already own something or it's cheaper elsewhere.", inline: false }
             ] },
         { color: 0xff9800, url: page, ...img("cart"),
             fields: [
-                { name: "💰 Fill in what you paid", value: "One click on your Steam purchase history fills the price you paid into your Steam Value Checker library. Key activations and gifts get their retail price.", inline: false },
-                { name: "🔗 One-click connect", value: "Press **Connect the extension** on the dashboard's Library page. No codes to paste.", inline: false },
-                { name: "🏷️ Price overlay", value: "On Steam game pages, see your price, the all-time low and whether you own or wishlisted it.", inline: false }
+                { name: "💰 Fill in what you paid", value: "One click on your Steam purchase history and it fills in what you paid for each game in your Steam Value Checker library. Key activations and gifts get their retail price.", inline: false },
+                { name: "🔗 One-click connect", value: "Hit **Connect the extension** on the dashboard's Library page. No codes to copy and paste.", inline: false },
+                { name: "🏷️ Price overlay", value: "On a Steam game page you can see what you paid, the all-time low, and whether you already own it or have it wishlisted.", inline: false }
             ] },
-        { color: 0xff9800, url: page, ...img("paid"), footer: { text: "Free · no account needed to use it · keys are never sent to any server. You can turn these messages off with the button below." } }
+        { color: 0xff9800, url: page, ...img("paid"), footer: { text: "Free, no account needed, and your keys never go to a server. Don't want these messages? Use the button below to turn them off." } }
     ];
     const buttons = [{ type: 2, style: 5, label: "Get FanaticalGrabber", url: page }];
     if (dashboardUrl) buttons.push({ type: 2, style: 5, label: "Open the dashboard", url: dashboardUrl });

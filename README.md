@@ -4,7 +4,7 @@
 
 # Steam Value Checker
 
-**See what your game library is worth, and what you saved.**
+**Find out what your game library is worth, and how much you saved.**
 
 ![Node](https://img.shields.io/badge/node-%E2%89%A522.13-107c41)
 ![discord.js](https://img.shields.io/badge/discord.js-v14-5865f2)
@@ -16,7 +16,7 @@
 
 ## What it does
 
-Send the bot a list of game titles, or upload an export from the [FanaticalGrabber](https://jacob-lucado.github.io/FanaticalGrabber/) browser extension, and it replies with:
+Give the bot a list of game titles, or upload an export from the [FanaticalGrabber](https://jacob-lucado.github.io/FanaticalGrabber/) browser extension, and it sends back:
 
 | Column | Meaning |
 | --- | --- |
@@ -25,7 +25,7 @@ Send the bot a list of game titles, or upload an export from the [FanaticalGrabb
 | **Cheapest** | The lowest current price across tracked stores, with the store name |
 | **All-time low** | The lowest price ever recorded (shown in the totals) |
 
-Tell it what you paid and it works out what you saved against each of those.
+Tell it what you paid and it works out how much you saved against each one.
 
 Prices come from [IsThereAnyDeal](https://isthereanydeal.com).
 

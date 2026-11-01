@@ -7,11 +7,11 @@ export const HONEYPOT_TOPIC = "⛔ TRAP CHANNEL: do NOT type here. Anyone who se
 /** The notice posted in the channel itself. */
 export function honeypotPayload() {
     return { embeds: [{ color: 0xed4245, title: "⛔  DO NOT TYPE IN THIS CHANNEL",
-        description: "**This is a trap for spam and scam bots.**\n\nAnyone who sends a message here is **banned automatically**, with no warning and no second chance.",
+        description: "**This channel is a trap for spam and scam bots.**\n\nIf you send a message here, you get **banned automatically**. No warning, no second chances.",
         fields: [
-            { name: "Real members", value: "Nothing here is for you. Close this channel and head to the others. Please do not test it, reply to this message or say hi." },
-            { name: "Bots and spammers", value: "Your account is banned and your messages from the last day are deleted as soon as you post." },
-            { name: "Banned by mistake?", value: "Ask a moderator to review the case. They can lift it with `/mod unban`." }],
+            { name: "Real members", value: "There's nothing here for you, so just head to the other channels. Please don't test it, reply to this, or say hi. It really will ban you." },
+            { name: "Bots and spammers", value: "The moment you post, you're banned and your messages from the last day are deleted." },
+            { name: "Banned by mistake?", value: "Message a moderator and they'll look at it. They can undo it with `/mod unban`." }],
         footer: { text: "Steam Value Checker · spam trap" } }] };
 }
 

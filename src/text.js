@@ -5,11 +5,11 @@ export function quickStart(dashboardUrl = null) {
     return {
         color: 0xff9800, title: "Three places to start",
         description: [
-            "1. **Watch games:** `/wishlist import` brings in your public Steam wishlist, and I tell you when something goes on sale.",
-            "2. **Price your games:** `/steam link` fills your library with hours played and what it is worth.",
-            "3. **See everything:** `/help` lists every command" + (dashboardUrl ? `, and the dashboard has a guided tour: ${dashboardUrl}/#/mypage` : ".")
+            "1. **Watch games:** `/wishlist import` pulls in your public Steam wishlist, and I'll tell you when something goes on sale.",
+            "2. **Price your games:** `/steam link` fills in your library, your hours, and what it's all worth.",
+            "3. **See everything else:** `/help` lists every command" + (dashboardUrl ? `, and the dashboard has a guided tour: ${dashboardUrl}/#/mypage` : ".")
         ].join("\n"),
-        footer: { text: "This message only shows once." }
+        footer: { text: "You'll only see this once." }
     };
 }
 
@@ -52,11 +52,11 @@ export const HELP = [
 ].join("\n");
 
 export const ABOUT = [
-    "Steam Value Checker shows what a game library is worth: MSRP, the current Steam price, the cheapest current price across tracked stores, and what you saved if you tell it what you paid.",
+    "Steam Value Checker tells you what your game library is worth: the full price, what Steam charges now, the cheapest price across the stores it tracks, and how much you saved if you tell it what you paid.",
     "",
-    "Price data comes from [IsThereAnyDeal](https://isthereanydeal.com). It works with exports from the FanaticalGrabber browser extension, and can watch your wishlist for sales.",
+    "Prices come from [IsThereAnyDeal](https://isthereanydeal.com). It works with exports from the FanaticalGrabber browser extension, and it can keep an eye on your wishlist for sales.",
     "",
-    "Not affiliated with Valve, Steam, Fanatical or IsThereAnyDeal. Prices change quickly and may differ from what a store shows you."
+    "I'm not affiliated with Valve, Steam, Fanatical or IsThereAnyDeal. Prices move fast, so what you see in a store might not match."
 ].join("\n");
 
 export const PRIVACY = [

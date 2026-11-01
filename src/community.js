@@ -70,14 +70,14 @@ export const TEMPLATE = {
             { key: "botlogs", name: "bot-logs", topic: "Bot notices" }] }
     ],
     rules: [
-        "**1. Be kind and respectful.** No harassment, hate speech, slurs or personal attacks. Disagree without being cruel.",
-        "**2. Keep it clean.** No NSFW, gore or shock content anywhere. Spoilers go behind spoiler tags.",
-        "**3. No spam or self-promotion.** No flooding, mass pings, unrequested ads or invite links without a moderator's OK.",
-        "**4. No cheating, cracked games or key trading.** Giveaway keys are handed out by the bot only. Never buy, sell or swap keys here.",
-        "**5. Use the right channel.** Memes in #memes, group requests in #looking-for-group, bot commands in #bot-commands.",
-        "**6. Protect your privacy.** Never share passwords, Steam logins or other people's personal information.",
-        "**7. Follow Discord's Terms and Community Guidelines.** Accounts must be 13 or older.",
-        "**8. Listen to the moderators.** Their word is final. Questions about a decision? Open a ticket in #get-help."
+        "**1. Be decent to people.** No harassment, hate speech, slurs or personal attacks. You can disagree without being cruel.",
+        "**2. Keep it clean.** No NSFW, gore or shock content anywhere. Put spoilers behind spoiler tags.",
+        "**3. No spam or self-promo.** No flooding, mass pings, random ads, or invite links unless a mod says it's fine.",
+        "**4. No cheating, cracked games or key trading.** Giveaway keys only come from the bot. Don't buy, sell or swap keys here.",
+        "**5. Use the right channel.** Memes go in #memes, group requests in #looking-for-group, and bot commands in #bot-commands.",
+        "**6. Look after your privacy.** Never share passwords, Steam logins or anyone else's personal info.",
+        "**7. Follow Discord's Terms and Community Guidelines.** You need to be 13 or older.",
+        "**8. Listen to the mods.** Their call is final. If you think they got one wrong, open a ticket in #get-help."
     ]
 };
 
@@ -88,7 +88,7 @@ export function rulesPayload({ server = "the server", base = null, rules = null,
     return {
         embeds: [{
             color: 0xed4245, title: `${server} · Server Rules`,
-            description: `Please follow these rules while you are here.\n\n${list}`.slice(0, 4000),
+            description: `Read these before you jump in.\n\n${list}`.slice(0, 4000),
             fields: [
                 { name: "⚠️ What happens if you break them", value: "Warning → timeout → kick → ban. Serious breaks can skip straight to a ban.", inline: false },
                 { name: "🆘 Need help?", value: `Open a ticket in ${helpChannel ? `<#${helpChannel}>` : "#get-help"}`, inline: true },
@@ -102,11 +102,11 @@ export function rulesPayload({ server = "the server", base = null, rules = null,
 
 /** Posts in #get-help and #report-a-bug: one button each that opens the form. */
 export const helpPanel = () => ({
-    embeds: [{ color: 0x57f287, title: "Need help?", description: "Press the button to open a **private ticket**. Only you and the moderators can see it, and you get replies in your DMs.\n\nGood for: giveaway key problems, report a member, questions about the server." }],
+    embeds: [{ color: 0x57f287, title: "Need help?", description: "Press the button to open a **private ticket**. Only you and the mods can see it, and replies land in your DMs.\n\nUse it for giveaway key problems, reporting a member, or any question about the server." }],
     components: [{ type: 1, components: [{ type: 2, style: 3, label: "Open a ticket", emoji: { name: "🎫" }, custom_id: "tk_open:0" }] }]
 });
 export const bugPanel = () => ({
-    embeds: [{ color: 0xfaa61a, title: "Found a bug?", description: "Press the button and tell us what went wrong with the bot. It goes straight to the bot's developer. You can also use `/bug` anywhere." }],
+    embeds: [{ color: 0xfaa61a, title: "Found a bug?", description: "Press the button and tell me what went wrong with the bot. It goes straight to the developer (that's me). `/bug` works anywhere too." }],
     components: [{ type: 1, components: [{ type: 2, style: 4, label: "Report a bug", emoji: { name: "🐞" }, custom_id: "tk_bug" }] }]
 });
 
@@ -362,15 +362,15 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
 export function welcomeDmPayload({ server, dashboardUrl = null }) {
     const embed = {
         color: 0x4d8cff, title: `Welcome to ${server}`,
-        description: "I'm **Steam Value Checker**, the bot that handles game deals and the community here. What I can do for you:",
+        description: "I'm **Steam Value Checker**. I handle the game deals and a few other things around here. Here's what I can do for you:",
         fields: [
-            { name: "💸 Sale alerts", value: "`/wishlist import` your Steam wishlist and I message you when a game drops in price. `/value` prices any list of games." },
-            { name: "🎁 Free games", value: "`/freegames` shows what is free to claim right now on Steam, Epic, GOG and more." },
-            { name: "🎮 Your library", value: "Sign in through Steam on the dashboard to see your library value, hours and what to play next." },
-            { name: "🏆 In this server", value: "Earn XP and levels by chatting and talking in voice (`/rank`, `/levels`), get your own invite link (`/invites link`), and prove your Steam account in #verify for the Steam Verified role." },
-            { name: "🔔 Control it", value: "`/alerts` sets quiet hours and how you get notified. `/help` lists every command. `/mydata delete` removes your data any time." }
+            { name: "💸 Sale alerts", value: "Run `/wishlist import` and I'll message you when something on your Steam wishlist drops in price. `/value` prices any list of games." },
+            { name: "🎁 Free games", value: "`/freegames` shows what you can grab for free right now on Steam, Epic, GOG and more." },
+            { name: "🎮 Your library", value: "Sign in with Steam on the dashboard to see what your library is worth, your hours, and what to play next." },
+            { name: "🏆 In this server", value: "You earn XP and levels by chatting and hanging out in voice (`/rank`, `/levels`). Grab your own invite link with `/invites link`, and verify your Steam account in #verify for the Steam Verified role." },
+            { name: "🔔 Control it", value: "`/alerts` lets you set quiet hours and pick how I notify you. `/help` lists every command, and `/mydata delete` wipes your data whenever you want." }
         ],
-        footer: { text: "You got this message because you joined a server that uses the bot. Replies here are not read." }
+        footer: { text: "You're getting this because you joined a server that uses me. I don't read replies here." }
     };
     const components = dashboardUrl ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open the dashboard", url: dashboardUrl }] }] : [];
     return { embeds: [embed], components, allowed_mentions: { parse: [] } };
