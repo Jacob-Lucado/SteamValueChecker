@@ -2293,9 +2293,9 @@
         try {
           const { bans } = await api("/api/admin/bans");
           banBox.replaceChildren(bans.length ? h("div", {}, ...bans.map(x => {
-            const lift = h("button", { class: "btn green small", text: "Lift" });
+            const lift = h("button", { class: "btn green small", text: "Lift restriction" });
             lift.addEventListener("click", () => busy(lift, async () => { await setBan(x.discord_id, false); toast("Restriction lifted.", "ok"); loadBans(); if (pick.value) load(); }));
-            return h("div", { class: "row" }, h("span", { text: x.discord_id + (x.reason ? " · " + x.reason : "") + " · " + new Date(x.at).toLocaleDateString() }), lift);
+            return h("div", { class: "row", style: "align-items:center;justify-content:space-between;gap:12px" }, h("span", { text: x.discord_id + (x.reason ? " · " + x.reason : "") + " · " + new Date(x.at).toLocaleDateString() }), h("div", { style: "flex:none" }, lift));
           })) : h("p", { class: "muted", text: "Nobody is restricted." }));
         } catch (e) { banBox.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
       }
