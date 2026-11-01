@@ -247,7 +247,7 @@
       h("div", { class: "dc-bot" }, h("img", { src: "/logo.png", alt: "", width: "36", height: "36" }), h("b", { text: "Steam Value Checker" }), h("span", { class: "dc-tag", text: "APP" })),
       h("div", { class: "dc-embed" },
         h("div", { class: "dc-title", text: "Wanderstop is 61% off" }),
-        h("div", { class: "dc-line", text: "🏆 All-time low" }),
+        h("div", { class: "dc-line", text: "All-time low" }),
         h("div", { class: "dc-line", text: "$9.87 at Fanatical (you save $15.12)" }),
         h("div", { class: "dc-fields" }, h("span", {}, h("b", { text: "Regular" }), "$24.99"), h("span", {}, h("b", { text: "Discount" }), "61% off"), h("span", {}, h("b", { text: "All-time low" }), "$9.83")),
         h("div", { class: "dc-art", text: "game art" })),
@@ -666,17 +666,17 @@
       busy(hist, async () => {
         const d = await api("/api/wishlist/history?itad_id=" + encodeURIComponent(r.itad_id));
         if (!d.points.length) { chartHolder.replaceChildren(h("p", { class: "muted small", text: "No price history yet." })); return; }
-        chartHolder.replaceChildren(d.advice ? h("div", { class: "notice " + (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "warn") }, h("b", { text: (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "🟢 " : "🟠 ") + "Buy now or wait? " + d.advice.label + ". " }), d.advice.reasons.join(" ")) : "",
+        chartHolder.replaceChildren(d.advice ? h("div", { class: "notice " + (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "warn") }, h("b", { text: (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "") + "Buy now or wait? " + d.advice.label + ". " }), d.advice.reasons.join(" ")) : "",
           h("p", { class: "muted small", text: "Lowest store price over the last year, " + r.title }),
           lineChart([{ name: "Price", cls: "s0", points: d.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }));
       });
     });
-    const star = h("button", { class: "btn gray small", text: r.priority ? "★ Priority" : "☆ Priority", title: "Priority games are listed first and alert even in quiet hours", "aria-pressed": String(Boolean(r.priority)) });
+    const star = h("button", { class: "btn gray small", text: r.priority ? "Priority" : "Priority", title: "Priority games are listed first and alert even in quiet hours", "aria-pressed": String(Boolean(r.priority)) });
     star.addEventListener("click", () => busy(star, async () => { await api("/api/wishlist/priority", { itad_id: r.itad_id, starred: !r.priority }); reload(); }));
     const pick = h("input", { type: "checkbox", class: "pick", "aria-label": "Select " + r.title });
     pick.addEventListener("change", () => onPick && onPick(r.itad_id, pick.checked));
     return h("div", { class: "wish" + (sale ? " sale" : "") },
-      h("div", {}, h("div", { class: "name" }, pick, " ", r.priority ? "⭐ " : "", h("a", { href: "#/g/" + r.itad_id, class: "game-link", text: r.title }), " ", verdictBadge(r.verdict), r.owned ? h("span", { class: "badge none", text: "Owned" }) : ""), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}${r.release_at ? " · releases " + new Date(r.release_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " (you will be told)" : ""}` })),
+      h("div", {}, h("div", { class: "name" }, pick, " ", r.priority ? "" : "", h("a", { href: "#/g/" + r.itad_id, class: "game-link", text: r.title }), " ", verdictBadge(r.verdict), r.owned ? h("span", { class: "badge none", text: "Owned" }) : ""), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}${r.release_at ? " · releases " + new Date(r.release_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " (you will be told)" : ""}` })),
       h("div", { class: "price-box" },
         h("span", { class: "badge" + (sale ? "" : " none"), text: sale ? "-" + pct + "%" : "–" }),
         sale && r.regular !== null && h("span", { class: "was", text: money(r.regular, cur) }),
@@ -791,8 +791,8 @@
   function giftButton(g, slug) {
     const wrap = h("div", { class: "gift" });
     const draw = () => {
-      if (g.claim === "taken") { wrap.replaceChildren(h("span", { class: "muted small", text: "🎁 Someone is already gifting this" })); return; }
-      const b = h("button", { class: "btn gray small", text: g.claim === "mine" ? "🎁 You are gifting this (undo)" : "🎁 I’ll gift this" });
+      if (g.claim === "taken") { wrap.replaceChildren(h("span", { class: "muted small", text: "Someone is already gifting this" })); return; }
+      const b = h("button", { class: "btn gray small", text: g.claim === "mine" ? "You are gifting this (undo)" : "I’ll gift this" });
       b.addEventListener("click", () => busy(b, async () => {
         try {
           const r = await api("/api/public/gift", { slug, id: g.id, token: giftCode(), claim: g.claim !== "mine" });
@@ -811,9 +811,9 @@
     const wrap = h("div", { class: "soon" });
     const draw = () => {
       const kids = [];
-      if (g.soon) kids.push(h("span", { class: "chip ok", text: "🎉 Up for giveaway soon" }));
+      if (g.soon) kids.push(h("span", { class: "chip ok", text: "Up for giveaway soon" }));
       if (canMark) {
-        const b = h("button", { class: "btn gray small", text: g.soon ? "Remove giveaway mark" : "🎉 Up for giveaway" });
+        const b = h("button", { class: "btn gray small", text: g.soon ? "Remove giveaway mark" : "Up for giveaway" });
         b.addEventListener("click", () => busy(b, async () => {
           try { const r = await api("/api/wishlist/soon", { slug, id: g.id, on: !g.soon }); g.soon = r.soon; toast(g.soon ? "Marked. Members can see it's coming up." : "Mark removed.", "ok"); }
           catch (e) { toast(e.message, "error"); }
@@ -829,14 +829,14 @@
 
   // Members: games their servers' staff plan to give away.
   function soonPanel() {
-    const panel = h("div", { class: "panel" }, h("h3", { text: "🎉 Up for giveaway soon" }), h("p", { class: "muted", text: "Loading…" }));
+    const panel = h("div", { class: "panel" }, h("h3", { text: "Up for giveaway soon" }), h("p", { class: "muted", text: "Loading…" }));
     api("/api/giveaways/soon").then(d => {
-      panel.replaceChildren(h("h3", { text: "🎉 Up for giveaway soon" }),
+      panel.replaceChildren(h("h3", { text: "Up for giveaway soon" }),
         h("p", { class: "muted small", text: "Games your servers' moderators plan to give away. Keep an eye on the giveaway channel." }),
         d.games.length ? h("div", { class: "free-grid" }, d.games.map(g => h("div", { class: "free-card" },
-          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "🎮" }),
+          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
           h("div", { class: "free-info" }, h("strong", { text: g.title }), h("span", { class: "muted small", text: g.server || "" }))))) : h("div", { class: "empty", text: "Nothing is marked right now." }));
-    }).catch(e => panel.replaceChildren(h("h3", { text: "🎉 Up for giveaway soon" }), h("div", { class: "notice warn", text: e.message })));
+    }).catch(e => panel.replaceChildren(h("h3", { text: "Up for giveaway soon" }), h("div", { class: "notice warn", text: e.message })));
     return panel;
   }
 
@@ -861,11 +861,11 @@
           tile("Steam", g.steam != null ? money(g.steam, cur) : "–", g.msrp ? "Regular " + money(g.msrp, cur) : ""),
           tile("All-time low", g.atl != null ? money(g.atl, cur) : "–"),
           tile("1-year low", g.low1y != null ? money(g.low1y, cur) : "–", g.low3m != null ? "3-month " + money(g.low3m, cur) : "")),
-        g.advice ? h("div", { class: "notice " + (good ? "ok" : "warn") }, h("b", { text: (good ? "🟢 " : "🟠 ") + "Buy now or wait? " + g.advice.label + ". " }), g.advice.reasons.join(" ")) : "",
+        g.advice ? h("div", { class: "notice " + (good ? "ok" : "warn") }, h("b", { text: (good ? "" : "") + "Buy now or wait? " + g.advice.label + ". " }), g.advice.reasons.join(" ")) : "",
         g.points.length ? h("div", { class: "panel" }, h("h3", { text: "Price over the last year" }), lineChart([{ name: "Price", cls: "s0", points: g.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + g.title })) : "",
-        g.free.length ? h("div", { class: "panel" }, h("h3", { text: "🎁 Free right now" }), g.free.map(f => h("div", { class: "game-line" }, h("span", {}, h("b", { text: f.title }), " on " + f.shop), f.url ? ext(f.url, "Claim", "btn green small") : ""))) : "",
+        g.free.length ? h("div", { class: "panel" }, h("h3", { text: "Free right now" }), g.free.map(f => h("div", { class: "game-line" }, h("span", {}, h("b", { text: f.title }), " on " + f.shop), f.url ? ext(f.url, "Claim", "btn green small") : ""))) : "",
         g.bundles.length ? h("div", { class: "panel" }, h("h3", { text: "In a bundle" }), g.bundles.map(b => h("div", { class: "game-line" }, h("span", {}, h("b", { text: b.title }), ` (${b.shop || "bundle"}) from ${money(b.price, b.currency || cur)}`), b.url ? ext(b.url, "Open", "btn gray small") : ""))) : "",
-        g.watchers ? h("p", { class: "muted", text: `👥 ${g.watchers} member${g.watchers === 1 ? "" : "s"} of your server ${g.watchers === 1 ? "is" : "are"} watching this (only people who opted in with /alerts share).` }) : "");
+        g.watchers ? h("p", { class: "muted", text: `${g.watchers} member${g.watchers === 1 ? "" : "s"} of your server ${g.watchers === 1 ? "is" : "are"} watching this (only people who opted in with /alerts share).` }) : "");
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
@@ -878,7 +878,7 @@
       holder.className = "";
       holder.replaceChildren(pageHead(d.slug + "'s wishlist", `${d.games.length} game${d.games.length === 1 ? "" : "s"} with today's best prices. Thinking of a gift?`),
         d.games.length ? h("div", { class: "free-grid" }, d.games.map(g => h("div", { class: "free-card" },
-          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "🎮" }),
+          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money2(g.price, g.currency) }),
@@ -892,7 +892,7 @@
       const fmt = ms => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
       panel.replaceChildren(h("h3", { text: "Steam sale calendar" }),
         d.sales.length ? h("div", { class: "st-list" }, d.sales.map(e => h("div", { class: "st-row" },
-          h("div", {}, h("b", { text: (e.kind === "sale" ? "🏷️ " : "🎪 ") + e.name }), e.note && h("div", { class: "muted small", text: e.note })),
+          h("div", {}, h("b", { text: (e.kind === "sale" ? "" : "") + e.name }), e.note && h("div", { class: "muted small", text: e.note })),
           h("div", { class: "st-when" }, h("span", { class: "chip " + (e.live ? "ok" : "dim"), text: e.live ? "On now" : "Upcoming" }), h("span", { class: "muted small", text: `${fmt(e.start)} to ${fmt(e.end)}` })))))
           : h("div", { class: "empty", text: "No upcoming events listed." }),
         h("p", { class: "muted small", text: `From Valve's published schedule (updated ${d.updated}). Black Friday week is announced closer to the time.` }));
@@ -915,14 +915,14 @@
         const inCat = all.filter(g => cat === "all" || (cat === "dlc") === g.dlc);
         const shops = [...new Set(inCat.map(g => g.shop))];
         if (!shops.includes(shop)) shop = "all";
-        tabs.replaceChildren(...[["games", "🎮 Games"], ...(d.showDlc ? [["dlc", "🧩 DLC"], ["all", "📋 All"]] : [])].map(([id, label]) =>
+        tabs.replaceChildren(...[["games", "Games"], ...(d.showDlc ? [["dlc", "DLC"], ["all", "All"]] : [])].map(([id, label]) =>
           h("button", { class: "tab" + (id === cat ? " active" : ""), text: `${label} (${all.filter(g => id === "all" || (id === "dlc") === g.dlc).length})`, onclick: () => { cat = id; draw(); } })));
         const rows = inCat.filter(g => shop === "all" || g.shop === shop).sort(SORTS[sort]);
         body.replaceChildren(...[
           shops.length > 1 ? h("div", { class: "chips" }, ["all", ...shops].map(x => h("button", { class: "tab small" + (x === shop ? " active" : ""), text: x === "all" ? "All stores" : x, onclick: () => { shop = x; draw(); } }))) : null,
           rows.length ? h("div", { class: "free-grid" }, rows.map(g => h("div", { class: "free-card" },
-            g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: g.dlc ? "🧩" : "🎮" }),
-            h("div", { class: "free-info" }, h("strong", { text: g.title }), g.dlc ? h("span", { class: "dlc-tag", text: "🧩 DLC" }) : null, g.dlc && g.base && g.baseOwned !== null ? h("span", { class: "own-note " + (g.baseOwned ? "yes" : "no"), text: (g.baseOwned ? "You own the base game" : "You don't own the base game") + " (" + g.base + ")" }) : null, h("span", { class: "muted small", text: g.shop + (g.dlc ? " • DLC" : "") + (g.expiry ? " • ends " + new Date(g.expiry).toLocaleDateString() : "") }), soon(g) ? h("span", { class: "chip warn", text: "⏰ Ending soon" }) : null,
+            g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
+            h("div", { class: "free-info" }, h("strong", { text: g.title }), g.dlc ? h("span", { class: "dlc-tag", text: "DLC" }) : null, g.dlc && g.base && g.baseOwned !== null ? h("span", { class: "own-note " + (g.baseOwned ? "yes" : "no"), text: (g.baseOwned ? "You own the base game" : "You don't own the base game") + " (" + g.base + ")" }) : null, h("span", { class: "muted small", text: g.shop + (g.dlc ? " • DLC" : "") + (g.expiry ? " • ends " + new Date(g.expiry).toLocaleDateString() : "") }), soon(g) ? h("span", { class: "chip warn", text: "⏰ Ending soon" }) : null,
               ext(g.url, "Claim", "btn green small"))))) : h("div", { class: "empty", text: "Nothing here right now." })].filter(Boolean));
       };
       draw();
@@ -966,8 +966,8 @@
         h("div", { class: "sv-top" }, serverIcon(g, "sv-icon"),
           h("div", { class: "sv-name" }, h("strong", { text: g.name }), h("div", { class: "sv-badges" }, g.manageable ? h("span", { class: "chip", text: "You manage this" }) : h("span", { class: "chip dim", text: "Member" }), botBadge(g)))),
         h("div", { class: "sv-stats" },
-          stat("📣", "Alert channel", g.alertChannel ? "Set" : "Not set"),
-          stat("👥", "Group alerts", g.groupMin ? `From ${g.groupMin} members` : "Off")),
+          stat("", "Alert channel", g.alertChannel ? "Set" : "Not set"),
+          stat("", "Group alerts", g.groupMin ? `From ${g.groupMin} members` : "Off")),
         h("div", { class: "sv-actions" }, ...actions.filter(Boolean)));
     }
 
@@ -1021,21 +1021,21 @@
     } })));
 
     function overview() {
-      const tile = (icon, k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: `${icon} ${k}` }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
+      const tile = (icon, k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
       const go = key => () => { const t = [...tabs.children].find(b => b.textContent === sections.find(s => s[0] === key)[1]); t && t.click(); };
       const action = (icon, title, text, onclick) => h("button", { class: "sv-action", onclick }, h("span", { class: "sv-ico big", text: icon }), h("span", {}, h("b", { text: title }), h("span", { class: "muted small", text })));
       const out = [];
       if (g.bot === false) out.push(h("div", { class: "notice warn" }, "The bot is not in this server yet. ", guildInvite(g) && g.manageable ? ext(guildInvite(g), "Add it now", "btn green small") : "Ask a server manager to add it."));
       out.push(h("div", { class: "grid three" },
-        tile("📣", "Alert channel", g.alertChannel ? "Set" : "Not set", g.alertChannel ? "Used when a DM fails or a member picks channel delivery" : "Alerts go by DM only"),
-        tile("👥", "Group alerts", g.groupMin ? `From ${g.groupMin}` : "Off", "When several opted-in members want the same game"),
-        tile("🤖", "Bot", g.bot === null ? "-" : g.bot ? "Installed" : "Not added")));
+        tile("", "Alert channel", g.alertChannel ? "Set" : "Not set", g.alertChannel ? "Used when a DM fails or a member picks channel delivery" : "Alerts go by DM only"),
+        tile("", "Group alerts", g.groupMin ? `From ${g.groupMin}` : "Off", "When several opted-in members want the same game"),
+        tile("", "Bot", g.bot === null ? "-" : g.bot ? "Installed" : "Not added")));
       if (canUse) {
         out.push(h("div", { class: "sv-actions-grid" },
-          g.manageable && action("📣", "Choose the alert channel", "Where alerts go when a DM cannot be delivered", go("alerts")),
-          action("🎮", "Shared wishlist", "Suggest games and vote with your server", go("list")),
-          action("🏆", "Leaderboard", "Who has saved the most against MSRP", go("board")),
-          g.manageable && action("🎁", "Giveaways", "Create and manage key giveaways", () => { location.hash = "#/giveaways"; })));
+          g.manageable && action("", "Choose the alert channel", "Where alerts go when a DM cannot be delivered", go("alerts")),
+          action("", "Shared wishlist", "Suggest games and vote with your server", go("list")),
+          action("", "Leaderboard", "Who has saved the most against MSRP", go("board")),
+          g.manageable && action("", "Giveaways", "Create and manage key giveaways", () => { location.hash = "#/giveaways"; })));
       }
       return out.filter(Boolean);
     }
@@ -1265,9 +1265,9 @@
       const input = h("input", { type: "number", min: "0", max: "5000", step: "1", placeholder: "Hours this year", value: g ? String(g.goal) : "", "aria-label": "Hours goal for this year" });
       const save = h("button", { class: "btn blue shrink", text: g ? "Update goal" : "Set goal" });
       save.addEventListener("click", () => busy(save, async () => { await api("/api/steam/goal", { hours: Number(input.value || 0) }); toast(Number(input.value) ? "Goal saved." : "Goal cleared.", "ok"); loadRecap(); }));
-      return h("div", { class: "subpanel" }, h("h4", { text: "🎯 Hours goal" }),
+      return h("div", { class: "subpanel" }, h("h4", { text: "Hours goal" }),
         g ? h("div", {}, h("div", { class: "bar", role: "img", "aria-label": g.pct + "% of the goal" }, (() => { const f = h("div", { class: "fill" }); f.style.width = g.pct + "%"; return f; })()),
-          h("p", { class: "small", text: `${g.done} of ${g.goal} hours (${g.pct}%).` + (g.reached ? " Goal reached 🎉" : ` On this pace: about ${g.projected} by the end of the year${g.projected >= g.goal ? ", so you are on track" : ""}. You need about ${g.perWeek} hours a week.`) }))
+          h("p", { class: "small", text: `${g.done} of ${g.goal} hours (${g.pct}%).` + (g.reached ? " Goal reached" : ` On this pace: about ${g.projected} by the end of the year${g.projected >= g.goal ? ", so you are on track" : ""}. You need about ${g.perWeek} hours a week.`) }))
           : h("p", { class: "muted small", text: "Set a target for hours played this year and see if you are on pace." }),
         h("div", { class: "rule inline" }, input, save));
     }
@@ -1293,7 +1293,7 @@
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     };
     loadRecap();
-    return h("div", { class: "panel" }, h("h3", { text: "⏱️ Hours tracked since you linked" }),
+    return h("div", { class: "panel" }, h("h3", { text: "Hours tracked since you linked" }),
       h("p", { class: "muted small", text: "Steam only tells us lifetime hours per game, not when you played them. So this counts the hours you add after linking, as your library syncs. It can't show anything from before you linked. Save it as an image to share." }),
       out);
   }
@@ -1306,7 +1306,7 @@
       c.avatar ? h("img", { class: "sc-avatar", src: c.avatar, alt: "", width: "72", height: "72", referrerpolicy: "no-referrer", loading: "lazy" }) : h("div", { class: "sc-avatar sc-none", text: "👤" }),
       h("div", { class: "sc-info" },
         h("h3", { text: c.name }),
-        c.playing ? h("div", { class: "sc-playing", text: "🎮 Playing " + c.playing }) : null,
+        c.playing ? h("div", { class: "sc-playing", text: "Playing " + c.playing }) : null,
         meta ? h("div", { class: "muted small", text: meta }) : null),
       h("div", { class: "sc-actions" }, h("a", { class: "btn gray small", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Open on Steam ↗" }), ...actions));
   }
@@ -1422,7 +1422,7 @@
           nextBtn.textContent = "Pick another";
           nextOut.replaceChildren(h("div", { class: "panel" },
             n.pick.appid ? steamArt(n.pick.appid, "next-art") : null,
-            h("h3", { text: "🎯 " + n.pick.title }), h("p", { class: "muted", text: n.why }),
+            h("h3", { text: "" + n.pick.title }), h("p", { class: "muted", text: n.why }),
             n.others.length ? h("p", { class: "muted small", text: "Also good: " + n.others.map(o => o.title).join(", ") }) : null,
             h("p", { class: "muted small", text: n.remaining ? `${n.remaining} more to choose from.` : "That is everything left that you have not finished." })));
         }
@@ -1438,7 +1438,7 @@
         out.replaceChildren(
           d.card ? steamProfileCard(d.card, quickUnlink) : null,
           analyticsPanel(cur, st),
-          h("div", { class: "panel" }, h("div", { class: "panel-head" }, h("h3", { text: "💰 Estimated account value" }), valueImageBtn),
+          h("div", { class: "panel" }, h("div", { class: "panel-head" }, h("h3", { text: "Estimated account value" }), valueImageBtn),
             h("div", { class: "grid four" },
               tile("At full price", money(st.value.msrp, cur), "list price today"),
               tile("At today's cheapest", money(st.value.cheapest, cur), "best current deal"),
@@ -1505,7 +1505,7 @@
       const load = h("button", { class: "btn blue small", text: `Load ${items.length} into the box` });
       load.addEventListener("click", () => { box.value = [...new Set([...keysIn(), ...items.map(i => i.key)])].join("\n"); refresh(); toast("Loaded. Press Redeem when you are ready.", "ok"); });
       vaultBox.hidden = false;
-      vaultBox.replaceChildren(h("h3", { text: "🗝️ Key vault" }),
+      vaultBox.replaceChildren(h("h3", { text: "Key vault" }),
         h("p", { class: "muted small", text: `${items.length} key${items.length === 1 ? "" : "s"} you revealed on Fanatical and have not redeemed. They stay in your browser; only the game titles are used to price them.` }),
         h("ul", { class: "plain" }, items.slice(0, 8).map(i => h("li", {}, h("b", { text: i.title }), " ", h("code", { text: mask(i.key) })))),
         items.length > 8 ? h("p", { class: "muted small", text: `and ${items.length - 8} more` }) : "",
@@ -1665,15 +1665,15 @@
       save.addEventListener("click", () => busy(save, async () => { draw(await api("/api/library/challenge", { goal: Number(goal.value) })); toast("Saved.", "ok"); }));
       const pct = c.goal ? Math.min(100, Math.round(c.done / c.goal * 100)) : 0;
       out.replaceChildren(
-        c.goal ? h("div", {}, h("p", {}, h("b", { text: `${c.done} of ${c.goal} finished` }), c.done >= c.goal ? " 🎉 Goal met!" : ` · ${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left in ${c.month}`), progressBar(pct / 100))
+        c.goal ? h("div", {}, h("p", {}, h("b", { text: `${c.done} of ${c.goal} finished` }), c.done >= c.goal ? " Goal met!" : ` · ${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left in ${c.month}`), progressBar(pct / 100))
           : h("p", { class: "muted", text: `Pick how many games you want to finish in ${c.month}.` }),
-        h("p", { class: "muted small", text: c.streak ? `🔥 ${c.streak}-month streak (best ${c.best})` : "No streak yet. Meet your goal this month to start one." }),
+        h("p", { class: "muted small", text: c.streak ? `${c.streak}-month streak (best ${c.best})` : "No streak yet. Meet your goal this month to start one." }),
         c.titles.length ? h("p", { class: "muted small", text: "Finished: " + c.titles.join(", ") }) : "",
         c.history.length > 1 ? h("p", { class: "muted small", text: c.history.filter(x => x.month !== c.month).map(x => `${x.done >= x.goal ? "✅" : "▫️"} ${x.month} ${x.done}/${x.goal}`).join("   ") }) : "",
         h("div", { class: "row" }, field("Games to finish this month (0 clears)", goal), save));
     }
     api("/api/library/challenge").then(draw).catch(e => out.replaceChildren(h("div", { class: "notice warn", text: e.message })));
-    return h("div", { class: "panel" }, h("h3", { text: "🏁 Backlog challenge" }),
+    return h("div", { class: "panel" }, h("h3", { text: "Backlog challenge" }),
       h("p", { class: "muted small", text: "Mark games finished (or reach 100% achievements) to count them. Keep the streak going month after month." }), out);
   }
 
@@ -1706,7 +1706,7 @@
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     load();
-    return h("details", { class: "panel" }, h("summary", { text: "🎁 Bundles you bought" }), out,
+    return h("details", { class: "panel" }, h("summary", { text: "Bundles you bought" }), out,
       h("p", { class: "muted small", text: "The games are added to your library, with what you paid split evenly across them." }),
       h("div", { class: "bundle-form" }, h("div", { class: "rule inline" }, field("Name", name), field("Paid", paid)), field("Games", titles), h("div", { class: "row" }, add)));
   }
@@ -1719,7 +1719,7 @@
         h("span", { class: "trophy-icon", text: b.icon }), h("strong", { text: b.name }),
         h("span", { class: "muted small", text: (b.tier ? b.tier + " · " : "Not yet · ") + b.value + " " + b.unit + (b.next ? " (next at " + b.next + ")" : "") })))));
     }).catch(() => out.remove());
-    return h("details", { class: "panel" }, h("summary", { text: "🏅 Trophy case" }), out);
+    return h("details", { class: "panel" }, h("summary", { text: "Trophy case" }), out);
   }
 
   function spendPanel() {
@@ -1743,7 +1743,7 @@
           sp.bestValue.length ? h("div", {}, h("h4", { text: "Best value per hour" }), h("ul", { class: "plain" }, sp.bestValue.map(line))) : "",
           sp.worstValue.length ? h("div", {}, h("h4", { text: "Most expensive per hour" }), h("ul", { class: "plain" }, sp.worstValue.map(line))) : ""));
     }).catch(e => out.replaceChildren(h("div", { class: "notice warn", text: e.message })));
-    return h("div", { class: "panel" }, h("h3", { text: "💸 What you have spent" }), out);
+    return h("div", { class: "panel" }, h("h3", { text: "What you have spent" }), out);
   }
 
   async function libraryView() {
@@ -1805,7 +1805,7 @@
       const n = d.next;
       offered.push(n.pick.itad_id);
       nextBtn.textContent = "Pick another";
-      nextOut.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "🎯 Play next" }),
+      nextOut.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Play next" }),
         h("div", { class: "game-cell" }, (n.pick.appid || n.pick.itad_id) ? steamArt(n.pick.appid, "game-thumb", 92, 43, n.pick.itad_id) : null, h("div", {}, h("div", { class: "game-title", text: n.pick.title }), h("div", { class: "muted", text: n.why }))),
         n.others.length ? h("p", { class: "muted small", text: "Also in the running: " + n.others.map(o => o.title).join(", ") }) : null,
         h("p", { class: "muted small", text: n.remaining ? `${n.remaining} more to choose from.` : "That is everything left in your backlog." })));
@@ -1867,7 +1867,7 @@
           });
           const game = h("div", { class: "game-cell" },
             (r.appid || r.itad_id) ? steamArt(r.appid, "game-thumb", 92, 43, r.itad_id) : null,
-            h("div", {}, h("div", { class: "game-title", text: r.title }), (r.minutes || r.ach_total) ? h("div", { class: "muted small", text: [r.minutes ? hoursText(r.minutes) + " played" : null, r.ach_total ? `🏆 ${r.ach_done}/${r.ach_total}` : null].filter(Boolean).join(" · ") }) : null));
+            h("div", {}, h("div", { class: "game-title", text: r.title }), (r.minutes || r.ach_total) ? h("div", { class: "muted small", text: [r.minutes ? hoursText(r.minutes) + " played" : null, r.ach_total ? `${r.ach_done}/${r.ach_total}` : null].filter(Boolean).join(" · ") }) : null));
           const tick = h("input", { type: "checkbox", checked: picked.has(r.itad_id), "aria-label": "Select " + r.title });
           tick.addEventListener("change", () => { tick.checked ? picked.add(r.itad_id) : picked.delete(r.itad_id); drawBar(); });
           return [h("tr", {}, h("td", { class: "tick" }, tick), h("td", {}, game), h("td", {}, stat), h("td", { class: "num" }, money(r.paid, cur), r.gifted ? h("span", { class: "gift-tip", tabindex: "0", "data-tip": "Gifted", "aria-label": "Gifted", text: "🎁" }) : null), h("td", { class: "num", text: money(r.msrp, cur) }),
@@ -1928,7 +1928,7 @@
               h("div", { class: "lib-title", text: r.title })),
             h("div", { class: "lib-meta" },
               h("span", { text: r.minutes ? "⏱ " + hoursText(r.minutes) : "Never played" }),
-              r.ach_total ? h("span", { text: `🏆 ${r.ach_done}/${r.ach_total}` }) : null,
+              r.ach_total ? h("span", { text: `${r.ach_done}/${r.ach_total}` }) : null,
               r.saved != null && r.saved > 0 ? h("span", { class: "lib-save", text: "Saved " + money(r.saved, cur) }) : null),
             prices.length ? h("div", { class: "lib-prices" }, prices.map(([k, v]) => h("span", {}, h("small", { text: k }), " " + v))) : null,
             (r.genres || []).length ? h("div", { class: "lib-tags" }, r.genres.map(g => h("span", { class: "lib-tag", text: g }))) : null,
@@ -2179,7 +2179,7 @@
       };
       const paintPreview = () => {
         count.textContent = msg.value.length + " / 1500";
-        preview.replaceChildren(h("div", { class: "muted small", text: "📣 Official message from the Steam Value Checker developer" }), h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff." }));
+        preview.replaceChildren(h("div", { class: "muted small", text: "Official message from the Steam Value Checker developer" }), h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff." }));
       };
       const paintWho = () => {
         const c = info.counts;
@@ -2622,7 +2622,7 @@
         const d = await api("/api/status");
         const tm = d.telemetry, st = d.stats;
         const refresh = h("button", { class: "btn gray small", text: "Refresh now", onclick: () => busy(refresh, () => load(true)) });
-        const tile = (icon, k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: `${icon} ${k}` }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
+        const tile = (icon, k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
         const row = (k, v) => h("div", { class: "kv" }, h("span", { class: "muted", text: k }), h("b", { text: v === null || v === undefined ? "-" : String(v) }));
         const up = d.uptime;
         holder.className = "status-page";
@@ -2631,8 +2631,8 @@
             h("div", {}, h("span", { class: "st-dot " + d.overall }), h("strong", { text: HEAD[d.overall] || "Checking…" })),
             h("div", { class: "st-meta" }, h("span", { class: "muted small", text: d.checkedAt ? "Last checked " + ago(d.checkedAt) : "Starting up…" }), refresh)),
           st && h("div", { class: "grid four" },
-            tile("🌐", "Servers", n(st.servers)), tile("👥", "Members served", n(st.members)), tile("🎮", "Games watched", n(st.gamesWatched)),
-            tile("✅", "Uptime, 90 days", up.pct90 === null ? "-" : up.pct90 + "%", up.pct30 === null ? null : `${up.pct30}% over the last 30 days`)),
+            tile("", "Servers", n(st.servers)), tile("", "Members served", n(st.members)), tile("", "Games watched", n(st.gamesWatched)),
+            tile("", "Uptime, 90 days", up.pct90 === null ? "-" : up.pct90 + "%", up.pct30 === null ? null : `${up.pct30}% over the last 30 days`)),
           h("div", { class: "panel" }, h("h3", { text: "Services" }),
             h("div", { class: "st-list" }, d.components.map(c => h("div", { class: "st-row" },
               h("div", {}, h("b", { text: c.name }), h("div", { class: "muted small", text: c.detail ? `${c.desc} • ${c.detail}` : c.desc })),
@@ -2677,8 +2677,8 @@
           md(state.cfg.about),
           ab && h("p", { class: "muted small", text: "Online since " + new Date(ab.startedAt).toLocaleString() + " · v" + ab.version + " · Node " + String(ab.node).replace(/^v/, "") }),
           ab ? h("div", { class: "grid four about-stats" },
-            tile("🟢", "Uptime", ab.uptime), tile("🌐", "Servers", n(ab.servers)), tile("👥", "Members reached", n(ab.members)), tile("📡", "Latency", ab.pingMs === null ? "-" : ab.pingMs + " ms"),
-            tile("🎮", "Games watched", n(ab.gamesWatched)), tile("🔔", "Alerts, last 24h", n(ab.alerts24h)), tile("🎁", "Giveaways run", n(ab.giveaways)), tile("✅", "Keys redeemed", n(ab.redeemed)))
+            tile("", "Uptime", ab.uptime), tile("", "Servers", n(ab.servers)), tile("", "Members reached", n(ab.members)), tile("", "Latency", ab.pingMs === null ? "-" : ab.pingMs + " ms"),
+            tile("", "Games watched", n(ab.gamesWatched)), tile("", "Alerts, last 24h", n(ab.alerts24h)), tile("", "Giveaways run", n(ab.giveaways)), tile("", "Keys redeemed", n(ab.redeemed)))
             : h("p", { class: "muted", text: "Live numbers are not available right now." }),
           h("div", { class: "rule inline" },
             c && h("a", { class: "btn blue", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Created by " + c.name }),
@@ -2920,7 +2920,7 @@
 
   function newsBanner() {
     if (!state.me || !state.me.news || currentView() === "changelog") return null;
-    return h("div", { class: "notice news" }, h("span", { text: "✨ New: " + (state.me.newsTitle || "see what changed") + ". " }), h("a", { href: "#/changelog", text: "See what's new" }),
+    return h("div", { class: "notice news" }, h("span", { text: "New: " + (state.me.newsTitle || "see what changed") + ". " }), h("a", { href: "#/changelog", text: "See what's new" }),
       h("button", { class: "btn gray small", text: "Dismiss", onclick: async e => { const box = e.currentTarget.parentElement; state.me.news = null; box.remove(); try { await api("/api/changelog/seen", {}); } catch {} } }));
   }
 
@@ -3229,23 +3229,23 @@
     const flag = id => { const x = (me.setup || []).find(t => t.id === id); return Boolean(x && x.done); };
     const st = () => me.settings;
     const CARDS = [
-      { id: "wishlist", icon: "💸", title: "Wishlist sale alerts", text: "Watch games and hear about sales, lows and bundles.", href: "#/wishlist", status: () => [me.games > 0, me.games + " game" + (me.games === 1 ? "" : "s") + " watched"], toggle: { key: "paused", label: "Alerts on", invert: true } },
-      { id: "free", icon: "🎁", title: "Free game alerts", text: "Told when a game is free on Steam, Epic, GOG and more. The free games page lists them all.", href: "#/free", status: () => [st().free, st().free ? "On" : "Off"], toggle: { key: "free", label: "Turn on" } },
-      { id: "digest", icon: "📰", title: "Weekly digest", text: "One summary of your wishlist sales each week.", href: "#/alerts", status: () => [st().digest, st().digest ? "On" : "Off"], toggle: { key: "digest", label: "Turn on" } },
-      { id: "bundles", icon: "📦", title: "Bundle and giveaway alerts", text: "When a wishlist game is in a bundle or given away.", href: "#/alerts", status: () => [st().bundles, st().bundles ? "On" : "Off"], toggle: { key: "bundles", label: "Turn on" } },
-      { id: "share", icon: "👥", title: "Share with your server", text: "Group alerts, the savings leaderboard and the backlog league.", href: "#/alerts", status: () => [st().share, st().share ? "Opted in" : "Not shared"], toggle: { key: "share", label: "Share" } },
-      { id: "library", icon: "📚", title: "Library", text: "What you own, what you paid, backlog, spend and trophies.", href: "#/library", status: () => [me.library > 0, me.library + " game" + (me.library === 1 ? "" : "s")] },
-      { id: "steam", icon: "🎮", title: "Steam link", text: "Hours played, hours tracked over time and a taste profile.", href: "#/steam", status: () => [flag("steam"), flag("steam") ? "Linked" : "Not linked"] },
-      { id: "challenge", icon: "🏁", title: "Backlog challenge", text: "A monthly goal of games to finish, with a streak and badges.", href: "#/library", status: () => [flag("challenge"), flag("challenge") ? "Goal set this month" : "No goal this month"] },
-      { id: "friends", icon: "🎂", title: "Friends and gifts", text: "Birthdays, reminders and what is on sale for them.", href: "#/friends", status: () => [flag("friend"), flag("friend") ? "Friends added" : "None yet"] },
-      { id: "public", icon: "🔗", title: "Public wishlist page", text: "A shareable page for gifts, where visitors can mark what they will buy.", href: "#/alerts", status: () => [Boolean(profile && profile.public), profile && profile.public ? "On" : "Off"] },
-      { id: "redeem", icon: "🔑", title: "Batch redeem", text: "Redeem many Steam keys through the FanaticalGrabber extension.", href: "#/redeem", status: null },
-      { id: "war", icon: "⚔️", title: "Sale war room", text: "Plan a sale cart with a budget slider.", href: "#/warroom", status: null },
-      { id: "foryou", icon: "✨", title: "For you", text: "Discounts ranked by your taste and wishlist.", href: "#/foryou", status: null },
-      { id: "deals", icon: "🏷️", title: "Deals and bundles", text: "Bundle checks and sale prep.", href: "#/deals", status: null },
-      { id: "calendar", icon: "📅", title: "Calendar", text: "Release dates, Steam sales and server events.", href: "#/calendar", status: null },
-      { id: "compare", icon: "🆚", title: "Compare libraries", text: "See what you and a friend both own.", href: "#/compare", status: null },
-      { id: "notifications", icon: "🔔", title: "Notifications", text: "A copy of every alert, and what to mute.", href: "#/notifications", status: () => [me.unread === 0, me.unread ? me.unread + " unread" : "All read"] }
+      { id: "wishlist", icon: "", title: "Wishlist sale alerts", text: "Watch games and hear about sales, lows and bundles.", href: "#/wishlist", status: () => [me.games > 0, me.games + " game" + (me.games === 1 ? "" : "s") + " watched"], toggle: { key: "paused", label: "Alerts on", invert: true } },
+      { id: "free", icon: "", title: "Free game alerts", text: "Told when a game is free on Steam, Epic, GOG and more. The free games page lists them all.", href: "#/free", status: () => [st().free, st().free ? "On" : "Off"], toggle: { key: "free", label: "Turn on" } },
+      { id: "digest", icon: "", title: "Weekly digest", text: "One summary of your wishlist sales each week.", href: "#/alerts", status: () => [st().digest, st().digest ? "On" : "Off"], toggle: { key: "digest", label: "Turn on" } },
+      { id: "bundles", icon: "", title: "Bundle and giveaway alerts", text: "When a wishlist game is in a bundle or given away.", href: "#/alerts", status: () => [st().bundles, st().bundles ? "On" : "Off"], toggle: { key: "bundles", label: "Turn on" } },
+      { id: "share", icon: "", title: "Share with your server", text: "Group alerts, the savings leaderboard and the backlog league.", href: "#/alerts", status: () => [st().share, st().share ? "Opted in" : "Not shared"], toggle: { key: "share", label: "Share" } },
+      { id: "library", icon: "", title: "Library", text: "What you own, what you paid, backlog, spend and trophies.", href: "#/library", status: () => [me.library > 0, me.library + " game" + (me.library === 1 ? "" : "s")] },
+      { id: "steam", icon: "", title: "Steam link", text: "Hours played, hours tracked over time and a taste profile.", href: "#/steam", status: () => [flag("steam"), flag("steam") ? "Linked" : "Not linked"] },
+      { id: "challenge", icon: "", title: "Backlog challenge", text: "A monthly goal of games to finish, with a streak and badges.", href: "#/library", status: () => [flag("challenge"), flag("challenge") ? "Goal set this month" : "No goal this month"] },
+      { id: "friends", icon: "", title: "Friends and gifts", text: "Birthdays, reminders and what is on sale for them.", href: "#/friends", status: () => [flag("friend"), flag("friend") ? "Friends added" : "None yet"] },
+      { id: "public", icon: "", title: "Public wishlist page", text: "A shareable page for gifts, where visitors can mark what they will buy.", href: "#/alerts", status: () => [Boolean(profile && profile.public), profile && profile.public ? "On" : "Off"] },
+      { id: "redeem", icon: "", title: "Batch redeem", text: "Redeem many Steam keys through the FanaticalGrabber extension.", href: "#/redeem", status: null },
+      { id: "war", icon: "", title: "Sale war room", text: "Plan a sale cart with a budget slider.", href: "#/warroom", status: null },
+      { id: "foryou", icon: "", title: "For you", text: "Discounts ranked by your taste and wishlist.", href: "#/foryou", status: null },
+      { id: "deals", icon: "", title: "Deals and bundles", text: "Bundle checks and sale prep.", href: "#/deals", status: null },
+      { id: "calendar", icon: "", title: "Calendar", text: "Release dates, Steam sales and server events.", href: "#/calendar", status: null },
+      { id: "compare", icon: "", title: "Compare libraries", text: "See what you and a friend both own.", href: "#/compare", status: null },
+      { id: "notifications", icon: "", title: "Notifications", text: "A copy of every alert, and what to mute.", href: "#/notifications", status: () => [me.unread === 0, me.unread ? me.unread + " unread" : "All read"] }
     ];
     const ids = CARDS.map(c => c.id);
     const ordered = () => {
@@ -3482,7 +3482,7 @@
         }));
         const del = h("button", { class: "btn red small", text: "Remove" });
         del.addEventListener("click", () => busy(del, async () => { await api("/api/friends/remove", { name: f.name }); toast("Removed.", "ok"); load(); }));
-        return h("div", { class: "panel" }, h("strong", { text: f.name }), h("span", { class: "muted", text: f.birthday ? "  🎂 " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, show, del));
+        return h("div", { class: "panel" }, h("strong", { text: f.name }), h("span", { class: "muted", text: f.birthday ? "  " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, show, del));
       }));
     }
     const add = h("button", { class: "btn blue", text: "Save friend" });
@@ -3493,7 +3493,7 @@
   }
 
   async function calendarView() {
-    const KIND = { release: ["🎮", "Releases"], sale: ["🏷️", "Steam sales"], event: ["📅", "Server events"], lfg: ["👥", "Group games"] };
+    const KIND = { release: ["", "Releases"], sale: ["", "Steam sales"], event: ["", "Server events"], lfg: ["", "Group games"] };
     const st = { kinds: new Set(Object.keys(KIND)), guild: "", mode: "list", month: new Date() };
     st.month.setDate(1); st.month.setHours(0, 0, 0, 0);
     let data = null;
@@ -3521,7 +3521,7 @@
       out.replaceChildren(...[...groups].map(([k, rows]) => h("div", { class: "panel" },
         h("h3", { text: new Date(rows[0].start).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) }),
         ...rows.map(e => h("div", { class: "cal-row" },
-          h("span", { class: "cal-ico", text: KIND[e.kind][0] }),
+          
           h("div", {}, h("div", { class: "cal-title", text: e.title }), h("div", { class: "muted small", text: [timeText(e), e.server, e.notes].filter(Boolean).join(" · ") })),
           removeBtn(e) || "")))));
     }
@@ -3537,7 +3537,7 @@
         const today = dayKey(d) === dayKey(Date.now());
         cells.push(h("div", { class: "cal-cell" + (d.getMonth() !== first.getMonth() ? " other" : "") + (today ? " today" : "") },
           h("div", { class: "cal-day", text: String(d.getDate()) }),
-          ...items.slice(0, 3).map(e => h("div", { class: "cal-chip " + e.kind, title: e.title + " · " + timeText(e), text: KIND[e.kind][0] + " " + e.title })),
+          ...items.slice(0, 3).map(e => h("div", { class: "cal-chip " + e.kind, title: e.title + " · " + timeText(e), text: e.title })),
           items.length > 3 ? h("div", { class: "muted small", text: "+" + (items.length - 3) + " more" }) : ""));
       }
       const prev = h("button", { class: "btn gray small", text: "‹", "aria-label": "Previous month" }), next = h("button", { class: "btn gray small", text: "›", "aria-label": "Next month" });
@@ -3550,7 +3550,7 @@
     const draw = () => (st.mode === "month" ? drawMonth() : drawList());
 
     function drawToolbar() {
-      const chips = Object.entries(KIND).map(([k, [ico, label]]) => { const b = h("button", { type: "button", class: "tab small" + (st.kinds.has(k) ? " active" : ""), text: ico + " " + label, "aria-pressed": String(st.kinds.has(k)) });
+      const chips = Object.entries(KIND).map(([k, [ico, label]]) => { const b = h("button", { type: "button", class: "tab small" + (st.kinds.has(k) ? " active" : ""), text: label, "aria-pressed": String(st.kinds.has(k)) });
         b.addEventListener("click", () => { st.kinds.has(k) ? st.kinds.delete(k) : st.kinds.add(k); drawToolbar(); draw(); }); return b; });
       const mode = h("button", { type: "button", class: "tab small", text: st.mode === "list" ? "Month view" : "List view" });
       mode.addEventListener("click", () => { st.mode = st.mode === "list" ? "month" : "list"; drawToolbar(); draw(); });
@@ -3958,7 +3958,7 @@
           h("li", { text: d.multiplier === 1 ? "XP speed is normal." : `This server runs XP at ×${d.multiplier}.` })));
         const curve = h("div", { class: "panel" }, h("h3", { text: "XP needed per level" }),
           h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Level", "XP to reach it", "Total XP"].map((c, i) => h("th", { class: i ? "num" : "", text: c })))), h("tbody", {}, d.curve.map(c => h("tr", {}, h("td", { text: String(c.level) }), h("td", { class: "num", text: c.need.toLocaleString() }), h("td", { class: "num", text: c.total.toLocaleString() })))))));
-        const shop = h("div", { class: "panel shop-soon" }, h("div", { class: "shop-badge", text: "COMING SOON" }), h("h3", { text: "🎁 Prize shop" }),
+        const shop = h("div", { class: "panel shop-soon" }, h("div", { class: "shop-badge", text: "COMING SOON" }), h("h3", { text: "Prize shop" }),
           h("p", { text: "Spend the XP you earn on rewards from your server's team. Game keys, roles, perks and more." }),
           h("div", { class: "shop-ghosts", "aria-hidden": "true" }, [["🎮", "Game key"], ["👑", "Special role"], ["✨", "Server perk"]].map(([i, n]) => h("div", { class: "shop-ghost" }, h("span", { text: i }), h("b", { text: n }), h("small", { text: "??? XP" })))),
           h("p", { class: "muted small", text: "Keep earning XP. Nothing you earn is lost when the shop opens." }));

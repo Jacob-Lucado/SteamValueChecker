@@ -811,3 +811,5 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .soon { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .soon:empty { display: none; }
 .lp-icon:empty, .lp-flow-icon:empty { display: none; }
+.sv-ico:empty, .free-noart:empty, .cal-ico:empty, .icon:empty { display: none; }
+.free-noart:empty { display: grid; }
