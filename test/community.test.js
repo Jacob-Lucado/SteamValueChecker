@@ -881,3 +881,32 @@ test("owner announcements can ping @everyone or @here in server channels only, n
     assert.equal(none.chans[0].content, undefined); assert.deepEqual(none.chans[0].allowed_mentions, { parse: [] });
     assert.equal((await run("bogus", "channels")).chans[0].content, undefined);
 });
+
+
+test("community setup builds the music category, posts the intro there and points the player at it", async () => {
+    const { welcomeDmPayload } = await import("../src/community.js");
+    const f = welcomeDmPayload({ server: "S" }).embeds[0].fields;
+    assert.ok(f.some(x => /Music/.test(x.name) && /\/play/.test(x.value)));
+    const db = openDb(":memory:");
+    const api = fakeApi();
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "owner", sleep: noSleep, pace: 0 });
+    const cat = api.state.channels.find(c => c.type === 4 && /MUSIC/.test(c.name));
+    assert.ok(cat, "music category");
+    const cmd = api.state.channels.find(c => c.name === "music-commands");
+    assert.equal(cmd.parent_id, cat.id);
+    assert.equal(api.state.channels.filter(c => c.type === 2 && c.parent_id === cat.id).length, 2, "two music voice channels");
+    assert.equal(db.getMusicSettings("G").channel_id, r.channels.musiccmd);
+    const intro = api.state.sent.find(m => m.id === cmd.id && JSON.stringify(m.p).includes("Music is here"));
+    assert.ok(intro, "intro posted in the command channel");
+    // an older server gets the category the next time setup runs, and the intro with it
+    const old = fakeApi(); const db2 = openDb(":memory:");
+    await communitySetup({ api: old, db: db2, guildId: "H", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    const gone = old.state.channels.filter(c => /MUSIC|music-commands|^Music/.test(c.name)).map(c => c.id);
+    old.state.channels = old.state.channels.filter(c => !gone.includes(c.id)); old.state.sent.length = 0;
+    db2.setCommunity("H", { setup_keys: JSON.stringify(JSON.parse(db2.getCommunity("H").setup_keys).filter(k => !["musiccmd", "music1", "music2"].includes(k))) }); db2.setMusicSettings("H", { channel_id: null }); // how a server set up before music looks
+    await communitySetup({ api: old, db: db2, guildId: "H", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.ok(old.state.channels.some(c => c.name === "music-commands"));
+    assert.equal(old.state.channels.filter(c => c.type === 2 && /^Music/.test(c.name)).length, 2);
+    assert.equal(db2.getMusicSettings("H").channel_id, old.state.channels.find(c => c.name === "music-commands").id);
+    assert.ok(old.state.sent.some(m => JSON.stringify(m.p).includes("Music is here")));
+});

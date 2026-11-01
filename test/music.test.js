@@ -298,8 +298,8 @@ test("short command replies become embeds, errors in red", async () => {
 test("community setup gives music its own category, command channel and intro", async () => {
     const { TEMPLATE, musicIntroPayload } = await import("../src/community.js");
     const cat = TEMPLATE.categories.find(c => /MUSIC/.test(c.name));
-    assert.ok(cat && cat.channels.some(c => c.key === "music" && c.name === "music-commands") && cat.voice.length >= 1);
-    assert.ok(!TEMPLATE.categories.filter(c => c !== cat).some(c => (c.channels ?? []).some(x => x.key === "music")));
+    assert.ok(cat && cat.channels.some(c => c.key === "musiccmd" && c.name === "music-commands") && cat.voice.length >= 1);
+    assert.ok(!TEMPLATE.categories.filter(c => c !== cat).some(c => (c.channels ?? []).some(x => x.key === "musiccmd")));
     const e = musicIntroPayload().embeds[0];
     const text = JSON.stringify(e);
     for (const w of ["/play", "playlist", "saveplaylist", "settings", "skip", "loop", "SoundCloud"]) assert.ok(text.includes(w), w);

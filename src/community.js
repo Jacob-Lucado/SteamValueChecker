@@ -85,7 +85,7 @@ export const TEMPLATE = {
             { key: "requests", name: "feature-requests", topic: "Ideas for the bot, with their status. Suggest and vote on the dashboard", forum: true }] },
         { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "afk", name: "AFK" }] },
         { name: "🎵 MUSIC", channels: [
-            { key: "music", name: "music-commands", topic: "Run /play and the other music commands here. Join a Music voice channel first. SoundCloud songs and playlists" }],
+            { key: "musiccmd", name: "music-commands", topic: "Run /play and the other music commands here. Join a Music voice channel first. SoundCloud songs and playlists" }],
             voice: [{ key: "music1", name: "Music 1" }, { key: "music2", name: "Music 2" }] },
         { name: "🛠️ STAFF", staff: true, channels: [
             { key: "staffchat", name: "staff-chat", topic: "Moderators only" },
@@ -294,7 +294,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setWeeklyDigest?.(guildId, true); db.setSaleFeed?.(guildId, true); // the Friday round-up and "a Steam sale just started" posts
     if (!db.getGiveawaySettings(guildId).manager_role_id) db.setGiveawaySettings(guildId, { manager_role_id: roleIds.mod }); // moderators can run giveaways
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
-    if (chIds.music && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.music }); // now-playing messages land in #music
+    if (chIds.musiccmd && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.musiccmd }); // now-playing messages land in #music
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
     db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_promos: pingOf("Promo drop pings") });
@@ -323,14 +323,14 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/promos add` or on the dashboard, and can turn on news watching with `/promos news`." });
     await say(api, chIds.tickets, { content: "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
-    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
+    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), music in <#${chIds.musiccmd}> (join a Music voice channel and use /play), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
     await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
 
     // ---- server settings (all best effort: a missing permission only skips that part) ----
     if (chIds.afk) await api.editGuild(guildId, { afk_channel_id: chIds.afk, afk_timeout: 900 }).catch(() => notes.push("Could not set the AFK channel (needs Manage Server)."));
     await api.editGuild(guildId, { system_channel_flags: 1 }).catch(() => {}); // stop Discord's own join message, the bot greets instead
 
-    if (chIds.music && created.channels.includes("music-commands")) await say(api, chIds.music, musicIntroPayload()); // only in a channel made just now
+    if (chIds.musiccmd && created.channels.includes("music-commands")) await say(api, chIds.musiccmd, musicIntroPayload()); // only in a channel made just now
     if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
     if (chIds.drops && !db.getDropSettings(guildId).channel_id) db.setDropSettings(guildId, { channel_id: chIds.drops });
     db.setCommunity(guildId, { setup_keys: JSON.stringify(Object.keys(chIds)) });
@@ -340,7 +340,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 }
 
 /** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
-export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops"]);
+export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops", "musiccmd", "music1", "music2"]);
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
 
 /** What a second run does: create only the template channels this server has never been given. */
@@ -353,7 +353,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     const bot = { id: botId, type: 1, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages | PERM.createInvite | B(14)), deny: "0" };
     const mod = modRole ? [{ id: modRole, type: 0, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages), deny: "0" }] : [];
     const overwrites = kind => kind === "forum" ? [{ id: everyone, type: 0, allow: "0", deny: str(PERM.createThreads) }, bot, ...mod] : [];
-    const chIds = {};
+    const chIds = {}, chCats = {};
     for (const cat of TEMPLATE.categories) {
         for (const c of cat.channels ?? []) {
             if (built.has(c.key)) continue;
@@ -375,11 +375,29 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
             chIds[c.key] = ex.id;
         }
     }
+    // voice channels that were added later (the music rooms): created under their category, matched by name so nothing is doubled
+    for (const cat of TEMPLATE.categories) {
+        for (const v of cat.voice ?? []) {
+            if (built.has(v.key) || !ADDED_LATER.has(v.key)) continue;
+            let ex = existingChannels.find(x => x.type === 2 && x.name.toLowerCase() === v.name.toLowerCase());
+            if (!ex) {
+                const catCh = existingChannels.find(x => x.type === 4 && x.name.toLowerCase() === cat.name.toLowerCase()) ?? chCats[cat.name];
+                const parent = catCh ?? await guard(() => api.createChannel(guildId, { name: cat.name, type: 4 }), `create the ${cat.name} category`);
+                if (parent) chCats[cat.name] = parent;
+                ex = await guard(() => api.createChannel(guildId, { name: v.name, type: 2, parent_id: parent?.id }), `create the ${v.name} voice channel`);
+                if (!ex) continue;
+                created.channels.push(v.name); await wait();
+            }
+            chIds[v.key] = ex.id;
+        }
+    }
     // connect only what is new, and only where nothing is chosen yet
     if (chIds.honeypot) {
         if (!db.getCommunity(guildId).honeypot_channel) db.setCommunity(guildId, { honeypot_channel: chIds.honeypot });
         if (created.channels.includes(HONEYPOT_NAME)) await say(api, chIds.honeypot, honeypotPayload()); // only in a channel made just now
     }
+    if (chIds.musiccmd && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.musiccmd });
+    if (chIds.musiccmd && created.channels.includes("music-commands")) await say(api, chIds.musiccmd, musicIntroPayload());
     if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
     if (chIds.codes && created.channels.includes("game-codes")) await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/codes`, or on the dashboard." });
     if (chIds.drops && !db.getDropSettings(guildId).channel_id) db.setDropSettings(guildId, { channel_id: chIds.drops });
@@ -421,6 +439,7 @@ export function welcomeDmPayload({ server, dashboardUrl = null }) {
             { name: "🎁 Free games", value: "`/freegames` shows what you can grab for free right now on Steam, Epic, GOG and more." },
             { name: "🎮 Your library", value: "Sign in with Steam on the dashboard to see what your library is worth, your hours, and what to play next." },
             { name: "🏆 In this server", value: "You earn XP and levels by chatting and hanging out in voice (`/rank`, `/levels`). Grab your own invite link with `/invites link`, and verify your Steam account in #verify for the Steam Verified role." },
+            { name: "🎵 Music", value: "Join a Music voice channel and run `/play` with a SoundCloud song or playlist link in #music-commands. `/music` has the rest: queue, skip, loop and saved playlists." },
             { name: "🔔 Control it", value: "`/alerts` lets you set quiet hours and pick how I notify you. `/help` lists every command, and `/mydata delete` wipes your data whenever you want." }
         ],
         footer: { text: "You're getting this because you joined a server that uses me. I don't read replies here." }

@@ -284,7 +284,7 @@
         h("div", { class: "lp-hero-art" }, mock)),
 
       h("div", { class: "lp-ticker", "aria-hidden": "true" }, h("div", { class: "lp-ticker-track" },
-        ...[0, 1].flatMap(() => ["Library value", "Wishlist alerts", "Free game alerts", "Key giveaways", "Bundle check", "Play next", "Price history"].map(t => h("span", { text: t }))))),
+        ...[0, 1].flatMap(() => ["Library value", "Wishlist alerts", "Free game alerts", "Key giveaways", "SoundCloud music", "Bundle check", "Play next", "Price history"].map(t => h("span", { text: t }))))),
 
       ab && (n(ab.servers) || n(ab.gamesWatched)) ? h("section", { class: "lp-stats" },
         stat("Servers", n(ab.servers)), stat("Games watched", n(ab.gamesWatched)), stat("Alerts in the last 24h", n(ab.alerts24h)), stat("Giveaway keys redeemed", n(ab.redeemed))) : null,
@@ -295,6 +295,7 @@
           feature("", "Library value", "See the full price, what Steam charges today, the cheapest store right now, and how much you actually saved on what you paid."),
           feature("", "Wishlist alerts", "Bring in your public Steam wishlist and choose what counts as worth a ping: any sale, a certain percent off, a price you set, or an all-time low."),
           feature("", "Game codes", "SHiFT codes for Borderlands and other limited-time game codes, posted once each with the right game and an end date, then greyed out when they run out."),
+          feature("", "Music", "Play SoundCloud songs and whole playlists in a voice channel with /play. Queue, skip votes, loop and a now-playing card that updates live, with a full player on the dashboard."),
           feature("", "Free game alerts", "Get a message when a game goes free on Steam, Epic, GOG and others, with a button to grab it. /freegames shows what's free at the moment."),
           feature("", "Giveaways", "Hand out game keys, Nitro, gift cards or whatever else. Winners hit a button to claim, tell the bot if it worked, and a vouch gets posted for you."),
           feature("", "Server tools", "A wishlist the whole server shares and votes on, a savings leaderboard for people who opt in, and a ping when a few members are all waiting on the same deal."),
@@ -4167,7 +4168,7 @@
         const toggle = (on, path, key, labelOn, labelOff) => { const b = h("button", { class: "btn small " + (on ? "red" : "green"), text: on ? labelOn : labelOff }); b.addEventListener("click", () => busy(b, async () => { await post(path, { [key]: !on }); load(); })); return b; };
         // build
         const build = h("div", { class: "panel" }, h("h3", { text: "Build my server" }),
-          h("p", { class: "muted", text: "Creates the usual gaming-server layout: Information (welcome, rules, announcements, roles), Community (general, introductions, memes, clips, off-topic, bot-commands), Gaming (looking-for-group, game-chat, game-night, wishlists), Deals and Giveaways, Support (get-help tickets and report-a-bug), Voice lobbies and a private Staff area. Also creates Moderator, Member and level roles and a role picker, posts the rules (with the bot logo), the support buttons and the welcome, and connects deal alerts, giveaways, support tickets, welcome and XP. Safe to run again: a server that is already built only gets the channels that are new, and nothing you renamed, moved, deleted or changed is touched. A brand-new server is built automatically when the bot joins." }),
+          h("p", { class: "muted", text: "Creates the usual gaming-server layout: Information (welcome, rules, announcements, roles), Community (general, introductions, memes, clips, off-topic, bot-commands), Gaming (looking-for-group, game-chat, game-night, wishlists), Deals and Giveaways, Support (get-help tickets and report-a-bug), Music (a #music-commands channel with an intro of every music command, plus two Music voice channels), Voice lobbies and a private Staff area. Also creates Moderator, Member and level roles and a role picker, posts the rules (with the bot logo), the support buttons and the welcome, and connects deal alerts, giveaways, music, support tickets, welcome and XP. Safe to run again: a server that is already built only gets the channels that are new, and nothing you renamed, moved, deleted or changed is touched. A brand-new server is built automatically when the bot joins." }),
           (() => { const b = h("button", { class: "btn green", text: d.built ? "Run setup again (adds only what's new)" : "Set up this server" }); b.addEventListener("click", () => busy(b, async () => { const r = await post("/api/community/setup", {}); toast(r.updated ? `Updated: ${r.created.channels.length} new channel${r.created.channels.length === 1 ? "" : "s"} added, nothing else changed.` : `Done: ${r.created.channels.length} channels, ${r.created.roles.length} roles created.`, "ok"); load(); })); return b; })());
         // welcome
         const wCh = chSel(st.welcome_channel), logCh = chSel(st.log_channel), wMsg = h("textarea", { rows: "3", maxlength: "1000", placeholder: st.defaultWelcome }); wMsg.value = st.welcome_msg || "";
