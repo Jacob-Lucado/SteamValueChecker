@@ -135,7 +135,7 @@ const lfgCmd = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("event").setDescription("Also create a Discord event (the bot needs Manage Events)")))
     .addSubcommand(s => s.setName("list").setDescription("Open posts in this server"))
     .addSubcommand(s => s.setName("close").setDescription("Close a post you made (managers can close any)")
-        .addIntegerOption(o => o.setName("id").setDescription("The post number from /lfg list").setRequired(true).setMinValue(1)));
+        .addIntegerOption(o => o.setName("id").setDescription("The post number from /server lfg list").setRequired(true).setMinValue(1)));
 
 const calendarCmd = new SlashCommandBuilder()
     .setName("calendar")
@@ -150,7 +150,7 @@ const calendarCmd = new SlashCommandBuilder()
         .addIntegerOption(o => o.setName("reminder").setDescription("When to remind (default 1 hour before)").addChoices(
             { name: "No reminder", value: 0 }, { name: "15 minutes before", value: 15 }, { name: "1 hour before", value: 60 }, { name: "1 day before", value: 1440 })))
     .addSubcommand(s => s.setName("remove").setDescription("Remove a server event (managers)")
-        .addIntegerOption(o => o.setName("id").setDescription("The event number from /calendar view").setRequired(true).setMinValue(1)))
+        .addIntegerOption(o => o.setName("id").setDescription("The event number from /server calendar view").setRequired(true).setMinValue(1)))
     .addSubcommand(s => s.setName("feed").setDescription("Optional: a private link to show this calendar in Google, Apple or Outlook calendar")
         .addStringOption(o => o.setName("action").setDescription("What to do (default: make a link)").addChoices(
             { name: "Make a new link", value: "new" }, { name: "Turn the link off", value: "off" })));
@@ -254,7 +254,7 @@ const friendCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("add").setDescription("Add or update a friend (a reminder comes a week before their birthday)")
         .addStringOption(o => o.setName("name").setDescription("A nickname").setRequired(true).setMaxLength(30))
         .addStringOption(o => o.setName("birthday").setDescription("Month and day as MM-DD, for example 03-27").setMaxLength(5))
-        .addStringOption(o => o.setName("page").setDescription("Their public wishlist page name (from /publicpage)").setMaxLength(24)))
+        .addStringOption(o => o.setName("page").setDescription("Their public wishlist page name (from /me publicpage)").setMaxLength(24)))
     .addSubcommand(s => s.setName("list").setDescription("Your friends and their upcoming birthdays"))
     .addSubcommand(s => s.setName("deals").setDescription("What is on sale on a friend's public wishlist")
         .addStringOption(o => o.setName("name").setDescription("The friend").setRequired(true).setMaxLength(30)))
@@ -524,7 +524,7 @@ const feature = new SlashCommandBuilder()
             { name: "Under review", value: "open" }, { name: "Planned", value: "planned" }, { name: "In development", value: "in_development" },
             { name: "Shipped", value: "shipped" }, { name: "Rejected", value: "rejected" }, { name: "On hold", value: "on_hold" })))
     .addSubcommand(s => s.setName("vote").setDescription("Vote for an idea, or take your vote back")
-        .addIntegerOption(o => o.setName("id").setDescription("The number shown in /feature list").setRequired(true).setMinValue(1)));
+        .addIntegerOption(o => o.setName("id").setDescription("The number shown in /bot feature list").setRequired(true).setMinValue(1)));
 
 const codes = new SlashCommandBuilder()
     .setName("codes")
@@ -552,7 +552,7 @@ const promos = new SlashCommandBuilder()
         .addIntegerOption(o => o.setName("days").setDescription("Days until it ends, if you know").setMinValue(1).setMaxValue(365))
         .addStringOption(o => o.setName("note").setDescription("Anything people should know, like region or one per account").setMaxLength(300)))
     .addSubcommand(s => s.setName("end").setDescription("Server managers: mark a drop as over")
-        .addIntegerOption(o => o.setName("id").setDescription("The number shown in /promos list").setRequired(true).setMinValue(1)))
+        .addIntegerOption(o => o.setName("id").setDescription("The number shown in /server promos list").setRequired(true).setMinValue(1)))
     .addSubcommand(s => s.setName("channel").setDescription("Server managers: where promo drops are posted")
         .addChannelOption(o => o.setName("channel").setDescription("Text channel (leave empty to see the current setting)").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
         .addBooleanOption(o => o.setName("clear").setDescription("Stop posting promo drops in this server")))
@@ -623,7 +623,23 @@ const musicCmd = new SlashCommandBuilder()
         .addIntegerOption(o => o.setName("maxqueue").setDescription("Most songs allowed in the queue").setMinValue(5).setMaxValue(500))
         .addIntegerOption(o => o.setName("maxminutes").setDescription("Longest single song in minutes (0 = no limit)").setMinValue(0).setMaxValue(600))
         .addBooleanOption(o => o.setName("announce").setDescription("Post a message when each song starts"))
-        .addBooleanOption(o => o.setName("stay").setDescription("Stay in the voice channel when the queue ends")));
+        .addBooleanOption(o => o.setName("stay").setDescription("Stay in the voice channel when the queue ends"))
+        .addBooleanOption(o => o.setName("radio").setDescription("Allow live radio stream links")))
+    .addSubcommand(s => s.setName("live").setDescription("Pick a live radio station to play (only ones that are on the air right now)"))
+    .addSubcommandGroup(g => g.setName("autodj").setDescription("The Auto DJ keeps music going when nobody has queued anything")
+        .addSubcommand(s => s.setName("submit").setDescription("Request a song or playlist for the Auto DJ to play (you don't need to be in voice)")
+            .addStringOption(o => o.setName("song").setDescription("A SoundCloud song or playlist link, or words to search for").setRequired(true).setMaxLength(300)))
+        .addSubcommand(s => s.setName("requests").setDescription("See the requests waiting for the Auto DJ"))
+        .addSubcommand(s => s.setName("setup").setDescription("Server managers: turn on the Auto DJ and set what it plays")
+            .addBooleanOption(o => o.setName("enabled").setDescription("Turn the Auto DJ on or off"))
+            .addStringOption(o => o.setName("playlist").setDescription("A SoundCloud playlist link for it to play from").setMaxLength(300))
+            .addStringOption(o => o.setName("savedplaylist").setDescription("Or use one of your own saved playlists").setAutocomplete(true).setMaxLength(40))
+            .addBooleanOption(o => o.setName("clearplaylist").setDescription("Remove the Auto DJ playlist"))
+            .addChannelOption(o => o.setName("channel").setDescription("A voice channel it joins by itself when someone is in it").addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice))
+            .addBooleanOption(o => o.setName("clearchannel").setDescription("Stop joining a voice channel by itself"))
+            .addIntegerOption(o => o.setName("idle").setDescription("Seconds of silence before it starts (5 to 600)").setMinValue(5).setMaxValue(600))
+            .addBooleanOption(o => o.setName("requests").setDescription("Let members request songs for it"))
+            .addBooleanOption(o => o.setName("shuffle").setDescription("Play the playlist in random order"))));
 
 const playCmd = new SlashCommandBuilder()
     .setName("play")
@@ -637,3 +653,41 @@ export const commands = [
     ...[alertchannel, giveaway, promos, musicCmd, playCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
+
+// ---------- the commands people actually see ----------
+// Everything above is written as one command per feature because that is how each feature grew. Discord shows a long,
+// noisy list that way, so they are folded into a few grouped commands. The handlers still think in the old names:
+// legacyRoute() turns "/me wishlist add" back into ("wishlist", "add") before anything else runs.
+const HUBS = [
+    { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
+    { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "mydata"] },
+    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "rank", "levels", "serverstats", "leaderboard"], groups: ["giveaway", "promos", "serverlist", "lfg", "calendar", "invites"] },
+    { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji"] },
+    { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
+];
+const KEEP = ["help", "dashboard", "alerts", "mod", "music", "play"];
+const KINDS = { everywhere, serverOnly, serverOrDm };
+const byName = new Map(commands.map(c => [c.name, c]));
+
+export const hubCommands = [
+    ...HUBS.map(hub => {
+        const b = new SlashCommandBuilder().setName(hub.name).setDescription(hub.description);
+        if (hub.perm) b.setDefaultMemberPermissions(hub.perm);
+        const j = KINDS[hub.kind](b).toJSON();
+        j.options = [
+            ...hub.flat.map(n => { const c = byName.get(n); return { type: 1, name: c.name, description: c.description, options: c.options ?? [] }; }),
+            ...hub.groups.map(n => { const c = byName.get(n); return { type: 2, name: c.name, description: c.description, options: c.options }; })
+        ];
+        return j;
+    }),
+    ...KEEP.map(n => byName.get(n))
+];
+export const HUB_NAMES = new Set(HUBS.map(h => h.name));
+// Old command names that only worked inside a server (their hub also serves DMs, so the dispatcher checks).
+export const SERVER_ONLY_LEGACY = new Set(commands.filter(c => !(c.contexts ?? []).includes(1)).map(c => c.name));
+
+// ("games", null, "value") -> { command: "value", sub: null };  ("me", "wishlist", "add") -> { command: "wishlist", sub: "add" }
+export function legacyRoute(commandName, group, sub) {
+    if (!HUB_NAMES.has(commandName)) return null;
+    return group ? { command: group, sub } : { command: sub, sub: null };
+}

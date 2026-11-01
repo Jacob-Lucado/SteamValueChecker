@@ -75,7 +75,7 @@ const delta = (n, f) => (n === null || n === undefined || n === 0 ? null : { tex
 
 export function challengeSpec(c) {
     if (!c.goal) return { title: "Backlog challenge", subtitle: c.month, accent: "#a4d007", accent2: "#57f287", hero: { label: "Streak", value: `${c.streak ?? 0}` },
-        sections: [{ heading: "Get started", rows: [{ left: "No goal set for this month", right: "/library challenge goal:3" }] }], note: "Finish that many games this month to keep a streak." };
+        sections: [{ heading: "Get started", rows: [{ left: "No goal set for this month", right: "/me library challenge goal:3" }] }], note: "Finish that many games this month to keep a streak." };
     const met = c.done >= c.goal;
     return { title: "Backlog challenge", subtitle: c.month, accent: "#a4d007", accent2: "#57f287", hero: { label: met ? "Goal met" : "Finished", value: `${c.done}/${c.goal}` },
         progress: { pct: c.done / c.goal, left: `${c.done} of ${c.goal} finished`, right: met ? "Goal met" : `${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left` },
@@ -87,7 +87,7 @@ export function challengeSpec(c) {
 
 export function spendSpec(sp) {
     const c = sp.currency;
-    if (!sp.games) return { title: "What you have spent", accent: "#f0883e", accent2: "#f5c542", sections: [{ heading: "Nothing recorded yet", rows: [{ left: "Add what you paid with /library add", right: "" }, { left: "Or press Send what I paid in the extension", right: "" }] }] };
+    if (!sp.games) return { title: "What you have spent", accent: "#f0883e", accent2: "#f5c542", sections: [{ heading: "Nothing recorded yet", rows: [{ left: "Add what you paid with /me library add", right: "" }, { left: "Or press Send what I paid in the extension", right: "" }] }] };
     const line = g => ({ left: g.title, right: `${money(g.paid, c)} · ${money(g.perHour, c)}/h` });
     return { title: "What you have spent", subtitle: `${sp.games} game${sp.games === 1 ? "" : "s"}, about ${money(sp.avg, c)} each`, accent: "#f0883e", accent2: "#f5c542", hero: { label: "Total", value: money(sp.total, c) },
         tiles: [{ label: String(sp.year.year), value: money(sp.year.total, c) }, { label: "Games", value: num(sp.games) }, { label: "Unplayed", value: sp.unplayed.count ? money(sp.unplayed.total, c) : "None", tone: sp.unplayed.count ? "bad" : "good" }],

@@ -394,7 +394,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "music/pause": "POST /api/music/control", "music/resume": "POST /api/music/control", "music/skip": "POST /api/music/control", "music/skipto": "POST /api/music/control", "music/previous": "POST /api/music/control",
         "music/seek": "POST /api/music/control", "music/stop": "POST /api/music/control", "music/leave": "POST /api/music/control", "music/volume": "POST /api/music/control", "music/loop": "POST /api/music/control",
         "music/shuffle": "POST /api/music/control", "music/remove": "POST /api/music/control", "music/move": "POST /api/music/control", "music/clear": "POST /api/music/control",
-        "music/saveplaylist": "POST /api/music/playlists", "music/loadplaylist": "POST /api/music/playlists", "music/deleteplaylist": "POST /api/music/playlists", "music/settings": "POST /api/music/settings", play: "POST /api/music/play",
+        "music/live": "GET /api/music/stations", "music/submit": "POST /api/music/submit", "music/requests": "GET /api/music", "music/setup": "POST /api/music/autodj", "music/saveplaylist": "POST /api/music/playlists", "music/loadplaylist": "POST /api/music/playlists", "music/deleteplaylist": "POST /api/music/playlists", "music/settings": "POST /api/music/settings", play: "POST /api/music/play",
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
@@ -746,15 +746,29 @@ test("server free feed posts games once per server, never DLC; stats are counts 
     assert.match(serverStatsEmbed(serverStats(t.db, "nobody")).description, /opted in/);
 });
 
-test("help mentions the newer commands and stays within what the bot can send", async () => {
-    const { HELP } = await import("../src/text.js");
-    assert.ok(HELP.length <= 4096, `help is ${HELP.length} characters (Discord embeds hold 4096)`);
-    const { commands } = await import("../src/commands.js");
-    for (const c of commands) {
-        const j = c.toJSON ? c.toJSON() : c;
-        assert.ok(HELP.includes("`/" + j.name + "`"), "help is missing /" + j.name);
-        for (const o of (j.options ?? []).filter(o => o.type === 1 || o.type === 2)) assert.ok(HELP.includes("`" + o.name + "`") || HELP.includes(o.name), `help is missing /${j.name} ${o.name}`);
+test("help is a set of pages that name every command, and the registered commands stay under Discord's limits", async () => {
+    const { HELP_PAGES } = await import("../src/text.js");
+    const { helpPayload } = await import("../src/helpui.js");
+    const text = HELP_PAGES.map(p => p.title + " " + p.description + " " + p.fields.map(f => f.name + " " + f.value).join(" ")).join("\n");
+    for (const p of HELP_PAGES) {
+        const e = helpPayload(p.key).embeds[0];
+        assert.ok(e.fields.length <= 25 && JSON.stringify(e).length < 5500, `help page ${p.key} is too big`);
+        assert.ok((e.description ?? "").length <= 4096 && e.fields.every(f => f.value.length <= 1024 && f.name.length <= 256), `help page ${p.key} has a field that is too long`);
     }
+    const { hubCommands, commands } = await import("../src/commands.js");
+    assert.ok(hubCommands.length <= 12, `${hubCommands.length} commands is not minimal`);
+    for (const j of hubCommands) {
+        assert.ok(text.includes("/" + j.name), "help is missing /" + j.name);
+        const subs = (j.options ?? []).filter(o => o.type === 1 || o.type === 2);
+        assert.ok(subs.length <= 25, `/${j.name} has ${subs.length} subcommands`);
+        for (const o of subs) {
+            assert.ok(text.includes(o.name), `help is missing /${j.name} ${o.name}`);
+            for (const x of (o.options ?? []).filter(x => x.type === 1 || x.type === 2)) assert.ok(text.includes(x.name), `help is missing /${j.name} ${o.name} ${x.name}`);
+        }
+    }
+    // folding must not lose anything: every old command is reachable
+    const reach = new Set(hubCommands.flatMap(j => ["games", "me", "server", "manage", "bot"].includes(j.name) ? j.options.map(o => o.name) : [j.name]));
+    for (const c of commands) if (c.name !== "dash") assert.ok(reach.has(c.name), `/${c.name} fell out of the grouped commands`);
 });
 
 test("the currency list fits a Discord choice menu (25 max) with unique codes", async () => {

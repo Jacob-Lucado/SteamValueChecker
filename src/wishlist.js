@@ -46,7 +46,7 @@ export async function viewRows(db, itad, user) {
     return { rows, currency: rows.find(r => r.currency)?.currency ?? "USD" };
 }
 
-/** Plain-JSON copy of everything stored about a user, for /mydata export. */
+/** Plain-JSON copy of everything stored about a user, for /me mydata export. */
 export function exportJson(db, userId) {
     const data = db.exportUser(userId);
     if (!data) return null;

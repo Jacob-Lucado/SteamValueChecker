@@ -1,4 +1,4 @@
-// Discord side of feature requests: /feature request, list and vote.
+// Discord side of feature requests: /bot feature request, list and vote.
 import { MessageFlags } from "discord.js";
 import { UserError } from "./errors.js";
 import { submitRequest, requestListEmbed } from "./requests.js";
@@ -29,7 +29,7 @@ export function createRequestHandlers({ db, publish = null, publicUrl = null }) 
             }
             if (sub === "vote") {
                 const r = db.getRequest(i.options.getInteger("id", true));
-                if (!r) throw new UserError("I can't find a request with that number. Use `/feature list` to see them.");
+                if (!r) throw new UserError("I can't find a request with that number. Use `/bot feature list` to see them.");
                 const voted = db.toggleRequestVote(r.id, i.user.id);
                 return await eph(i, voted ? `Voted for **${r.title}**.` : `Took back your vote for **${r.title}**.`);
             }
@@ -40,7 +40,7 @@ export function createRequestHandlers({ db, publish = null, publicUrl = null }) 
         try {
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const id = submitRequest({ db, userId: i.user.id, userName: i.user.username, title: i.fields.getTextInputValue("title"), body: i.fields.getTextInputValue("body"), publish });
-            return void await i.editReply(`Saved. Your idea is request **#${id}**. Others can vote with \`/feature vote id:${id}\`${publicUrl ? ` or on ${publicUrl}/#/requests` : ""}. You will get a DM when its status changes.`);
+            return void await i.editReply(`Saved. Your idea is request **#${id}**. Others can vote with \`/bot feature vote id:${id}\`${publicUrl ? ` or on ${publicUrl}/#/requests` : ""}. You will get a DM when its status changes.`);
         } catch (err) { await failed(i, err); }
     }
     return { handleCommand, handleModal };

@@ -75,6 +75,12 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
                 .map(c => ({ id: c.id, name: c.name }));
         },
 
+        /** Voice and stage channels, for choosing where the Auto DJ sits. */
+        async listVoiceChannels(guildId) {
+            const all = await call(`/guilds/${encodeURIComponent(guildId)}/channels`, { headers: bot });
+            return (Array.isArray(all) ? all : []).filter(c => c.type === 2 || c.type === 13).sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map(c => ({ id: c.id, name: c.name }));
+        },
+
         /** Forum channels of a server the bot is in (for the feature requests forum). */
         async listForums(guildId) {
             const all = await call(`/guilds/${encodeURIComponent(guildId)}/channels`, { headers: bot });

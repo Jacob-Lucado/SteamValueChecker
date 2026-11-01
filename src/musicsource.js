@@ -1,5 +1,6 @@
 // SoundCloud for the music feature. It leans on yt-dlp to search and find the real audio address (SoundCloud has no
 // open API for new apps) and ffmpeg to turn that into raw sound Discord can play. Only SoundCloud links are accepted.
+import { probeRadio, openRadio } from "./musicradio.js";
 import { spawn } from "node:child_process";
 
 export const YTDLP = process.env.YTDLP_PATH || "yt-dlp";
@@ -53,7 +54,7 @@ export function run(cmd, args, { timeoutMs = 30_000, spawnImpl = spawn } = {}) {
     });
 }
 
-export function createSource({ exec = run, spawnImpl = spawn } = {}) {
+export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: probeRadio, open: openRadio } } = {}) {
     const json = async args => JSON.parse(await exec(YTDLP, ["--no-warnings", "--no-call-home", "--ignore-config", ...args]));
 
     return {
@@ -85,7 +86,24 @@ export function createSource({ exec = run, spawnImpl = spawn } = {}) {
         },
 
         /** The raw audio stream for a track, starting `seek` seconds in. Call `.kill()` to stop it. */
+        /** Checks a pasted address is a working live audio stream (an Icecast or Shoutcast station, say). */
+        radioProbe: url => radio.probe(url),
+
         async stream(track, { seek = 0 } = {}) {
+            if (track.radio) {
+                // A live station: fetch it here (so the address checks stay in force) and hand the audio to ffmpeg to decode.
+                const r = await radio.open(track.url);
+                const p = spawnImpl(FFMPEG, ["-hide_banner", "-loglevel", "error", "-protocol_whitelist", "pipe", "-i", "pipe:0", "-vn", "-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1"], { stdio: ["pipe", "pipe", "pipe"] });
+                let err = "";
+                p.stderr.on("data", d => { err = (err + d).slice(-500); });
+                p.stdin.on("error", () => {}); p.on("error", () => {});
+                r.res.on("error", () => { try { p.stdin.end(); } catch { /* */ } });
+                r.res.on("end", () => { try { p.stdin.end(); } catch { /* */ } });
+                r.res.pipe(p.stdin);
+                const kill = () => { r.close(); try { p.kill("SIGKILL"); } catch { /* already gone */ } };
+                p.on("close", () => r.close());
+                return { stream: p.stdout, process: p, lastError: () => err.trim(), kill, name: r.name };
+            }
             let raw;
             try { raw = await exec(YTDLP, ["--no-warnings", "--ignore-config", "--no-playlist", "-g", "-f", "bestaudio/best", "--", track.url]); }
             catch (err) {

@@ -1,4 +1,4 @@
-// Discord side of game codes: /codes latest, channel, games and ping.
+// Discord side of game codes: /games codes latest, channel, games and ping.
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
 import { applyCodeSettings, codeEmbed, codeView, describeGames, pendingFor } from "./codes.js";
@@ -7,7 +7,7 @@ import { codeGames } from "./codes.js";
 
 const eph = (i, payload) => i.reply({ ...(typeof payload === "string" ? { content: payload } : payload), flags: MessageFlags.Ephemeral });
 
-/** One line per code for the /codes latest list. */
+/** One line per code for the /games codes latest list. */
 export function codeLine(c) {
     const v = codeView(c);
     const ends = v.expiresAt ? `ends <t:${Math.floor(v.expiresAt / 1000)}:R>` : "no end date listed";
@@ -20,7 +20,7 @@ export function createCodeHandlers({ db, runNow = null }) {
         if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new UserError("You need the Manage Server permission to change this.");
     };
     const summary = (gid, s = db.getCodeSettings(gid)) => [
-        s.channel_id ? `Codes are posted in <#${s.channel_id}>.` : "No codes channel yet. Pick one with `/codes channel`.",
+        s.channel_id ? `Codes are posted in <#${s.channel_id}>.` : "No codes channel yet. Pick one with `/games codes channel`.",
         s.games.length ? `Only: ${describeGames(s.games)}.` : "Every game is included.",
         s.role_id ? `Pings <@&${s.role_id}>.` : "No role is pinged."
     ].join("\n");
@@ -57,7 +57,7 @@ export function createCodeHandlers({ db, runNow = null }) {
                 const base = cur.length ? cur : all;
                 const keys = expandGames([game]);
                 const next = on === false ? base.filter(k => !keys.includes(k)) : [...new Set([...base, ...keys])];
-                if (!next.length) throw new UserError("Keep at least one game, or turn the codes channel off with `/codes channel clear:true`.");
+                if (!next.length) throw new UserError("Keep at least one game, or turn the codes channel off with `/games codes channel clear:true`.");
                 return await eph(i, "Updated.\n" + summary(gid, applyCodeSettings(db, gid, { games: next })));
             }
             if (sub === "ping") {

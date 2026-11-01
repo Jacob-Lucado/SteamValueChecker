@@ -79,7 +79,7 @@ const withCard = (spec, name, alt, embed) => {
 };
 
 export function createHandlers({ db, itad, publicUrl = null, getStatus = () => null, getAbout = () => null }) {
-    // ---------- /wishlist ----------
+    // ---------- /me wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");
         await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -98,8 +98,8 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             if (r.rateLimited) lines.push("IsThereAnyDeal asked the bot to slow down, so only part of the wishlist was added. Run the import again in a minute to add the rest.");
             if (res.skippedForLimit) lines.push(`Your list is full (200 games), so ${res.skippedForLimit} were skipped.`);
             lines.push("", `Alerts: **any sale**, delivered by **${deliveryText(db.getUser(i.user.id))}**.`);
-            lines.push("Use `/wishlist alert` to change when you get alerted, and `/wishlist view` to see prices. Run `/wishlist import` again any time to sync.");
-            if (user.delivery === "dm") lines.push("Make sure your DMs from this server are open, or ask an admin to set `/alertchannel`.");
+            lines.push("Use `/me wishlist alert` to change when you get alerted, and `/me wishlist view` to see prices. Run `/me wishlist import` again any time to sync.");
+            if (user.delivery === "dm") lines.push("Make sure your DMs from this server are open, or ask an admin to set `/manage alertchannel`.");
             await i.editReply(lines.join("\n"));
         } catch (err) {
             undo();
@@ -149,7 +149,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         try {
             const { rows, currency } = await viewRows(db, itad, user);
-            if (!rows.length) throw new UserError("Your wishlist is empty. Use `/wishlist import` or `/wishlist add`.");
+            if (!rows.length) throw new UserError("Your wishlist is empty. Use `/me wishlist import` or `/me wishlist add`.");
             const pages = Math.max(1, Math.ceil(rows.length / WISHLIST_PER_PAGE));
             const view = page => [wishlistEmbed(rows, page, currency)];
             const message = await i.editReply({ embeds: view(0), components: pages > 1 ? [pageButtons(0, pages)] : [] });
@@ -314,7 +314,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const mode = i.options.getString("mode", true);
                 if (mode === "channel" && !db.getGuild(user.guild_id)) {
                     return eph(i, i.inGuild() || user.guild_id
-                        ? "This server has no alert channel yet. Ask a server admin to run `/alertchannel set`, then try again."
+                        ? "This server has no alert channel yet. Ask a server admin to run `/manage alertchannel set`, then try again."
                         : "Channel delivery needs a server where the bot is installed and has an alert channel. Run this in that server, or keep alerts by DM.");
                 }
                 db.updateUser(user.discord_id, { delivery: mode });
@@ -413,7 +413,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { share: on ? 1 : 0 });
                 return eph(i, on
-                    ? "You are in. Your server may now see your name in group alerts (\"N members are watching…\") and on `/leaderboard`. Only your name, the number of games and your percent saved are shown. Turn this off any time."
+                    ? "You are in. Your server may now see your name in group alerts (\"N members are watching…\") and on `/server leaderboard`. Only your name, the number of games and your percent saved are shown. Turn this off any time."
                     : "You are out of group alerts and the leaderboard.");
             }
             case "history": {
@@ -422,7 +422,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         }
     }
 
-    // ---------- /alertchannel ----------
+    // ---------- /manage alertchannel ----------
     async function handleAlertChannel(i) {
         if (!i.inGuild()) return eph(i, "Use this command in a server.");
         if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return eph(i, "You need the Manage Server permission to use this.");
@@ -449,32 +449,32 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             case "clear":
                 return eph(i, db.clearGuildChannel(i.guildId) ? "Alert channel removed. Alerts will be DMs only." : "No alert channel was set.");
             case "feed": {
-                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/manage alertchannel set`.");
                 const on = i.options.getBoolean("enabled", true);
                 db.setFreeFeed(i.guildId, on);
                 return eph(i, on ? "Free game feed on. New free games (not DLC) are posted in the alert channel, once each." : "Free game feed off.");
             }
             case "hot": {
-                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/manage alertchannel set`.");
                 const n = i.options.getInteger("minimum", true);
                 if (n !== 0 && n < 30) return eph(i, "Pick 30 or more, or 0 to turn it off. Below 30 would post nearly every sale.");
                 db.setHotMin(i.guildId, n);
                 return eph(i, n ? `Hot deals on. Steam discounts of ${n}% or more are posted in the alert channel, each deal once.` : "Hot deals off.");
             }
             case "sales": {
-                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/manage alertchannel set`.");
                 const on = i.options.getBoolean("enabled", true);
                 db.setSaleFeed(i.guildId, on);
                 return eph(i, on ? "Sale posts on. The alert channel gets one post when a Steam sale or festival starts (including one that is already running)." : "Sale posts off.");
             }
             case "digest": {
-                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/manage alertchannel set`.");
                 const on = i.options.getBoolean("enabled", true);
                 db.setWeeklyDigest(i.guildId, on);
                 return eph(i, on ? "Weekly digest on. Fridays the alert channel gets cheap games that opted-in members watch (never who), free games and the week's server events." : "Weekly digest off.");
             }
             case "group": {
-                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/alertchannel set`.");
+                if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/manage alertchannel set`.");
                 const n = i.options.getInteger("minimum", true);
                 if (n === 1) return eph(i, "Use 2 or more, or 0 to turn it off.");
                 db.setGroupMin(i.guildId, n);
@@ -482,12 +482,12 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             }
             case "show": {
                 const g = db.getGuild(i.guildId);
-                return eph(i, g ? `Alert channel: <#${g.channel_id}>` : "No alert channel is set. Use `/alertchannel set`.");
+                return eph(i, g ? `Alert channel: <#${g.channel_id}>` : "No alert channel is set. Use `/manage alertchannel set`.");
             }
         }
     }
 
-    // ---------- /library ----------
+    // ---------- /me library ----------
     async function handleLibrary(i) {
         const user = db.ensureUser(i.user.id, i.guildId);
         const sub = i.options.getSubcommand();
@@ -518,14 +518,14 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                     `\`${token}\``,
                     "Open the Grabber panel on Fanatical, choose **Send to Steam Value Checker**, and paste it when asked.",
                     "To fill in **what you paid** for your Steam games, open your Steam purchase history (store.steampowered.com/account/history) and press **Send what I paid**. For games you activated with keys, use the licenses page (store.steampowered.com/account/licenses) to record their retail price.",
-                    "Making a new code replaces this one. `/library grabber action:Turn the link off` removes it."
+                    "Making a new code replaces this one. `/me library grabber action:Turn the link off` removes it."
                 ].join("\n"));
             }
             if (sub === "bundle") {
                 cooldown(i, "lib");
                 await i.deferReply({ flags: MessageFlags.Ephemeral });
                 const r = await addBundle(db, itad, i.user.id, { name: i.options.getString("name", true), paid: i.options.getNumber("paid", true), titles: i.options.getString("titles", true) });
-                return void await i.editReply(`Saved bundle **#${r.id}** with ${r.matched} games${r.newGames ? ` (${r.newGames} new in your library, paid split evenly)` : ""}.${r.notFound.length ? ` Not found: ${r.notFound.slice(0, 5).join(", ")}.` : ""} See it with \`/library bundles\`.`);
+                return void await i.editReply(`Saved bundle **#${r.id}** with ${r.matched} games${r.newGames ? ` (${r.newGames} new in your library, paid split evenly)` : ""}.${r.notFound.length ? ` Not found: ${r.notFound.slice(0, 5).join(", ")}.` : ""} See it with \`/me library bundles\`.`);
             }
             if (sub === "bundles") {
                 const rm = i.options.getInteger("remove");
@@ -548,12 +548,12 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             if (sub === "backlog") {
                 const view = await libraryView(db, itad, user, { snapshot: false });
-                if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
+                if (!view.rows.length) throw new UserError("Your library is empty. Use `/me library add` or `/me library import`.");
                 return void await i.editReply({ embeds: [backlogEmbed(view, playNext(view.rows))] });
             }
             if (sub === "trend") {
                 const view = await libraryView(db, itad, user);
-                if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
+                if (!view.rows.length) throw new UserError("Your library is empty. Use `/me library add` or `/me library import`.");
                 const tr = trendSummary(view.snapshots);
                 if (!tr) throw new UserError("A trend needs at least two days of data. I take a snapshot every day, so check back tomorrow.");
                 return void await i.editReply(withCard(trendSpec(tr, view.currency, view.totals.backlogGames), "trend.png", "Your library trend", trendEmbed(tr, view.currency, view.totals.backlogGames)));
@@ -575,14 +575,14 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 return void await i.editReply(lines.join("\n"));
             }
             const view = await libraryView(db, itad, user);
-            if (!view.rows.length) throw new UserError("Your library is empty. Use `/library add` or `/library import`.");
+            if (!view.rows.length) throw new UserError("Your library is empty. Use `/me library add` or `/me library import`.");
             return void await i.editReply({ embeds: [libraryEmbed(view, view.currency)] });
         } catch (err) {
             await failed(i, "library", err);
         }
     }
 
-    // ---------- /serverlist and /leaderboard ----------
+    // ---------- /server serverlist and /server leaderboard ----------
     const canManage = i => Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 
     /**
@@ -648,7 +648,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         catch (err) { await eph(i, err instanceof UserError ? err.message : "Something went wrong. Try again in a moment."); }
     }
 
-    // ---------- /freegames ----------
+    // ---------- /games freegames ----------
     const MAX_FREE_PLATFORMS = 6;
     async function handleFreeGames(i) {
         const store = (i.options.getString("store") ?? "").trim().toLowerCase();
@@ -664,7 +664,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "freegames", err); }
     }
 
-    /** Buttons and the store menu on the /freegames message. The whole state lives in the custom id, so it survives restarts. */
+    /** Buttons and the store menu on the /games freegames message. The whole state lives in the custom id, so it survives restarts. */
     async function handleFreeMenu(i) {
         try {
             let cat, store, page;
@@ -678,7 +678,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "freegames", err); }
     }
 
-    // ---------- /status ----------
+    // ---------- /bot status ----------
     async function handleStatus(i) {
         const st = getStatus();
         if (!st) return eph(i, "Status is not available right now.");
@@ -686,7 +686,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return i.reply({ ...withCard(statusSpec(snap, getAbout()), "status.png", "Bot status", statusEmbed(snap, getAbout(), publicUrl)), flags: MessageFlags.Ephemeral });
     }
 
-    // ---------- /serverstats ----------
+    // ---------- /server serverstats ----------
     async function handleServerStats(i) {
         try {
             await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -695,7 +695,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "serverstats", err); }
     }
 
-    // ---------- /friend ----------
+    // ---------- /me friend ----------
     async function handleFriend(i) {
         const sub = i.options.getSubcommand();
         db.ensureUser(i.user.id, i.guildId);
@@ -707,12 +707,12 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             if (sub === "remove") return eph(i, db.removeFriend(i.user.id, i.options.getString("name", true)) ? "Removed." : "No friend by that name.");
             if (sub === "list") {
                 const rows = friendRows(db, i.user.id);
-                if (!rows.length) return eph(i, "No friends yet. Add one with `/friend add`.");
+                if (!rows.length) return eph(i, "No friends yet. Add one with `/me friend add`.");
                 return i.reply({ flags: MessageFlags.Ephemeral, embeds: [{ color: 0xe91e63, title: "Your friends", description: rows.map(f => `• **${f.name}**${f.birthday ? ` 🎂 ${f.birthday}${f.daysToBirthday <= 30 ? ` (in ${f.daysToBirthday} day${f.daysToBirthday === 1 ? "" : "s"})` : ""}` : ""}${f.slug ? " · has a public page" : ""}`).join("\n") }] });
             }
             const f = db.getFriend(i.user.id, i.options.getString("name", true));
-            if (!f) return eph(i, "No friend by that name. See `/friend list`.");
-            if (!f.slug) return eph(i, `Add **${f.name}**'s public page first: \`/friend add name:${f.name} page:their-page-name\`.`);
+            if (!f) return eph(i, "No friend by that name. See `/me friend list`.");
+            if (!f.slug) return eph(i, `Add **${f.name}**'s public page first: \`/me friend add name:${f.name} page:their-page-name\`.`);
             cooldown(i, "view");
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const deals = await friendDeals(db, itad, f.slug, 8);
@@ -721,7 +721,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "friend", err); }
     }
 
-    // ---------- /publicpage ----------
+    // ---------- /me publicpage ----------
     async function handlePublicPage(i) {
         try {
             db.ensureUser(i.user.id, i.guildId);
@@ -736,7 +736,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "publicpage", err); }
     }
 
-    // ---------- /sales and /watch ----------
+    // ---------- /games sales and /games watch ----------
     async function handleSales(i) {
         return i.reply({ embeds: [salesEmbed(upcomingSales(Date.now()), { watching: db.countItems(i.user.id) || null })], flags: MessageFlags.Ephemeral });
     }
@@ -751,7 +751,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "watch", err); }
     }
 
-    // ---------- /mydata ----------
+    // ---------- /me mydata ----------
     async function handleMyData(i) {
         if (i.options.getSubcommand() === "export") {
             const json = exportJson(db, i.user.id);
@@ -811,7 +811,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         if (!db.sharingMembers(i.guildId).includes(friend.id)) return reply(`${friend.displayName ?? friend.username} has not opted in. They can turn it on with \`/alerts share\`.`);
         db.ensureUser(i.user.id, i.guildId);
         const r = compareLibraries(db, i.user.id, friend.id);
-        if (!r.a.games) return reply("Your library is empty. Use `/library add`, `/library import` or `/steam link` first.");
+        if (!r.a.games) return reply("Your library is empty. Use `/me library add`, `/me library import` or `/me steam link` first.");
         if (!r.b.games) return reply(`${friend.displayName ?? friend.username} has no games in their library yet.`);
         return i.reply({ ...withCard(compareSpec(r, "You", friend.displayName ?? friend.username), "compare.png", "Library comparison", compareEmbed(r, "You", friend.displayName ?? friend.username)), ...(pub ? {} : { flags: MessageFlags.Ephemeral }) });
     }

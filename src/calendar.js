@@ -73,7 +73,7 @@ export function eventEmbed(ev, { reminder = false } = {}) {
     return {
         color: 0x5865f2, title: `${reminder ? "⏰ Starting soon: " : "📅 "}${ev.title}`,
         description: [`<t:${ts}:F> (<t:${ts}:R>)`, ev.notes].filter(Boolean).join("\n\n"),
-        footer: { text: "Server event · /calendar view shows what is coming up" }
+        footer: { text: "Server event · /server calendar view shows what is coming up" }
     };
 }
 

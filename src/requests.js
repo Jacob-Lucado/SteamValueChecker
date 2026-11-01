@@ -1,4 +1,4 @@
-// Feature request rules shared by the /feature command and the dashboard.
+// Feature request rules shared by the /bot feature command and the dashboard.
 import { UserError } from "./errors.js";
 import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE, MAX_BODY } from "./requeststore.js";
 
@@ -18,10 +18,10 @@ export function submitRequest({ db, userId, userName, title, body, publish = nul
     return id;
 }
 
-/** The embed for /feature list. */
+/** The embed for /bot feature list. */
 export function requestListEmbed(rows, { status = null, base = null } = {}) {
     const icon = { open: "🗳️", planned: "📌", in_development: "🛠️", shipped: "🚀", rejected: "🚫", duplicate: "♻️", on_hold: "⏸️" };
     return { color: 0x5865f2, title: status ? `Feature requests: ${REQUEST_STATUSES[status]}` : "Feature requests",
-        description: (rows.length ? rows.map(r => `${icon[r.status] ?? "•"} **#${r.id}** ${r.title}\n└ ${REQUEST_STATUSES[r.status]} · ▲ ${r.votes}${r.voted ? " (you voted)" : ""}${r.note ? ` · ${r.note.slice(0, 80)}` : ""}`).join("\n") : "Nothing here yet. Be the first with `/feature request`.").slice(0, 4000),
-        footer: { text: "Vote with /feature vote id:<number>" + (base ? ` · ${base.replace(/^https?:\/\//, "")}/#/requests` : "") } };
+        description: (rows.length ? rows.map(r => `${icon[r.status] ?? "•"} **#${r.id}** ${r.title}\n└ ${REQUEST_STATUSES[r.status]} · ▲ ${r.votes}${r.voted ? " (you voted)" : ""}${r.note ? ` · ${r.note.slice(0, 80)}` : ""}`).join("\n") : "Nothing here yet. Be the first with `/bot feature request`.").slice(0, 4000),
+        footer: { text: "Vote with /bot feature vote id:<number>" + (base ? ` · ${base.replace(/^https?:\/\//, "")}/#/requests` : "") } };
 }

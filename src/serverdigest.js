@@ -35,5 +35,5 @@ export async function buildServerDigest({ db, itad, guildId, guildName = "this s
     const events = db.listCalEvents(guildId, now, now + 7 * 86400_000).slice(0, 5);
     if (events.length) fields.push({ name: "Coming up this week", value: events.map(e => `• **${e.title}** <t:${Math.floor(e.starts_at / 1000)}:F>`).join("\n") });
     if (!fields.length) return null;
-    return { color: 0x66c0f4, title: `This week in ${guildName}`, description: "Your Friday round-up from Steam Value Checker.", fields, footer: { text: "Turn this off with /alertchannel digest" } };
+    return { color: 0x66c0f4, title: `This week in ${guildName}`, description: "Your Friday round-up from Steam Value Checker.", fields, footer: { text: "Turn this off with /manage alertchannel digest" } };
 }

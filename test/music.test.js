@@ -112,13 +112,15 @@ function rig({ settings = {}, members = {}, tracks = null } = {}) {
     const source = {
         search: async q => (q.includes("nothing") ? [] : [T(1, { title: `Result for ${q}` })]),
         resolve: async url => (url.includes("/sets/") ? { kind: "playlist", title: "My Set", tracks: [T(1), T(2), T(3)] } : { kind: "track", title: "One", tracks: [T(1)] }),
+        radioProbe: async url => ({ url, title: "Test FM", artist: "Live radio", duration: null, thumb: null, live: true, radio: true }),
+        details: async t => ({ ...t, duration: 180, thumb: "https://i/x.jpg" }),
         stream: async (t, o) => { if (t.title === "Broken") throw new Error("no audio"); return { stream: {}, kill() { this.killed = true; }, seek: o?.seek ?? 0 }; }
     };
     const humans = { c1: 3 };
     const getGuild = gid => (gid === "g1" ? {
         id: "g1", voiceAdapterCreator: () => {}, memberInfo: u => members[u] ?? { roleIds: [], isManager: false },
         voiceChannelOf: u => (u === "nobody" ? null : { id: u === "other" ? "c2" : "c1", name: "Lounge", canJoin: u !== "noperm", canSpeak: true }),
-        humansIn: id => humans[id] ?? 0, channelName: () => "Lounge"
+        humansIn: id => humans[id] ?? 0, channelName: () => "Lounge", voiceChannelInfo: id => ({ id, name: "Auto", canJoin: true, canSpeak: true })
     } : null);
     const api = { sendMessage: async (ch, p) => { posts.push([ch, p]); return { id: "m" + posts.length }; }, editMessage: async (ch, id, p) => { edits.push([ch, id, p]); } };
     const timers = [];
@@ -325,4 +327,100 @@ test("a stream that dies partway through a song is resumed, not treated as the s
     // after a few drops in a row it gives up and moves on instead of looping forever
     for (let i = 0; i < 4; i++) { r.players[0].resource.playbackDuration = 60_000; r.players[0].emit("idle"); await new Promise(x => setImmediate(x)); }
     assert.equal(r.m.status("g1").current.title, "Track 2");
+});
+
+// ---------- radio, Auto DJ, requests ----------
+const flush = () => new Promise(x => setImmediate(x));
+const firePending = async (r, ms) => { const t = [...r.timers].reverse().find(x => x.ms === ms && !x.cleared); assert.ok(t, `a ${ms}ms timer`); t.fn(); await flush(); await flush(); };
+
+test("a live stream link is queued as a live track, and managers can switch streams off", async () => {
+    const r = rig();
+    const a = await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://radio.example.com/live.mp3" });
+    assert.equal(a.kind, "radio");
+    assert.equal(r.m.status("g1").current.live, true);
+    assert.equal(r.m.status("g1").live, true);
+    await assert.rejects(r.m.seek("g1", "u1", 30), /live stream/);
+    const off = rig({ settings: { radio: 0 } });
+    await assert.rejects(off.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://radio.example.com/live.mp3" }), /turned off/);
+});
+
+test("a live stream that drops is reopened instead of skipped", async () => {
+    const r = rig();
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://radio.example.com/live.mp3" });
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", tracks: [T(2)] });
+    r.players[0].emit("idle"); await flush();
+    assert.equal(r.m.status("g1").current.live, true);
+    assert.equal(r.log.filter(x => x[0] === "play").length, 2);
+});
+
+test("Auto DJ: when the queue runs dry it plays requests first, then its playlist, and stops when told to", async () => {
+    const r = rig({ settings: { autodj: 1, autodj_idle: 30 } });
+    r.db.setAutoPlaylist("g1", [T(7), T(8)], "https://soundcloud.com/a/sets/mix");
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", tracks: [T(1)] });
+    await r.m.submit("g1", "u2", { tracks: [T(5, { title: "Requested" })] });
+    r.players[0].resource.playbackDuration = 200_000; r.players[0].emit("idle"); await flush();
+    assert.equal(r.m.status("g1").current, null, "idle, waiting for the Auto DJ");
+    await firePending(r, 30_000);
+    assert.equal(r.m.status("g1").current.title, "Requested");
+    assert.equal(r.m.status("g1").current.requestedBy, "u2");
+    r.players[0].resource.playbackDuration = 200_000; r.players[0].emit("idle"); await flush();
+    await firePending(r, 1500);
+    const c = r.m.status("g1").current;
+    assert.equal(c.auto, true); assert.ok(["Track 7", "Track 8"].includes(c.title));
+    // a real request from someone replaces the filler song straight away
+    const q = await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", tracks: [T(3)] });
+    assert.equal(q.startedNow, true);
+    assert.equal(r.m.status("g1").current.title, "Track 3");
+    // stopping means silence, not another filler song
+    r.m.stop("g1", "u1"); await flush();
+    assert.equal(r.m.status("g1").current, null);
+});
+
+test("requests: need the Auto DJ on, are limited per person, and can be taken back", async () => {
+    const off = rig();
+    await assert.rejects(off.m.submit("g1", "u1", { tracks: [T(1)] }), /isn't turned on/);
+    const r = rig({ settings: { autodj: 1 } });
+    for (let n = 1; n <= 5; n++) await r.m.submit("g1", "u1", { tracks: [T(n)] });
+    await assert.rejects(r.m.submit("g1", "u1", { tracks: [T(9)] }), /already have 5/);
+    const list = r.m.listSubmissions("g1");
+    assert.equal(list.length, 5);
+    r.db.setMusicSettings("g1", { dj_role_id: "djrole" });
+    assert.throws(() => r.m.removeSubmission("g1", "u2", list[0].id), /Only DJs and moderators/);
+    r.db.setMusicSettings("g1", { dj_role_id: null });
+    r.m.removeSubmission("g1", "u1", list[0].id);
+    assert.equal(r.m.listSubmissions("g1").length, 4);
+    const closed = rig({ settings: { autodj: 1, autodj_submit: 0 } });
+    await assert.rejects(closed.m.submit("g1", "u1", { tracks: [T(1)] }), /isn't taking song requests/);
+});
+
+test("Auto DJ channel: the bot joins by itself when someone is in it and there is something to play", async () => {
+    const r = rig({ settings: { autodj: 1, autodj_channel_id: "c1" } });
+    assert.equal(await r.m.autoJoin("g1"), false, "nothing to play yet");
+    r.db.setAutoPlaylist("g1", [T(7)], "x");
+    assert.equal(await r.m.autoJoin("g1"), true);
+    assert.deepEqual(r.log.filter(x => x[0] === "join"), [["join", "c1"]]);
+    assert.equal(r.m.status("g1").current.auto, true);
+});
+
+test("moderators get DJ powers, and each role shows as its own tier", async () => {
+    const { tierOf } = await import("../src/music.js");
+    const s = { dj_role_id: "dj" };
+    assert.equal(isDj(s, { roleIds: [], isModerator: true }), true);
+    assert.equal(isDj(s, { roleIds: [] }), false);
+    assert.deepEqual(["manager", "moderator", "dj", "listener"], [tierOf(s, { isManager: true }), tierOf(s, { isModerator: true }), tierOf(s, { roleIds: ["dj"] }), tierOf(s, { roleIds: [] })]);
+    const r = rig({ settings: { dj_role_id: "djrole" } });
+    r.db.setCommunity("g1", { mod_role_id: "modrole" });
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", tracks: [T(1), T(2)] });
+    assert.throws(() => r.m.pause("g1", "u1"), /DJ|role/);
+});
+
+test("the station list only shows stations that answer, and remembers the answer for a while", async () => {
+    const { createStations } = await import("../src/stations.js");
+    let calls = 0, clock = 0;
+    const list = [{ name: "Up", genre: "Rock", url: "https://a.example/up" }, { name: "Down", genre: "Pop", url: "https://a.example/down" }];
+    const st = createStations({ list, now: () => clock, probe: async url => { calls++; if (url.endsWith("down")) throw new Error("off air"); return { url, title: "x", duration: null, live: true, radio: true }; } });
+    const a = await st.working();
+    assert.deepEqual(a.map(t => t.title), ["Up"]); assert.equal(a[0].artist, "Live radio · Rock"); assert.equal(a[0].live, true);
+    await st.working(); assert.equal(calls, 2, "cached");
+    clock += 11 * 60_000; await st.working(); assert.equal(calls, 4, "checked again after ten minutes");
 });

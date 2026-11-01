@@ -26,7 +26,7 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
             host: env.DASHBOARD_HOST || "127.0.0.1"
         } : null,
         ownerId: env.OWNER_DISCORD_ID || null,
-        // Shown on /about and the dashboard. Set CREATOR_NAME / CREATOR_X_URL to change them.
+        // Shown on /bot about and the dashboard. Set CREATOR_NAME / CREATOR_X_URL to change them.
         creator: { name: env.CREATOR_NAME || "Jacob Lucado", url: env.CREATOR_X_URL || "https://x.com/twit_user69" },
         // Giveaways store prize keys, so they stay off until there is a secret to encrypt them with.
         keySecret: env.KEY_ENCRYPTION_SECRET || null,

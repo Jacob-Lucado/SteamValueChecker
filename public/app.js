@@ -296,7 +296,7 @@
           feature("", "Wishlist alerts", "Bring in your public Steam wishlist and choose what counts as worth a ping: any sale, a certain percent off, a price you set, or an all-time low."),
           feature("", "Game codes", "SHiFT codes for Borderlands and other limited-time game codes, posted once each with the right game and an end date, then greyed out when they run out."),
           feature("", "Music", "Play SoundCloud songs and whole playlists in a voice channel with /play. Queue, skip votes, loop and a now-playing card that updates live, with a full player on the dashboard."),
-          feature("", "Free game alerts", "Get a message when a game goes free on Steam, Epic, GOG and others, with a button to grab it. /freegames shows what's free at the moment."),
+          feature("", "Free game alerts", "Get a message when a game goes free on Steam, Epic, GOG and others, with a button to grab it. /games freegames shows what's free at the moment."),
           feature("", "Giveaways", "Hand out game keys, Nitro, gift cards or whatever else. Winners hit a button to claim, tell the bot if it worked, and a vouch gets posted for you."),
           feature("", "Server tools", "A wishlist the whole server shares and votes on, a savings leaderboard for people who opt in, and a ping when a few members are all waiting on the same deal."),
           feature("", "Friends and gifts", "Save your friends' birthdays and get a nudge a week before, along with whatever's on sale from their wishlist. Visitors can claim a game as a gift so two people don't buy the same one."),
@@ -305,7 +305,7 @@
           feature("", "Steam library", "Sign in with Steam to see your hours, what you never touched, your achievements and a suggestion for what to play next. It can also pull in what you paid from your purchase history and mark the gifts."),
           feature("", "Hot deals and sale starts", "Your server gets a post when a big deal shows up or a Steam sale kicks off. You pick the minimum discount."),
           feature("", "Bundle check", "Checks a bundle against what the games cost today, and ignores the ones you already own."),
-          feature("", "Support", "Something broken? Use /bug or open a ticket. Replies show up in the same thread on Discord and on the dashboard."),
+          feature("", "Support", "Something broken? Use /bot bug or open a ticket. Replies show up in the same thread on Discord and on the dashboard."),
           feature("", "Dashboard", "Everything the commands do, in your browser, plus charts, price history and a place to run your giveaways."))),
 
       h("section", { class: "lp-section" },
@@ -335,7 +335,7 @@
         h("div", { class: "lp-grid three" },
           feature("", "No passwords", "The bot never asks for a Steam, Fanatical or store password, and it ignores anything in chat that looks like a key."),
           feature("", "Limited sharing", "Game titles go to IsThereAnyDeal so it can look up prices. That's the only thing that leaves the bot."),
-          feature("", "Export or delete", "Run /mydata or use the dashboard to download or wipe everything stored about you."))),
+          feature("", "Export or delete", "Run /me mydata or use the dashboard to download or wipe everything stored about you."))),
 
       h("section", { class: "lp-final" },
         h("h2", { text: "Add it to your server" }),
@@ -784,7 +784,7 @@
         h("h3", { text: "What to tell me about" }),
         h("label", { class: "check" }, bundles, "A wishlist game is in a bundle or being given away"),
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
-        h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /freegames and the Free games page show)"),
+        h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
         codeRows.box),
       h("div", { class: "panel" },
         h("h3", { text: "Quiet hours and weekly digest" }),
@@ -968,7 +968,7 @@
       c.addEventListener("change", async () => { try { const r = await api("/api/settings", { [key]: c.checked }); state.me.settings = r.settings; toast("Saved.", "ok"); if (key === "free_dlc") loadFree(panel); } catch (e) { toast(e.message, "error"); c.checked = !c.checked; } });
       return h("label", { class: "check" }, c, " ", h("b", { text: label }), " ", h("span", { class: "muted small", text: hint })); };
     app.replaceChildren(pageHead("Free games", "Everything that is free to claim right now on Steam, Epic, GOG and more. Claiming happens on the store's site."),
-      h("div", { class: "panel" }, sw("free", "Tell me when a game goes free", "(sent by DM or to your alert channel)"), h("p"), sw("free_dlc", "Show free DLC", "(also hides it from /freegames)")),
+      h("div", { class: "panel" }, sw("free", "Tell me when a game goes free", "(sent by DM or to your alert channel)"), h("p"), sw("free_dlc", "Show free DLC", "(also hides it from /games freegames)")),
       soonPanel(), panel);
     loadFree(panel);
   }
@@ -1562,7 +1562,7 @@
         nextBtn.addEventListener("click", () => busy(nextBtn, pickNext));
 
         out.className = "";
-        const valueImageBtn = h("button", { class: "btn gray small", type: "button", text: "Save as image", title: "The same picture /steam value posts in Discord", onclick: e => busy(e.currentTarget, async () => {
+        const valueImageBtn = h("button", { class: "btn gray small", type: "button", text: "Save as image", title: "The same picture /me steam value posts in Discord", onclick: e => busy(e.currentTarget, async () => {
           const res = await fetch("/api/steam/value.png", { credentials: "same-origin" });
           if (!res.ok) { let m = "Could not draw the picture."; try { m = (await res.json()).error || m; } catch { /* keep the default */ } throw new Error(m); }
           const url = URL.createObjectURL(await res.blob()), a = h("a", { href: url, download: "steam-account-value.png" }); a.click(); setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -1727,7 +1727,7 @@
       window.postMessage({ svc: "page", type: "redeem", id: jobId, items: keys }, location.origin);
     }
     go.addEventListener("click", () => start(keysIn(), false));
-    // A batch queued with /redeem in Discord: shown here, started only when the member presses Run.
+    // A batch queued with /games redeem in Discord: shown here, started only when the member presses Run.
     async function checkQueue() {
       if (running || queued) return;
       try {
@@ -2212,7 +2212,7 @@
       if (bugData.newCount && state.me) { api("/api/admin/bugs/seen", {}).then(() => { state.me.bugsNew = 0; bugData.newCount = 0; renderChrome(); }).catch(() => {}); }
       const ago = t => { const m = Math.max(1, Math.round((Date.now() - t) / 60000)); return m < 60 ? m + " min ago" : m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago"; };
       return [h("div", { class: "panel" }, h("h3", { text: `Bug reports (${bugData.open} open)` }),
-        h("p", { class: "muted small", text: "Sent by members with /bug, /support open (type: bug) or the Support page. Open one to read the thread and reply." }),
+        h("p", { class: "muted small", text: "Sent by members with /bot bug, /bot support open (type: bug) or the Support page. Open one to read the thread and reply." }),
         list.length ? h("div", { class: "scroll-y tall" }, list.map(b => h("div", { class: "bug-card" + (newOnes.has(b.id) ? " new" : "") },
           h("div", { class: "row" }, h("strong", { text: `#${b.id} ${b.subject}` }), newOnes.has(b.id) ? h("span", { class: "badge-count", text: "NEW" }) : null, h("span", { class: "chip dim", text: b.status })),
           h("div", { class: "muted small", text: `${b.user_name || b.user_id} · ${ago(b.created_at)}${b.replies ? " · " + b.replies + " repl" + (b.replies === 1 ? "y" : "ies") : ""}` }),
@@ -2370,7 +2370,7 @@
           await refresh();
         }));
         return h("div", { class: "panel" }, h("h3", { text: "Advertise FanaticalGrabber" }),
-          h("p", { class: "muted small", text: "A message from you (marked as from the bot developer) that lists the extension's features with example pictures, with Get it, Open the dashboard and No more promos buttons. Only people the bot already knows are messaged, and anyone who presses No more promos is skipped from then on. Always send yourself the preview first. /grabberad does the same in Discord." }),
+          h("p", { class: "muted small", text: "A message from you (marked as from the bot developer) that lists the extension's features with example pictures, with Get it, Open the dashboard and No more promos buttons. Only people the bot already knows are messaged, and anyone who presses No more promos is skipped from then on. Always send yourself the preview first. /bot grabberad does the same in Discord." }),
           h("div", { class: "grid three" }, ["hero", "cart", "paid"].map(n => h("img", { src: `/grabber-ad-${n}.png`, alt: "", loading: "lazy", width: "300", height: "158", class: "ad-thumb" }))),
           h("div", { class: "row" }, field("Send to", pWho), field("Type SEND to confirm", pConfirm)), h("div", { class: "row" }, pBtn));
       };
@@ -2525,12 +2525,12 @@
         box.className = "";
         box.replaceChildren(
           c.membersIntent ? null : h("div", { class: "notice warn", text: "Server Members Intent is off for the bot, so welcome messages and invite tracking are paused everywhere. Turn it on in the Discord Developer Portal (Bot, Privileged Gateway Intents) and restart." }),
-          h("div", { class: "grid four" }, tile("Servers using community", t.servers, `${t.built} built with /community setup`), tile("Welcome on", t.welcomeOn, "servers"), tile("XP on", t.xpOn, `${n0(t.xpMembers)} members earning`), tile("Total XP earned", n0(t.xpTotal)),
+          h("div", { class: "grid four" }, tile("Servers using community", t.servers, `${t.built} built with /manage community setup`), tile("Welcome on", t.welcomeOn, "servers"), tile("XP on", t.xpOn, `${n0(t.xpMembers)} members earning`), tile("Total XP earned", n0(t.xpTotal)),
             tile("Joins tracked", n0(t.joins), `${n0(t.referred)} through an invite`), tile("Personal invite links", n0(t.inviteLinks)), tile("Level rewards set", n0(t.levelRoles), `${n0(t.rewards)} referral rewards`), tile("Role picker roles", n0(t.selfRoles)), tile("Moderation cases", n0(t.modCases), `${t.modServers} servers · ${n0(t.activeWarnings)} active warnings`)),
           h("div", { class: "panel" }, h("h3", { text: "Feature use" }),
-            table(["What", "Times", "Last used"], [row("Server built automatically (fresh server)", "setup_auto"), row("Server built with /community setup", "setup_manual"), row("Server built from the dashboard", "dash_setup"), row("Channels created", "channels_created"), row("Welcome messages posted", "welcomes"), row("Welcome DMs sent", "welcome_dms"), row("Welcome DMs that could not be delivered", "welcome_dm_failed"),
+            table(["What", "Times", "Last used"], [row("Server built automatically (fresh server)", "setup_auto"), row("Server built with /manage community setup", "setup_manual"), row("Server built from the dashboard", "dash_setup"), row("Channels created", "channels_created"), row("Welcome messages posted", "welcomes"), row("Welcome DMs sent", "welcome_dms"), row("Welcome DMs that could not be delivered", "welcome_dm_failed"),
               row("Joins tracked", "joins_tracked"), row("Referrals credited", "referrals"), row("Invite links made", "invite_links"), row("Level-ups", "level_ups"), row("Roles picked from the panel", "role_picks"), row("Emoji added", "emoji_added"), row("Emoji added from the dashboard", "dash_emoji"), row("Emoji images uploaded on the dashboard", "dash_emoji_upload"), row("Steam Verified roles given", "steam_verified_roles"),
-              row("/rank used", "cmd:rank"), row("/levels used", "cmd:levels"), row("/invites me used", "cmd:invites/me"), row("/invites top used", "cmd:invites/top"), row("/invites link used", "cmd:invites/link"), row("/emoji import used", "cmd:emoji/import"), row("/emoji list used", "cmd:emoji/list"), row("/community used", "cmd:community/status"),
+              row("/server rank used", "cmd:rank"), row("/server levels used", "cmd:levels"), row("/server invites me used", "cmd:invites/me"), row("/server invites top used", "cmd:invites/top"), row("/server invites link used", "cmd:invites/link"), row("/manage emoji import used", "cmd:emoji/import"), row("/manage emoji list used", "cmd:emoji/list"), row("/manage community used", "cmd:community/status"),
               row("Warnings", "mod_warn"), row("Timeouts", "mod_timeout"), row("Timeouts lifted", "mod_untimeout"), row("Kicks", "mod_kick"), row("Bans", "mod_ban"), row("Unbans", "mod_unban"), row("Message cleanups", "mod_purge"), row("Messages deleted", "mod_messages_cleared"), row("Warnings cleared", "mod_warnings_cleared"), row("Moderation done on the dashboard", "dash_mod"), row("/mod warn used", "cmd:mod/warn"), row("/mod timeout used", "cmd:mod/timeout"), row("/mod kick used", "cmd:mod/kick"), row("/mod ban used", "cmd:mod/ban"), row("/mod purge used", "cmd:mod/purge"), row("/mod cases used", "cmd:mod/cases")])),
           h("div", { class: "panel" }, h("h3", { text: "Cross-server giveaways" }),
             h("div", { class: "grid four" }, tile("Cross-server giveaways", g.crossServer), tile("Hosted by a partner", g.partner), tile("With entry steps", g.withSteps), tile("Entries", n0(g.crossEntries))),
@@ -2542,7 +2542,19 @@
     };
 
     const requestsTab = () => { const box = h("div", { class: "muted", text: "Loading…" }); requestList(box, { admin: true }).then(() => { box.className = ""; }); return [box]; };
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    const musicTab = () => {
+      const box = h("div", { class: "muted", text: "Loading…" });
+      const load = () => api("/api/admin/music").then(r => {
+        box.className = "";
+        const force = (gid, action, b) => busy(b, async () => { await api("/api/admin/music", { guild_id: gid, action }); toast(action === "leave" ? "Left." : "Stopped.", "ok"); await load(); });
+        const rows = r.sessions.map(x => { const st = h("button", { class: "btn gray small", type: "button", text: "Stop" }), lv = h("button", { class: "btn red small", type: "button", text: "Leave" }); st.addEventListener("click", () => force(x.guildId, "stop", st)); lv.addEventListener("click", () => force(x.guildId, "leave", lv));
+          return h("div", { class: "cal-row" }, h("span", { text: x.track?.live ? "📻" : "🎵" }), h("div", {}, h("b", { text: x.guildName }), h("div", { class: "muted small", text: [x.channelName ? "in " + x.channelName : "", x.track ? x.track.title + (x.track.live ? " (live)" : x.track.auto ? " (Auto DJ)" : "") : "idle", `${x.queue} queued`, `${x.listeners} listening`, x.autoDj ? "Auto DJ on" : ""].filter(Boolean).join(" · ") })), h("div", { class: "row" }, st, lv)); });
+        box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: `Voice sessions (${r.sessions.length})` }), h("p", { class: "muted small", text: "Every server where the bot is in a voice channel right now. Stop clears the queue and the Auto DJ stays quiet until someone adds a song; Leave disconnects." }), r.sessions.length ? h("div", { class: "scroll-y tall" }, ...rows) : h("p", { class: "muted", text: "The bot isn't in any voice channel." })));
+      }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
+      load();
+      return [box];
+    };
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["music", "Music", musicTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
     const body = h("div");
@@ -2807,7 +2819,7 @@
   }
 
   // ---------- help ----------
-  // The About page: the same numbers as the /about command in Discord.
+  // The About page: the same numbers as the /bot about command in Discord.
   let statusTimer = 0;
   async function statusView() {
     clearInterval(statusTimer);
@@ -3010,7 +3022,7 @@
     const save = h("button", { class: "btn blue", text: "Save", onclick: () => busy(save, async () => { const r = await api("/api/tickets/setup", { guild_id: sel.value, channel_id: ch.value, staff_role_id: role.value }); Object.assign(cur(), r); toast("Saved."); }) });
     const add = h("button", { class: "btn gray", text: "Add canned reply", onclick: () => busy(add, async () => { const r = await api("/api/tickets/canned", { guild_id: sel.value, title: cTitle.value, body: cBody.value }); cur().canned = r.canned; cTitle.value = ""; cBody.value = ""; paint(); }) });
     return h("div", { class: "panel" }, h("h3", { text: "Ticket settings" }),
-      h("p", { class: "muted small", text: "With a channel set, new tickets are posted there with Reply, Assign and Resolve buttons. Without one they go to the bot owner. Same as /support setup." }),
+      h("p", { class: "muted small", text: "With a channel set, new tickets are posted there with Reply, Assign and Resolve buttons. Without one they go to the bot owner. Same as /bot support setup." }),
       field("Queue", sel), h("div", { class: "row" }, field("Channel ID", ch), field("Staff role ID", role)), save,
       h("h4", { text: "Canned replies" }), cannedBox, h("div", { class: "row" }, field("Title", cTitle)), field("Text", cBody), add);
   }
@@ -3120,121 +3132,194 @@
   // ---------- music ----------
   async function musicView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Music", "Play SoundCloud in a voice channel. Join one in your server, then add songs or whole playlists here or with /play."), holder);
+    app.replaceChildren(pageHead("Music", "Play SoundCloud songs, playlists and live radio in a voice channel. Join one in your server, then add music here or with /play."), holder);
     const fmt = sec => { sec = Math.max(0, Math.floor(sec || 0)); const hh = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return (hh ? hh + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+    const toSeconds = text => { const t = String(text).trim().toLowerCase(); if (/^\d+$/.test(t)) return Number(t); const m = t.match(/^(?:(\d+):)?(\d+):(\d{1,2})$/) || t.match(/^()(\d+):(\d{1,2})$/); if (m) return Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]); return NaN; };
+    const TIERS = { manager: ["Server manager", "You can change every music setting and control the player."], moderator: ["Moderator", "You can control the player and take down any request."], dj: ["DJ", "You can control the player."], listener: ["Listener", "You can add songs and vote to skip. Only DJs, moderators and managers use the other controls when this server has a DJ role."] };
     let list;
     try { list = (await api("/api/music")).guilds; } catch (e) { return holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     if (!list.length) return holder.replaceChildren(h("div", { class: "empty", text: "I don't share a server with you yet. Add the bot to a server, then come back." }));
     let saved = ""; try { saved = localStorage.getItem("svc_music_guild") || ""; } catch { /* storage blocked */ }
     const pick = h("select", { "aria-label": "Server" }, ...list.map(g => h("option", { value: g.id, text: g.name + (g.active ? "  ·  playing" : ""), selected: g.id === saved })));
     const body = h("div");
-    let timer = 0, tick = 0, cur = null;
+    let timer = 0, tick = 0, built = false, cur = null;
     const stop = () => { clearTimeout(timer); clearInterval(tick); };
     const alive = () => currentView() === "music" && document.body.contains(body);
+    const syncers = []; // little functions that re-check what the person is allowed to do after every refresh
+    const typing = box => box && box.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
 
-    async function load(first) {
-      if (first) body.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+    async function load(rebuild) {
+      if (rebuild && !built) body.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
       let d;
       try { d = await api("/api/music?guild=" + encodeURIComponent(pick.value)); } catch (e) { return body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-      cur = d; paint(d);
-      clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); }, 5000);
+      cur = d;
+      if (rebuild || !built) { built = true; build(d); } else update(d);
+      clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); }, 3000);
     }
-    pick.addEventListener("change", () => { try { localStorage.setItem("svc_music_guild", pick.value); } catch { /* fine */ } stop(); load(true); });
+    pick.addEventListener("change", () => { try { localStorage.setItem("svc_music_guild", pick.value); } catch { /* fine */ } stop(); built = false; load(true); });
 
+    const gid = () => pick.value;
     const act = (label, action, extra = {}, cls = "gray") => {
       const b = h("button", { class: "btn small " + cls, type: "button", text: label });
       b.addEventListener("click", () => busy(b, async () => {
-        const r = await api("/api/music/control", { guild_id: pick.value, action, ...extra });
+        const r = await api("/api/music/control", { guild_id: gid(), action, ...extra });
         if (r.result && r.result.skipped === false) toast(`Vote to skip: ${r.result.votes}/${r.result.need}`, "ok");
         await load(false);
       }));
       return b;
     };
+    const inChannel = a => a.present && a.enabled && a.inVoice && a.sameChannel;
 
-    function paint(d) {
-      clearInterval(tick);
-      const st = d.status, a = d.access, t = st.current;
-      const can = a.present && a.enabled && a.inVoice && a.sameChannel;
-      const note = !a.enabled ? "Music is turned off in this server." : !a.inVoice ? "Join a voice channel in this server to add songs or use the controls." : !a.sameChannel ? "I'm playing in another voice channel. Join it to use the controls." : `You're in ${a.voiceName}.`;
-      const dj = !a.dj ? h("p", { class: "muted small", text: "This server uses a DJ role, so only DJs can pause, shuffle or change the volume. You can still add songs and vote to skip." }) : "";
-
-      // now playing
+    // ----- parts that refresh every few seconds -----
+    const npBox = h("div", { class: "panel" }), queueBox = h("div", { class: "panel" }), reqBox = h("div", { class: "panel" });
+    function paintNow(d) {
+      const st = d.status, a = d.access, t = st.current, can = inChannel(a);
       const bar = h("div", { class: "bar" }), fill = h("div", { class: "fill" }); bar.append(fill);
       const pos = h("span", { class: "muted small" });
-      const draw = () => { if (!t) return; const p = st.paused ? st.position : st.position + (Date.now() - d._at) / 1000; const q = Math.min(p, t.duration || p); fill.style.width = t.duration ? Math.min(100, (q / t.duration) * 100) + "%" : "0%"; pos.textContent = t.duration ? `${fmt(q)} / ${fmt(t.duration)}` : fmt(q); };
-      d._at = Date.now(); draw(); if (t && !st.paused) tick = setInterval(() => { if (alive()) draw(); }, 1000);
+      const stamp = Date.now();
+      const draw = () => { if (!t || t.live) return; const p = st.paused ? st.position : st.position + (Date.now() - stamp) / 1000; const q = Math.min(p, t.duration || p); fill.style.width = t.duration ? Math.min(100, (q / t.duration) * 100) + "%" : "0%"; pos.textContent = t.duration ? `${fmt(q)} / ${fmt(t.duration)}` : fmt(q); };
+      clearInterval(tick); draw(); if (t && !t.live && !st.paused) tick = setInterval(() => { if (alive()) draw(); }, 1000);
       const vol = h("input", { type: "range", min: "1", max: "100", value: String(st.volume), "aria-label": "Volume", disabled: !can || !t || !a.dj });
-      vol.addEventListener("change", () => api("/api/music/control", { guild_id: pick.value, action: "volume", value: Number(vol.value) }).then(() => load(false)).catch(e => toast(e.message, "error")));
+      vol.addEventListener("change", () => api("/api/music/control", { guild_id: gid(), action: "volume", value: Number(vol.value) }).then(() => load(false)).catch(e => toast(e.message, "error")));
       const loopSel = select([["off", "Loop: off"], ["track", "Loop: this song"], ["queue", "Loop: whole queue"]], st.loop);
       loopSel.disabled = !can || !t || !a.dj;
-      loopSel.addEventListener("change", () => api("/api/music/control", { guild_id: pick.value, action: "loop", value: loopSel.value }).then(() => load(false)).catch(e => toast(e.message, "error")));
+      loopSel.addEventListener("change", () => api("/api/music/control", { guild_id: gid(), action: "loop", value: loopSel.value }).then(() => load(false)).catch(e => toast(e.message, "error")));
       const lock = b => { if (!can || !t) b.disabled = true; return b; };
-      const np = h("div", { class: "panel" }, h("h3", { text: "Now playing" }),
+      const seekIn = h("input", { type: "text", placeholder: "1:30", size: "6", "aria-label": "Jump to a time", disabled: !can || !t || t.live || !a.dj });
+      const seekGo = h("button", { class: "btn gray small", type: "button", text: "Jump", disabled: !can || !t || t.live || !a.dj });
+      seekGo.addEventListener("click", () => { const n = toSeconds(seekIn.value); if (!Number.isFinite(n)) return toast("Type a time like 1:30.", "error"); busy(seekGo, async () => { await api("/api/music/control", { guild_id: gid(), action: "seek", value: n }); await load(false); }); });
+      const sub = [t?.artist, st.paused ? "paused" : "playing", st.channelName ? "in " + st.channelName : ""].filter(Boolean).join(" · ");
+      const tag = t?.live ? h("span", { class: "chip bad", text: "● LIVE" }) : t?.auto ? h("span", { class: "chip", text: "Auto DJ" }) : t?.submitted ? h("span", { class: "chip ok", text: "Member request" }) : "";
+      const role = TIERS[a.tier] ?? TIERS.listener;
+      const dj = !a.dj ? h("p", { class: "muted small", text: "This server uses a DJ role, so only DJs, moderators and managers can pause, shuffle or change the volume. You can still add songs and vote to skip." }) : "";
+      const note = !a.enabled ? "Music is turned off in this server." : !a.inVoice ? "Join a voice channel in this server to add songs or use the controls." : !a.sameChannel ? "I'm playing in another voice channel. Join it to use the controls." : `You're in ${a.voiceName}.`;
+      npBox.replaceChildren(h("h3", { text: "Now playing" }),
         t ? h("div", { class: "music-now" },
-          t.thumb ? h("img", { src: t.thumb, alt: "", width: "96", height: "96", referrerpolicy: "no-referrer" }) : h("span", { class: "noimg" }),
-          h("div", { class: "music-meta" }, h("div", {}, h("a", { href: t.url, target: "_blank", rel: "noopener noreferrer", text: t.title + " ↗" })), h("div", { class: "muted small", text: [t.artist, st.paused ? "paused" : "playing", st.channelName ? "in " + st.channelName : ""].filter(Boolean).join(" · ") }), bar, pos))
-          : h("p", { class: "muted", text: st.active ? "The queue is empty. Add something below." : "Nothing is playing." }),
-        h("div", { class: "row" }, lock(act("⏮", "previous")), lock(act(st.paused ? "▶ Resume" : "⏸ Pause", st.paused ? "resume" : "pause", {}, st.paused ? "green" : "blue")), lock(act("⏭ Skip", "skip")), lock(act("⏹ Stop", "stop", {}, "red")),
-          lock(act("🔀 Shuffle", "shuffle")), lock(act("Leave", "leave"))),
-        h("div", { class: "row" }, field("Volume " + st.volume + "%", vol), field("Loop", loopSel)),
-        h("p", { class: "muted small", text: note }), dj);
+          t.thumb ? h("img", { src: t.thumb, alt: "", width: "96", height: "96", referrerpolicy: "no-referrer" }) : h("span", { class: "noimg", text: t.live ? "📻" : "" }),
+          h("div", { class: "music-meta" }, h("div", {}, t.live ? h("span", { text: t.title }) : h("a", { href: t.url, target: "_blank", rel: "noopener noreferrer", text: t.title + " ↗" }), " ", tag), h("div", { class: "muted small", text: sub }), t.live ? h("div", { class: "muted small", text: "Live stream, no end" }) : bar, t.live ? "" : pos))
+          : h("p", { class: "muted", text: st.active ? (st.auto.on ? "The queue is empty. The Auto DJ will start in a moment." : "The queue is empty. Add something below.") : "Nothing is playing." }),
+        h("div", { class: "row" }, lock(act("⏮", "previous")), lock(act(st.paused ? "▶ Resume" : "⏸ Pause", st.paused ? "resume" : "pause", {}, st.paused ? "green" : "blue")), lock(act("⏭ Skip", "skip")), lock(act("⏹ Stop", "stop", {}, "red")), lock(act("🔀 Shuffle", "shuffle")), lock(act("Leave", "leave"))),
+        h("div", { class: "row" }, field("Volume " + st.volume + "%", vol), field("Loop", loopSel), field("Jump to", h("div", { class: "row" }, seekIn, seekGo))),
+        h("p", { class: "muted small", text: note }), h("p", { class: "muted small" }, h("b", { text: role[0] + ": " }), role[1]), dj);
+    }
+    function paintQueue(d) {
+      const st = d.status, can = inChannel(d.access);
+      const rows = st.next.map((x, i) => h("div", { class: "cal-row" }, h("span", { class: "muted", text: String(i + 1) }),
+        h("div", {}, x.live ? h("span", { text: x.title }) : h("a", { href: x.url, target: "_blank", rel: "noopener noreferrer", text: x.title }), h("div", { class: "muted small", text: [x.artist, x.live ? "live" : x.duration ? fmt(x.duration) : ""].filter(Boolean).join(" · ") })),
+        h("div", { class: "row" }, ...(can ? [act("⏭", "skipto", { n: i + 1 }), ...(i > 0 ? [act("▲", "move", { from: i + 1, to: i })] : []), act("✕", "remove", { n: i + 1 }, "red")] : []))));
+      queueBox.replaceChildren(h("h3", { text: `Queue (${st.total} song${st.total === 1 ? "" : "s"}${st.totalSeconds ? " · " + fmt(st.totalSeconds) : ""})` }),
+        rows.length ? h("div", { class: "scroll-y tall" }, ...rows) : h("p", { class: "muted", text: "Nothing waiting." }),
+        rows.length && can && d.access.dj ? h("div", { class: "row" }, act("Clear the queue", "clear", {}, "red")) : "");
+    }
+    function paintReqs(d) {
+      const s = d.settings, a = d.access, subs = d.submissions;
+      reqBox.style.display = s.autodj ? "" : "none";
+      if (!s.autodj) return;
+      if (typing(reqBox)) return;
+      const q = h("input", { type: "text", placeholder: "SoundCloud song or playlist link, or words to search", maxlength: "300", "aria-label": "Request a song" });
+      const go = h("button", { class: "btn green", type: "button", text: "Request" }), find = h("button", { class: "btn blue", type: "button", text: "Search" });
+      const results = h("div");
+      go.disabled = find.disabled = !(a.enabled && s.autodj_submit);
+      const send = (extra = {}) => api("/api/music/submit", { guild_id: gid(), query: q.value, ...extra }).then(r => { toast(r.added > 1 ? `Requested ${r.added} songs.` : "Requested. It plays before the Auto DJ's own songs.", "ok"); q.value = ""; results.replaceChildren(); return load(false); });
+      go.addEventListener("click", () => busy(go, () => send()));
+      q.addEventListener("keydown", e => { if (e.key === "Enter" && !go.disabled) go.click(); });
+      find.addEventListener("click", () => busy(find, async () => {
+        const r = await api("/api/music/search?guild=" + encodeURIComponent(gid()) + "&q=" + encodeURIComponent(q.value));
+        results.replaceChildren(r.results.length ? h("div", { class: "cards" }, ...r.results.map(x => { const b = h("button", { class: "btn green small", type: "button", text: "Request" }); b.addEventListener("click", () => busy(b, () => send({ query: "", tracks: [x] }))); return h("div", { class: "note-game" }, x.thumb ? h("img", { src: x.thumb, alt: "", width: "56", height: "56", referrerpolicy: "no-referrer" }) : h("span", { class: "noimg" }), h("div", { class: "note-info" }, h("a", { href: x.url, target: "_blank", rel: "noopener noreferrer", text: x.title + " ↗" }), h("span", { class: "muted small", text: [x.artist, x.duration ? fmt(x.duration) : ""].filter(Boolean).join(" · ") })), b); })) : h("p", { class: "muted", text: "No results." }));
+      }));
+      const rows = subs.map(r => h("div", { class: "cal-row" }, r.thumb ? h("img", { src: r.thumb, alt: "", width: "40", height: "40", referrerpolicy: "no-referrer" }) : h("span", { class: "noimg" }),
+        h("div", {}, h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer", text: r.title }), h("div", { class: "muted small", text: [r.artist, "requested by " + (r.mine ? "you" : r.name)].filter(Boolean).join(" · ") })),
+        (r.mine || a.dj) ? (() => { const b = h("button", { class: "btn red small", type: "button", text: "✕", title: "Take it off the list" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/music/submission", { guild_id: gid(), id: r.id }); await load(false); })); return b; })() : ""));
+      const clearBtn = (a.dj && subs.length > 1) ? (() => { const b = h("button", { class: "btn red small", type: "button", text: "Clear all requests" }); b.addEventListener("click", () => { if (!confirm("Remove every request from the list?")) return; busy(b, async () => { await api("/api/music/submission", { guild_id: gid(), action: "clear" }); await load(false); }); }); return b; })() : "";
+      reqBox.replaceChildren(h("h3", { text: `Auto DJ requests (${subs.length} waiting)` }),
+        h("p", { class: "muted small", text: s.autodj_submit ? "Ask for songs without being in the voice channel. The Auto DJ plays requests, oldest first, before its own playlist. Up to 5 waiting per person." : "Requests are turned off in this server." }),
+        s.autodj_submit ? h("div", { class: "lookup-row" }, q, go, find) : "", results,
+        subs.length ? h("div", { class: "scroll-y tall" }, ...rows) : h("p", { class: "muted", text: "No requests right now." }), clearBtn);
+    }
+    function update(d) { paintNow(d); paintQueue(d); paintReqs(d); for (const f of syncers) f(d); }
 
-      // add
-      const q = h("input", { type: "text", placeholder: "SoundCloud link (track or playlist) or words to search for", maxlength: "300", "aria-label": "Song, playlist link or search" });
+    // ----- parts that stay put while you type -----
+    function addPanel(d) {
+      const q = h("input", { type: "text", placeholder: "SoundCloud link (song or playlist), a live radio stream link, or words to search for", maxlength: "300", "aria-label": "Song, playlist, stream link or search" });
       const next = h("input", { type: "checkbox" }), shuf = h("input", { type: "checkbox" });
       const results = h("div");
       const play = h("button", { class: "btn green", type: "button", text: "Play" }), find = h("button", { class: "btn blue", type: "button", text: "Search" });
-      play.disabled = find.disabled = !(a.present && a.enabled && a.inVoice && a.sameChannel);
-      const add = (extra = {}) => api("/api/music/play", { guild_id: pick.value, query: q.value, next: next.checked, shuffle: shuf.checked, ...extra }).then(r => { toast(r.startedNow ? `Playing: ${r.title}` : r.added > 1 ? `Added ${r.added} songs.` : "Added to the queue.", "ok"); q.value = ""; results.replaceChildren(); return load(false); });
+      const add = (extra = {}) => api("/api/music/play", { guild_id: gid(), query: q.value, next: next.checked, shuffle: shuf.checked, ...extra }).then(r => { toast(r.startedNow ? `Playing: ${r.title}` : r.added > 1 ? `Added ${r.added} songs.` : "Added to the queue.", "ok"); q.value = ""; results.replaceChildren(); return load(false); });
       play.addEventListener("click", () => busy(play, () => add()));
       q.addEventListener("keydown", e => { if (e.key === "Enter" && !play.disabled) play.click(); });
       find.addEventListener("click", () => busy(find, async () => {
-        const r = await api("/api/music/search?guild=" + encodeURIComponent(pick.value) + "&q=" + encodeURIComponent(q.value));
+        const r = await api("/api/music/search?guild=" + encodeURIComponent(gid()) + "&q=" + encodeURIComponent(q.value));
         results.replaceChildren(r.results.length ? h("div", { class: "cards" }, ...r.results.map(x => { const b = h("button", { class: "btn green small", type: "button", text: "Add" }); b.addEventListener("click", () => busy(b, () => add({ query: "", tracks: [x] }))); return h("div", { class: "note-game" }, x.thumb ? h("img", { src: x.thumb, alt: "", width: "56", height: "56", referrerpolicy: "no-referrer" }) : h("span", { class: "noimg" }), h("div", { class: "note-info" }, h("a", { href: x.url, target: "_blank", rel: "noopener noreferrer", text: x.title + " ↗" }), h("span", { class: "muted small", text: [x.artist, x.duration ? fmt(x.duration) : ""].filter(Boolean).join(" · ") })), b); })) : h("p", { class: "muted", text: "No results." }));
       }));
-      const addPanel = h("div", { class: "panel" }, h("h3", { text: "Add music" }),
-        h("div", { class: "lookup-row" }, q, play, find),
+      syncers.push(d2 => { play.disabled = find.disabled = !inChannel(d2.access); });
+      return h("div", { class: "panel" }, h("h3", { text: "Add music" }), h("div", { class: "lookup-row" }, q, play, find),
         h("div", { class: "row" }, h("label", { class: "check" }, next, " Play next"), h("label", { class: "check" }, shuf, " Shuffle if it's a playlist")),
-        h("p", { class: "muted small", text: "Paste a SoundCloud song, playlist (set) or artist link to queue it all (up to 100 songs), or type words and press Search to choose." }), results);
-
-      // queue
-      const rows = st.next.map((x, i) => h("div", { class: "cal-row" }, h("span", { class: "muted", text: String(i + 1) }),
-        h("div", {}, h("a", { href: x.url, target: "_blank", rel: "noopener noreferrer", text: x.title }), h("div", { class: "muted small", text: [x.artist, x.duration ? fmt(x.duration) : ""].filter(Boolean).join(" · ") })),
-        h("div", { class: "row" }, ...(can ? [act("⏭", "skipto", { n: i + 1 }), ...(i > 0 ? [act("▲", "move", { from: i + 1, to: i })] : []), act("✕", "remove", { n: i + 1 }, "red")] : []))));
-      const queuePanel = h("div", { class: "panel" }, h("h3", { text: `Queue (${st.total} song${st.total === 1 ? "" : "s"}${st.totalSeconds ? " · " + fmt(st.totalSeconds) : ""})` }),
-        rows.length ? h("div", { class: "scroll-y tall" }, ...rows) : h("p", { class: "muted", text: "Nothing waiting." }),
-        rows.length && can ? h("div", { class: "row" }, act("Clear the queue", "clear", {}, "red")) : "");
-
-      // playlists
+        h("p", { class: "muted small", text: "Paste a SoundCloud song, playlist (set) or artist link to queue it all (up to 100 songs), or a live radio stream link (an Icecast or Shoutcast address like https://play.sas-media.ru/play_256), or type words and press Search." }), results);
+    }
+    function stationsPanel(d) {
+      const out = h("div"), btn = h("button", { class: "btn blue small", type: "button", text: "Show stations on the air" });
+      btn.addEventListener("click", () => busy(btn, async () => {
+        const r = await api("/api/music/stations?guild=" + encodeURIComponent(gid()));
+        out.replaceChildren(r.stations.length ? h("div", { class: "scroll-y tall" }, ...r.stations.map(x => { const b = h("button", { class: "btn green small", type: "button", text: "Play" }); b.disabled = !inChannel(cur.access) || !cur.settings.radio; b.addEventListener("click", () => busy(b, async () => { const p = await api("/api/music/play", { guild_id: gid(), query: x.url }); toast(p.startedNow ? `Playing: ${x.title}` : "Added to the queue.", "ok"); await load(false); })); return h("div", { class: "cal-row" }, h("span", { text: "📻" }), h("div", {}, h("b", { text: x.title }), h("div", { class: "muted small", text: x.genre ?? "" })), b); })) : h("p", { class: "muted", text: "None of the stations answered just now. Try again in a minute." }));
+      }));
+      return h("div", { class: "panel" }, h("h3", { text: "Live radio" }), h("p", { class: "muted small", text: d.settings.radio ? "Stations are checked when you ask, so everything listed is on the air. You can also paste any stream link above." : "Live radio is turned off in this server. A manager can allow it below." }), h("div", { class: "row" }, btn), out);
+    }
+    function playlistsPanel(d) {
       const pname = h("input", { type: "text", maxlength: "40", placeholder: "Name for a new playlist", "aria-label": "Playlist name" });
       const saveBtn = h("button", { class: "btn blue small", type: "button", text: "Save current queue" });
-      saveBtn.addEventListener("click", () => busy(saveBtn, async () => { await api("/api/music/playlists", { guild_id: pick.value, action: "save", name: pname.value }); toast("Saved.", "ok"); pname.value = ""; await load(false); }));
-      const plRows = d.playlists.map(p => { const lb = h("button", { class: "btn green small", type: "button", text: "Queue it" }), db2 = h("button", { class: "btn red small", type: "button", text: "Delete" });
-        lb.disabled = !(a.present && a.enabled && a.inVoice && a.sameChannel);
-        lb.addEventListener("click", () => busy(lb, async () => { const r = await api("/api/music/playlists", { guild_id: pick.value, action: "load", name: p.name }); toast(`Added ${r.added} songs.`, "ok"); await load(false); }));
-        db2.addEventListener("click", () => { if (!confirm("Delete this playlist?")) return; busy(db2, async () => { await api("/api/music/playlists", { guild_id: pick.value, action: "delete", name: p.name }); await load(false); }); });
+      saveBtn.addEventListener("click", () => busy(saveBtn, async () => { await api("/api/music/playlists", { guild_id: gid(), action: "save", name: pname.value }); toast("Saved.", "ok"); await load(true); }));
+      const rows = d.playlists.map(p => { const lb = h("button", { class: "btn green small", type: "button", text: "Queue it" }), db2 = h("button", { class: "btn red small", type: "button", text: "Delete" });
+        syncers.push(d2 => { lb.disabled = !inChannel(d2.access); });
+        lb.addEventListener("click", () => busy(lb, async () => { const r = await api("/api/music/playlists", { guild_id: gid(), action: "load", name: p.name }); toast(`Added ${r.added} songs.`, "ok"); await load(false); }));
+        db2.addEventListener("click", () => { if (!confirm("Delete this playlist?")) return; busy(db2, async () => { await api("/api/music/playlists", { guild_id: gid(), action: "delete", name: p.name }); await load(true); }); });
         return h("div", { class: "row", style: "align-items:center;justify-content:space-between" }, h("span", {}, h("b", { text: p.name }), h("span", { class: "muted small", text: `  ${p.count} song${p.count === 1 ? "" : "s"}` })), h("div", { class: "row" }, lb, db2)); });
-      const plPanel = h("div", { class: "panel" }, h("h3", { text: "My playlists" }), h("p", { class: "muted small", text: "Saved to your account, so you can load them in any server. Up to 10 playlists of 100 songs." }),
-        ...(plRows.length ? plRows : [h("p", { class: "muted", text: "None yet." })]), h("div", { class: "lookup-row" }, pname, saveBtn));
-
-      const parts = [np, addPanel, queuePanel, plPanel];
-      if (d.channels) parts.push(settingsPanel(d));
-      body.replaceChildren(...parts);
+      return h("div", { class: "panel" }, h("h3", { text: "My playlists" }), h("p", { class: "muted small", text: "Saved to your account, so you can load them in any server. Up to 10 playlists of 100 songs." }),
+        ...(rows.length ? rows : [h("p", { class: "muted", text: "None yet." })]), h("div", { class: "lookup-row" }, pname, saveBtn));
     }
-
+    function autoPanel(d) {
+      const s = d.settings;
+      const on = h("input", { type: "checkbox", checked: Boolean(s.autodj) }), sub = h("input", { type: "checkbox", checked: Boolean(s.autodj_submit) }), shuf = h("input", { type: "checkbox", checked: Boolean(s.autodj_shuffle) });
+      const idle = h("input", { type: "number", min: "5", max: "600", value: String(s.autodj_idle) });
+      const vc = h("select", {}, h("option", { value: "", text: "Only when someone starts it (stays in the channel it's already in)" }), ...(d.voiceChannels ?? []).map(c => h("option", { value: c.id, text: "🔊 " + c.name, selected: c.id === s.autodj_channel_id })));
+      const link = h("input", { type: "text", maxlength: "300", placeholder: "SoundCloud playlist link", "aria-label": "Auto DJ playlist link" });
+      const savedSel = select([["", "Or use one of my saved playlists…"], ...d.playlists.map(p => [p.name, `${p.name} (${p.count})`])], "");
+      const save = h("button", { class: "btn green", type: "button", text: "Save Auto DJ settings" });
+      const call = (extra, ok) => api("/api/music/autodj", { guild_id: gid(), ...extra }).then(r => { toast(r.note || ok || "Saved.", "ok"); return load(true); });
+      save.addEventListener("click", () => busy(save, () => call({ autodj: on.checked, autodj_submit: sub.checked, autodj_shuffle: shuf.checked, autodj_idle: Number(idle.value), autodj_channel_id: vc.value })));
+      const setLink = h("button", { class: "btn blue small", type: "button", text: "Use this playlist" });
+      setLink.addEventListener("click", () => busy(setLink, () => call({ playlist_url: link.value })));
+      const useSaved = h("button", { class: "btn blue small", type: "button", text: "Use it" });
+      useSaved.addEventListener("click", () => { if (!savedSel.value) return toast("Pick a saved playlist first.", "error"); busy(useSaved, () => call({ saved_playlist: savedSel.value })); });
+      const clr = h("button", { class: "btn red small", type: "button", text: "Remove playlist" });
+      clr.addEventListener("click", () => { if (!confirm("Remove the Auto DJ's playlist?")) return; busy(clr, () => call({ clear_playlist: true })); });
+      const pl = d.autodj.playlist;
+      const preview = pl.length ? h("div", { class: "scroll-y tall" }, ...pl.slice(0, 50).map((t, i) => h("div", { class: "cal-row" }, h("span", { class: "muted", text: String(i + 1) }), t.thumb ? h("img", { src: t.thumb, alt: "", width: "40", height: "40", referrerpolicy: "no-referrer", loading: "lazy" }) : h("span", { class: "noimg" }), h("div", {}, h("a", { href: t.url, target: "_blank", rel: "noopener noreferrer", text: t.title }), h("div", { class: "muted small", text: [t.artist, t.duration ? fmt(t.duration) : ""].filter(Boolean).join(" · ") }))))) : h("p", { class: "muted", text: "No playlist yet. Paste a SoundCloud playlist link above." });
+      return h("div", { class: "panel" }, h("h3", { text: "Auto DJ" }),
+        h("p", { class: "muted small", text: "Keeps music going. When the bot sits in a voice channel with nothing playing for a while, it starts the playlist you choose. Members' requests play first, and anyone's /play beats the playlist right away." }),
+        h("label", { class: "check" }, on, " Auto DJ is on"), h("label", { class: "check" }, sub, " Members can request songs (even from outside the voice channel)"), h("label", { class: "check" }, shuf, " Shuffle the playlist"),
+        h("div", { class: "row" }, field("Start after this many seconds of silence", idle), field("Join this voice channel by itself", vc)),
+        save, h("hr"), h("h4", { text: `Playlist (${d.autodj.count} songs${s.autodj_source && /^https?:/.test(s.autodj_source) ? "" : ""})` }),
+        h("div", { class: "lookup-row" }, link, setLink), h("div", { class: "lookup-row" }, savedSel, useSaved), d.autodj.count ? h("div", { class: "row" }, clr) : "", preview);
+    }
     function settingsPanel(d) {
       const s = d.settings;
-      const on = h("input", { type: "checkbox", checked: Boolean(s.enabled) }), ann = h("input", { type: "checkbox", checked: Boolean(s.announce) }), stay = h("input", { type: "checkbox", checked: Boolean(s.stay) });
+      const on = h("input", { type: "checkbox", checked: Boolean(s.enabled) }), ann = h("input", { type: "checkbox", checked: Boolean(s.announce) }), stay = h("input", { type: "checkbox", checked: Boolean(s.stay) }), radio = h("input", { type: "checkbox", checked: Boolean(s.radio) });
       const num = (v, lo, hi) => h("input", { type: "number", min: String(lo), max: String(hi), value: String(v) });
       const vol = num(s.volume, 1, 100), mq = num(s.max_queue, 5, 500), mm = num(s.max_minutes, 0, 600), lv = num(s.leave_minutes, 1, 60);
       const role = h("select", {}, h("option", { value: "", text: "Everyone can use the controls" }), ...d.roles.filter(r => r.id !== d.guild.id).map(r => h("option", { value: r.id, text: "DJ role: " + r.name, selected: r.id === s.dj_role_id })));
-      const chan = h("select", {}, h("option", { value: "", text: "Where the song was added from" }), ...d.channels.filter(c => !c.type || c.type === 0 || c.type === 5).map(c => h("option", { value: c.id, text: "#" + c.name, selected: c.id === s.channel_id })));
+      const chan = h("select", {}, h("option", { value: "", text: "Where the song was added from" }), ...d.channels.map(c => h("option", { value: c.id, text: "#" + c.name, selected: c.id === s.channel_id })));
       const save = h("button", { class: "btn green", type: "button", text: "Save music settings" });
-      save.addEventListener("click", () => busy(save, async () => { await api("/api/music/settings", { guild_id: pick.value, enabled: on.checked, announce: ann.checked, stay: stay.checked, volume: Number(vol.value), max_queue: Number(mq.value), max_minutes: Number(mm.value), leave_minutes: Number(lv.value), dj_role_id: role.value, channel_id: chan.value }); toast("Saved.", "ok"); await load(false); }));
-      return h("div", { class: "panel" }, h("h3", { text: "Server music settings" }), h("p", { class: "muted small", text: "Only people with Manage Server see this. The bot needs Connect and Speak in your voice channels, plus Send Messages where it posts." }),
-        h("label", { class: "check" }, on, " Music is on"), h("label", { class: "check" }, ann, " Post a message when each song starts"), h("label", { class: "check" }, stay, " Stay in the voice channel when the queue ends"),
+      save.addEventListener("click", () => busy(save, async () => { await api("/api/music/settings", { guild_id: gid(), enabled: on.checked, announce: ann.checked, stay: stay.checked, radio: radio.checked, volume: Number(vol.value), max_queue: Number(mq.value), max_minutes: Number(mm.value), leave_minutes: Number(lv.value), dj_role_id: role.value, channel_id: chan.value }); toast("Saved.", "ok"); await load(true); }));
+      return h("div", { class: "panel" }, h("h3", { text: "Server music settings" }), h("p", { class: "muted small", text: "Only people with Manage Server see this. Moderators (the role from community setup) can always use the DJ controls. The bot needs Connect and Speak in your voice channels, plus Send Messages where it posts." }),
+        h("label", { class: "check" }, on, " Music is on"), h("label", { class: "check" }, ann, " Post a message when each song starts"), h("label", { class: "check" }, stay, " Stay in the voice channel when the queue ends"), h("label", { class: "check" }, radio, " Allow live radio stream links"),
         h("div", { class: "row" }, field("Controls", role), field("Now-playing messages go to", chan)),
         h("div", { class: "row" }, field("Starting volume (1-100)", vol), field("Most songs in the queue", mq), field("Longest song, minutes (0 = no limit)", mm), field("Leave after idle (minutes)", lv)), save);
+    }
+    function build(d) {
+      clearInterval(tick); syncers.length = 0;
+      body.replaceChildren(npBox, addPanel(d), stationsPanel(d), queueBox, reqBox, playlistsPanel(d), ...(d.channels ? [autoPanel(d), settingsPanel(d)] : []));
+      reqBox.replaceChildren();
+      update(d);
     }
 
     holder.className = ""; holder.replaceChildren(field("Server", pick), body);
@@ -3635,12 +3720,12 @@
     app.append(profileCardPanel());
   }
 
-  // Pictures from any https address for your own My page and profile card. Shown on your profile card. The links are saved with your account so /profilecard can draw them; nothing is uploaded and nobody else sees them unless you post your card.
+  // Pictures from any https address for your own My page and profile card. Shown on your profile card. The links are saved with your account so /me profilecard can draw them; nothing is uploaded and nobody else sees them unless you post your card.
   const ART_KEY = "svc_myart";
   function loadMyArt() { try { const v = JSON.parse(localStorage.getItem(ART_KEY) || "{}"); return { banner: okImage(v.banner) ? v.banner : "", avatar: okImage(v.avatar) ? v.avatar : "", auto: v.auto === true }; } catch { return { banner: "", avatar: "", auto: false }; } }
   function saveMyArt(art) {
     try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* the website still works without it */ }
-    // The /profilecard command draws from the server, so it needs the same pictures. Failing quietly is fine; the card here still works.
+    // The /me profilecard command draws from the server, so it needs the same pictures. Failing quietly is fine; the card here still works.
     if (state.me) api("/api/profile/card-settings", { avatar: art.avatar || "", banner: art.banner || "" }).catch(() => {});
   }
   // Steam art for the pictures. A wide hero for the banner (with the store header as a fallback) and the Steam profile picture.
@@ -3676,7 +3761,7 @@
       toast("Saved on this device.", "ok"); myPageView();
     } });
     box.replaceChildren(h("summary", { text: "Your pictures (banner and profile card picture)" }),
-      h("p", { class: "muted small", text: "Use images from any https address: a banner for this page and a picture for your profile card. They are loaded by your browser from that site, which can see your address, so use hosts you trust. Only the links are saved (with your account, for /profilecard); no image is uploaded. A picture the host does not allow for downloads is skipped on the saved card." }),
+      h("p", { class: "muted small", text: "Use images from any https address: a banner for this page and a picture for your profile card. They are loaded by your browser from that site, which can see your address, so use hosts you trust. Only the links are saved (with your account, for /me profilecard); no image is uploaded. A picture the host does not allow for downloads is skipped on the saved card." }),
       h("div", { class: "row" }, field("Banner", banner), field("Profile card picture", avatar)), apply);
   }
 
@@ -3690,7 +3775,7 @@
     const out = h("div", { class: "muted", text: "Loading…" });
     const wrap = h("div", { class: "panel" }, h("h3", { text: "Profile card" }), out);
     api("/api/profile/card").then(d => {
-      // What is saved with the account wins, so the card here and /profilecard match.
+      // What is saved with the account wins, so the card here and /me profilecard match.
       const sp = d.prefs || {};
       if (sp.show) Object.assign(opt, sp.show);
       if (sp.theme) opt.theme = sp.theme;
@@ -3794,7 +3879,7 @@
       pname.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPlat(); } });
       paintTags();
       out.className = "";
-      out.replaceChildren(h("p", { class: "muted small", text: "Drawn from your library, hours, challenge and badges. Choose what to show, add your gaming names, then save the image, or post it in Discord with /profilecard. Your choices are saved with your account." }),
+      out.replaceChildren(h("p", { class: "muted small", text: "Drawn from your library, hours, challenge and badges. Choose what to show, add your gaming names, then save the image, or post it in Discord with /me profilecard. Your choices are saved with your account." }),
         h("div", { class: "row" }, box("games", "Games"), box("finished", "Finished"), box("hours", "Hours"), box("saved", "Percent saved"), box("streak", "Streak"), box("badges", "Badges"), box("genres", "Top genres")),
         field("Colour", theme),
         h("h4", { text: "Your gaming names" }),
@@ -3917,7 +4002,7 @@
         toast(r.announced ? "Event added and announced." : "Event added.", "ok"); title.value = ""; notes.value = ""; load();
       }));
       admin.replaceChildren(h("h2", { text: "Add a server event" }), h("div", { class: "panel" },
-        h("p", { class: "muted small", text: "Members see it here and with /calendar view. If you pick a channel it is announced there now and members get a reminder before it starts." }),
+        h("p", { class: "muted small", text: "Members see it here and with /server calendar view. If you pick a channel it is announced there now and members get a reminder before it starts." }),
         mgr.length > 1 ? field("Server", guild) : "", h("div", { class: "row" }, field("Title", title), field("Date and time (your browser's time zone)", when)), field("Notes", notes), h("div", { class: "row" }, field("Announce", chan), field("Reminder", remind)), h("p", {}, add)));
     }
 
@@ -3977,9 +4062,9 @@
           }) });
           form.replaceChildren(h("div", { class: "grid two" }, field("Game", game), field("When (your local time)", when), field("Players, counting you", slots), field("Channel", chan)), field("Note", note),
             h("label", { class: "check" }, evt, " Also create a Discord event (the bot needs Manage Events)"), h("p"), post);
-        } else form.replaceChildren(h("p", { class: "muted small", text: "Server managers can post from here. Everyone can post with /lfg post in Discord, and join from here or from the post." }));
+        } else form.replaceChildren(h("p", { class: "muted small", text: "Server managers can post from here. Everyone can post with /server lfg post in Discord, and join from here or from the post." }));
         out.className = "";
-        if (!d.posts.length) { out.replaceChildren(h("div", { class: "empty", text: "No open posts. Start one with /lfg post." + (g ? "" : "") })); return; }
+        if (!d.posts.length) { out.replaceChildren(h("div", { class: "empty", text: "No open posts. Start one with /server lfg post." + (g ? "" : "") })); return; }
         out.replaceChildren(...d.posts.map(p => {
           const act = async (path, msg) => { try { await api(path, { guild_id: guild.value, id: p.id }); toast(msg, "ok"); load(); } catch (e) { toast(e.message, "error"); } };
           const join = h("button", { class: "btn green small", text: p.joined ? "Leave" : "Join", onclick: () => act(p.joined ? "/api/lfg/leave" : "/api/lfg/join", p.joined ? "You left." : "You are in.") });
@@ -3993,11 +4078,11 @@
     load();
   }
 
-  // ---------- guided server setup (same checklist as /setup in Discord) ----------
+  // ---------- guided server setup (same checklist as /manage setup in Discord) ----------
   async function setupView() {
     const servers = state.me.servers.filter(g => g.manageable);
     const holder = h("div");
-    app.replaceChildren(pageHead("Server setup", "A few choices and your server is ready. The same steps are in Discord with /setup."), holder);
+    app.replaceChildren(pageHead("Server setup", "A few choices and your server is ready. The same steps are in Discord with /manage setup."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "You need the Manage Server permission in a server to set it up." })); return; }
     const wanted = currentParam();
     const guild = serverPicker(servers, wanted);
@@ -4034,17 +4119,17 @@
             st.alertChannel ? (() => { const b = h("button", { class: "btn small " + (st.weeklyDigest ? "red" : "green"), text: st.weeklyDigest ? "Turn off" : "Turn on" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/digest", { guild_id: guild.value, enabled: !st.weeklyDigest }); load(); })); return b; })() : h("span", { class: "muted small", text: "Choose an alert channel first." })),
           row(st.steps.find(x => x.id === "gamenight"), "Game night nudges", "When 2 or more opted-in members in a voice channel all have the same game hit their alert, the bot posts once in that channel's text chat. Members join with /alerts share.",
             (() => { const b = h("button", { class: "btn small " + (st.gameNight ? "red" : "green"), text: st.gameNight ? "Turn off" : "Turn on" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/gamenight", { guild_id: guild.value, enabled: !st.gameNight }); load(); })); return b; })()),
-          row(sSupport, "Support tickets", "Members use /support open. Tickets appear here with Reply, Assign and Resolve buttons, and in the Support page.",
+          row(sSupport, "Support tickets", "Members use /bot support open. Tickets appear here with Reply, Assign and Resolve buttons, and in the Support page.",
             h("div", { class: "row" }, supportSel, staffSel, save("Save", () => api("/api/tickets/setup", { guild_id: guild.value, channel_id: supportSel.value, staff_role_id: staffSel.value })))),
           state.me.giveaways ? row(sVouch, "Giveaway vouches", "Winners' confirmations are posted here. Without one the bot looks for a channel named #vouches.",
             h("div", { class: "row" }, vouchSel, save("Save", () => api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouchSel.value })))) : null,
           row(st.steps.find(x => x.id === "requests"), "Feature requests forum", "Every idea members send in on the dashboard becomes a post here, tagged with its status (planned, in development, shipped…). Needs a forum channel, which Discord only offers on Community servers.",
             fo.forums.length ? h("div", { class: "row" }, reqSel, save("Save", () => api("/api/community/places", { guild_id: guild.value, requests_channel: reqSel.value }))) : h("span", { class: "muted small", text: "No forum channel yet. \"Create the channels for me\" makes one, or add one in Discord." }))),
           h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
-            h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/wishlist import" }), ", then star favorites with ", h("code", { text: "/wishlist priority" })),
-            h("li", {}, "Price a library: ", h("code", { text: "/value" }), " or link Steam for hours, ", h("code", { text: "/steam recap" }), " and ", h("code", { text: "/library challenge" })),
-            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/library badges" }), " and ", h("code", { text: "/leaderboard board:finished" })), h("li", {}, "Track bundles and hour goals: ", h("code", { text: "/library bundle" }), " and ", h("code", { text: "/steam goal" })), h("li", {}, "See events and release dates: ", h("code", { text: "/calendar view" })),
-            h("li", {}, "Ask for help: ", h("code", { text: "/support open" })), h("li", {}, "Managers can run giveaways: ", h("code", { text: "/giveaway create" }))))].filter(Boolean));
+            h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/me wishlist import" }), ", then star favorites with ", h("code", { text: "/me wishlist priority" })),
+            h("li", {}, "Price a library: ", h("code", { text: "/games value" }), " or link Steam for hours, ", h("code", { text: "/me steam recap" }), " and ", h("code", { text: "/me library challenge" })),
+            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/me publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/me friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/me library badges" }), " and ", h("code", { text: "/server leaderboard board:finished" })), h("li", {}, "Track bundles and hour goals: ", h("code", { text: "/me library bundle" }), " and ", h("code", { text: "/me steam goal" })), h("li", {}, "See events and release dates: ", h("code", { text: "/server calendar view" })),
+            h("li", {}, "Ask for help: ", h("code", { text: "/bot support open" })), h("li", {}, "Managers can run giveaways: ", h("code", { text: "/server giveaway create" }))))].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     guild.addEventListener("change", load);
@@ -4055,7 +4140,7 @@
   async function communityView() {
     const servers = state.me.servers.filter(g => g.bot !== false);
     const holder = h("div");
-    app.replaceChildren(pageHead("Community", "Welcome messages, levels, invites and emoji for your gaming server. In Discord: /community, /rank, /levels, /invites and /emoji."), holder);
+    app.replaceChildren(pageHead("Community", "Welcome messages, levels, invites and emoji for your gaming server. In Discord: /manage community, /server rank, /server levels, /server invites and /manage emoji."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
     const guild = serverPicker(servers, currentParam());
     const GID = () => guild.value;
@@ -4181,7 +4266,7 @@
           field("Role every new member gets", auto), h("div", { class: "row" }, save("Save role", () => post("/api/community/autorole", { role_id: auto.value }))));
         const vRole = roSel(st.verified_role_id, "No Steam Verified role");
         const verify = h("div", { class: "panel" }, h("h3", { text: "Steam verification" }),
-          h("p", { class: "muted", text: "Members prove their Steam account (they sign in on Steam's own page) and get this role from the button in #verify or /steam verify. Members who already verified get it the moment they join." }),
+          h("p", { class: "muted", text: "Members prove their Steam account (they sign in on Steam's own page) and get this role from the button in #verify or /me steam verify. Members who already verified get it the moment they join." }),
           field("Steam Verified role", vRole), h("div", { class: "row" }, save("Save", () => post("/api/community/verifyrole", { role_id: vRole.value }))),
           h("p", { class: "muted small", text: "Want Discord itself to require it? In Discord open Server Settings, Roles, pick the role, open Links, and add this bot's Steam Verified condition. That one step can only be done in Discord." }));
         // ping roles
@@ -4193,7 +4278,7 @@
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),
-          h("p", { class: "muted", text: "Members get their own invite link (/invites link or the button above). Every member who joins with it counts for them, earns the inviter bonus XP, and can unlock a role." }),
+          h("p", { class: "muted", text: "Members get their own invite link (/server invites link or the button above). Every member who joins with it counts for them, earns the inviter bonus XP, and can unlock a role." }),
           field("Bonus XP for each new member they bring (0 for none)", bonus), h("div", { class: "row" }, save("Save bonus", () => post("/api/community/referral", { bonus: bonus.value }))),
           d.rewards.length ? h("ul", { class: "plain" }, d.rewards.map(r => h("li", {}, `${r.count} invited: `, h("b", { text: roleName(r.role_id) }), " ", save("Remove", () => post("/api/community/referral", { count: r.count, remove: true }), "btn gray small")))) : h("p", { class: "muted", text: "No role rewards yet." }),
           h("div", { class: "row" }, rCount, rRole, save("Add reward", () => post("/api/community/referral", { count: rCount.value, role_id: rRole.value }))));
@@ -4237,13 +4322,13 @@
           h("div", { class: "row" }, save("Save", () => post("/api/community/rules", { text: rText.value })), save("Save and post in the rules channel", () => post("/api/community/rules", { text: rText.value, post: true }), "btn green small")));
         const tkCh = chSel(d.support.ticket_channel), tkRole = roSel(d.support.staff_role_id, "Server managers only");
         const supportP = h("div", { class: "panel" }, h("h3", { text: "Support tickets" }),
-          h("p", { class: "muted", text: "Members press Open a ticket in #get-help (or use /support open). Tickets land in the channel below with Reply, Assign me and Resolve buttons. Bug reports go to the bot's developer instead." }),
+          h("p", { class: "muted", text: "Members press Open a ticket in #get-help (or use /bot support open). Tickets land in the channel below with Reply, Assign me and Resolve buttons. Bug reports go to the bot's developer instead." }),
           field("Tickets channel (staff only)", tkCh), field("Role that answers tickets", tkRole),
           h("div", { class: "row" }, save("Save support", () => post("/api/community/support", { ticket_channel: tkCh.value, staff_role_id: tkRole.value }))));
         const announceP = announceDesigner({ chSel, roSel, defaultCh: st.announce_channel || (ch.channels.find(c => c.name === "announcements") || {}).id, history: d.announcements, roleName, chName: id => (ch.channels.find(c => c.id === id) || {}).name });
         const lbCh = chSel(st.lb_channel), lbHours = h("input", { type: "number", min: "1", max: "48", value: String(st.lb_hours || 5), "aria-label": "Hours between refreshes" });
         const lbP = h("div", { class: "panel" }, h("h3", { text: "XP leaderboard" }),
-          h("p", { class: "muted", text: "A read-only channel with the top members and top inviters. The bot edits the same message on a timer, so it never fills the channel. Members use /rank for their own place." }),
+          h("p", { class: "muted", text: "A read-only channel with the top members and top inviters. The bot edits the same message on a timer, so it never fills the channel. Members use /server rank for their own place." }),
           field("Leaderboard channel", lbCh), field("Refresh every (hours, 1 to 48)", lbHours),
           h("p", { class: "muted small", text: st.lb_at ? "Last updated " + new Date(st.lb_at).toLocaleString() + "." : "Not posted yet." }),
           h("div", { class: "row" }, save("Save", () => post("/api/community/leaderboard", { channel_id: lbCh.value, hours: lbHours.value })),
@@ -4266,7 +4351,7 @@
   async function xpView() {
     const servers = state.me.servers.filter(g => g.bot !== false);
     const holder = h("div");
-    app.replaceChildren(pageHead("Server XP", "Levels, the leaderboard and rewards for your server. In Discord: /rank and /levels."), holder);
+    app.replaceChildren(pageHead("Server XP", "Levels, the leaderboard and rewards for your server. In Discord: /server rank and /server levels."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
     const guild = serverPicker(servers, currentParam());
     let page = 1;
@@ -4294,7 +4379,7 @@
         const how = h("div", { class: "panel" }, h("h3", { text: "How XP works" }), h("ul", {},
           h("li", { text: `Chat: ${d.how.message[0]} to ${d.how.message[1]} XP for a message, at most once a minute.` }),
           h("li", { text: `Voice: ${d.how.voicePerMinute} XP a minute in a voice channel with someone else (not muted or deafened, not in AFK).` }),
-          h("li", { text: d.how.referral ? `Invites: ${d.how.referral} XP each time someone joins through your invite link.` : "Invites: bring friends with your own link (/invites link)." }),
+          h("li", { text: d.how.referral ? `Invites: ${d.how.referral} XP each time someone joins through your invite link.` : "Invites: bring friends with your own link (/server invites link)." }),
           h("li", { text: d.multiplier === 1 ? "XP speed is normal." : `This server runs XP at ×${d.multiplier}.` })));
         const curve = h("div", { class: "panel" }, h("h3", { text: "XP needed per level" }),
           h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Level", "XP to reach it", "Total XP"].map((c, i) => h("th", { class: i ? "num" : "", text: c })))), h("tbody", {}, d.curve.map(c => h("tr", {}, h("td", { text: String(c.level) }), h("td", { class: "num", text: c.need.toLocaleString() }), h("td", { class: "num", text: c.total.toLocaleString() })))))));

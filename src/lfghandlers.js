@@ -1,4 +1,4 @@
-// /lfg: Discord side of looking-for-group posts.
+// /server lfg: Discord side of looking-for-group posts.
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { parseWhen } from "./lfg.js";
 import { LFG_JOIN, LFG_LEAVE, LFG_CLOSE } from "./lfgrender.js";
@@ -21,7 +21,7 @@ export function createLfgHandlers({ db, lfg }) {
         try {
             if (sub === "list") {
                 const posts = db.listOpenLfg(i.guildId);
-                if (!posts.length) return eph(i, "No open posts here. Start one with `/lfg post`.");
+                if (!posts.length) return eph(i, "No open posts here. Start one with `/server lfg post`.");
                 return i.reply({ flags: MessageFlags.Ephemeral, embeds: [{ color: 0x57f287, title: "Open looking-for-group posts",
                     description: posts.slice(0, 15).map(p => `**#${p.id}** ${p.game}, <t:${Math.floor(p.starts_at / 1000)}:R>, ${db.lfgMembers(p.id).length}/${p.slots}${p.message_id ? ` [open](https://discord.com/channels/${p.guild_id}/${p.channel_id}/${p.message_id})` : ""}`).join("\n") }] });
             }

@@ -86,7 +86,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 stats.delivered += part.length;
                 for (const a of part) {
                     db.markAlerted(a.item.id, a.now.price);
-                    if (a.item.source === "watch") db.removeWatch(userId, a.item.itad_id); // a /watch is one-shot
+                    if (a.item.source === "watch") db.removeWatch(userId, a.item.itad_id); // a /games watch is one-shot
                     db.logAlert({ discord_id: userId, itad_id: a.item.itad_id, title: a.item.title, kind: "sale", price: a.now.price, regular: a.now.regular, shop: a.now.shop, via: res.via });
                 }
             } else {
@@ -304,7 +304,7 @@ export function schedule(fn, everyMs, { onError = () => {}, setIntervalImpl = se
 
 /**
  * Servers that turned on the free game feed get new free games posted in their alert channel, once each.
- * Games only (no DLC), so the channel is not flooded; members who want DLC use /freegames.
+ * Games only (no DLC), so the channel is not flooded; members who want DLC use /games freegames.
  */
 export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
     const stats = { guilds: 0, posted: 0 };

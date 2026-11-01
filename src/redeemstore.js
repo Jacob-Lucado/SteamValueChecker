@@ -1,4 +1,4 @@
-// Batch redeem jobs queued from Discord (/redeem). The member's open dashboard page picks a job up and hands the keys to the
+// Batch redeem jobs queued from Discord (/games redeem). The member's open dashboard page picks a job up and hands the keys to the
 // FanaticalGrabber extension, which redeems them in their own logged-in browser. Keys are kept only until the job finishes
 // (or 24 hours pass), then erased; only counts remain.
 export const redeemSchema = `

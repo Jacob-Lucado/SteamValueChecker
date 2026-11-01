@@ -1,4 +1,4 @@
-// Discord side of giveaways: the /giveaway command, the Enter / Claim prize / confirm buttons, and the key forms.
+// Discord side of giveaways: the /server giveaway command, the Enter / Claim prize / confirm buttons, and the key forms.
 // Prize keys are typed into a private form (modal), never into a channel, and are encrypted before they are saved.
 
 import { randomBytes } from "node:crypto";
@@ -60,7 +60,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         else await eph(i, content).catch(() => {});
     }
 
-    // ---------- /giveaway ----------
+    // ---------- /server giveaway ----------
     function readCreate(o, i) {
         const textChannel = (c, what) => {
             if (c && ![0, 5].includes(c.type)) throw new UserError(`The ${what} must be a text channel.`);
@@ -105,7 +105,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             const r = await giveaways.create({ ...d.draft, keys });
             const art = { auto: "Artwork was found automatically.", custom: "Using your image.", none: "No artwork (none was found; you can recreate it with an `image:` link)." }[r.imageSource];
             await i.editReply([
-                r.rounds > 1 ? `Series created: **${r.rounds} rounds** scheduled in <#${d.draft.channel_id}>, the first starting <t:${Math.floor(r.starts_at / 1000)}:R> (giveaway #${r.ids.join(", #")}). Cancel any round with \`/giveaway cancel\`.`
+                r.rounds > 1 ? `Series created: **${r.rounds} rounds** scheduled in <#${d.draft.channel_id}>, the first starting <t:${Math.floor(r.starts_at / 1000)}:R> (giveaway #${r.ids.join(", #")}). Cancel any round with \`/server giveaway cancel\`.`
                   : r.scheduled ? `Giveaway **#${r.id}** is scheduled in <#${d.draft.channel_id}>. It starts <t:${Math.floor(r.starts_at / 1000)}:R> and runs until <t:${Math.floor(r.ends_at / 1000)}:R>.`
                   : `Giveaway **#${r.id}** is live in <#${d.draft.channel_id}> with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. It ends <t:${Math.floor(r.ends_at / 1000)}:R>.`,
                 art, duplicates ? `${duplicates} duplicate key${duplicates === 1 ? " was" : "s were"} skipped.` : null,
@@ -161,7 +161,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         needManager(i);
         const rows = db.listGiveaways(i.guildId, { limit: 15 });
         const lines = rows.map(g => `**#${g.id}** ${g.title}: ${g.status}${g.status === "active" ? `, ends <t:${Math.floor(g.ends_at / 1000)}:R>` : ""}, ${db.countEntries(g.id)} entries`);
-        return i.reply({ embeds: [{ color: 0xff9800, title: "Giveaways", description: lines.join("\n") || "None yet. Start one with `/giveaway create`." }], flags: MessageFlags.Ephemeral });
+        return i.reply({ embeds: [{ color: 0xff9800, title: "Giveaways", description: lines.join("\n") || "None yet. Start one with `/server giveaway create`." }], flags: MessageFlags.Ephemeral });
     }
 
     async function setup(i) {

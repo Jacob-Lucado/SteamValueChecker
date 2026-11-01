@@ -14,7 +14,9 @@ import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID,
 import { collectAbout } from "./about.js";
 import { FANATICAL_GRABBER_URL, EXTENSION_STORE_URL, REGIONS } from "./constants.js";
 import { readFileSync } from "node:fs";
-import { HELP, ABOUT, PRIVACY, quickStart } from "./text.js";
+import { ABOUT, PRIVACY, quickStart } from "./text.js";
+import { helpPayload, handleHelpPick } from "./helpui.js";
+import { legacyRoute, SERVER_ONLY_LEGACY } from "./commands.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
@@ -52,6 +54,8 @@ import { createDropHandlers } from "./dropshandlers.js";
 import { runDrops } from "./drops.js";
 import { createMusic } from "./music.js";
 import { createSource } from "./musicsource.js";
+import { createStations } from "./stations.js";
+import { probeRadio } from "./musicradio.js";
 import { createMusicHandlers, guildAdapter } from "./musichandlers.js";
 import { nowPlayingPayload } from "./musicrender.js";
 import { createRequestHandlers, FR } from "./requesthandlers.js";
@@ -192,10 +196,11 @@ const dropUi = createDropHandlers({ db, runNow: pollDrops });
 // Music needs Discord's voice library. If it ever fails to load the rest of the bot still runs.
 const musicGuild = guildAdapter(client);
 let music = null, musicUi = null;
+const stations = createStations({ probe: probeRadio });
 try {
     const voice = await import("@discordjs/voice");
     music = createMusic({ db, source: createSource(), voice, getGuild: musicGuild, api: botRest, panel: (gid, st) => nowPlayingPayload(st), log: m => console.log(`[music] ${m}`) });
-    musicUi = createMusicHandlers({ db, music, adapter: musicGuild });
+    musicUi = createMusicHandlers({ db, music, adapter: musicGuild, stations });
 } catch (err) { console.error(`[music] turned off: ${err.message}`); }
 const musicOff = i => (i.isRepliable?.() ? i.reply({ content: "Music isn't available on this bot right now.", flags: MessageFlags.Ephemeral }).catch(() => {}) : null);
 const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id => publishRequest({ db, api: botRest, id, base: publicBase }) });
@@ -288,17 +293,17 @@ client.on(Events.GuildCreate, async guild => {
             if (isFreshGuild({ channels, roles: roles.map(r => ({ ...r, guild_id: guild.id })), memberCount: guild.memberCount })) {
                 auto = await communitySetup({ api: botRest, db, guildId: guild.id, botId: client.user.id, userId: guild.ownerId, fresh: true, baseUrl: publicBase });
             }
-        } catch (e) { autoNote = e.userFacing ? e.message : "I tried to set the server up but hit a problem. Run /community setup to try again."; }
+        } catch (e) { autoNote = e.userFacing ? e.message : "I tried to set the server up but hit a problem. Run /manage community setup to try again."; }
         const link = publicBase ? `${publicBase}/#/setup/${guild.id}` : null;
         let embed = { color: 0xff9800, title: `Steam Value Checker is now in ${guild.name}`,
-            description: ["It takes about a minute to set up:", "1. In your server, run **`/setup`** and press **Create the channels for me** (or pick existing channels from the menus).", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/wishlist import`, `/value` and `/support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };
+            description: ["It takes about a minute to set up:", "1. In your server, run **`/manage setup`** and press **Create the channels for me** (or pick existing channels from the menus).", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/me wishlist import`, `/games value` and `/bot support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };
         if (auto) embed = { ...setupSummary(auto, publicBase, guild.id, MEMBERS_INTENT), title: `${guild.name} is ready`, description: "This looked like a brand-new server, so I set it up for you.\n\n" + setupSummary(auto, publicBase, guild.id, MEMBERS_INTENT).description };
         else if (autoNote) embed = { ...embed, description: embed.description + `\n\n⚠️ ${autoNote}` };
-        else embed = { ...embed, description: embed.description + "\n\nWant the full gaming-community layout (channels, roles, welcome, XP, invites)? Run **`/community setup`**." };
+        else embed = { ...embed, description: embed.description + "\n\nWant the full gaming-community layout (channels, roles, welcome, XP, invites)? Run **`/manage community setup`**." };
         const comp = auto ? (publicBase ? [{ type: 1, components: [{ type: 2, style: 5, label: "Fine-tune on the dashboard", url: `${publicBase}/#/community/${guild.id}` }] }] : []) : (link ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open setup page", url: link }] }] : []);
         await discord.sendDm(guild.ownerId, { embeds: [embed], components: comp }).catch(async () => {
             // DMs closed: leave a short note where managers will see it
-            const ch = guild.systemChannel; if (ch) await ch.send({ content: "A server manager can run `/setup` to get started.", allowedMentions: { parse: [] } });
+            const ch = guild.systemChannel; if (ch) await ch.send({ content: "A server manager can run `/manage setup` to get started.", allowedMentions: { parse: [] } });
         });
     } catch { /* the owner may have DMs closed */ }
 });
@@ -311,6 +316,7 @@ client.on(Events.VoiceStateUpdate, (oldS, newS) => {
         else music.onVoiceChange(oldS.guild.id);
     } catch (err) { console.error(`[music] ${err.message}`); }
 });
+client.once(Events.ClientReady, () => { setTimeout(() => music?.autoBoot().catch(err => console.error(`[music] ${err.message}`)), 8000).unref?.(); }); // rejoin Auto DJ channels that have people in them after a restart
 client.on(Events.GuildDelete, guild => { music?.onBotDisconnected(guild.id); if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
 
 // ---- community: XP, welcome, invites ----
@@ -496,11 +502,22 @@ client.on(Events.InteractionCreate, async i => {
         return;
     }
     if (i.user?.id && db.getUser(i.user.id)) db.touchUser(i.user.id);
+    // "/me wishlist add" arrives as the old "/me wishlist add" from here on, so every handler stays as it was.
+    if (i.isChatInputCommand() || i.isAutocomplete()) {
+        const route = legacyRoute(i.commandName, i.options.getSubcommandGroup(false), i.options.getSubcommand(false));
+        if (route) {
+            i.hubName = i.commandName; i.commandName = route.command;
+            i.options.getSubcommand = (required = true) => { if (route.sub == null && required) throw new Error("This command has no subcommand."); return route.sub; };
+            i.options.getSubcommandGroup = () => null;
+            if (i.isChatInputCommand() && SERVER_ONLY_LEGACY.has(route.command) && !i.inGuild()) return void i.reply({ content: "That one works inside a server. Try it there.", flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+    }
     if (i.isAutocomplete()) {
         try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : i.commandName === "music" ? (musicUi?.handleAutocomplete(i) ?? i.respond([])) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
     }
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
+    if (i.isStringSelectMenu() && i.customId === "help_pick") return handleHelpPick(i);
     if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);
     if (i.isStringSelectMenu() && i.customId.startsWith("mu_pick:")) return musicUi ? musicUi.handleSelect(i) : musicOff(i);
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
@@ -525,7 +542,7 @@ client.on(Events.InteractionCreate, async i => {
                 await i.reply({ content: "That game is no longer on your wishlist, or this alert is not yours.", flags: MessageFlags.Ephemeral });
             } else {
                 db.removeItem(item.discord_id, item.itad_id);
-                await i.reply({ content: `Stopped watching **${item.title}**. You can add it again any time with /wishlist add.`, flags: MessageFlags.Ephemeral });
+                await i.reply({ content: `Stopped watching **${item.title}**. You can add it again any time with /me wishlist add.`, flags: MessageFlags.Ephemeral });
             }
         } catch (err) { console.error(`[stop] ${err.stack ?? err.message}`); }
         return;
@@ -539,7 +556,7 @@ client.on(Events.InteractionCreate, async i => {
         return;
     }
     if (!i.isChatInputCommand()) return;
-    console.log(`[command] /${i.commandName}${i.options?.getSubcommand?.(false) ? " " + i.options.getSubcommand(false) : ""}`);
+    console.log(`[command] /${i.hubName ? i.hubName + " " : ""}${i.commandName}${i.options?.getSubcommand?.(false) ? " " + i.options.getSubcommand(false) : ""}`);
     const known = db.getUser(i.user.id);
     const showTip = !known?.tipped && !["help", "about", "privacy", "mydata", "changelog"].includes(i.commandName);
     try {
@@ -554,7 +571,7 @@ client.on(Events.InteractionCreate, async i => {
                 const user = db.ensureUser(i.user.id, i.guildId);
                 const pick = i.options.getString("currency");
                 const name = v => REGIONS.find(r => r.value === v)?.name ?? v;
-                if (!pick) return await i.reply({ content: `Prices are shown in **${name(user.region)}**. Change it with \`/currency currency:\`, or from the dashboard's top bar.`, flags: MessageFlags.Ephemeral });
+                if (!pick) return await i.reply({ content: `Prices are shown in **${name(user.region)}**. Change it with \`/me currency currency:\`, or from the dashboard's top bar.`, flags: MessageFlags.Ephemeral });
                 db.updateUser(user.discord_id, { region: pick });
                 return await i.reply({ content: `Prices are now in **${name(pick)}**, here and on the dashboard.`, flags: MessageFlags.Ephemeral });
             }
@@ -601,7 +618,7 @@ client.on(Events.InteractionCreate, async i => {
             case "publicpage": return await handlers.handlePublicPage(i);
             case "friend": return await handlers.handleFriend(i);
             case "mydata": return await handlers.handleMyData(i);
-            case "help": return await embedReply(i, HELP);
+            case "help": return await i.reply({ ...helpPayload("start"), flags: MessageFlags.Ephemeral });
             case "dashboard": case "dash": return await i.reply(dashPayload(cfg.dashboard?.publicUrl ?? null, i.options.getString("page")));
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
             case "privacy": return await embedReply(i, PRIVACY);
@@ -624,7 +641,7 @@ if (cfg.dashboard) {
     const rest = createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
     });
-    // One broadcaster for the dashboard's Admin page and /grabberad, so only one announcement or promotion goes out at a time.
+    // One broadcaster for the dashboard's Admin page and /bot grabberad, so only one announcement or promotion goes out at a time.
 const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), sendChannel: (id, p) => discord.sendChannel(id, p),
     guildInfo: id => { const g = client.guilds.cache.get(id); return g ? { name: g.name, icon: g.iconURL({ extension: "png", size: 256 }) } : null; },
     guildBanner: async info => {
@@ -632,7 +649,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ music, musicGuild, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

@@ -23,7 +23,7 @@ export function presenceLines({ servers, members, users, uptimeMs, supportUrl })
     if (Number.isFinite(members) && members > 0) lines.push(`👥 ${plural(members, "member", "members")} across servers`);
     if (Number.isFinite(users) && users > 0) lines.push(`💸 Watching deals for ${plural(users, "player", "players")}`);
     if (Number.isFinite(uptimeMs)) lines.push(`⏱️ Online for ${uptimeText(uptimeMs)}`);
-    lines.push("🎮 Try /help, /freegames and /value");
+    lines.push("🎮 Try /help or /games value");
     if (supportUrl) lines.push(`🐦 Support: ${bare(supportUrl)}`);
     return lines.map(l => l.slice(0, 128));
 }

@@ -30,6 +30,12 @@ export function guildAdapter(client) {
                 if (!m) return { roleIds: [], isManager: guild.ownerId === userId };
                 return { roleIds: [...m.roles.cache.keys()], isManager: guild.ownerId === userId || m.permissions.has(PermissionFlagsBits.ManageGuild) || m.permissions.has(PermissionFlagsBits.Administrator) };
             },
+            voiceChannelInfo(channelId) {
+                const ch = guild.channels.cache.get(channelId);
+                if (!ch || (ch.type !== ChannelType.GuildVoice && ch.type !== ChannelType.GuildStageVoice)) return null;
+                const p = me() ? ch.permissionsFor(me()) : null;
+                return { id: ch.id, name: ch.name, canJoin: Boolean(p?.has(PermissionFlagsBits.Connect)) && !(ch.full && !p?.has(PermissionFlagsBits.MoveMembers)), canSpeak: ch.type === ChannelType.GuildStageVoice || Boolean(p?.has(PermissionFlagsBits.Speak)) };
+            },
             voiceChannelOf(userId) {
                 const ch = guild.voiceStates.cache.get(userId)?.channel;
                 if (!ch) return null;
@@ -50,11 +56,21 @@ export function settingsSummary(s) {
         s.channel_id ? `Now-playing messages go to <#${s.channel_id}>.` : "Now-playing messages go where `/play` was used.",
         `Up to **${s.max_queue}** songs in the queue${s.max_minutes ? `, **${s.max_minutes}** minutes max per song` : ""}.`,
         s.announce ? "I post a message when each song starts." : "No song-start messages.",
-        s.stay ? "I stay in the voice channel when the queue ends." : `I leave ${s.leave_minutes} minutes after the queue ends or everyone leaves.`
+        s.stay ? "I stay in the voice channel when the queue ends." : `I leave ${s.leave_minutes} minutes after the queue ends or everyone leaves.`,
+        `Live radio links are **${s.radio ? "allowed" : "off"}**.`
     ].join("\n");
 }
 
-export function createMusicHandlers({ db, music, adapter }) {
+export function autoSummary(s, count, pending) {
+    return [
+        `Auto DJ is **${s.autodj ? "on" : "off"}**. It plays ${count ? `**${count}** songs from ${s.autodj_source ? (/^https?:/.test(s.autodj_source) ? "the playlist you set" : s.autodj_source) : "its playlist"}` : "nothing yet (set a playlist)"}${s.autodj_shuffle ? ", shuffled" : " in order"}.`,
+        `It starts after **${s.autodj_idle}s** of silence${s.autodj_channel_id ? ` and joins <#${s.autodj_channel_id}> by itself when someone is in it` : ""}.`,
+        s.autodj_submit ? `Members can request songs (${pending} waiting). Requests play before the playlist.` : "Song requests are off.",
+        `Live radio links are **${s.radio ? "allowed" : "off"}**.`
+    ].join("\n");
+}
+
+export function createMusicHandlers({ db, music, adapter, stations = null }) {
     const picks = new Map(); // search results waiting for a choice
     const sweep = () => { const t = Date.now(); for (const [k, v] of picks) if (v.exp < t) picks.delete(k); };
     const managerOnly = i => { if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new UserError("You need the Manage Server permission to change this."); };
@@ -68,7 +84,7 @@ export function createMusicHandlers({ db, music, adapter }) {
             const sub = i.commandName === "play" ? "play" : i.options.getSubcommand();
             const gid = i.guildId, uid = i.user.id;
             await adapter(gid)?.warm?.(uid);
-            const slow = ["play", "search", "loadplaylist"].includes(sub);
+            const slow = ["play", "search", "loadplaylist", "live", "submit", "setup"].includes(sub);
             if (slow) { await i.deferReply(); deferred = true; }
             const reply = async payload => (deferred ? i.editReply(fancy(payload)) : i.reply(fancy(payload)));
 
@@ -86,6 +102,44 @@ export function createMusicHandlers({ db, music, adapter }) {
                     const token = `${uid}${Date.now().toString(36)}`;
                     picks.set(token, { results, userId: uid, exp: Date.now() + 5 * 60_000 });
                     return await reply(searchPayload(results, token, q));
+                }
+                case "live": {
+                    music.who(gid, uid);
+                    if (!db.getMusicSettings(gid).radio) throw new UserError("Live radio is turned off in this server. A manager can allow it with `/music settings`.");
+                    const list = stations ? await stations.working() : [];
+                    if (!list.length) throw new UserError("None of the stations answered just now. Try again in a minute, or paste a stream link with `/play`.");
+                    sweep();
+                    const token = `${uid}${Date.now().toString(36)}`;
+                    picks.set(token, { results: list.slice(0, 25), userId: uid, exp: Date.now() + 5 * 60_000 });
+                    return await reply({ embeds: [{ color: 0xff5500, title: "📻 Live radio", description: list.slice(0, 25).map((t, n) => `**${n + 1}.** ${t.title} · ${t.genre ?? ""}`).join("\n"), footer: { text: "Pick a station to start it. These are checked just now, so every one is on the air." } }], components: [{ type: 1, components: [{ type: 3, custom_id: `mu_pick:${token}`, placeholder: "Pick a station", options: list.slice(0, 25).map((t, n) => ({ label: t.title.slice(0, 100), description: String(t.genre ?? "Live radio").slice(0, 100), value: String(n) })) }] }], allowedMentions: { parse: [] } });
+                }
+                case "submit": {
+                    const r = await music.submit(gid, uid, { query: i.options.getString("song") });
+                    return await reply({ embeds: [{ color: 0xff5500, title: "🎧 Request added", description: `${r.added > 1 ? `**${r.added} songs** from **${r.title}**` : `**${r.first.title}**`} will play on the Auto DJ.\nYou have **${r.pending}** waiting. Requests play before the Auto DJ's own playlist.`, footer: { text: "See the list with /music autodj requests" } }], allowedMentions: { parse: [] } });
+                }
+                case "requests": {
+                    const rows = music.listSubmissions(gid);
+                    return await reply({ embeds: [{ color: 0xff5500, title: "Waiting for the Auto DJ", description: rows.length ? rows.slice(0, 20).map((r, n) => `**${n + 1}.** ${r.title}${r.artist ? ` · ${r.artist}` : ""} · <@${r.user_id}>`).join("\n") + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : "") : "No requests right now. Add one with `/music autodj submit`." }], flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+                }
+                case "setup": {
+                    managerOnly(i);
+                    const o = i.options, patch = {}; let playlistNote = "";
+                    if (o.getBoolean("enabled") !== null) patch.autodj = o.getBoolean("enabled") ? 1 : 0;
+                    if (o.getInteger("idle") !== null) patch.autodj_idle = o.getInteger("idle");
+                    if (o.getBoolean("requests") !== null) patch.autodj_submit = o.getBoolean("requests") ? 1 : 0;
+                    if (o.getBoolean("shuffle") !== null) patch.autodj_shuffle = o.getBoolean("shuffle") ? 1 : 0;
+                    if (o.getChannel("channel")) patch.autodj_channel_id = o.getChannel("channel").id;
+                    if (o.getBoolean("clearchannel")) patch.autodj_channel_id = null;
+                    if (Object.keys(patch).length) db.setMusicSettings(gid, patch);
+                    if (o.getBoolean("clearplaylist")) { music.clearAutoPlaylist(gid); playlistNote = "Playlist removed.\n"; }
+                    else if (o.getString("playlist")) { const r = await music.setAutoPlaylist(gid, { link: o.getString("playlist") }); playlistNote = `Playlist set: ${r.count} songs.\n`; }
+                    else if (o.getString("savedplaylist")) {
+                        const p = db.getPlaylist(uid, o.getString("savedplaylist"));
+                        if (!p) throw new UserError("You don't have a saved playlist with that name. `/music playlists` lists yours.");
+                        const r = await music.setAutoPlaylist(gid, { tracks: p.tracks, label: p.name }); playlistNote = `Playlist set from **${p.name}**: ${r.count} songs.\n`;
+                    }
+                    if (db.getMusicSettings(gid).autodj) music.autoJoin(gid).catch(() => {});
+                    return await reply({ content: (Object.keys(patch).length || playlistNote ? "Saved.\n" : "") + playlistNote + autoSummary(db.getMusicSettings(gid), db.getAutoPlaylist(gid).length, db.countSubmissions(gid)), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
                 }
                 case "nowplaying": return await reply({ embeds: [nowPlayingEmbed(music.status(gid))] });
                 case "queue": return await reply({ embeds: [queueEmbed(music.status(gid), (i.options.getInteger("page") ?? 1) - 1)], flags: MessageFlags.Ephemeral });
@@ -142,6 +196,7 @@ export function createMusicHandlers({ db, music, adapter }) {
                     if (o.getInteger("volume") !== null) patch.volume = o.getInteger("volume");
                     if (o.getInteger("maxqueue") !== null) patch.max_queue = o.getInteger("maxqueue");
                     if (o.getInteger("maxminutes") !== null) patch.max_minutes = o.getInteger("maxminutes");
+                    if (o.getBoolean("radio") !== null) patch.radio = o.getBoolean("radio") ? 1 : 0;
                     if (o.getBoolean("announce") !== null) patch.announce = o.getBoolean("announce") ? 1 : 0;
                     if (o.getBoolean("stay") !== null) patch.stay = o.getBoolean("stay") ? 1 : 0;
                     const s = Object.keys(patch).length ? db.setMusicSettings(gid, patch) : db.getMusicSettings(gid);
@@ -205,7 +260,7 @@ export function createMusicHandlers({ db, music, adapter }) {
 
     async function handleAutocomplete(i) {
         const f = i.options.getFocused(true);
-        if (f.name !== "name") return i.respond([]);
+        if (f.name !== "name" && f.name !== "savedplaylist") return i.respond([]);
         const q = String(f.value ?? "").toLowerCase();
         return i.respond(db.listPlaylists(i.user.id).filter(p => p.name.toLowerCase().includes(q)).slice(0, 25).map(p => ({ name: `${p.name} (${p.tracks.length})`.slice(0, 100), value: p.name })));
     }

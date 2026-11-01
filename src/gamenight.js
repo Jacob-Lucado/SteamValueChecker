@@ -54,7 +54,7 @@ export function gameNightEmbed(r) {
     if (near) fields.push({ name: "Almost everyone owns", value: near });
     const buy = list(r.buy, b => `• **${b.title}** wanted by ${b.wanters.map(w => `<@${w}>`).join(", ")}${b.now?.price != null ? ` at **${money(b.now.price, b.now.currency ?? "USD")}**${b.now.discount > 0 ? ` (-${Math.round(b.now.discount * 100)}%)` : ""}${b.now.shop ? ` at ${b.now.shop}` : ""}` : ""}`);
     if (buy) fields.push({ name: "Worth buying together", value: buy });
-    if (r.empty?.length) fields.push({ name: "No games on record", value: `${r.empty.map(m => `<@${m}>`).join(", ")} ${r.empty.length === 1 ? "has" : "have"} no games in the bot yet, so ${r.empty.length === 1 ? "they are" : "they are all"} left out of "Everyone owns". Link Steam with \`/steam link\` or add games with \`/library import\`.` });
+    if (r.empty?.length) fields.push({ name: "No games on record", value: `${r.empty.map(m => `<@${m}>`).join(", ")} ${r.empty.length === 1 ? "has" : "have"} no games in the bot yet, so ${r.empty.length === 1 ? "they are" : "they are all"} left out of "Everyone owns". Link Steam with \`/me steam link\` or add games with \`/me library import\`.` });
     return { color: 0xff9800, title: `Game night for ${r.people.length}`, description: r.people.map(p => `<@${p}>`).join(" "), fields,
         footer: { text: `${r.hidden ? `${r.hidden} not counted (not opted in)  •  ` : ""}Only members who opted in with /alerts share are included` } };
 }
@@ -102,5 +102,5 @@ export function voiceBuyEmbed(g) {
     const off = g.now.discount > 0 ? ` (-${Math.round(g.now.discount * 100)}%)` : "";
     return { color: 0x57f287, title: `${g.users.length} of you want ${g.title}`, url: /^https:\/\//.test(g.now.url ?? "") ? g.now.url : undefined,
         description: `${g.users.map(u => `<@${u}>`).join(" ")}\nIt just dropped to **${money(g.now.price, g.now.currency ?? "USD")}**${off}${g.now.shop ? ` at ${g.now.shop}` : ""}. Buy it together for game night?`,
-        footer: { text: "Only members who opted in with /alerts share are included  •  /setup to turn this off" } };
+        footer: { text: "Only members who opted in with /alerts share are included  •  /manage setup to turn this off" } };
 }

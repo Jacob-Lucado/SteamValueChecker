@@ -1,4 +1,4 @@
-// The /value pipeline without any Discord code, shared by the dashboard.
+// The /games value pipeline without any Discord code, shared by the dashboard.
 import { parseUpload, parseTyped, sanitize } from "./parse.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { toCsv } from "./render.js";

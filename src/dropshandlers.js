@@ -1,4 +1,4 @@
-// Discord side of promo drops: /promos add, list, end, channel, ping and news.
+// Discord side of promo drops: /server promos add, list, end, channel, ping and news.
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
 import { applyDropSettings, cleanDrop, dropView } from "./drops.js";
@@ -17,8 +17,8 @@ export function createDropHandlers({ db, runNow = null }) {
         if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new UserError("You need the Manage Server permission to change this.");
     };
     const summary = (gid, s = db.getDropSettings(gid)) => [
-        s.channel_id ? `Promo drops are posted in <#${s.channel_id}>.` : "No promo channel yet. Pick one with `/promos channel`.",
-        s.news ? "I also watch NVIDIA, SteelSeries and the Steam news of games like Dead by Daylight and post anything that sounds like a giveaway or a code." : "News watching is off (`/promos news`).",
+        s.channel_id ? `Promo drops are posted in <#${s.channel_id}>.` : "No promo channel yet. Pick one with `/server promos channel`.",
+        s.news ? "I also watch NVIDIA, SteelSeries and the Steam news of games like Dead by Daylight and post anything that sounds like a giveaway or a code." : "News watching is off (`/server promos news`).",
         s.role_id ? `Pings <@&${s.role_id}>.` : "No role is pinged."
     ].join("\n");
 
@@ -29,22 +29,22 @@ export function createDropHandlers({ db, runNow = null }) {
             const gid = i.guildId;
             if (sub === "list") {
                 const rows = db.listDrops(gid, { status: "active", limit: 10 }).filter(d => !d.expires_at || d.expires_at > Date.now());
-                return await eph(i, { embeds: [{ color: 0x1abc9c, title: "Promo drops in this server", description: rows.length ? rows.map(dropLine).join("\n\n") : "Nothing right now. Managers can add one with `/promos add`.", footer: { text: "These can run out before they are marked as ended" } }] });
+                return await eph(i, { embeds: [{ color: 0x1abc9c, title: "Promo drops in this server", description: rows.length ? rows.map(dropLine).join("\n\n") : "Nothing right now. Managers can add one with `/server promos add`.", footer: { text: "These can run out before they are marked as ended" } }] });
             }
             managerOnly(i);
             if (sub === "add") {
                 let clean;
                 try { clean = cleanDrop({ title: i.options.getString("title"), code: i.options.getString("code"), url: i.options.getString("link"), source: i.options.getString("from"), days: i.options.getInteger("days"), note: i.options.getString("note") }); }
                 catch (err) { throw new UserError(err.message); }
-                if (!db.getDropSettings(gid).channel_id) throw new UserError("Pick a channel first with `/promos channel`, then add the drop.");
+                if (!db.getDropSettings(gid).channel_id) throw new UserError("Pick a channel first with `/server promos channel`, then add the drop.");
                 const id = db.addDrop({ guildId: gid, ...clean, createdBy: i.user.id });
                 runNow?.().catch(() => {});
-                return await eph(i, `Added as #${id}. It goes out in the promo channel in a moment. End it early with \`/promos end id:${id}\`.`);
+                return await eph(i, `Added as #${id}. It goes out in the promo channel in a moment. End it early with \`/server promos end id:${id}\`.`);
             }
             if (sub === "end") {
                 const id = i.options.getInteger("id");
                 const d = db.getDrop(id);
-                if (!d || d.guild_id !== gid) throw new UserError("I don't have a drop with that number in this server. `/promos list` shows them.");
+                if (!d || d.guild_id !== gid) throw new UserError("I don't have a drop with that number in this server. `/server promos list` shows them.");
                 if (!db.endDrop(id)) throw new UserError("That one has already ended.");
                 runNow?.().catch(() => {});
                 return await eph(i, `Ended #${id}. Its post will be greyed out.`);
@@ -66,7 +66,7 @@ export function createDropHandlers({ db, runNow = null }) {
             if (sub === "news") {
                 const on = i.options.getBoolean("on");
                 if (on === null || on === undefined) return await eph(i, summary(gid));
-                if (on && !db.getDropSettings(gid).channel_id) throw new UserError("Pick a channel first with `/promos channel`.");
+                if (on && !db.getDropSettings(gid).channel_id) throw new UserError("Pick a channel first with `/server promos channel`.");
                 return await eph(i, (on ? "Okay, I'll post news that sounds like a giveaway or a code. Only new ones, nothing old." : "News watching is off.") + "\n" + summary(gid, applyDropSettings(db, gid, { news: on })));
             }
         } catch (err) {

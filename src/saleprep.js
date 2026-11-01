@@ -17,7 +17,7 @@ export function fitBudget(rows, budget) {
 
 export async function salePrep({ db, itad, user, budget = null, now = Date.now() }) {
     const items = db.listItems(user.discord_id);
-    if (!items.length) throw new UserError("Your wishlist is empty. Import it with `/wishlist import` or add games with `/wishlist add`.");
+    if (!items.length) throw new UserError("Your wishlist is empty. Import it with `/me wishlist import` or add games with `/me wishlist add`.");
     const prices = await itad.getPrices(items.map(i => i.itad_id), user.region);
     const buyNow = [], wait = [];
     let currency = "USD";

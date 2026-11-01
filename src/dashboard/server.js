@@ -99,7 +99,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { music: 800, musicsearch: 3_000, musicplay: 2_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
+const COOLDOWNS = { music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -127,7 +127,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, music = null, musicGuild = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -646,9 +646,15 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             }
             const g = musicMember(s, gid);
             await musicGuild?.(gid)?.warm?.(s.userId);
-            const settings = db.getMusicSettings(gid);
-            const out = { guild: { id: g.id, name: g.name }, settings, status: music.status(gid), access: music.access(gid, s.userId), playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })) };
-            if (isManager(g)) { const c = await guildChoices(gid); out.channels = c.channels; out.roles = c.roles; }
+            const { autodj_playlist: _skip, ...settings } = db.getMusicSettings(gid);
+            const subs = db.listSubmissions(gid);
+            const names = Object.fromEntries(await Promise.all([...new Set(subs.slice(0, 50).map(r => r.user_id))].map(async id => [id, (await rest.memberName?.(g.id, id).catch(() => null)) || "Member " + id.slice(-4)])));
+            const out = {
+                guild: { id: g.id, name: g.name }, settings, status: music.status(gid), access: { ...music.access(gid, s.userId), isBotOwner: isOwner(s) }, playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })),
+                autodj: { playlist: db.getAutoPlaylist(gid).slice(0, 100), count: db.getAutoPlaylist(gid).length },
+                submissions: subs.slice(0, 50).map(r => ({ id: r.id, userId: r.user_id, name: names[r.user_id], title: r.title, artist: r.artist, url: r.url, thumb: r.thumb, duration: r.duration, mine: r.user_id === s.userId }))
+            };
+            if (isManager(g)) { const c = await guildChoices(gid); out.channels = c.channels; out.roles = c.roles; out.voiceChannels = await Promise.resolve(rest.listVoiceChannels?.(gid) ?? []).catch(() => []); }
             return out;
         },
         "GET /api/music/search": async (req, _b, url) => {
@@ -709,6 +715,73 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             }
             throw new HttpError(400, "Unknown action.");
         },
+        "GET /api/music/stations": async (req, _b, url) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            musicMember(s, url.searchParams.get("guild"));
+            cooldown(s.userId, "musicstations");
+            return { stations: stations ? (await stations.working()).map(t => ({ title: t.title, genre: t.genre, url: t.url, name: t.title })) : [] };
+        },
+        "POST /api/music/submit": async (req, body) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const g = musicMember(s, body.guild_id);
+            cooldown(s.userId, "musicsubmit");
+            await musicGuild?.(g.id)?.warm?.(s.userId);
+            const tracks = Array.isArray(body.tracks) && body.tracks.length ? body.tracks.slice(0, 1).map(t => ({ url: String(t.url ?? ""), title: String(t.title ?? "").slice(0, 150), artist: String(t.artist ?? "").slice(0, 80), duration: Number(t.duration) > 0 ? Math.round(Number(t.duration)) : null, thumb: typeof t.thumb === "string" && t.thumb.startsWith("https://") ? t.thumb : null })).filter(t => isSoundcloudUrl(t.url)) : null;
+            const r = await musicCall(() => music.submit(g.id, s.userId, { query: body.query, tracks: tracks?.length ? tracks : null }));
+            return { added: r.added, title: r.title, pending: r.pending };
+        },
+        "POST /api/music/submission": async (req, body) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const g = musicMember(s, body.guild_id);
+            await musicGuild?.(g.id)?.warm?.(s.userId);
+            if (body.action === "clear") { const n = await musicCall(async () => music.clearSubmissions(g.id, s.userId)); return { cleared: n }; }
+            await musicCall(async () => music.removeSubmission(g.id, s.userId, body.id));
+            return { removed: true };
+        },
+        "POST /api/music/autodj": async (req, body) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const g = managedGuild(req, body.guild_id);
+            cooldown(s.userId, "musicauto");
+            const patch = {};
+            const flag = k => { if (body[k] !== undefined) patch[k] = body[k] ? 1 : 0; };
+            flag("autodj"); flag("autodj_submit"); flag("autodj_shuffle"); flag("radio");
+            if (body.autodj_idle !== undefined) { const n = Math.round(Number(body.autodj_idle)); if (!(n >= 5 && n <= 600)) throw new HttpError(400, "Idle time must be between 5 and 600 seconds."); patch.autodj_idle = n; }
+            if (body.autodj_channel_id !== undefined) {
+                if (body.autodj_channel_id) { const vcs = await Promise.resolve(rest.listVoiceChannels?.(g.id) ?? []).catch(() => []); if (!vcs.some(c => c.id === body.autodj_channel_id)) throw new HttpError(400, "Pick a voice channel from the list."); }
+                patch.autodj_channel_id = body.autodj_channel_id || null;
+            }
+            if (Object.keys(patch).length) db.setMusicSettings(g.id, patch);
+            let note = null;
+            if (body.clear_playlist) { music.clearAutoPlaylist(g.id); note = "Playlist removed."; }
+            else if (body.playlist_url) { const r = await musicCall(() => music.setAutoPlaylist(g.id, { link: body.playlist_url })); note = `Playlist set: ${r.count} songs.`; }
+            else if (body.saved_playlist) {
+                const p = db.getPlaylist(s.userId, String(body.saved_playlist));
+                if (!p) throw new HttpError(404, "You don't have a saved playlist with that name.");
+                const r = await musicCall(() => music.setAutoPlaylist(g.id, { tracks: p.tracks, label: p.name })); note = `Playlist set from ${p.name}: ${r.count} songs.`;
+            }
+            if (db.getMusicSettings(g.id).autodj) music.autoJoin(g.id).catch(() => {});
+            const { autodj_playlist: _skip, ...settings } = db.getMusicSettings(g.id);
+            return { settings, note, count: db.getAutoPlaylist(g.id).length };
+        },
+        "GET /api/admin/music": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const nameOf = id => guildList?.().find(x => x.id === id)?.name ?? null;
+            return { sessions: music.sessions().filter(x => !isHidden(x.guildId)).map(x => ({ ...x, guildName: nameOf(x.guildId) ?? "Server " + x.guildId.slice(-4) })) };
+        },
+        "POST /api/admin/music": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            if (isHidden(String(body.guild_id ?? ""))) throw new HttpError(404, "Unknown server.");
+            await musicCall(async () => music.adminForce(String(body.guild_id ?? ""), String(body.action ?? "")));
+            return { ok: true, sessions: music.sessions().filter(x => !isHidden(x.guildId)).length };
+        },
         "POST /api/music/settings": async (req, body) => {
             const s = session(req);
             if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
@@ -718,6 +791,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             if (body.enabled !== undefined) patch.enabled = body.enabled ? 1 : 0;
             if (body.announce !== undefined) patch.announce = body.announce ? 1 : 0;
             if (body.stay !== undefined) patch.stay = body.stay ? 1 : 0;
+            if (body.radio !== undefined) patch.radio = body.radio ? 1 : 0;
             int("volume", 1, 100, "Starting volume"); int("max_queue", 5, 500, "Queue size"); int("max_minutes", 0, 600, "Song length limit"); int("leave_minutes", 1, 60, "Leave time");
             if (body.dj_role_id !== undefined || body.channel_id !== undefined) {
                 const { channels, roles } = await guildChoices(g.id);
@@ -973,7 +1047,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
         },
 
         "POST /api/redeem/finish": async (req, body) => {
-            // The page reports what the extension did with a batch that was queued by /redeem. Results go back to the member's Discord DMs.
+            // The page reports what the extension did with a batch that was queued by /games redeem. Results go back to the member's Discord DMs.
             const s = session(req);
             const job = db.pendingRedeemJob(s.userId);
             if (body.cancel) { db.cancelRedeemJob(s.userId); return { ok: true }; }
@@ -992,7 +1066,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             const done = results.filter(r => r.status === "redeemed");
             if (done.length) lines.push("", "**Redeemed**", ...done.slice(0, 25).map(r => `• ${r.game || "Unnamed product"} (\`${r.key.slice(0, 5)}-•••••-${r.key.slice(-5)}\`)`));
             if (failed.length) lines.push("", "**Failed** (still yours to retry)", ...failed.slice(0, 25).map(r => `• \`${r.key}\` ${r.message || r.status}`));
-            if (left > 0) lines.push("", `**${left}** key${left === 1 ? "" : "s"} were not tried. Send them again with /redeem.`);
+            if (left > 0) lines.push("", `**${left}** key${left === 1 ? "" : "s"} were not tried. Send them again with /games redeem.`);
             db.logRedeem(s.userId, results);
             if (!db.finishRedeemJob(s.userId, job.id, summary)) throw new HttpError(404, "That batch is no longer waiting.");
             const text = lines.join("\n").slice(0, 3900);
@@ -1171,7 +1245,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
         // What to play next from the Steam library. `skip` (comma-separated ids already offered) makes "pick another" fresh.
         // Library analytics: tiles, hours by genre, played vs backlog, most played. Genre tags are fetched a few at a time, so
         // `pending` says how many games are still waiting; the page asks again until it is 0.
-        // Discord Linked Roles: show Steam on your Discord profile. The same as /steam verify.
+        // Discord Linked Roles: show Steam on your Discord profile. The same as /me steam verify.
         "GET /api/steam/linkedroles": async (req) => {
             const s = session(req); userRow(s);
             const p = connectionPayload(db, s.userId);
@@ -1384,7 +1458,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             return { weeklyDigest: Boolean(body.enabled) };
         },
 
-        // The same checklist as /setup in Discord.
+        // The same checklist as /manage setup in Discord.
         "GET /api/servers/setup": async (req, _b, url) => {
             const s = session(req);
             const g = managerGuild(s, url.searchParams.get("guild"));
@@ -1403,7 +1477,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
         },
         "GET /api/compare": async (req, _b, url) => {
-            // Same rules as /compare: a friend in one of your servers who turned on sharing (/alerts share).
+            // Same rules as /server compare: a friend in one of your servers who turned on sharing (/alerts share).
             const s = session(req);
             const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
             const them = String(url.searchParams.get("user") ?? "");
@@ -1598,7 +1672,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             return { about: botInfo ? botInfo() : null, creator: config.creator ?? null, freeNow };
         },
 
-        // Public, like /about: aggregate health only, nothing about any person.
+        // Public, like /bot about: aggregate health only, nothing about any person.
         "GET /api/status": async () => {
             if (!status) throw new HttpError(404, "Status is not available.");
             const info = botInfo ? botInfo() : null, mem = process.memoryUsage();
@@ -2443,7 +2517,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             if (key === "GET /auth/steam/return") return await steamReturn(req, res, url);
             if (key === "POST /auth/logout") { checkWrite(req); return logout(req, res); }
 
-            // The same pictures /profilecard and /steam value post in Discord. Saved straight from the website with a download name.
+            // The same pictures /me profilecard and /me steam value post in Discord. Saved straight from the website with a download name.
             if (key === "GET /api/profile/card.png" || key === "GET /api/steam/value.png" || key === "GET /api/steam/recap.png") {
                 const s = session(req); userRow(s);
                 const undo = cooldown(s.userId, "cardimg");
@@ -2495,7 +2569,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
                 // Called by the FanaticalGrabber extension with a link code instead of a dashboard session. Adds titles only.
                 const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
                 const uid = m ? db.grabberUserForToken(m[1]) : null;
-                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /library grabber.");
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /me library grabber.");
                 if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
                 cooldown(uid, "grabber");
                 const body = await readJson(req, 60_000);
@@ -2530,7 +2604,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
                 // The extension's bundle and cart helpers: current prices for up to 60 Steam apps, by link code. Only app numbers are sent.
                 const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
                 const uid = m ? db.grabberUserForToken(m[1]) : null;
-                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /library grabber.");
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /me library grabber.");
                 if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
                 cooldown(uid, "grabberprices");
                 const body = await readJson(req, 5_000);
@@ -2551,7 +2625,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
                 // Called by the extension on a Steam store page, with the member's link code. Returns prices and whether they own or wishlisted it.
                 const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
                 const uid = m ? db.grabberUserForToken(m[1]) : null;
-                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /library grabber.");
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /me library grabber.");
                 const appid = Number(url.searchParams.get("appid"));
                 if (!Number.isInteger(appid) || appid <= 0 || appid > 1e9) throw new HttpError(400, "Bad app id.");
                 cooldown(uid, "grabbergame");

@@ -10,7 +10,7 @@ import { requestSchema, requestStore } from "./requeststore.js";
 import { codeSchema, codeStore } from "./codestore.js";
 import { dropSchema, dropStore } from "./dropstore.js";
 import { banSchema, banStore } from "./banstore.js";
-import { musicSchema, musicStore } from "./musicstore.js";
+import { musicSchema, musicStore, MUSIC_EXTRA_COLUMNS } from "./musicstore.js";
 import { steamSchema, steamStore } from "./steamstore.js";
 import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { redeemSchema, redeemStore } from "./redeemstore.js";
@@ -187,6 +187,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     // Columns added after the first release. Safe to run on every start.
     const cols = t => db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
     const addColumn = (table, name, def) => { if (!cols(table).includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`); };
+    for (const [col, def] of MUSIC_EXTRA_COLUMNS) addColumn("music_settings", col, def);
     addColumn("items", "priority", "INTEGER NOT NULL DEFAULT 0");
     addColumn("items", "release_at", "INTEGER");
     addColumn("items", "release_check", "INTEGER");
@@ -615,7 +616,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             watched: all("SELECT title, COUNT(DISTINCT discord_id) AS n FROM items GROUP BY itad_id ORDER BY n DESC, title LIMIT 10").map(clean),
             features: [
                 ["Linked Steam", safe("SELECT COUNT(*) AS n FROM steam_links")], ["FanaticalGrabber link codes", safe("SELECT COUNT(*) AS n FROM grabber_links")],
-                ["Servers built with /community setup", safe("SELECT COUNT(*) AS n FROM community WHERE setup_at IS NOT NULL")], ["Members earning XP", safe("SELECT COUNT(*) AS n FROM member_xp WHERE xp > 0")], ["Members who joined through an invite", safe("SELECT COUNT(*) AS n FROM invite_joins WHERE inviter_id IS NOT NULL")], ["Cross-server giveaways", safe("SELECT COUNT(*) AS n FROM giveaways WHERE is_global = 1")], ["Opted in to server boards", safe("SELECT COUNT(*) AS n FROM users WHERE share = 1")], ["Public wishlist pages", safe("SELECT COUNT(*) AS n FROM users WHERE profile_public = 1")],
+                ["Servers built with /manage community setup", safe("SELECT COUNT(*) AS n FROM community WHERE setup_at IS NOT NULL")], ["Members earning XP", safe("SELECT COUNT(*) AS n FROM member_xp WHERE xp > 0")], ["Members who joined through an invite", safe("SELECT COUNT(*) AS n FROM invite_joins WHERE inviter_id IS NOT NULL")], ["Cross-server giveaways", safe("SELECT COUNT(*) AS n FROM giveaways WHERE is_global = 1")], ["Opted in to server boards", safe("SELECT COUNT(*) AS n FROM users WHERE share = 1")], ["Public wishlist pages", safe("SELECT COUNT(*) AS n FROM users WHERE profile_public = 1")],
                 ["Custom profile cards", safe("SELECT COUNT(*) AS n FROM card_prefs")], ["Bundles tracked", safe("SELECT COUNT(*) AS n FROM bundles_bought")],
                 ["Hours goals this year", safe("SELECT COUNT(*) AS n FROM hour_goals")], ["Backlog challenges this month", safe("SELECT COUNT(*) AS n FROM challenges WHERE month = ?", thisMonth)],
                 ["Friends added", safe("SELECT COUNT(*) AS n FROM friends")], ["Open looking-for-group posts", safe("SELECT COUNT(*) AS n FROM lfg_posts WHERE status = 'open'")],

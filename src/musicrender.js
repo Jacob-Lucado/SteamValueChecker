@@ -15,11 +15,11 @@ export function progressBar(pos, dur, width = 14) {
 export function nowPlayingEmbed(st) {
     const t = st.current;
     if (!t) return { color: COLOR, title: "Nothing is playing", description: "Use `/play` to add a song from SoundCloud." };
-    const bar = t.duration ? `\n\n${progressBar(st.position, t.duration)}\n\`${fmtTime(st.position)} / ${fmtTime(t.duration)}\`` : "";
+    const bar = t.live ? "\n\n🔴 **LIVE**" : t.duration ? `\n\n${progressBar(st.position, t.duration)}\n\`${fmtTime(st.position)} / ${fmtTime(t.duration)}\`` : "";
     return {
-        color: COLOR, author: { name: st.paused ? "⏸️ Paused" : "🎶 Now playing" },
+        color: COLOR, author: { name: st.paused ? "⏸️ Paused" : t.live ? "📻 Live radio" : t.auto ? "🎧 Auto DJ" : "🎶 Now playing" },
         title: short(t.title, 200), url: t.url,
-        description: `${t.artist ? `by **${short(t.artist, 60)}**\n` : ""}Requested by ${t.requestedBy ? `<@${t.requestedBy}>` : "someone"}${bar}`,
+        description: `${t.artist ? `by **${short(t.artist, 60)}**\n` : ""}${t.auto ? "Playing from the **Auto DJ**" : `Requested by ${t.requestedBy ? `<@${t.requestedBy}>` : "someone"}`}${bar}`,
         ...(t.thumb ? { thumbnail: { url: t.thumb } } : {}),
         fields: [
             { name: "Up next", value: st.next[0] ? short(st.next[0].title, 60) : "Nothing yet", inline: true },

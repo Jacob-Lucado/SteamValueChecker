@@ -1,4 +1,4 @@
-// Embeds for /bundle and /saleprep. No Discord library needed, so they are easy to test.
+// Embeds for /games bundle and /games saleprep. No Discord library needed, so they are easy to test.
 import { money } from "./render.js";
 
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);

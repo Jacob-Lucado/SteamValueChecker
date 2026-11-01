@@ -1,4 +1,4 @@
-// /calendar: what is coming up, server events for managers, and an optional private link for other calendar apps.
+// /server calendar: what is coming up, server events for managers, and an optional private link for other calendar apps.
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { calendarEntries, KINDS } from "./calendar.js";
 import { parseWhen } from "./lfg.js";
@@ -44,12 +44,12 @@ export function createCalendarHandlers({ db, calendar, publicUrl }) {
                 const announce = i.options.getBoolean("announce") !== false;
                 const remind = i.options.getInteger("reminder");
                 const r = await calendar.create({ guildId: i.guildId, creatorId: i.user.id, title: i.options.getString("title", true), notes: i.options.getString("notes"), startsAt, channelId: announce ? i.channelId : null, remindMin: remind ?? 60 });
-                return void await eph(i, `Added event \`#${r.id}\`.${announce ? (r.announced ? " Announced in this channel." : " I could not post the announcement here. Check my permissions in this channel.") : ""} Members see it with \`/calendar view\`${base ? " and on the dashboard's Calendar page" : ""}.`);
+                return void await eph(i, `Added event \`#${r.id}\`.${announce ? (r.announced ? " Announced in this channel." : " I could not post the announcement here. Check my permissions in this channel.") : ""} Members see it with \`/server calendar view\`${base ? " and on the dashboard's Calendar page" : ""}.`);
             }
             if (sub === "remove") {
                 if (!i.guildId) return void await eph(i, "Use this in a server.");
                 if (!canManage(i)) return void await eph(i, "You need the Manage Server permission to remove events.");
-                return void await eph(i, calendar.remove(i.options.getInteger("id", true), i.guildId) ? "Removed." : "I can't find that event in this server. The number is shown in `/calendar view`.");
+                return void await eph(i, calendar.remove(i.options.getInteger("id", true), i.guildId) ? "Removed." : "I can't find that event in this server. The number is shown in `/server calendar view`.");
             }
             if (sub === "feed") {
                 if (i.options.getString("action") === "off") return void await eph(i, db.revokeCalFeed(i.user.id) ? "Your calendar link is off. The old link no longer works." : "You do not have a calendar link.");
@@ -59,7 +59,7 @@ export function createCalendarHandlers({ db, calendar, publicUrl }) {
                     "Your private calendar link (keep it secret; anyone with it can read your calendar):",
                     `\`${base}/calendar/feed/${token}.ics\``,
                     "Paste it into Google Calendar (Other calendars > From URL), Apple Calendar (File > New Calendar Subscription) or Outlook (Add calendar > From internet). It updates by itself.",
-                    "Making a new link replaces this one. `/calendar feed action:Turn the link off` removes it."
+                    "Making a new link replaces this one. `/server calendar feed action:Turn the link off` removes it."
                 ].join("\n"));
             }
         } catch (err) { await failed(i, err); }

@@ -1,5 +1,5 @@
 // The #leaderboard channel: one embed with the XP top ten and top inviters that the bot edits on a timer (default every 5 hours).
-// Managers can refresh it at once with /leaderboardrefresh or from the dashboard.
+// Managers can refresh it at once with /manage leaderboardrefresh or from the dashboard.
 import { UserError } from "./errors.js";
 
 export const LB_DEFAULT_HOURS = 5, LB_MIN_HOURS = 1, LB_MAX_HOURS = 48;
@@ -12,7 +12,7 @@ export function leaderboardEmbed({ server = "Server", rows = [], inviters = [], 
     const fields = [];
     if (inviters.length) fields.push({ name: "🤝 Top inviters", value: inviters.slice(0, 5).map((r, n) => `${place(n)} **${r.name}** · ${r.active} invited`).join("\n"), inline: true });
     if (totals) fields.push({ name: "📊 Server", value: `**${totals.members.toLocaleString()}** ranked members\n**${totals.messages.toLocaleString()}** messages\nTop level **${totals.topLevel}**`, inline: true });
-    fields.push({ name: "​", value: "Chat and hang out in voice to earn XP. Check your own place with `/rank`.", inline: false });
+    fields.push({ name: "​", value: "Chat and hang out in voice to earn XP. Check your own place with `/server rank`.", inline: false });
     return {
         color: 0xf1c40f, title: `🏆  ${server} · XP Leaderboard`,
         description: rows.length ? rows.map((r, n) => `${place(n)} **${r.name}**\n└ Level **${r.level}** · ${r.xp.toLocaleString()} XP`).join("\n") : "Nobody has earned XP yet. Start chatting!",
@@ -26,7 +26,7 @@ export function leaderboardEmbed({ server = "Server", rows = [], inviters = [], 
 /** Builds the board and edits the existing message (or posts a new one). Throws UserError when it cannot. */
 export async function refreshLeaderboard({ db, api, guildId, base = null, now = () => Date.now() }) {
     const c = db.getCommunity(guildId);
-    if (!c.lb_channel) throw new UserError("No leaderboard channel is set. Run /community setup or choose one on the dashboard.");
+    if (!c.lb_channel) throw new UserError("No leaderboard channel is set. Run /manage community setup or choose one on the dashboard.");
     const name = async id => (await api.memberName(guildId, id).catch(() => null)) ?? `<@${id}>`;
     const [guild, rows, inviters] = await Promise.all([
         api.getGuild(guildId).catch(() => null),

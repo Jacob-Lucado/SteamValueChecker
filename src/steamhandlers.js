@@ -1,4 +1,4 @@
-// /steam: link a public Steam profile so the library and hours played fill in by themselves, and get a pick for what to play next.
+// /me steam: link a public Steam profile so the library and hours played fill in by themselves, and get a pick for what to play next.
 import { MessageFlags } from "discord.js";
 import { libraryView } from "./library.js";
 import { viewRows } from "./wishlist.js";
@@ -71,7 +71,7 @@ export function steamEmbed({ stats, link, currency }) {
     return {
         color: 0x66c0f4, title: "Your Steam library",
         fields,
-        footer: { text: `Synced ${link?.synced_at ? new Date(link.synced_at).toISOString().slice(0, 10) : "never"}  •  Run /steam sync to refresh, /steam next for something to play.` }
+        footer: { text: `Synced ${link?.synced_at ? new Date(link.synced_at).toISOString().slice(0, 10) : "never"}  •  Run /me steam sync to refresh, /me steam next for something to play.` }
     };
 }
 
@@ -97,7 +97,7 @@ export function nextEmbed(n, currency) {
         color: 0x66c0f4, title: `🎯 Play ${n.pick.title}`, description: n.why,
         image: n.pick.appid ? { url: art(n.pick.appid) } : undefined,
         fields: n.others.length ? [{ name: "Also good", value: n.others.map(r => line(r, x => (x.minutes ? fmtHours(x.minutes) : "unplayed"))).join("\n") }] : [],
-        footer: { text: n.remaining ? `${n.remaining} more to choose from. Run /steam next again for another.` : "That is everything left that you have not finished." }
+        footer: { text: n.remaining ? `${n.remaining} more to choose from. Run /me steam next again for another.` : "That is everything left that you have not finished." }
     };
 }
 
@@ -115,10 +115,10 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
         `Linked. Found **${r.owned}** games (**${fmtHours(r.minutes)}** played).`,
         r.value && r.value.games ? `Library value: **${money(r.value.msrp, r.value.currency)}** at full price, **${money(r.value.cheapest, r.value.currency)}** at today's cheapest prices.` : null,
         `Added **${r.added}**, updated **${r.updated}**.` + (r.unmatched ? ` ${r.unmatched} could not be matched to a price and were skipped.` : ""),
-        r.achievements?.checked ? `Checked achievements for **${r.achievements.checked}** games${r.achievements.newlyFinished ? `; **${r.achievements.newlyFinished}** at 100% were marked Finished` : ""}.${r.achievements.remaining ? " Run `/steam sync` again for the rest." : ""}` : null,
+        r.achievements?.checked ? `Checked achievements for **${r.achievements.checked}** games${r.achievements.newlyFinished ? `; **${r.achievements.newlyFinished}** at 100% were marked Finished` : ""}.${r.achievements.remaining ? " Run `/me steam sync` again for the rest." : ""}` : null,
         r.skippedForLimit ? `Your library is full, so ${r.skippedForLimit} were skipped.` : null,
         r.truncated ? "Only your most played games fit in the library limit." : null,
-        "Steam's API doesn't share what you paid. Fill it in automatically with the FanaticalGrabber extension (open your Steam purchase history and press **Send what I paid**), or add it with `/library add`. Run `/steam view` for the breakdown or `/steam next` for something to play."
+        "Steam's API doesn't share what you paid. Fill it in automatically with the FanaticalGrabber extension (open your Steam purchase history and press **Send what I paid**), or add it with `/me library add`. Run `/me steam view` for the breakdown or `/me steam next` for something to play."
     ].filter(Boolean).join("\n");
 
     async function handle(i) {
@@ -136,11 +136,11 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
             }
             const link = db.getSteamLink(i.user.id);
             if (sub === "next") {
-                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                if (!link) throw new UserError("Link your profile first with `/me steam link`.");
                 await i.deferReply({ flags: MessageFlags.Ephemeral });
                 const view = await libraryView(db, itad, db.getUser(i.user.id), { snapshot: false });
                 const n = steamNext(view.rows);
-                if (!n) throw new UserError("Nothing left to suggest. Everything from Steam is finished or dropped, or not synced yet (`/steam sync`).");
+                if (!n) throw new UserError("Nothing left to suggest. Everything from Steam is finished or dropped, or not synced yet (`/me steam sync`).");
                 return void await i.editReply({ embeds: [nextEmbed(n, view.currency)] });
             }
             if (sub === "foryou") {
@@ -148,13 +148,13 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
                 await i.deferReply({ flags: MessageFlags.Ephemeral });
                 const r = await forYou({ db, itad, userId: i.user.id, user: db.getUser(i.user.id), fetchImpl, tagBudget: 25 });
                 const top = r.deals.filter(d => d.match === null || d.match >= 60).slice(0, 8);
-                if (!top.length) throw new UserError("No picks right now. Link Steam (`/steam link`) so I know your taste, then try again.");
+                if (!top.length) throw new UserError("No picks right now. Link Steam (`/me steam link`) so I know your taste, then try again.");
                 const lines = top.map(d => `${d.match ? `**${d.match}%**` : "•"} [${d.title}](${d.url ?? "https://store.steampowered.com/"}): ${money(d.price, d.currency)} at ${d.shop} (-${d.cut}%)${d.atl ? " · all-time low" : ""}${d.wishlist ? " · on your wishlist" : ""}`);
                 return void await i.editReply({ embeds: [{ color: 0x4da3ff, title: "Deals picked for you", description: lines.join("\n").slice(0, 3900),
                     footer: { text: (r.personalised ? `Based on your ${r.genres.slice(0, 3).join(", ")} games` : "Link Steam to personalise this") + (r.pending ? `  •  still reading genres for ${r.pending} games` : "") + "  •  Prices by IsThereAnyDeal" } }] });
             }
             if (sub === "taste") {
-                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                if (!link) throw new UserError("Link your profile first with `/me steam link`.");
                 await i.deferReply({ flags: MessageFlags.Ephemeral });
                 const user = db.getUser(i.user.id);
                 const need = db.appsNeedingTags(i.user.id, 10);
@@ -165,7 +165,7 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
                 return void await i.editReply({ embeds: [tasteEmbed(profile, picks, currency)] });
             }
             if (sub === "recap") {
-                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                if (!link) throw new UserError("Link your profile first with `/me steam link`.");
                 const year = new Date().getUTCFullYear();
                 const shared = i.options.getBoolean("public") === true;
                 const all = db.playRecapAll(i.user.id);
@@ -183,20 +183,20 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
                 return void await i.reply({ embeds: [recapEmbed({ ...rec, allTime: all })], ...flags });
             }
             if (sub === "goal") {
-                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                if (!link) throw new UserError("Link your profile first with `/me steam link`.");
                 const set = i.options.getInteger("hours");
                 if (set !== null) db.setHourGoal(i.user.id, set);
                 const goal = db.getHourGoal(i.user.id);
-                if (!goal) return void await i.reply({ content: set === 0 ? "Hours goal cleared." : "No hours goal yet. Set one with `/steam goal hours:300`.", flags: MessageFlags.Ephemeral });
+                if (!goal) return void await i.reply({ content: set === 0 ? "Hours goal cleared." : "No hours goal yet. Set one with `/me steam goal hours:300`.", flags: MessageFlags.Ephemeral });
                 return void await i.reply({ embeds: [goalEmbed(goalProgress(goal, db.playRecap(i.user.id, new Date().getUTCFullYear()).totalMinutes))], flags: MessageFlags.Ephemeral });
             }
             if (sub === "value") {
-                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                if (!link) throw new UserError("Link your profile first with `/me steam link`.");
                 const shared = i.options.getBoolean("public") === true;
                 await i.deferReply(shared ? {} : { flags: MessageFlags.Ephemeral });
                 const view = await libraryView(db, itad, db.getUser(i.user.id), { snapshot: false });
                 const rows = view.rows.filter(r => r.appid);
-                if (!rows.length) throw new UserError("No Steam games in your library yet. Run `/steam sync`.");
+                if (!rows.length) throw new UserError("No Steam games in your library yet. Run `/me steam sync`.");
                 const value = steamValue(rows, view.currency);
                 // The same picture as the website's Steam page. If it cannot be drawn, the text version still goes out.
                 let png = null;
@@ -208,12 +208,12 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
                 return void await i.editReply({ embeds: [valueEmbed({ value, owned: link.games, currency: view.currency, link })] });
             }
             if (sub === "view") {
-                if (!link) throw new UserError("Link your profile first with `/steam link`.");
+                if (!link) throw new UserError("Link your profile first with `/me steam link`.");
                 await i.deferReply({ flags: MessageFlags.Ephemeral });
                 const user = db.getUser(i.user.id);
                 const view = await libraryView(db, itad, user, { snapshot: false });
                 const rows = view.rows.filter(r => r.appid);
-                if (!rows.length) throw new UserError("No Steam games in your library yet. Run `/steam sync`.");
+                if (!rows.length) throw new UserError("No Steam games in your library yet. Run `/me steam sync`.");
                 return void await i.editReply({ embeds: [steamEmbed({ stats: playStats(rows), link, currency: view.currency })] });
             }
             wait(i.user.id);

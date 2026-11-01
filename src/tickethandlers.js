@@ -1,4 +1,4 @@
-// Discord side of support tickets: /support, and the Reply / Assign / Resolve buttons and forms.
+// Discord side of support tickets: /bot support, and the Reply / Assign / Resolve buttons and forms.
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
 import { TK } from "./tickets.js";
@@ -39,18 +39,18 @@ export function createTicketHandlers({ db, tickets, ownerId = null, publicUrl = 
     // A bug report: always goes to the bot owner and shows on the Admin page.
     const bugModal = i => i.showModal({
         custom_id: TK.mBug, title: "Report a bug",
-        components: [field("subject", "Short title", 1, 100, "e.g. /steam recap shows no image"), field("body", "What happened?", 2, 1000, "What you did and what went wrong"), field("steps", "Steps to repeat it / what you expected", 2, 500, "Optional", false)]
+        components: [field("subject", "Short title", 1, 100, "e.g. /me steam recap shows no image"), field("body", "What happened?", 2, 1000, "What you did and what went wrong"), field("steps", "Steps to repeat it / what you expected", 2, 500, "Optional", false)]
     });
     async function handleBug(i) { try { return await bugModal(i); } catch (err) { await failed(i, err); } }
 
-    // ---------- /support ----------
+    // ---------- /bot support ----------
     async function handleCommand(i) {
         try {
             const sub = i.options.getSubcommand();
             if (sub === "open") return i.options.getString("type") === "bug" ? await bugModal(i) : await openModal(i);
             if (sub === "mine") {
                 const rows = db.listTickets({ userId: i.user.id, limit: 15 });
-                if (!rows.length) return eph(i, "You have no tickets. Use `/support open` if you need help.");
+                if (!rows.length) return eph(i, "You have no tickets. Use `/bot support open` if you need help.");
                 const icon = { open: "🟢", waiting: "🟡", resolved: "✅", closed: "⚫" };
                 return i.reply({ flags: MessageFlags.Ephemeral, embeds: [{ color: 0xff9800, title: "Your tickets",
                     description: rows.map(t => `${icon[t.status]} **#${t.id}** ${t.subject}${publicUrl ? ` ([open](${publicUrl}/#/support/${t.id}))` : ""}`).join("\n").slice(0, 4000) }] });

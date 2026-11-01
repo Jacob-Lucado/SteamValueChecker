@@ -172,5 +172,5 @@ test("game night says who has no games on record, and points them to /steam link
     assert.deepEqual(r.empty, ["c"]);
     const field = gameNightEmbed(r).fields.find(f => f.name === "No games on record");
     assert.match(field.value, /<@c>/);
-    assert.match(field.value, /\/steam link/);
+    assert.match(field.value, /\/me steam link/);
 });

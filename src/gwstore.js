@@ -207,7 +207,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         return getGiveawaySettings(guildId);
     }
 
-    /** A member's own giveaway data: used by /mydata delete. Wipes what they entered and anything waiting for them. */
+    /** A member's own giveaway data: used by /me mydata delete. Wipes what they entered and anything waiting for them. */
     function forgetGiveawayUser(userId) {
         run("DELETE FROM giveaway_entries WHERE discord_id = ?", userId);
         run("DELETE FROM giveaway_excluded WHERE discord_id = ?", userId);

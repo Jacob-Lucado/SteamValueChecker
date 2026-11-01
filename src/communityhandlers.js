@@ -1,4 +1,4 @@
-// Slash commands for the community features: /community, /rank, /levels, /invites, /emoji, and the role-picker buttons.
+// Slash commands for the community features: /manage community, /server rank, /server levels, /server invites, /manage emoji, and the role-picker buttons.
 // No discord.js import: everything the handlers need comes from the interaction object and the shared REST helper.
 import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
 import { UserError } from "./errors.js";
@@ -36,7 +36,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         return boardSvg({ title, subtitle, accent, accent2, rows: list.map((r, n) => ({ name: people[n].name, art: art(people[n].url), big: big(r), small: small(r) })) });
     }
 
-    // ---- /community ----
+    // ---- /manage community ----
     async function community(i) {
         const sub = i.options.getSubcommand();
         if (!i.inGuild()) return eph(i, "Use this in a server.");
@@ -73,9 +73,9 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         if (sub === "verifyrole") {
             const role = i.options.getRole("role");
             if (i.options.getBoolean("clear")) { db.setCommunity(gid, { verified_role_id: null }); return eph(i, "Nobody will be given a Steam Verified role."); }
-            if (!role) return eph(i, db.getCommunity(gid).verified_role_id ? `Members who prove their Steam account get <@&${db.getCommunity(gid).verified_role_id}>.` : "No Steam Verified role is set. Pick one with the role option, or run `/community setup`.");
+            if (!role) return eph(i, db.getCommunity(gid).verified_role_id ? `Members who prove their Steam account get <@&${db.getCommunity(gid).verified_role_id}>.` : "No Steam Verified role is set. Pick one with the role option, or run `/manage community setup`.");
             db.setCommunity(gid, { verified_role_id: role.id });
-            return eph(i, `Members who prove their Steam account will get **${role.name}** (they press the button in #verify or use /steam verify). My role must be above it.\n${LINKED_NOTE}`);
+            return eph(i, `Members who prove their Steam account will get **${role.name}** (they press the button in #verify or use /me steam verify). My role must be above it.\n${LINKED_NOTE}`);
         }
         if (sub === "autorole") {
             const role = i.options.getRole("role");
@@ -112,7 +112,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         }
     }
 
-    // ---- /rank ----
+    // ---- /server rank ----
     async function rank(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server.");
         const user = i.options.getUser("member") ?? i.user;
@@ -133,7 +133,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         } catch { return reply(i, { embeds: [embed], allowedMentions: { parse: [] } }); }
     }
 
-    // ---- /leaderboardrefresh ----
+    // ---- /manage leaderboardrefresh ----
     const lbLast = new Map();
     async function leaderboardRefresh(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server.");
@@ -146,7 +146,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         catch (e) { lbLast.delete(i.guildId); return i.editReply({ content: e instanceof UserError ? e.message : "I could not update it. Check my permissions in the leaderboard channel." }); }
     }
 
-    // ---- /levels ----
+    // ---- /server levels ----
     async function levels(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server.");
         const top = db.xpTop(i.guildId, 10);
@@ -160,7 +160,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         } catch { return reply(i, { embeds: [embed], allowedMentions: { parse: [] } }); }
     }
 
-    // ---- /invites ----
+    // ---- /server invites ----
     async function invites(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server.");
         const sub = i.options.getSubcommand();
@@ -171,7 +171,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         }
         if (sub === "top") {
             const top = db.inviteTop(i.guildId, 10);
-            const embed = { color: 0x57f287, title: "Top inviters", description: top.length ? top.map((r, n) => `**${n + 1}.** ${mention(r.user_id)} · ${r.active} here (${r.total} joined)`).join("\n") : "Nobody has invited anyone yet. Get your link with `/invites link`." };
+            const embed = { color: 0x57f287, title: "Top inviters", description: top.length ? top.map((r, n) => `**${n + 1}.** ${mention(r.user_id)} · ${r.active} here (${r.total} joined)`).join("\n") : "Nobody has invited anyone yet. Get your link with `/server invites link`." };
             try {
                 await i.deferReply();
                 const svg = await board(i, { title: "Top inviters", subtitle: i.guild?.name ?? "", list: top, big: r => `${r.active} here`, small: r => `${r.total} joined in total`, accent: "#57f287", accent2: "#70a6d8", empty: "Nobody has invited anyone yet." });
@@ -182,19 +182,19 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         const s = service.inviteSummary(i.guildId, user.id);
         const rewards = s.rewards.map(r => `${s.active >= r.count ? "✅" : "⬜"} ${r.count} invited → <@&${r.role_id}>`).join("\n");
         const embed = { color: 0x57f287, title: `${user.username}'s invites`, description: `**${s.active}** members still here · ${s.total} joined in total · ${s.left} left`,
-            fields: [...(rewards ? [{ name: "Rewards", value: rewards }] : []), ...(s.by ? [{ name: "Joined through", value: mention(s.by), inline: true }] : []), ...(user.id === i.user.id ? [{ name: "Your link", value: s.link ?? "Get one with `/invites link`" }] : [])] };
+            fields: [...(rewards ? [{ name: "Rewards", value: rewards }] : []), ...(s.by ? [{ name: "Joined through", value: mention(s.by), inline: true }] : []), ...(user.id === i.user.id ? [{ name: "Your link", value: s.link ?? "Get one with `/server invites link`" }] : [])] };
         try {
             await i.deferReply({ flags: EPHEMERAL });
             const url = avatarUrl(user), art = await artFor([url], fetchImpl), by = s.by ? await whois(i, s.by) : null;
             const roleName = id => i.guild?.roles?.cache?.get(id)?.name ?? "Reward role";
             const svg = inviteCardSvg({ name: i.guild?.members?.cache?.get(user.id)?.displayName ?? user.globalName ?? user.username, art: art(url), server: i.guild?.name, active: s.active, total: s.total, left: s.left, by: by?.name,
                 rewards: s.rewards.map(r => ({ count: r.count, done: s.active >= r.count, role: roleName(r.role_id) })) });
-            const link = user.id === i.user.id ? (s.link ? `Your link: ${s.link}` : "Get your link with `/invites link`.") : "";
+            const link = user.id === i.user.id ? (s.link ? `Your link: ${s.link}` : "Get your link with `/server invites link`.") : "";
             return await i.editReply({ ...picture(svg, "invites.png", `${user.username}'s invites`), content: link, allowedMentions: { parse: [] } });
         } catch { return reply(i, { embeds: [embed], flags: EPHEMERAL, allowedMentions: { parse: [] } }); }
     }
 
-    // ---- /emoji ----
+    // ---- /manage emoji ----
     async function emoji(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server.");
         if (!can(i, BIT.expressions) && !can(i, BIT.manageGuild)) return eph(i, "You need the Manage Expressions permission for this.");
@@ -231,7 +231,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         } catch { return eph(i, "I could not change that role. My role needs to be above it in Server Settings, Roles."); }
     }
 
-    // ---- Steam verification: /steam verify and the button in #verify ----
+    // ---- Steam verification: /me steam verify and the button in #verify ----
     async function verify(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server.");
         const base = publicUrl ? `${publicUrl}/auth/linked` : null;
@@ -240,9 +240,9 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         try { r = await service.grantVerified(i.guildId, i.user.id); }
         catch { return eph(i, "I could not give the role. My role must be above Steam Verified in Server Settings, Roles."); }
         if (r === "granted") return i.reply({ content: `You are verified ✅ and now have the Steam Verified role.${base ? `\nTip: press below to also show your Steam on your Discord profile (Linked Roles).` : ""}`, components: link, flags: EPHEMERAL });
-        if (r === "no_role") return eph(i, "This server has no Steam Verified role yet. A manager can run `/community setup` or `/community verifyrole`.");
+        if (r === "no_role") return eph(i, "This server has no Steam Verified role yet. A manager can run `/manage community setup` or `/manage community verifyrole`.");
         if (!base) return eph(i, "Steam sign-in is not available on this bot right now.");
-        return i.reply({ content: "Sign in through Steam first. It takes a few seconds on Steam's own page, and the bot never sees your password. Then press the button again here (or run `/steam verify`).", components: link, flags: EPHEMERAL });
+        return i.reply({ content: "Sign in through Steam first. It takes a few seconds on Steam's own page, and the bot never sees your password. Then press the button again here (or run `/me steam verify`).", components: link, flags: EPHEMERAL });
     }
 
     async function handleCommand(i) {
@@ -283,7 +283,7 @@ export function statusEmbed(db, guildId, publicUrl, membersIntent) {
             `**Level roles:** ${lr.length ? lr.map(r => `${r.level} → ${role(r.role_id)}`).join(", ") : "none"}`,
             `**Referrals:** ${c.referral_xp} XP each${rw.length ? ` · ${rw.map(r => `${r.count} → ${role(r.role_id)}`).join(", ")}` : ""}`,
             `**Role picker:** ${sr.length} roles`,
-            "", c.setup_at ? "Built with `/community setup`." : "Not built yet: `/community setup` creates the standard channels and roles.",
+            "", c.setup_at ? "Built with `/manage community setup`." : "Not built yet: `/manage community setup` creates the standard channels and roles.",
             ...(membersIntent ? [] : ["⚠️ Server Members Intent is off, so welcome messages and invite tracking are paused."]),
             publicUrl ? `Web page: ${publicUrl}/#/community/${guildId}` : ""].join("\n").slice(0, 4000) };
 }

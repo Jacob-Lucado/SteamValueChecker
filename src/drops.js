@@ -148,7 +148,7 @@ export async function runDrops({ db, api, notifier = null, getNews = fetchNews, 
     return stats;
 }
 
-/** Shared by /promos and the dashboard. Throws an Error with a plain message. */
+/** Shared by /server promos and the dashboard. Throws an Error with a plain message. */
 export function applyDropSettings(db, guildId, body) {
     const patch = {};
     if (body.channel_id !== undefined) patch.channel_id = body.channel_id || null;

@@ -1,4 +1,4 @@
-// Guided server setup: the same checklist in Discord (/setup, channel pickers) and on the dashboard (Setup page).
+// Guided server setup: the same checklist in Discord (/manage setup, channel pickers) and on the dashboard (Setup page).
 // No discord.js import here: the dashboard shares setupStatus, and it runs without discord.js.
 const EPHEMERAL = 64;
 const PermissionFlagsBits = { ManageGuild: 1n << 5n, ViewChannel: 1n << 10n, SendMessages: 1n << 11n, EmbedLinks: 1n << 14n };
@@ -27,7 +27,7 @@ export function setupEmbed(st, dashboardUrl = null, guildId = null, note = null)
     const where = { alert: st.alertChannel, support: st.supportChannel, vouch: st.vouchChannel, requests: st.requestsChannel };
     return { color: 0xff9800, title: "Server setup",
         description: [...st.steps.map(x => `${mark(x)} ${x.text}${where[x.id] ? ` → <#${where[x.id]}>` : ""}`),
-            "", st.complete ? "The essentials are done. Members can use `/wishlist import`, `/support open` and the rest." : "Pick channels below. Everything can be changed again any time with `/setup`.",
+            "", st.complete ? "The essentials are done. Members can use `/me wishlist import`, `/bot support open` and the rest." : "Pick channels below. Everything can be changed again any time with `/manage setup`.",
             dashboardUrl ? `\nPrefer a web page? ${dashboardUrl}/#/setup/${guildId}` : "",
             note ? `\n${note}` : ""].join("\n").slice(0, 4000) };
 }
@@ -74,12 +74,12 @@ export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId =
     if (need.alert) {
         const c = await make({ name: "deal-alerts", type: 0, parent_id: cat.id, topic: "Sale alerts and free games from Steam Value Checker", permission_overwrites: readOnly });
         db.setGuildChannel(guildId, c.id, userId); db.setFreeFeed(guildId, true); created.push({ id: c.id, role: "alerts" });
-        await say(c.id, "Alerts land here when a member's DM fails, and new free games are posted for everyone. Members: use `/wishlist import` to get your own sale alerts.");
+        await say(c.id, "Alerts land here when a member's DM fails, and new free games are posted for everyone. Members: use `/me wishlist import` to get your own sale alerts.");
     }
     if (need.support) {
         const c = await make({ name: "support-tickets", type: 0, parent_id: cat.id, topic: "Member help tickets (staff only)", permission_overwrites: priv });
         db.setTicketSettings(guildId, { channelId: c.id, staffRoleId: staffRoleId ?? st.staffRole }); created.push({ id: c.id, role: "support" });
-        await say(c.id, "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons. Only you and the bot can see this channel. Add your staff in the channel's permissions, or set a staff role in `/setup`.");
+        await say(c.id, "Member tickets from `/bot support open` appear here with Reply, Assign me and Resolve buttons. Only you and the bot can see this channel. Add your staff in the channel's permissions, or set a staff role in `/manage setup`.");
     }
     if (need.vouch) {
         const c = await make({ name: "vouches", type: 0, parent_id: cat.id, topic: "Giveaway winners confirm their keys worked", permission_overwrites: readOnly });

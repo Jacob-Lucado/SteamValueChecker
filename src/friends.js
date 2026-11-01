@@ -32,7 +32,7 @@ export async function friendDeals(db, itad, slug, limit = 8) {
 export function birthdayEmbed(friend, days, deals) {
     const when = days === 0 ? "is **today**" : days === 1 ? "is **tomorrow**" : `is in **${days} days**`;
     const lines = deals?.length ? deals.slice(0, 5).map(d => `• **${d.title}** ${money(d.price, d.currency ?? "USD")}${d.discount > 0 ? ` (-${d.discount}%)` : ""} at ${d.shop}`).join("\n")
-        : friend.slug ? "Nothing on their public wishlist is on sale right now." : `Add their public page with \`/friend add name:${friend.name} page:their-page-name\` and I will show what is on sale for them.`;
+        : friend.slug ? "Nothing on their public wishlist is on sale right now." : `Add their public page with \`/me friend add name:${friend.name} page:their-page-name\` and I will show what is on sale for them.`;
     return { color: 0xe91e63, title: `🎂 ${friend.name}'s birthday ${when.replace(/\*\*/g, "")}`, description: `${friend.name}'s birthday ${when}.\n\n${lines}`, footer: { text: "Mute these with /alerts mute: Friend birthday reminders" } };
 }
 

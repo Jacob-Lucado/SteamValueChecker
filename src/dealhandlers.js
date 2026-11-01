@@ -1,4 +1,4 @@
-// /bundle and /saleprep: Discord side. The analysis lives in bundle.js and saleprep.js, the embeds in dealrender.js.
+// /games bundle and /games saleprep: Discord side. The analysis lives in bundle.js and saleprep.js, the embeds in dealrender.js.
 import { MessageFlags } from "discord.js";
 import { bundleCheck } from "./bundle.js";
 import { salePrep, saleRecap } from "./saleprep.js";

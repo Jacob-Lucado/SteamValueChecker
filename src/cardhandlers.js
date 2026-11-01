@@ -1,4 +1,4 @@
-// /profilecard: your shareable profile card, posted as a picture. Same card as the My page on the website.
+// /me profilecard: your shareable profile card, posted as a picture. Same card as the My page on the website.
 import { AttachmentBuilder, MessageFlags } from "discord.js";
 import { renderProfileCard } from "./cardimg.js";
 import { UserError } from "./errors.js";

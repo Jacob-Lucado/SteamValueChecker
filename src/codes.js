@@ -20,7 +20,7 @@ export function describeGames(keys) {
     return GAME_FAMILIES.filter(f => f.games.some(k => set.has(k))).map(f => f.title).join(", ");
 }
 
-/** What the dashboard and the /codes command show for one stored code. */
+/** What the dashboard and the /games codes command show for one stored code. */
 export function codeView(c, at = Date.now()) {
     const game = gameByKey(c.game);
     return { id: c.id, code: c.code, game: c.game, gameTitle: game?.title ?? c.game, art: gameArt(game, ""), accent: hex(game?.color), provider: game?.provider ?? "shift", platform: c.platform, reward: c.reward, note: c.note,
@@ -117,7 +117,7 @@ export async function runCodes({ db, api, base = null, notifier = null, fetchCod
     return stats;
 }
 
-/** Shared by the /codes command and the dashboard: validate and save a server's settings. Throws an Error with a plain message. */
+/** Shared by the /games codes command and the dashboard: validate and save a server's settings. Throws an Error with a plain message. */
 export function applyCodeSettings(db, guildId, body, { allowedGames = ALL_GAMES.map(g => g.key) } = {}) {
     const patch = {};
     if (body.channel_id !== undefined) patch.channel_id = body.channel_id || null;

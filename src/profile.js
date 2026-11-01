@@ -18,7 +18,7 @@ export function setProfile(db, userId, { enabled, slug }) {
     const user = db.getUser(userId);
     let name = user?.profile_slug ?? null;
     if (slug !== undefined && slug !== null && slug !== "") name = cleanSlug(slug);
-    if (enabled && !name) throw new UserError("Choose a page name first, for example `/publicpage enabled:true name:jacob`.");
+    if (enabled && !name) throw new UserError("Choose a page name first, for example `/me publicpage enabled:true name:jacob`.");
     try { db.setProfile(userId, { slug: name, isPublic: Boolean(enabled) }); }
     catch (err) { if (/UNIQUE/i.test(err.message)) throw new UserError("That page name is taken. Try another."); throw err; }
     return { slug: name, public: Boolean(enabled) };

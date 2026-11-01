@@ -246,7 +246,7 @@ export function digestEmbed(rows, currency, { limit = 10 } = {}) {
         const link = safeUrl(r.best.url);
         return `${link ? `[**${r.title}**](${link})` : `**${r.title}**`}: ${money(r.best.price, currency)} (-${Math.round(r.discount * 100)}%) at ${r.best.shop}${tag}`;
     });
-    if (onSale.length > limit) lines.push(`…and ${onSale.length - limit} more. Open /wishlist view for the full list.`);
+    if (onSale.length > limit) lines.push(`…and ${onSale.length - limit} more. Open /me wishlist view for the full list.`);
     return { color: COLOR, title: "Your weekly wishlist digest", description: `${onSale.length} of ${rows.length} games are on sale.\n\n${lines.join("\n")}`.slice(0, 4000), footer: { text: "Turn off with /alerts digest  •  Prices by IsThereAnyDeal" } };
 }
 
@@ -267,7 +267,7 @@ export function libraryEmbed(view, currency) {
     return { color: COLOR, title: "Library value", fields, footer: { text: "Prices by IsThereAnyDeal" } };
 }
 
-/** The /status card, the same data as the Status page. */
+/** The /bot status card, the same data as the Status page. */
 export function statusEmbed(snap, about, publicUrl = null) {
     const ICON = { operational: "🟢", degraded: "🟡", down: "🔴", unknown: "⚪" };
     const HEAD = { operational: "All systems operational", degraded: "Some systems are degraded", down: "Major outage" };
@@ -281,7 +281,7 @@ export function statusEmbed(snap, about, publicUrl = null) {
     };
 }
 
-/** The /serverstats card. Opted-in members only, and only counts: nobody is named for what they want. */
+/** The /server serverstats card. Opted-in members only, and only counts: nobody is named for what they want. */
 export function serverStatsEmbed(s) {
     if (!s.members) return { color: COLOR, title: "Server stats", description: "Nobody here has opted in yet. Members turn it on with `/alerts share`, then the numbers appear." };
     const fields = [
@@ -307,7 +307,7 @@ export function backlogEmbed(view, next) {
         fields.push({ name: "🎯 Play next", value: `**${next.pick.title}**\n${next.why}`.slice(0, 1000) });
         if (next.others.length) fields.push({ name: "Also in the running", value: next.others.map(o => o.title).join("\n").slice(0, 500) });
     }
-    return { color: COLOR, title: "Your backlog", description: "Mark games with `/library status`. Games are in your backlog until you change them.", fields, footer: { text: "Prices by IsThereAnyDeal" } };
+    return { color: COLOR, title: "Your backlog", description: "Mark games with `/me library status`. Games are in your backlog until you change them.", fields, footer: { text: "Prices by IsThereAnyDeal" } };
 }
 
 /** Several members of a server are watching the same game and it just hit their alert. */
@@ -323,7 +323,7 @@ export function groupEmbed(title, count, now) {
     };
 }
 
-/** One game's price and lows, for /wishlist check. */
+/** One game's price and lows, for /me wishlist check. */
 export function checkEmbed(title, now, verdict, advice = null) {
     const c = now.currency ?? "USD";
     const fields = [
@@ -345,19 +345,19 @@ export function checkEmbed(title, now, verdict, advice = null) {
 
 /** The server's shared list with votes and prices. */
 export function serverListEmbed(rows, currency, limit = 15) {
-    if (!rows.length) return { color: COLOR, title: "Server wishlist", description: "Nothing here yet. Add a game with `/serverlist add`." };
+    if (!rows.length) return { color: COLOR, title: "Server wishlist", description: "Nothing here yet. Add a game with `/server serverlist add`." };
     const lines = rows.slice(0, limit).map(r => {
         const price = r.best ? `${money(r.best.price, currency)}${r.discount > 0 ? ` (-${Math.round(r.discount * 100)}%)` : ""}` : "no price";
         return `**${r.votes}** ${r.votes === 1 ? "vote" : "votes"}  •  **${r.title}**: ${price}${r.verdict && r.verdict.level === "great" ? " (all-time low)" : ""}`;
     });
     if (rows.length > limit) lines.push(`…and ${rows.length - limit} more.`);
-    return { color: COLOR, title: "Server wishlist", description: lines.join("\n").slice(0, 4000), footer: { text: "Vote with /serverlist vote  •  Prices by IsThereAnyDeal" } };
+    return { color: COLOR, title: "Server wishlist", description: lines.join("\n").slice(0, 4000), footer: { text: "Vote with /server serverlist vote  •  Prices by IsThereAnyDeal" } };
 }
 
 /** Opt-in leaderboard. Members are mentioned, which shows their name without pinging anyone. */
 export function leaderboardEmbed(entries) {
     if (!entries.length) {
-        return { color: COLOR, title: "Savings leaderboard", description: "Nobody has joined yet. Members can opt in with `/alerts share`, then add games with prices using `/library`." };
+        return { color: COLOR, title: "Savings leaderboard", description: "Nobody has joined yet. Members can opt in with `/alerts share`, then add games with prices using `/me library`." };
     }
     const medal = ["1.", "2.", "3."];
     const lines = entries.map((e, i) => `${medal[i] ?? `${i + 1}.`} <@${e.discord_id}>: **${e.savedPct.toFixed(0)}%** saved across ${e.games} games`);
@@ -365,13 +365,13 @@ export function leaderboardEmbed(entries) {
 }
 
 export function leagueEmbed(entries) {
-    if (!entries.length) return { color: COLOR, title: "Backlog league", description: "Nobody has finished a game this month yet. Members opt in with `/alerts share`, then mark games finished with `/library`." };
+    if (!entries.length) return { color: COLOR, title: "Backlog league", description: "Nobody has finished a game this month yet. Members opt in with `/alerts share`, then mark games finished with `/me library`." };
     const lines = entries.map((e, i) => `${i + 1}. <@${e.discord_id}>: **${e.done}** finished`);
     return { color: COLOR, title: "Backlog league: finished this month", description: lines.join("\n"), footer: { text: "Only members who opted in. Resets on the 1st (UTC)." } };
 }
 
 export function bundlesEmbed(v) {
-    if (!v.bundles.length) return { color: COLOR, title: "Your bundles", description: "No bundles yet. Add one with `/library bundle` (name, what you paid and the games)." };
+    if (!v.bundles.length) return { color: COLOR, title: "Your bundles", description: "No bundles yet. Add one with `/me library bundle` (name, what you paid and the games)." };
     const lines = v.bundles.slice(0, 10).map(b => `**#${b.id} ${b.name}**: paid ${money(b.paid, v.currency)} for ${b.games} games worth ${money(b.msrp, v.currency)} (${money(b.perGame, v.currency)} each). ${b.verdict ? b.verdict.text + "." : ""} Played ${b.played} of ${b.games}, ${b.hours} hours.`);
     return { color: COLOR, title: "Your bundles", description: lines.join("\n"), footer: { text: `Total paid ${money(v.totals.paid, v.currency)} for games worth ${money(v.totals.msrp, v.currency)} at full price.` } };
 }
@@ -466,7 +466,7 @@ export function extrasButtons(hits) {
 
 const num = n => (n === null || n === undefined ? "-" : Number(n).toLocaleString("en-US"));
 
-/** The /about card: creator credit with logo, live numbers, banner and link buttons. */
+/** The /bot about card: creator credit with logo, live numbers, banner and link buttons. */
 export function aboutPayload(info, { about, fanaticalUrl = null } = {}) {
     const c = info.creator;
     const stat = (icon, name, value) => ({ name: `${icon} ${name}`, value: `**${value}**`, inline: true });
@@ -556,7 +556,7 @@ export function regionsEmbed(game, rows) {
 export function challengeEmbed(c) {
     const bar = (done, goal) => { const n = Math.min(10, Math.round(done / goal * 10)); return "▰".repeat(n) + "▱".repeat(10 - n); };
     if (!c.goal) {
-        return { color: 0xa4d007, title: "Backlog challenge", description: `No goal for ${c.month} yet. Set one with \`/library challenge goal:3\` and finish that many games this month.` +
+        return { color: 0xa4d007, title: "Backlog challenge", description: `No goal for ${c.month} yet. Set one with \`/me library challenge goal:3\` and finish that many games this month.` +
             (c.streak ? `\n🔥 Streak: **${c.streak}** month${c.streak === 1 ? "" : "s"}` : "") };
     }
     const met = c.done >= c.goal;
@@ -574,7 +574,7 @@ export function challengeEmbed(c) {
 }
 
 export function spendEmbed(sp) {
-    if (!sp.games) return { color: 0xf0883e, title: "What you have spent", description: "No amounts recorded yet. Add what you paid with `/library add`, import a FanaticalGrabber export that has prices, or press **Send what I paid** on your Steam purchase history with the extension, and I will add it up." };
+    if (!sp.games) return { color: 0xf0883e, title: "What you have spent", description: "No amounts recorded yet. Add what you paid with `/me library add`, import a FanaticalGrabber export that has prices, or press **Send what I paid** on your Steam purchase history with the extension, and I will add it up." };
     const c = sp.currency, peak = Math.max(...sp.months.map(m => m.total), 1), bars = " ▁▂▃▄▅▆▇█";
     const spark = sp.months.map(m => bars[Math.round(m.total / peak * 8)]).join("");
     const line = g => `• **${g.title}** ${money(g.paid, c)} for ${g.hours} h (${money(g.perHour, c)}/h)`;
@@ -613,7 +613,7 @@ export function saleStartPayload(ev) {
     return { embeds: [{
         color: 0x1b9aaa, title: `${fest ? "🎪" : "🏷️"} ${ev.name} has started`,
         url: saleUrl(ev),
-        description: `${fest ? "Steam's festival is on." : "Steam's sale is on."} It runs until ${t(ev.end, "f")} (${t(ev.end, "R")}).${ev.note ? "\n" + ev.note : ""}\nPrices are dropping now. Check your wishlist alerts with \`/wishlist\`.`,
+        description: `${fest ? "Steam's festival is on." : "Steam's sale is on."} It runs until ${t(ev.end, "f")} (${t(ev.end, "R")}).${ev.note ? "\n" + ev.note : ""}\nPrices are dropping now. Check your wishlist alerts with \`/me wishlist\`.`,
         footer: { text: "Dates from Valve's published schedule" }
     }], components: [{ type: 1, components: [linkButton(fest ? "See the festival" : "See the sale", saleUrl(ev))] }] };
 }

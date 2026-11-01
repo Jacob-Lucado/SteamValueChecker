@@ -1,4 +1,4 @@
-// The /freegames message: one game per page with big artwork, category buttons (Games / DLC / All), a store menu and
+// The /games freegames message: one game per page with big artwork, category buttons (Games / DLC / All), a store menu and
 // page buttons. All the state is in the custom ids, so there is nothing to store and it keeps working after a restart.
 import { freeGamesPayload, shopIcon } from "./render.js";
 

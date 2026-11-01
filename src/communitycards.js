@@ -1,4 +1,4 @@
-// Picture cards for /rank, /levels and /invites, drawn as SVG and turned into PNG like the profile card.
+// Picture cards for /server rank, /server levels and /server invites, drawn as SVG and turned into PNG like the profile card.
 // No emoji are drawn (the bundled font has none); medals, rings and bars are shapes.
 import { svgToPng, fetchImageDataUri } from "./imgrender.js";
 
@@ -34,7 +34,7 @@ const frame = (w, h, body, a, b) => `<svg xmlns="http://www.w3.org/2000/svg" wid
   <rect width="${w}" height="${h}" rx="28" fill="url(#bg)"/><rect width="${w}" height="${h}" rx="28" fill="url(#glow)"/>
   <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="27" fill="none" stroke="#26324d" stroke-width="2"/>${body}</svg>`;
 
-/** The /rank card. d: { name, art, server, level, into, need, rank, members, xp, messages, invited } */
+/** The /server rank card. d: { name, art, server, level, into, need, rank, members, xp, messages, invited } */
 export function rankCardSvg(d) {
     const top = d.rank && d.rank <= 3, accent = top ? MEDAL[d.rank - 1] : "#70a6d8", accent2 = top ? "#ffffff" : "#8b7cf6";
     const pct = d.need ? d.into / d.need : 0;
@@ -54,7 +54,7 @@ export function rankCardSvg(d) {
   ${stat(48, 306, 214, "Total XP", num(d.xp))}${stat(282, 306, 214, "Messages", num(d.messages))}${stat(516, 306, 214, "Voice", `${num(d.voice ?? 0)} min`)}${stat(750, 306, 202, "Invited", num(d.invited))}`, accent, accent2);
 }
 
-/** A ranked list with pictures: the /levels board and the top inviters. rows: [{ name, art, big, small }] */
+/** A ranked list with pictures: the /server levels board and the top inviters. rows: [{ name, art, big, small }] */
 export function boardSvg({ title, subtitle, rows, empty = "Nobody here yet.", accent = "#70a6d8", accent2 = "#8b7cf6" }) {
     const RH = 74, head = 118, h = head + Math.max(1, rows.length) * RH + 28;
     const list = rows.length ? rows.map((r, n) => {

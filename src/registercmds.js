@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { REST, Routes } from "discord.js";
-import { commands } from "./commands.js";
+import { hubCommands as commands } from "./commands.js";
 
 export async function registerCommands(cfg, { onlyIfChanged = false, dbPath = cfg.dbPath } = {}) {
     // Commands that can be installed on a person's account must be global. GLOBAL_COMMANDS=1 registers globally

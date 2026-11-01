@@ -33,7 +33,7 @@ export function createModHandlers({ db, mod, publicUrl = null }) {
                 const ch = o.getChannel("channel");
                 if (ch) { db.setCommunity(gid, { mod_log_channel: ch.id }); return eph(i, `Moderation actions will be logged in <#${ch.id}>.`); }
                 const cur = mod.logChannel(gid);
-                return eph(i, cur ? `Moderation actions are logged in <#${cur}>. Pick another with the channel option.` : "No mod log yet. Pick a channel with the channel option, or run `/community setup`.");
+                return eph(i, cur ? `Moderation actions are logged in <#${cur}>. Pick another with the channel option.` : "No mod log yet. Pick a channel with the channel option, or run `/manage community setup`.");
             }
             if (sub === "cases" || sub === "warnings") {
                 const u = sub === "warnings" ? o.getUser("user", true) : o.getUser("user");

@@ -1,4 +1,4 @@
-// /redeem: queue Steam keys from Discord. The member's dashboard (Batch redeem page) picks them up, the FanaticalGrabber
+// /games redeem: queue Steam keys from Discord. The member's dashboard (Batch redeem page) picks them up, the FanaticalGrabber
 // extension redeems them in their own logged-in browser, and the results come back here as a DM.
 import { MessageFlags } from "discord.js";
 import { UserError } from "./errors.js";
@@ -21,7 +21,7 @@ export function createRedeemHandlers({ db, publicUrl }) {
         const text = [i.options.getString("keys"), file ? await readUploadText(file) : null].filter(Boolean).join("\n");
         if (!text.trim()) {
             const w = db.pendingRedeemJob(i.user.id);
-            return reply(w ? `A batch of **${w.total}** key${w.total === 1 ? " is" : "s are"} waiting. Open ${link ?? "the dashboard's Batch redeem page"} to run it, or \`/redeem cancel:true\` to drop it.` : "Give me some keys with `keys:` or `file:`, for example `/redeem keys:AAAAA-BBBBB-CCCCC`.");
+            return reply(w ? `A batch of **${w.total}** key${w.total === 1 ? " is" : "s are"} waiting. Open ${link ?? "the dashboard's Batch redeem page"} to run it, or \`/games redeem cancel:true\` to drop it.` : "Give me some keys with `keys:` or `file:`, for example `/games redeem keys:AAAAA-BBBBB-CCCCC`.");
         }
         const all = extractKeys(text);
         if (!all.length) throw new UserError("I could not find any Steam keys. They look like `AAAAA-BBBBB-CCCCC`.");

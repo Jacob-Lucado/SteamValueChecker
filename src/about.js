@@ -1,4 +1,4 @@
-// Numbers and wording for /about and the dashboard's About panel. Aggregate only: no names, IDs or keys.
+// Numbers and wording for /bot about and the dashboard's About panel. Aggregate only: no names, IDs or keys.
 
 import { isHidden } from "./hidden.js";
 

@@ -33,7 +33,7 @@ Prices come from [IsThereAnyDeal](https://isthereanydeal.com).
 
 ## Commands
 
-### `/value`
+### `/games value`
 
 | Option | What it does |
 | --- | --- |
@@ -57,54 +57,54 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 
 | Command | What it does |
 | --- | --- |
-| `/wishlist import profile:` | Reads your **public** Steam wishlist from a profile link, custom name or SteamID64. No login. Run it again to sync new games (and drop ones you removed on Steam) |
-| `/wishlist add title:` | Adds one game by title, with an optional alert rule |
-| `/wishlist remove game:` | Removes a game (autocompletes from your list) |
-| `/wishlist view` | Your list with current prices, sales first |
-| `/wishlist alert type:` | Sets when you are alerted, for one game or all: any sale, a % off or more, a price or lower, or an all-time low |
-| `/wishlist check game:` | Is it a good deal right now? Price, 3-month, 1-year and all-time lows, a plain verdict, and a buy now or wait recommendation from a year of price history and the next Steam sale |
+| `/me wishlist import profile:` | Reads your **public** Steam wishlist from a profile link, custom name or SteamID64. No login. Run it again to sync new games (and drop ones you removed on Steam) |
+| `/me wishlist add title:` | Adds one game by title, with an optional alert rule |
+| `/me wishlist remove game:` | Removes a game (autocompletes from your list) |
+| `/me wishlist view` | Your list with current prices, sales first |
+| `/me wishlist alert type:` | Sets when you are alerted, for one game or all: any sale, a % off or more, a price or lower, or an all-time low |
+| `/me wishlist check game:` | Is it a good deal right now? Price, 3-month, 1-year and all-time lows, a plain verdict, and a buy now or wait recommendation from a year of price history and the next Steam sale |
 | `/alerts delivery` | DM (default) or the server alert channel |
 | `/alerts quiethours`, `digest`, `bundles`, `freegames`, `share`, `history` | Hold alerts overnight (with your time zone), a weekly sales digest, bundle and giveaway alerts, opt in to server group alerts and the leaderboard, and your recent alerts |
 | `/alerts codes` / `promos` | DM when a new game code drops (all games or only some) or when NVIDIA, SteelSeries or a game's news mentions a giveaway or code. Only new ones from when you turn it on; also on the dashboard's Alerts page |
 | `/alerts freegames enabled:` | Get told when any game is free to claim. One message per store; several free games from the same store come with a **Claim all** button, a single game with **Claim game** |
-| `/watch title:` | Watch one game for a price drop without adding it to your wishlist. Removed after the alert, or after 30 days |
-| `/sales` | Upcoming Steam sales and festivals with countdowns (dates in `src/salescal.js`, update when Valve announces new ones) |
-| `/promos list\|add\|end\|channel\|ping\|news` | Promo drops such as SteelSeries or NVIDIA giveaways. Managers add a code or link (also on the dashboard under Servers, Promo drops) and it is posted once, then greyed out when it ends. `news` also posts giveaway and code news from the NVIDIA and SteelSeries blogs and the Steam news of games like Dead by Daylight (RSS, `src/drops.js`) |
+| `/games watch title:` | Watch one game for a price drop without adding it to your wishlist. Removed after the alert, or after 30 days |
+| `/games sales` | Upcoming Steam sales and festivals with countdowns (dates in `src/salescal.js`, update when Valve announces new ones) |
+| `/server promos list\|add\|end\|channel\|ping\|news` | Promo drops such as SteelSeries or NVIDIA giveaways. Managers add a code or link (also on the dashboard under Servers, Promo drops) and it is posted once, then greyed out when it ends. `news` also posts giveaway and code news from the NVIDIA and SteelSeries blogs and the Steam news of games like Dead by Daylight (RSS, `src/drops.js`) |
 | `/music` / `/play` | SoundCloud in a voice channel: play a track, search or paste a playlist link, queue, skip with votes, loop, seek, volume, saved playlists, DJ role and limits (`/music settings`). Also the dashboard's Music page. Uses yt-dlp and ffmpeg (both installed by the Dockerfile; `src/music*.js`) |
-| `/codes latest\|channel\|games\|ping` | Limited-time game codes (Borderlands SHiFT, Genshin Impact, Honkai: Star Rail, Zenless Zone Zero). `latest` lists working codes. Managers pick the channel, the games and a role to ping; the same settings are on the dashboard under Servers, Game codes. Sources: a community SHiFT list on GitHub and two HoYoverse code lists (`api.ennead.cc`, `hoyo-codes.seria.moe`), checked every 20 minutes (`src/codesource.js`) |
-| `/publicpage enabled: name:` | A public, shareable page of your wishlist and best prices at `#/u/name`. Shows only game names, art and prices |
-| `/status` | Live health checks, uptime and incidents (the same data as the dashboard Status page) |
-| `/library status\|backlog` | Mark games backlog, playing, played, finished or dropped; see unplayed spend and what to play next |
-| `/serverstats` | A server's numbers for members who opted in: most wanted games, savings, top of the server list. Counts only |
-| `/alertchannel feed enabled:` | Post new free games (not DLC) in the alert channel for everyone |
-| `/library add\|import\|view\|remove` | Games you own and what you paid. Shows what they are worth, what you saved against MSRP, and a value-over-time chart on the dashboard |
-| `/serverlist add\|view\|vote\|remove` | A wishlist the whole server shares, with votes and current prices |
-| `/leaderboard` | Who in the server has saved the most (percent of MSRP), for members who opted in |
-| `/alertchannel group minimum:` | Post once when that many opted-in members watch the same game and it hits their alert |
+| `/games codes latest\|channel\|games\|ping` | Limited-time game codes (Borderlands SHiFT, Genshin Impact, Honkai: Star Rail, Zenless Zone Zero). `latest` lists working codes. Managers pick the channel, the games and a role to ping; the same settings are on the dashboard under Servers, Game codes. Sources: a community SHiFT list on GitHub and two HoYoverse code lists (`api.ennead.cc`, `hoyo-codes.seria.moe`), checked every 20 minutes (`src/codesource.js`) |
+| `/me publicpage enabled: name:` | A public, shareable page of your wishlist and best prices at `#/u/name`. Shows only game names, art and prices |
+| `/bot status` | Live health checks, uptime and incidents (the same data as the dashboard Status page) |
+| `/me library status\|backlog` | Mark games backlog, playing, played, finished or dropped; see unplayed spend and what to play next |
+| `/server serverstats` | A server's numbers for members who opted in: most wanted games, savings, top of the server list. Counts only |
+| `/manage alertchannel feed enabled:` | Post new free games (not DLC) in the alert channel for everyone |
+| `/me library add\|import\|view\|remove` | Games you own and what you paid. Shows what they are worth, what you saved against MSRP, and a value-over-time chart on the dashboard |
+| `/server serverlist add\|view\|vote\|remove` | A wishlist the whole server shares, with votes and current prices |
+| `/server leaderboard` | Who in the server has saved the most (percent of MSRP), for members who opted in |
+| `/manage alertchannel group minimum:` | Post once when that many opted-in members watch the same game and it hits their alert |
 | `/alerts pause`, `resume`, `region`, `stores`, `status` | Your alert settings |
-| `/alertchannel set\|clear\|show` | Server admins (Manage Server): the channel used when a DM fails, or when a member opts out of DMs |
-| `/steam link\|sync\|view\|value\|next\|unlink` | Link a **public** Steam profile: imports your games with hours played, shows what you never played and the total value, `/steam value` draws the estimated account value as a picture (full price, today's cheapest and all-time-low; `public:true` posts it in the channel), and `/steam next` picks what to play next from your own library. Uses `STEAM_API_KEY` if set, otherwise the public games page. With the key, a sync also reads achievement progress for played games and marks a game **Finished** when every achievement is unlocked (checked games are skipped for a week). *Game details* must be public |
-| `/bundle titles:` | Is a bundle worth it? Compares each tier to the cheapest current prices of the games you do not own |
-| `/saleprep plan\|recap` | A buy-now / wait list and a budget plan for the next Steam sale, and a recap of what alerts caught |
-| `/lfg post\|list\|close` | Looking-for-group posts with Join/Leave buttons, an optional Discord scheduled event (needs Manage Events) and auto-close |
-| `/redeem` | Queue Steam keys (`keys:` or a `file:`) for batch redeeming. Open the dashboard's **Batch redeem** page while logged into Steam, with FanaticalGrabber 2.3+, and press Run. Results come back as a DM. Keys are stored only until the batch finishes (24 hours at most). `history:true` lists recent results (masked hints) and repeat keys are skipped |
-| `/library trend` | How your library value, game count and backlog changed over the last month and since tracking began (from daily snapshots) |
-| `/friend add`, `list`, `deals`, `remove` | Friends' nicknames and birthdays (month and day) with their public wishlist page; a reminder a week ahead and what is on sale for them |
-| `/library badges` | Trophy case of badges earned from your library and challenge streak |
-| `/leaderboard board:finished` | Monthly backlog league for members who opted in |
-| `/compare` | Your library against a friend's: games you both own, and what only one of you has. They must have opted in with `/alerts share`; server only |
-| `/regions` | One game's cheapest price in about a dozen regions, ranked in US dollars (recent ECB exchange rates). Region-locked keys mean this is for information |
-| `/calendar` | `view` lists release dates of wishlisted games, Steam sales, server events and open `/lfg` posts. `add` and `remove` (Manage Server) manage server events, announced in the channel with a reminder before they start. `feed` makes an optional private link for Google, Apple or Outlook calendar |
-| `/steam recap` | Hours tracked this year and in total since you linked Steam, per month and per game. Steam only shares lifetime hours, so this counts what is added between syncs (they run automatically every few hours) |
-| `/profilecard [public]` | Your profile card as a picture: games, hours, trophies and the gaming names you added on the dashboard's My page |
-| `/library spend` | What you have spent from the amounts you recorded: totals, the last 12 months, best and worst cost per hour played, and bought-but-unplayed. Months follow when a game was added to your library |
-| `/library challenge [goal]` | A monthly goal of games to finish and a streak of months you met it. A game counts when marked finished (or 100% achievements) in that UTC month |
-| `/wishlist cleanup` / `priority` | Remove wishlist games you already own; star a game so it is listed first and its alerts come through quiet hours |
-| `/publicpage reset_claims:true` | Visitors to your public page can mark a game as "I'm gifting this". You see only how many, never who; this clears them |
-| `/alertchannel digest` | Server admins: a Friday round-up in the alert channel of cheap games opted-in members watch (never who), free games and the week's events |
-| `/library grabber` | A link code for the FanaticalGrabber extension's **Send to Steam Value Checker** button. Only game titles are sent, never keys; the code is stored hashed and can be turned off. The same code lets the extension's **Send what I paid** button (on your Steam purchase history) fill in what you paid |
-| `/currency [currency]` | Choose the currency prices are shown in (saved; the dashboard's top-bar picker is the same setting). With no option it shows yours |
-| `/mydata export\|delete` | Download or delete everything stored about you |
+| `/manage alertchannel set\|clear\|show` | Server admins (Manage Server): the channel used when a DM fails, or when a member opts out of DMs |
+| `/me steam link\|sync\|view\|value\|next\|unlink` | Link a **public** Steam profile: imports your games with hours played, shows what you never played and the total value, `/me steam value` draws the estimated account value as a picture (full price, today's cheapest and all-time-low; `public:true` posts it in the channel), and `/me steam next` picks what to play next from your own library. Uses `STEAM_API_KEY` if set, otherwise the public games page. With the key, a sync also reads achievement progress for played games and marks a game **Finished** when every achievement is unlocked (checked games are skipped for a week). *Game details* must be public |
+| `/games bundle titles:` | Is a bundle worth it? Compares each tier to the cheapest current prices of the games you do not own |
+| `/games saleprep plan\|recap` | A buy-now / wait list and a budget plan for the next Steam sale, and a recap of what alerts caught |
+| `/server lfg post\|list\|close` | Looking-for-group posts with Join/Leave buttons, an optional Discord scheduled event (needs Manage Events) and auto-close |
+| `/games redeem` | Queue Steam keys (`keys:` or a `file:`) for batch redeeming. Open the dashboard's **Batch redeem** page while logged into Steam, with FanaticalGrabber 2.3+, and press Run. Results come back as a DM. Keys are stored only until the batch finishes (24 hours at most). `history:true` lists recent results (masked hints) and repeat keys are skipped |
+| `/me library trend` | How your library value, game count and backlog changed over the last month and since tracking began (from daily snapshots) |
+| `/me friend add`, `list`, `deals`, `remove` | Friends' nicknames and birthdays (month and day) with their public wishlist page; a reminder a week ahead and what is on sale for them |
+| `/me library badges` | Trophy case of badges earned from your library and challenge streak |
+| `/server leaderboard board:finished` | Monthly backlog league for members who opted in |
+| `/server compare` | Your library against a friend's: games you both own, and what only one of you has. They must have opted in with `/alerts share`; server only |
+| `/games regions` | One game's cheapest price in about a dozen regions, ranked in US dollars (recent ECB exchange rates). Region-locked keys mean this is for information |
+| `/server calendar` | `view` lists release dates of wishlisted games, Steam sales, server events and open `/server lfg` posts. `add` and `remove` (Manage Server) manage server events, announced in the channel with a reminder before they start. `feed` makes an optional private link for Google, Apple or Outlook calendar |
+| `/me steam recap` | Hours tracked this year and in total since you linked Steam, per month and per game. Steam only shares lifetime hours, so this counts what is added between syncs (they run automatically every few hours) |
+| `/me profilecard [public]` | Your profile card as a picture: games, hours, trophies and the gaming names you added on the dashboard's My page |
+| `/me library spend` | What you have spent from the amounts you recorded: totals, the last 12 months, best and worst cost per hour played, and bought-but-unplayed. Months follow when a game was added to your library |
+| `/me library challenge [goal]` | A monthly goal of games to finish and a streak of months you met it. A game counts when marked finished (or 100% achievements) in that UTC month |
+| `/me wishlist cleanup` / `priority` | Remove wishlist games you already own; star a game so it is listed first and its alerts come through quiet hours |
+| `/me publicpage reset_claims:true` | Visitors to your public page can mark a game as "I'm gifting this". You see only how many, never who; this clears them |
+| `/manage alertchannel digest` | Server admins: a Friday round-up in the alert channel of cheap games opted-in members watch (never who), free games and the week's events |
+| `/me library grabber` | A link code for the FanaticalGrabber extension's **Send to Steam Value Checker** button. Only game titles are sent, never keys; the code is stored hashed and can be turned off. The same code lets the extension's **Send what I paid** button (on your Steam purchase history) fill in what you paid |
+| `/me currency [currency]` | Choose the currency prices are shown in (saved; the dashboard's top-bar picker is the same setting). With no option it shows yours |
+| `/me mydata export\|delete` | Download or delete everything stored about you |
 
 **How alerts are delivered**
 
@@ -118,74 +118,80 @@ The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, min
 
 > Steam only shares wishlists that are **public**. Set *Game details* to Public under Profile > Edit Profile > Privacy Settings, then import.
 
-### `/freegames`
+### `/games freegames`
 
 Lists the games that are free to claim right now on Steam, Epic, GOG and other stores, with Claim buttons. Optional `store` filters to one store (e.g. `steam`) and `public` posts it for the whole channel. `/alerts freegames` pings you when new ones appear.
 
 ### Steam library, gifts and Play next
 
-- **Sign in through Steam** (the button on the dashboard, uses Steam's own OpenID page, no API key and no password) links your account and syncs your library. After that `/steam link`, `/wishlist import` and the dashboard need no profile link. A pasted profile still works, but only a Steam sign-in counts as proof for signing in later (a Steam-only sign-in is never an admin session, and a Discord sign-in connects it once). The Steam page shows library analytics: games, hours, collection value, hours by genre, played vs backlog and most played.
-- `/steam link` reads your **public** Steam profile (hours, achievements). `/steam view`, `next` (Play next), `value`, `taste`, `recap`, `goal` (a finish-the-backlog target) and `unlink`. `/steam foryou` (and the dashboard **For you** page) ranks live discounts by how well they fit your taste and wishlist, skipping games you own.
-- With the FanaticalGrabber extension, **Send what I paid** (Steam purchase history) fills in prices on synced games, and **Record retail prices** (Steam licenses) records key activations and gifts at retail. Gifts show a `*` in `/library view` (and a Gifted tooltip on the dashboard) and are left out of spend and savings.
-- `/library bundle` records a bundle you bought (name, what you paid, the games; the price is split evenly) and `/library bundles` lists them. `/bundle` checks whether a bundle is worth it before you buy.
+- **Sign in through Steam** (the button on the dashboard, uses Steam's own OpenID page, no API key and no password) links your account and syncs your library. After that `/me steam link`, `/me wishlist import` and the dashboard need no profile link. A pasted profile still works, but only a Steam sign-in counts as proof for signing in later (a Steam-only sign-in is never an admin session, and a Discord sign-in connects it once). The Steam page shows library analytics: games, hours, collection value, hours by genre, played vs backlog and most played.
+- `/me steam link` reads your **public** Steam profile (hours, achievements). `/me steam view`, `next` (Play next), `value`, `taste`, `recap`, `goal` (a finish-the-backlog target) and `unlink`. `/me steam foryou` (and the dashboard **For you** page) ranks live discounts by how well they fit your taste and wishlist, skipping games you own.
+- With the FanaticalGrabber extension, **Send what I paid** (Steam purchase history) fills in prices on synced games, and **Record retail prices** (Steam licenses) records key activations and gifts at retail. Gifts show a `*` in `/me library view` (and a Gifted tooltip on the dashboard) and are left out of spend and savings.
+- `/me library bundle` records a bundle you bought (name, what you paid, the games; the price is split evenly) and `/me library bundles` lists them. `/games bundle` checks whether a bundle is worth it before you buy.
 
 ### Hot deals, sale starts and alert settings
 
-- `/alertchannel hot` posts big deals in the channel, with a minimum discount; `/alertchannel sales` posts when a Steam sale starts. `/alertchannel feed`, `digest` and `group` cover free games, the weekly digest and group pings.
+- `/manage alertchannel hot` posts big deals in the channel, with a minimum discount; `/manage alertchannel sales` posts when a Steam sale starts. `/manage alertchannel feed`, `digest` and `group` cover free games, the weekly digest and group pings.
 - `/alerts mindiscount` hides your own alerts below a discount you choose.
-- `/bug` sends a problem report to the bot owner; `/support open type:bug` does the same through a ticket.
+- `/bot bug` sends a problem report to the bot owner; `/bot support open type:bug` does the same through a ticket.
 
 ### Network-wide giveaways (bot owner)
 
-The dashboard's **Admin > Giveaway** tab runs one giveaway across every server: it is posted in each server's giveaway channel (set with `/giveaway setup giveawaychannel`) and sent to opted-in members by DM, with one shared pool of entries and one draw. Every copy is labelled as a **cross-server giveaway** and says who hosts it. You can host it yourself or pick **A partner**: the post then shows the partner's name and logo with links to their website, Discord, X and more, and a footer saying it is presented by Steam Value Checker (you still hold the keys). Add up to eight **entry steps** (follow on X, repost, join a Discord, follow on Twitch, subscribe on YouTube, wishlist or follow on Steam, join a newsletter, visit a site or a custom step): each shows as a numbered line and a link button, and entrants are reminded when they press Enter. Discord cannot check a follow, so the post says winners may be checked and a new winner is drawn if a step was skipped. Giveaway posts no longer show a giveaway number.
+The dashboard's **Admin > Giveaway** tab runs one giveaway across every server: it is posted in each server's giveaway channel (set with `/server giveaway setup giveawaychannel`) and sent to opted-in members by DM, with one shared pool of entries and one draw. Every copy is labelled as a **cross-server giveaway** and says who hosts it. You can host it yourself or pick **A partner**: the post then shows the partner's name and logo with links to their website, Discord, X and more, and a footer saying it is presented by Steam Value Checker (you still hold the keys). Add up to eight **entry steps** (follow on X, repost, join a Discord, follow on Twitch, subscribe on YouTube, wishlist or follow on Steam, join a newsletter, visit a site or a custom step): each shows as a numbered line and a link button, and entrants are reminded when they press Enter. Discord cannot check a follow, so the post says winners may be checked and a new winner is drawn if a step was skipped. Giveaway posts no longer show a giveaway number.
 
-### Giveaways (`/giveaway`)
+### Giveaways (`/server giveaway`)
 
-Server owners (Manage Server, or a role set with `/giveaway setup`) can give away game keys.
+Server owners (Manage Server, or a role set with `/server giveaway setup`) can give away game keys.
 
-- `/giveaway create title length [game] [image] [thumbnail] [color] [requirerole] [bonusrole] [pingrole] ...` opens a private form where you paste the prizes, one per line as `Name | KEY` (up to 50 keys in one giveaway). The post groups them neatly, e.g. `Hades ×2, Celeste`.
+- `/server giveaway create title length [game] [image] [thumbnail] [color] [requirerole] [bonusrole] [pingrole] ...` opens a private form where you paste the prizes, one per line as `Name | KEY` (up to 50 keys in one giveaway). The post groups them neatly, e.g. `Hades ×2, Celeste`.
 - **Artwork:** the bot finds Steam art for `game` automatically, or use your own `image` (a picture, animated GIF, or a video link: .mp4/.webm, YouTube, Vimeo, Twitch clip, Streamable, Tenor/Giphy) and a small `thumbnail` (picture or GIF). Videos play in the message itself, since Discord embeds cannot hold video. The bot never downloads media; it only links to it. `noautoimage` turns auto-art off.
 - **Customise:** description, color, button text, required role, bonus entries for a role, minimum account/server age, a role to ping, and how many hours winners have to claim.
 - When it ends, winners are announced with a **Claim key** button. The bot DMs the key; if DMs are closed it replies only to the winner with "Your DMs are closed, so the prize is posted here:".
-- After delivery the winner is asked to confirm it redeemed (or report a problem). A confirmed key is wiped and the bot posts a vouch in `#vouches` (or the channel set in `/giveaway setup`).
-- Unclaimed keys are redrawn to other entrants; unused keys are DMed back to the host. Also: `/giveaway end | cancel | reroll | replace | info | list`, plus a full Giveaways page on the dashboard.
+- After delivery the winner is asked to confirm it redeemed (or report a problem). A confirmed key is wiped and the bot posts a vouch in `#vouches` (or the channel set in `/server giveaway setup`).
+- Unclaimed keys are redrawn to other entrants; unused keys are DMed back to the host. Also: `/server giveaway end | cancel | reroll | replace | info | list`, plus a full Giveaways page on the dashboard.
 
 Keys are encrypted (AES-256-GCM) with `KEY_ENCRYPTION_SECRET`, never appear in any public message or dashboard response, and are deleted on confirmation, cancellation or after a retention period. Set the secret in `.env` to enable giveaways; if you lose it, stored keys can't be read. Backups only contain encrypted keys.
 
-### Game night (`/gamenight`)
-Run it in (or point it at) a voice channel. It looks at who is in the channel and, among members who opted in with `/alerts share`, lists games everyone owns, games almost everyone owns (and who is missing), and games at least two of them want but do not own, with the current price ("worth buying together"). A button picks one game at random. The dashboard's **Game night** page does the same for any opted-in members you pick. With **Game night nudges** on (`/setup`), the bot also posts once in a voice channel's text chat when two or more opted-in people sitting in it have the same game hit their alert. Needs the voice-state intent (non-privileged); nothing about voice is stored.
+### Game night (`/server gamenight`)
+Run it in (or point it at) a voice channel. It looks at who is in the channel and, among members who opted in with `/alerts share`, lists games everyone owns, games almost everyone owns (and who is missing), and games at least two of them want but do not own, with the current price ("worth buying together"). A button picks one game at random. The dashboard's **Game night** page does the same for any opted-in members you pick. With **Game night nudges** on (`/manage setup`), the bot also posts once in a voice channel's text chat when two or more opted-in people sitting in it have the same game hit their alert. Needs the voice-state intent (non-privileged); nothing about voice is stored.
 
-### Community: a full gaming server (`/community`, `/rank`, `/levels`, `/invites`, `/emoji`)
-- **Fresh server setup.** When the bot is added to a brand-new server (only Discord's default channels) it builds the usual gaming community straight away and DMs the owner a summary: categories for Information (`#welcome`, `#rules`, `#announcements`, `#roles`), Community (`#general`, `#introductions`, `#memes`, `#clips-and-screenshots`, `#off-topic`, `#bot-commands`), Gaming (`#looking-for-group`, `#game-chat`, `#game-night`, `#wishlists-and-deals`), Deals and Giveaways (`#deal-alerts`, `#giveaways`, `#vouches`), Music (`#music-commands`, which gets an intro post listing every music command, and two Music voice channels; now-playing posts go there), Voice (Lobby, three Gaming rooms, Chill, AFK) and a private Staff area (`#staff-chat`, `#mod-log`, `#support-tickets`, `#bot-logs`). It also makes Moderator, Member, Regular, Veteran and Legend roles, a role picker (platforms and ping roles), posts the rules and a welcome, and connects the bot's own features. A server that already has channels is not touched until a manager runs **`/community setup`** (or **Build my server** on the dashboard's Community page); running it again only adds what is missing.
+### Community: a full gaming server (`/manage community`, `/server rank`, `/server levels`, `/server invites`, `/manage emoji`)
+- **Fresh server setup.** When the bot is added to a brand-new server (only Discord's default channels) it builds the usual gaming community straight away and DMs the owner a summary: categories for Information (`#welcome`, `#rules`, `#announcements`, `#roles`), Community (`#general`, `#introductions`, `#memes`, `#clips-and-screenshots`, `#off-topic`, `#bot-commands`), Gaming (`#looking-for-group`, `#game-chat`, `#game-night`, `#wishlists-and-deals`), Deals and Giveaways (`#deal-alerts`, `#giveaways`, `#vouches`), Music (`#music-commands`, which gets an intro post listing every music command, and two Music voice channels; now-playing posts go there), Voice (Lobby, three Gaming rooms, Chill, AFK) and a private Staff area (`#staff-chat`, `#mod-log`, `#support-tickets`, `#bot-logs`). It also makes Moderator, Member, Regular, Veteran and Legend roles, a role picker (platforms and ping roles), posts the rules and a welcome, and connects the bot's own features. A server that already has channels is not touched until a manager runs **`/manage community setup`** (or **Build my server** on the dashboard's Community page); running it again only adds what is missing.
 - **Bot status.** Under its name the bot rotates every 30 seconds through how many servers it is in, how many members, how many players it watches deals for, its uptime, a few commands to try and your X link (`CREATOR_X_URL`). Set `PRESENCE=off` to turn it off. Discord's Rich Presence images and Ask to Join are for games; bots only get a status line, so this is text.
 - **Moderation (`/mod`).** `warn`, `warnings`, `clearwarns`, `timeout` (1 minute to 28 days), `untimeout`, `kick`, `ban` (optionally deleting 0-7 days of messages), `unban`, `purge` (up to 100 messages newer than 14 days, optionally one person's), `cases` and `log`. Each needs the matching Discord permission (Moderate Members, Kick Members, Ban Members, Manage Messages; `log` needs Manage Server). Every action is saved as a numbered case, posted to the mod log (`#mod-log` in a built server; older servers keep using their log channel until one is chosen), and warned, timed-out, kicked and banned members get a private message. Nobody can act on themselves, the owner, the bot, or anyone whose top role is at or above theirs, and the bot's role has to be above the target. The dashboard's **Moderation** page does the same, needs the same permissions, and shows the case log.
-- **Steam Verified.** A new server gets a Steam Verified role and a `#verify` channel with a button. Members sign in through Steam first, then press it (or run `/steam verify`). The Steam page also offers **Linked Roles** as an extra option: their Steam shows on their Discord profile, and a server admin can require it for a role (Server Settings, Roles, the role, Links; Discord has no bot API for that step). Normal linking is unchanged. If the bot cannot set the Linked Roles Verification URL itself, set it to `<PUBLIC_URL>/auth/linked` in the Developer Portal. Administrator is not required; Manage Roles is enough.
-- **Welcome messages.** New members are greeted in `#welcome` with their avatar, member number and who invited them (`/community welcome` sets the channel, text with `{user} {username} {server} {count} {inviter}`, an optional private welcome and leave notes). `/community autorole` gives every new member a role.
-- **Levels and XP.** Members earn 15-25 XP per message (once a minute) and 5 XP a minute in voice with others. `/rank` shows level, progress and place, `/levels` the top ten. `/community xp` sets speed and where level-ups are announced, `/community levelrole` gives a role at a level.
-- **Invites and referrals.** The bot works out which invite each new member used. `/invites link` gives you a permanent personal link, `/invites me` and `/invites top` show counts, `/community referral` sets bonus XP per new member (paid once per person, also when they rejoin) and roles at invite counts.
-- **Emoji import.** `/emoji import` copies custom emoji pasted from other servers (up to 20 at a time) or adds an attached image; `/emoji list` shows what the server has. Only Discord's own CDN is fetched.
+- **Steam Verified.** A new server gets a Steam Verified role and a `#verify` channel with a button. Members sign in through Steam first, then press it (or run `/me steam verify`). The Steam page also offers **Linked Roles** as an extra option: their Steam shows on their Discord profile, and a server admin can require it for a role (Server Settings, Roles, the role, Links; Discord has no bot API for that step). Normal linking is unchanged. If the bot cannot set the Linked Roles Verification URL itself, set it to `<PUBLIC_URL>/auth/linked` in the Developer Portal. Administrator is not required; Manage Roles is enough.
+- **Welcome messages.** New members are greeted in `#welcome` with their avatar, member number and who invited them (`/manage community welcome` sets the channel, text with `{user} {username} {server} {count} {inviter}`, an optional private welcome and leave notes). `/manage community autorole` gives every new member a role.
+- **Levels and XP.** Members earn 15-25 XP per message (once a minute) and 5 XP a minute in voice with others. `/server rank` shows level, progress and place, `/server levels` the top ten. `/manage community xp` sets speed and where level-ups are announced, `/manage community levelrole` gives a role at a level.
+- **Invites and referrals.** The bot works out which invite each new member used. `/server invites link` gives you a permanent personal link, `/server invites me` and `/server invites top` show counts, `/manage community referral` sets bonus XP per new member (paid once per person, also when they rejoin) and roles at invite counts.
+- **Emoji import.** `/manage emoji import` copies custom emoji pasted from other servers (up to 20 at a time) or adds an attached image; `/manage emoji list` shows what the server has. Only Discord's own CDN is fetched.
 - **Dashboard.** The Servers menu has **Community** (your standing, top inviters, build, welcome, referrals, emoji paste and image upload) and **Server XP** (your level card, the full paged leaderboard, level rewards, how XP works, the XP curve and, for managers, XP settings; a prize shop is marked Coming soon). **Admin > Community** shows what is built and used across all servers.
-- **Needs:** turn on **Server Members Intent** for the bot in the Discord Developer Portal (Bot, Privileged Gateway Intents) for welcome messages and invite tracking; the bot checks this at startup and runs without them if it is off. The invite link now also asks for Manage Roles, Manage Server (to read invites), Create Invite and Manage Expressions. Existing servers can grant these to the bot's role, then run `/community setup`.
+- **Needs:** turn on **Server Members Intent** for the bot in the Discord Developer Portal (Bot, Privileged Gateway Intents) for welcome messages and invite tracking; the bot checks this at startup and runs without them if it is off. The invite link now also asks for Manage Roles, Manage Server (to read invites), Create Invite and Manage Expressions. Existing servers can grant these to the bot's role, then run `/manage community setup`.
 
-### Server setup (`/setup`)
-When the bot joins, the server owner gets a DM (or a note in the system channel) pointing to `/setup`: an ephemeral panel with channel pickers for the alert channel, support ticket channel and giveaway vouches, a free-games feed toggle and a live checklist. **Create the channels for me** (also on the dashboard) makes a Steam Value Checker category with `#deal-alerts`, a private `#support-tickets` (only you, the bot and an optional staff role) and `#vouches`, and connects them. It needs the Manage Channels permission; the invite link now asks for it (19472, plus Manage Events, 8589954064, for looking-for-group events), and existing servers can grant it to the bot's role. The dashboard's **Setup** page (Servers menu) does the same, including inviting the bot if it is not in the server yet. The dashboard menu is grouped into Games, Servers, Account and Help dropdowns.
+### Server setup (`/manage setup`)
+When the bot joins, the server owner gets a DM (or a note in the system channel) pointing to `/manage setup`: an ephemeral panel with channel pickers for the alert channel, support ticket channel and giveaway vouches, a free-games feed toggle and a live checklist. **Create the channels for me** (also on the dashboard) makes a Steam Value Checker category with `#deal-alerts`, a private `#support-tickets` (only you, the bot and an optional staff role) and `#vouches`, and connects them. It needs the Manage Channels permission; the invite link now asks for it (19472, plus Manage Events, 8589954064, for looking-for-group events), and existing servers can grant it to the bot's role. The dashboard's **Setup** page (Servers menu) does the same, including inviting the bot if it is not in the server yet. The dashboard menu is grouped into Games, Servers, Account and Help dropdowns.
 
-### Support tickets (`/support`)
-`/support open` opens a ticket (a form asks for a subject and details), `/support mine` lists yours. Replies reach you by DM with a Reply button and on the dashboard's **Support** page; both sides see the same thread.
-Tickets go to the server's queue only if a manager ran `/support setup channel:#help` there; otherwise they go to the bot owner (the owner sets that channel with `/support setup global:true`). Staff answer with the Reply, Assign me and Resolve buttons or from the dashboard inbox (search, status filter, tags, assignee, canned replies, transcript download, owner-only recent errors). Quiet tickets resolve after 7 days waiting and close 3 days later; closed tickets are purged after 6 months. A giveaway "key did not work" report opens a ticket automatically. Staff never see game keys.
+### Music (`/music`, `/play`)
+SoundCloud songs and playlists, plus live radio (`/music live` lists stations on the air; any Icecast/Shoutcast link works in `/play`). The **Auto DJ** plays a manager-chosen playlist when nothing is queued and members can send requests (`/music autodj submit`). The dashboard's Music page has the same player with album art, seek, requests and settings. Needs Connect and Speak, ffmpeg and yt-dlp (the Dockerfile has both).
+
+### Command layout
+Related commands are grouped: `/games`, `/me`, `/server`, `/manage`, `/bot`, with `/alerts`, `/music`, `/play`, `/mod`, `/dashboard` and `/help` on their own. `src/commands.js` still defines each feature as its own command; `legacyRoute` maps the grouped form back so the handlers did not change. `/help` is a paged embed.
+
+### Support tickets (`/bot support`)
+`/bot support open` opens a ticket (a form asks for a subject and details), `/bot support mine` lists yours. Replies reach you by DM with a Reply button and on the dashboard's **Support** page; both sides see the same thread.
+Tickets go to the server's queue only if a manager ran `/bot support setup channel:#help` there; otherwise they go to the bot owner (the owner sets that channel with `/bot support setup global:true`). Staff answer with the Reply, Assign me and Resolve buttons or from the dashboard inbox (search, status filter, tags, assignee, canned replies, transcript download, owner-only recent errors). Quiet tickets resolve after 7 days waiting and close 3 days later; closed tickets are purged after 6 months. A giveaway "key did not work" report opens a ticket automatically. Staff never see game keys.
 
 ### Notifications, snooze and language
-Every delivered alert is copied to the dashboard's **Notifications** page (kept 60 days). `/alerts mute` stops DMs for one kind but still records it. Sale alerts have **Snooze 7 days** and **Only below a price** buttons. `/alerts language` switches the main buttons and dashboard menu to Spanish or French. `/changelog` and a dashboard banner show what is new. On the dashboard: press `/` to search, `g` then `w`, `l`, `a`, `s`, `n`, `h` to jump, and use the ◐ button for high contrast. The home page has a setup checklist, and a server owner gets a short setup DM when the bot joins.
+Every delivered alert is copied to the dashboard's **Notifications** page (kept 60 days). `/alerts mute` stops DMs for one kind but still records it. Sale alerts have **Snooze 7 days** and **Only below a price** buttons. `/alerts language` switches the main buttons and dashboard menu to Spanish or French. `/bot changelog` and a dashboard banner show what is new. On the dashboard: press `/` to search, `g` then `w`, `l`, `a`, `s`, `n`, `h` to jump, and use the ◐ button for high contrast. The home page has a setup checklist, and a server owner gets a short setup DM when the bot joins.
 
-### `/help`, `/about`, `/privacy`
+### `/help`, `/bot about`, `/bot privacy`
 
-Usage notes and a plain-language privacy summary. `/about` is a card with the creator credit (name linked to X, with a logo), live uptime, servers, members reached, latency and giveaway totals. The same card is on the dashboard Help page. Set `CREATOR_NAME` and `CREATOR_X_URL` to change the credit.
+Usage notes and a plain-language privacy summary. `/bot about` is a card with the creator credit (name linked to X, with a logo), live uptime, servers, members reached, latency and giveaway totals. The same card is on the dashboard Help page. Set `CREATOR_NAME` and `CREATOR_X_URL` to change the credit.
 
 ## Install on a server or on your account
 
-Most commands (`/value`, `/wishlist`, `/alerts`, `/library`, `/freegames`, `/mydata`, `/help`, `/about`, `/privacy`) also work when a person adds the app to **their own account**: they can use it in DMs, group chats and any server, even ones without the bot. `/serverlist`, `/leaderboard` and `/serverstats` also work in a DM with the bot, about the server you last used it in (you must still be a member). Server management and voice features (`/alertchannel`, `/giveaway`, `/setup`, `/gamenight`) need the bot installed in the server and are used there.
+Most commands (`/games value`, `/me wishlist`, `/alerts`, `/me library`, `/games freegames`, `/me mydata`, `/help`, `/bot about`, `/bot privacy`) also work when a person adds the app to **their own account**: they can use it in DMs, group chats and any server, even ones without the bot. `/server serverlist`, `/server leaderboard` and `/server serverstats` also work in a DM with the bot, about the server you last used it in (you must still be a member). Server management and voice features (`/manage alertchannel`, `/server giveaway`, `/manage setup`, `/server gamenight`) need the bot installed in the server and are used there.
 
-To allow it: in the Developer Portal open **Installation**, tick **User Install** under Installation Contexts, and add the `applications.commands` scope under Default Install Settings > User Install. Then register the commands globally by removing `GUILD_ID`, or set `GLOBAL_COMMANDS=1`. The dashboard and `/about` show an "Add to your account" link.
+To allow it: in the Developer Portal open **Installation**, tick **User Install** under Installation Contexts, and add the `applications.commands` scope under Default Install Settings > User Install. Then register the commands globally by removing `GUILD_ID`, or set `GLOBAL_COMMANDS=1`. The dashboard and `/bot about` show an "Add to your account" link.
 
 ## Web dashboard
 
@@ -278,7 +284,7 @@ branding/       Logo and banner
 
 ## Privacy
 
-`/value` stores nothing. If you use wishlist alerts, the bot stores your Discord ID, wishlist, alert rules, settings, your library and what you paid (if you use it), 90 days of alert history, server list votes and (if you import) your public Steam ID, and you can export or delete it with `/mydata`. Game titles and IDs are sent to IsThereAnyDeal for prices, and user input is never written to logs. See [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md).
+`/games value` stores nothing. If you use wishlist alerts, the bot stores your Discord ID, wishlist, alert rules, settings, your library and what you paid (if you use it), 90 days of alert history, server list votes and (if you import) your public Steam ID, and you can export or delete it with `/me mydata`. Game titles and IDs are sent to IsThereAnyDeal for prices, and user input is never written to logs. See [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md).
 
 ## Known limits
 
@@ -286,7 +292,7 @@ branding/       Logo and banner
 - **"Cheapest now" can come from key-reseller sites.** Use `stores:major` to limit it to major stores.
 - **Title matching can be wrong.** Fuzzy matches are marked with `~`. Check them before trusting the totals.
 - **Unmatched games are left out of the totals,** while `paid` covers everything you entered. The bot notes this when it happens.
-- **Steam wishlist import is untested against live Steam.** It uses Steam's `IWishlistService/GetWishlist` endpoint, which needs only a public profile. If Steam changes it, import fails with an error and manual `/wishlist add` still works.
+- **Steam wishlist import is untested against live Steam.** It uses Steam's `IWishlistService/GetWishlist` endpoint, which needs only a public profile. If Steam changes it, import fails with an error and manual `/me wishlist add` still works.
 - Alerts are best effort and run on a schedule, so a short sale can be missed.
 - **Bundle, giveaway and price-history features use ITAD endpoints that have only been tested against fake responses**, like the rest of the live API calls. If ITAD changes a response, those features fail quietly and the rest keeps working.
 - **Free game alerts show whatever IsThereAnyDeal lists as a giveaway.** Whether that includes every Steam free-to-keep promotion is unverified. The buttons open the store page: the bot cannot claim for you, because that needs your store login.
@@ -323,7 +329,7 @@ Sale alerts now carry a 12 month price sparkline with a buy-now-or-wait note, an
 
 ### Giveaway scheduling
 
-`/giveaway create` can start later (`startin:2h`), repeat as a series (`rounds:4 repeatevery:7d`, prizes are split across the rounds and all rounds are scheduled up front), and be limited to server boosters (`boosters:true`). The dashboard form has the same fields.
+`/server giveaway create` can start later (`startin:2h`), repeat as a series (`rounds:4 repeatevery:7d`, prizes are split across the rounds and all rounds are scheduled up front), and be limited to server boosters (`boosters:true`). The dashboard form has the same fields.
 
 ## FanaticalGrabber visitor counter
 

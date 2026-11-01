@@ -1,4 +1,4 @@
-// Turns an SVG into a PNG on the server (for /profilecard and /steam value) and fetches picture links safely.
+// Turns an SVG into a PNG on the server (for /me profilecard and /me steam value) and fetches picture links safely.
 import { Resvg } from "@resvg/resvg-js";
 import { fileURLToPath } from "node:url";
 import dns from "node:dns/promises";

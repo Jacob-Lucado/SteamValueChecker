@@ -22,7 +22,7 @@ export async function readUpload(file) {
     return parseUpload(new TextDecoder("utf-8").decode(buf), name);
 }
 
-/** Raw text of an attached .txt/.csv/.json/.md file (for /redeem, which looks for keys rather than game titles). */
+/** Raw text of an attached .txt/.csv/.json/.md file (for /games redeem, which looks for keys rather than game titles). */
 export async function readUploadText(file) {
     const name = file.name.toLowerCase();
     if (!FILE_TYPES.some(ext => name.endsWith(ext))) throw new UserError(`Unsupported file type. Upload a ${FILE_TYPES.join(", ")} file.`);

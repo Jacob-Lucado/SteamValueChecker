@@ -25,6 +25,7 @@ export function musicIntroPayload() {
                 { name: "🎛️ Control", value: "`/music pause` · `resume` · `skip` (others vote) · `skipto` · `previous` · `seek` · `stop` · `leave`\n`/music volume` · `loop` (song or whole queue) · `shuffle`" },
                 { name: "📜 Queue", value: "`/music nowplaying` · `queue` · `remove` · `move` · `clear`" },
                 { name: "💾 Your playlists", value: "`/music saveplaylist` saves what's queued to your account, `loadplaylist` brings it back in any server, plus `playlists` and `deleteplaylist`." },
+                { name: "📻 Live radio & Auto DJ", value: "`/music live` lists radio stations on the air right now, or paste any stream link into `/play`.\nWith the **Auto DJ** on, the bot keeps playing a playlist when nobody has queued anything, and anyone can send requests with `/music autodj submit` (no voice channel needed)." },
                 { name: "🛠️ Managers", value: "`/music settings` sets a DJ role, starting volume, queue and song length limits, and where the now-playing card goes. It all lives on the dashboard's **Music** page too, along with a full player." },
                 { name: "✨ Good to know", value: "The now-playing card updates live and has buttons for pause, skip, loop, shuffle, volume and queue. Premium-only SoundCloud tracks can't be played. The bot leaves a few minutes after the queue ends or everyone leaves." }
             ],
@@ -67,12 +68,12 @@ export const TEMPLATE = {
             { key: "memes", name: "memes", topic: "Gaming memes" },
             { key: "clips", name: "clips-and-screenshots", topic: "Your best moments" },
             { key: "offtopic", name: "off-topic", topic: "Everything that is not games" },
-            { key: "botcmd", name: "bot-commands", topic: "Run /rank, /levels, /invites and the rest here" }] },
+            { key: "botcmd", name: "bot-commands", topic: "Run /server rank, /server levels, /server invites and the rest here" }] },
         { name: "🎮 GAMING", channels: [
-            { key: "lfg", name: "looking-for-group", topic: "Find people to play with. Try /lfg post" },
+            { key: "lfg", name: "looking-for-group", topic: "Find people to play with. Try /server lfg post" },
             { key: "gamechat", name: "game-chat", topic: "What are you playing?" },
             { key: "gamenight", name: "game-night", topic: "Plan the next session together" },
-            { key: "wishlists", name: "wishlists-and-deals", topic: "Share wishlists and sales. Try /wishlist import" }] },
+            { key: "wishlists", name: "wishlists-and-deals", topic: "Share wishlists and sales. Try /me wishlist import" }] },
         { name: "💸 DEALS & GIVEAWAYS", channels: [
             { key: "deals", name: "deal-alerts", topic: "Sales and free games from Steam Value Checker", readonly: true },
             { key: "drops", name: "promo-drops", topic: "Key giveaways from SteelSeries, NVIDIA and others, posted once each and marked when they end", readonly: true },
@@ -131,7 +132,7 @@ export const helpPanel = () => ({
     components: [{ type: 1, components: [{ type: 2, style: 3, label: "Open a ticket", emoji: { name: "🎫" }, custom_id: "tk_open:0" }] }]
 });
 export const bugPanel = () => ({
-    embeds: [{ color: 0xfaa61a, title: "Found a bug?", description: "Press the button and tell me what went wrong with the bot. It goes straight to the developer (that's me). `/bug` works anywhere too." }],
+    embeds: [{ color: 0xfaa61a, title: "Found a bug?", description: "Press the button and tell me what went wrong with the bot. It goes straight to the developer (that's me). `/bot bug` works anywhere too." }],
     components: [{ type: 1, components: [{ type: 2, style: 4, label: "Report a bug", emoji: { name: "🐞" }, custom_id: "tk_bug" }] }]
 });
 
@@ -318,10 +319,10 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.welcome, { embeds: [{ color: 0x57f287, title: `Welcome to ${gname}`, description: `New here? Start with <#${chIds.rules}>, pick your roles in <#${chIds.roles}>, then say hi in <#${chIds.introductions}>.\n\nNew members are greeted in this channel.` }] });
     await refreshLeaderboard({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not post the leaderboard (check my permissions in #leaderboard)."));
     await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts." });
-    await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/wishlist import` to get your own alerts." });
-    await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/codes`, or on the dashboard." });
-    await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/promos add` or on the dashboard, and can turn on news watching with `/promos news`." });
-    await say(api, chIds.tickets, { content: "Member tickets from `/support open` appear here with Reply, Assign me and Resolve buttons." });
+    await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/me wishlist import` to get your own alerts." });
+    await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });
+    await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/server promos add` or on the dashboard, and can turn on news watching with `/server promos news`." });
+    await say(api, chIds.tickets, { content: "Member tickets from `/bot support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
     await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), music in <#${chIds.musiccmd}> (join a Music voice channel and use /play), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
     await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
@@ -399,9 +400,9 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     if (chIds.musiccmd && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.musiccmd });
     if (chIds.musiccmd && created.channels.includes("music-commands")) await say(api, chIds.musiccmd, musicIntroPayload());
     if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
-    if (chIds.codes && created.channels.includes("game-codes")) await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/codes`, or on the dashboard." });
+    if (chIds.codes && created.channels.includes("game-codes")) await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });
     if (chIds.drops && !db.getDropSettings(guildId).channel_id) db.setDropSettings(guildId, { channel_id: chIds.drops });
-    if (chIds.drops && created.channels.includes("promo-drops")) await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/promos add` or on the dashboard, and can turn on news watching with `/promos news`." });
+    if (chIds.drops && created.channels.includes("promo-drops")) await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/server promos add` or on the dashboard, and can turn on news watching with `/server promos news`." });
     if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     // the opt-in ping roles for codes and promos, for servers that were set up before they existed
@@ -435,12 +436,12 @@ export function welcomeDmPayload({ server, dashboardUrl = null }) {
         color: 0x4d8cff, title: `Welcome to ${server} 👋`,
         description: "I'm **Steam Value Checker**. I handle the game deals and a few other things around here. Here's what I can do for you:",
         fields: [
-            { name: "💸 Sale alerts", value: "Run `/wishlist import` and I'll message you when something on your Steam wishlist drops in price. `/value` prices any list of games." },
-            { name: "🎁 Free games", value: "`/freegames` shows what you can grab for free right now on Steam, Epic, GOG and more." },
+            { name: "💸 Sale alerts", value: "Run `/me wishlist import` and I'll message you when something on your Steam wishlist drops in price. `/games value` prices any list of games." },
+            { name: "🎁 Free games", value: "`/games freegames` shows what you can grab for free right now on Steam, Epic, GOG and more." },
             { name: "🎮 Your library", value: "Sign in with Steam on the dashboard to see what your library is worth, your hours, and what to play next." },
-            { name: "🏆 In this server", value: "You earn XP and levels by chatting and hanging out in voice (`/rank`, `/levels`). Grab your own invite link with `/invites link`, and verify your Steam account in #verify for the Steam Verified role." },
+            { name: "🏆 In this server", value: "You earn XP and levels by chatting and hanging out in voice (`/server rank`, `/server levels`). Grab your own invite link with `/server invites link`, and verify your Steam account in #verify for the Steam Verified role." },
             { name: "🎵 Music", value: "Join a Music voice channel and run `/play` with a SoundCloud song or playlist link in #music-commands. `/music` has the rest: queue, skip, loop and saved playlists." },
-            { name: "🔔 Control it", value: "`/alerts` lets you set quiet hours and pick how I notify you. `/help` lists every command, and `/mydata delete` wipes your data whenever you want." }
+            { name: "🔔 Control it", value: "`/alerts` lets you set quiet hours and pick how I notify you. `/help` lists every command, and `/me mydata delete` wipes your data whenever you want." }
         ],
         footer: { text: "You're getting this because you joined a server that uses me. I don't read replies here." }
     };

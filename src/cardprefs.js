@@ -1,5 +1,5 @@
 // What a member's shareable profile card shows: the gaming names they add, the colour, picture links and which stats.
-// Kept as one small JSON blob per member so the website and /profilecard draw the same card.
+// Kept as one small JSON blob per member so the website and /me profilecard draw the same card.
 import { UserError } from "./errors.js";
 
 export const PLATFORMS = [

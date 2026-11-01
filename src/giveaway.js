@@ -397,7 +397,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const channelId = g.vouch_channel_id || db.getGiveawaySettings(g.guild_id).vouch_channel_id || await discord.findChannelByName(g.guild_id, "vouches");
         let vouched = false;
         if (channelId) { try { await discord.post(channelId, vouchPayload(g, k, userId)); vouched = true; } catch { /* no access to the channel */ } }
-        await dmHost(g, hostNote(g, `<@${userId}> confirmed that **${k.label}** redeemed successfully.${vouched ? "" : "\nI could not post it in a vouches channel. Set one with `/giveaway setup`."}`));
+        await dmHost(g, hostNote(g, `<@${userId}> confirmed that **${k.label}** redeemed successfully.${vouched ? "" : "\nI could not post it in a vouches channel. Set one with `/server giveaway setup`."}`));
         return { vouched };
     }
 
