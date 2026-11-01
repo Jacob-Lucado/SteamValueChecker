@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { cleanEntry, cleanReward, gameByName, gameArt, normalizeCode, parseExpiry, parseShiftFeed, fetchShiftCodes } from "../src/codesource.js";
+import { fetchHoyoCodes, fetchAllCodes, joinRewards, cleanRewardItem, redeemUrlFor, gameByKey, cleanEntry, cleanReward, gameByName, gameArt, normalizeCode, parseExpiry, parseShiftFeed, fetchShiftCodes } from "../src/codesource.js";
 import { codeEmbed, runCodes, applyCodeSettings } from "../src/codes.js";
 import { createCodeHandlers } from "../src/codeshandlers.js";
 
@@ -164,7 +164,7 @@ test("codes: a channel that vanished is skipped without stopping the other serve
 test("codes: settings are validated", () => {
     const db = openDb(":memory:");
     assert.throws(() => applyCodeSettings(db, "g1", { games: ["nope"] }), /not a game/);
-    assert.deepEqual(applyCodeSettings(db, "g1", { games: ["bl4", "bl3", "wonderlands", "blgoty", "bltps", "bl2"] }).games, [], "every game selected means no filter");
+    assert.deepEqual(applyCodeSettings(db, "g1", { games: ["bl4", "bl3", "wonderlands", "blgoty", "bltps", "bl2", "genshin", "hsr", "zzz"] }).games, [], "every game selected means no filter");
     assert.deepEqual(applyCodeSettings(db, "g1", { games: ["bl2"], channel_id: "c9" }).games, ["bl2"]);
     assert.equal(db.getCodeSettings("g1").channel_id, "c9");
 });
@@ -199,7 +199,7 @@ test("codes: /codes latest lists working codes for anyone, settings need Manage 
     assert.match(cantPost.replies[0].content, /can't post/);
     assert.equal(db.getCodeSettings("g1").channel_id, "c1");
     await ui.handleCommand(interaction({ sub: "games", options: { game: "bl4", on: false } }));
-    assert.ok(!db.getCodeSettings("g1").games.includes("bl4") && db.getCodeSettings("g1").games.length === 5);
+    assert.ok(!db.getCodeSettings("g1").games.includes("bl4") && db.getCodeSettings("g1").games.length === 8);
     await ui.handleCommand(interaction({ sub: "ping", options: { role: { id: "r5" } } }));
     assert.equal(db.getCodeSettings("g1").role_id, "r5");
 });
@@ -209,4 +209,82 @@ test("codes: community setup adds a game-codes channel and points the server at 
     const chans = TEMPLATE.categories.flatMap(c => c.channels ?? []);
     assert.ok(chans.some(c => c.key === "codes" && c.name === "game-codes"));
     assert.ok(ADDED_LATER.has("codes"), "servers that already ran setup get it on the next run");
+});
+
+// ---------- HoYoverse games ----------
+const json = body => async () => ({ ok: true, status: 200, json: async () => body });
+const ennead = { active: [{ code: "ABCD1234EFGH", rewards: ["Primogem ×60", "Adventurer's Experience ×5"] }, { code: "GIFTCODE", rewards: ["Mora ×10000"] }], inactive: [{ code: "OLDCODE12345", rewards: [] }] };
+const seria = { codes: [{ code: "GIFTCODE", status: "OK", rewards: "Mora*10000" }, { code: "ONLYSERIA999", status: "OK", rewards: "Primogem*40;Mora*20000" }, { code: "BROKEN", status: "NOT_OK", rewards: "" }] };
+const hoyoFetch = (over = {}) => async url => {
+    if (over[new URL(url).host] === "down") return { ok: false, status: 503 };
+    if (url.includes("ennead")) return { ok: true, json: async () => ennead };
+    return { ok: true, json: async () => seria };
+};
+
+test("hoyo: rewards from both lists become one readable line", () => {
+    assert.equal(cleanRewardItem("Primogem ×60"), "60 Primogem");
+    assert.equal(cleanRewardItem("Stellar Jade x100"), "100 Stellar Jade");
+    assert.equal(cleanRewardItem("Credit ×50,000"), "50,000 Credit");
+    assert.equal(cleanRewardItem("Mora*10000"), "10000 Mora");
+    assert.equal(cleanRewardItem("Free items"), "Free items");
+    assert.equal(joinRewards("Primogem*40;Mora*20000"), "40 Primogem, 20000 Mora");
+    assert.equal(joinRewards(["Primogem ×60", "Adventurer's Experience ×5"]), "60 Primogem, 5 Adventurer's Experience");
+    assert.equal(joinRewards(""), "Free items");
+    assert.equal(joinRewards("60 stellar jade and one fuel"), "60 stellar jade and one fuel");
+});
+
+test("hoyo: the two lists are merged, duplicates collapse, broken codes are left out", async () => {
+    const r = await fetchHoyoCodes({ fetchImpl: hoyoFetch(), now: NOW });
+    const genshin = r.codes.filter(c => c.game === "genshin").map(c => c.code).sort();
+    assert.deepEqual(genshin, ["ABCD1234EFGH", "GIFTCODE", "ONLYSERIA999"]);
+    assert.equal(r.codes.find(c => c.code === "GIFTCODE" && c.game === "genshin").reward, "10000 Mora");
+    assert.equal(r.codes.find(c => c.code === "ONLYSERIA999").key, "hoyo:genshin:ONLYSERIA999");
+    assert.ok(r.complete.includes("genshin") && r.complete.includes("hsr") && r.complete.includes("zzz"));
+    const half = await fetchHoyoCodes({ fetchImpl: hoyoFetch({ "hoyo-codes.seria.moe": "down" }), now: NOW });
+    assert.ok(half.codes.length > 0 && half.complete.length === 0, "one list down: still posts what it has, but never decides a code ended");
+    assert.ok(half.errors.length > 0);
+    await assert.rejects(fetchHoyoCodes({ fetchImpl: async () => ({ ok: false, status: 500 }), now: NOW }), /500/);
+});
+
+test("hoyo: redeem links fill the code in, and each game has its own look", () => {
+    assert.equal(redeemUrlFor(gameByKey("genshin"), "ABC123"), "https://genshin.hoyoverse.com/en/gift?code=ABC123");
+    assert.match(redeemUrlFor(gameByKey("hsr"), "ABC123"), /hsr\.hoyoverse\.com\/gift\?code=ABC123/);
+    assert.match(redeemUrlFor(gameByKey("zzz"), "ABC123"), /zenless\.hoyoverse\.com\/redemption\?code=ABC123/);
+    assert.match(redeemUrlFor(gameByKey("bl4"), "X"), /shift\.gearboxsoftware\.com/);
+    const e = codeEmbed({ code: "GIFTCODE", game: "zzz", reward: "20 Polychrome", platform: "All platforms", expires_at: null });
+    assert.match(e.embeds[0].author.name, /Zenless Zone Zero · redeem code/);
+    assert.equal(e.embeds[0].image, undefined, "no art is better than the wrong art");
+    assert.equal(e.components[0].components[0].url, "https://zenless.hoyoverse.com/redemption?code=GIFTCODE");
+    assert.match(e.embeds[0].fields.find(f => f.name === "Heads up").value, /servers or regions/);
+});
+
+test("hoyo: a code that drops off a complete list ends, but a partial answer never ends anything", async () => {
+    const db = openDb(":memory:");
+    db.setCodeSettings("g1", { channel_id: "c1" });
+    const { api, sent, edits } = fakeApi();
+    const run = fetchImpl => runCodes({ db, api, fetchCodes: () => fetchAllCodes({ fetchImpl, now: NOW }), now: () => NOW, sleep: async () => {} });
+    const shiftFeed = [{ codes: [raw()] }];
+    const both = over => async url => (url.includes("githubusercontent") ? { ok: true, json: async () => shiftFeed } : hoyoFetch(over)(url));
+    const r1 = await run(both());
+    assert.ok(r1.added >= 5);
+    assert.equal(sent.length, 3, "first run posts the newest few");
+    // seria goes down: the codes only it listed are NOT treated as ended
+    const r2 = await run(both({ "hoyo-codes.seria.moe": "down" }));
+    assert.equal(r2.expired, 0);
+    assert.ok(db.codeByKey("hoyo:genshin:ONLYSERIA999").status === "active");
+    // both answer, and ONLYSERIA999 is gone from the list
+    seria.codes = seria.codes.filter(c => c.code !== "ONLYSERIA999");
+    const r3 = await run(both());
+    assert.equal(r3.expired, 3, "the mock serves the same lists for all three games");
+    assert.equal(db.codeByKey("hoyo:genshin:ONLYSERIA999").status, "expired");
+    // one provider failing entirely does not hide the other
+    const r4 = await run(async url => (url.includes("githubusercontent") ? { ok: false, status: 500 } : hoyoFetch()(url)));
+    assert.match(r4.feedError, /SHiFT/);
+    assert.ok(edits.length >= 0);
+});
+
+test("hoyo: codes without an end date do not age out like old SHiFT codes", () => {
+    const db = openDb(":memory:");
+    db.upsertCode({ provider: "hoyo", key: "hoyo:genshin:KEEPME123", code: "KEEPME123", game: "genshin", reward: "x", expiresAt: null, seenAt: NOW });
+    assert.equal(db.expireDue(NOW + 90 * 86400_000).length, 0);
 });

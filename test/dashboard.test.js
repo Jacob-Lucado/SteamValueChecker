@@ -1404,14 +1404,14 @@ test("game codes: signed-in members see the list, managers set up their server, 
     assert.equal((await o.request("/api/codes?game=bl2")).data.codes.length, 1);
     assert.equal((await o.request("/api/codes?game=nope")).status, 400);
     const s = (await o.request("/api/servers/codes?guild=g-admin")).data;
-    assert.equal(s.channels.length, 2); assert.equal(s.games.length, 6);
+    assert.equal(s.channels.length, 2); assert.equal(s.games.length, 9);
     assert.equal((await o.request("/api/servers/codes?guild=g-member")).status, 403);
     const saved = (await post("/api/servers/codes", { guild_id: "g-admin", channel_id: "c1", role_id: "r1", games: ["bl4"] })).data;
     assert.equal(saved.settings.channel_id, "c1"); assert.deepEqual(saved.settings.games, ["bl4"]); assert.equal(saved.settings.role_id, "r1");
     assert.ok(o.sent.some(m => m.id === "c1"), "a confirmation is posted in the chosen channel");
     assert.equal((await post("/api/servers/codes", { guild_id: "g-admin", channel_id: "nope" })).status, 400);
     assert.equal((await post("/api/servers/codes", { guild_id: "g-admin", role_id: "nope" })).status, 400);
-    assert.equal((await post("/api/servers/codes", { guild_id: "g-admin", games: ["zzz"] })).status, 400);
+    assert.equal((await post("/api/servers/codes", { guild_id: "g-admin", games: ["nope"] })).status, 400);
     assert.equal((await post("/api/servers/codes", { guild_id: "g-member", channel_id: "c1" })).status, 403);
     assert.equal((await post("/api/codes/retire", { id: 1 })).status, 200);
     assert.equal(o.db.getCode(1).status, "expired");

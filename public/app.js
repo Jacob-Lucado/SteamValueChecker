@@ -965,18 +965,18 @@
         const retire = owner && c.status === "active" ? h("button", { class: "btn red small", text: "Mark ended" }) : null;
         if (retire) retire.addEventListener("click", () => busy(retire, async () => { await api("/api/codes/retire", { id: c.id }); toast("Marked as ended. Server posts are being updated.", "ok"); await load(); }));
         return h("div", { class: "free-card" + (c.status === "expired" ? " ended" : "") },
-          c.art ? h("img", { src: c.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
+          c.art ? h("img", { src: c.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart code-tile code-" + c.game, text: c.gameTitle }),
           h("div", { class: "free-info" }, h("strong", { text: c.gameTitle }), h("div", { text: c.reward || "Unknown reward" }),
             h("code", { class: "code-text", text: c.code }),
             h("span", { class: "muted small", text: `${c.platform || "All platforms"} · ${c.expiresAt ? when(c.expiresAt) : "no end date listed"}` }),
             c.note ? h("span", { class: "muted small", text: c.note + ". May only work on that region's account." }) : null,
-            h("div", { class: "row" }, c.status === "active" ? copy : null, c.status === "active" ? ext(c.redeemUrl, "Redeem on SHiFT", "btn gray small") : h("span", { class: "chip dim", text: "Ended" }), retire)));
+            h("div", { class: "row" }, c.status === "active" ? copy : null, c.status === "active" ? ext(c.redeemUrl, c.provider === "hoyo" ? "Redeem" : "Redeem on SHiFT", "btn gray small") : h("span", { class: "chip dim", text: "Ended" }), retire)));
       })) : h("p", { class: "muted", text: st.status === "expired" ? "No ended codes in the last two weeks." : "No working codes right now. New ones show up here as soon as they are listed." }));
     }
     const fail = e => list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
     const poll = owner ? h("button", { class: "btn gray small", text: "Check for new codes now" }) : null;
     if (poll) poll.addEventListener("click", () => busy(poll, async () => { const r = await api("/api/admin/codes/poll", {}); toast(r.result.skipped ? "A check is already running." : `Checked: ${r.result.added} new, ${r.result.posted} posted.`, "ok"); await load(); }));
-    app.replaceChildren(pageHead("Game codes", "Limited-time codes for games, like SHiFT codes for Borderlands. Each one is listed once, with the right game and an end date when one is known. Servers can have them posted in a channel. The list comes from mentalmars.com, through a community mirror on GitHub."), poll && h("div", { class: "panel" }, poll), head, list);
+    app.replaceChildren(pageHead("Game codes", "Limited-time codes for Borderlands (SHiFT), Genshin Impact, Honkai: Star Rail and Zenless Zone Zero. Each one is listed once, under the right game, with an end date when one is known. Servers can have them posted in a channel. SHiFT codes come from mentalmars.com through a community mirror, the HoYoverse ones from two community code lists."), poll && h("div", { class: "panel" }, poll), head, list);
     load().catch(fail);
   }
 
@@ -1163,7 +1163,7 @@
           holder.className = "";
           holder.replaceChildren(
             h("div", { class: "panel" }, h("h3", { text: "Game codes" }),
-              h("p", { class: "muted", text: "Limited-time codes, like SHiFT codes for Borderlands, posted once each in the channel you pick. When a code ends, its post is greyed out. The same list is on the Game codes page for everyone." }),
+              h("p", { class: "muted", text: "Limited-time codes for Borderlands, Genshin Impact, Star Rail and Zenless Zone Zero, posted once each in the channel you pick. When a code ends, its post is greyed out. The same list is on the Game codes page for everyone." }),
               field("Channel", chan), field("Ping this role for new codes", role),
               h("div", {}, h("label", { text: "Games" }), h("div", { class: "checks" }, boxes)),
               h("div", { class: "row" }, save)));

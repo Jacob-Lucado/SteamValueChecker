@@ -67,9 +67,16 @@ export function codeStore({ run, get, all, clean, now }) {
 
     /** Marks every active code whose end date has passed. Returns the rows that just changed. */
     function expireDue(at = now()) {
-        const due = all("SELECT * FROM promo_codes WHERE status = 'active' AND ((expires_at IS NOT NULL AND expires_at < ?) OR (expires_at IS NULL AND first_seen < ?))", at, at - UNDATED_MAX_AGE_MS).map(clean);
+        const due = all("SELECT * FROM promo_codes WHERE status = 'active' AND ((expires_at IS NOT NULL AND expires_at < ?) OR (expires_at IS NULL AND provider = 'shift' AND first_seen < ?))", at, at - UNDATED_MAX_AGE_MS).map(clean);
         for (const c of due) run("UPDATE promo_codes SET status = 'expired' WHERE id = ?", c.id);
         return due.map(c => ({ ...c, status: "expired" }));
+    }
+    /** For lists that only show what works: an active code of this game that is no longer listed has ended. Returns the rows that changed. */
+    function expireMissing(provider, game, presentKeys) {
+        const keep = new Set(presentKeys);
+        const gone = all("SELECT * FROM promo_codes WHERE status = 'active' AND provider = ? AND game = ?", provider, game).map(clean).filter(c => !keep.has(c.key));
+        for (const c of gone) run("UPDATE promo_codes SET status = 'expired' WHERE id = ?", c.id);
+        return gone.map(c => ({ ...c, status: "expired" }));
     }
     /** An admin or a manager can retire a code by hand (it was reported dead). */
     const setCodeStatus = (id, status) => run("UPDATE promo_codes SET status = ? WHERE id = ?", status, id).changes > 0;
@@ -108,5 +115,5 @@ export function codeStore({ run, get, all, clean, now }) {
     const codeGuilds = () => all("SELECT guild_id FROM code_guilds WHERE channel_id IS NOT NULL").map(r => getCodeSettings(r.guild_id));
     const codeCounts = () => ({ active: Number(get("SELECT COUNT(*) AS n FROM promo_codes WHERE status = 'active'").n), total: Number(get("SELECT COUNT(*) AS n FROM promo_codes").n), servers: Number(get("SELECT COUNT(*) AS n FROM code_guilds WHERE channel_id IS NOT NULL").n) });
 
-    return { upsertCode, getCode, codeByKey, listCodes, expireDue, setCodeStatus, pruneCodes, codePost, codePosts, hasAnyCodePost, addCodePost, markPostExpired, dropCodePost, stalePosts, getCodeSettings, setCodeSettings, codeGuilds, codeCounts };
+    return { upsertCode, getCode, codeByKey, listCodes, expireDue, expireMissing, setCodeStatus, pruneCodes, codePost, codePosts, hasAnyCodePost, addCodePost, markPostExpired, dropCodePost, stalePosts, getCodeSettings, setCodeSettings, codeGuilds, codeCounts };
 }

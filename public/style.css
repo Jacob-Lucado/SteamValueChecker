@@ -830,3 +830,8 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .code-text { font-size: 15px; letter-spacing: .02em; word-break: break-all; user-select: all; }
 .free-card.ended { opacity: .6; filter: grayscale(.6); }
 .checks { display: grid; gap: 6px; margin-top: 6px; }
+
+.code-tile { font-weight: 700; font-size: 20px; text-align: center; padding: 0 12px; color: #fff; background: linear-gradient(135deg, #3b4a6b, #1d2538); }
+.code-genshin { background: linear-gradient(135deg, #c9a24a, #5b4a8a); }
+.code-hsr { background: linear-gradient(135deg, #7c6bd6, #25214a); }
+.code-zzz { background: linear-gradient(135deg, #f0c419, #1b1b1b); color: #fff; }

@@ -507,7 +507,7 @@ const emojiCmd = new SlashCommandBuilder()
 
 const bug = new SlashCommandBuilder().setName("bug").setDescription("Report a problem with the bot. It goes straight to the bot owner");
 
-const CODE_GAME_CHOICES = [{ name: "Borderlands 4", value: "bl4" }, { name: "Borderlands 3", value: "bl3" }, { name: "Tiny Tina's Wonderlands", value: "wonderlands" }, { name: "Borderlands: Game of the Year", value: "blgoty" }, { name: "Borderlands: The Pre-Sequel", value: "bltps" }, { name: "Borderlands 2", value: "bl2" }];
+const CODE_GAME_CHOICES = [{ name: "Borderlands 4", value: "bl4" }, { name: "Borderlands 3", value: "bl3" }, { name: "Tiny Tina's Wonderlands", value: "wonderlands" }, { name: "Borderlands: Game of the Year", value: "blgoty" }, { name: "Borderlands: The Pre-Sequel", value: "bltps" }, { name: "Borderlands 2", value: "bl2" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }];
 
 const feature = new SlashCommandBuilder()
     .setName("feature")
@@ -522,7 +522,7 @@ const feature = new SlashCommandBuilder()
 
 const codes = new SlashCommandBuilder()
     .setName("codes")
-    .setDescription("Limited-time game codes, like SHiFT codes for Borderlands")
+    .setDescription("Limited-time game codes: Borderlands SHiFT codes, Genshin, Star Rail and Zenless")
     .addSubcommand(s => s.setName("latest").setDescription("The newest codes that still work")
         .addStringOption(o => o.setName("game").setDescription("Only one game").addChoices(...CODE_GAME_CHOICES)))
     .addSubcommand(s => s.setName("channel").setDescription("Server managers: where new codes are posted")

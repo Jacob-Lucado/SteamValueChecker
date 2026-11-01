@@ -1,5 +1,6 @@
 // Where limited-time game codes come from, and how a raw entry becomes something we can trust.
-// The feed is a community list on GitHub (scraped from mentalmars.com), so every field is checked before it is stored.
+// SHiFT codes come from a community list on GitHub (scraped from mentalmars.com); HoYoverse codes come from two public APIs.
+// Every field is checked before it is stored.
 
 export const SHIFT_SOURCE = "https://raw.githubusercontent.com/ugoogalizer/autoshift-codes/main/shiftcodes.json";
 export const SHIFT_REDEEM_URL = "https://shift.gearboxsoftware.com/rewards";
@@ -17,9 +18,21 @@ export const SHIFT_GAMES = [
     { key: "bl2", title: "Borderlands 2", appid: 49520, match: /borderlands\s*2/i }
 ];
 
-export const gameByKey = key => SHIFT_GAMES.find(g => g.key === key) ?? null;
+/** HoYoverse games. Their lists mark a code as working or not, and carry no end date. There is no official art to link, so the dashboard uses an accent colour. */
+export const HOYO_GAMES = [
+    { key: "genshin", title: "Genshin Impact", color: 0x4fc3b8, ennead: "genshin", seria: "genshin", redeem: code => `https://genshin.hoyoverse.com/en/gift?code=${encodeURIComponent(code)}` },
+    { key: "hsr", title: "Honkai: Star Rail", color: 0x8f7cf0, ennead: "starrail", seria: "hkrpg", redeem: code => `https://hsr.hoyoverse.com/gift?code=${encodeURIComponent(code)}` },
+    { key: "zzz", title: "Zenless Zone Zero", color: 0xf2c200, ennead: "zenless", seria: "nap", redeem: code => `https://zenless.hoyoverse.com/redemption?code=${encodeURIComponent(code)}` }
+].map(g => ({ ...g, provider: "hoyo", note: "Some codes only work on certain servers or regions" }));
+SHIFT_GAMES.forEach(g => { g.provider = "shift"; g.color = 0xff9800; });
+export const ALL_GAMES = [...SHIFT_GAMES, ...HOYO_GAMES];
+
+export const gameByKey = key => ALL_GAMES.find(g => g.key === key) ?? null;
+/** The SHiFT game a feed entry's game name belongs to. */
 export const gameByName = name => SHIFT_GAMES.find(g => g.match.test(String(name ?? ""))) ?? null;
-export const gameArt = game => (game ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg` : null);
+export const gameArt = game => (game?.appid ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg` : null);
+/** Where to redeem one code. HoYoverse links fill the code in for you. */
+export const redeemUrlFor = (game, code) => (game?.redeem ? game.redeem(code) : SHIFT_REDEEM_URL);
 
 /** A code with no end date is only trusted while it is fresh. Older ones in the list are almost always dead, so they are ignored. */
 export const UNDATED_MAX_AGE_MS = 21 * 86400_000;
@@ -105,4 +118,63 @@ export async function fetchShiftCodes({ fetchImpl = globalThis.fetch, now = Date
     const codes = parseShiftFeed(json, now);
     if (!codes.length) throw new CodeFeedError("the code list had no usable codes");
     return codes;
+}
+
+// ---------- HoYoverse (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero) ----------
+
+export const HOYO_SOURCES = { ennead: "https://api.ennead.cc/mihoyo", seria: "https://hoyo-codes.seria.moe" };
+const HOYO_CODE_RE = /^[A-Z0-9]{5,20}$/;
+
+/** "Primogem ×60", "Stellar Jade x100", "Mora*10000" -> "60 Primogem". Anything else is kept as written. */
+export function cleanRewardItem(raw) {
+    const text = String(raw ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    const m = text.match(/^(.*?)\s*[×x*]\s*([\d,]+)$/i);
+    return m && m[1] ? `${m[2]} ${m[1]}` : text;
+}
+/** A list of rewards from either source (an array, or "A*1;B*2", or plain prose) -> one short line. */
+export function joinRewards(input) {
+    const items = (Array.isArray(input) ? input : String(input ?? "").includes(";") ? String(input).split(";") : [String(input ?? "")]).map(cleanRewardItem).filter(Boolean);
+    if (!items.length) return "Free items";
+    const text = items.slice(0, 6).join(", ") + (items.length > 6 ? ` and ${items.length - 6} more` : "");
+    return text.slice(0, 200);
+}
+const hoyoCode = raw => { const c = String(raw ?? "").toUpperCase().replace(/\s+/g, ""); return HOYO_CODE_RE.test(c) ? c : null; };
+
+async function getJson(fetchImpl, url, timeoutMs) {
+    const res = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { "User-Agent": "SteamValueChecker (Discord bot)" } });
+    if (!res.ok) throw new CodeFeedError(`${new URL(url).host} answered ${res.status}`);
+    return res.json();
+}
+
+/**
+ * Working codes for the three HoYoverse games, from two lists that are merged. Returns { codes, complete, errors }.
+ * `complete` names the games where both lists answered; only for those is a code that is no longer listed treated as ended.
+ */
+export async function fetchHoyoCodes({ fetchImpl = globalThis.fetch, now = Date.now(), timeoutMs = 20_000 } = {}) {
+    const codes = [], complete = [], errors = [];
+    for (const game of HOYO_GAMES) {
+        const [a, b] = await Promise.allSettled([
+            getJson(fetchImpl, `${HOYO_SOURCES.ennead}/${game.ennead}/codes`, timeoutMs),
+            getJson(fetchImpl, `${HOYO_SOURCES.seria}/codes?game=${game.seria}`, timeoutMs)
+        ]);
+        const found = new Map(); // code -> reward line; the first list's structured rewards win
+        if (a.status === "fulfilled") for (const c of Array.isArray(a.value?.active) ? a.value.active : []) { const code = hoyoCode(c?.code); if (code && !found.has(code)) found.set(code, joinRewards(c.rewards)); }
+        if (b.status === "fulfilled") for (const c of Array.isArray(b.value?.codes) ? b.value.codes : []) { const code = c?.status === "OK" || c?.status === undefined ? hoyoCode(c?.code) : null; if (code && !found.has(code)) found.set(code, joinRewards(c.rewards)); }
+        for (const r of [a, b]) if (r.status === "rejected") errors.push(`${game.title}: ${r.reason?.message ?? r.reason}`);
+        for (const [code, reward] of found) codes.push({ provider: "hoyo", key: `hoyo:${game.key}:${code}`, code, game: game.key, platform: "All platforms", reward, note: null, expiresAt: null, sourceUrl: null, seenAt: now });
+        if (a.status === "fulfilled" && b.status === "fulfilled" && found.size) complete.push(game.key);
+    }
+    if (!codes.length && errors.length) throw new CodeFeedError(errors.join("; "));
+    return { codes, complete, errors };
+}
+
+/** Every provider at once. One being down never hides the others. Throws only when nothing at all could be read. */
+export async function fetchAllCodes(opts = {}) {
+    const [shift, hoyo] = await Promise.allSettled([fetchShiftCodes(opts), fetchHoyoCodes(opts)]);
+    const codes = [], complete = [], errors = [];
+    if (shift.status === "fulfilled") codes.push(...shift.value); else errors.push(`SHiFT: ${shift.reason?.message ?? shift.reason}`);
+    if (hoyo.status === "fulfilled") { codes.push(...hoyo.value.codes); complete.push(...hoyo.value.complete.map(k => `hoyo:${k}`)); errors.push(...hoyo.value.errors); }
+    else errors.push(`HoYoverse: ${hoyo.reason?.message ?? hoyo.reason}`);
+    if (!codes.length) throw new CodeFeedError(errors.join("; ") || "no codes");
+    return { codes, complete, errors };
 }

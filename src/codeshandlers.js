@@ -2,7 +2,8 @@
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
 import { applyCodeSettings, codeEmbed, codeView, pendingFor } from "./codes.js";
-import { gameByKey, SHIFT_REDEEM_URL } from "./codesource.js";
+import { gameByKey } from "./codesource.js";
+import { codeGames } from "./codes.js";
 
 const eph = (i, payload) => i.reply({ ...(typeof payload === "string" ? { content: payload } : payload), flags: MessageFlags.Ephemeral });
 
@@ -10,7 +11,7 @@ const eph = (i, payload) => i.reply({ ...(typeof payload === "string" ? { conten
 export function codeLine(c) {
     const v = codeView(c);
     const ends = v.expiresAt ? `ends <t:${Math.floor(v.expiresAt / 1000)}:R>` : "no end date listed";
-    return `**${v.gameTitle}** · ${v.reward || "Unknown reward"}\n\`${v.code}\` · ${v.platform || "All platforms"} · ${ends}`;
+    return `**${v.gameTitle}** · ${v.reward || "Unknown reward"}\n\`${v.code}\` · ${ends} · [Redeem](${v.redeemUrl})`;
 }
 
 export function createCodeHandlers({ db, runNow = null }) {
@@ -29,11 +30,11 @@ export function createCodeHandlers({ db, runNow = null }) {
             const sub = i.options.getSubcommand();
             if (sub === "latest") {
                 const game = i.options.getString("game");
-                const rows = db.listCodes({ status: "active", game: game || null, limit: 8 });
+                const rows = db.listCodes({ status: "active", game: game || null, limit: 8 }).filter(c => !c.expires_at || c.expires_at > Date.now());
                 const embed = { color: 0xff9800, title: game ? `${gameByKey(game)?.title ?? "Game"} codes` : "Latest game codes",
                     description: rows.length ? rows.map(codeLine).join("\n\n") : "No active codes right now. New ones show up here as soon as they are listed.",
-                    footer: { text: "Redeem at shift.gearboxsoftware.com/rewards" } };
-                return await eph(i, { embeds: [embed], components: [{ type: 1, components: [{ type: 2, style: 5, label: "Redeem on SHiFT", url: SHIFT_REDEEM_URL }] }] });
+                    footer: { text: "Codes can run out before they are marked as ended" } };
+                return await eph(i, { embeds: [embed] });
             }
             managerOnly(i);
             const gid = i.guildId;
@@ -52,7 +53,7 @@ export function createCodeHandlers({ db, runNow = null }) {
                 const on = i.options.getBoolean("on");
                 if (!game) return await eph(i, summary(gid));
                 const cur = db.getCodeSettings(gid).games;
-                const all = ["bl4", "bl3", "wonderlands", "blgoty", "bltps", "bl2"];
+                const all = codeGames().map(g => g.key);
                 const base = cur.length ? cur : all;
                 const next = on === false ? base.filter(k => k !== game) : [...new Set([...base, game])];
                 if (!next.length) throw new UserError("Keep at least one game, or turn the codes channel off with `/codes channel clear:true`.");
