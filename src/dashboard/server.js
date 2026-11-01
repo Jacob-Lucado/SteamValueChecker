@@ -51,6 +51,7 @@ import { addToServerList, serverListView, vote, removeFromServerList } from "../
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { artUrl } from "../render.js";
+import { isSoundcloudUrl } from "../musicsource.js";
 import { publishRequest, refreshRequest, removeRequestPosts } from "../requestsync.js";
 import { cleanRequest, limitMessage } from "../requests.js";
 import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY as REQ_BODY, MAX_NOTE as REQ_NOTE } from "../requeststore.js";
@@ -98,7 +99,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
+const COOLDOWNS = { music: 800, musicsearch: 3_000, musicplay: 2_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -126,7 +127,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ db, itad, rest, music = null, musicGuild = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -256,6 +257,14 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
         if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
         return g;
     };
+    /** Anyone signed in who is in that server (and the bot is too) may use its player; the player itself checks the rest. */
+    const musicMember = (s, guildId) => {
+        const g = s.guilds.find(x => x.id === String(guildId ?? ""));
+        if (!g || !botGuilds?.(g.id)) throw new HttpError(404, "I'm not in that server, or you're not in it.");
+        return g;
+    };
+    /** Player errors are plain sentences meant for people, so they go back as they are. */
+    const musicCall = async fn => { try { return await fn(); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; } };
     async function guildChoices(guildId, withRoles = true) {
         try { return { channels: await rest.listChannels(guildId), roles: withRoles ? await Promise.resolve(rest.listRoles?.(guildId) ?? []).catch(() => []) : [] }; }
         catch (err) {
@@ -623,6 +632,99 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
             if (!codes?.poll) throw new HttpError(400, "The code poll is not running on this bot.");
             const r = await codes.poll();
             return { result: r ?? { skipped: true } };
+        },
+
+
+        // ----- music (SoundCloud in voice channels) -----
+        "GET /api/music": async (req, _b, url) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const gid = url.searchParams.get("guild");
+            if (!gid) {
+                // the servers this person is in where the bot is too
+                return { guilds: s.guilds.filter(g => !isHidden(g.id) && botGuilds?.(g.id)).map(g => ({ id: g.id, name: g.name, icon: g.icon, manager: isManager(g), active: music.status(g.id).active })) };
+            }
+            const g = musicMember(s, gid);
+            await musicGuild?.(gid)?.warm?.(s.userId);
+            const settings = db.getMusicSettings(gid);
+            const out = { guild: { id: g.id, name: g.name }, settings, status: music.status(gid), access: music.access(gid, s.userId), playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })) };
+            if (isManager(g)) { const c = await guildChoices(gid); out.channels = c.channels; out.roles = c.roles; }
+            return out;
+        },
+        "GET /api/music/search": async (req, _b, url) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            musicMember(s, url.searchParams.get("guild"));
+            cooldown(s.userId, "musicsearch");
+            return { results: await musicCall(() => music.search(url.searchParams.get("q"))) };
+        },
+        "POST /api/music/play": async (req, body) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const g = musicMember(s, body.guild_id);
+            cooldown(s.userId, "musicplay");
+            await musicGuild?.(g.id)?.warm?.(s.userId);
+            const tracks = Array.isArray(body.tracks) && body.tracks.length ? body.tracks.slice(0, 1).map(t => ({ url: String(t.url ?? ""), title: String(t.title ?? "").slice(0, 150), artist: String(t.artist ?? "").slice(0, 80), duration: Number(t.duration) || null, thumb: typeof t.thumb === "string" && t.thumb.startsWith("https://") ? t.thumb : null })).filter(t => isSoundcloudUrl(t.url)) : null;
+            const r = await musicCall(() => music.enqueue({ guildId: g.id, userId: s.userId, textChannelId: null, query: body.query, tracks: tracks?.length ? tracks : null, playNext: Boolean(body.next), shuffleAdded: Boolean(body.shuffle) }));
+            return { added: r.added, kind: r.kind, title: r.title, startedNow: r.startedNow, status: music.status(g.id) };
+        },
+        "POST /api/music/control": async (req, body) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const g = musicMember(s, body.guild_id);
+            cooldown(s.userId, "music");
+            await musicGuild?.(g.id)?.warm?.(s.userId);
+            const id = g.id, u = s.userId, n = Number(body.n ?? body.value);
+            const acts = {
+                pause: () => music.pause(id, u), resume: () => music.resume(id, u), skip: () => music.skip(id, u), stop: () => music.stop(id, u), leave: () => music.leave(id, u),
+                previous: () => music.previous(id, u), shuffle: () => music.shuffle(id, u), clear: () => music.clear(id, u), loop: () => music.setLoop(id, u, String(body.value)),
+                volume: () => music.setVolume(id, u, n), seek: () => music.seek(id, u, n), skipto: () => music.skipTo(id, u, n), remove: () => music.remove(id, u, n), move: () => music.move(id, u, Number(body.from), Number(body.to))
+            };
+            if (!Object.hasOwn(acts, String(body.action))) throw new HttpError(400, "Unknown action.");
+            const result = await musicCall(async () => acts[body.action]());
+            return { result: result && typeof result === "object" && "skipped" in result ? { skipped: result.skipped, votes: result.votes, need: result.need } : null, status: music.status(id) };
+        },
+        "POST /api/music/playlists": async (req, body) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const g = musicMember(s, body.guild_id);
+            const name = String(body.name ?? "").trim();
+            if (body.action === "save") {
+                const st = music.status(g.id); const tracks = [st.current, ...st.next].filter(Boolean);
+                if (!tracks.length) throw new HttpError(400, "Nothing is playing or queued to save.");
+                try { var saved = db.savePlaylist(s.userId, name, tracks); } catch (e) { throw new HttpError(400, e.message); }
+                return { saved, playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })) };
+            }
+            if (body.action === "delete") {
+                if (!db.deletePlaylist(s.userId, name)) throw new HttpError(404, "You don't have a playlist with that name.");
+                return { playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })) };
+            }
+            if (body.action === "load") {
+                const p = db.getPlaylist(s.userId, name);
+                if (!p) throw new HttpError(404, "You don't have a playlist with that name.");
+                cooldown(s.userId, "musicplay");
+                await musicGuild?.(g.id)?.warm?.(s.userId);
+                const r = await musicCall(() => music.enqueue({ guildId: g.id, userId: s.userId, textChannelId: null, tracks: p.tracks }));
+                return { added: r.added, status: music.status(g.id) };
+            }
+            throw new HttpError(400, "Unknown action.");
+        },
+        "POST /api/music/settings": async (req, body) => {
+            const s = session(req);
+            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
+            const g = managedGuild(req, body.guild_id);
+            const patch = {};
+            const int = (k, lo, hi, label) => { if (body[k] === undefined) return; const n = Math.round(Number(body[k])); if (!(n >= lo && n <= hi)) throw new HttpError(400, `${label} must be between ${lo} and ${hi}.`); patch[k] = n; };
+            if (body.enabled !== undefined) patch.enabled = body.enabled ? 1 : 0;
+            if (body.announce !== undefined) patch.announce = body.announce ? 1 : 0;
+            if (body.stay !== undefined) patch.stay = body.stay ? 1 : 0;
+            int("volume", 1, 100, "Starting volume"); int("max_queue", 5, 500, "Queue size"); int("max_minutes", 0, 600, "Song length limit"); int("leave_minutes", 1, 60, "Leave time");
+            if (body.dj_role_id !== undefined || body.channel_id !== undefined) {
+                const { channels, roles } = await guildChoices(g.id);
+                if (body.dj_role_id !== undefined) { if (body.dj_role_id && !roles.some(r => r.id === body.dj_role_id)) throw new HttpError(400, "Pick a role from the list."); patch.dj_role_id = body.dj_role_id || null; }
+                if (body.channel_id !== undefined) { if (body.channel_id && !channels.some(c => c.id === body.channel_id)) throw new HttpError(400, "Pick a text channel from the list."); patch.channel_id = body.channel_id || null; }
+            }
+            return { settings: Object.keys(patch).length ? db.setMusicSettings(g.id, patch) : db.getMusicSettings(g.id) };
         },
 
         // ----- promo drops (SteelSeries, NVIDIA and the like) -----

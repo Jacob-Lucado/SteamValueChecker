@@ -13,7 +13,7 @@ export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(
 const str = n => String(n);
 
 /** Permission number for the invite link: what the existing features need plus roles, invites, emojis and events. */
-export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14) | B(15) | B(16) | B(18) | B(28) | B(30) | B(33) | B(6) | B(1) | B(2) | B(13) | B(40) | B(17) | B(38) | B(7) | B(22) | B(23) | B(24) | B(27)); // the last five are what the Moderator role is made with: a bot can only hand out permissions it holds itself
+export const BOT_PERMISSIONS = String(B(0) | B(4) | B(5) | B(10) | B(11) | B(14) | B(15) | B(16) | B(18) | B(28) | B(30) | B(33) | B(6) | B(1) | B(2) | B(13) | B(40) | B(17) | B(38) | B(7) | B(22) | B(23) | B(24) | B(27) | B(20) | B(21)); // Connect and Speak are for music; the five before them are what the Moderator role is made with: a bot can only hand out permissions it holds itself
 
 /** The link that adds the bot to a server: the bot and slash-command scopes with every permission the features need. */
 export const botInviteUrl = clientId => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=bot%20applications.commands&permissions=${BOT_PERMISSIONS}`;
@@ -53,6 +53,7 @@ export const TEMPLATE = {
             { key: "lfg", name: "looking-for-group", topic: "Find people to play with. Try /lfg post" },
             { key: "gamechat", name: "game-chat", topic: "What are you playing?" },
             { key: "gamenight", name: "game-night", topic: "Plan the next session together" },
+            { key: "music", name: "music", topic: "Join the Music voice channel, then queue songs with /play. SoundCloud links and playlists work" },
             { key: "wishlists", name: "wishlists-and-deals", topic: "Share wishlists and sales. Try /wishlist import" }] },
         { name: "💸 DEALS & GIVEAWAYS", channels: [
             { key: "deals", name: "deal-alerts", topic: "Sales and free games from Steam Value Checker", readonly: true },
@@ -64,7 +65,7 @@ export const TEMPLATE = {
             { key: "help", name: "get-help", topic: "Need a hand? Open a private ticket with the moderators", readonly: true },
             { key: "bugs", name: "report-a-bug", topic: "Found a problem with the bot? Report it straight to the developer", readonly: true },
             { key: "requests", name: "feature-requests", topic: "Ideas for the bot, with their status. Suggest and vote on the dashboard", forum: true }] },
-        { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "afk", name: "AFK" }] },
+        { name: "🔊 VOICE", voice: [{ key: "lobby", name: "Lobby" }, { key: "v1", name: "Gaming 1" }, { key: "v2", name: "Gaming 2" }, { key: "v3", name: "Gaming 3" }, { key: "chill", name: "Chill" }, { key: "music", name: "Music" }, { key: "afk", name: "AFK" }] },
         { name: "🛠️ STAFF", staff: true, channels: [
             { key: "staffchat", name: "staff-chat", topic: "Moderators only" },
             { key: "modlog", name: "mod-log", topic: "Every warning, timeout, kick, ban and message cleanup" },
@@ -272,6 +273,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setWeeklyDigest?.(guildId, true); db.setSaleFeed?.(guildId, true); // the Friday round-up and "a Steam sale just started" posts
     if (!db.getGiveawaySettings(guildId).manager_role_id) db.setGiveawaySettings(guildId, { manager_role_id: roleIds.mod }); // moderators can run giveaways
     db.setTicketSettings(guildId, { channelId: chIds.tickets, staffRoleId: roleIds.mod });
+    if (chIds.music && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.music }); // now-playing messages land in #music
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
     db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_promos: pingOf("Promo drop pings") });

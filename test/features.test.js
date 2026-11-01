@@ -390,6 +390,11 @@ test("every slash command has a dashboard counterpart", async () => {
         "alertchannel/group": "POST /api/servers/group", "alertchannel/feed": "POST /api/servers/feed", "alertchannel/hot": "POST /api/servers/hot", "alertchannel/sales": "POST /api/servers/sales", "alertchannel/digest": "POST /api/servers/digest", "serverstats": "GET /api/servers/stats",
         "library/add": "POST /api/library/add", "library/badges": "GET /api/library/badges", "library/trend": "GET /api/library", "library/import": "POST /api/library/import", "library/view": "GET /api/library", "library/grabber": "POST /api/grabber/token", "library/remove": "POST /api/library/remove", "library/challenge": "POST /api/library/challenge", "library/spend": "GET /api/library/spend", "library/status": "POST /api/library/status", "library/backlog": "GET /api/library/next",
         "serverlist/add": "POST /api/servers/list/add", "serverlist/view": "GET /api/servers/list", "serverlist/vote": "POST /api/servers/list/vote", "serverlist/remove": "POST /api/servers/list/remove",
+        "music/play": "POST /api/music/play", "music/search": "GET /api/music/search", "music/nowplaying": "GET /api/music", "music/queue": "GET /api/music", "music/playlists": "GET /api/music",
+        "music/pause": "POST /api/music/control", "music/resume": "POST /api/music/control", "music/skip": "POST /api/music/control", "music/skipto": "POST /api/music/control", "music/previous": "POST /api/music/control",
+        "music/seek": "POST /api/music/control", "music/stop": "POST /api/music/control", "music/leave": "POST /api/music/control", "music/volume": "POST /api/music/control", "music/loop": "POST /api/music/control",
+        "music/shuffle": "POST /api/music/control", "music/remove": "POST /api/music/control", "music/move": "POST /api/music/control", "music/clear": "POST /api/music/control",
+        "music/saveplaylist": "POST /api/music/playlists", "music/loadplaylist": "POST /api/music/playlists", "music/deleteplaylist": "POST /api/music/playlists", "music/settings": "POST /api/music/settings", play: "POST /api/music/play",
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
@@ -515,7 +520,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "codes", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "feature", "freegames", "friendCmd", "grabberAd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "modCmd", "promos", "rank", "setup"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "modCmd", "musicCmd", "playCmd", "promos", "rank", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);
     assert.match(src, /const serverOnly = b => b[\s\S]*?setContexts\(InteractionContextType\.Guild\);/, "server-only commands stay out of DMs");

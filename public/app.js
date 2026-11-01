@@ -136,7 +136,7 @@
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
@@ -3116,6 +3116,130 @@
     } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
+  // ---------- music ----------
+  async function musicView() {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Music", "Play SoundCloud in a voice channel. Join one in your server, then add songs or whole playlists here or with /play."), holder);
+    const fmt = sec => { sec = Math.max(0, Math.floor(sec || 0)); const hh = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return (hh ? hh + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+    let list;
+    try { list = (await api("/api/music")).guilds; } catch (e) { return holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    if (!list.length) return holder.replaceChildren(h("div", { class: "empty", text: "I don't share a server with you yet. Add the bot to a server, then come back." }));
+    let saved = ""; try { saved = localStorage.getItem("svc_music_guild") || ""; } catch { /* storage blocked */ }
+    const pick = h("select", { "aria-label": "Server" }, ...list.map(g => h("option", { value: g.id, text: g.name + (g.active ? "  ·  playing" : ""), selected: g.id === saved })));
+    const body = h("div");
+    let timer = 0, tick = 0, cur = null;
+    const stop = () => { clearTimeout(timer); clearInterval(tick); };
+    const alive = () => currentView() === "music" && document.body.contains(body);
+
+    async function load(first) {
+      if (first) body.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+      let d;
+      try { d = await api("/api/music?guild=" + encodeURIComponent(pick.value)); } catch (e) { return body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+      cur = d; paint(d);
+      clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); }, 5000);
+    }
+    pick.addEventListener("change", () => { try { localStorage.setItem("svc_music_guild", pick.value); } catch { /* fine */ } stop(); load(true); });
+
+    const act = (label, action, extra = {}, cls = "gray") => {
+      const b = h("button", { class: "btn small " + cls, type: "button", text: label });
+      b.addEventListener("click", () => busy(b, async () => {
+        const r = await api("/api/music/control", { guild_id: pick.value, action, ...extra });
+        if (r.result && r.result.skipped === false) toast(`Vote to skip: ${r.result.votes}/${r.result.need}`, "ok");
+        await load(false);
+      }));
+      return b;
+    };
+
+    function paint(d) {
+      clearInterval(tick);
+      const st = d.status, a = d.access, t = st.current;
+      const can = a.present && a.enabled && a.inVoice && a.sameChannel;
+      const note = !a.enabled ? "Music is turned off in this server." : !a.inVoice ? "Join a voice channel in this server to add songs or use the controls." : !a.sameChannel ? "I'm playing in another voice channel. Join it to use the controls." : `You're in ${a.voiceName}.`;
+      const dj = !a.dj ? h("p", { class: "muted small", text: "This server uses a DJ role, so only DJs can pause, shuffle or change the volume. You can still add songs and vote to skip." }) : "";
+
+      // now playing
+      const bar = h("div", { class: "bar" }), fill = h("div", { class: "fill" }); bar.append(fill);
+      const pos = h("span", { class: "muted small" });
+      const draw = () => { if (!t) return; const p = st.paused ? st.position : st.position + (Date.now() - d._at) / 1000; const q = Math.min(p, t.duration || p); fill.style.width = t.duration ? Math.min(100, (q / t.duration) * 100) + "%" : "0%"; pos.textContent = t.duration ? `${fmt(q)} / ${fmt(t.duration)}` : fmt(q); };
+      d._at = Date.now(); draw(); if (t && !st.paused) tick = setInterval(() => { if (alive()) draw(); }, 1000);
+      const vol = h("input", { type: "range", min: "1", max: "100", value: String(st.volume), "aria-label": "Volume", disabled: !can || !t || !a.dj });
+      vol.addEventListener("change", () => api("/api/music/control", { guild_id: pick.value, action: "volume", value: Number(vol.value) }).then(() => load(false)).catch(e => toast(e.message, "error")));
+      const loopSel = select([["off", "Loop: off"], ["track", "Loop: this song"], ["queue", "Loop: whole queue"]], st.loop);
+      loopSel.disabled = !can || !t || !a.dj;
+      loopSel.addEventListener("change", () => api("/api/music/control", { guild_id: pick.value, action: "loop", value: loopSel.value }).then(() => load(false)).catch(e => toast(e.message, "error")));
+      const lock = b => { if (!can || !t) b.disabled = true; return b; };
+      const np = h("div", { class: "panel" }, h("h3", { text: "Now playing" }),
+        t ? h("div", { class: "music-now" },
+          t.thumb ? h("img", { src: t.thumb, alt: "", width: "96", height: "96", referrerpolicy: "no-referrer" }) : h("span", { class: "noimg" }),
+          h("div", { class: "music-meta" }, h("div", {}, h("a", { href: t.url, target: "_blank", rel: "noopener noreferrer", text: t.title + " ↗" })), h("div", { class: "muted small", text: [t.artist, st.paused ? "paused" : "playing", st.channelName ? "in " + st.channelName : ""].filter(Boolean).join(" · ") }), bar, pos))
+          : h("p", { class: "muted", text: st.active ? "The queue is empty. Add something below." : "Nothing is playing." }),
+        h("div", { class: "row" }, lock(act("⏮", "previous")), lock(act(st.paused ? "▶ Resume" : "⏸ Pause", st.paused ? "resume" : "pause", {}, st.paused ? "green" : "blue")), lock(act("⏭ Skip", "skip")), lock(act("⏹ Stop", "stop", {}, "red")),
+          lock(act("🔀 Shuffle", "shuffle")), lock(act("Leave", "leave"))),
+        h("div", { class: "row" }, field("Volume " + st.volume + "%", vol), field("Loop", loopSel)),
+        h("p", { class: "muted small", text: note }), dj);
+
+      // add
+      const q = h("input", { type: "text", placeholder: "SoundCloud link (track or playlist) or words to search for", maxlength: "300", "aria-label": "Song, playlist link or search" });
+      const next = h("input", { type: "checkbox" }), shuf = h("input", { type: "checkbox" });
+      const results = h("div");
+      const play = h("button", { class: "btn green", type: "button", text: "Play" }), find = h("button", { class: "btn blue", type: "button", text: "Search" });
+      play.disabled = find.disabled = !(a.present && a.enabled && a.inVoice && a.sameChannel);
+      const add = (extra = {}) => api("/api/music/play", { guild_id: pick.value, query: q.value, next: next.checked, shuffle: shuf.checked, ...extra }).then(r => { toast(r.startedNow ? `Playing: ${r.title}` : r.added > 1 ? `Added ${r.added} songs.` : "Added to the queue.", "ok"); q.value = ""; results.replaceChildren(); return load(false); });
+      play.addEventListener("click", () => busy(play, () => add()));
+      q.addEventListener("keydown", e => { if (e.key === "Enter" && !play.disabled) play.click(); });
+      find.addEventListener("click", () => busy(find, async () => {
+        const r = await api("/api/music/search?guild=" + encodeURIComponent(pick.value) + "&q=" + encodeURIComponent(q.value));
+        results.replaceChildren(r.results.length ? h("div", { class: "cards" }, ...r.results.map(x => { const b = h("button", { class: "btn green small", type: "button", text: "Add" }); b.addEventListener("click", () => busy(b, () => add({ query: "", tracks: [x] }))); return h("div", { class: "note-game" }, x.thumb ? h("img", { src: x.thumb, alt: "", width: "56", height: "56", referrerpolicy: "no-referrer" }) : h("span", { class: "noimg" }), h("div", { class: "note-info" }, h("a", { href: x.url, target: "_blank", rel: "noopener noreferrer", text: x.title + " ↗" }), h("span", { class: "muted small", text: [x.artist, x.duration ? fmt(x.duration) : ""].filter(Boolean).join(" · ") })), b); })) : h("p", { class: "muted", text: "No results." }));
+      }));
+      const addPanel = h("div", { class: "panel" }, h("h3", { text: "Add music" }),
+        h("div", { class: "lookup-row" }, q, play, find),
+        h("div", { class: "row" }, h("label", { class: "check" }, next, " Play next"), h("label", { class: "check" }, shuf, " Shuffle if it's a playlist")),
+        h("p", { class: "muted small", text: "Paste a SoundCloud song, playlist (set) or artist link to queue it all (up to 100 songs), or type words and press Search to choose." }), results);
+
+      // queue
+      const rows = st.next.map((x, i) => h("div", { class: "cal-row" }, h("span", { class: "muted", text: String(i + 1) }),
+        h("div", {}, h("a", { href: x.url, target: "_blank", rel: "noopener noreferrer", text: x.title }), h("div", { class: "muted small", text: [x.artist, x.duration ? fmt(x.duration) : ""].filter(Boolean).join(" · ") })),
+        h("div", { class: "row" }, ...(can ? [act("⏭", "skipto", { n: i + 1 }), ...(i > 0 ? [act("▲", "move", { from: i + 1, to: i })] : []), act("✕", "remove", { n: i + 1 }, "red")] : []))));
+      const queuePanel = h("div", { class: "panel" }, h("h3", { text: `Queue (${st.total} song${st.total === 1 ? "" : "s"}${st.totalSeconds ? " · " + fmt(st.totalSeconds) : ""})` }),
+        rows.length ? h("div", { class: "scroll-y tall" }, ...rows) : h("p", { class: "muted", text: "Nothing waiting." }),
+        rows.length && can ? h("div", { class: "row" }, act("Clear the queue", "clear", {}, "red")) : "");
+
+      // playlists
+      const pname = h("input", { type: "text", maxlength: "40", placeholder: "Name for a new playlist", "aria-label": "Playlist name" });
+      const saveBtn = h("button", { class: "btn blue small", type: "button", text: "Save current queue" });
+      saveBtn.addEventListener("click", () => busy(saveBtn, async () => { await api("/api/music/playlists", { guild_id: pick.value, action: "save", name: pname.value }); toast("Saved.", "ok"); pname.value = ""; await load(false); }));
+      const plRows = d.playlists.map(p => { const lb = h("button", { class: "btn green small", type: "button", text: "Queue it" }), db2 = h("button", { class: "btn red small", type: "button", text: "Delete" });
+        lb.disabled = !(a.present && a.enabled && a.inVoice && a.sameChannel);
+        lb.addEventListener("click", () => busy(lb, async () => { const r = await api("/api/music/playlists", { guild_id: pick.value, action: "load", name: p.name }); toast(`Added ${r.added} songs.`, "ok"); await load(false); }));
+        db2.addEventListener("click", () => { if (!confirm("Delete this playlist?")) return; busy(db2, async () => { await api("/api/music/playlists", { guild_id: pick.value, action: "delete", name: p.name }); await load(false); }); });
+        return h("div", { class: "row", style: "align-items:center;justify-content:space-between" }, h("span", {}, h("b", { text: p.name }), h("span", { class: "muted small", text: `  ${p.count} song${p.count === 1 ? "" : "s"}` })), h("div", { class: "row" }, lb, db2)); });
+      const plPanel = h("div", { class: "panel" }, h("h3", { text: "My playlists" }), h("p", { class: "muted small", text: "Saved to your account, so you can load them in any server. Up to 10 playlists of 100 songs." }),
+        ...(plRows.length ? plRows : [h("p", { class: "muted", text: "None yet." })]), h("div", { class: "lookup-row" }, pname, saveBtn));
+
+      const parts = [np, addPanel, queuePanel, plPanel];
+      if (d.channels) parts.push(settingsPanel(d));
+      body.replaceChildren(...parts);
+    }
+
+    function settingsPanel(d) {
+      const s = d.settings;
+      const on = h("input", { type: "checkbox", checked: Boolean(s.enabled) }), ann = h("input", { type: "checkbox", checked: Boolean(s.announce) }), stay = h("input", { type: "checkbox", checked: Boolean(s.stay) });
+      const num = (v, lo, hi) => h("input", { type: "number", min: String(lo), max: String(hi), value: String(v) });
+      const vol = num(s.volume, 1, 100), mq = num(s.max_queue, 5, 500), mm = num(s.max_minutes, 0, 600), lv = num(s.leave_minutes, 1, 60);
+      const role = h("select", {}, h("option", { value: "", text: "Everyone can use the controls" }), ...d.roles.filter(r => r.id !== d.guild.id).map(r => h("option", { value: r.id, text: "DJ role: " + r.name, selected: r.id === s.dj_role_id })));
+      const chan = h("select", {}, h("option", { value: "", text: "Where the song was added from" }), ...d.channels.filter(c => !c.type || c.type === 0 || c.type === 5).map(c => h("option", { value: c.id, text: "#" + c.name, selected: c.id === s.channel_id })));
+      const save = h("button", { class: "btn green", type: "button", text: "Save music settings" });
+      save.addEventListener("click", () => busy(save, async () => { await api("/api/music/settings", { guild_id: pick.value, enabled: on.checked, announce: ann.checked, stay: stay.checked, volume: Number(vol.value), max_queue: Number(mq.value), max_minutes: Number(mm.value), leave_minutes: Number(lv.value), dj_role_id: role.value, channel_id: chan.value }); toast("Saved.", "ok"); await load(false); }));
+      return h("div", { class: "panel" }, h("h3", { text: "Server music settings" }), h("p", { class: "muted small", text: "Only people with Manage Server see this. The bot needs Connect and Speak in your voice channels, plus Send Messages where it posts." }),
+        h("label", { class: "check" }, on, " Music is on"), h("label", { class: "check" }, ann, " Post a message when each song starts"), h("label", { class: "check" }, stay, " Stay in the voice channel when the queue ends"),
+        h("div", { class: "row" }, field("Controls", role), field("Now-playing messages go to", chan)),
+        h("div", { class: "row" }, field("Starting volume (1-100)", vol), field("Most songs in the queue", mq), field("Longest song, minutes (0 = no limit)", mm), field("Leave after idle (minutes)", lv)), save);
+    }
+
+    holder.className = ""; holder.replaceChildren(field("Server", pick), body);
+    load(true);
+  }
+
   async function changelogView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("What's new", ""), holder);
@@ -4285,7 +4409,7 @@
     load();
   }
 
-  const VIEWS = { promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

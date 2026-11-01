@@ -50,6 +50,10 @@ import { createCodeHandlers } from "./codeshandlers.js";
 import { runCodes } from "./codes.js";
 import { createDropHandlers } from "./dropshandlers.js";
 import { runDrops } from "./drops.js";
+import { createMusic } from "./music.js";
+import { createSource } from "./musicsource.js";
+import { createMusicHandlers, guildAdapter } from "./musichandlers.js";
+import { nowPlayingPayload } from "./musicrender.js";
 import { createRequestHandlers, FR } from "./requesthandlers.js";
 import { publishRequest } from "./requestsync.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
@@ -185,6 +189,15 @@ const pollDrops = async () => {
     try { return await runDrops({ db, api: botRest, notifier, log: m => console.log(`[promos] ${m}`) }); } finally { dropsBusy = false; }
 };
 const dropUi = createDropHandlers({ db, runNow: pollDrops });
+// Music needs Discord's voice library. If it ever fails to load the rest of the bot still runs.
+const musicGuild = guildAdapter(client);
+let music = null, musicUi = null;
+try {
+    const voice = await import("@discordjs/voice");
+    music = createMusic({ db, source: createSource(), voice, getGuild: musicGuild, api: botRest, panel: (gid, st) => nowPlayingPayload(st), log: m => console.log(`[music] ${m}`) });
+    musicUi = createMusicHandlers({ db, music, adapter: musicGuild });
+} catch (err) { console.error(`[music] turned off: ${err.message}`); }
+const musicOff = i => (i.isRepliable?.() ? i.reply({ content: "Music isn't available on this bot right now.", flags: MessageFlags.Ephemeral }).catch(() => {}) : null);
 const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id => publishRequest({ db, api: botRest, id, base: publicBase }) });
 const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
 const setupUi = createSetupHandlers({ db, publicUrl: publicBase });
@@ -290,7 +303,15 @@ client.on(Events.GuildCreate, async guild => {
     } catch { /* the owner may have DMs closed */ }
 });
 
-client.on(Events.GuildDelete, guild => { if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
+// Music: leave a few minutes after everyone has left the voice channel, and clean up if the bot is removed from one.
+client.on(Events.VoiceStateUpdate, (oldS, newS) => {
+    try {
+        if (!music) return;
+        if (oldS.id === client.user?.id && oldS.channelId && !newS.channelId) music.onBotDisconnected(oldS.guild.id);
+        else music.onVoiceChange(oldS.guild.id);
+    } catch (err) { console.error(`[music] ${err.message}`); }
+});
+client.on(Events.GuildDelete, guild => { music?.onBotDisconnected(guild.id); if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
 
 // ---- community: XP, welcome, invites ----
 client.on(Events.MessageCreate, async m => {
@@ -476,10 +497,12 @@ client.on(Events.InteractionCreate, async i => {
     }
     if (i.user?.id && db.getUser(i.user.id)) db.touchUser(i.user.id);
     if (i.isAutocomplete()) {
-        try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
+        try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : i.commandName === "music" ? (musicUi?.handleAutocomplete(i) ?? i.respond([])) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
     }
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
+    if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);
+    if (i.isStringSelectMenu() && i.customId.startsWith("mu_pick:")) return musicUi ? musicUi.handleSelect(i) : musicOff(i);
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
     if (i.isButton() && i.customId.startsWith("lfg_")) return lfgUi.handleButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);
@@ -551,6 +574,7 @@ client.on(Events.InteractionCreate, async i => {
             case "feature": return await requestUi.handleCommand(i);
             case "codes": return await codeUi.handleCommand(i);
             case "promos": return await dropUi.handleCommand(i);
+            case "music": case "play": return musicUi ? await musicUi.handleCommand(i) : await musicOff(i);
             case "grabberad": {
                 const eph = content => i.reply({ content, flags: MessageFlags.Ephemeral });
                 if (!cfg.ownerId || i.user.id !== cfg.ownerId) return await eph("Only the bot owner can use this.");
@@ -608,7 +632,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ music, musicGuild, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {
@@ -618,7 +642,7 @@ const dashboard = createDashboard({ broadcaster, db, itad, rest, codes: { poll: 
 // Breadcrumbs for the Admin log, so a restart is never silent: why it stopped, and how much memory it was using.
 const memNote = () => { const m = process.memoryUsage(); return `rss ${Math.round(m.rss / 1048576)} MB, heap ${Math.round(m.heapUsed / 1048576)} MB`; };
 console.log(`${ACTIVITY}[boot] Bot started, ${memNote()}, heap limit ${Math.round(v8.getHeapStatistics().heap_size_limit / 1048576)} MB`);
-for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { console.log(`${ACTIVITY}[restart] Bot stopping: the host sent ${sig} (a deploy or restart). Memory: ${memNote()}`); setTimeout(() => process.exit(0), 300); });
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { music?.shutdown(); } catch { /* */ } console.log(`${ACTIVITY}[restart] Bot stopping: the host sent ${sig} (a deploy or restart). Memory: ${memNote()}`); setTimeout(() => process.exit(0), 300); });
 process.on("exit", code => { try { if (code !== 0) console.error(`[exit] bot exited unexpectedly with code ${code}, ${memNote()}`); } catch { /* nothing left to do */ } });
 setInterval(() => { const m = process.memoryUsage(); if (m.rss > 380 * 1048576) console.error(`[memory] high usage: ${memNote()}`); }, 60_000).unref();
 
