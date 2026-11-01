@@ -862,3 +862,22 @@ test("running setup again gives an older server the Game code and Promo drop pin
     assert.equal(sentCodes[0].content, `<@&${c.ping_codes}>`);
     db.setCodeSettings("G", { role_id: "custom" });
 });
+
+test("owner announcements can ping @everyone or @here in server channels only, never in DMs", async () => {
+    const { createBroadcaster } = await import("../src/broadcast.js");
+    const run = async (mention, audience) => {
+        const dms = [], chans = [];
+        const db = { broadcastTargets: () => ({ users: ["u1"], channels: ["c1"] }), broadcastChannelGuilds: () => new Map(), startBroadcast: () => 1, progressBroadcast() {} };
+        const b = createBroadcaster({ db, sendDm: async (id, p) => dms.push(p), sendChannel: async (id, p) => chans.push(p), ownerId: "o", delayMs: 0, sleep: async () => {} });
+        b.start({ title: "T", body: "B", audience, mention });
+        for (let i = 0; i < 30 && b.running(); i++) await new Promise(r => setTimeout(r, 5));
+        return { dms, chans };
+    };
+    const a = await run("everyone", "both");
+    assert.equal(a.chans[0].content, "@everyone"); assert.deepEqual(a.chans[0].allowed_mentions, { parse: ["everyone"] });
+    assert.equal(a.dms[0].content, undefined); assert.deepEqual(a.dms[0].allowed_mentions, { parse: [] });
+    assert.equal((await run("here", "channels")).chans[0].content, "@here");
+    const none = await run("none", "channels");
+    assert.equal(none.chans[0].content, undefined); assert.deepEqual(none.chans[0].allowed_mentions, { parse: [] });
+    assert.equal((await run("bogus", "channels")).chans[0].content, undefined);
+});

@@ -60,22 +60,26 @@ export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, o
     }
 
     /** Starts sending and returns right away; progress is in status(). */
-    function start({ title, body, audience, promo = false }) {
+    function start({ title, body, audience, promo = false, mention = "none" }) {
         if (!AUDIENCES.includes(audience)) throw new UserError("Pick who gets it.");
         if (running) throw new UserError("A broadcast is still going out. Wait for it to finish.");
         if (promo && !promoPayload) throw new UserError("The advertisement is not available here.");
         const { t, b } = promo ? { t: "FanaticalGrabber advertisement", b: "(advertisement)" } : clean(title, body);
         const base = publicUrl ? String(publicUrl).replace(/\/$/, "") : null;
+        // @everyone / @here only ever go on the server-channel copy, never in DMs, and never on the advertisement.
+        const ping = !promo && (mention === "everyone" || mention === "here") ? mention : null;
+        const pingBits = ping ? { content: `@${ping}`, allowed_mentions: { parse: ["everyone"] } } : { allowed_mentions: { parse: [] } };
         const payload = promo ? promoPayload() : { embeds: [noticeEmbed(t, b, base)], allowed_mentions: { parse: [] } };
+        const chPayload = promo ? payload : { ...payload, ...pingBits };
         const chGuild = !promo && guildInfo ? db.broadcastChannelGuilds() : new Map();
         const payloadFor = async cid => {
             const info = chGuild.has(cid) ? guildInfo(chGuild.get(cid)) : null;
-            if (!info?.name) return payload;
+            if (!info?.name) return chPayload;
             const embed = noticeEmbed(t, b, base, info);
             // A picture made for this server; if it cannot be drawn the shared banner stays.
             const file = guildBanner ? await guildBanner(info).catch(() => null) : null;
-            if (file) { embed.image = { url: `attachment://${file.name}` }; return { embeds: [embed], files: [file], allowed_mentions: { parse: [] } }; }
-            return { embeds: [embed], allowed_mentions: { parse: [] } };
+            if (file) { embed.image = { url: `attachment://${file.name}` }; return { embeds: [embed], files: [file], ...pingBits }; }
+            return { embeds: [embed], ...pingBits };
         };
         const targets = db.broadcastTargets({ promo });
         const dmIds = audience === "me" ? [ownerId] : audience === "dm" || audience === "both" ? targets.users : [];

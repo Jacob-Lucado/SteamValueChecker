@@ -2350,6 +2350,8 @@
       const count = h("span", { class: "muted small", text: "0 / 1500" });
       const who = h("select", { "aria-label": "Who gets it" });
       const confirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
+      const mention = select([["none", "No ping"], ["everyone", "@everyone"], ["here", "@here"]], "none");
+      const mentionRow = field("Ping in server channels", mention);
       const preview = h("div", { class: "notice" });
       const progress = h("div"), history = h("div");
       const send = h("button", { class: "btn red", type: "button", text: "Send announcement" });
@@ -2375,6 +2377,8 @@
         count.textContent = msg.value.length + " / 1500";
         preview.replaceChildren(h("div", { class: "muted small", text: "Official message from the Steam Value Checker developer" }), h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff." }));
       };
+      who.addEventListener("change", () => syncMention());
+      const syncMention = () => { mentionRow.hidden = who.value === "dm" || who.value === "me"; if (mentionRow.hidden) mention.value = "none"; };
       const paintWho = () => {
         const c = info.counts;
         who.replaceChildren(...[["dm", `DMs to members (${c.dm})`], ["channels", `Every server's #announcements channel (${c.channels})`], ["both", `Both (${c.dm + c.channels})`]].map(([v, t]) => h("option", { value: v, text: t })));
@@ -2389,13 +2393,13 @@
       };
       async function refresh() {
         info = await api("/api/admin/broadcast");
-        const keep = who.value; paintWho(); if (keep) who.value = keep;
+        const keep = who.value; paintWho(); if (keep) who.value = keep; syncMention();
         paintProgress(info.current); paintHistory();
         clearTimeout(timer);
         if (info.current && document.body.contains(box)) timer = setTimeout(() => refresh().catch(() => {}), 2500);
       }
       const go = async audience => {
-        const r = await api("/api/admin/broadcast", { title: title.value, body: msg.value, audience, confirm: confirm.value });
+        const r = await api("/api/admin/broadcast", { title: title.value, body: msg.value, audience, confirm: confirm.value, mention: mention.value });
         toast(audience === "me" ? "Test sent to you." : `Sending to ${r.total} places. You can leave this page.`, "ok");
         if (audience !== "me") confirm.value = "";
         await refresh();
@@ -2409,7 +2413,8 @@
           h("div", { class: "panel" }, h("h3", { text: "Announce something" }),
             h("p", { class: "muted small", text: "For things like downtime for an update. DMs go out about one a second, so a large list takes a while. Members whose DMs keep failing are skipped." }),
             field("Title", title), field("Message", msg), count, h("h4", { text: "Preview" }), preview,
-            h("div", { class: "row" }, field("Send to", who), field("Type SEND to confirm", confirm)),
+            h("div", { class: "row" }, field("Send to", who), mentionRow, field("Type SEND to confirm", confirm)),
+            h("p", { class: "muted small", text: "The ping only goes on the server-channel copy (never DMs). Each server needs to let the bot mention everyone, otherwise Discord just shows the text." }),
             h("div", { class: "row" }, test, send)),
           promoPanel(), 
           h("div", { class: "panel" }, h("h3", { text: "Progress" }), progress, h("h4", { text: "Recent announcements" }), history));

@@ -1885,7 +1885,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
             if (audience !== "me" && body.confirm !== "SEND") throw new HttpError(400, "Type SEND to confirm.");
             const undo = audience !== "me" ? cooldown(s.userId, "broadcast") : () => {};
             try {
-                const r = broadcaster().start({ title: body.title, body: body.body, audience, promo: body.kind === "promo" });
+                const r = broadcaster().start({ title: body.title, body: body.body, audience, promo: body.kind === "promo", mention: ["everyone", "here"].includes(body.mention) ? body.mention : "none" });
                 log(`Bot owner started broadcast #${r.id} to ${audience} (${r.total} recipient${r.total === 1 ? "" : "s"})`);
                 return { ...r, current: broadcaster().current() };
             } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
