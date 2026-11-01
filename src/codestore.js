@@ -61,7 +61,7 @@ export function codeStore({ run, get, all, clean, now }) {
     function listCodes({ status = null, game = null, limit = 50 } = {}) {
         const where = [], args = [];
         if (status) { where.push("status = ?"); args.push(status); }
-        if (game) { where.push("game = ?"); args.push(game); }
+        if (game) { const g = [].concat(game); where.push(`game IN (${g.map(() => "?").join(",")})`); args.push(...g); }
         return all(`SELECT * FROM promo_codes ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY first_seen DESC, id DESC LIMIT ?`, ...args, Math.min(200, Math.max(1, limit))).map(clean);
     }
 

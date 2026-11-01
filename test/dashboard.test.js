@@ -1472,3 +1472,17 @@ test("the Deals page can load its bundle and sale prep parts back to back withou
     // asking for the same thing twice in a row is still held back
     assert.equal((await o.request("/api/saleprep")).status, 429);
 });
+
+test("game codes: the Borderlands filter covers all six games, and the art files are served", async () => {
+    const { cleanEntry } = await import("../src/codesource.js");
+    const mk = (n, game) => cleanEntry({ code: `AAAA${n}-BBBBB-CCCCC-DDDDD-EEEEE`, type: "shift", game, platform: "universal", reward: "3 Golden Keys", expires: "Dec 5, 2026", archived: "2026-10-30 10:00:00+00:00" }, Date.UTC(2026, 9, 30));
+    const o = await signedIn({});
+    o.db.upsertCode(mk(1, "Borderlands 4")); o.db.upsertCode(mk(2, "Borderlands 2"));
+    o.db.upsertCode({ provider: "hoyo", key: "hoyo:zzz:ABCD1234", code: "ABCD1234", game: "zzz", reward: "20 Polychrome", expiresAt: null, seenAt: Date.now() });
+    const all = (await o.request("/api/codes")).data;
+    assert.deepEqual(all.families.map(f => f.key), ["borderlands", "genshin", "hsr", "zzz"]);
+    assert.equal((await o.request("/api/codes?game=borderlands")).data.codes.length, 2);
+    assert.equal((await o.request("/api/codes?game=zzz")).data.codes[0].art, "/img/codes/zzz.jpg");
+    const img = await o.request("/img/codes/zzz.jpg");
+    assert.equal(img.status, 200);
+});

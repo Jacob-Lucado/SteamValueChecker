@@ -306,7 +306,7 @@ const watch = new SlashCommandBuilder()
     .addStringOption(o => o.setName("title").setDescription("Game title").setRequired(true).setMaxLength(100))
     .addStringOption(alertType).addNumberOption(alertValue);
 
-const CODE_GAME_CHOICES = [{ name: "Borderlands 4", value: "bl4" }, { name: "Borderlands 3", value: "bl3" }, { name: "Tiny Tina's Wonderlands", value: "wonderlands" }, { name: "Borderlands: Game of the Year", value: "blgoty" }, { name: "Borderlands: The Pre-Sequel", value: "bltps" }, { name: "Borderlands 2", value: "bl2" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }];
+const CODE_GAME_CHOICES = [{ name: "Borderlands (all of them)", value: "borderlands" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }];
 const alerts = new SlashCommandBuilder()
     .setName("alerts")
     .setDescription("How and where you get sale alerts")

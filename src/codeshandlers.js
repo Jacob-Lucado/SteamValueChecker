@@ -1,8 +1,8 @@
 // Discord side of game codes: /codes latest, channel, games and ping.
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
-import { applyCodeSettings, codeEmbed, codeView, pendingFor } from "./codes.js";
-import { gameByKey } from "./codesource.js";
+import { applyCodeSettings, codeEmbed, codeView, describeGames, pendingFor } from "./codes.js";
+import { expandGames, GAME_FAMILIES } from "./codesource.js";
 import { codeGames } from "./codes.js";
 
 const eph = (i, payload) => i.reply({ ...(typeof payload === "string" ? { content: payload } : payload), flags: MessageFlags.Ephemeral });
@@ -21,7 +21,7 @@ export function createCodeHandlers({ db, runNow = null }) {
     };
     const summary = (gid, s = db.getCodeSettings(gid)) => [
         s.channel_id ? `Codes are posted in <#${s.channel_id}>.` : "No codes channel yet. Pick one with `/codes channel`.",
-        s.games.length ? `Only: ${s.games.map(k => gameByKey(k)?.title ?? k).join(", ")}.` : "Every game is included.",
+        s.games.length ? `Only: ${describeGames(s.games)}.` : "Every game is included.",
         s.role_id ? `Pings <@&${s.role_id}>.` : "No role is pinged."
     ].join("\n");
 
@@ -30,8 +30,8 @@ export function createCodeHandlers({ db, runNow = null }) {
             const sub = i.options.getSubcommand();
             if (sub === "latest") {
                 const game = i.options.getString("game");
-                const rows = db.listCodes({ status: "active", game: game || null, limit: 8 }).filter(c => !c.expires_at || c.expires_at > Date.now());
-                const embed = { color: 0xff9800, title: game ? `${gameByKey(game)?.title ?? "Game"} codes` : "Latest game codes",
+                const rows = db.listCodes({ status: "active", game: game ? expandGames([game]) : null, limit: 8 }).filter(c => !c.expires_at || c.expires_at > Date.now());
+                const embed = { color: 0xff9800, title: game ? `${GAME_FAMILIES.find(f => f.key === game)?.title ?? "Game"} codes` : "Latest game codes",
                     description: rows.length ? rows.map(codeLine).join("\n\n") : "No active codes right now. New ones show up here as soon as they are listed.",
                     footer: { text: "Codes can run out before they are marked as ended" } };
                 return await eph(i, { embeds: [embed] });
@@ -55,7 +55,8 @@ export function createCodeHandlers({ db, runNow = null }) {
                 const cur = db.getCodeSettings(gid).games;
                 const all = codeGames().map(g => g.key);
                 const base = cur.length ? cur : all;
-                const next = on === false ? base.filter(k => k !== game) : [...new Set([...base, game])];
+                const keys = expandGames([game]);
+                const next = on === false ? base.filter(k => !keys.includes(k)) : [...new Set([...base, ...keys])];
                 if (!next.length) throw new UserError("Keep at least one game, or turn the codes channel off with `/codes channel clear:true`.");
                 return await eph(i, "Updated.\n" + summary(gid, applyCodeSettings(db, gid, { games: next })));
             }

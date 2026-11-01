@@ -716,12 +716,12 @@
       const box = h("div", { class: "panel" }, h("h3", { text: "Game codes and promos" }), h("p", { class: "muted", text: "Loading…" }));
       api("/api/alerts/codes").then(d => {
         const codes = h("input", { type: "checkbox", checked: d.codes }), promos = h("input", { type: "checkbox", checked: d.promos });
-        const picked = new Set(d.games.length ? d.games : d.allGames.map(x => x.key));
-        const boxes = d.allGames.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.title); });
+        const picked = new Set(d.families.filter(f => !d.games.length || f.games.some(k => d.games.includes(k))).map(f => f.key));
+        const boxes = d.families.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.title); });
         const save = h("button", { class: "btn green", text: "Save" });
         save.addEventListener("click", () => busy(save, async () => {
           if (codes.checked && !picked.size) throw new Error("Keep at least one game ticked, or turn code alerts off.");
-          await api("/api/alerts/codes", { codes: codes.checked, promos: promos.checked, games: picked.size ? [...picked] : d.allGames.map(x => x.key) });
+          await api("/api/alerts/codes", { codes: codes.checked, promos: promos.checked, games: [...picked] });
           toast("Saved. Only new ones from now on.", "ok");
         }));
         box.replaceChildren(h("h3", { text: "Game codes and promos" }),
@@ -975,7 +975,7 @@
       const d = await api("/api/codes?status=" + st.status + (st.game ? "&game=" + encodeURIComponent(st.game) : ""));
       head.replaceChildren(
         h("button", { class: "tab small" + (!st.game ? " active" : ""), text: "All games", onclick: () => { st.game = ""; load().catch(fail); } }),
-        ...d.games.map(x => h("button", { class: "tab small" + (st.game === x.key ? " active" : ""), text: x.title, onclick: () => { st.game = x.key; load().catch(fail); } })),
+        ...d.families.map(x => h("button", { class: "tab small" + (st.game === x.key ? " active" : ""), text: x.title, onclick: () => { st.game = x.key; load().catch(fail); } })),
         h("button", { class: "tab small" + (st.status === "expired" ? " active" : ""), text: st.status === "expired" ? "Showing ended" : "Show ended", onclick: () => { st.status = st.status === "expired" ? "active" : "expired"; load().catch(fail); } }));
       list.className = "";
       list.replaceChildren(d.codes.length ? h("div", { class: "free-grid" }, d.codes.map(c => {
@@ -1171,8 +1171,8 @@
           const st = d.settings;
           const chan = select([["", "No channel (off)"], ...d.channels.map(c => ["" + c.id, "#" + c.name])], st.channel_id || "");
           const role = select([["", "Nobody"], ...d.roles.filter(r => r.name !== "@everyone").map(r => ["" + r.id, r.name])], st.role_id || "");
-          const picked = new Set(st.games.length ? st.games : d.games.map(x => x.key));
-          const boxes = d.games.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.title); });
+          const picked = new Set(d.families.filter(f => !st.games.length || f.games.some(k => st.games.includes(k))).map(f => f.key));
+          const boxes = d.families.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.title); });
           const save = h("button", { class: "btn green", text: "Save" });
           save.addEventListener("click", () => busy(save, async () => {
             if (!picked.size) throw new Error("Keep at least one game ticked, or pick no channel to turn this off.");

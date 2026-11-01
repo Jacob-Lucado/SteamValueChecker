@@ -8,7 +8,7 @@ const MAX_PER_RUN = 5;
 // Direct messages carry no allowed_mentions of ours, and the channel route adds its own.
 const plain = ({ allowed_mentions, ...rest }) => rest;
 
-export async function sendCodeAlerts({ db, notifier, now = Date.now, log = () => {} }) {
+export async function sendCodeAlerts({ db, notifier, base = null, now = Date.now, log = () => {} }) {
     const stats = { delivered: 0, failed: 0, deferred: 0 };
     const active = db.listCodes({ status: "active", limit: 100 }).filter(c => !c.expires_at || c.expires_at > now());
     for (const sub of db.alertSubscribers("codes")) {
@@ -18,7 +18,7 @@ export async function sendCodeAlerts({ db, notifier, now = Date.now, log = () =>
         if (!mine.length) continue;
         if (isQuiet(user, now())) { stats.deferred += mine.length; continue; }
         for (const c of mine.slice(0, MAX_PER_RUN).reverse()) {
-            const res = await notifier.deliver(user, plain(codeEmbed(c)), "codes");
+            const res = await notifier.deliver(user, plain(codeEmbed(c, { base })), "codes");
             if (!res.ok) { stats.failed++; log(`code alert not delivered (${res.reason ?? "unknown"})`); break; }
             db.markSeen(sub.id, `code:${c.id}`);
             stats.delivered++;

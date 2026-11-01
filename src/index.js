@@ -175,7 +175,7 @@ let codesBusy = false;
 const pollCodes = async () => {
     if (codesBusy) return null;
     codesBusy = true;
-    try { return await runCodes({ db, api: botRest, notifier, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
+    try { return await runCodes({ db, api: botRest, base: publicBase, notifier, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
 };
 const codeUi = createCodeHandlers({ db, runNow: pollCodes });
 let dropsBusy = false;

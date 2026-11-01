@@ -1,5 +1,5 @@
 // Game code posts: the embed, the poll that posts each code once per server, and the edit that marks a code as ended.
-import { fetchAllCodes, gameByKey, gameArt, redeemUrlFor, ALL_GAMES } from "./codesource.js";
+import { fetchAllCodes, gameByKey, gameArt, redeemUrlFor, ALL_GAMES, GAME_FAMILIES, expandGames } from "./codesource.js";
 import { sendCodeAlerts } from "./dropalerts.js";
 
 const sleepDefault = ms => new Promise(r => setTimeout(r, ms));
@@ -8,19 +8,27 @@ const MAX_PER_RUN = 8;     // posts per server per poll, so a server that was of
 const FIRST_RUN_POSTS = 3; // a server that has never had a code only gets the newest few; the rest are marked as seen
 
 export const codeGames = () => ALL_GAMES.map(g => ({ key: g.key, title: g.title, provider: g.provider }));
+export const codeFamilies = () => GAME_FAMILIES.map(f => ({ key: f.key, title: f.title, games: f.games }));
 const hex = n => "#" + (n ?? 0xff9800).toString(16).padStart(6, "0");
 
 const unix = ms => Math.floor(ms / 1000);
 
+/** "Borderlands, Genshin Impact" for a list of game keys (all six Borderlands games read as one). Empty means every game. */
+export function describeGames(keys) {
+    const set = new Set(keys ?? []);
+    if (!set.size) return "every game";
+    return GAME_FAMILIES.filter(f => f.games.some(k => set.has(k))).map(f => f.title).join(", ");
+}
+
 /** What the dashboard and the /codes command show for one stored code. */
 export function codeView(c, at = Date.now()) {
     const game = gameByKey(c.game);
-    return { id: c.id, code: c.code, game: c.game, gameTitle: game?.title ?? c.game, art: gameArt(game), accent: hex(game?.color), provider: game?.provider ?? "shift", platform: c.platform, reward: c.reward, note: c.note,
+    return { id: c.id, code: c.code, game: c.game, gameTitle: game?.title ?? c.game, art: gameArt(game, ""), accent: hex(game?.color), provider: game?.provider ?? "shift", platform: c.platform, reward: c.reward, note: c.note,
         expiresAt: c.expires_at ?? null, status: c.status === "active" && c.expires_at && c.expires_at < at ? "expired" : c.status, firstSeen: c.first_seen, sourceUrl: c.source_url, redeemUrl: redeemUrlFor(game, c.code) };
 }
 
 /** The post for one code. `expired` greys it out, strikes the code through and drops the buttons. */
-export function codeEmbed(c, { expired = false } = {}) {
+export function codeEmbed(c, { expired = false, base = null } = {}) {
     const game = gameByKey(c.game);
     const ends = c.expires_at ? `<t:${unix(c.expires_at)}:D> (<t:${unix(c.expires_at)}:R>)` : "No end date listed";
     const fields = [
@@ -36,7 +44,7 @@ export function codeEmbed(c, { expired = false } = {}) {
         title: expired ? `Expired: ${c.reward || "code"}` : (c.reward || "New code"),
         description: expired ? `~~${c.code}~~\nThis code has ended.` : `\`\`\`\n${c.code}\n\`\`\`${game?.provider === "hoyo" ? "Copy it, then redeem it in the game (Settings, Redeem Code) or with the button below." : "Copy it, then redeem it on the SHiFT site while signed in to the account linked to your game."}`,
         fields,
-        image: game && gameArt(game) ? { url: gameArt(game) } : undefined,
+        image: game && gameArt(game, base) ? { url: gameArt(game, base) } : undefined,
         footer: { text: expired ? "Steam Value Checker · code ended" : game?.provider === "hoyo" ? "Steam Value Checker · codes can stop working without warning" : "Codes from mentalmars.com · they can run out before the listed date" }
     };
     const buttons = [{ type: 2, style: 5, label: game?.provider === "hoyo" ? "Redeem this code" : "Redeem on SHiFT", url: redeemUrlFor(game, c.code) }];
@@ -55,7 +63,7 @@ export function pendingFor(db, guildId, settings) {
  * One poll: read the feed, store anything new, retire what ended, post what each server has not had, and edit old posts.
  * `fetchCodes` is injectable for tests. A failed fetch still lets the expiry and edit steps run.
  */
-export async function runCodes({ db, api, notifier = null, fetchCodes = fetchAllCodes, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
+export async function runCodes({ db, api, base = null, notifier = null, fetchCodes = fetchAllCodes, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
     const stats = { fetched: 0, added: 0, posted: 0, expired: 0, failed: 0, feedError: null };
     try {
         const got = await fetchCodes();
@@ -83,7 +91,7 @@ export async function runCodes({ db, api, notifier = null, fetchCodes = fetchAll
         const ping = settings.role_id ?? db.getCommunity?.(gid)?.ping_codes ?? null; // the server's own "Game code pings" role is the default
         for (const c of [...toPost].reverse()) { // oldest first, so the newest ends up at the bottom of the channel
             try {
-                const msg = await api.sendMessage(settings.channel_id, { ...codeEmbed(c), content: ping ? `<@&${ping}>` : undefined, allowed_mentions: ping ? { roles: [ping] } : { parse: [] } });
+                const msg = await api.sendMessage(settings.channel_id, { ...codeEmbed(c, { base }), content: ping ? `<@&${ping}>` : undefined, allowed_mentions: ping ? { roles: [ping] } : { parse: [] } });
                 db.addCodePost(c.id, gid, settings.channel_id, msg?.id ?? null);
                 stats.posted++;
             } catch (err) {
@@ -96,12 +104,12 @@ export async function runCodes({ db, api, notifier = null, fetchCodes = fetchAll
     }
 
     if (notifier) {
-        try { const a = await sendCodeAlerts({ db, notifier, now, log }); stats.alerted = a.delivered; stats.failed += a.failed; }
+        try { const a = await sendCodeAlerts({ db, notifier, base, now, log }); stats.alerted = a.delivered; stats.failed += a.failed; }
         catch (err) { log(`code alerts: ${err.message}`); }
     }
 
     for (const p of db.stalePosts()) {
-        try { await api.editMessage(p.channel_id, p.message_id, codeEmbed({ ...p, expires_at: p.expires_at }, { expired: true })); db.markPostExpired(p.code_id, p.guild_id); }
+        try { await api.editMessage(p.channel_id, p.message_id, codeEmbed({ ...p, expires_at: p.expires_at }, { expired: true, base })); db.markPostExpired(p.code_id, p.guild_id); }
         catch (err) { if (err?.status === 404 || err?.status === 403) db.markPostExpired(p.code_id, p.guild_id); else stats.failed++; }
         await sleep(pace);
     }
@@ -115,7 +123,7 @@ export function applyCodeSettings(db, guildId, body, { allowedGames = ALL_GAMES.
     if (body.channel_id !== undefined) patch.channel_id = body.channel_id || null;
     if (body.role_id !== undefined) patch.role_id = body.role_id || null;
     if (body.games !== undefined) {
-        const games = Array.isArray(body.games) ? body.games.map(String) : [];
+        const games = expandGames(Array.isArray(body.games) ? body.games.map(String) : []);
         const bad = games.find(g => !allowedGames.includes(g));
         if (bad) throw new Error("That is not a game I track codes for.");
         patch.games = games.length === allowedGames.length ? [] : games; // every game selected is the same as no filter

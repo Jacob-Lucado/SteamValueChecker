@@ -14,7 +14,8 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
-import { applyCodeSettings, codeGames, codeView } from "../codes.js";
+import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
+import { expandGames } from "../codesource.js";
 import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
 import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
 import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
@@ -87,7 +88,10 @@ const FILES = {
     "/grabber-ad-cart.png": ["grabber-ad-cart.png", "image/png"],
     "/grabber-ad-paid.png": ["grabber-ad-paid.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
-    "/favicon.png": ["favicon.png", "image/png"]
+    "/favicon.png": ["favicon.png", "image/png"],
+    "/img/codes/genshin.jpg": ["img/codes/genshin.jpg", "image/jpeg"],
+    "/img/codes/hsr.jpg": ["img/codes/hsr.jpg", "image/jpeg"],
+    "/img/codes/zzz.jpg": ["img/codes/zzz.jpg", "image/jpeg"]
 };
 const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
@@ -540,11 +544,12 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
         "GET /api/codes": async (req, _b, url) => {
             session(req);
             const game = url.searchParams.get("game") || null;
-            if (game && !codeGames().some(g => g.key === game)) throw new HttpError(400, "Unknown game.");
+            const wanted = game ? expandGames([game]) : null; // the Borderlands entry stands for all six
+            if (wanted && !wanted.every(k => codeGames().some(g => g.key === k))) throw new HttpError(400, "Unknown game.");
             const status = url.searchParams.get("status") === "expired" ? "expired" : "active";
             const at = now();
             db.expireDue(at); // anything that ended since the last poll should not show as working
-            return { games: codeGames(), status, codes: db.listCodes({ status, game, limit: 100 }).map(c => codeView(c, at)), counts: db.codeCounts() };
+            return { games: codeGames(), families: codeFamilies(), status, codes: db.listCodes({ status, game: wanted, limit: 100 }).map(c => codeView(c, at)), counts: db.codeCounts() };
         },
         "GET /api/servers/codes": async (req, _b, url) => {
             const s = session(req);
@@ -556,7 +561,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
                 if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
                 throw err;
             }
-            return { settings: db.getCodeSettings(g.id), channels, roles, games: codeGames() };
+            return { settings: db.getCodeSettings(g.id), channels, roles, games: codeGames(), families: codeFamilies() };
         },
         "POST /api/servers/codes": async (req, body) => {
             const s = session(req);
@@ -750,7 +755,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
         // game code and promo news alerts to your own DMs
         "GET /api/alerts/codes": async (req) => {
             const s = session(req); userRow(s);
-            return { ...db.getAlertSubs(s.userId), allGames: codeGames() };
+            return { ...db.getAlertSubs(s.userId), allGames: codeGames(), families: codeFamilies() };
         },
         "POST /api/alerts/codes": async (req, body) => {
             const s = session(req); userRow(s);
@@ -759,12 +764,12 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
             if (body.promos !== undefined) patch.promos = Boolean(body.promos);
             if (body.games !== undefined) {
                 const keys = codeGames().map(g => g.key);
-                const games = Array.isArray(body.games) ? body.games.map(String) : [];
+                const games = expandGames(Array.isArray(body.games) ? body.games.map(String) : []);
                 if (games.some(g => !keys.includes(g))) throw new HttpError(400, "That is not a game I track codes for.");
                 if (!games.length) throw new HttpError(400, "Keep at least one game ticked, or turn code alerts off.");
                 patch.games = games.length === keys.length ? [] : games;
             }
-            return { ...db.setAlertSubs(s.userId, patch), allGames: codeGames() };
+            return { ...db.setAlertSubs(s.userId, patch), allGames: codeGames(), families: codeFamilies() };
         },
 
         "GET /api/alerts/history": async (req) => {

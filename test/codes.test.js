@@ -288,3 +288,34 @@ test("hoyo: codes without an end date do not age out like old SHiFT codes", () =
     db.upsertCode({ provider: "hoyo", key: "hoyo:genshin:KEEPME123", code: "KEEPME123", game: "genshin", reward: "x", expiresAt: null, seenAt: NOW });
     assert.equal(db.expireDue(NOW + 90 * 86400_000).length, 0);
 });
+
+test("codes: the Borderlands games are one entry, and the HoYoverse games have their own art", async () => {
+    const { GAME_FAMILIES, expandGames, gameByKey, gameArt } = await import("../src/codesource.js");
+    const { describeGames, codeFamilies, codeView } = await import("../src/codes.js");
+    assert.deepEqual(GAME_FAMILIES.map(f => f.key), ["borderlands", "genshin", "hsr", "zzz"]);
+    assert.equal(expandGames(["borderlands"]).length, 6);
+    assert.deepEqual(expandGames(["zzz", "bl4", "zzz"]), ["zzz", "bl4"]);
+    assert.equal(describeGames(["bl4", "bl2", "genshin"]), "Borderlands, Genshin Impact");
+    assert.equal(describeGames([]), "every game");
+    assert.equal(codeFamilies().length, 4);
+    // HoYoverse art is our own copy: a relative path for the site, the full address for Discord, nothing when there is no address
+    for (const k of ["genshin", "hsr", "zzz"]) {
+        assert.equal(gameArt(gameByKey(k), ""), `/img/codes/${k}.jpg`);
+        assert.equal(gameArt(gameByKey(k), "https://bot.example"), `https://bot.example/img/codes/${k}.jpg`);
+        assert.equal(gameArt(gameByKey(k)), null);
+    }
+    assert.match(gameArt(gameByKey("bl4"), ""), /steamstatic/);
+    const e = codeEmbed({ code: "ABC", game: "hsr", reward: "x", expires_at: null }, { base: "https://bot.example" });
+    assert.equal(e.embeds[0].image.url, "https://bot.example/img/codes/hsr.jpg");
+    assert.equal(codeView({ id: 1, code: "ABC", game: "zzz", status: "active" }).art, "/img/codes/zzz.jpg");
+    const { readFileSync, statSync } = await import("node:fs");
+    for (const k of ["genshin", "hsr", "zzz"]) assert.ok(statSync(new URL(`../public/img/codes/${k}.jpg`, import.meta.url)).size > 20000);
+});
+
+test("codes: picking Borderlands for a server turns on all six games", () => {
+    const db = openDb(":memory:");
+    const s = applyCodeSettings(db, "g1", { games: ["borderlands", "zzz"] });
+    assert.equal(s.games.length, 7);
+    assert.ok(!s.games.includes("genshin"));
+    assert.deepEqual(applyCodeSettings(db, "g1", { games: ["borderlands", "genshin", "hsr", "zzz"] }).games, [], "everything is no filter");
+});

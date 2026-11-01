@@ -33,8 +33,8 @@ import { readUpload } from "./upload.js";
 import { sanitize } from "./parse.js";
 
 import { UserError } from "./errors.js";
-import { codeGames } from "./codes.js";
-import { gameByKey } from "./codesource.js";
+import { codeGames, describeGames } from "./codes.js";
+import { expandGames } from "./codesource.js";
 import { boardSvg, artFor } from "./communitycards.js";
 import { panelSvg, toPng, challengeSpec, spendSpec, trendSpec, compareSpec, badgesSpec, statusSpec, serverStatsSpec } from "./panelcards.js";
 export { UserError };
@@ -379,12 +379,13 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 if (game) {
                     const all = codeGames().map(g => g.key);
                     const base = games.length ? games : all;
-                    games = keep === false ? base.filter(k => k !== game) : [...new Set([...base, game])];
+                    const keys = expandGames([game]);
+                    games = keep === false ? base.filter(k => !keys.includes(k)) : [...new Set([...base, ...keys])];
                     if (!games.length) throw new UserError("Keep at least one game, or turn code alerts off.");
                     if (games.length === all.length) games = [];
                 }
                 const s = db.setAlertSubs(user.discord_id, { codes: on, ...(game ? { games } : {}) });
-                return eph(i, on ? `I'll message you when a new game code drops${s.games.length ? ` for ${s.games.map(k => gameByKey(k)?.title ?? k).join(", ")}` : " for any game"}. Only codes from now on, nothing old.` : "Game code alerts are off.");
+                return eph(i, on ? `I'll message you when a new game code drops${s.games.length ? ` for ${describeGames(s.games)}` : " for any game"}. Only codes from now on, nothing old.` : "Game code alerts are off.");
             }
             case "promos": {
                 const on = i.options.getBoolean("enabled", true);

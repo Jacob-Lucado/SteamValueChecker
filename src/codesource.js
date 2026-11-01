@@ -20,17 +20,25 @@ export const SHIFT_GAMES = [
 
 /** HoYoverse games. Their lists mark a code as working or not, and carry no end date. There is no official art to link, so the dashboard uses an accent colour. */
 export const HOYO_GAMES = [
-    { key: "genshin", title: "Genshin Impact", color: 0x4fc3b8, ennead: "genshin", seria: "genshin", redeem: code => `https://genshin.hoyoverse.com/en/gift?code=${encodeURIComponent(code)}` },
-    { key: "hsr", title: "Honkai: Star Rail", color: 0x8f7cf0, ennead: "starrail", seria: "hkrpg", redeem: code => `https://hsr.hoyoverse.com/gift?code=${encodeURIComponent(code)}` },
-    { key: "zzz", title: "Zenless Zone Zero", color: 0xf2c200, ennead: "zenless", seria: "nap", redeem: code => `https://zenless.hoyoverse.com/redemption?code=${encodeURIComponent(code)}` }
+    { key: "genshin", title: "Genshin Impact", color: 0x4fc3b8, artFile: "/img/codes/genshin.jpg", ennead: "genshin", seria: "genshin", redeem: code => `https://genshin.hoyoverse.com/en/gift?code=${encodeURIComponent(code)}` },
+    { key: "hsr", title: "Honkai: Star Rail", color: 0x8f7cf0, artFile: "/img/codes/hsr.jpg", ennead: "starrail", seria: "hkrpg", redeem: code => `https://hsr.hoyoverse.com/gift?code=${encodeURIComponent(code)}` },
+    { key: "zzz", title: "Zenless Zone Zero", color: 0xf2c200, artFile: "/img/codes/zzz.jpg", ennead: "zenless", seria: "nap", redeem: code => `https://zenless.hoyoverse.com/redemption?code=${encodeURIComponent(code)}` }
 ].map(g => ({ ...g, provider: "hoyo", note: "Some codes only work on certain servers or regions" }));
 SHIFT_GAMES.forEach(g => { g.provider = "shift"; g.color = 0xff9800; });
 export const ALL_GAMES = [...SHIFT_GAMES, ...HOYO_GAMES];
 
+/** What people pick from: all the Borderlands games are one entry. Keys of the individual games still work everywhere. */
+export const GAME_FAMILIES = [
+    { key: "borderlands", title: "Borderlands", games: SHIFT_GAMES.map(g => g.key) },
+    ...HOYO_GAMES.map(g => ({ key: g.key, title: g.title, games: [g.key] }))
+];
+/** Turns a list that may hold family keys into individual game keys. Unknown keys are kept so callers can reject them. */
+export const expandGames = list => [...new Set((list ?? []).flatMap(k => GAME_FAMILIES.find(f => f.key === k)?.games ?? [k]))];
 export const gameByKey = key => ALL_GAMES.find(g => g.key === key) ?? null;
 /** The SHiFT game a feed entry's game name belongs to. */
 export const gameByName = name => SHIFT_GAMES.find(g => g.match.test(String(name ?? ""))) ?? null;
-export const gameArt = game => (game?.appid ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg` : null);
+/** Steam's header for Borderlands; our own copy for the HoYoverse games. `base` is the site address ("" for the dashboard's own pages, null when there is none). */
+export const gameArt = (game, base = null) => (game?.appid ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg` : game?.artFile && base !== null && base !== undefined ? `${base}${game.artFile}` : null);
 /** Where to redeem one code. HoYoverse links fill the code in for you. */
 export const redeemUrlFor = (game, code) => (game?.redeem ? game.redeem(code) : SHIFT_REDEEM_URL);
 
