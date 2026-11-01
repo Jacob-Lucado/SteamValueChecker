@@ -1,6 +1,7 @@
 // Builds the Discord embeds and the CSV download from report data.
 // Embeds are plain API objects (no discord.js needed), which keeps this module testable.
 
+import { saleUrl } from "./salescal.js";
 import { protonLabel } from "./proton.js";
 import { tr } from "./i18n.js";
 export const ROWS_PER_PAGE = 15;
@@ -602,8 +603,8 @@ export function saleStartPayload(ev) {
     const fest = ev.kind === "fest";
     return { embeds: [{
         color: 0x1b9aaa, title: `${fest ? "🎪" : "🏷️"} ${ev.name} has started`,
-        url: "https://store.steampowered.com/",
+        url: saleUrl(ev),
         description: `${fest ? "Steam's festival is on." : "Steam's sale is on."} It runs until ${t(ev.end, "f")} (${t(ev.end, "R")}).${ev.note ? "\n" + ev.note : ""}\nPrices are dropping now. Check your wishlist alerts with \`/wishlist\`.`,
         footer: { text: "Dates from Valve's published schedule" }
-    }] };
+    }], components: [{ type: 1, components: [linkButton(fest ? "See the festival" : "See the sale", saleUrl(ev))] }] };
 }

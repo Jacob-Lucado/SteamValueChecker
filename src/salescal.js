@@ -11,6 +11,9 @@ export const SALES = [
     { name: "Steam Summer Sale", kind: "sale", start: d("2027-06-24"), end: d("2027-07-08"), note: "A major sale, second only to winter." }
 ];
 
+/** Where to send people for a sale. Next Fest has its own page all year; Valve's other event pages only exist while they run, so those go to the specials page. */
+export const saleUrl = ev => /next fest/i.test(ev?.name ?? "") ? "https://store.steampowered.com/sale/nextfest" : "https://store.steampowered.com/specials";
+
 /** Big sales that already happened (kept for the price oracle). Dates are Valve's published ones, to the day. */
 export const PAST_SALES = [
     { name: "Steam Autumn Sale", kind: "sale", start: d("2025-11-26"), end: d("2025-12-03") },
@@ -25,14 +28,14 @@ export const salesBefore = (now = Date.now(), days = 365) => [...PAST_SALES, ...
 /** Events that are on now or still to come, soonest first. */
 export function upcomingSales(now = Date.now(), { limit = 6, salesOnly = false } = {}) {
     return SALES.filter(s => s.end > now && (!salesOnly || s.kind === "sale"))
-        .map(s => ({ ...s, live: s.start <= now }))
+        .map(s => ({ ...s, live: s.start <= now, url: saleUrl(s) }))
         .sort((a, b) => a.start - b.start)
         .slice(0, limit);
 }
 
 export function salesEmbed(events, { now = Date.now(), watching = null } = {}) {
     const t = (ms, f = "R") => `<t:${Math.floor(ms / 1000)}:${f}>`;
-    const lines = events.map(e => `${e.live ? "🟢 **ON NOW**" : e.kind === "sale" ? "🏷️" : "🎪"} **${e.name}**\n${t(e.start, "D")} to ${t(e.end, "D")}  •  ${e.live ? "ends " + t(e.end) : "starts " + t(e.start)}${e.note ? `\n*${e.note}*` : ""}`);
+    const lines = events.map(e => `${e.live ? "🟢 **ON NOW**" : e.kind === "sale" ? "🏷️" : "🎪"} [**${e.name}**](${saleUrl(e)})\n${t(e.start, "D")} to ${t(e.end, "D")}  •  ${e.live ? "ends " + t(e.end) : "starts " + t(e.start)}${e.note ? `\n*${e.note}*` : ""}`);
     return {
         color: 0x1b9aaa, title: "Steam sale calendar",
         description: lines.join("\n\n") || "No upcoming Steam events are listed right now.",

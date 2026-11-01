@@ -36,6 +36,7 @@ export function createNotifier({ db, discord }) {
 
     /** `type` is alert, bundle, free or digest. A muted type goes only to the notification center, not to a DM or channel. */
     async function deliver(user, payload, type = "alert") {
+        if (db.isBanned?.(user.discord_id)) return { ok: false, via: null, reason: "restricted" };
         const muted = String(user.muted ?? "").split(",").includes(type);
         if (muted) { record(user, type, payload); return { ok: true, via: "inbox" }; }
         const r = await send(user, payload);

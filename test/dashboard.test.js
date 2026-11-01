@@ -1486,3 +1486,45 @@ test("game codes: the Borderlands filter covers all six games, and the art files
     const img = await o.request("/img/codes/zzz.jpg");
     assert.equal(img.status, 200);
 });
+
+test("owner can list a server's people and restrict them; restricted people are cut off from the dashboard and alerts", async () => {
+    const t = await signedIn();
+    for (const p of ["/api/admin/server-members?guild=123456", "/api/admin/bans"]) assert.equal((await t.request(p)).status, 403);
+    assert.equal((await t.request("/api/admin/ban", { method: "POST", body: { id: "2000002" } })).status, 403);
+    await t.close();
+
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    o.db.ensureUser("2000002", "5550001"); o.db.ensureUser("2000003", "5550001"); o.db.ensureUser("2000004", "5550002");
+    o.db.updateUser("2000002", { last_seen: Date.now() });
+    const old = await o.request("/api/admin/server-members?guild=5550001&days=30");
+    assert.equal(old.status, 200);
+    assert.deepEqual(old.data.members.map(m => m.id).sort(), ["2000002", "2000003"]); // 2000003 was created just now, so counts as recent
+    assert.equal((await o.request("/api/admin/server-members?guild=bad")).status, 404);
+    assert.equal((await o.request("/api/admin/ban", { method: "POST", body: { id: "u1" } })).status, 400);
+    assert.equal((await o.request("/api/admin/ban", { method: "POST", body: { id: "nope" } })).status, 400);
+    const b = await o.request("/api/admin/ban", { method: "POST", body: { id: "2000002", reason: "spam" } });
+    assert.equal(b.data.banned, true);
+    assert.equal(o.db.isBanned("2000002"), true);
+    const after = (await o.request("/api/admin/server-members?guild=5550001&days=0")).data.members.find(m => m.id === "2000002");
+    assert.equal(after.banned, true); assert.equal(after.banReason, "spam");
+    assert.equal((await o.request("/api/admin/bans")).data.bans.length, 1);
+    assert.equal((await o.request("/api/admin/ban", { method: "POST", body: { id: "2000002", ban: false } })).data.banned, false);
+    assert.equal(o.db.isBanned("2000002"), false);
+    await o.close();
+
+    // a restricted member's own session is refused
+    const m = await signedIn();
+    m.db.banUser("u1", "test");
+    const blocked = await m.request("/api/me");
+    assert.equal(blocked.status, 403); assert.equal(blocked.data.restricted, true); assert.match(blocked.data.error, /restricted/);
+    await m.close();
+});
+
+test("alerts are not delivered to restricted people", async () => {
+    const { createNotifier } = await import("../src/notify.js");
+    const db = openDb(":memory:"); db.ensureUser("777777", "g1"); db.banUser("777777", "x");
+    let sent = 0;
+    const n = createNotifier({ db, discord: { sendDm: async () => { sent++; }, sendChannel: async () => { sent++; } } });
+    const r = await n.deliver(db.getUser("777777"), { content: "hi" });
+    assert.equal(r.ok, false); assert.equal(sent, 0);
+});

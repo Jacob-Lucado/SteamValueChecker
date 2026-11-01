@@ -103,6 +103,7 @@ const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
 
+export const RESTRICTED_TEXT = "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard, and you won't get alerts. If you think this is a mistake, contact the bot owner.";
 class HttpError extends Error {
     constructor(status, message) {
         super(message);
@@ -211,13 +212,18 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
     function session(req) {
         const s = sessions.get(cookies(req)[COOKIE]);
         if (!s || s.expires < now()) throw new HttpError(401, "Please sign in with Discord.");
+        if (s.userId && s.userId !== config.ownerId && db.isBanned(s.userId)) {
+            sessions.delete(cookies(req)[COOKIE]);
+            throw Object.assign(new HttpError(403, RESTRICTED_TEXT), { restricted: true });
+        }
+        if (s.userId) db.touchUser(s.userId);
         return s;
     }
 
     /** The signed-in session if there is one, otherwise null (for public pages that show a little more to staff). */
     function softSession(req) {
         const s = sessions.get(cookies(req)[COOKIE]);
-        return s && s.expires >= now() ? s : null;
+        return s && s.expires >= now() && !(s.userId && s.userId !== config.ownerId && db.isBanned(s.userId)) ? s : null;
     }
     const STAFF_PERMS = ["moderate", "kick", "ban", "manageMessages"];
     /** Owner, Manage Server, Administrator or any moderator permission in that server. */
@@ -750,6 +756,16 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
                 return { updated: targets.length, label: describeTrigger({ trigger_type: trig.type, trigger_value: trig.value }) };
             }
             throw new HttpError(400, "Unknown action.");
+        },
+
+        // giveaway and code news the bot spotted, plus drops added in the member's own servers
+        "GET /api/promos": async (req) => {
+            const s = session(req);
+            const at = now();
+            db.expireDrops(at);
+            const mine = s.guilds.filter(g => !botGuilds || botGuilds(g.id));
+            const drops = mine.flatMap(g => db.listDrops(g.id, { status: "active", limit: 10 }).map(d => ({ ...dropView(d, at), server: g.name })));
+            return { news: db.listNews(30).map(n => ({ id: n.id, source: n.source, kind: n.kind, title: n.title, url: n.url, summary: n.summary, seenAt: n.seen_at })), drops: drops.filter(d => d.status === "active") };
         },
 
         // game code and promo news alerts to your own DMs
@@ -1816,6 +1832,36 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
             log(`Bot owner ran "${body.action}" on member ${id}`);
             return db.adminUser(id);
         },
+        "GET /api/admin/server-members": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const gid = String(url.searchParams.get("guild") ?? "");
+            if (!/^\d{5,25}$/.test(gid) || isHidden(gid)) throw new HttpError(404, "Unknown server.");
+            const days = Math.min(365, Math.max(0, Number(url.searchParams.get("days") ?? 30) || 0));
+            const members = db.serverMembers(gid, { activeDays: days, limit: 200 });
+            // Names are a nice-to-have; ask Discord for the first batch and carry on without them if it won't say.
+            await Promise.all(members.slice(0, 60).map(async m => {
+                try { const r = await rest.getMember?.(gid, m.id); const u = r?.user ?? r; m.name = r?.nick || u?.global_name || u?.username || null; if (u?.username) m.username = u.username; } catch { /* left the server, or Discord is busy */ }
+            }));
+            return { members, days };
+        },
+        "GET /api/admin/bans": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            return { bans: db.listBans() };
+        },
+        "POST /api/admin/ban": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const id = String(body.id ?? "").replace(/\D/g, "");
+            if (!/^\d{5,25}$/.test(id)) throw new HttpError(400, "Paste a Discord user ID (numbers only).");
+            if (id === config.ownerId) throw new HttpError(400, "You can't restrict yourself.");
+            if (body.ban === false) { db.unbanUser(id); log(`Bot owner lifted the restriction on ${id}`); return { banned: false, id }; }
+            db.banUser(id, String(body.reason ?? ""), s.userId);
+            for (const [k, v] of sessions) if (v.userId === id) sessions.delete(k); // signed out right away
+            log(`Bot owner restricted ${id}`);
+            return { banned: true, id };
+        },
         "POST /api/admin/clear-dm-failures": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -2102,6 +2148,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
 
         const name = who.user.global_name || who.user.username;
         const avatar = who.user.avatar ? `https://cdn.discordapp.com/avatars/${who.user.id}/${who.user.avatar}.png?size=64` : null;
+        if (who.user.id !== config.ownerId && db.isBanned(who.user.id)) return send(res, 302, "", { Location: "/?error=restricted" });
         startSession(res, {
             userId: who.user.id, username: name, avatar,
             guilds: (who.guilds ?? []).map(g => ({ id: g.id, name: g.name, icon: g.icon, owner: Boolean(g.owner), permissions: String(g.permissions ?? "0") }))
@@ -2417,7 +2464,7 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
             json(res, 200, await handler(req, body, url));
         } catch (err) {
             const e = toHttp(err);
-            json(res, e.status, { error: e.message });
+            json(res, e.status, e.restricted ? { error: e.message, restricted: true } : { error: e.message });
         }
     });
 

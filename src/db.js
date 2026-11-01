@@ -9,6 +9,7 @@ import { ticketSchema, ticketStore } from "./ticketstore.js";
 import { requestSchema, requestStore } from "./requeststore.js";
 import { codeSchema, codeStore } from "./codestore.js";
 import { dropSchema, dropStore } from "./dropstore.js";
+import { banSchema, banStore } from "./banstore.js";
 import { steamSchema, steamStore } from "./steamstore.js";
 import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { redeemSchema, redeemStore } from "./redeemstore.js";
@@ -161,6 +162,7 @@ ${ticketSchema}
 ${requestSchema}
 ${codeSchema}
 ${dropSchema}
+${banSchema}
 ${communitySchema}
 ${steamSchema}
 ${grabberSchema}
@@ -238,6 +240,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("community", "verified_role_id", "TEXT");
     addColumn("community", "mod_log_channel", "TEXT");
+    addColumn("users", "last_seen", "INTEGER");
     addColumn("users", "promo_off", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "announce_channel", "TEXT");
     addColumn("community", "rules_channel", "TEXT");
@@ -274,6 +277,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const grabber = grabberStore({ run, get, clean, now });
     const redeem = redeemStore({ run, get, all, clean, now });
     const calendar = calendarStore({ run, get, all, clean, now });
+    const bans = banStore({ run, get, all, clean, now });
     const gifts = giftStore({ run, get, all, now });
     const friends = friendStore({ run, get, all, now });
     const challenges = challengeStore({ run, all });
@@ -290,7 +294,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free", "free_dlc", "min_discount", "promo_off"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -629,7 +633,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         return { id: u.discord_id, joined: u.created_at, region: u.region, delivery: u.delivery, paused: Boolean(u.paused), dmFailures: u.dm_failures, share: Boolean(u.share), lang: u.lang ?? "en",
             wishlist: n("SELECT COUNT(*) AS n FROM items WHERE discord_id = ?"), library: n("SELECT COUNT(*) AS n FROM library WHERE discord_id = ?"),
             steam: Boolean(get("SELECT 1 AS n FROM steam_links WHERE discord_id = ?", id)), grabber: Boolean(get("SELECT 1 AS n FROM grabber_links WHERE discord_id = ?", id)),
-            alerts: n("SELECT COUNT(*) AS n FROM alert_log WHERE discord_id = ?"), tickets: n("SELECT COUNT(*) AS n FROM tickets WHERE user_id = ?") };
+            banned: Boolean(get("SELECT 1 AS n FROM bans WHERE discord_id = ?", id)), lastSeen: u.last_seen ?? null, alerts: n("SELECT COUNT(*) AS n FROM alert_log WHERE discord_id = ?"), tickets: n("SELECT COUNT(*) AS n FROM tickets WHERE user_id = ?") };
     }
     const clearAllDmFailures = () => run("UPDATE users SET dm_failures = 0 WHERE dm_failures > 0").changes;
 
@@ -697,6 +701,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

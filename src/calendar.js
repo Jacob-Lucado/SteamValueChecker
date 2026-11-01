@@ -1,7 +1,7 @@
 // The calendar: one list of what is coming up for a member (release dates of wishlisted games, Steam sales, their servers' events
 // and open looking-for-group posts), server events added by managers with an announcement and a reminder, and a standard .ics
 // feed for anyone who wants it in another calendar app.
-import { SALES } from "./salescal.js";
+import { SALES, saleUrl } from "./salescal.js";
 import { UserError } from "./errors.js";
 
 export const MAX_UPCOMING_PER_SERVER = 40;
@@ -18,7 +18,7 @@ export function calendarEntries(db, userId, { from, to, guildIds = [], kinds = K
         }
     }
     if (want.has("sale")) {
-        for (const s of SALES) if (s.end >= from && s.start <= to) out.push({ kind: "sale", title: s.name, start: s.start, end: s.end, allDay: true, notes: s.note ?? "" });
+        for (const s of SALES) if (s.end >= from && s.start <= to) out.push({ kind: "sale", title: s.name, start: s.start, end: s.end, allDay: true, notes: s.note ?? "", url: saleUrl(s) });
     }
     for (const gid of guildIds) {
         if (want.has("event")) for (const e of db.listCalEvents(gid, from, to)) out.push({ kind: "event", id: e.id, guild_id: gid, title: e.title, start: e.starts_at, end: null, allDay: false, notes: e.notes ?? "", channel_id: e.channel_id });
