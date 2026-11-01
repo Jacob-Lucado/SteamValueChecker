@@ -44,16 +44,16 @@ export function createModHandlers({ db, mod, publicUrl = null }) {
             if (sub === "purge") {
                 await i.deferReply({ flags: EPHEMERAL });
                 const r = await mod.purge({ guildId: gid, actorId, channelId: o.getChannel("channel")?.id ?? i.channelId, amount: o.getInteger("amount", true), userId: o.getUser("user")?.id ?? null });
-                return i.editReply({ content: `🧹 Deleted ${r.deleted} message${r.deleted === 1 ? "" : "s"} (case #${r.case.case_no}).` });
+                return i.editReply({ content: `Deleted ${r.deleted} message${r.deleted === 1 ? "" : "s"} (case #${r.case.case_no}).` });
             }
             await i.deferReply({ flags: EPHEMERAL });
             let r, text;
-            if (sub === "warn") { r = await mod.warn({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `⚠️ Warned <@${r.case.user_id}> (case #${r.case.case_no}). They now have ${r.warnings} active warning${r.warnings === 1 ? "" : "s"}.${r.dmSent ? "" : " I could not message them."}`; }
-            else if (sub === "timeout") { r = await mod.timeout({ guildId: gid, actorId, userId: user(), duration: o.getString("duration", true), reason: reason() }); text = `🔇 Timed out <@${r.case.user_id}> for ${fmtDuration(r.case.duration_s)} (case #${r.case.case_no}).`; }
-            else if (sub === "untimeout") { r = await mod.untimeout({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `🔈 Lifted the timeout on <@${r.case.user_id}> (case #${r.case.case_no}).`; }
-            else if (sub === "kick") { r = await mod.kick({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `👢 Kicked <@${r.case.user_id}> (case #${r.case.case_no}).`; }
-            else if (sub === "ban") { r = await mod.ban({ guildId: gid, actorId, userId: user(), reason: reason(), deleteDays: o.getInteger("delete_days") ?? 0 }); text = `🔨 Banned <@${r.case.user_id}> (case #${r.case.case_no}).`; }
-            else if (sub === "unban") { r = await mod.unban({ guildId: gid, actorId, userId: o.getString("user_id", true).trim(), reason: reason() }); text = `🕊️ Unbanned <@${r.case.user_id}> (case #${r.case.case_no}).`; }
+            if (sub === "warn") { r = await mod.warn({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `Warned <@${r.case.user_id}> (case #${r.case.case_no}). They now have ${r.warnings} active warning${r.warnings === 1 ? "" : "s"}.${r.dmSent ? "" : " I could not message them."}`; }
+            else if (sub === "timeout") { r = await mod.timeout({ guildId: gid, actorId, userId: user(), duration: o.getString("duration", true), reason: reason() }); text = `Timed out <@${r.case.user_id}> for ${fmtDuration(r.case.duration_s)} (case #${r.case.case_no}).`; }
+            else if (sub === "untimeout") { r = await mod.untimeout({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `Lifted the timeout on <@${r.case.user_id}> (case #${r.case.case_no}).`; }
+            else if (sub === "kick") { r = await mod.kick({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `Kicked <@${r.case.user_id}> (case #${r.case.case_no}).`; }
+            else if (sub === "ban") { r = await mod.ban({ guildId: gid, actorId, userId: user(), reason: reason(), deleteDays: o.getInteger("delete_days") ?? 0 }); text = `Banned <@${r.case.user_id}> (case #${r.case.case_no}).`; }
+            else if (sub === "unban") { r = await mod.unban({ guildId: gid, actorId, userId: o.getString("user_id", true).trim(), reason: reason() }); text = `Unbanned <@${r.case.user_id}> (case #${r.case.case_no}).`; }
             else return i.editReply({ content: "I do not know that command." });
             return i.editReply({ content: text, allowedMentions: { parse: [] } });
         } catch (e) {

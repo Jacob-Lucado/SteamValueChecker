@@ -7,7 +7,7 @@ import { MAX_BUNDLES } from "./bundlestore.js";
 export const verdictFor = (paid, msrp) => {
     if (!(msrp > 0)) return null;
     const off = Math.round((1 - paid / msrp) * 100);
-    return off >= 50 ? { tone: "ok", text: `Great: ${off}% under full price` } : off >= 15 ? { tone: "ok", text: `Good: ${off}% under full price` } : off >= 0 ? { tone: "", text: "About full price" } : { tone: "bad", text: "Cost more than buying the games separately" };
+    return off >= 50 ? { tone: "ok", text: `${off}% under full price, a strong buy` } : off >= 15 ? { tone: "ok", text: `${off}% under full price` } : off >= 0 ? { tone: "", text: "About full price" } : { tone: "bad", text: "Cost more than buying the games separately" };
 };
 
 /** Resolves the titles, files the new games in the library (paid split evenly, existing games keep what you paid) and saves the bundle. */

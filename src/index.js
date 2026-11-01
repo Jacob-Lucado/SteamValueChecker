@@ -257,7 +257,7 @@ client.on(Events.GuildCreate, async guild => {
             }
         } catch (e) { autoNote = e.userFacing ? e.message : "I tried to set the server up but hit a problem. Run /community setup to try again."; }
         const link = publicBase ? `${publicBase}/#/setup/${guild.id}` : null;
-        let embed = { color: 0xff9800, title: `Thanks for adding Steam Value Checker to ${guild.name}`,
+        let embed = { color: 0xff9800, title: `Steam Value Checker is now in ${guild.name}`,
             description: ["It takes about a minute to set up:", "1. In your server, run **`/setup`** and press **Create the channels for me** (or pick existing channels from the menus).", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/wishlist import`, `/value` and `/support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };
         if (auto) embed = { ...setupSummary(auto, publicBase, guild.id, MEMBERS_INTENT), title: `${guild.name} is ready`, description: "This looked like a brand-new server, so I set it up for you.\n\n" + setupSummary(auto, publicBase, guild.id, MEMBERS_INTENT).description };
         else if (autoNote) embed = { ...embed, description: embed.description + `\n\n⚠️ ${autoNote}` };

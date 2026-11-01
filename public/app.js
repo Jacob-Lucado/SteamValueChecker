@@ -363,7 +363,7 @@
         !data.personalised ? h("div", { class: "notice" }, "These are the best current discounts. ", h("a", { href: "#/steam", text: "Sign in through Steam" }), " (or add wishlist games) and they will be ranked for you.") : null,
         h("div", { class: "panel fy-filters" },
           h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Sort" }), sort,
-            chip("All-time low", st.atl, set("atl", !st.atl)), chip("Great match 80+", st.great, set("great", !st.great)), chip("On wishlist", st.wish, set("wish", !st.wish))),
+            chip("All-time low", st.atl, set("atl", !st.atl)), chip("Strong match 80+", st.great, set("great", !st.great)), chip("On wishlist", st.wish, set("wish", !st.wish))),
           h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Discount" }), ...[[0, "Any discount"], [25, "25%+"], [50, "50%+"], [75, "75%+"]].map(([n, t]) => chip(t, st.cut === n, set("cut", n))),
             h("span", { class: "fy-lab", text: "Max price" }), maxSel),
           shops.length > 1 ? h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Store" }), chip("All", st.shop === "all", set("shop", "all")), ...shops.slice(0, 12).map(x => chip(x, st.shop === x, set("shop", x)))) : null),
@@ -2735,7 +2735,7 @@
       if (!admin) {
         const title = h("input", { type: "text", maxlength: "100", placeholder: "What would you like the bot to do?" });
         const body = h("textarea", { maxlength: "1000", placeholder: "More detail (optional): what problem does it solve?" });
-        const send = h("button", { class: "btn green", text: "Send request", onclick: () => busy(send, async () => { await api("/api/requests", { title: title.value, body: body.value }); toast("Thanks! Others can vote on it now.", "ok"); load().catch(() => {}); }) });
+        const send = h("button", { class: "btn green", text: "Send request", onclick: () => busy(send, async () => { await api("/api/requests", { title: title.value, body: body.value }); toast("Saved. Others can vote on it now.", "ok"); load().catch(() => {}); }) });
         parts.push(h("div", { class: "panel" }, h("h3", { text: "Suggest a feature" }), field("Idea", title), field("Details", body),
           h("p", { class: "muted small", text: `Check the list first and vote if it's already there. You can have ${d.max} requests waiting at once. You get a message when the status changes.` }), send));
       }

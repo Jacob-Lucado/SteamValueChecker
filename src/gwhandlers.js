@@ -243,11 +243,11 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             if (kind === ID.claim) return await claim(i, Number(rest));
             if (kind === ID.confirm) {
                 const r = await giveaways.confirm(Number(rest), i.user.id);
-                return await i.update({ content: `✅ Thank you for confirming!${r.vouched ? " It was posted in the vouches channel." : ""}`, embeds: [], components: [] });
+                return await i.update({ content: `Confirmed.${r.vouched ? " It was posted in the vouches channel." : ""}`, embeds: [], components: [] });
             }
             if (kind === ID.problem) {
                 const r = await giveaways.reportProblem(Number(rest), i.user.id);
-                return await i.update({ content: `Sorry about that. ${r.hostTold ? "The host has been told and will sort it out." : "I couldn't reach the host, so please message them directly."}`, embeds: [], components: [] });
+                return await i.update({ content: `${r.hostTold ? "The host has been told and will sort it out." : "I couldn't reach the host, so please message them directly."}`, embeds: [], components: [] });
             }
         } catch (err) { await failed(i, err); }
     }

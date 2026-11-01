@@ -97,7 +97,7 @@ export function createTicketHandlers({ db, tickets, ownerId = null, publicUrl = 
             }
             if (kind === TK.rate) {
                 const r = tickets.rate(Number(a), i.user.id, Number(b));
-                return await i.update({ content: `Thanks for the ${"⭐".repeat(r)} rating!`, embeds: [], components: [] });
+                return await i.update({ content: `Rating saved: ${"⭐".repeat(r)}`, embeds: [], components: [] });
             }
         } catch (err) { await failed(i, err); }
     }

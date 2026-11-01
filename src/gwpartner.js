@@ -85,7 +85,7 @@ export function crossServerParts(g) {
     const hostLine = partner
         ? `**${g.host_name}**${links.length ? "\n" + links.map(l => md(l.label, l.url)).join(" · ") : ""}`
         : `**${g.host_name}**, host of Steam Value Checker`;
-    const author = { name: partner ? `🌐 Cross-server giveaway · hosted by ${g.host_name}` : `🌐 Cross-server giveaway · hosted by ${g.host_name}`, ...(partner && g.host_logo ? { icon_url: g.host_logo } : {}), ...(partner && links[0] ? { url: links[0].url } : {}) };
+    const author = { name: partner ? `Cross-server giveaway · hosted by ${g.host_name}` : `Cross-server giveaway · hosted by ${g.host_name}`, ...(partner && g.host_logo ? { icon_url: g.host_logo } : {}), ...(partner && links[0] ? { url: links[0].url } : {}) };
     const how = [...steps.map((s, i) => `${i + 1}. ${md(`${STEP_KINDS[s.kind]?.icon ?? "•"} ${s.label}`, s.url)}`), `${steps.length + 1}. Press **Enter giveaway** below`];
     return {
         author, hostLine,

@@ -6,7 +6,7 @@ export function grabberPromo({ base = null, url = "https://jacob-lucado.github.i
     const img = n => (root ? { image: { url: `${root}/grabber-ad-${n}.png` } } : {});
     const page = url; // the same url on every embed makes Discord show them as one gallery
     const embeds = [
-        { color: 0xff9800, url: page, author: { name: "📣 A message from the Steam Value Checker developer" }, title: "🔑 Meet FanaticalGrabber", ...img("hero"),
+        { color: 0xff9800, url: page, author: { name: "A message from the Steam Value Checker developer" }, title: "Meet FanaticalGrabber", ...img("hero"),
             description: "Got Fanatical bundles full of Steam keys? **FanaticalGrabber** is a free Chrome extension from the maker of Steam Value Checker. It reveals every key in one click, exports them, and redeems them on Steam in bulk.",
             fields: [
                 { name: "🔓 Reveal & export", value: "Reveal all keys at once, then export to **TXT, CSV, JSON, Markdown, HTML or XLSX**, or copy them.", inline: false },

@@ -40,7 +40,7 @@ export function createRequestHandlers({ db, publish = null, publicUrl = null }) 
         try {
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const id = submitRequest({ db, userId: i.user.id, userName: i.user.username, title: i.fields.getTextInputValue("title"), body: i.fields.getTextInputValue("body"), publish });
-            return void await i.editReply(`Thanks! Your idea is request **#${id}**. Others can vote with \`/feature vote id:${id}\`${publicUrl ? ` or on ${publicUrl}/#/requests` : ""}. You will get a DM when its status changes.`);
+            return void await i.editReply(`Saved. Your idea is request **#${id}**. Others can vote with \`/feature vote id:${id}\`${publicUrl ? ` or on ${publicUrl}/#/requests` : ""}. You will get a DM when its status changes.`);
         } catch (err) { await failed(i, err); }
     }
     return { handleCommand, handleModal };

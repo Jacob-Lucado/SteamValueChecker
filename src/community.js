@@ -87,7 +87,7 @@ export function rulesPayload({ server = "the server", base = null, rules = null,
     const root = base ? String(base).replace(/\/$/, "") : null;
     return {
         embeds: [{
-            color: 0xed4245, title: `📜  ${server} · Server Rules`,
+            color: 0xed4245, title: `${server} · Server Rules`,
             description: `Please follow these rules while you are here.\n\n${list}`.slice(0, 4000),
             fields: [
                 { name: "⚠️ What happens if you break them", value: "Warning → timeout → kick → ban. Serious breaks can skip straight to a ban.", inline: false },
@@ -102,11 +102,11 @@ export function rulesPayload({ server = "the server", base = null, rules = null,
 
 /** Posts in #get-help and #report-a-bug: one button each that opens the form. */
 export const helpPanel = () => ({
-    embeds: [{ color: 0x57f287, title: "🎫 Need help?", description: "Press the button to open a **private ticket**. Only you and the moderators can see it, and you get replies in your DMs.\n\nGood for: giveaway key problems, report a member, questions about the server." }],
+    embeds: [{ color: 0x57f287, title: "Need help?", description: "Press the button to open a **private ticket**. Only you and the moderators can see it, and you get replies in your DMs.\n\nGood for: giveaway key problems, report a member, questions about the server." }],
     components: [{ type: 1, components: [{ type: 2, style: 3, label: "Open a ticket", emoji: { name: "🎫" }, custom_id: "tk_open:0" }] }]
 });
 export const bugPanel = () => ({
-    embeds: [{ color: 0xfaa61a, title: "🐞 Found a bug?", description: "Press the button and tell us what went wrong with the bot. It goes straight to the bot's developer. You can also use `/bug` anywhere." }],
+    embeds: [{ color: 0xfaa61a, title: "Found a bug?", description: "Press the button and tell us what went wrong with the bot. It goes straight to the bot's developer. You can also use `/bug` anywhere." }],
     components: [{ type: 1, components: [{ type: 2, style: 4, label: "Report a bug", emoji: { name: "🐞" }, custom_id: "tk_bug" }] }]
 });
 
@@ -286,7 +286,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.honeypot, honeypotPayload());
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     await say(api, chIds.bugs, bugPanel());
-    await say(api, chIds.announcements, { embeds: [{ color: 0x4d8cff, title: "📢 Announcements", description: "News from the staff lands here. Server managers can post announcements from the dashboard.\n\nMessages marked **Official message from the bot developer** come from the person who runs Steam Value Checker, for things like planned downtime." }] });
+    await say(api, chIds.announcements, { embeds: [{ color: 0x4d8cff, title: "Announcements", description: "News from the staff lands here. Server managers can post announcements from the dashboard.\n\nMessages marked **Official message from the bot developer** come from the person who runs Steam Value Checker, for things like planned downtime." }] });
     await say(api, chIds.roles, rolePanel(selfRoles));
     await say(api, chIds.verify, verifyPanel(roleIds.verified));
     await say(api, chIds.welcome, { embeds: [{ color: 0x57f287, title: `Welcome to ${gname}`, description: `New here? Start with <#${chIds.rules}>, pick your roles in <#${chIds.roles}>, then say hi in <#${chIds.introductions}>.\n\nNew members are greeted in this channel.` }] });

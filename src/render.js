@@ -494,7 +494,7 @@ export function aboutPayload(info, { about, fanaticalUrl = null } = {}) {
 export function releaseEmbed({ title, releaseAt, best, currency, url }) {
     const lines = [`Released <t:${Math.floor(releaseAt / 1000)}:D>.`];
     lines.push(best ? `Cheapest right now: **${money(best.price, currency)}** at ${best.shop}.` : "No prices are listed yet. Your sale alerts will tell you when one appears.");
-    return { color: COLOR, title: `🎉 Now out: ${title}`, description: lines.join("\n"), url: url || undefined };
+    return { color: COLOR, title: `Now out: ${title}`, description: lines.join("\n"), url: url || undefined };
 }
 
 
@@ -547,7 +547,7 @@ export function challengeEmbed(c) {
     const bar = (done, goal) => { const n = Math.min(10, Math.round(done / goal * 10)); return "▰".repeat(n) + "▱".repeat(10 - n); };
     if (!c.goal) {
         return { color: 0xa4d007, title: "Backlog challenge", description: `No goal for ${c.month} yet. Set one with \`/library challenge goal:3\` and finish that many games this month.` +
-            (c.streak ? `\n🔥 Streak: **${c.streak}** month${c.streak === 1 ? "" : "s"}` : "") };
+            (c.streak ? `\nStreak: **${c.streak}** month${c.streak === 1 ? "" : "s"}` : "") };
     }
     const met = c.done >= c.goal;
     const hist = c.history.filter(h => h.month !== c.month).map(h => `${h.done >= h.goal ? "✅" : "▫️"} ${h.month}: ${h.done}/${h.goal}`);
@@ -555,7 +555,7 @@ export function challengeEmbed(c) {
         color: 0xa4d007, title: `Backlog challenge, ${c.month}`,
         description: `${bar(c.done, c.goal)} **${c.done}** of **${c.goal}** finished` + (met ? " Goal met." : ` · ${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left`),
         fields: [
-            { name: "Streak", value: `🔥 **${c.streak}** month${c.streak === 1 ? "" : "s"} (best ${c.best})`, inline: true },
+            { name: "Streak", value: `**${c.streak}** month${c.streak === 1 ? "" : "s"} (best ${c.best})`, inline: true },
             ...(c.titles.length ? [{ name: "Finished this month", value: c.titles.map(t => `• ${t}`).join("\n").slice(0, 1000) }] : []),
             ...(hist.length ? [{ name: "Earlier months", value: hist.join("\n") }] : [])
         ],
@@ -587,13 +587,13 @@ export function hotDealsPayload(deals) {
     const list = deals.filter(d => safeUrl(d.url)).slice(0, 6);
     if (!list.length) return null;
     const embeds = list.map((d, n) => ({
-        color: 0xe74c3c, title: `🔥 ${d.title} is ${Math.round(d.cut)}% off`.slice(0, 256), url: safeUrl(d.url),
-        description: `**${hotMoney(d.price, d.currency)}** ~~${hotMoney(d.regular, d.currency)}~~ on Steam${d.storeLow !== null && d.price <= d.storeLow + 0.001 ? "  •  🏆 lowest price on Steam" : ""}${d.expiry ? `\nEnds ${stamp(d.expiry)}` : ""}`,
+        color: 0xe74c3c, title: `${d.title} is ${Math.round(d.cut)}% off`.slice(0, 256), url: safeUrl(d.url),
+        description: `**${hotMoney(d.price, d.currency)}** ~~${hotMoney(d.regular, d.currency)}~~ on Steam${d.storeLow !== null && d.price <= d.storeLow + 0.001 ? "  •  lowest price on Steam" : ""}${d.expiry ? `\nEnds ${stamp(d.expiry)}` : ""}`,
         image: n < 3 ? { url: d.appid ? steamArt(d.appid) : itadArt(d.id) } : undefined,
         thumbnail: n >= 3 ? { url: d.appid ? steamArt(d.appid) : itadArt(d.id) } : undefined,
         footer: { text: "Big Steam discounts  •  prices in USD" }
     }));
-    return { content: list.length === 1 ? "🔥 **Hot deal on Steam**" : `🔥 **${list.length} hot deals on Steam**`, embeds };
+    return { content: list.length === 1 ? "**Hot deal on Steam**" : `**${list.length} hot deals on Steam**`, embeds };
 }
 
 /** "A Steam sale just started", from the sale calendar. */
