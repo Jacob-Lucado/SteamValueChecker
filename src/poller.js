@@ -9,7 +9,7 @@ import { isDlc } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
-import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, groupEmbed, freeGamesPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
+import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
 import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
@@ -260,7 +260,7 @@ export async function runDigests({ db, itad, notifier, now = () => Date.now(), l
             const { rows, currency } = await viewRows(db, itad, user);
             const embed = digestEmbed(rows, currency);
             if (!embed) { db.updateUser(user.discord_id, { last_digest_at: now() }); stats.skipped++; continue; }
-            const res = await notifier.deliver(user, { embeds: [embed] }, "digest");
+            const res = await notifier.deliver(user, { embeds: [embed] }, "digest", { items: digestItems(rows, currency) });
             if (res.ok) {
                 db.updateUser(user.discord_id, { last_digest_at: now() });
                 db.logAlert({ discord_id: user.discord_id, title: "Weekly digest", kind: "digest", via: res.via });

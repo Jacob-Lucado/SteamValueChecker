@@ -241,6 +241,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "verified_role_id", "TEXT");
     addColumn("community", "mod_log_channel", "TEXT");
     addColumn("users", "last_seen", "INTEGER");
+    addColumn("notifications", "extra", "TEXT");
     addColumn("users", "promo_off", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "announce_channel", "TEXT");
     addColumn("community", "rules_channel", "TEXT");
@@ -396,8 +397,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const snoozeItem = (itemId, until) => run("UPDATE items SET snooze_until = ? WHERE id = ?", until, itemId).changes;
 
     // Notification center: a copy of what the bot told this person, so it can be read later even if a DM was missed.
-    const addNotification = (userId, { type, title, body = null, url = null }) =>
-        run("INSERT INTO notifications (user_id, type, title, body, url, at) VALUES (?,?,?,?,?,?)", userId, type, String(title).slice(0, 200), body ? String(body).slice(0, 600) : null, url, now()).lastInsertRowid;
+    const addNotification = (userId, { type, title, body = null, url = null, extra = null }) =>
+        run("INSERT INTO notifications (user_id, type, title, body, url, at, extra) VALUES (?,?,?,?,?,?,?)", userId, type, String(title).slice(0, 200), body ? String(body).slice(0, 600) : null, url, now(), extra ? JSON.stringify(extra).slice(0, 20000) : null).lastInsertRowid;
     const listNotifications = (userId, limit = 60) => all("SELECT * FROM notifications WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?", userId, limit).map(clean);
     const unreadNotifications = userId => get("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read = 0", userId).n;
     const readNotifications = userId => run("UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0", userId).changes;

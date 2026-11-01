@@ -35,7 +35,7 @@ export async function viewRows(db, itad, user) {
         const now = current(s);
         return {
             owned: owned.has(it.itad_id), priority: Boolean(it.priority),
-            itad_id: it.itad_id, title: it.title, source: it.source,
+            itad_id: it.itad_id, appid: it.appid ?? null, title: it.title, source: it.source,
             best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
             alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value,
             low1y: now.low1y, low3m: now.low3m, verdict: dealVerdict(now),

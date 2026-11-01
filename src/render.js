@@ -230,12 +230,21 @@ export function giveawayEmbed({ item, giveaway }) {
 }
 
 /** Weekly digest: best sales on the wishlist. Returns null when nothing is on sale. */
+/** The games behind a digest, as plain data the dashboard can expand: picture, price, discount and a link to the deal. */
+export function digestItems(rows, currency, { limit = 25 } = {}) {
+    return rows.filter(r => r.discount > 0 && r.best).sort((a, b) => b.discount - a.discount).slice(0, limit).map(r => ({
+        gid: r.itad_id ?? null, title: r.title, image: artUrl(r) ?? null, price: money(r.best.price, currency), discount: Math.round(r.discount * 100), shop: r.best.shop,
+        low: Boolean(r.verdict && r.verdict.level === "great"), url: safeUrl(r.best.url) ?? null
+    }));
+}
+
 export function digestEmbed(rows, currency, { limit = 10 } = {}) {
     const onSale = rows.filter(r => r.discount > 0 && r.best).sort((a, b) => b.discount - a.discount);
     if (!onSale.length) return null;
     const lines = onSale.slice(0, limit).map(r => {
         const tag = r.verdict && r.verdict.level === "great" ? " (all-time low)" : "";
-        return `**${r.title}**: ${money(r.best.price, currency)} (-${Math.round(r.discount * 100)}%) at ${r.best.shop}${tag}`;
+        const link = safeUrl(r.best.url);
+        return `${link ? `[**${r.title}**](${link})` : `**${r.title}**`}: ${money(r.best.price, currency)} (-${Math.round(r.discount * 100)}%) at ${r.best.shop}${tag}`;
     });
     if (onSale.length > limit) lines.push(`…and ${onSale.length - limit} more. Open /wishlist view for the full list.`);
     return { color: COLOR, title: "Your weekly wishlist digest", description: `${onSale.length} of ${rows.length} games are on sale.\n\n${lines.join("\n")}`.slice(0, 4000), footer: { text: "Turn off with /alerts digest  •  Prices by IsThereAnyDeal" } };

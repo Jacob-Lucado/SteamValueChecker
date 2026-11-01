@@ -138,3 +138,26 @@ test("the scheduler never overlaps runs", async () => {
     assert.equal(runs, 1);
     stop();
 });
+
+test("the weekly digest links each game and keeps the games for the dashboard to expand", async () => {
+    const { digestEmbed, digestItems } = await import("../src/render.js");
+    const rows = [
+        { title: "Gore Doctor", itad_id: "id-gore", appid: 123, discount: 0.9, best: { price: 1.69, shop: "Steam", url: "https://store.steampowered.com/app/123" }, verdict: { level: "great" } },
+        { title: "No Link Game", itad_id: "id-x", discount: 0.5, best: { price: 5, shop: "Fanatical", url: "javascript:alert(1)" } },
+        { title: "Not on sale", itad_id: "id-n", discount: 0, best: { price: 9, shop: "Steam" } }
+    ];
+    const e = digestEmbed(rows, "USD");
+    assert.match(e.description, /\[\*\*Gore Doctor\*\*\]\(https:\/\/store\.steampowered\.com\/app\/123\)/);
+    assert.doesNotMatch(e.description, /javascript:/);
+    const items = digestItems(rows, "USD");
+    assert.equal(items.length, 2);
+    assert.equal(items[0].title, "Gore Doctor"); assert.equal(items[0].low, true); assert.equal(items[0].discount, 90);
+    assert.match(items[0].image, /^https:\/\/.*123/); assert.equal(items[1].url, null);
+
+    const db = openDb(":memory:"); db.ensureUser("5550001");
+    const { createNotifier } = await import("../src/notify.js");
+    const n = createNotifier({ db, discord: { sendDm: async () => {}, sendChannel: async () => {} } });
+    await n.deliver(db.getUser("5550001"), { embeds: [e] }, "digest", { items });
+    const row = db.listNotifications("5550001")[0];
+    assert.equal(JSON.parse(row.extra).items.length, 2);
+});

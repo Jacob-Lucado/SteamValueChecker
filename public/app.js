@@ -3076,6 +3076,27 @@
       .replace(/\s*\n+\s*/g, " · ").replace(/\s{2,}/g, " ").trim();
   }
 
+  // One notification. A digest carries its games, so it opens like an accordion: picture, price, discount and a link for each.
+  function noteCard(n) {
+    const when = new Date(n.at).toLocaleString();
+    if (n.items && n.items.length) {
+      const first = n.body ? plainDiscord(n.body).split("\n")[0].slice(0, 120) : "";
+      return h("details", { class: "card-link note-open" + (n.read ? "" : " unread") },
+        h("summary", {}, h("span", { class: "icon", text: TYPE_ICON[n.type] || "🔔" }),
+          h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${when}${first ? " · " + first : ""} · tap to see the games` }))),
+        h("div", { class: "note-games" }, ...n.items.map(g => h("div", { class: "note-game" },
+          g.image ? h("img", { src: g.image, alt: "", loading: "lazy", width: "120", height: "56", referrerpolicy: "no-referrer", onerror: e => e.currentTarget.remove() }) : h("span", { class: "noimg" }),
+          h("div", { class: "note-info" },
+            h("div", {}, g.url && /^https:\/\//.test(g.url) ? h("a", { href: g.url, target: "_blank", rel: "noopener noreferrer", text: g.title + " ↗" }) : h("strong", { text: g.title })),
+            h("div", { class: "muted small", text: `${g.price} · -${g.discount}% at ${g.shop}${g.low ? " · all-time low" : ""}` }),
+            g.gid ? h("a", { class: "small", href: "#/g/" + encodeURIComponent(g.gid), text: "Price history and details" }) : ""))))); 
+    }
+    const link = n.url && /^https:\/\//.test(n.url);
+    return h(link ? "a" : "div", { class: "card-link" + (n.read ? "" : " unread"), ...(link ? { href: n.url, target: "_blank", rel: "noopener noreferrer" } : {}) },
+      h("span", { class: "icon", text: TYPE_ICON[n.type] || "🔔" }),
+      h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${when}${n.body ? " · " + plainDiscord(n.body).slice(0, 160) : ""}` })));
+  }
+
   async function notificationsView() {
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("Notifications", "A copy of every alert the bot sends you, so a missed DM is never lost. Muted kinds are kept here but not sent to Discord (change that in Alert settings)."), holder);
@@ -3090,9 +3111,7 @@
             p.link ? ext(p.link, "Open in Discord") : null))) : null,
         h("p", { class: "muted small" }, "Choose what is sent to Discord in ", h("a", { href: "#/alerts", text: "Alert settings" }), "."),
         h("div", { class: "panel" }, h("h3", { text: "Recent" }),
-          d.items.length ? h("div", { class: "cards" }, ...d.items.map(n => h(n.url && /^https:\/\//.test(n.url) ? "a" : "div", { class: "card-link" + (n.read ? "" : " unread"), ...(n.url && /^https:\/\//.test(n.url) ? { href: n.url, target: "_blank", rel: "noopener noreferrer" } : {}) },
-            h("span", { class: "icon", text: TYPE_ICON[n.type] || "🔔" }),
-            h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${new Date(n.at).toLocaleString()}${n.body ? " · " + plainDiscord(n.body).slice(0, 160) : ""}` }))))) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." }))].filter(Boolean));
+          d.items.length ? h("div", { class: "cards" }, ...d.items.map(noteCard)) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." }))].filter(Boolean));
       if (d.unread) { await api("/api/notifications/read", {}); state.me.unread = 0; renderChrome(); }
     } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }

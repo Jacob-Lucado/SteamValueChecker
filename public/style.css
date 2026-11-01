@@ -835,3 +835,15 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .code-genshin { background: linear-gradient(135deg, #c9a24a, #5b4a8a); }
 .code-hsr { background: linear-gradient(135deg, #7c6bd6, #25214a); }
 .code-zzz { background: linear-gradient(135deg, #f0c419, #1b1b1b); color: #fff; }
+
+/* Expandable digest in Notifications */
+details.note-open > summary { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; list-style: none; }
+details.note-open > summary::-webkit-details-marker { display: none; }
+details.note-open > summary::after { content: "▾"; margin-left: auto; opacity: .6; transition: transform .15s; }
+details.note-open[open] > summary::after { transform: rotate(180deg); }
+.note-games { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line, rgba(128,128,128,.25)); }
+.note-game { display: flex; gap: 12px; align-items: center; }
+.note-game img, .note-game .noimg { width: 120px; height: 56px; border-radius: 6px; object-fit: cover; flex: none; background: rgba(128,128,128,.2); }
+.note-info { min-width: 0; display: grid; gap: 2px; }
+@media (max-width: 520px) { .note-game img, .note-game .noimg { width: 84px; height: 40px; } }
+details.note-open.card-link { display: block; }

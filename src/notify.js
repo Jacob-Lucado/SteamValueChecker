@@ -25,22 +25,22 @@ export function createNotifier({ db, discord }) {
     }
 
     /** Keeps a copy in the person's notification center. Never allowed to break delivery. */
-    function record(user, type, payload) {
+    function record(user, type, payload, meta = null) {
         try {
             const e = payload.embeds?.[0];
             const title = e?.title ?? (payload.content ? String(payload.content).slice(0, 120) : "Notification");
             const more = (payload.embeds?.length ?? 0) > 1 ? ` (+${payload.embeds.length - 1} more)` : "";
-            db.addNotification(user.discord_id, { type, title: title + more, body: e?.description ?? null, url: e?.url ?? null });
+            db.addNotification(user.discord_id, { type, title: title + more, body: e?.description ?? null, url: e?.url ?? null, extra: meta });
         } catch { /* the inbox is a convenience */ }
     }
 
     /** `type` is alert, bundle, free or digest. A muted type goes only to the notification center, not to a DM or channel. */
-    async function deliver(user, payload, type = "alert") {
+    async function deliver(user, payload, type = "alert", meta = null) {
         if (db.isBanned?.(user.discord_id)) return { ok: false, via: null, reason: "restricted" };
         const muted = String(user.muted ?? "").split(",").includes(type);
-        if (muted) { record(user, type, payload); return { ok: true, via: "inbox" }; }
+        if (muted) { record(user, type, payload, meta); return { ok: true, via: "inbox" }; }
         const r = await send(user, payload);
-        if (r.ok) record(user, type, payload);
+        if (r.ok) record(user, type, payload, meta);
         return r;
     }
 

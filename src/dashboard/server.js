@@ -399,7 +399,11 @@ export function createDashboard({ db, itad, rest, codes = null, drops = null, op
 
         "GET /api/notifications": async (req) => {
             const s = session(req); userRow(s);
-            return { items: db.listNotifications(s.userId, 80), unread: db.unreadNotifications(s.userId) };
+            return { items: db.listNotifications(s.userId, 80).map(({ extra, ...n }) => {
+                let items = null;
+                try { items = JSON.parse(extra ?? "null")?.items ?? null; } catch { /* old or damaged row */ }
+                return items ? { ...n, items } : n;
+            }), unread: db.unreadNotifications(s.userId) };
         },
         "POST /api/notifications/read": async (req) => { const s = session(req); userRow(s); db.readNotifications(s.userId); return { unread: 0 }; },
 
