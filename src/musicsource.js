@@ -96,7 +96,7 @@ export function createSource({ exec = run, spawnImpl = spawn } = {}) {
             }
             const out = raw.split("\n").map(s => s.trim()).filter(Boolean)[0];
             if (!out || !/^https:\/\//i.test(out)) throw new Error("Couldn't get audio for that track. It may be private or blocked in some countries.");
-            const args = ["-hide_banner", "-loglevel", "error", ...(process.env.MUSIC_HTTP_PROXY ? ["-http_proxy", process.env.MUSIC_HTTP_PROXY] : []), "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+            const args = ["-hide_banner", "-loglevel", "error", ...(process.env.MUSIC_HTTP_PROXY ? ["-http_proxy", process.env.MUSIC_HTTP_PROXY] : []), "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "4xx,5xx", "-rw_timeout", "15000000",
                 "-i", out, ...(seek > 0 ? ["-ss", String(Math.floor(seek))] : []), "-vn", "-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1"];
             const p = spawnImpl(FFMPEG, args, { stdio: ["ignore", "pipe", "pipe"] });
             let err = "";

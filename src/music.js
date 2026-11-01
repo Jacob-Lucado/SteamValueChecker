@@ -25,6 +25,7 @@ export const fmtTime = sec => {
  *  api      – bot REST: sendMessage(channelId, payload), editMessage(channelId, messageId, payload)
  */
 const LIVE_MS = 10_000;
+const EARLY_END_SECONDS = 8, MAX_RESUMES = 4; // a song ending more than this early counts as a dropped stream
 /** Discord plays Opus. Left alone the encoder picks a modest bitrate, so raise it to what the voice channel allows (SoundCloud itself tops out around 128 kbps, so more than that adds nothing). */
 export const MAX_BITRATE = 128_000;
 export function tuneEncoder(resource, channelBitrate) {
@@ -134,7 +135,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         catch (err) { return failTrack(g, track, err); }
         // Someone may have stopped everything while we were fetching.
         if (!g.connection || g.queue.current !== track) { try { s.kill(); } catch { /* */ } return null; }
-        g.stream = s; g.offset = seek; g.failures = 0;
+        g.stream = s; g.offset = seek; g.failures = 0; if (seek === 0) g.resumes = 0;
         const resource = voice.createAudioResource(s.stream, { inputType: voice.StreamType.Raw, inlineVolume: true });
         resource.volume?.setVolume((g.volume ?? 50) / 100);
         tuneEncoder(resource, getGuild(g.guildId)?.channelBitrate?.(g.voiceChannelId));
@@ -173,6 +174,16 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     }
     function onIdle(g) {
         if (g.swapping || !g.connection) return;
+        // The stream can die partway through a song (a dropped connection while fetching its pieces). That isn't the song ending, so pick it up again where it stopped.
+        const t = g.queue.current;
+        const at = g.offset + (g.resource?.playbackDuration ?? 0) / 1000;
+        if (t?.duration && at < t.duration - EARLY_END_SECONDS && (g.resumes ?? 0) < MAX_RESUMES) {
+            g.resumes = (g.resumes ?? 0) + 1;
+            log(`stream ended early at ${Math.floor(at)}s of ${t.duration}s (${g.stream?.lastError?.() || "no error"}), resuming (${g.resumes}/${MAX_RESUMES})`);
+            g.resource = null;
+            playCurrent(g, { seek: Math.floor(at) }).catch(err => log(`resume failed: ${err?.message}`));
+            return;
+        }
         g.playing = false; g.resource = null;
         const nxt = g.queue.advance();
         if (nxt) playCurrent(g).catch(err => log(`play failed: ${err?.message}`));

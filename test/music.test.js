@@ -143,10 +143,10 @@ test("playing: join, start the first track, queue the rest, post the now-playing
 test("a track ending moves to the next, and the queue running out starts the leave timer", async () => {
     const r = rig();
     await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", tracks: [T(1), T(2)] });
-    r.players[0].emit("idle");
+    r.players[0].resource.playbackDuration = 200_000; r.players[0].emit("idle"); // played all the way through
     await new Promise(x => setImmediate(x));
     assert.equal(r.m.status("g1").current.title, "Track 2");
-    r.players[0].emit("idle");
+    r.players[0].resource.playbackDuration = 200_000; r.players[0].emit("idle");
     await new Promise(x => setImmediate(x));
     assert.equal(r.m.status("g1").current, null);
     const leave = r.timers.at(-1);
@@ -312,4 +312,17 @@ test("the voice encoder is raised to the channel's bitrate, capped at 128 kbps",
     const enc = { setBitrate: n => seen.push(n), setFEC: () => {}, setPLP: () => {} };
     tuneEncoder({ encoder: enc }, 96_000); tuneEncoder({ encoder: enc }, 384_000); tuneEncoder({ encoder: enc }, null); tuneEncoder({}, 96_000);
     assert.deepEqual(seen, [96_000, 128_000, 64_000]);
+});
+
+test("a stream that dies partway through a song is resumed, not treated as the song ending", async () => {
+    const r = rig();
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", tracks: [T(1, { duration: 200 }), T(2)] });
+    r.players[0].resource.playbackDuration = 60_000; // died a minute in
+    r.players[0].emit("idle");
+    await new Promise(x => setImmediate(x));
+    assert.equal(r.m.status("g1").current.title, "Track 1", "same song, not the next one");
+    assert.equal(r.log.filter(x => x[0] === "play").length, 2);
+    // after a few drops in a row it gives up and moves on instead of looping forever
+    for (let i = 0; i < 4; i++) { r.players[0].resource.playbackDuration = 60_000; r.players[0].emit("idle"); await new Promise(x => setImmediate(x)); }
+    assert.equal(r.m.status("g1").current.title, "Track 2");
 });
