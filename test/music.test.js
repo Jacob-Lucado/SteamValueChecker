@@ -493,3 +493,14 @@ test("the old now-playing card is deleted when the next song posts its own", asy
     assert.ok(r.posts.length > before, "a new card was posted");
     assert.deepEqual(r.deleted, [["t1", "m" + before]]);
 });
+
+test("a slow SoundCloud lookup is retried once before the track fails", async () => {
+    let calls = 0;
+    const exec = async () => { calls++; if (calls === 1) throw new Error("SoundCloud took too long to answer."); return "https://cdn.example/a.mp3\n"; };
+    const fake = () => ({ stdout: {}, stderr: { on() {} }, on() {}, kill() {} });
+    const src = createSource({ exec, spawnImpl: fake });
+    const s = await src.stream({ url: "https://soundcloud.com/a/b", title: "x" });
+    assert.equal(calls, 2); assert.ok(s.stream);
+    calls = -5; // keeps timing out: the second failure goes up
+    await assert.rejects(createSource({ exec: async () => { throw new Error("SoundCloud took too long to answer."); }, spawnImpl: fake }).stream({ url: "https://soundcloud.com/a/b", title: "x" }), /too long/);
+});

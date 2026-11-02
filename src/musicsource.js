@@ -119,7 +119,9 @@ export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: p
                 return { stream: p.stdout, process: p, lastError: () => err.trim(), kill, name: r.name };
             }
             let raw;
-            try { raw = await exec(YTDLP, ["--no-warnings", "--ignore-config", "--no-playlist", "-g", "-f", "bestaudio/best", "--", track.url]); }
+            const grab = () => exec(YTDLP, ["--no-warnings", "--ignore-config", "--no-playlist", "--socket-timeout", "20", "-g", "-f", "bestaudio/best", "--", track.url], { timeoutMs: 60_000 });
+            // SoundCloud is sometimes slow to answer from a server, so a timed-out lookup gets one more go before the track is given up on.
+            try { try { raw = await grab(); } catch (e) { if (!/took too long/i.test(String(e?.message))) throw e; raw = await grab(); } }
             catch (err) {
                 const msg = String(err?.message ?? "");
                 if (/DRM|premium|subscription|Go\+/i.test(msg)) throw new Error("That track is protected (SoundCloud Go+) and can't be streamed.");
