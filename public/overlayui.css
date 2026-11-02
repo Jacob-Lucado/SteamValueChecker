@@ -1,0 +1,34 @@
+/* The stream overlay panel (public/overlayui.js). Uses the same colour variables as the dashboard and the music studio. */
+.ovp { display: block; }
+.ovp[hidden] { display: none; }
+.ovp-note { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.ovp-h { margin: 22px 0 10px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ovp-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; margin: 0 0 10px; }
+.ovp-seg-wrap { display: grid; gap: 4px; }
+.ovp-k { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ovp-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); }
+.ovp-seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 99px; cursor: pointer; }
+.ovp-seg button.on { background: var(--accent); color: #fff; }
+.ovp-stage { position: relative; height: 280px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 8px; background: conic-gradient(rgba(255, 255, 255, .07) 25%, transparent 0 50%, rgba(255, 255, 255, .07) 0 75%, transparent 0) 0 0 / 24px 24px, linear-gradient(135deg, #1c2a44, #2a1f4a); }
+.ovp-stage[data-bg="game"] { background: radial-gradient(120% 90% at 70% 20%, #3b5a3a 0, transparent 55%), radial-gradient(100% 80% at 20% 90%, #5a2f2a 0, transparent 60%), linear-gradient(180deg, #1b2a3d, #0d1520); }
+.ovp-stage[data-bg="bright"] { background: linear-gradient(135deg, #f4f7fb, #ffd98a 60%, #ff9f6b); }
+.ovp-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; background: transparent; color-scheme: normal; transform-origin: 0 0; }
+.ovp-hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; padding: 12px 16px; border-radius: 14px; background: rgba(10, 16, 28, .85); color: #f4f8fd; font-size: 14px; max-width: 86%; text-align: center; }
+.ovp-hint[hidden] { display: none; }
+.ovp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px 18px; margin: 16px 0 6px; align-items: start; }
+.ovp-field { display: grid; gap: 6px; }
+.ovp-field > label { font-size: 12.5px; color: var(--muted); }
+.ovp-field select, .ovp-field input[type=number] { width: 100%; box-sizing: border-box; height: 40px; padding: 0 12px; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--line); color: var(--text); font: inherit; }
+.ovp-field input[type=color] { padding: 2px 4px; height: 40px; width: 72px; cursor: pointer; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--line); }
+.ovp-inline { display: flex; align-items: center; gap: 10px; }
+.ovp-inline input { flex: 1; accent-color: var(--accent); }
+.ovp-val { min-width: 38px; color: var(--text); font-variant-numeric: tabular-nums; }
+.ovp-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer; }
+.ovp-anchor { display: grid; grid-template-columns: repeat(3, 26px); gap: 4px; padding: 6px; background: var(--input-bg); border: 1px solid var(--line); border-radius: 10px; width: max-content; }
+.ovp-anchor button { width: 26px; height: 18px; border-radius: 5px; border: 0; background: var(--soft-2); cursor: pointer; padding: 0; }
+.ovp-anchor button.on { background: var(--accent); }
+.ovp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ovp-url { flex: 1; min-width: 200px; height: 42px; border-radius: 99px; padding: 0 16px; background: var(--input-bg); border: 1px solid var(--line); color: var(--text); font: 13px/1 ui-monospace, Menlo, Consolas, monospace; }
+.ovp-btn { height: 42px; padding: 0 20px; border: 0; border-radius: 99px; background: linear-gradient(135deg, var(--accent), #7c6cff); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.ovp-mini { height: 32px; padding: 0 14px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.ovp-mini.bad { color: #ff8a8a; }

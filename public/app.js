@@ -3459,8 +3459,7 @@
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("Music", "Play SoundCloud songs, playlists and live radio in a voice channel. Join one in your server, then add music here or with /play."), holder);
     const big = h("a", { class: "btn blue", href: "#", target: "_blank", rel: "noopener", text: "View the big music player ↗", title: "Opens the full-screen player with session chat" });
-    const stream = h("a", { class: "btn gray", href: "#", target: "_blank", rel: "noopener", text: "Stream overlay for OBS ↗", title: "A compact now-playing card for your stream, with a link just for this server" });
-    stream.style.display = "none"; app.insertBefore(h("div", { class: "row" }, big, stream), holder);
+    app.insertBefore(h("div", { class: "row" }, big), holder);
     const fmt = sec => { sec = Math.max(0, Math.floor(sec || 0)); const hh = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return (hh ? hh + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
     const toSeconds = text => { const t = String(text).trim().toLowerCase(); if (/^\d+$/.test(t)) return Number(t); const m = t.match(/^(?:(\d+):)?(\d+):(\d{1,2})$/) || t.match(/^()(\d+):(\d{1,2})$/); if (m) return Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]); return NaN; };
     const TIERS = { manager: ["Server manager", "You can change every music setting and control the player."], moderator: ["Moderator", "You can control the player and take down any request."], dj: ["DJ", "You can control the player."], listener: ["Listener", "You can add songs and vote to skip. Only DJs, moderators and managers use the other controls when this server has a DJ role."] };
@@ -3472,7 +3471,25 @@
     const body = h("div");
     let timer = 0, tick = 0, built = false, cur = null;
     const stop = () => { clearTimeout(timer); clearInterval(tick); };
+    const closeViz = () => { if (ovViz) { ovViz.close(); ovViz = null; } };
     const alive = () => currentView() === "music" && document.body.contains(body);
+    // The OBS overlay panel lives on this page (same panel as the music studio's Stream tab). It follows what is actually playing.
+    let ov = null, ovBox = null, ovLoading = false, ovViz = null;
+    const loadOnce = (tag, attrs) => new Promise((res, rej) => { const e = document.createElement(tag); Object.assign(e, attrs); e.onload = res; e.onerror = rej; document.head.append(e); });
+    function streamPanel(d) {
+      if (!d.access?.canStream) { if (ovBox) ovBox.hidden = true; return; }
+      if (!ov) {
+        if (ovLoading) return; ovLoading = true;
+        Promise.all([window.SvcOverlayPanel ? 0 : loadOnce("script", { src: "/overlayui.js" }), document.querySelector('link[href="/overlayui.css"]') ? 0 : loadOnce("link", { rel: "stylesheet", href: "/overlayui.css" })])
+          .then(() => { ov = window.SvcOverlayPanel({ api, toast, getData: () => cur, getGuild: () => pick.value, storeKey: "svc_music_ov" }); ovBox = h("div", { class: "panel" }, h("h3", { text: "Stream overlay for OBS" }), ov.el); if (alive()) { body.append(ovBox); streamPanel(cur); } })
+          .catch(() => { ovLoading = false; });
+        return;
+      }
+      if (!ovBox.isConnected) body.append(ovBox);
+      ovBox.hidden = false; ov.update();
+      if (!ovViz && window.EventSource) { ovViz = new EventSource("/api/music/viz?guild=" + encodeURIComponent(pick.value)); ovViz.dataset = pick.value; ovViz.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.p) ov.viz(m); } catch { /* ignore */ } }; }
+      else if (ovViz && ovViz.dataset !== pick.value) { ovViz.close(); ovViz = null; ov.reload(); streamPanel(d); }
+    }
     const syncers = []; // little functions that re-check what the person is allowed to do after every refresh
     const typing = box => box && box.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
 
@@ -3482,9 +3499,9 @@
       try { d = await api("/api/music?guild=" + encodeURIComponent(pick.value)); } catch (e) { return body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
       cur = d;
       if (rebuild || !built) { built = true; build(d); } else update(d);
-      clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); }, 3000);
+      clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); else { closeViz(); ov?.destroy(); ov = ovBox = null; ovLoading = false; } }, 3000);
     }
-    const bigLink = () => { const base = state.cfg?.musicUrl || "/music"; const q = base + (base.includes("?") ? "&" : "?") + "guild=" + encodeURIComponent(pick.value); big.href = q; stream.href = q + "&tab=stream"; };
+    const bigLink = () => { const base = state.cfg?.musicUrl || "/music"; const q = base + (base.includes("?") ? "&" : "?") + "guild=" + encodeURIComponent(pick.value); big.href = q; };
     bigLink();
     pick.addEventListener("change", () => { bigLink(); try { localStorage.setItem("svc_music_guild", pick.value); } catch { /* fine */ } stop(); built = false; load(true); });
 
@@ -3566,7 +3583,7 @@
         s.autodj_submit ? h("div", { class: "lookup-row" }, q, go, find) : "", results,
         subs.length ? h("div", { class: "scroll-y tall" }, ...rows) : h("p", { class: "muted", text: "No requests right now." }), clearBtn);
     }
-    function update(d) { paintNow(d); paintQueue(d); paintReqs(d); stream.style.display = d.access?.canStream ? "" : "none"; for (const f of syncers) f(d); }
+    function update(d) { paintNow(d); paintQueue(d); paintReqs(d); streamPanel(d); for (const f of syncers) f(d); }
 
     // ----- parts that stay put while you type -----
     function addPanel(d) {
@@ -3647,7 +3664,7 @@
     }
     function build(d) {
       clearInterval(tick); syncers.length = 0;
-      body.replaceChildren(npBox, addPanel(d), stationsPanel(d), queueBox, reqBox, playlistsPanel(d), ...(d.channels ? [autoPanel(d), settingsPanel(d)] : []));
+      body.replaceChildren(npBox, addPanel(d), stationsPanel(d), queueBox, reqBox, playlistsPanel(d), ...(d.channels ? [autoPanel(d), settingsPanel(d)] : [])); streamPanel(d);
       reqBox.replaceChildren();
       update(d);
     }
