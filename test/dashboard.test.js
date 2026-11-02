@@ -605,7 +605,9 @@ test("the page has share-preview tags with the real address, plus robots and sit
     const robots = await (await t.request("/robots.txt", { raw: true })).text();
     assert.match(robots, /Disallow: \/api\//);
     assert.match(robots, new RegExp(`Sitemap: ${ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/sitemap.xml`));
-    assert.match(await (await t.request("/sitemap.xml", { raw: true })).text(), /<loc>/);
+    assert.match(robots, /Allow: \/grabber/);
+    const map = await (await t.request("/sitemap.xml", { raw: true })).text();
+    for (const p of ["/", "/grabber", "/terms.html", "/privacy.html"]) assert.ok(map.includes(`<loc>${ORIGIN}${p}</loc>`), p);
     await t.close();
 });
 
