@@ -4,6 +4,16 @@ export function publicUrlOf(raw) {
     return /^https?:\/\//i.test(v) ? v : `https://${v}`;
 }
 
+/** Where the admin panel lives: ADMIN_URL if set, else admin. in front of the public domain. Not on shared hosts like fly.dev, which cannot share a sign-in. */
+export function adminUrlOf(publicUrl, raw) {
+    if (raw) return publicUrlOf(raw);
+    try {
+        const u = new URL(publicUrl);
+        if (u.protocol !== "https:" || u.hostname === "localhost" || /^[\d.]+$/.test(u.hostname) || !u.hostname.includes(".") || /\.fly\.dev$/i.test(u.hostname)) return null;
+        return `https://admin.${u.hostname}`;
+    } catch { return null; }
+}
+
 // Reads settings from environment variables (loaded from .env by the entry points).
 export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIENT_ID", "ITAD_API_KEY"]) {
     const missing = required.filter(k => !env[k]);
@@ -28,6 +38,9 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
         dashboard: env.DASHBOARD_URL && env.DISCORD_CLIENT_SECRET ? {
             publicUrl: publicUrlOf(env.DASHBOARD_URL),
             clientSecret: env.DISCORD_CLIENT_SECRET,
+            adminUrl: adminUrlOf(publicUrlOf(env.DASHBOARD_URL), env.ADMIN_URL),
+            // One sign-in for the main site and the admin panel: the session cookie is set for the whole domain.
+            cookieDomain: env.COOKIE_DOMAIN || (adminUrlOf(publicUrlOf(env.DASHBOARD_URL), env.ADMIN_URL) ? new URL(publicUrlOf(env.DASHBOARD_URL)).hostname : null),
             port: Number(env.DASHBOARD_PORT) || 3000,
             host: env.DASHBOARD_HOST || "127.0.0.1"
         } : null,

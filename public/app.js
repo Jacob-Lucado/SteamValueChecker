@@ -3,6 +3,7 @@
   "use strict";
 
   const state = { cfg: null, me: null };
+  const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
   const app = document.getElementById("app");
 
   // The browser turns null/undefined/false passed to replaceChildren/append/prepend into the words "null", "undefined", "false".
@@ -74,7 +75,7 @@
     try { res = await fetch(path, opts); } catch { throw new Error("Could not reach the dashboard server."); }
     let data = {};
     try { data = await res.json(); } catch { /* not JSON */ }
-    if (res.status === 401) { state.me = null; renderChrome(); }
+    if (res.status === 401) { state.me = null; if (!ADMIN_MODE) renderChrome(); }
     if (res.status === 403 && data.restricted) { state.restricted = data.error; state.me = null; showRestricted(); throw new Error(data.error); }
     if (!res.ok) throw new Error(data.error || "Something went wrong.");
     return data;
@@ -2186,12 +2187,13 @@
       h("div", { class: "rule inline" }, level, refresh, copy, clear), out);
   }
 
-  async function adminView() {
+  async function adminView(opts = {}) {
     const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Admin", "Only you, the bot owner, can see this."), holder);
+    if (!opts.shell) app.replaceChildren(pageHead("Admin", "Only you, the bot owner, can see this."),
+      state.me && state.me.adminUrl ? h("div", { class: "notice" }, h("strong", { text: "There's a bigger admin panel now. " }), h("a", { href: state.me.adminUrl, text: "Open it" }), " for a sidebar, search (Ctrl+K), live system health and an audit log of what you do.") : null, holder);
     let d, ins, bugData;
     try { [d, ins, bugData] = await Promise.all([api("/api/admin/stats"), api("/api/admin/insights"), api("/api/admin/bugs")]); }
-    catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
+    catch (e) { if (opts.shell) throw e; holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
     const st = d.stats, hl = d.health || {}, bot = ins.bot || {};
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
     const when = t => (t ? new Date(t).toLocaleString() : "never");
@@ -2221,7 +2223,7 @@
     };
 
     const overview = () => [
-      bugData.newCount ? h("div", { class: "notice warn" }, h("strong", { text: `${bugData.newCount} new bug report${bugData.newCount === 1 ? "" : "s"}. ` }), h("a", { href: "#/admin", onclick: e => { e.preventDefault(); current = "bugs"; show(); }, text: "Read them" })) : null,
+      bugData.newCount ? h("div", { class: "notice warn" }, h("strong", { text: `${bugData.newCount} new bug report${bugData.newCount === 1 ? "" : "s"}. ` }), h("a", { href: opts.shell ? "#/bugs" : "#/admin", onclick: opts.shell ? undefined : (e => { e.preventDefault(); current = "bugs"; show(); }), text: "Read them" })) : null,
       h("div", { class: "grid four" }, tile("Members", st.users, `${st.activeUsers} with alerts on`), tile("Wishlist games", st.wishlistGames, `${st.uniqueGames} different games`),
         tile("Library games", st.libraryGames), tile("Servers with a channel", st.serversWithChannel),
         tile("Alerts, last 24h", st.alerts24h), tile("DM delivery", st.dmUsers, `${st.channelUsers} use the channel`), tile("DMs failing", st.usersFailingDm, "3 or more failures in a row"),
@@ -2555,6 +2557,7 @@
       return [box];
     };
     const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["music", "Music", musicTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    if (opts.shell) return { TABS, tile, table, when, n0, st, hl, bot, ins, bugData, sum, daily };
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
     const body = h("div");
@@ -2567,6 +2570,220 @@
     show();
   }
 
+
+  // ---------- the admin panel (admin.html): a sidebar app around the same pages as adminView ----------
+  const ADMIN_NAV = [
+    ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
+    ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."]]],
+    ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."]]],
+    ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
+    ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
+    ["Operations", [["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."]]]
+  ];
+  const ADMIN_PAGES = Object.fromEntries(ADMIN_NAV.flatMap(([, items]) => items.map(([id, title, icon, sub]) => [id, { title, icon, sub }])));
+  let adminCtx = null, adminCtxAt = 0, adminTimer = 0;
+
+  async function adminContext(force = false) {
+    if (!force && adminCtx && Date.now() - adminCtxAt < 45_000) return adminCtx;
+    adminCtx = await adminView({ shell: true });
+    adminCtxAt = Date.now();
+    return adminCtx;
+  }
+  const admEl = id => document.getElementById(id);
+
+  function adminCenter(title, text, ...actions) {
+    app.replaceChildren(h("div", { class: "adm-center" }, h("div", { class: "panel" }, h("h2", { text: title }), h("p", { class: "muted", text }), h("div", { class: "row" }, actions))));
+  }
+
+  async function adminBoot() {
+    try { state.cfg = await api("/api/config"); } catch (e) { return adminCenter("Can't reach the bot", e.message); }
+    try { state.me = await api("/api/me"); } catch { state.me = null; }
+    if (!state.me) return adminCenter("Admin panel", "Sign in with the Discord account that owns the bot.", h("a", { class: "btn blue big", href: "/auth/login?next=admin", text: "Sign in with Discord" }));
+    if (!state.me.isOwner) return adminCenter("Owner only", "This account isn't the bot owner, so there's nothing to see here.",
+      h("a", { class: "btn gray", href: state.cfg.siteUrl || "/", text: "Back to Steam Value Checker" }),
+      h("button", { class: "btn gray", type: "button", text: "Sign out", onclick: async () => { try { await api("/auth/logout", {}); } catch { /* already out */ } location.reload(); } }));
+    adminChrome();
+    adminRoute();
+    adminPulse();
+    setInterval(adminPulse, 30_000);
+  }
+
+  function adminChrome() {
+    const nav = admEl("admNav");
+    nav.replaceChildren(...ADMIN_NAV.flatMap(([group, items]) => [h("div", { class: "adm-group", text: group }),
+      ...items.map(([id, title, icon]) => h("a", { class: "adm-link", href: "#/" + id, "data-page": id }, h("i", { text: icon, "aria-hidden": "true" }), h("span", { text: title }), h("span", { class: "adm-badge", "data-badge": id, hidden: true })))]));
+    admEl("admFoot").replaceChildren(h("a", { href: state.cfg.siteUrl || "/", text: "← Steam Value Checker" }), h("span", { text: "Signed in as " + (state.me.user?.username || "owner") }));
+    admEl("admUser").replaceChildren(state.me.user?.avatar ? h("img", { src: state.me.user.avatar, alt: "", width: "30", height: "30", referrerpolicy: "no-referrer" }) : null, themeButton(),
+      h("button", { class: "btn gray small", type: "button", text: "Sign out", onclick: async () => { try { await api("/auth/logout", {}); } catch { /* already out */ } location.reload(); } }));
+    const shell = admEl("adm");
+    admEl("admBurger").addEventListener("click", () => shell.classList.toggle("open"));
+    admEl("admScrim").addEventListener("click", () => shell.classList.remove("open"));
+    admEl("admSearch").addEventListener("click", () => adminPalette());
+    document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); adminPalette(); } });
+  }
+
+  /** The little status light in the top bar, and the badge on Bug reports. */
+  async function adminPulse() {
+    const box = admEl("admStatus");
+    try {
+      const sys = await api("/api/admin/system");
+      const b = sys.bot || {};
+      box.replaceChildren(h("i", { class: "adm-dot ok", "aria-hidden": "true" }), h("span", { class: "txt", text: `Online${b.pingMs != null ? " · " + b.pingMs + " ms" : ""}${b.servers != null ? " · " + b.servers + " servers" : ""}` }));
+    } catch (e) { box.replaceChildren(h("i", { class: "adm-dot bad", "aria-hidden": "true" }), h("span", { class: "txt", text: "Can't reach the bot" })); }
+    try {
+      const n = (await api("/api/admin/bugs")).newCount || 0, badge = document.querySelector('[data-badge="bugs"]');
+      if (badge) { badge.hidden = !n; badge.textContent = String(n); }
+    } catch { /* the badge is a nicety */ }
+  }
+
+  function adminRoute() {
+    clearTimeout(adminTimer);
+    admEl("adm").classList.remove("open");
+    const id = (location.hash.replace(/^#\/?/, "").split(/[/?]/)[0]) || "overview";
+    const page = ADMIN_PAGES[id] ? id : "overview";
+    document.querySelectorAll(".adm-link").forEach(a => { const on = a.dataset.page === page; a.classList.toggle("active", on); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); });
+    const meta = ADMIN_PAGES[page];
+    document.title = `${meta.title} · Admin · Steam Value Checker`;
+    admEl("admCrumb").replaceChildren("Admin / ", h("b", { text: meta.title }));
+    const body = h("div", {}, h("p", { class: "muted", text: "Loading…" }));
+    const refresh = h("button", { class: "btn gray small", type: "button", text: "Refresh", onclick: () => { adminCtx = null; adminRoute(); adminPulse(); } });
+    app.replaceChildren(h("div", { class: "adm-head" }, h("div", {}, h("h1", { text: meta.title }), h("p", { text: meta.sub })), h("div", { class: "adm-actions" }, refresh)), body);
+    window.scrollTo({ top: 0, behavior: "instant" });
+    const draw = nodes => body.replaceChildren(...nodes);
+    const fail = e => body.replaceChildren(h("div", { class: "notice warn", text: e.message || "Something went wrong." }));
+    if (page === "system") return void adminSystem(body, fail);
+    if (page === "audit") return void adminAudit(body);
+    adminContext().then(ctx => {
+      const tab = ctx.TABS.find(t => t[0] === page);
+      const nodes = tab[2]();
+      if (page === "overview") {
+        // Quick doors first, then the headline numbers, then the charts.
+        const firstGrid = nodes.findIndex(n => n && n.classList && n.classList.contains("grid"));
+        nodes.splice(firstGrid + 1, 0, ...adminTrends(ctx));
+        nodes.unshift(adminQuick(ctx));
+      }
+      draw(nodes);
+    }).catch(fail);
+  }
+
+  /** One-click doors to the things you do most. */
+  function adminQuick(ctx) {
+    const q = (href, title, text, extra = {}) => h("a", { href, ...extra }, h("b", { text: title }), h("span", { text }));
+    return h("div", { class: "adm-quick" },
+      q("#/announce", "Announce something", "Message members and servers"),
+      q("#/giveaway", "Start a giveaway", "Network-wide, all servers"),
+      q("#/bugs", ctx.bugData.newCount ? `${ctx.bugData.newCount} new bug report${ctx.bugData.newCount === 1 ? "" : "s"}` : "Bug reports", `${ctx.bugData.open} open`),
+      q("/api/admin/backup", "Download the backup", "The latest database copy", { download: "" }));
+  }
+  function adminTrends(ctx) {
+    return [h("div", { class: "grid two" },
+      h("div", { class: "panel" }, h("h3", { text: "New members per day" }), ctx.daily(ctx.ins.signups, "New members", "s0")),
+      h("div", { class: "panel" }, h("h3", { text: "Alerts sent per day" }), ctx.daily(ctx.ins.alerts, "Alerts", "s1")))];
+  }
+
+  async function adminSystem(body, fail) {
+    const draw = async () => {
+      const sys = await api("/api/admin/system");
+      if (!document.body.contains(body)) return;
+      const p = sys.process, b = sys.bot || {};
+      const up = s => { const d = Math.floor(s / 86400), hr = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d}d ${hr}h` : hr ? `${hr}h ${m}m` : `${m}m`; };
+      const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
+      const lagBad = p.lagMs > 100;
+      body.replaceChildren(
+        h("div", { class: "grid four" }, tile("Uptime", up(p.uptimeS), b.version ? "Version " + b.version : p.node), tile("Discord ping", b.pingMs != null ? b.pingMs + " ms" : "–", b.servers != null ? b.servers + " servers" : null),
+          tile("Memory", p.rssMb + " MB", `${p.heapMb} MB of ${p.heapLimitMb} MB heap`), tile("Event loop lag", p.lagMs + " ms", lagBad ? "Slow: something is blocking" : "Healthy")),
+        h("div", { class: "grid four" }, tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
+        h("div", { class: "panel" }, h("h3", { text: "Recent errors" }),
+          sys.errors.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Where" }), h("th", { text: "When" })])), h("tbody", {}, sys.errors.map(e => h("tr", {}, h("td", { text: String(e.where) }), h("td", { text: new Date(e.at).toLocaleString() })))))) : h("p", { class: "muted", text: "None since the bot started." })),
+        h("p", { class: "muted small", text: "This page refreshes by itself every 10 seconds." }));
+      adminTimer = setTimeout(() => draw().catch(() => {}), 10_000);
+    };
+    try { await draw(); } catch (e) { fail(e); }
+  }
+
+  async function adminAudit(body) {
+    const rows = [];
+    let more = false, q = "";
+    const list = h("div"), search = h("input", { type: "search", placeholder: "Filter by action, person or detail", "aria-label": "Filter the audit log" });
+    const more$ = h("button", { class: "btn gray small", type: "button", text: "Load older" });
+    const csv = h("button", { class: "btn gray small", type: "button", text: "Download CSV" });
+    const paint = () => {
+      list.replaceChildren(rows.length ? h("div", { class: "scroll-y tall" }, h("table", {}, h("thead", {}, h("tr", {}, ["When", "Action", "Target", "Details"].map(c => h("th", { text: c })))),
+        h("tbody", {}, rows.map(r => h("tr", {}, h("td", { text: new Date(r.at).toLocaleString() }), h("td", {}, h("b", { text: r.action })), h("td", { text: r.target || "–" }), h("td", { class: "adm-audit-detail", text: r.detail || "" })))))) : h("p", { class: "muted", text: q ? "Nothing matches." : "Nothing yet. Actions you take in this panel show up here." }));
+      more$.hidden = !more;
+    };
+    const load = async reset => {
+      if (reset) rows.length = 0;
+      const before = rows.length ? rows[rows.length - 1].id : "";
+      const r = await api(`/api/admin/audit?q=${encodeURIComponent(q)}${before ? "&before=" + before : ""}`);
+      rows.push(...r.rows); more = r.more; paint();
+    };
+    let t = 0;
+    search.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { q = search.value.trim(); load(true).catch(e => toast(e.message, "bad")); }, 250); });
+    more$.addEventListener("click", () => busy(more$, () => load(false)));
+    csv.addEventListener("click", () => {
+      const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const text = ["when,action,target,details", ...rows.map(r => [new Date(r.at).toISOString(), r.action, r.target, r.detail].map(esc).join(","))].join("\n");
+      const a = h("a", { href: URL.createObjectURL(new Blob([text], { type: "text/csv" })), download: "admin-audit-log.csv" }); document.body.append(a); a.click(); a.remove();
+    });
+    body.replaceChildren(h("div", { class: "panel" }, h("div", { class: "lookup-row" }, search, csv), list, h("div", { class: "row" }, more$)));
+    try { await load(true); } catch (e) { list.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  /** Ctrl+K: jump to a page, run a quick action, or look someone up by Discord ID. */
+  function adminPalette() {
+    if (document.querySelector(".adm-pal-back")) return;
+    const items = [
+      ...Object.entries(ADMIN_PAGES).map(([id, m]) => ({ label: m.title, hint: "Page", run: () => { location.hash = "#/" + id; } })),
+      { label: "Download the latest backup", hint: "Action", run: () => { location.href = "/api/admin/backup"; } },
+      { label: "Switch light / dark theme", hint: "Action", run: () => { window.svcTheme && window.svcTheme.toggle(); } },
+      { label: "Open Steam Value Checker", hint: "Link", run: () => { location.href = state.cfg.siteUrl || "/"; } }];
+    const input = h("input", { type: "text", placeholder: "Type a page, an action, or paste a Discord ID…", "aria-label": "Search the admin panel", autocomplete: "off", spellcheck: "false" });
+    const ul = h("ul", { role: "listbox" });
+    let shown = [], at = 0;
+    const close = () => back.remove();
+    const choose = it => { close(); it.run(); };
+    const paint = () => {
+      const q = input.value.trim().toLowerCase(), id = input.value.replace(/\D/g, "");
+      shown = items.filter(i => !q || i.label.toLowerCase().includes(q));
+      if (/^\d{5,25}$/.test(id)) shown.unshift({ label: `Look up member ${id}`, hint: "Person", run: () => adminMemberCard(id) });
+      at = Math.min(at, Math.max(0, shown.length - 1));
+      ul.replaceChildren(...(shown.length ? shown.map((it, i) => h("li", { class: i === at ? "on" : "", role: "option", onclick: () => choose(it) }, it.label, h("small", { text: it.hint }))) : [h("li", {}, "Nothing matches.")]));
+    };
+    input.addEventListener("input", () => { at = 0; paint(); });
+    input.addEventListener("keydown", e => {
+      if (e.key === "Escape") return close();
+      if (e.key === "ArrowDown") { e.preventDefault(); at = Math.min(shown.length - 1, at + 1); paint(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); at = Math.max(0, at - 1); paint(); }
+      else if (e.key === "Enter" && shown[at]) { e.preventDefault(); choose(shown[at]); }
+    });
+    const back = h("div", { class: "adm-pal-back", onclick: e => { if (e.target === back) close(); } },
+      h("div", { class: "adm-pal" }, input, ul, h("div", { class: "adm-pal-foot" }, h("span", {}, h("kbd", { text: "↑↓" }), " move"), h("span", {}, h("kbd", { text: "Enter" }), " open"), h("span", {}, h("kbd", { text: "Esc" }), " close"))));
+    document.body.append(back);
+    paint(); input.focus();
+  }
+
+  /** A quick look at one person from the palette, with the actions you would reach for. */
+  async function adminMemberCard(id) {
+    const back = h("div", { class: "adm-pal-back", onclick: e => { if (e.target === back) back.remove(); } });
+    const card = h("div", { class: "adm-card-modal" }, h("p", { class: "muted", text: "Looking them up…" }));
+    back.append(card); document.body.append(back);
+    document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { back.remove(); document.removeEventListener("keydown", esc); } });
+    const draw = u => {
+      const act = (label, action, cls = "gray") => h("button", { class: `btn ${cls} small`, type: "button", text: label, onclick: ev => busy(ev.currentTarget, async () => { draw(await api("/api/admin/user", { id: u.id, action })); toast("Done.", "ok"); }) });
+      const ban = h("button", { class: "btn small " + (u.banned ? "green" : "red"), type: "button", text: u.banned ? "Lift restriction" : "Restrict", onclick: ev => busy(ev.currentTarget, async () => {
+        if (u.banned) await api("/api/admin/ban", { id: u.id, ban: false });
+        else { const r = prompt("Why are you restricting this person? (optional, only you see it)"); if (r === null) return; await api("/api/admin/ban", { id: u.id, ban: true, reason: r }); }
+        u.banned = !u.banned; draw(u);
+      }) });
+      const t = (k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }));
+      card.replaceChildren(h("h3", { text: "Member " + u.id }), u.banned ? h("div", { class: "notice warn", text: "This person is restricted." }) : null,
+        h("div", { class: "grid four" }, t("Wishlist", u.wishlist), t("Library", u.library), t("Alerts", u.alerts), t("Failed DMs", u.dmFailures)),
+        h("p", { class: "muted small", text: `Region ${u.region} · ${u.delivery} · language ${u.lang} · ${u.paused ? "alerts paused" : "alerts on"} · joined ${new Date(u.joined).toLocaleDateString()}` }),
+        h("div", { class: "row" }, act("Reset failed DMs", "reset_dm"), u.paused ? act("Resume alerts", "resume", "green") : act("Pause alerts", "pause"), ban));
+    };
+    try { draw(await api("/api/admin/user?id=" + encodeURIComponent(id))); } catch (e) { card.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
 
   // ---------- giveaways ----------
   // ---------- giveaway designer pieces, shared by the server form and the owner form ----------
@@ -2880,7 +3097,11 @@
       const tile = (icon, k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }));
       holder.className = "about-page";
       holder.replaceChildren(
-        h("img", { class: "about-banner", src: "/banner.png", alt: "Steam Value Checker" }),
+        // Drawn in the page rather than shown as a picture, so it stays sharp on any screen.
+        h("div", { class: "about-banner-live", role: "img", "aria-label": "Steam Value Checker: MSRP, sale price and cheapest price now" },
+          h("i", { class: "ab-ring r1", "aria-hidden": "true" }), h("i", { class: "ab-ring r2", "aria-hidden": "true" }),
+          h("img", { class: "ab-tag", src: "/tag.svg", alt: "", width: "108", height: "120" }),
+          h("div", { class: "ab-text" }, h("div", { class: "ab-title", text: "Steam Value Checker" }), h("div", { class: "ab-sub", text: "MSRP, sale price and cheapest price now" }), h("div", { class: "ab-note", text: "Works with FanaticalGrabber exports" }))),
         h("div", { class: "panel about" },
           h("div", { class: "about-head" },
             h("img", { class: "about-logo", src: "/logo.png", alt: "", width: "84", height: "84" }),
@@ -4610,6 +4831,6 @@
     document.addEventListener("visibilitychange", beat);
   })();
 
-  window.addEventListener("hashchange", route);
-  boot();
+  if (ADMIN_MODE) { window.addEventListener("hashchange", adminRoute); adminBoot(); }
+  else { window.addEventListener("hashchange", route); boot(); }
 })();

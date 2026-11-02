@@ -8,6 +8,7 @@ import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes, createHash } from "node:crypto";
 import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import v8 from "node:v8";
 import { join as joinPath } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -85,6 +86,7 @@ const FILES = {
     "/creator.png": ["creator.png", "image/png"],
     "/creator-bg.webp": ["creator-bg.webp", "image/webp"],
     "/banner.png": ["banner.png", "image/png"],
+    "/tag.svg": ["tag.svg", "image/svg+xml"],
     "/multikey.png": ["multikey.png", "image/png"],
     "/grabber-ad-hero.png": ["grabber-ad-hero.png", "image/png"],
     "/grabber-ad-cart.png": ["grabber-ad-cart.png", "image/png"],
@@ -92,6 +94,8 @@ const FILES = {
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
+    "/admin": ["admin.html", "text/html; charset=utf-8"],
+    "/admin.css": ["admin.css", "text/css; charset=utf-8"],
     "/grabber": ["grabber.html", "text/html; charset=utf-8"],
     "/grabber.html": ["grabber.html", "text/html; charset=utf-8"],
     "/grabber.css": ["grabber.css", "text/css; charset=utf-8"],
@@ -140,6 +144,12 @@ const isManager = g => {
 
 export function createDashboard({ emojigg = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
+    // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
+    const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
+    const adminHost = adminOrigin ? new URL(adminOrigin).host.toLowerCase() : null;
+    const cookieDomain = config.cookieDomain && adminHost && adminHost.endsWith("." + config.cookieDomain) ? config.cookieDomain : null;
+    const onAdminHost = req => Boolean(adminHost) && String(req?.headers?.host ?? "").toLowerCase() === adminHost;
+    const adminHome = adminOrigin ? adminOrigin + "/" : "/admin";
     const secure = origin.startsWith("https://");
     const sessions = new Map();
     const states = new Map();
@@ -161,6 +171,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     const setCookie = (res, name, value, maxAgeS) => {
         const parts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly", "SameSite=Lax", `Max-Age=${maxAgeS}`];
         if (secure) parts.push("Secure");
+        if (cookieDomain && name === COOKIE) parts.push(`Domain=${cookieDomain}`);
         const prev = res.getHeader("Set-Cookie") ?? [];
         res.setHeader("Set-Cookie", [...(Array.isArray(prev) ? prev : [prev]), parts.join("; ")]);
     };
@@ -184,7 +195,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             "Cross-Origin-Opener-Policy": "same-origin",
             ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
             // The data and sign-in endpoints never belong in a search result, even if something links to them.
-            ...(/^\/(api|auth)\//.test(path) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
+            ...(/^\/(api|auth)\//.test(path) || /^\/admin(\.css)?(\?|$)/.test(path) || onAdminHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
             "Content-Security-Policy":
                 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
                 "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'",
@@ -254,7 +265,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         if (!type.startsWith("application/json") || req.headers["x-requested-with"] !== "dashboard") {
             throw new HttpError(403, "Request blocked.");
         }
-        if (req.headers.origin && req.headers.origin !== origin) throw new HttpError(403, "Request blocked.");
+        if (req.headers.origin && req.headers.origin !== origin && req.headers.origin !== adminOrigin) throw new HttpError(403, "Request blocked.");
     }
 
     function cooldown(userId, key) {
@@ -299,6 +310,15 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         try { const value = await fn(); memo.set(key, { value, until: Date.now() + ttl }); if (memo.size > 2000) memo.delete(memo.keys().next().value); return value; }
         catch (err) { if (hit) return hit.value; throw err; } // Discord is busy: show the last answer rather than an error
     };
+    const AUDIT_FIELDS = ["id", "ban", "action", "audience", "guild_id", "status", "kind", "reason", "title"];
+    function auditAdmin(req, path, body) {
+        try {
+            const s = session(req);
+            if (body && isHidden(String(body.guild_id ?? ""))) return;
+            const detail = Object.entries(body ?? {}).filter(([k, v]) => AUDIT_FIELDS.includes(k) && ["string", "number", "boolean"].includes(typeof v) && String(v).length <= 120).map(([k, v]) => `${k}=${v}`).join(" ");
+            db.logAudit({ actor: s.userId, action: path.replace("/api/admin/", ""), target: body?.id ?? body?.guild_id ?? null, detail: detail || null });
+        } catch { /* the action already happened; a missing log line must not undo it */ }
+    }
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
     const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
@@ -398,6 +418,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
         "GET /api/config": async () => ({
             regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
+            siteUrl: origin,
             help: HELP, about: ABOUT, extension: { latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST },
             privacy: PRIVACY.split("\n").filter(l => !/github\.com/i.test(l)).join("\n"), maxUploadChars: MAX_UPLOAD_CHARS,
             // View Channel + Send Messages + Embed Links, the least the bot needs to post alerts
@@ -418,6 +439,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 games: db.countItems(s.userId),
                 servers: serversFor(s, u),
                 isOwner: isOwner(s),
+                adminUrl: isOwner(s) ? (adminOrigin ? adminOrigin + "/" : origin + "/admin") : null,
                 steamOnly: Boolean(s.steamOnly),
                 giveaways: Boolean(giveaways),
                 library: db.countLibrary(s.userId),
@@ -2008,6 +2030,30 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         },
 
         // ----- owner -----
+        // A trail of what the owner did in the admin panel. Only short, harmless fields are kept: never prize keys or message text.
+        "GET /api/admin/audit": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const before = Number(url.searchParams.get("before")) || null;
+            const rows = db.listAudit({ limit: 50, before, q: url.searchParams.get("q") ?? "" });
+            return { rows, more: rows.length === 50 };
+        },
+        // How the bot itself is doing right now: process, memory, sign-ins and the event loop.
+        "GET /api/admin/system": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const mem = process.memoryUsage(), heap = v8.getHeapStatistics();
+            const lag = await new Promise(r => { const t0 = process.hrtime.bigint(); setImmediate(() => r(Number(process.hrtime.bigint() - t0) / 1e6)); });
+            const t = now();
+            let live = 0; for (const v of sessions.values()) if (v.expires > t) live++;
+            return {
+                process: { uptimeS: Math.round(process.uptime()), rssMb: Math.round(mem.rss / 1048576), heapMb: Math.round(mem.heapUsed / 1048576), heapLimitMb: Math.round(heap.heap_size_limit / 1048576), node: process.version, platform: process.platform, lagMs: Math.round(lag * 10) / 10 },
+                sessions: { signedIn: live, steamOnly: [...sessions.values()].filter(v => v.expires > t && v.steamOnly).length },
+                bot: botInfo ? botInfo() : null,
+                errors: ops ? (ops.snapshot()?.errors ?? []).slice(0, 10) : [],
+                admin: { host: adminHost, sharedCookie: Boolean(cookieDomain) }
+            };
+        },
         "GET /api/admin/stats": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -2340,6 +2386,8 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     // ---------- auth ----------
     async function login(req, res) {
         sweep();
+        // Sent here from the admin panel: after signing in, go back there.
+        if (new URL(req.url, origin).searchParams.get("next") === "admin") setCookie(res, NEXT_COOKIE, "admin", 600);
         const state = randomBytes(24).toString("hex");
         states.set(state, now() + 10 * 60_000);
         setCookie(res, STATE_COOKIE, state, 600);
@@ -2405,6 +2453,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             catch (err) { log(`Could not link Discord roles for a Steam sign-in (${err.status ?? err.name})`, "warn"); return send(res, 302, "", { Location: "/#/steam?roles=failed" }); }
             return send(res, 302, "", { Location: "/#/steam?roles=1" });
         }
+        if (cookies(req)[NEXT_COOKIE] === "admin") { setCookie(res, NEXT_COOKIE, "", 0); return send(res, 302, "", { Location: adminHome }); }
         send(res, 302, "", { Location: "/#/mypage" });
     }
 
@@ -2464,7 +2513,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
 
     // ---------- static ----------
     const zcache = new Map(); // `${file}:${encoding}` -> the compressed page code, made once
-    async function serveFile(res, path) {
+    async function serveFile(res, path, extra = {}) {
         const [file, type] = FILES[path];
         let body = cache.get(file);
         if (!body) {
@@ -2476,7 +2525,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         }
         const etag = cache.get(file + ":etag");
         const text = /\.(js|css|html)$/.test(file);
-        const headers = { "Content-Type": type, "Cache-Control": text ? "no-cache" : "public, max-age=3600", ETag: etag };
+        const headers = { "Content-Type": type, "Cache-Control": text ? "no-cache" : "public, max-age=3600", ETag: etag, ...extra };
         if (res.req?.headers?.["if-none-match"] === etag) return send(res, 304, "", { ETag: etag, "Cache-Control": headers["Cache-Control"] });
         const enc = COMPRESSIBLE.test(type) ? encodingOf(res.req) : null;
         if (enc) {
@@ -2546,9 +2595,10 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 const page = url.pathname.endsWith(".html") ? legalFramePage(kind, origin) : legalPage(kind, origin); // .html shows the PDF, the plain path the same text as a web page
                 if (page) return send(res, 200, page, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
+            if (req.method === "GET" && (url.pathname === "/admin" || (url.pathname === "/" && onAdminHost(req)))) return await serveFile(res, "/admin", { "Cache-Control": "no-store" });
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();
@@ -2569,6 +2619,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 const r = apiLimit.hit(sessions.has(sid) ? `s:${sid}` : `ip:${clientIp(req)}`);
                 if (!r.ok) throw new HttpError(429, `Too many requests. Try again in ${r.retryAfterS}s.`);
             }
+            if (key === "GET /auth/login" && onAdminHost(req)) return send(res, 302, "", { Location: `${origin}/auth/login?next=admin` }); // sign-in happens on the main address
             if (key === "GET /auth/login") return await login(req, res);
             if (key === "GET /auth/callback") return await callback(req, res, url);
             if (key === "GET /auth/linked") return await linkedStart(req, res);
@@ -2709,7 +2760,9 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 checkWrite(req);
                 body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
             }
-            json(res, 200, await handler(req, body, url));
+            const out = await handler(req, body, url);
+            if (req.method === "POST" && url.pathname.startsWith("/api/admin/")) auditAdmin(req, url.pathname, body);
+            json(res, 200, out);
         } catch (err) {
             const e = toHttp(err);
             json(res, e.status, e.restricted ? { error: e.message, restricted: true } : { error: e.message });

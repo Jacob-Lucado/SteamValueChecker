@@ -181,3 +181,12 @@ test("a dashboard address typed without https still loads as https", async () =>
     assert.equal(loadConfig({ ...base, DASHBOARD_URL: "steamvaluechecker.com" }).dashboard.publicUrl, "https://steamvaluechecker.com");
     assert.equal(loadConfig({ ...base, DASHBOARD_URL: " https://steamvaluechecker.com/ " }).dashboard.publicUrl, "https://steamvaluechecker.com");
 });
+
+test("the admin address defaults to admin. in front of a real domain, never on fly.dev or a bare IP", async () => {
+    const { adminUrlOf } = await import("../src/config.js");
+    assert.equal(adminUrlOf("https://steamvaluechecker.com"), "https://admin.steamvaluechecker.com");
+    assert.equal(adminUrlOf("https://steamvaluechecker.fly.dev"), null);
+    assert.equal(adminUrlOf("http://127.0.0.1:3000"), null);
+    assert.equal(adminUrlOf("http://localhost:3000"), null);
+    assert.equal(adminUrlOf("https://steamvaluechecker.com", "panel.example.org"), "https://panel.example.org");
+});

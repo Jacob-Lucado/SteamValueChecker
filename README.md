@@ -322,6 +322,8 @@ fly deploy
 
 Add `https://YOUR-DOMAIN/auth/callback` as a redirect under OAuth2 in the Discord Developer Portal.
 
+**Admin panel.** The owner's tools live in their own panel: `https://admin.YOUR-DOMAIN` when the bot runs on a real domain (or `/admin` on the main address anywhere else). To use the subdomain, add a CNAME for `admin` pointing at your Fly app, add the certificate (`fly certs add admin.YOUR-DOMAIN`), and nothing else: sign-in happens on the main address and a cookie for the whole domain carries it over. Optional settings: `ADMIN_URL` (use a different address) and `COOKIE_DOMAIN` (the domain the shared sign-in cookie covers; it defaults to the main address's host). Everything done in the panel is written to an audit log, and the panel is never indexed by search engines.
+
 
 ### Price insight, ProtonDB and the status page
 

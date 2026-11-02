@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" data-mode="admin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Steam Value Checker</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0f1724">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/admin.css">
+<script src="/theme.js"></script>
+</head>
+<body class="adm-body">
+<div class="adm" id="adm">
+  <aside class="adm-side" id="admSide" aria-label="Admin menu">
+    <a class="adm-brand" href="#/overview"><img src="/logo.png" alt="" width="34" height="34"><span><b>Steam Value Checker</b><small>Admin panel</small></span></a>
+    <nav id="admNav" aria-label="Admin pages"></nav>
+    <div class="adm-side-foot" id="admFoot"></div>
+  </aside>
+  <div class="adm-scrim" id="admScrim"></div>
+  <div class="adm-main">
+    <header class="adm-top">
+      <button class="adm-burger" id="admBurger" type="button" aria-label="Open the menu">☰</button>
+      <div class="adm-crumb" id="admCrumb"></div>
+      <button class="adm-search" id="admSearch" type="button"><span>Search pages, people, actions…</span><kbd>Ctrl K</kbd></button>
+      <div class="adm-status" id="admStatus"></div>
+      <div class="adm-user" id="admUser"></div>
+    </header>
+    <main id="app" class="adm-content"><p class="muted">Loading…</p></main>
+  </div>
+</div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<noscript><p class="page">The admin panel needs JavaScript.</p></noscript>
+<script src="/app.js" defer></script>
+</body>
+</html>

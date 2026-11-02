@@ -77,7 +77,7 @@ async function setup({ sendFails = false, guildsOf, config = {}, giveawayService
         return request(`/auth/callback?code=good&state=${state}`);
     }
 
-    return { db, dash, base, request, signIn, sent, advance: ms => { clock += ms; }, close: () => dash.close() };
+    return { db, dash, base, cookie: () => cookie, request, signIn, sent, advance: ms => { clock += ms; }, close: () => dash.close() };
 }
 
 test("static files, security headers, and nothing outside the allowlist", async () => {
@@ -361,6 +361,13 @@ test("applySteamImport stores games, prunes only on a complete import", () => {
 });
 
 // ---------- newer features ----------
+import nodeHttp from "node:http";
+/** A GET that says which address it was sent to, the way a browser on admin.example would. */
+const getAs = (t, host, path) => new Promise((resolve, reject) => {
+    const u = new URL(t.base);
+    const req = nodeHttp.request({ host: u.hostname, port: u.port, path, method: "GET", headers: { Host: host, Cookie: t.cookie?.() ?? "" } }, res => { let body = ""; res.on("data", c => { body += c; }); res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body })); });
+    req.on("error", reject); req.end();
+});
 const signedIn = async (opts) => { const t = await setup(opts); await t.signIn(); return t; };
 
 test("settings: quiet hours, digest and sharing are validated and saved", async () => {
@@ -1575,6 +1582,51 @@ test("safety headers: noindex on data and sign-in routes, locked-down browser fe
         assert.match(sec, /^Contact: https:\/\/x\.com\/twit_user69$/m);
         assert.match(sec, /^Expires: \d{4}-/m);
     } finally { await t.close(); }
+});
+
+test("admin panel: own address, sign-in handoff, audit trail, system page, and nothing for anyone else", async () => {
+    const cfg = { ownerId: "u1", adminUrl: "https://admin.bot.example", cookieDomain: "bot.example" };
+    const o = await signedIn({ config: cfg });
+    try {
+        const onAdmin = { Host: "admin.bot.example" };
+        const home = await getAs(o, onAdmin.Host, "/");
+        assert.match(home.body, /data-mode="admin"/);
+        assert.equal(home.headers["x-robots-tag"], "noindex, nofollow");
+        assert.equal(home.headers["cache-control"], "no-store");
+        assert.match(await (await o.request("/admin", { raw: true })).text(), /data-mode="admin"/, "also reachable at /admin on the main address");
+        assert.doesNotMatch(await (await o.request("/", { raw: true })).text(), /data-mode="admin"/, "the main address still shows the dashboard");
+        const login = await getAs(o, onAdmin.Host, "/auth/login");
+        assert.equal(login.status, 302);
+        assert.equal(login.headers.location, `${ORIGIN}/auth/login?next=admin`, "sign-in happens on the main address");
+        assert.match((await o.request("/robots.txt", { raw: true }).then(r => r.text())), /Disallow: \/admin/);
+
+        o.db.ensureUser("5550001");
+        assert.equal((await o.request("/api/admin/user", { method: "POST", body: { id: "5550001", action: "pause" }, headers: { Origin: "https://admin.bot.example" } })).status, 200, "the admin address may make changes");
+        assert.equal((await o.request("/api/admin/user", { method: "POST", body: { id: "5550001", action: "resume" }, headers: { Origin: "https://evil.example" } })).status, 403);
+        await o.request("/api/admin/broadcast", { method: "POST", body: { title: "Update", body: "SECRET-MESSAGE-TEXT", audience: "me", confirm: "" } }); // may fail; the text must never be logged either way
+        const audit = await o.request("/api/admin/audit");
+        assert.equal(audit.status, 200);
+        assert.equal(audit.data.rows[0].action, "user");
+        assert.match(audit.data.rows[0].detail, /action=pause/);
+        assert.equal(audit.data.rows[0].target, "5550001");
+        assert.ok(!JSON.stringify(audit.data).includes("SECRET-MESSAGE-TEXT"), "message text is never kept");
+        assert.equal((await o.request("/api/admin/audit?q=nothing-like-this")).data.rows.length, 0);
+
+        // Signing in from the admin panel comes back to it, and the session cookie covers the whole domain so both addresses share it.
+        const l = await o.request("/auth/login?next=admin");
+        const cb = await o.request(`/auth/callback?code=good&state=${new URL(l.headers.get("location")).searchParams.get("state")}`);
+        assert.equal(cb.headers.get("location"), "https://admin.bot.example/");
+        assert.ok(cb.set.some(c => /^svc_session=/.test(c) && /Domain=bot\.example/.test(c)), "session cookie is shared across the domain");
+        const sys = await o.request("/api/admin/system");
+        assert.equal(sys.status, 200);
+        assert.ok(sys.data.process.rssMb > 0);
+        assert.equal(sys.data.admin.host, "admin.bot.example");
+        assert.equal(sys.data.admin.sharedCookie, true);
+    } finally { await o.close(); }
+    const other = await signedIn({ config: { ownerId: "someone-else" } });
+    try {
+        for (const p of ["/api/admin/audit", "/api/admin/system"]) assert.equal((await other.request(p)).status, 403, p);
+    } finally { await other.close(); }
 });
 
 test("terms and privacy answer at .html and at the plain path", async () => {
