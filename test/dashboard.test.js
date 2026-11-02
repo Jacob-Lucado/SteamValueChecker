@@ -1558,6 +1558,24 @@ test("the FanaticalGrabber page is served by the bot and its counter works from 
     } finally { await t.close(); }
 });
 
+test("safety headers: noindex on data and sign-in routes, locked-down browser features, and a security.txt", async () => {
+    const t = await setup();
+    try {
+        const api = await t.request("/api/config", { raw: true });
+        assert.equal(api.headers.get("x-robots-tag"), "noindex, nofollow");
+        const login = await t.request("/auth/login", { raw: true });
+        assert.equal(login.headers.get("x-robots-tag"), "noindex, nofollow");
+        const home = await t.request("/", { raw: true });
+        assert.equal(home.headers.get("x-robots-tag"), null, "the public page stays indexable");
+        assert.match(home.headers.get("permissions-policy"), /camera=\(\)/);
+        assert.equal(home.headers.get("cross-origin-opener-policy"), "same-origin");
+        assert.equal(home.headers.get("strict-transport-security"), ORIGIN.startsWith("https://") ? "max-age=31536000; includeSubDomains" : null);
+        const sec = await (await t.request("/.well-known/security.txt", { raw: true })).text();
+        assert.match(sec, /^Contact: https:\/\/x\.com\/twit_user69$/m);
+        assert.match(sec, /^Expires: \d{4}-/m);
+    } finally { await t.close(); }
+});
+
 test("terms and privacy answer at .html and at the plain path", async () => {
     const t = await setup();
     try {

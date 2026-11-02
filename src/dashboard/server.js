@@ -173,10 +173,16 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const enc = encodingOf(res.req);
             if (enc) { body = squeeze(Buffer.from(body), enc, 4); headers = { ...headers, "Content-Encoding": enc, Vary: "Accept-Encoding" }; }
         }
+        const path = String(res.req?.url ?? "");
         res.writeHead(status, {
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY",
             "Referrer-Policy": "no-referrer",
+            "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+            "Cross-Origin-Opener-Policy": "same-origin",
+            ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
+            // The data and sign-in endpoints never belong in a search result, even if something links to them.
+            ...(/^\/(api|auth)\//.test(path) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
             "Content-Security-Policy":
                 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
                 "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
@@ -2537,7 +2543,11 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             }
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+            }
+            if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
+                const expires = new Date(now() + 365 * 86400_000).toISOString();
+                return send(res, 200, `Contact: https://x.com/twit_user69\nExpires: ${expires}\nPreferred-Languages: en\nCanonical: ${origin}/.well-known/security.txt\nPolicy: ${origin}/privacy.html\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" });
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
                 return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${["/", "/grabber", "/terms.html", "/privacy.html"].map(p => `<url><loc>${origin}${p}</loc></url>`).join("")}</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
