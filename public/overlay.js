@@ -8,7 +8,7 @@
   const pick = (k, list, d) => (list.includes(q.get(k)) ? q.get(k) : d);
   const cfg = {
     token: q.get("token") || "", demo: q.has("demo") && q.get("demo") !== "0",
-    style: pick("style", ["card", "minimal", "bar", "square"], "card"), theme: pick("theme", ["dark", "light", "glass", "clear"], "dark"),
+    style: pick("style", ["card", "minimal", "bar", "square", "vinyl", "neon", "poster", "ticker", "compact"], "card"), theme: pick("theme", ["dark", "light", "glass", "clear"], "dark"),
     accent: hex("accent", "#4da3ff"), accent2: hex("accent2", "#7c6cff"), scale: num("scale", 1, 0.5, 3),
     anchor: pick("anchor", ["tl", "tc", "tr", "ml", "mc", "mr", "bl", "bc", "br"], "bl"),
     progress: flag("progress", true), viz: flag("viz", true), art: flag("art", true), label: flag("label", true), next: flag("next", false),

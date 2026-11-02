@@ -344,7 +344,7 @@
   }
   // ---------- stream overlay: a compact player for OBS, with a live demo and the private link for this server ----------
   const OV_DEFAULTS = { style: "card", theme: "dark", accent: "4da3ff", scale: 1, anchor: "bl", art: 1, progress: 1, viz: 1, label: 1, next: 0, mode: "always", hold: 10, pause: 6 };
-  const OV_SIZES = { card: [520, 170], minimal: [500, 120], bar: [820, 120], square: [330, 410] };
+  const OV_SIZES = { card: [520, 170], minimal: [500, 120], bar: [820, 120], square: [330, 410], vinyl: [520, 180], neon: [520, 150], poster: [390, 390], ticker: [690, 80], compact: [360, 100] };
   function buildStream() {
     let o = { ...OV_DEFAULTS };
     try { Object.assign(o, JSON.parse(store.get("svc_music_ov") || "{}")); } catch { /* start fresh */ }
@@ -387,7 +387,7 @@
     ui.ov.linkBox = h("div", { class: "mu-ov-link" });
     ui.ov.size = h("p", { class: "mu-hint" });
     const optionsGrid = h("div", { class: "mu-set" },
-      field("Look", sel("style", [["card", "Card"], ["minimal", "Minimal text"], ["bar", "Wide bar"], ["square", "Square cover"]])), field("Theme", sel("theme", [["dark", "Dark"], ["light", "Light"], ["glass", "Frosted glass"], ["clear", "Clear (no background)"]])),
+      field("Look", sel("style", [["card", "Card"], ["vinyl", "Spinning record"], ["neon", "Neon outline"], ["poster", "Poster (big cover)"], ["square", "Square cover"], ["bar", "Wide bar"], ["ticker", "Slim strip"], ["compact", "Small chip"], ["minimal", "Minimal text"]])), field("Theme", sel("theme", [["dark", "Dark"], ["light", "Light"], ["glass", "Frosted glass"], ["clear", "Clear (no background)"]])),
       field("Accent colour", color), field("Size", h("div", { class: "mu-inline" }, scale, scaleOut)), field("Where it sits", anchors),
       field("When it shows", sel("mode", [["always", "Whenever music is playing"], ["popup", "Pop up for each new song"]])), field("Seconds to show each new song", hold), field("Hide after pausing (seconds, 0 = stay)", pause),
       box("art", "Cover art"), box("progress", "Progress bar"), box("viz", "Live visualizer"), box("label", "“Now playing” label"), box("next", "Up next"));

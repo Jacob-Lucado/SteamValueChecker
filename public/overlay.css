@@ -71,4 +71,39 @@ body { font-family: Inter, "Segoe UI", system-ui, -apple-system, "Helvetica Neue
 .ov[data-style="square"] .art-wrap { width: 100%; height: auto; aspect-ratio: 1; border-radius: 16px; font-size: 80px; }
 .ov[data-style="square"] .title { font-size: 20px; }
 
+/* a record that spins while the music plays and slows to a stop when it pauses */
+.ov[data-style="vinyl"] .card { width: 470px; min-height: 132px; padding: 14px 22px 14px 14px; border-radius: 26px; }
+.ov[data-style="vinyl"] .art-wrap { width: 108px; height: 108px; border-radius: 50%; box-shadow: 0 0 0 5px rgba(0, 0, 0, .55), 0 10px 26px rgba(0, 0, 0, .5); animation: spin 7s linear infinite; animation-play-state: paused; font-size: 0; }
+.ov[data-style="vinyl"] .art-wrap::after { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: 50%; background: radial-gradient(circle, #0b0f18 0 6%, rgba(255, 255, 255, .3) 6.5% 8%, transparent 8.5%), repeating-radial-gradient(circle, transparent 0 5px, rgba(0, 0, 0, .16) 6px 7px); }
+.ov.in:not(.paused)[data-style="vinyl"] .art-wrap { animation-play-state: running; }
+.ov[data-style="vinyl"] .art-wrap .art { filter: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* a glowing outline in the accent colour */
+.ov[data-style="neon"] .card { width: 470px; min-height: 108px; border-radius: 12px; background: rgba(6, 9, 18, .88); border: 1.5px solid var(--accent); box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 0 18px -2px var(--accent), inset 0 0 22px -12px var(--accent); }
+.ov[data-style="neon"][data-theme="light"] .card { background: rgba(255, 255, 255, .92); }
+.ov[data-style="neon"] .art-wrap { width: 84px; height: 84px; border-radius: 8px; box-shadow: 0 0 14px -2px var(--accent); }
+.ov[data-style="neon"] .title { text-transform: uppercase; letter-spacing: .04em; font-size: 20px; text-shadow: 0 0 12px var(--accent); }
+.ov[data-style="neon"] .label { text-shadow: 0 0 10px var(--accent); }
+.ov[data-style="neon"] .prog { height: 3px; box-shadow: 0 0 10px var(--accent); }
+/* big cover with the words laid over the bottom */
+.ov[data-style="poster"] .card { width: 340px; min-height: 0; padding: 0; gap: 0; border-radius: 22px; display: block; aspect-ratio: 1; color: #fff; }
+.ov[data-style="poster"] .art-wrap { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; box-shadow: none; font-size: 110px; }
+.ov[data-style="poster"] .viz { display: none; }
+.ov[data-style="poster"] .body { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 80px 20px 22px; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .55) 45%, rgba(0, 0, 0, .88)); }
+.ov[data-style="poster"] .title { font-size: 24px; } .ov[data-style="poster"] .artist, .ov[data-style="poster"] .next { color: rgba(255, 255, 255, .8); }
+.ov[data-style="poster"] .prog { z-index: 3; }
+/* a slim strip: Title, then the artist after a dash */
+.ov[data-style="ticker"] .card { width: 640px; min-height: 0; padding: 7px 20px 7px 8px; gap: 12px; border-radius: 8px; border-left: 5px solid var(--accent); }
+.ov[data-style="ticker"] .art-wrap { width: 44px; height: 44px; border-radius: 6px; font-size: 20px; }
+.ov[data-style="ticker"] .body { flex-direction: row; align-items: baseline; gap: 10px; }
+.ov[data-style="ticker"] .label { flex: none; font-size: 10px; } .ov[data-style="ticker"] .title { font-size: 17px; flex: none; max-width: 55%; }
+.ov[data-style="ticker"] .artist { font-size: 15px; min-width: 0; } .ov[data-style="ticker"] .artist::before { content: "—"; margin-right: 8px; opacity: .6; }
+.ov[data-style="ticker"] .next, .ov[data-style="ticker"] .viz { display: none; } .ov[data-style="ticker"] .prog { height: 2px; }
+/* a small chip for tight corners */
+.ov[data-style="compact"] .card { width: 310px; min-height: 0; padding: 8px 16px 8px 8px; gap: 12px; border-radius: 16px; }
+.ov[data-style="compact"] .art-wrap { width: 52px; height: 52px; border-radius: 12px; font-size: 22px; }
+.ov[data-style="compact"] .label, .ov[data-style="compact"] .next, .ov[data-style="compact"] .viz { display: none; }
+.ov[data-style="compact"] .title { font-size: 16px; } .ov[data-style="compact"] .artist { font-size: 13px; } .ov[data-style="compact"] .prog { height: 3px; }
+
 @media (prefers-reduced-motion: reduce) { .card, .art { transition-duration: .01s !important; } .scroll > span, .eq i, .ov.shine .card::after { animation: none !important; } }
+.ov[data-style="ticker"] .title, .ov[data-style="bar"] .title { -webkit-mask-image: none; mask-image: none; padding-right: 2px; }
