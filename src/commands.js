@@ -1,6 +1,7 @@
 import { ApplicationIntegrationType, ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 
 import { REGIONS, ALERT_TYPES } from "./constants.js";
+import { CATEGORIES } from "./stations.js";
 export { REGIONS };
 
 // Commands that work anywhere: installed on a server, or on a person's own account (DMs, group chats, any server).
@@ -644,7 +645,8 @@ const musicCmd = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("channelstatus").setDescription("Show the current song as the voice channel's status"))
         .addBooleanOption(o => o.setName("stay").setDescription("Wait in the last voice channel; go back to the live station or Auto DJ when someone joins"))
         .addBooleanOption(o => o.setName("radio").setDescription("Allow live radio stream links")))
-    .addSubcommand(s => s.setName("live").setDescription("Pick a live radio station to play (only ones that are on the air right now)"))
+    .addSubcommand(s => s.setName("live").setDescription("Pick a live radio station to play (only ones that are on the air right now)")
+        .addStringOption(o => o.setName("type").setDescription("What kind of music").addChoices(...CATEGORIES.map(([value, name]) => ({ name, value })))))
     .addSubcommandGroup(g => g.setName("autodj").setDescription("The Auto DJ keeps music going when nobody has queued anything")
         .addSubcommand(s => s.setName("submit").setDescription("Request a song or playlist for the Auto DJ to play (you don't need to be in voice)")
             .addStringOption(o => o.setName("song").setDescription("A SoundCloud song or playlist link, or words to search for").setRequired(true).setMaxLength(300)))

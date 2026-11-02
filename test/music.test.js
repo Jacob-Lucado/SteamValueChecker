@@ -504,3 +504,14 @@ test("a slow SoundCloud lookup is retried once before the track fails", async ()
     calls = -5; // keeps timing out: the second failure goes up
     await assert.rejects(createSource({ exec: async () => { throw new Error("SoundCloud took too long to answer."); }, spawnImpl: fake }).stream({ url: "https://soundcloud.com/a/b", title: "x" }), /too long/);
 });
+
+test("the station list has hip hop and R&B, and an unfiltered pick mixes every kind", async () => {
+    const { createStations, STATIONS, CATEGORIES } = await import("../src/stations.js");
+    for (const [id] of CATEGORIES) assert.ok(STATIONS.some(s => s.cat === id), `has ${id}`);
+    assert.ok(STATIONS.filter(s => s.cat === "hiphop").length >= 5 && STATIONS.filter(s => s.cat === "rnb").length >= 5);
+    assert.equal(new Set(STATIONS.map(s => s.url)).size, STATIONS.length, "no duplicates");
+    const st = createStations({ probe: async url => ({ url, title: "x", duration: null, live: true, radio: true }) });
+    const mix = await st.pick(); assert.equal(mix.length, 25);
+    assert.ok(new Set(mix.map(t => t.cat)).size >= 6, "every kind represented");
+    assert.ok((await st.pick("hiphop")).every(t => t.cat === "hiphop"));
+});

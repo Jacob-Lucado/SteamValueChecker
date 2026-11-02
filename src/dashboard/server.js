@@ -54,6 +54,7 @@ import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
 import { artUrl } from "../render.js";
 import { isSoundcloudUrl } from "../musicsource.js";
+import { CATEGORIES } from "../stations.js";
 import { publishRequest, refreshRequest, removeRequestPosts } from "../requestsync.js";
 import { cleanRequest, limitMessage } from "../requests.js";
 import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY as REQ_BODY, MAX_NOTE as REQ_NOTE } from "../requeststore.js";
@@ -989,7 +990,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
             musicMember(s, url.searchParams.get("guild"));
             cooldown(s.userId, "musicstations");
-            return { stations: stations ? (await stations.working()).map(t => ({ title: t.title, genre: t.genre, url: t.url, name: t.title })) : [] };
+            return { categories: CATEGORIES.map(([id, name]) => ({ id, name })), stations: stations ? (await stations.working()).map(t => ({ title: t.title, genre: t.genre, cat: t.cat ?? "", url: t.url, name: t.title })) : [] };
         },
         "POST /api/music/submit": async (req, body) => {
             const s = session(req);

@@ -3604,12 +3604,15 @@
         h("p", { class: "muted small", text: "Paste a SoundCloud song, playlist (set) or artist link to queue it all (up to 100 songs), or a live radio stream link (an Icecast or Shoutcast address like https://play.sas-media.ru/play_256), or type words and press Search." }), results);
     }
     function stationsPanel(d) {
-      const out = h("div"), btn = h("button", { class: "btn blue small", type: "button", text: "Show stations on the air" });
-      btn.addEventListener("click", () => busy(btn, async () => {
-        const r = await api("/api/music/stations?guild=" + encodeURIComponent(gid()));
-        out.replaceChildren(r.stations.length ? h("div", { class: "scroll-y tall" }, ...r.stations.map(x => { const b = h("button", { class: "btn green small", type: "button", text: "Play" }); b.disabled = !inChannel(cur.access) || !cur.settings.radio; b.addEventListener("click", () => busy(b, async () => { const p = await api("/api/music/play", { guild_id: gid(), query: x.url }); toast(p.startedNow ? `Playing: ${x.title}` : "Added to the queue.", "ok"); await load(false); })); return h("div", { class: "cal-row" }, h("span", { text: "📻" }), h("div", {}, h("b", { text: x.title }), h("div", { class: "muted small", text: x.genre ?? "" })), b); })) : h("p", { class: "muted", text: "None of the stations answered just now. Try again in a minute." }));
-      }));
-      return h("div", { class: "panel" }, h("h3", { text: "Live radio" }), h("p", { class: "muted small", text: d.settings.radio ? "Stations are checked when you ask, so everything listed is on the air. You can also paste any stream link above." : "Live radio is turned off in this server. A manager can allow it below." }), h("div", { class: "row" }, btn), out);
+      const out = h("div"), chips = h("div", { class: "row" }), btn = h("button", { class: "btn blue small", type: "button", text: "Show stations on the air" });
+      let data = null, cat = "";
+      const paint = () => {
+        chips.replaceChildren(...[{ id: "", name: "All" }, ...data.categories].map(c => { const b = h("button", { class: "btn small " + (c.id === cat ? "blue" : "gray"), type: "button", text: c.name }); b.addEventListener("click", () => { cat = c.id; paint(); }); return b; }));
+        const list = data.stations.filter(x => !cat || x.cat === cat);
+        out.replaceChildren(list.length ? h("div", { class: "scroll-y tall" }, ...list.map(x => { const b = h("button", { class: "btn green small", type: "button", text: "Play" }); b.disabled = !inChannel(cur.access) || !cur.settings.radio; b.addEventListener("click", () => busy(b, async () => { const p = await api("/api/music/play", { guild_id: gid(), query: x.url }); toast(p.startedNow ? `Playing: ${x.title}` : "Added to the queue.", "ok"); await load(false); })); return h("div", { class: "cal-row" }, h("span", { text: "📻" }), h("div", {}, h("b", { text: x.title }), h("div", { class: "muted small", text: x.genre ?? "" })), b); })) : h("p", { class: "muted", text: data.stations.length ? "No stations of that kind are on the air right now." : "None of the stations answered just now. Try again in a minute." }));
+      };
+      btn.addEventListener("click", () => busy(btn, async () => { data = await api("/api/music/stations?guild=" + encodeURIComponent(gid())); paint(); }));
+      return h("div", { class: "panel" }, h("h3", { text: "Live radio" }), h("p", { class: "muted small", text: d.settings.radio ? "Hip hop, R&B, dance, chill, rock, throwbacks and more. Stations are checked when you ask, so everything listed is on the air. You can also paste any stream link above." : "Live radio is turned off in this server. A manager can allow it below." }), h("div", { class: "row" }, btn), chips, out);
     }
     function playlistsPanel(d) {
       const pname = h("input", { type: "text", maxlength: "40", placeholder: "Name for a new playlist", "aria-label": "Playlist name" });

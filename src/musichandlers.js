@@ -2,6 +2,7 @@
 import { MessageFlags, PermissionFlagsBits, ChannelType } from "discord.js";
 import { UserError } from "./errors.js";
 import { fmtTime } from "./music.js";
+import { CATEGORIES } from "./stations.js";
 import { fancy, nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, playlistLine, playerLink, QUEUE_PAGE } from "./musicrender.js";
 
 const eph = (i, payload, bad = false) => i.reply({ ...fancy(payload, bad), flags: MessageFlags.Ephemeral });
@@ -107,12 +108,13 @@ export function createMusicHandlers({ db, music, adapter, stations = null, playe
                 case "live": {
                     music.who(gid, uid);
                     if (!db.getMusicSettings(gid).radio) throw new UserError("Live radio is turned off in this server. A manager can allow it with `/music settings`.");
-                    const list = stations ? await stations.working() : [];
-                    if (!list.length) throw new UserError("None of the stations answered just now. Try again in a minute, or paste a stream link with `/play`.");
+                    const cat = i.options.getString("type");
+                    const list = stations ? (stations.pick ? await stations.pick(cat) : await stations.working()) : [];
+                    if (!list.length) throw new UserError(cat ? "No stations of that kind answered just now. Try another type or again in a minute." : "None of the stations answered just now. Try again in a minute, or paste a stream link with `/play`.");
                     sweep();
                     const token = `${uid}${Date.now().toString(36)}`;
                     picks.set(token, { results: list.slice(0, 25), userId: uid, exp: Date.now() + 5 * 60_000 });
-                    return await reply({ embeds: [{ color: 0xff5500, title: "📻 Live radio", description: list.slice(0, 25).map((t, n) => `**${n + 1}.** ${t.title} · ${t.genre ?? ""}`).join("\n"), footer: { text: "Pick a station to start it. These are checked just now, so every one is on the air." } }], components: [{ type: 1, components: [{ type: 3, custom_id: `mu_pick:${token}`, placeholder: "Pick a station", options: list.slice(0, 25).map((t, n) => ({ label: t.title.slice(0, 100), description: String(t.genre ?? "Live radio").slice(0, 100), value: String(n) })) }] }], allowedMentions: { parse: [] } });
+                    return await reply({ embeds: [{ color: 0xff5500, title: `📻 Live radio${cat ? " · " + (CATEGORIES.find(c => c[0] === cat)?.[1] ?? "") : ""}`, description: list.slice(0, 25).map((t, n) => `**${n + 1}.** ${t.title} · ${t.genre ?? ""}`).join("\n"), footer: { text: "Pick a station to start it. These are checked just now, so every one is on the air." } }], components: [{ type: 1, components: [{ type: 3, custom_id: `mu_pick:${token}`, placeholder: "Pick a station", options: list.slice(0, 25).map((t, n) => ({ label: t.title.slice(0, 100), description: String(t.genre ?? "Live radio").slice(0, 100), value: String(n) })) }] }], allowedMentions: { parse: [] } });
                 }
                 case "submit": {
                     const r = await music.submit(gid, uid, { query: i.options.getString("song") });

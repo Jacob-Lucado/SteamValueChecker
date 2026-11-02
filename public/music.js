@@ -241,15 +241,21 @@
   // ---------- radio ----------
   function buildRadio() {
     ui.radioList = h("div", { class: "mu-list" });
-    ui.panes.radio.append(h("p", { class: "mu-hint", text: "Live stations that are on the air right now." }), ui.radioList);
+    ui.radioChips = h("div", { class: "mu-seg", role: "radiogroup", "aria-label": "Kind of music" });
+    ui.radioCat = "";
+    ui.panes.radio.append(h("p", { class: "mu-hint", text: "Live stations that are on the air right now." }), ui.radioChips, ui.radioList);
+  }
+  function paintRadio() {
+    const r = ui.radioData; if (!r) return;
+    ui.radioChips.replaceChildren(...[{ id: "", name: "All" }, ...r.categories].map(c => h("button", { type: "button", role: "radio", class: c.id === ui.radioCat ? "on" : "", "aria-checked": String(c.id === ui.radioCat), text: c.name, onclick: () => { ui.radioCat = c.id; paintRadio(); } })));
+    const list = r.stations.filter(s => !ui.radioCat || s.cat === ui.radioCat);
+    ui.radioList.replaceChildren(...(list.length ? list.map(s => trackRow({ title: s.title, artist: s.genre, live: true }, [h("button", { class: "mu-mini go", type: "button", text: "Play", disabled: !can() || !data?.settings?.radio, title: data?.settings?.radio ? "" : "Live radio is off in this server", onclick: () => add({ query: s.url }, s.title) })])) : [h("p", { class: "mu-empty", text: "No stations of that kind are on the air right now." })]));
   }
   async function loadRadio() {
     ui.radioLoaded = true;
     ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: "Tuning in…" }));
-    try {
-      const r = await api("/api/music/stations?guild=" + encodeURIComponent(gid));
-      ui.radioList.replaceChildren(...(r.stations.length ? r.stations.map(s => trackRow({ title: s.title, artist: s.genre, live: true }, [h("button", { class: "mu-mini go", type: "button", text: "Play", disabled: !can() || !data?.settings?.radio, title: data?.settings?.radio ? "" : "Live radio is off in this server", onclick: () => add({ query: s.url }, s.title) })])) : [h("p", { class: "mu-empty", text: "No stations answered just now. Try again in a minute." })]));
-    } catch (e) { ui.radioLoaded = false; ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: e.message })); }
+    try { ui.radioData = await api("/api/music/stations?guild=" + encodeURIComponent(gid)); paintRadio(); }
+    catch (e) { ui.radioLoaded = false; ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: e.message })); }
   }
 
   // ---------- playlists ----------
