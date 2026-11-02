@@ -2,6 +2,7 @@
 // Embeds are plain API objects (no discord.js needed), which keeps this module testable.
 
 import { saleUrl } from "./salescal.js";
+import { pagedPayload } from "./pager.js";
 import { protonLabel } from "./proton.js";
 import { tr } from "./i18n.js";
 export const ROWS_PER_PAGE = 15;
@@ -179,16 +180,17 @@ export function alertButtons(item, now, { single = true, lang = "en" } = {}) {
 }
 
 /** A whole alert message for one member: up to 5 games, each with its art and its own buttons. */
-export function alertPayload(hits, { trigger, verdict, lang = "en" }) {
+export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null }) {
     const single = hits.length === 1;
-    return {
-        content: single ? undefined : `${hits.length} games on your wishlist hit your alert.`,
-        embeds: hits.map(h => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: single ? "image" : "thumbnail", insight: h.insight ?? null, proton: h.proton ?? null })),
-        components: [...hits.map(h => alertButtons(h.item, h.now, { single, lang })).filter(Boolean),
-            ...(single && hits[0].item.id != null ? [{ type: 1, components: [
-                { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${hits[0].item.id}` },
-                { type: 2, style: 2, label: tr(lang, "Only below a price…"), custom_id: `${BELOW_ID}:${hits[0].item.id}` }] }] : [])]
-    };
+    const embedFor = (h, one) => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: one ? "image" : "thumbnail", insight: h.insight ?? null, proton: h.proton ?? null });
+    const rowsFor = (h, one) => [alertButtons(h.item, h.now, { single: one, lang }),
+        ...(one && h.item.id != null ? [{ type: 1, components: [
+            { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${h.item.id}` },
+            { type: 2, style: 2, label: tr(lang, "Only below a price…"), custom_id: `${BELOW_ID}:${h.item.id}` }] }] : [])].filter(Boolean);
+    const content = single ? undefined : `${hits.length} games on your wishlist hit your alert.`;
+    // With a store to keep them in, several games become one card you page through, each with its own full set of buttons.
+    if (pager && !single) return pagedPayload(pager, { content, pages: hits.map(h => ({ embed: embedFor(h, true), rows: rowsFor(h, true), label: h.item.title })) });
+    return { content, embeds: hits.map(h => embedFor(h, single)), components: single ? rowsFor(hits[0], true) : hits.map(h => alertButtons(h.item, h.now, { single, lang })).filter(Boolean) };
 }
 
 export const WISHLIST_PER_PAGE = 15;
@@ -423,10 +425,10 @@ export function lastChancePayload(shop, games) {
     return p;
 }
 
-export function freeGamesPayload(shop, games) {
+export function freeGamesPayload(shop, games, { pager = null } = {}) {
     const list = games.filter(g => safeUrl(g.url)).slice(0, MAX_FREE_PER_MESSAGE);
     if (!list.length) return null;
-    const big = list.length <= 3; // full-width pictures for a few games, small ones when there are many
+    const big = list.length <= 3 || Boolean(pager); // full-width pictures for a few games, small ones when there are many
     const embeds = list.map((g, n) => {
         const art = freeArt(g);
         const dlc = g.type === "dlc" || /\b(dlc|soundtrack|add-?on|season pass)\b/i.test(g.title ?? "");
@@ -441,17 +443,27 @@ export function freeGamesPayload(shop, games) {
             ],
             image: big && art ? { url: art } : undefined,
             thumbnail: !big && art ? { url: art } : undefined,
-            footer: n === list.length - 1 ? { text: "Claiming needs you to be signed in to the store  •  Data by IsThereAnyDeal" } : undefined
+            footer: n === list.length - 1 || pager ? { text: "Claiming needs you to be signed in to the store  •  Data by IsThereAnyDeal" } : undefined
         };
     });
     const link = (label, url) => ({ type: 2, style: 5, label: label.slice(0, 80), url: safeUrl(url) });
     const row = list.length === 1
         ? [link("Claim game", list[0].url)]
         : [{ type: 2, style: 1, label: `Claim all (${list.length})`, custom_id: FREE_CLAIM_ALL_ID }, ...list.slice(0, 4).map(g => link(`Claim ${g.title}`, g.url))];
-    return {
-        content: list.length === 1 ? `Free game on ${shop}` : `${list.length} free games on ${shop}`,
-        embeds, components: [{ type: 1, components: row }]
-    };
+    const content = list.length === 1 ? `Free game on ${shop}` : `${list.length} free games on ${shop}`;
+    if (pager && list.length > 1) {
+        // one game per page: "Claim all" stays on every page, plus this game's own claim link
+        return pagedPayload(pager, { content, pages: list.map((g, n) => ({ embed: embeds[n], label: g.title, rows: [{ type: 1, components: [row[0], link(`Claim ${g.title}`, g.url)] }] })) });
+    }
+    return { content, embeds, components: [{ type: 1, components: row }] };
+}
+
+/** A message of bundle and giveaway alerts for one member: one card at a time when there are several. */
+export function extrasPayload(hits, { pager = null } = {}) {
+    const cards = hits.map(h => (h.kind === "bundle" ? bundleEmbed(h) : giveawayEmbed(h)));
+    const rows = extrasButtons(hits);
+    if (pager && hits.length > 1) return pagedPayload(pager, { content: `${hits.length} deals from your wishlist.`, pages: hits.map((h, n) => ({ embed: cards[n], rows: rows[n] ? [rows[n]] : [], label: h.item.title })) });
+    return { embeds: cards, components: rows };
 }
 
 /** Link buttons under bundle and giveaway alerts, one per card. */

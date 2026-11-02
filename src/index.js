@@ -16,6 +16,7 @@ import { FANATICAL_GRABBER_URL, EXTENSION_STORE_URL, REGIONS } from "./constants
 import { readFileSync } from "node:fs";
 import { ABOUT, PRIVACY, quickStart } from "./text.js";
 import { helpPayload, handleHelpPick } from "./helpui.js";
+import { pagedPayload, handlePager, tokenOf, PAGE_PREFIX, JUMP_PREFIX } from "./pager.js";
 import { legacyRoute, SERVER_ONLY_LEGACY } from "./commands.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
@@ -410,7 +411,7 @@ export function chunkText(text, max = 3900) {
     return out;
 }
 const embedReply = (i, description) =>
-    i.reply({ embeds: chunkText(description).map(d => ({ color: 0xff9800, description: d })), flags: MessageFlags.Ephemeral });
+    i.reply({ ...pagedPayload(db, { pages: chunkText(description).map((d, n) => ({ embed: { color: 0xff9800, description: d }, label: `Page ${n + 1}` })), jump: false }), flags: MessageFlags.Ephemeral });
 
 function pageButtons(page, pages) {
     return new ActionRowBuilder().addComponents(
@@ -518,6 +519,7 @@ client.on(Events.InteractionCreate, async i => {
     }
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if (i.isStringSelectMenu() && i.customId === "help_pick") return handleHelpPick(i);
+    if ((i.isButton() && i.customId.startsWith(PAGE_PREFIX)) || (i.isStringSelectMenu() && i.customId.startsWith(JUMP_PREFIX))) return handlePager(i, db);
     if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);
     if (i.isStringSelectMenu() && i.customId.startsWith("mu_pick:")) return musicUi ? musicUi.handleSelect(i) : musicOff(i);
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
@@ -550,7 +552,9 @@ client.on(Events.InteractionCreate, async i => {
     if ((i.isButton() && i.customId.startsWith("fg:")) || (i.isStringSelectMenu() && i.customId.startsWith("fgs:"))) return handlers.handleFreeMenu(i);
     if (i.isButton() && i.customId === FREE_CLAIM_ALL_ID) {
         // Every link is read from the message the bot itself sent, so nothing is stored or taken from the user.
-        const links = (i.message.embeds ?? []).filter(e => /^https:\/\//i.test(e.url ?? "")).map(e => `• [${String(e.title).slice(0, 80)}](${e.url})`);
+        const saved = tokenOf(i.message) ? db.getPager(tokenOf(i.message)) : null;
+        const cards = saved ? saved.pages.map(p => p.embed) : (i.message.embeds ?? []);
+        const links = cards.filter(e => /^https:\/\//i.test(e.url ?? "")).map(e => `• [${String(e.title).slice(0, 80)}](${e.url})`);
         try { await i.reply({ content: links.length ? `Open each link and claim it:\n${links.join("\n")}` : "Those links are no longer available.", flags: MessageFlags.Ephemeral }); }
         catch (err) { console.error(`[claim] ${err.name}: ${err.message}`); }
         return;

@@ -110,7 +110,8 @@ test("many alerts for one person are grouped into few messages", async () => {
     const t = setup({ prices });
     on(t.db, "u1", ids);
     await runCycle(t);
-    assert.deepEqual(t.sent.map(x => x.p.embeds.length), [5, 5, 2]);
+    assert.deepEqual(t.sent.map(x => x.p.embeds.length), [1, 1, 1], "each message shows one game at a time");
+    assert.deepEqual(t.sent.map(x => Number(x.p.components[0].components[1].label.split(" / ")[1])), [5, 5, 2], "and pages through the rest");
 });
 
 test("a failed price lookup leaves alerts for the next run", async () => {

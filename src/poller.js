@@ -9,7 +9,7 @@ import { isDlc } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
-import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
+import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
 import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
@@ -80,7 +80,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 catch { h.insight = null; }
                 h.proton = await protonTier(h.item.appid).catch(() => null);
             }));
-            const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict, lang: user.lang });
+            const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict, lang: user.lang, pager: db });
             const res = await notifier.deliver(user, payload, "alert");
             if (res.ok) {
                 stats.delivered += part.length;
@@ -177,7 +177,7 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
         if (!user) continue;
         if (isQuiet(user, now())) { stats.deferred += hits.length; continue; }
         for (const part of chunked(hits, MAX_CARDS)) {
-            const payload = { embeds: part.map(h => (h.kind === "bundle" ? bundleEmbed(h) : giveawayEmbed(h))), components: extrasButtons(part) };
+            const payload = extrasPayload(part, { pager: db });
             const res = await notifier.deliver(user, payload, "bundle");
             if (!res.ok) { stats.failed += part.length; continue; }
             stats.delivered += part.length;
@@ -235,7 +235,7 @@ export async function runFreeGames({ db, itad, notifier, now = () => Date.now(),
         for (const g of fresh) { if (!byShop.has(g.shop)) byShop.set(g.shop, []); byShop.get(g.shop).push(g); }
         for (const [shop, games] of byShop) {
             for (const part of chunked(games, 10)) {
-                const payload = freeGamesPayload(shop, part);
+                const payload = freeGamesPayload(shop, part, { pager: db });
                 if (!payload) { for (const g of part) db.markSeen(user.discord_id, `free:${g.id}`); continue; }
                 const res = await notifier.deliver(user, payload, "free");
                 if (!res.ok) { stats.failed += part.length; continue; }
@@ -321,7 +321,7 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
         for (const g of fresh) { if (!byShop.has(g.shop)) byShop.set(g.shop, []); byShop.get(g.shop).push(g); }
         for (const [shop, games] of byShop) {
             for (const part of chunked(games, 4)) {
-                const payload = freeGamesPayload(shop, part);
+                const payload = freeGamesPayload(shop, part, { pager: db });
                 const ok = payload ? await notifier.postGuild(guild.guild_id, payload, "free") : true;
                 if (!ok) { log(`feed post failed for a server`); continue; }
                 for (const g of part) db.guildMarkSeen(guild.guild_id, `free:${g.id}`);

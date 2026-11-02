@@ -2,6 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.05", date: "2026-11-05", title: "Fewer commands, bigger music", items: [
         "**Commands grouped:** the long list is now a few short ones. `/games` (prices, deals, free games, sales, codes), `/me` (wishlist, library, Steam, friends, your data), `/server` (giveaways, game nights, levels, boards, events), `/manage` (setup and community for managers), `/bot` (status, changelog, support, ideas), plus `/alerts`, `/music`, `/play`, `/mod`, `/dashboard` and `/help`. Everything does what it did before, just under a group.",
+        "**One card at a time:** messages that used to stack several cards (a batch of free games, several wishlist alerts, bundle and giveaway alerts, long replies) now show one card with Previous / Next buttons and a jump menu. Each page keeps its own buttons.",
         "**Paged help:** `/help` is now a clean paged embed with a menu for each topic.",
         "**Live radio:** `/music live` lists stations that are on the air right now, and you can paste any Icecast or Shoutcast stream link into `/play`.",
         "**Auto DJ:** managers pick a playlist and the bot keeps playing it when nobody has queued anything. Members send requests (`/music autodj submit`, or on the dashboard) and they play first.",

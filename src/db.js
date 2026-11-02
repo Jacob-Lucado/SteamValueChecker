@@ -11,6 +11,7 @@ import { codeSchema, codeStore } from "./codestore.js";
 import { dropSchema, dropStore } from "./dropstore.js";
 import { banSchema, banStore } from "./banstore.js";
 import { musicSchema, musicStore, MUSIC_EXTRA_COLUMNS } from "./musicstore.js";
+import { pagerSchema, pagerStore } from "./pagerstore.js";
 import { steamSchema, steamStore } from "./steamstore.js";
 import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { redeemSchema, redeemStore } from "./redeemstore.js";
@@ -165,6 +166,7 @@ ${codeSchema}
 ${dropSchema}
 ${banSchema}
 ${musicSchema}
+${pagerSchema}
 ${communitySchema}
 ${steamSchema}
 ${grabberSchema}
@@ -283,6 +285,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const calendar = calendarStore({ run, get, all, clean, now });
     const bans = banStore({ run, get, all, clean, now });
     const music = musicStore({ run, get, all, clean, now });
+    const pager = pagerStore({ run, get, now });
     const gifts = giftStore({ run, get, all, now });
     const friends = friendStore({ run, get, all, now });
     const challenges = challengeStore({ run, all });
@@ -707,6 +710,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

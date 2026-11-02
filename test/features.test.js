@@ -323,9 +323,17 @@ test("free games: one message per platform, Claim all for several, once per memb
     assert.equal(t.sent.length, 2); // Epic and Steam, each one message; u2 did not opt in
     assert.ok(t.sent.every(m => m.id === "u1"));
     const epic = t.sent.find(m => /Epic/.test(m.p.content)).p;
-    assert.equal(epic.embeds.length, 2);
-    assert.equal(epic.components[0].components[0].label, "Claim all (2)");
-    assert.equal(epic.components[0].components[0].custom_id, "free_claim_all");
+    assert.equal(epic.embeds.length, 1, "one game on screen, the other a page away");
+    assert.equal(epic.components[0].components[1].label, "1 / 2");
+    assert.equal(epic.components[1].components[0].label, "Claim all (2)");
+    assert.equal(epic.components[1].components[0].custom_id, "free_claim_all");
+    // the Next button shows the second game, with its own claim link
+    const { renderPage } = await import("../src/pager.js");
+    const token = epic.components[0].components[0].custom_id.split(":")[1];
+    const second = renderPage(token, t.db.getPager(token), 1);
+    assert.match(second.embeds[0].title, /Beta/);
+    assert.equal(second.components[0].components[1].label, "2 / 2");
+    assert.match(second.components.at(-1).components[1].label, /Claim Beta/);
     const steam = t.sent.find(m => /Steam/.test(m.p.content)).p;
     assert.deepEqual([steam.components[0].components[0].label, steam.components[0].components[0].style], ["Claim game", 5]);
     assert.equal(s1.delivered, 3);
