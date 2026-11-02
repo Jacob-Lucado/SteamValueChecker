@@ -114,7 +114,7 @@
 
     // tabs
     const panes = {}, tabs = {};
-    const tabDefs = [["queue", "Queue"], ["search", "Add music"], ["radio", "Radio"], ["requests", "Requests"], ["playlists", "Playlists"], ["autodj", "Auto DJ"], ["settings", "Settings"]];
+    const tabDefs = [["queue", "Queue"], ["search", "Add music"], ["radio", "Radio"], ["requests", "Requests"], ["playlists", "Playlists"], ["stream", "Stream"], ["autodj", "Auto DJ"], ["settings", "Settings"]];
     const tabBar = h("div", { class: "mu-tabs", role: "tablist" });
     for (const [id, label] of tabDefs) {
       tabs[id] = h("button", { class: "mu-tab", type: "button", role: "tab", onclick: () => showTab(id) }, label, h("b", { hidden: true }));
@@ -124,6 +124,7 @@
     ui.panes = panes; ui.tabs = tabs;
     buildSearch(); buildRadio(); buildPlaylists();
     ui.autoBox = h("div"); ui.setBox = h("div");
+    buildStream();
     panes.autodj.append(ui.autoBox); panes.settings.append(ui.setBox);
     ui.queueList = h("div", { class: "mu-list" });
     panes.queue.append(ui.queueList);
@@ -167,6 +168,7 @@
     for (const k of Object.keys(ui.panes)) { ui.panes[k].classList.toggle("on", k === id); ui.tabs[k].classList.toggle("on", k === id); ui.tabs[k].setAttribute("aria-selected", String(k === id)); }
     store.set("svc_music_tab", id);
     if (id === "radio" && !ui.radioLoaded) loadRadio();
+    if (id === "stream") streamOpen();
   }
   function onKey(e) {
     if (e.target.closest?.("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -335,6 +337,85 @@
     if (mgr && ui.mgrKey !== gid) { ui.mgrKey = gid; buildManager(d); }
     ui.clear.hidden = !(dj || a.isManager || a.isBotOwner);
   }
+  // ---------- stream overlay: a compact player for OBS, with a live demo and the private link for this server ----------
+  const OV_DEFAULTS = { style: "card", theme: "dark", accent: "4da3ff", scale: 1, anchor: "bl", art: 1, progress: 1, viz: 1, label: 1, next: 0, mode: "always", hold: 10, pause: 6 };
+  const OV_SIZES = { card: [520, 170], minimal: [500, 120], bar: [820, 120], square: [330, 410] };
+  function buildStream() {
+    let o = { ...OV_DEFAULTS };
+    try { Object.assign(o, JSON.parse(store.get("svc_music_ov") || "{}")); } catch { /* start fresh */ }
+    ui.ov = { o, token: null, base: location.origin + "/overlay", shown: false };
+    const save = () => store.set("svc_music_ov", JSON.stringify(o));
+    const params = (withToken) => {
+      const p = new URLSearchParams();
+      if (withToken) p.set("token", ui.ov.token); else p.set("demo", "1");
+      p.set("style", o.style); p.set("theme", o.theme); p.set("accent", o.accent); if (o.scale !== 1) p.set("scale", String(o.scale)); p.set("anchor", o.anchor);
+      for (const k of ["art", "progress", "viz", "label", "next"]) if (o[k] !== OV_DEFAULTS[k]) p.set(k, String(o[k]));
+      if (o.mode === "popup") { p.set("mode", "popup"); p.set("hold", String(o.hold)); }
+      if (o.pause !== OV_DEFAULTS.pause) p.set("pause", String(o.pause));
+      return p.toString();
+    };
+    ui.ov.params = params;
+    const frame = h("iframe", { class: "mu-ov-frame", title: "Preview of the stream overlay", loading: "lazy" });
+    let t = 0;
+    const refresh = () => { clearTimeout(t); t = setTimeout(() => { save(); frame.src = "/overlay?" + params(false); paintUrl(); }, 250); };
+    ui.ov.refresh = refresh;
+    const sel = (key, opts) => { const s = h("select"); for (const [v, label] of opts) s.append(h("option", { value: v, text: label, selected: String(o[key]) === v })); s.addEventListener("change", () => { o[key] = s.value; refresh(); }); return s; };
+    const box = (key, label) => { const [i, l] = check(o[key] === 1, label); i.addEventListener("change", () => { o[key] = i.checked ? 1 : 0; refresh(); }); return l; };
+    const color = h("input", { type: "color", value: "#" + o.accent, "aria-label": "Accent colour" });
+    color.addEventListener("input", () => { o.accent = color.value.slice(1); refresh(); });
+    const scale = h("input", { type: "range", min: "0.6", max: "2", step: "0.1", value: String(o.scale), "aria-label": "Size" });
+    const scaleOut = h("span", { class: "mu-val", text: o.scale + "×" });
+    scale.addEventListener("input", () => { o.scale = Number(scale.value); scaleOut.textContent = o.scale + "×"; refresh(); });
+    const pause = h("input", { type: "number", min: "0", max: "300", value: String(o.pause), "aria-label": "Seconds before it hides when paused" });
+    pause.addEventListener("change", () => { o.pause = Math.max(0, Math.min(300, Number(pause.value) || 0)); refresh(); });
+    const hold = h("input", { type: "number", min: "3", max: "120", value: String(o.hold), "aria-label": "Seconds to show each new song" });
+    hold.addEventListener("change", () => { o.hold = Math.max(3, Math.min(120, Number(hold.value) || 10)); refresh(); });
+    const anchors = h("div", { class: "mu-anchor", role: "radiogroup", "aria-label": "Where it sits" });
+    for (const a of ["tl", "tc", "tr", "ml", "mc", "mr", "bl", "bc", "br"]) { const b = h("button", { type: "button", class: o.anchor === a ? "on" : "", "aria-label": a, onclick: () => { o.anchor = a; for (const x of anchors.children) x.classList.toggle("on", x === b); refresh(); } }); anchors.append(b); }
+
+    ui.ov.url = h("input", { type: "password", readonly: true, class: "mu-url", "aria-label": "Overlay link", autocomplete: "off", spellcheck: "false" });
+    ui.ov.copy = h("button", { class: "mu-go", type: "button", text: "Copy link", onclick: async () => { try { await navigator.clipboard.writeText(ui.ov.url.value); toast("Link copied. Paste it into OBS as a Browser source."); } catch { ui.ov.url.type = "text"; ui.ov.url.select(); toast("Press Ctrl+C to copy it."); } } });
+    ui.ov.show = h("button", { class: "mu-mini", type: "button", text: "Show", onclick: () => { const on = ui.ov.url.type === "password"; ui.ov.url.type = on ? "text" : "password"; ui.ov.show.textContent = on ? "Hide" : "Show"; } });
+    ui.ov.make = h("button", { class: "mu-go", type: "button", text: "Create the link", onclick: () => overlayCall("create") });
+    ui.ov.reset = h("button", { class: "mu-mini", type: "button", text: "Make a new link", title: "The old link stops working right away", onclick: () => { if (confirm("Make a new link? The old one stops working right away, so you'd need to paste the new one into OBS.")) overlayCall("reset"); } });
+    ui.ov.off = h("button", { class: "mu-mini bad", type: "button", text: "Turn off", onclick: () => { if (confirm("Turn the overlay off? The link stops working.")) overlayCall("remove"); } });
+    ui.ov.linkBox = h("div", { class: "mu-ov-link" });
+    ui.ov.size = h("p", { class: "mu-hint" });
+    const optionsGrid = h("div", { class: "mu-set" },
+      field("Look", sel("style", [["card", "Card"], ["minimal", "Minimal text"], ["bar", "Wide bar"], ["square", "Square cover"]])), field("Theme", sel("theme", [["dark", "Dark"], ["light", "Light"], ["glass", "Frosted glass"], ["clear", "Clear (no background)"]])),
+      field("Accent colour", color), field("Size", h("div", { class: "mu-inline" }, scale, scaleOut)), field("Where it sits", anchors),
+      field("When it shows", sel("mode", [["always", "Whenever music is playing"], ["popup", "Pop up for each new song"]])), field("Seconds to show each new song", hold), field("Hide after pausing (seconds, 0 = stay)", pause),
+      box("art", "Cover art"), box("progress", "Progress bar"), box("viz", "Live visualizer"), box("label", "“Now playing” label"), box("next", "Up next"));
+    ui.panes.stream.append(
+      h("p", { class: "mu-hint", text: "A compact now-playing card for your stream. It fades in when a song starts, swaps with a shine when it changes, and fades out when the music stops. Try the styles here, then paste the link into OBS." }),
+      h("div", { class: "mu-ov-stage" }, frame, h("button", { class: "mu-mini mu-ov-replay", type: "button", text: "↻ Replay demo", onclick: () => { frame.src = "/overlay?" + params(false) + "&r=" + Date.now(); } })),
+      optionsGrid, h("h3", { class: "mu-h", text: "Your link for this server" }), ui.ov.linkBox, ui.ov.size);
+    frame.src = "/overlay?" + params(false);
+  }
+  function paintUrl() {
+    const v = ui.ov; if (!v) return;
+    const [w, hh] = OV_SIZES[v.o.style].map(n => Math.round(n * v.o.scale));
+    v.size.textContent = `In OBS: add a Browser source, paste the link, set the width to ${w} and the height to ${hh} (or the size of your whole scene and pick where it sits above). Leave "Shutdown source when not visible" off for the smoothest fades.`;
+    if (v.token) v.url.value = `${v.base}?${v.params(true)}`;
+  }
+  async function streamOpen() {
+    const v = ui.ov, mgr = Boolean(data?.channels);
+    if (!mgr) { v.linkBox.replaceChildren(h("p", { class: "mu-empty", text: "Only people with Manage Server can see or create the link. Ask a manager of this server, or use the demo above to pick a look and share the settings." })); return; }
+    try {
+      const r = await api("/api/music/overlay?guild=" + encodeURIComponent(gid));
+      v.token = r.token; v.base = r.base || v.base; drawLink(r.on);
+    } catch (e) { v.linkBox.replaceChildren(h("p", { class: "mu-empty", text: e.message })); }
+  }
+  function drawLink(on) {
+    const v = ui.ov;
+    if (!on) { v.token = null; v.linkBox.replaceChildren(h("p", { class: "mu-hint", text: "No link yet for this server. The link is private: anyone who has it can see the song that's playing, nothing else." }), h("div", { class: "mu-form" }, v.make)); v.size.hidden = true; return; }
+    v.size.hidden = false; paintUrl();
+    v.linkBox.replaceChildren(h("div", { class: "mu-form" }, v.url, v.show, v.copy), h("div", { class: "mu-form" }, v.reset, v.off), h("p", { class: "mu-hint", text: "Keep it private like a password. Make a new link any time and the old one stops working." }));
+  }
+  async function overlayCall(action) {
+    try { const r = await api("/api/music/overlay", { guild_id: gid, action }); ui.ov.token = r.token; drawLink(r.on); toast(action === "remove" ? "Overlay turned off." : action === "reset" ? "New link made. The old one no longer works." : "Link created."); } catch (e) { toast(e.message, "error"); }
+  }
+
   // ---------- manager panels (Auto DJ and server settings), same as the dashboard's Music page ----------
   const num = (v, lo, hi) => { const i = h("input", { type: "number", min: String(lo), max: String(hi), value: String(v) }); return i; };
   const sel = (opts, value) => { const s = h("select"); for (const [v, t] of opts) { const o = h("option", { value: v, text: t }); if (v === value) o.selected = true; s.append(o); } return s; };
@@ -398,7 +479,7 @@
   function selectGuild(id, first) {
     gid = id; store.set("svc_music_guild", id);
     vizOpen(true);
-    ui.radioLoaded = false; ui.qsig = ui.rsig = lastSig = ""; ui.mgrKey = ""; ui.results.replaceChildren(); ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: "Open this tab to see stations." }));
+    ui.radioLoaded = false; ui.qsig = ui.rsig = lastSig = ""; ui.mgrKey = ""; if (ui.ov) { ui.ov.token = null; if (ui.panes.stream.classList.contains("on")) streamOpen(); } ui.results.replaceChildren(); ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: "Open this tab to see stations." }));
     data = null; chatSince = 0; chatFirst = true; ui.msgs.replaceChildren();
     for (const [k, srv] of Object.entries(ui.srv)) srv.classList.toggle("on", k === id);
     refresh().then(() => { if (ui.panes.radio.classList.contains("on")) loadRadio(); });

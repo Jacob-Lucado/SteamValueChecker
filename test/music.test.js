@@ -6,7 +6,7 @@ import { createQueue } from "../src/musicqueue.js";
 import { isSoundcloudUrl, parseEntry, cleanQuery, createSource } from "../src/musicsource.js";
 import { createMusic, isDj, fmtTime } from "../src/music.js";
 import { parseTime, settingsSummary } from "../src/musichandlers.js";
-import { nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, controls, progressBar } from "../src/musicrender.js";
+import { nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, controls, progressBar, playerLink, nowPlayingPayload } from "../src/musicrender.js";
 import { UserError } from "../src/errors.js";
 
 const T = (n, extra = {}) => ({ url: `https://soundcloud.com/a/t${n}`, title: `Track ${n}`, artist: "Artist", duration: 100 + n, thumb: null, ...extra });
@@ -257,6 +257,11 @@ test("the now-playing post, queue and search menu are well formed", () => {
     assert.equal(controls(st).length, 2);
     assert.ok(controls(st).every(r => r.components.every(c => c.custom_id.startsWith("mu:") && c.custom_id.length <= 100)));
     assert.equal(controls({ ...st, paused: true })[0].components[1].custom_id, "mu:resume");
+    const link = playerLink("https://music.bot.example/", "123"); assert.equal(link, "https://music.bot.example/?guild=123");
+    assert.equal(playerLink(null, "1"), null);
+    const withBtn = controls(st, link)[1].components; assert.equal(withBtn.length, 5, "a row holds at most five");
+    assert.deepEqual([withBtn[4].style, withBtn[4].url, withBtn[4].custom_id], [5, link, undefined], "a link button, no handler needed");
+    assert.equal(nowPlayingPayload({ ...st, current: null }, link).components.length, 0);
     assert.match(queueEmbed(st).description, /\*\*1\.\*\*/);
     assert.match(queueEmbed({ ...st, next: [] }).description, /empty/);
     assert.match(addedEmbed({ kind: "track", title: "x", added: 1, first: T(1), position: 2, startedNow: false }).footer.text, /Position 2/);

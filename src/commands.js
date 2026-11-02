@@ -650,9 +650,13 @@ const playCmd = new SlashCommandBuilder()
     .addBooleanOption(o => o.setName("next").setDescription("Put it at the front of the queue"))
     .addBooleanOption(o => o.setName("shuffle").setDescription("Shuffle a playlist as it's added"));
 
+const playerCmd = new SlashCommandBuilder()
+    .setName("player")
+    .setDescription("Open the big music player for this server");
+
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -667,7 +671,7 @@ const HUBS = [
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];
-const KEEP = ["help", "dashboard", "alerts", "mod", "music", "play"];
+const KEEP = ["help", "dashboard", "alerts", "mod", "music", "play", "player"];
 const KINDS = { everywhere, serverOnly, serverOrDm };
 const byName = new Map(commands.map(c => [c.name, c]));
 

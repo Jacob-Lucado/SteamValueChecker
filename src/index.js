@@ -59,7 +59,7 @@ import { createSource } from "./musicsource.js";
 import { createStations } from "./stations.js";
 import { probeRadio } from "./musicradio.js";
 import { createMusicHandlers, guildAdapter } from "./musichandlers.js";
-import { nowPlayingPayload } from "./musicrender.js";
+import { nowPlayingPayload, playerLink } from "./musicrender.js";
 import { createRequestHandlers, FR } from "./requesthandlers.js";
 import { publishRequest } from "./requestsync.js";
 import { createGiveawayHandlers } from "./gwhandlers.js";
@@ -197,12 +197,13 @@ const pollDrops = async () => {
 const dropUi = createDropHandlers({ db, runNow: pollDrops });
 // Music needs Discord's voice library. If it ever fails to load the rest of the bot still runs.
 const musicGuild = guildAdapter(client);
+const playerBase = cfg.dashboard ? (cfg.dashboard.musicUrl ? cfg.dashboard.musicUrl.replace(/\/$/, "") + "/" : publicBase + "/music") : null;
 let music = null, musicUi = null;
 const stations = createStations({ probe: probeRadio });
 try {
     const voice = await import("@discordjs/voice");
-    music = createMusic({ db, source: createSource(), voice, getGuild: musicGuild, api: botRest, panel: (gid, st) => nowPlayingPayload(st), log: m => console.log(`[music] ${m}`) });
-    musicUi = createMusicHandlers({ db, music, adapter: musicGuild, stations });
+    music = createMusic({ db, source: createSource(), voice, getGuild: musicGuild, api: botRest, panel: (gid, st) => nowPlayingPayload(st, playerLink(playerBase, gid)), log: m => console.log(`[music] ${m}`) });
+    musicUi = createMusicHandlers({ db, music, adapter: musicGuild, stations, playerBase });
 } catch (err) { console.error(`[music] turned off: ${err.message}`); }
 const musicOff = i => (i.isRepliable?.() ? i.reply({ content: "Music isn't available on this bot right now.", flags: MessageFlags.Ephemeral }).catch(() => {}) : null);
 const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id => publishRequest({ db, api: botRest, id, base: publicBase }) });
@@ -597,7 +598,7 @@ client.on(Events.InteractionCreate, async i => {
             case "feature": return await requestUi.handleCommand(i);
             case "codes": return await codeUi.handleCommand(i);
             case "promos": return await dropUi.handleCommand(i);
-            case "music": case "play": return musicUi ? await musicUi.handleCommand(i) : await musicOff(i);
+            case "music": case "play": case "player": return musicUi ? await musicUi.handleCommand(i) : await musicOff(i);
             case "grabberad": {
                 const eph = content => i.reply({ content, flags: MessageFlags.Ephemeral });
                 if (!cfg.ownerId || i.user.id !== cfg.ownerId) return await eph("Only the bot owner can use this.");

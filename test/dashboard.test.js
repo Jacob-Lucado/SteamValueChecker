@@ -1787,3 +1787,45 @@ test("music studio: the live visualizer stream needs a sign-in and a server you 
     const anon = await setup({ extra: { music, botGuilds: () => true } });
     try { assert.equal((await anon.request("/api/music/viz?guild=g-admin")).status, 401); } finally { await anon.close(); }
 });
+
+test("stream overlay: managers make the private link, the stream needs only that link, and a new link kills the old one", async () => {
+    const music = { status: () => ({ active: true, playing: true, paused: false, current: { url: "https://soundcloud.com/a/b", title: "Song", artist: "Band", duration: 200, thumb: "https://i1.sndcdn.com/x.jpg" }, position: 12, next: [], volume: 50 }), access: () => ({}), sessions: () => [], viz: () => ({ paused: true }) };
+    const o = await signedIn({ extra: { music, botGuilds: () => true } });
+    try {
+        const get = async () => (await o.request("/api/music/overlay?guild=g-admin")).data;
+        assert.equal((await get()).on, false);
+        assert.ok([403, 404].includes((await o.request("/api/music/overlay?guild=g-nope")).status), "only servers you manage");
+        assert.equal((await o.request("/api/music/overlay", { method: "POST", body: { guild_id: "g-admin", action: "create" }, headers: { Origin: "https://evil.example" } })).status, 403);
+        const made = (await o.request("/api/music/overlay", { method: "POST", body: { guild_id: "g-admin", action: "create" } })).data;
+        assert.match(made.token, /^svco_[A-Za-z0-9_-]{32}$/);
+        const info = await get(); assert.equal(info.on, true); assert.equal(info.token, made.token); assert.match(info.base, /\/overlay$/);
+
+        const read = async token => {
+            const ac = new AbortController();
+            const res = await fetch(o.base + "/api/overlay/stream?token=" + token, { signal: ac.signal });
+            if (res.status !== 200) { ac.abort(); return { status: res.status }; }
+            const reader = res.body.getReader(); let text = "";
+            while (!/\n\n/.test(text)) { const { value, done } = await reader.read(); if (done) break; text += Buffer.from(value).toString(); }
+            ac.abort(); return { status: 200, text, type: res.headers.get("content-type") };
+        };
+        const live = await read(made.token); // no cookie on purpose
+        assert.equal(live.status, 200); assert.match(live.type, /text\/event-stream/);
+        const np = JSON.parse(live.text.split("data: ")[1].split("\n")[0]);
+        assert.deepEqual([np.on, np.playing, np.title, np.artist, np.position], [true, true, "Song", "Band", 12]);
+        assert.equal((await read("svco_" + "x".repeat(32))).status, 404);
+        assert.equal((await read("nonsense")).status, 404);
+
+        const fresh = (await o.request("/api/music/overlay", { method: "POST", body: { guild_id: "g-admin", action: "reset" } })).data.token;
+        assert.notEqual(fresh, made.token);
+        assert.equal((await read(made.token)).status, 404, "the old link stops working");
+        assert.equal((await read(fresh)).status, 200);
+        await o.request("/api/music/overlay", { method: "POST", body: { guild_id: "g-admin", action: "remove" } });
+        assert.equal((await read(fresh)).status, 404);
+
+        const page = await fetch(o.base + "/overlay");
+        assert.equal(page.status, 200);
+        assert.match(page.headers.get("content-security-policy"), /frame-ancestors 'self'/);
+        assert.match(page.headers.get("x-robots-tag"), /noindex/);
+        assert.match(await (await fetch(o.base + "/robots.txt")).text(), /Disallow: \/overlay/);
+    } finally { await o.close(); }
+});

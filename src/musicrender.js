@@ -32,14 +32,21 @@ export function nowPlayingEmbed(st) {
 
 const btn = (id, label, style = 2, disabled = false) => ({ type: 2, style, label, custom_id: `mu:${id}`, disabled });
 
-export function controls(st) {
+/** `playerUrl` is the big player for this server. It becomes a link button; Discord link buttons need no handler. */
+export function controls(st, playerUrl = null) {
     return [
         { type: 1, components: [btn("prev", "⏮"), btn(st.paused ? "resume" : "pause", st.paused ? "▶ Resume" : "⏸ Pause", st.paused ? 3 : 1), btn("skip", "⏭ Skip"), btn("stop", "⏹ Stop", 4), btn("loop", `🔁 ${LOOP_LABEL[st.loop]}`)] },
-        { type: 1, components: [btn("shuffle", "🔀 Shuffle"), btn("voldown", "🔉 -10"), btn("volup", "🔊 +10"), btn("queue", "📜 Queue")] }
+        { type: 1, components: [btn("shuffle", "🔀 Shuffle"), btn("voldown", "🔉 -10"), btn("volup", "🔊 +10"), btn("queue", "📜 Queue"), ...(playerUrl ? [{ type: 2, style: 5, label: "🎛 Big player", url: playerUrl }] : [])] }
     ];
 }
 
-export const nowPlayingPayload = st => ({ embeds: [nowPlayingEmbed(st)], components: st.current ? controls(st) : [], allowed_mentions: { parse: [] } });
+export const nowPlayingPayload = (st, playerUrl = null) => ({ embeds: [nowPlayingEmbed(st)], components: st.current ? controls(st, playerUrl) : [], allowed_mentions: { parse: [] } });
+
+/** The link to the big player, opened on the right server. Null when the web dashboard isn't set up. */
+export function playerLink(base, guildId) {
+    if (!base) return null;
+    try { const u = new URL(base); u.searchParams.set("guild", String(guildId)); return u.toString(); } catch { return null; }
+}
 
 export const QUEUE_PAGE = 10;
 export function queueEmbed(st, page = 0) {

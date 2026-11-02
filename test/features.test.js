@@ -402,7 +402,7 @@ test("every slash command has a dashboard counterpart", async () => {
         "music/pause": "POST /api/music/control", "music/resume": "POST /api/music/control", "music/skip": "POST /api/music/control", "music/skipto": "POST /api/music/control", "music/previous": "POST /api/music/control",
         "music/seek": "POST /api/music/control", "music/stop": "POST /api/music/control", "music/leave": "POST /api/music/control", "music/volume": "POST /api/music/control", "music/loop": "POST /api/music/control",
         "music/shuffle": "POST /api/music/control", "music/remove": "POST /api/music/control", "music/move": "POST /api/music/control", "music/clear": "POST /api/music/control",
-        "music/live": "GET /api/music/stations", "music/submit": "POST /api/music/submit", "music/requests": "GET /api/music", "music/setup": "POST /api/music/autodj", "music/saveplaylist": "POST /api/music/playlists", "music/loadplaylist": "POST /api/music/playlists", "music/deleteplaylist": "POST /api/music/playlists", "music/settings": "POST /api/music/settings", play: "POST /api/music/play",
+        "music/live": "GET /api/music/stations", "music/submit": "POST /api/music/submit", "music/requests": "GET /api/music", "music/setup": "POST /api/music/autodj", "music/saveplaylist": "POST /api/music/playlists", "music/loadplaylist": "POST /api/music/playlists", "music/deleteplaylist": "POST /api/music/playlists", "music/settings": "POST /api/music/settings", play: "POST /api/music/play", player: "GET /api/music",
         leaderboard: "GET /api/servers/leaderboard",
         "giveaway/create": "POST /api/giveaways/create", "giveaway/list": "GET /api/giveaways", "giveaway/info": "GET /api/giveaways/info", "giveaway/end": "POST /api/giveaways/end",
         "giveaway/cancel": "POST /api/giveaways/cancel", "giveaway/reroll": "POST /api/giveaways/reroll", "giveaway/replace": "POST /api/giveaways/replace", "giveaway/setup": "POST /api/giveaways/setup",
@@ -528,7 +528,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "codes", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "feature", "freegames", "friendCmd", "grabberAd", "help", "library", "mydata", "privacy", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "value", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "modCmd", "musicCmd", "playCmd", "promos", "rank", "setup"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "community", "compare", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "modCmd", "musicCmd", "playCmd", "playerCmd", "promos", "rank", "setup"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);
     assert.match(src, /const serverOnly = b => b[\s\S]*?setContexts\(InteractionContextType\.Guild\);/, "server-only commands stay out of DMs");

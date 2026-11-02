@@ -2,7 +2,7 @@
 import { MessageFlags, PermissionFlagsBits, ChannelType } from "discord.js";
 import { UserError } from "./errors.js";
 import { fmtTime } from "./music.js";
-import { fancy, nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, playlistLine, QUEUE_PAGE } from "./musicrender.js";
+import { fancy, nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, playlistLine, playerLink, QUEUE_PAGE } from "./musicrender.js";
 
 const eph = (i, payload, bad = false) => i.reply({ ...fancy(payload, bad), flags: MessageFlags.Ephemeral });
 
@@ -70,7 +70,7 @@ export function autoSummary(s, count, pending) {
     ].join("\n");
 }
 
-export function createMusicHandlers({ db, music, adapter, stations = null }) {
+export function createMusicHandlers({ db, music, adapter, stations = null, playerBase = null }) {
     const picks = new Map(); // search results waiting for a choice
     const sweep = () => { const t = Date.now(); for (const [k, v] of picks) if (v.exp < t) picks.delete(k); };
     const managerOnly = i => { if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new UserError("You need the Manage Server permission to change this."); };
@@ -81,7 +81,7 @@ export function createMusicHandlers({ db, music, adapter, stations = null }) {
         let deferred = false;
         try {
             if (!i.inGuild()) throw new UserError("Music works in servers. Join a voice channel in one and use this there.");
-            const sub = i.commandName === "play" ? "play" : i.options.getSubcommand();
+            const sub = i.commandName === "play" || i.commandName === "player" ? i.commandName : i.options.getSubcommand();
             const gid = i.guildId, uid = i.user.id;
             await adapter(gid)?.warm?.(uid);
             const slow = ["play", "search", "loadplaylist", "live", "submit", "setup"].includes(sub);
@@ -140,6 +140,11 @@ export function createMusicHandlers({ db, music, adapter, stations = null }) {
                     }
                     if (db.getMusicSettings(gid).autodj) music.autoJoin(gid).catch(() => {});
                     return await reply({ content: (Object.keys(patch).length || playlistNote ? "Saved.\n" : "") + playlistNote + autoSummary(db.getMusicSettings(gid), db.getAutoPlaylist(gid).length, db.countSubmissions(gid)), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+                }
+                case "player": {
+                    const url = playerLink(playerBase, gid);
+                    if (!url) throw new UserError("The big player needs the web dashboard, which isn't set up on this bot.");
+                    return await reply({ embeds: [{ color: 0xff5500, title: "🎛 The big music player", description: "Sign in with Discord and you get the full player for this server: the queue, search, radio, live visualizer, and a chat for everyone listening. There's also a Stream tab for showing what's playing on a live stream." }], components: [{ type: 1, components: [{ type: 2, style: 5, label: "Open the big player", url }] }], flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
                 }
                 case "nowplaying": return await reply({ embeds: [nowPlayingEmbed(music.status(gid))] });
                 case "queue": return await reply({ embeds: [queueEmbed(music.status(gid), (i.options.getInteger("page") ?? 1) - 1)], flags: MessageFlags.Ephemeral });

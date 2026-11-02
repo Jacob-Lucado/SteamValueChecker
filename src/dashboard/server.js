@@ -96,6 +96,9 @@ const FILES = {
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
+    "/overlay": ["overlay.html", "text/html; charset=utf-8"],
+    "/overlay.css": ["overlay.css", "text/css; charset=utf-8"],
+    "/overlay.js": ["overlay.js", "text/javascript; charset=utf-8"],
     "/music": ["music.html", "text/html; charset=utf-8"],
     "/music.css": ["music.css", "text/css; charset=utf-8"],
     "/music.js": ["music.js", "text/javascript; charset=utf-8"],
@@ -183,6 +186,44 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         timer = setInterval(tick, 100); tick();
         req.on("close", end); res.on("error", end);
     }
+    // The OBS overlay: a private link per server, no sign-in. It gets the song that is playing and (optionally) the visualizer levels, nothing else.
+    const overlayOpen = new Map();
+    let overlayTotal = 0;
+    function overlayStream(req, res, url) {
+        const token = url.searchParams.get("token") ?? "";
+        const gid = db.guildForOverlay(token);
+        if (!gid || !music) throw new HttpError(404, "This overlay link isn't valid. Make a new one in the music studio's Settings.");
+        const lim = overlayLimit.hit(clientIp(req));
+        if (!lim.ok) throw new HttpError(429, `Too many tries. Try again in ${lim.retryAfterS}s.`);
+        if (overlayTotal >= 100 || (overlayOpen.get(token) ?? 0) >= 4) throw new HttpError(429, "This overlay is open in too many places.");
+        overlayTotal++; overlayOpen.set(token, (overlayOpen.get(token) ?? 0) + 1);
+        const wantViz = url.searchParams.get("viz") === "1" && Boolean(music.viz);
+        res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" });
+        res.write("retry: 2000\n\n");
+        const born = now();
+        let n = 0, timer = 0, over = false, lastNp = "";
+        const end = () => { if (over) return; over = true; clearInterval(timer); overlayTotal--; overlayOpen.set(token, Math.max(0, (overlayOpen.get(token) ?? 1) - 1)); try { res.end(); } catch { /* gone */ } };
+        const np = () => {
+            let st = null;
+            try { st = music.status(gid); } catch { /* busy */ }
+            const t = st?.current;
+            const body = t ? { on: Boolean(st.active), playing: Boolean(st.playing), paused: Boolean(st.paused), id: `${t.url ?? ""}|${t.title}`, title: String(t.title ?? "").slice(0, 150), artist: String(t.artist ?? "").slice(0, 80), thumb: typeof t.thumb === "string" && t.thumb.startsWith("https://") ? t.thumb : null, duration: t.live ? 0 : Number(t.duration) || 0, live: Boolean(t.live), position: st.position ?? 0, next: st.next?.[0]?.title ? String(st.next[0].title).slice(0, 100) : null, auto: Boolean(t.auto), volume: st.volume ?? null }
+                : { on: false, playing: false };
+            return body;
+        };
+        const tick = () => {
+            if (!db.guildForOverlay(token) || now() - born > 12 * 3600_000) return end(); // reset or removed: the old link stops at once
+            if (n % 10 === 0) { const b = np(); const s = JSON.stringify(b); res.write(`event: np\ndata: ${s}\n\n`); lastNp = s; }
+            if (wantViz) {
+                let v = null;
+                try { v = music.viz(gid, 200); } catch { /* skip a beat */ }
+                if (v && !v.paused && v.frames?.length) res.write(`event: viz\ndata: ${JSON.stringify({ m: Math.round(v.playMs), f: v.first, d: Buffer.concat(v.frames.map(x => Buffer.from(x))).toString("base64") })}\n\n`);
+            }
+            n++;
+        };
+        timer = setInterval(tick, 100); tick();
+        req.on("close", end); res.on("error", end);
+    }
     const musicHome = musicOrigin ? musicOrigin + "/" : "/music";
     const cookieDomain = config.cookieDomain && [adminHost, musicHost].some(x => x && x.endsWith("." + config.cookieDomain)) ? config.cookieDomain : null;
     const chat = createMusicChat({ now });
@@ -195,6 +236,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     const steamPending = new Map(); // one-time token -> { steamid, exp }: a Steam sign-in that still needs a Discord account to attach to
     const lastRun = new Map();
     const cache = new Map();
+    const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
     const loginLimit = createLimiter({ windowMs: 60_000, max: 8, now });
@@ -219,6 +261,9 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     const COMPRESSIBLE = /^(text\/|application\/(json|javascript|xml)|image\/svg)/;
     const encodingOf = req => { const a = String(req?.headers?.["accept-encoding"] ?? ""); return /\bbr\b/.test(a) ? "br" : /\bgzip\b/.test(a) ? "gzip" : null; };
     const squeeze = (buf, enc, quality) => (enc === "br" ? brotliCompressSync(buf, { params: { [zc.BROTLI_PARAM_QUALITY]: quality } }) : gzipSync(buf, { level: Math.min(9, quality) }));
+    const CSP =
+"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
+        "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'";
     const send = (res, status, body, headers = {}) => {
         const type = String(headers["Content-Type"] ?? "");
         if (COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && body && Buffer.byteLength(body) > 1024) {
@@ -234,10 +279,9 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             "Cross-Origin-Opener-Policy": "same-origin",
             ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
             // The data and sign-in endpoints never belong in a search result, even if something links to them.
-            ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
-            "Content-Security-Policy":
-                "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
-                "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'",
+            ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music|overlay)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
+            "Content-Security-Policy": /^\/overlay(\?|$)/.test(path) ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
+            ...(/^\/overlay(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
             // The terms and privacy PDFs are shown in a frame on our own pages, so they may be framed by us and by no one else.
             ...(/^\/[a-z-]+\.pdf(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "frame-ancestors 'self'", "Content-Disposition": "inline" } : {}),
             ...headers
@@ -803,6 +847,18 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             if (body.clear) { if (!mod) throw new HttpError(403, "Only DJs, moderators and managers can clear the chat."); chat.clear(g.id); return { ok: true }; }
             if (!chat.remove(g.id, body.id, { by: s.userId, mod })) throw new HttpError(403, "You can only remove your own messages.");
             return { ok: true };
+        },
+        // The OBS overlay link for a server. Only people with Manage Server can see or change it.
+        "GET /api/music/overlay": async (req, _b, url) => {
+            const g = managedGuild(req, url.searchParams.get("guild"));
+            const o = db.getOverlay(g.id);
+            return { on: Boolean(o), token: o?.token ?? null, base: musicOrigin ? musicOrigin + "/overlay" : origin + "/overlay" };
+        },
+        "POST /api/music/overlay": async (req, body) => {
+            const g = managedGuild(req, body.guild_id);
+            if (body.action === "remove") { db.removeOverlay(g.id); return { on: false, token: null }; }
+            if (body.action !== "create" && body.action !== "reset") throw new HttpError(400, "Unknown action.");
+            return { on: true, token: db.resetOverlay(g.id) };
         },
         "GET /api/music/search": async (req, _b, url) => {
             const s = session(req);
@@ -2758,10 +2814,11 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 if (page) return send(res, 200, page, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && (url.pathname === "/admin" || (url.pathname === "/" && onAdminHost(req)))) return await serveFile(res, "/admin", { "Cache-Control": "no-store" });
+            if (req.method === "GET" && url.pathname === "/overlay") return await serveFile(res, "/overlay", { "Cache-Control": "no-store" });
             if (req.method === "GET" && (url.pathname === "/music" || (url.pathname === "/" && onMusicHost(req)))) return await serveFile(res, "/music", { "Cache-Control": "no-store" });
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();
@@ -2919,6 +2976,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
 
             if (key === "POST /api/admin/login") { checkWrite(req); return json(res, 200, adminPasswordLogin(req, res, await readJson(req, 5_000))); }
             if (key === "GET /api/music/viz") return vizStream(req, res, url);
+            if (key === "GET /api/overlay/stream") return overlayStream(req, res, url);
             const handler = routes[key];
             if (!handler) throw new HttpError(404, "Not found.");
             let body = {};

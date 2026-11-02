@@ -195,7 +195,7 @@ html:has(.mu-body) { overflow: clip; }
 .mu-opts { display: flex; gap: 18px; flex-wrap: wrap; margin: -4px 0 14px 4px; }
 .mu-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer; }
 .mu-check input { accent-color: var(--accent); width: 16px; height: 16px; }
-.mu-set { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px 18px; margin-bottom: 18px; align-items: end; }
+.mu-set { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px 18px; margin-bottom: 18px; align-items: start; }
 .mu-set .mu-check { grid-column: 1 / -1; }
 .mu-field { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .mu-field input, .mu-field select, .mu-form select { height: 40px; border-radius: 12px; padding: 0 12px; background: var(--input-bg); border: 1px solid var(--line); color: var(--white); font: inherit; font-size: 14px; min-width: 0; }
@@ -205,3 +205,17 @@ html:has(.mu-body) { overflow: clip; }
 
 .mu-viz { position: absolute; top: 0; bottom: 0; left: 76px; right: 340px; width: calc(100% - 416px); height: 100%; z-index: -1; pointer-events: none; }
 .mu.viz-live .mu-eq i { animation: none !important; opacity: 1; transition: transform .05s linear; }
+
+/* stream overlay tab */
+.mu-ov-stage { position: relative; height: 270px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 18px; background: conic-gradient(rgba(255,255,255,.07) 25%, transparent 0 50%, rgba(255,255,255,.07) 0 75%, transparent 0) 0 0 / 24px 24px, linear-gradient(135deg, #1c2a44, #2a1f4a); }
+.mu-ov-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; color-scheme: normal; }
+.mu-ov-replay { position: absolute; top: 10px; right: 10px; z-index: 2; }
+.mu-inline { display: flex; align-items: center; gap: 10px; }
+.mu-inline input { flex: 1; accent-color: var(--accent); }
+.mu-val { min-width: 34px; color: var(--white); font-variant-numeric: tabular-nums; }
+.mu-field input[type=color] { padding: 2px 4px; height: 40px; width: 72px; cursor: pointer; }
+.mu-anchor { display: grid; grid-template-columns: repeat(3, 26px); gap: 4px; padding: 6px; background: var(--input-bg); border: 1px solid var(--line); border-radius: 10px; width: max-content; }
+.mu-anchor button { width: 26px; height: 18px; border-radius: 5px; border: 0; background: var(--soft-2); cursor: pointer; padding: 0; }
+.mu-anchor button.on { background: var(--accent); }
+.mu-url { flex: 1; min-width: 200px; height: 42px; border-radius: 99px; padding: 0 16px; background: var(--input-bg); border: 1px solid var(--line); color: var(--white); font: 13px/1 ui-monospace, Menlo, Consolas, monospace; }
+.mu-ov-link { margin-bottom: 4px; }
