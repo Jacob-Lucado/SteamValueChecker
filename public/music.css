@@ -223,3 +223,7 @@ html:has(.mu-body) { overflow: clip; }
 /* the Stream tab gets a clean background so the preview and the settings read clearly */
 .mu.on-stream .mu-art, .mu.on-stream .mu-veil, .mu.on-stream .mu-viz { display: none; }
 .mu.on-stream { background: var(--bg); }
+
+.mu-listen { display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 99px; background: linear-gradient(135deg, var(--accent), var(--accent2, #7c6cff)); color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; box-shadow: 0 6px 18px -8px var(--accent); transition: transform .15s ease, filter .15s ease; }
+.mu-listen:hover { transform: translateY(-1px); filter: brightness(1.08); }
+.mu-listen[hidden] { display: none; }

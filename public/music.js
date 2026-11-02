@@ -105,6 +105,7 @@
     ui.vol = h("input", { type: "range", min: "1", max: "100", value: "50", "aria-label": "Volume" });
     ui.vol.addEventListener("change", () => control("volume", { value: Number(ui.vol.value) }));
     ui.pill = h("span", { class: "mu-pill" });
+    ui.listen = h("a", { class: "mu-listen", target: "_blank", rel: "noopener", hidden: true, text: "🎧 Listen now", title: "Opens the voice channel in Discord" });
     ui.note = h("p", { class: "mu-note" });
     ui.name = h("h1", { text: "" });
     const hero = h("section", { class: "mu-hero" }, ui.cover,
@@ -134,7 +135,7 @@
 
     ui.vizBtn = h("button", { class: "mu-mini", type: "button", onclick: cycleViz });
     paintVizBtn();
-    const stage = h("main", { class: "mu-stage" }, h("div", { class: "mu-top" }, ui.name, ui.pill, h("span", { class: "sp" }), ui.vizBtn), ui.note, hero, tabBar, ...Object.values(panes));
+    const stage = h("main", { class: "mu-stage" }, h("div", { class: "mu-top" }, ui.name, ui.pill, ui.listen, h("span", { class: "sp" }), ui.vizBtn), ui.note, hero, tabBar, ...Object.values(panes));
 
     // chat
     ui.here = h("div", { class: "mu-here" });
@@ -276,6 +277,8 @@
     ui.name.textContent = guilds.find(g => g.id === gid)?.name || "";
     ui.pill.className = "mu-pill" + (ok ? " good" : " warn");
     ui.pill.textContent = ok ? `🔊 In ${a.voiceName}` : !a.enabled ? "Music is off here" : !a.inVoice ? "Not in a voice channel" : "Different voice channel";
+    ui.listen.hidden = !(st.active && st.channelId);
+    if (!ui.listen.hidden) ui.listen.href = `https://discord.com/channels/${encodeURIComponent(gid)}/${encodeURIComponent(st.channelId)}`;
     ui.note.hidden = ok;
     ui.note.textContent = !a.present ? "I'm not in that server." : !a.enabled ? "Music is turned off in this server. A manager can turn it on from the dashboard." : !a.inVoice ? "Join a voice channel in this server and the controls unlock. You can already browse, chat and react." : `I'm playing in another voice channel (${st.channelName || "elsewhere"}). Join it to use the controls.`;
 
