@@ -2318,7 +2318,9 @@ export function createDashboard({ emojigg = null, news = null, db, itad, rest, m
                 sessions: { signedIn: live, steamOnly: [...sessions.values()].filter(v => v.expires > t && v.steamOnly).length },
                 bot: botInfo ? botInfo() : null,
                 errors: ops ? (ops.snapshot()?.errors ?? []).slice(0, 10) : [],
-                admin: { host: adminHost, sharedCookie: Boolean(cookieDomain) }
+                admin: { host: adminHost, sharedCookie: Boolean(cookieDomain) },
+                // which release and machine answered, so a deploy that didn't take is easy to spot
+                deploy: { release: String(process.env.FLY_IMAGE_REF ?? "").split(":").pop().slice(0, 40) || null, machine: process.env.FLY_MACHINE_ID ?? null, region: process.env.FLY_REGION ?? null, startedAt: Date.now() - Math.round(process.uptime()) * 1000 }
             };
         },
         // The owner's own username and password, a second way into this panel. Changing anything needs the current password again.

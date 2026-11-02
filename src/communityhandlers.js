@@ -1,6 +1,7 @@
 // Slash commands for the community features: /manage community, /server rank, /server levels, /server invites, /manage emoji, and the role-picker buttons.
 // No discord.js import: everything the handlers need comes from the interaction object and the shared REST helper.
 import { renderWelcomeCard } from "./cardimg.js";
+import { humanCount } from "./members.js";
 import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
 import { UserError } from "./errors.js";
 import { isHidden } from "./hidden.js";
@@ -68,13 +69,13 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             if (card !== null) patch.welcome_card = card ? 1 : 0;
             const c = Object.keys(patch).length ? db.setCommunity(gid, patch) : db.getCommunity(gid);
             if (o.getBoolean("test")) {
-                const sample = welcomePayload({ settings: c, userId: i.user.id, username: i.user.username, avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }), server: i.guild?.name ?? "the server", count: (i.guild?.memberCount ?? 1), inviterId: null, card: c.welcome_card !== 0 });
+                const sample = welcomePayload({ settings: c, userId: i.user.id, username: i.user.username, avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }), server: i.guild?.name ?? "the server", count: (i.guild ? humanCount(i.guild) : 1), inviterId: null, card: c.welcome_card !== 0 });
                 if (c.welcome_card !== 0) {
                     try {
-                        const png = await renderWelcomeCard({ name: i.user.username, server: i.guild?.name ?? "the server", count: (i.guild?.memberCount ?? 1), avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }) });
+                        const png = await renderWelcomeCard({ name: i.user.username, server: i.guild?.name ?? "the server", count: (i.guild ? humanCount(i.guild) : 1), avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }) });
                         return i.reply({ ...sample, content: "This is what a new member sees:", files: [{ attachment: Buffer.from(png), name: "welcome.png" }], flags: EPHEMERAL });
                     } catch { /* falls back to the plain sample below */ }
-                    return i.reply({ ...welcomePayload({ settings: c, userId: i.user.id, username: i.user.username, avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }), server: i.guild?.name ?? "the server", count: (i.guild?.memberCount ?? 1), inviterId: null }), content: "This is what a new member sees:", flags: EPHEMERAL });
+                    return i.reply({ ...welcomePayload({ settings: c, userId: i.user.id, username: i.user.username, avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }), server: i.guild?.name ?? "the server", count: (i.guild ? humanCount(i.guild) : 1), inviterId: null }), content: "This is what a new member sees:", flags: EPHEMERAL });
                 }
                 return i.reply({ ...sample, content: "This is what a new member sees:", flags: EPHEMERAL });
             }

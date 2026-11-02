@@ -1,4 +1,5 @@
 // Numbers and wording for /bot about and the dashboard's About panel. Aggregate only: no names, IDs or keys.
+import { humanCount } from "./members.js";
 
 import { isHidden } from "./hidden.js";
 
@@ -28,7 +29,7 @@ export function collectAbout({ client = null, db, cfg, startedAt, version = "1.0
         uptimeMs: now() - startedAt,
         uptime: formatDuration(now() - startedAt),
         servers: guilds ? guilds.size : null,
-        members: guilds ? [...guilds.values()].reduce((n, g) => n + (g.memberCount ?? 0), 0) : null,
+        members: guilds ? [...guilds.values()].reduce((n, g) => n + humanCount(g), 0) : null,
         pingMs: Number.isFinite(ping) && ping >= 0 ? Math.round(ping) : null,
         gamesWatched: stats.uniqueGames,
         membersWatching: stats.activeUsers,

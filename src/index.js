@@ -10,6 +10,7 @@ import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
+import { humanCount, warmMembers } from "./members.js";
 import { renderWelcomeCard } from "./cardimg.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
@@ -313,13 +314,14 @@ let adLast = 0;
 client.on(Events.GuildCreate, async guild => {
     try {
         if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
+        if (MEMBERS_INTENT) guild.members.fetch({ time: 30_000 }).catch(() => {}); // so its bots can be left out of the member count
         if (db.getMeta(`welcomed:${guild.id}`)) return;
         db.setMeta(`welcomed:${guild.id}`, "1");
         // A brand-new server (only Discord's default channels) is built for them right away: the usual gaming layout, welcome, XP, and the bot's own channels.
         let auto = null, autoNote = null;
         try {
             const [channels, roles] = await Promise.all([botRest.allChannels(guild.id), botRest.allRoles(guild.id)]);
-            if (isFreshGuild({ channels, roles: roles.map(r => ({ ...r, guild_id: guild.id })), memberCount: guild.memberCount })) {
+            if (isFreshGuild({ channels, roles: roles.map(r => ({ ...r, guild_id: guild.id })), memberCount: humanCount(guild) })) {
                 auto = await communitySetup({ api: botRest, db, guildId: guild.id, botId: client.user.id, userId: guild.ownerId, fresh: true, baseUrl: publicBase });
             }
         } catch (e) { autoNote = e.userFacing ? e.message : "I tried to set the server up but hit a problem. Run /manage community setup to try again."; }
@@ -370,7 +372,7 @@ client.on(Events.MessageCreate, async m => {
     } catch (err) { console.error(`[xp] ${err.name}: ${err.message}`); }
 });
 client.on(Events.GuildMemberAdd, async member => {
-    try { await community.onJoin({ guildId: member.guild.id, guildName: member.guild.name, count: member.guild.memberCount, member: { id: member.id, username: member.user.username, avatar: member.user.avatar, bot: member.user.bot } }); }
+    try { await community.onJoin({ guildId: member.guild.id, guildName: member.guild.name, count: humanCount(member.guild), member: { id: member.id, username: member.user.username, avatar: member.user.avatar, bot: member.user.bot } }); }
     catch (err) { console.error(`[welcome] ${err.name}: ${err.message}`); }
 });
 client.on(Events.GuildMemberRemove, async member => {
@@ -428,6 +430,7 @@ const status = createStatusMonitor({
         dashboard: { name: "Web dashboard", desc: "This website and its API", critical: false, check: () => ({ state: "operational" }) }
     }
 });
+client.once(Events.ClientReady, () => { if (MEMBERS_INTENT) warmMembers(client.guilds.cache, { log: m => console.log(`[members] ${m}`) }); }); // so bots can be left out of member counts
 client.once(Events.ClientReady, () => { if (process.env.PRESENCE !== "off") startPresence({ client, db, supportUrl: cfg.creator?.url, log: m => console.log(m) }); });
 client.once(Events.ClientReady, () => { status.start(); registerLinkedRoles(botRest, cfg.dashboard?.publicUrl ?? null, m => console.log(m)).then(ok => ok && console.log("[linked roles] conditions registered")); });
 // Remember each server's invite counts so a join can be matched to the invite that was used.
@@ -705,7 +708,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: g.memberCount })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ news, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

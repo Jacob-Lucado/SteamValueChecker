@@ -1621,6 +1621,7 @@ test("admin panel: own address, sign-in handoff, audit trail, system page, and n
         const sys = await o.request("/api/admin/system");
         assert.equal(sys.status, 200);
         assert.ok(sys.data.process.rssMb > 0);
+        assert.ok(sys.data.deploy.startedAt <= Date.now() && sys.data.deploy.startedAt > Date.now() - 3600_000, "when this process started"); assert.ok("release" in sys.data.deploy && "machine" in sys.data.deploy);
         assert.equal(sys.data.admin.host, "admin.bot.example");
         assert.equal(sys.data.admin.sharedCookie, true);
     } finally { await o.close(); }

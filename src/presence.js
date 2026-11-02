@@ -1,4 +1,5 @@
 // The bot's Discord status: a line under its name that rotates through server and member counts, uptime and the owner's X link.
+import { humanCount } from "./members.js";
 // Discord only lets a bot set an activity's type, name and (for streaming) link. The Rich Presence extras (big images, buttons,
 // "Ask to Join", elapsed timers) are refused for bots. So the profile gets two lines that Discord does allow:
 // a real activity ("Watching ...", the card under the name) and the custom status line with the rotating facts.
@@ -35,7 +36,7 @@ export function startPresence({ client, db, supportUrl, startedAt = Date.now(), 
         try {
             const all = client.guilds?.cache, guilds = all ? { size: all.filter ? all.filter(g => !isHidden(g.id)).size : all.size, reduce: (f, a) => (all.filter ? all.filter(g => !isHidden(g.id)) : all).reduce(f, a) } : undefined;
             const lines = presenceLines({
-                servers: guilds?.size, members: guilds ? guilds.reduce((n, g) => n + (g.memberCount ?? 0), 0) : undefined,
+                servers: guilds?.size, members: guilds ? guilds.reduce((n, g) => n + humanCount(g), 0) : undefined,
                 users: (() => { if (now() - usersAt > 600_000) { usersAt = now(); try { users = db?.stats?.().users; } catch { /* keep the last number */ } } return users; })(), uptimeMs: now() - startedAt, supportUrl
             });
             const state = lines[i++ % lines.length];
