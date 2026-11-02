@@ -231,7 +231,7 @@ test("subscriptions: a quiet first look, then an alert when a wishlist game join
     subs.set("b", [{ id: 6, name: "Game Pass", leaving: null }]);
     const s2 = await runExtras(t);
     assert.equal(s2.delivered, 1); assert.match(t.sent[0].p.embeds[0].title, /Title b is on Game Pass/);
-    assert.equal(t.sent[0].p.components.length, 0, "no link button, there is nothing to open");
+    assert.equal(t.sent[0].p.components.length, 1, "a button to find the game on the service"); assert.match(t.sent[0].p.components[0].components[0].url, /^https:\/\//);
     subs.set("a", [{ id: 6, name: "Game Pass", leaving: Date.now() + 5 * 86400_000 }]);
     const s3 = await runExtras(t);
     assert.equal(s3.delivered, 1); assert.match(t.sent[1].p.embeds[0].title, /Title a is leaving Game Pass/);

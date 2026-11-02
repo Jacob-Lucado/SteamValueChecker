@@ -250,6 +250,17 @@ export function subEmbed({ item, sub, kind }) {
         footer: { text: "Subscription alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" }
     };
 }
+// Where to look the game up on each service. Falls back to a web search for the game plus the service name.
+const SUB_LINKS = [
+    ["game pass", t => `https://www.xbox.com/en-US/search?q=${t}`], ["prime", t => `https://gaming.amazon.com/home?q=${t}`], ["luna", () => "https://luna.amazon.com/"],
+    ["humble", () => "https://www.humblebundle.com/games"], ["ubisoft", () => "https://www.ubisoft.com/en-us/ubisoftplus"], ["ea play", t => `https://www.ea.com/ea-play?q=${t}`],
+    ["ps plus", t => `https://store.playstation.com/search/${t}`], ["playstation", t => `https://store.playstation.com/search/${t}`]
+];
+export function subLink(sub, title) {
+    const t = encodeURIComponent(String(title ?? "")), name = String(sub?.name ?? "").toLowerCase();
+    const hit = SUB_LINKS.find(([k]) => name.includes(k));
+    return hit ? hit[1](t) : `https://www.google.com/search?q=${encodeURIComponent(`${title} ${sub?.name ?? ""}`)}`;
+}
 const SUB_ICON = { "game pass": "🎮", "prime": "📦", "luna": "🌙", "humble": "💚", "ubisoft": "🔷", "ea play": "🅴", "playstation": "🎮", "ps plus": "🎮" };
 const subIcon = name => SUB_ICON[Object.keys(SUB_ICON).find(k => String(name).toLowerCase().includes(k))] ?? "📦";
 
@@ -534,9 +545,10 @@ export function extrasPayload(hits, { pager = null } = {}) {
 /** Link buttons under bundle and giveaway alerts, one per card. */
 export function extrasButtons(hits) {
     return hits.map(h => {
-        const url = safeUrl((h.bundle ?? h.giveaway)?.url);
-        if (!url) return null; // subscription alerts have no link
-        const label = h.kind === "bundle" ? "View bundle" : "Claim it";
+        const isSub = h.kind === "sub" || h.kind === "subleave";
+        const url = isSub ? safeUrl(subLink(h.sub, h.item?.title)) : safeUrl((h.bundle ?? h.giveaway)?.url);
+        if (!url) return null;
+        const label = isSub ? `Find it on ${short(h.sub?.name ?? "the service", 24)}` : h.kind === "bundle" ? "View bundle" : "Claim it";
         return { type: 1, components: [linkButton(hits.length > 1 ? `${label}: ${short(h.item.title, 28)}` : label, url)] };
     });
 }
