@@ -346,16 +346,17 @@
     ui.clear.hidden = !(dj || a.isManager || a.isBotOwner);
   }
   // ---------- stream overlay: a compact player for OBS, with a live demo and the private link for this server ----------
-  const OV_DEFAULTS = { style: "card", theme: "dark", accent: "4da3ff", scale: 1, anchor: "bl", art: 1, progress: 1, viz: 1, label: 1, next: 0, bg: 100, opacity: 100, mode: "always", hold: 10, pause: 6 };
+  const OV_DEFAULTS = { style: "card", theme: "dark", accent: "4da3ff", scale: 1, anchor: "bl", art: 1, progress: 1, viz: 1, label: 1, next: 0, bg: 100, opacity: 100, preview: "live", backdrop: "checker", view: "close", mode: "always", hold: 10, pause: 6 };
   const OV_SIZES = { card: [520, 170], minimal: [500, 120], bar: [820, 120], square: [330, 410], vinyl: [520, 180], neon: [520, 150], poster: [390, 390], ticker: [690, 80], compact: [360, 100] };
   function buildStream() {
     let o = { ...OV_DEFAULTS };
     try { Object.assign(o, JSON.parse(store.get("svc_music_ov") || "{}")); } catch { /* start fresh */ }
     ui.ov = { o, token: null, base: location.origin + "/overlay", shown: false };
     const save = () => store.set("svc_music_ov", JSON.stringify(o));
-    const params = (withToken) => {
+    // kind: "link" (the real source link), "demo" (the show reel) or "feed" (what is playing right now, handed over by this page)
+    const params = kind => {
       const p = new URLSearchParams();
-      if (withToken) p.set("token", ui.ov.token); else p.set("demo", "1");
+      if (kind === "link") p.set("token", ui.ov.token); else if (kind === "feed") p.set("feed", "parent"); else p.set("demo", "1");
       p.set("style", o.style); p.set("theme", o.theme); p.set("accent", o.accent); if (o.scale !== 1) p.set("scale", String(o.scale)); p.set("anchor", o.anchor);
       for (const k of ["art", "progress", "viz", "label", "next", "bg", "opacity"]) if (o[k] !== OV_DEFAULTS[k]) p.set(k, String(o[k]));
       if (o.mode === "popup") { p.set("mode", "popup"); p.set("hold", String(o.hold)); }
@@ -363,9 +364,36 @@
       return p.toString();
     };
     ui.ov.params = params;
+    const seg = (key, label, opts) => {
+      const wrap = h("div", { class: "mu-seg", role: "radiogroup", "aria-label": label }), paint = () => { for (const b of wrap.querySelectorAll("button")) { const on = b.dataset.v === o[key]; b.classList.toggle("on", on); b.setAttribute("aria-checked", String(on)); } };
+      for (const [v, text] of opts) wrap.append(h("button", { type: "button", role: "radio", "data-v": v, text, onclick: () => { o[key] = v; paint(); save(); if (key === "preview") { frame.src = src(); pushNp(); } else sizeStage(); } }));
+      paint(); return h("div", { class: "mu-seg-wrap" }, h("span", { class: "mu-seg-k", text: label }), wrap);
+    };
     const frame = h("iframe", { class: "mu-ov-frame", title: "Preview of the stream overlay", loading: "lazy" });
+    const hint = h("div", { class: "mu-ov-hint", hidden: true }, h("b", { text: "Nothing is playing right now." }), h("span", { text: " Start a song to see it here." }), h("button", { class: "mu-mini", type: "button", text: "Show the demo reel", onclick: () => { o.preview = "demo"; save(); frame.src = src(); for (const b of ui.panes.stream.querySelectorAll('[aria-label="Preview"] button')) b.classList.toggle("on", b.dataset.v === "demo"); } }));
+    const stage = h("div", { class: "mu-ov-stage" }, frame, hint);
+    ui.ov.now = h("p", { class: "mu-hint mu-ov-now" });
+    // "Full scene" draws the overlay on a real 1920x1080 canvas, shrunk to fit, so you see exactly how big it will be on stream
+    function sizeStage() {
+      const full = o.view === "scene", w = stage.clientWidth || 800;
+      stage.dataset.bg = o.backdrop; stage.dataset.view = o.view;
+      if (full) { const k = w / 1920; frame.style.width = "1920px"; frame.style.height = "1080px"; frame.style.transform = `scale(${k})`; stage.style.height = Math.round(1080 * k) + "px"; }
+      else { frame.style.width = "100%"; frame.style.height = "100%"; frame.style.transform = "none"; stage.style.height = ""; }
+    }
+    // what is playing, handed to the preview every second so it fades, swaps and moves like the real thing
+    function pushNp() {
+      const st = data?.status, t = st?.current, win = frame.contentWindow; let np;
+      if (!st?.active || !t) np = { on: false };
+      else { const playing = Boolean(st.playing) && !st.paused; np = { on: true, playing: Boolean(st.playing), paused: Boolean(st.paused), id: `${t.url ?? ""}|${t.title}`, title: String(t.title ?? ""), artist: String(t.artist ?? ""), thumb: /^https:/.test(t.thumb ?? "") ? t.thumb : "", duration: t.duration || 0, live: Boolean(t.live || st.live), position: (st.position || 0) + (playing ? (performance.now() - (ui.ovStamp || performance.now())) / 1000 : 0), next: st.next?.[0]?.title ?? "", auto: Boolean(t.auto), volume: st.volume }; }
+      const live = o.preview === "live";
+      hint.hidden = !(live && !np.on);
+      ui.ov.now.textContent = live ? (np.on ? `Previewing what's playing right now: ${np.title}${np.artist ? " by " + np.artist : ""}.` : "") : "Showing the demo reel: made-up songs so you can see the fades and the song swap.";
+      if (live && win) { try { win.postMessage({ svc: "np", np }, location.origin); } catch { /* not loaded yet */ } }
+    }
+    ui.ov.push = pushNp; ui.ov.frame = frame;
     let t = 0;
-    const refresh = () => { clearTimeout(t); t = setTimeout(() => { save(); frame.src = "/overlay?" + params(false); paintUrl(); }, 250); };
+    const src = () => "/overlay?" + params(o.preview === "demo" ? "demo" : "feed");
+    const refresh = () => { clearTimeout(t); t = setTimeout(() => { save(); frame.src = src(); paintUrl(); }, 250); };
     ui.ov.refresh = refresh;
     const sel = (key, opts) => { const s = h("select"); for (const [v, label] of opts) s.append(h("option", { value: v, text: label, selected: String(o[key]) === v })); s.addEventListener("change", () => { o[key] = s.value; refresh(); }); return s; };
     const box = (key, label) => { const [i, l] = check(o[key] === 1, label); i.addEventListener("change", () => { o[key] = i.checked ? 1 : 0; refresh(); }); return l; };
@@ -397,15 +425,21 @@
       box("art", "Cover art"), box("progress", "Progress bar"), box("viz", "Live visualizer"), box("label", "“Now playing” label"), box("next", "Up next"));
     ui.panes.stream.append(
       h("p", { class: "mu-hint", text: "A compact now-playing card for your stream. It fades in when a song starts, swaps with a shine when it changes, and fades out when the music stops. Try the styles here, then paste the link into OBS." }),
-      h("div", { class: "mu-ov-stage" }, frame, h("button", { class: "mu-mini mu-ov-replay", type: "button", text: "↻ Replay demo", onclick: () => { frame.src = "/overlay?" + params(false) + "&r=" + Date.now(); } })),
+      h("div", { class: "mu-ov-bar" }, seg("preview", "Preview", [["live", "What's playing now"], ["demo", "Demo reel"]]), seg("backdrop", "Behind it", [["checker", "Transparent"], ["game", "Game scene"], ["bright", "Bright"]]), seg("view", "View", [["close", "Close-up"], ["scene", "Full 1080p scene"]]),
+        h("button", { class: "mu-mini", type: "button", text: "↻ Replay", onclick: () => { frame.src = src() + "&r=" + Date.now(); } })),
+      stage, ui.ov.now,
       optionsGrid, h("h3", { class: "mu-h", text: "Your own link for this server" }), ui.ov.linkBox, ui.ov.size);
-    frame.src = "/overlay?" + params(false);
+    frame.src = src();
+    sizeStage(); new ResizeObserver(sizeStage).observe(stage);
+    frame.addEventListener("load", () => pushNp());
+    window.addEventListener("message", e => { if (e.origin === location.origin && e.source === frame.contentWindow && e.data?.svc === "ready") pushNp(); });
+    clearInterval(ui.ov.feedTimer); ui.ov.feedTimer = setInterval(pushNp, 1000);
   }
   function paintUrl() {
     const v = ui.ov; if (!v) return;
     const [w, hh] = OV_SIZES[v.o.style].map(n => Math.round(n * v.o.scale));
     v.size.textContent = `In OBS: add a Browser source, paste the link, set the width to ${w} and the height to ${hh} (or the size of your whole scene and pick where it sits above). Leave "Shutdown source when not visible" off for the smoothest fades.`;
-    if (v.token) v.url.value = `${v.base}?${v.params(true)}`;
+    if (v.token) v.url.value = `${v.base}?${v.params("link")}`;
   }
   async function streamOpen() {
     const v = ui.ov;
@@ -478,6 +512,7 @@
   // ---------- loading ----------
   async function refresh() {
     try { data = await api("/api/music?guild=" + encodeURIComponent(gid)); } catch (e) { if (e.status === 401) return boot(); toast(e.message, "error"); return; }
+    ui.ovStamp = performance.now();
     paint(true);
     try { guilds.find(g => g.id === gid).active = data.status.active; } catch { /* fine */ }
   }
@@ -512,6 +547,7 @@
     es.onmessage = ev => {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (!m.p) { vizFresh = 0; return; }
+      if (ui.ov?.o.preview === "live" && ui.panes.stream.classList.contains("on")) { try { ui.ov.frame.contentWindow.postMessage({ svc: "viz", m }, location.origin); } catch { /* preview not ready */ } }
       const bin = atob(m.d), n = Math.floor(bin.length / BANDS), at = performance.now();
       if (m.m < vizLastM - 500 || m.f < vizLast - 100) { vizQueue = []; vizLast = m.f - 1; } // a new song, or a jump
       vizLastM = m.m;

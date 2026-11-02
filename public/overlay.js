@@ -12,7 +12,7 @@
     accent: hex("accent", "#4da3ff"), accent2: hex("accent2", "#7c6cff"), scale: num("scale", 1, 0.5, 3),
     anchor: pick("anchor", ["tl", "tc", "tr", "ml", "mc", "mr", "bl", "bc", "br"], "bl"),
     progress: flag("progress", true), viz: flag("viz", true), art: flag("art", true), label: flag("label", true), next: flag("next", false),
-    popup: q.get("mode") === "popup", hold: num("hold", 10, 3, 120), hideAfterPause: num("pause", 6, 0, 300), delay: num("delay", 200, 0, 1000),
+    feed: q.get("feed") === "parent", popup: q.get("mode") === "popup", hold: num("hold", 10, 3, 120), hideAfterPause: num("pause", 6, 0, 300), delay: num("delay", 200, 0, 1000),
     bg: num("bg", 100, 0, 100), opacity: num("opacity", 100, 10, 100)
   };
   const root = document.getElementById("ov");
@@ -157,5 +157,14 @@
     es.addEventListener("np", e => { try { onNp(JSON.parse(e.data)); } catch { /* skip */ } });
     es.addEventListener("viz", e => { try { onViz(JSON.parse(e.data)); } catch { /* skip */ } });
   }
-  if (cfg.demo) demo(); else if (cfg.token) live();
+  // Preview inside the music studio: the studio passes along what is playing right now (same address only).
+  function fed() {
+    window.addEventListener("message", e => {
+      if (e.origin !== location.origin || e.source !== window.parent) return;
+      const m = e.data; if (!m || typeof m !== "object") return;
+      if (m.svc === "np" && m.np) onNp(m.np); else if (m.svc === "viz" && m.m) onViz(m.m);
+    });
+    try { window.parent.postMessage({ svc: "ready" }, location.origin); } catch { /* not framed */ }
+  }
+  if (cfg.feed) fed(); else if (cfg.demo) demo(); else if (cfg.token) live();
 })();
