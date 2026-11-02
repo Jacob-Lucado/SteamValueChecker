@@ -1,8 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
-    { version: "2026.11.05", date: "2026-11-05", title: "Fewer commands, bigger music", items: [
+    { version: "2026.11.06", date: "2026-11-06", title: "People-only counts", items: [
         "**Member counts leave out bots:** the member numbers the bot shows (about, status, welcome messages, member numbers, the dashboard) now count people only. Turn on the Server Members intent so every bot can be spotted; without it only the bot itself is left out.",
         "**Admin system health:** now shows when the running bot started and which release, machine and region it is on.",
+    ] },
+    { version: "2026.11.05", date: "2026-11-05", title: "Fewer commands, bigger music", items: [
         "**Patch notes and news:** turn on `/alerts news` (or pick it on the dashboard's Alerts page) and the bot tells you about new patch notes, or every announcement, for the Steam games you own or wishlist. `/me library news` shows the latest right now. Your first check is quiet, so only new posts reach you.",
         "**Sale countdowns:** alerts, `/me wishlist check` and the weekly digest now say when a sale ends (\"ends in 9 hours\") whenever the store gives an end date.",
         "**Welcome cards:** the welcome message for new members now comes with a picture card showing their avatar, name and member number. Servers can turn it off with `/manage welcome card:false` or on the dashboard's Community page.",
