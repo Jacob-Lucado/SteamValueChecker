@@ -18,9 +18,10 @@ test("embeds keep what a command set and get what it left out", () => {
 
 test("bare text becomes a card, except when it pings someone or carries embeds or files", () => {
     const t = brandPayload({ content: "✅ Saved." }, { logo });
-    assert.equal(t.content, undefined); assert.equal(t.embeds[0].description, "✅  Saved."); assert.equal(t.embeds[0].color, BRAND_COLOR);
+    assert.equal(t.content, undefined); assert.equal(t.embeds[0].description, "✅  Saved."); assert.equal(t.embeds[0].color, 0x57f287);
     assert.equal(brandPayload("hello").embeds[0].description, "hello");
     assert.equal(brandPayload({ content: "⚠️ No." }).embeds[0].color, 0xed4245);
+    assert.equal(brandPayload({ content: "✅ Saved." }).embeds[0].color, 0x57f287, "good news is green");
     assert.equal(brandPayload({ content: "<@123456789012345678> you won" }).content, "<@123456789012345678> you won", "pings stay as text");
     assert.equal(brandPayload({ content: "@everyone hi" }).embeds, undefined);
     const withEmbed = brandPayload({ content: "<@&123456789012345678>", embeds: [{ title: "x" }] }, { logo });

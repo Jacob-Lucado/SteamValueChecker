@@ -49,11 +49,11 @@ export function createStreamHandlers({ db, streams, ownerId = null, publicUrl = 
                 }
                 case "setup": {
                     if (!isManager(i)) throw new UserError("You need the Manage Server permission to change this.");
-                    const patch = {}, role = i.options.getRole("streamerrole"), ch = i.options.getChannel("channel"), ping = i.options.getRole("pingrole");
-                    if (role) patch.streamer_role_id = role.id; if (ch) patch.live_channel = ch.id; if (ping) patch.ping_stream = ping.id;
+                    const patch = {}, role = i.options.getRole("streamerrole"), ch = i.options.getChannel("channel"), ping = i.options.getRole("pingrole"), auto = i.options.getBoolean("auto");
+                    if (role) patch.streamer_role_id = role.id; if (ch) patch.live_channel = ch.id; if (ping) patch.ping_stream = ping.id; if (auto !== null) patch.stream_auto = auto ? 1 : 0;
                     if (Object.keys(patch).length) db.setCommunity(gid, patch);
                     const n = db.getCommunity(gid);
-                    return await eph(i, { embeds: [{ color: 0x9146ff, title: "Streams", description: [`**Streamer role:** ${n.streamer_role_id ? `<@&${n.streamer_role_id}>` : "not set"}`, `**Live channel:** ${n.live_channel ? `<#${n.live_channel}>` : "not set"}`, `**Ping role:** ${n.ping_stream ? `<@&${n.ping_stream}>` : "not set"}`, "", Object.keys(patch).length ? "Saved." : "Pick any of the options to change them. Moderators and managers can always stream.", publicUrl ? `\nDashboard: ${publicUrl}/#/streams` : ""].join("\n") }] });
+                    return await eph(i, { embeds: [{ color: 0x9146ff, title: "Streams", description: [`**Streamer role:** ${n.streamer_role_id ? `<@&${n.streamer_role_id}>` : "not set"}`, `**Live channel:** ${n.live_channel ? `<#${n.live_channel}>` : "not set"}`, `**Ping role:** ${n.ping_stream ? `<@&${n.ping_stream}>` : "not set"}`, `**Automatic go-live:** ${n.stream_auto === 0 ? "off (people post with /server stream live)" : "on (linked channels are watched)"}`, "", Object.keys(patch).length ? "Saved." : "Pick any of the options to change them. Moderators and managers can always stream.", publicUrl ? `\nDashboard: ${publicUrl}/#/streams` : ""].join("\n") }] });
                 }
                 default: return;
             }

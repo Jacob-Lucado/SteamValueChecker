@@ -199,6 +199,7 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
  * Each giveaway is announced once per member.
  */
 const LAST_CHANCE_MS = 24 * 3600_000;
+const QUIET_START = [{ prefix: "luna:", marker: "freestart:luna" }]; // Amazon Luna's games are already open when it first shows up
 
 export async function runFreeGames({ db, itad, notifier, now = () => Date.now(), log = () => {}, fetchImpl = globalThis.fetch }) {
     const stats = { found: 0, delivered: 0, failed: 0, deferred: 0 };
@@ -209,6 +210,14 @@ export async function runFreeGames({ db, itad, notifier, now = () => Date.now(),
     catch (err) { log(`free game lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; return stats; }
 
     for (const user of users) {
+        // A store the member has never been told about starts quietly: its open offers count as already seen, so only new ones are announced.
+        for (const store of QUIET_START) {
+            const open = list.filter(g => String(g.id).startsWith(store.prefix));
+            if (open.length && !db.hasSeen(user.discord_id, store.marker)) {
+                for (const g of open) { db.markSeen(user.discord_id, `free:${g.id}`); db.markSeen(user.discord_id, `freelast:${g.id}`); }
+                db.markSeen(user.discord_id, store.marker);
+            }
+        }
         const mine = withOwnership(list, db, user.discord_id); // the same offers, with whether this member owns each DLC's base game
         // Last chance: a giveaway they were already told about, ending within a day, gets one reminder.
         const soon = mine.filter(g => g.url && g.expiry && g.expiry > now() && g.expiry - now() <= LAST_CHANCE_MS
@@ -314,6 +323,10 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
     try { list = (await enrichFree(await itad.getGiveawayList())).filter(g => g.url && !isDlc(g)); }
     catch (err) { log(`feed lookup failed: ${err.code ?? err.name}`); return stats; }
     for (const guild of guilds) {
+        for (const store of QUIET_START) {
+            const open = list.filter(g => String(g.id).startsWith(store.prefix));
+            if (open.length && !db.guildHasSeen(guild.guild_id, store.marker)) { for (const g of open) db.guildMarkSeen(guild.guild_id, `free:${g.id}`); db.guildMarkSeen(guild.guild_id, store.marker); }
+        }
         const fresh = list.filter(g => !db.guildHasSeen(guild.guild_id, `free:${g.id}`));
         if (!fresh.length) continue;
         stats.guilds++;

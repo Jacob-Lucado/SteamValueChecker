@@ -886,7 +886,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const c = db.getCommunity(g.id), mgr = isManager(g) || isOwner(s), roleIds = mgr ? [] : await rolesIn(g.id, s.userId);
             const out = {
                 guild: { id: g.id, name: g.name }, me: s.userId,
-                settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream },
+                settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream, auto: c.stream_auto !== 0 },
                 live: db.listStreamLive(g.id).map(r => ({ userId: r.user_id, title: r.title, url: r.url, game: r.game, since: r.started, mine: r.user_id === s.userId })),
                 can: { go: canStreamIn(c, { roleIds, isManager: isManager(g), isBotOwner: isOwner(s) }), manage: mgr },
                 optedIn: streams ? await streams.optedIn(g.id, s.userId) : null,
@@ -956,8 +956,9 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const patch = {};
             const pick = (k, list) => { if (!(k in body)) return; const v = body[k] ? String(body[k]) : null; if (v && !list.some(x => x.id === v)) throw new HttpError(400, "That isn't in this server."); return v; };
             for (const [k, list] of [["streamer_role_id", ch.roles], ["live_channel", ch.channels], ["ping_stream", ch.roles]]) { const v = pick(k, list); if (v !== undefined) patch[k] = v; }
+            if ("auto" in body) patch.stream_auto = body.auto ? 1 : 0;
             const c = db.setCommunity(g.id, patch);
-            return { settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream } };
+            return { settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream, auto: c.stream_auto !== 0 } };
         },
         "GET /api/music/search": async (req, _b, url) => {
             const s = session(req);

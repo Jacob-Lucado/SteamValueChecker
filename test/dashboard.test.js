@@ -1885,7 +1885,10 @@ test("streams: only streamers, mods and managers get the overlay and go-live; an
         // managers (g-admin) always can, and can change the settings
         assert.equal((await o.request("/api/music?guild=g-admin")).data.access.canStream, true);
         const set = await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-admin", streamer_role_id: "sr", live_channel: "c2", ping_stream: "pr" } });
-        assert.equal(set.status, 200); assert.deepEqual(set.data.settings, { streamer_role_id: "sr", live_channel: "c2", ping_stream: "pr" });
+        assert.equal(set.status, 200); assert.deepEqual(set.data.settings, { streamer_role_id: "sr", live_channel: "c2", ping_stream: "pr", auto: true });
+        const off = await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-admin", auto: false } });
+        assert.equal(off.data.settings.auto, false, "a manager can switch the automatic posts off"); assert.equal(off.data.settings.live_channel, "c2", "the rest is kept");
+        assert.equal((await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-admin", auto: true } })).data.settings.auto, true);
         assert.equal((await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-admin", live_channel: "nope" } })).status, 400);
     } finally { await o.close(); }
 });

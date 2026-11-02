@@ -490,7 +490,8 @@ const streamCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("setup").setDescription("Managers: pick the streamer role, live channel and ping role")
         .addRoleOption(o => o.setName("streamerrole").setDescription("People with this role can announce streams"))
         .addChannelOption(o => o.setName("channel").setDescription("Where go-live posts appear").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
-        .addRoleOption(o => o.setName("pingrole").setDescription("The opt-in role that gets pinged")));
+        .addRoleOption(o => o.setName("pingrole").setDescription("The opt-in role that gets pinged"))
+        .addBooleanOption(o => o.setName("auto").setDescription("Post by itself when linked streamers go live (on by default)")));
 
 const modCmd = new SlashCommandBuilder()
     .setName("mod")

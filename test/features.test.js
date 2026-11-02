@@ -341,6 +341,20 @@ test("free games: one message per platform, Claim all for several, once per memb
     assert.deepEqual(t.db.listAlerts("u1").map(a => a.kind), ["free", "free", "free"]);
 });
 
+test("free games: a store the member has never seen (Amazon Luna) starts quietly, then new games are announced", async () => {
+    const lunaGame = (n) => ({ ...free("luna:amzn1.pg.item." + n, "Luna " + n, "Amazon Luna", "https://luna.amazon.com/claims/x/dp/amzn1.pg.item." + n), expiry: Date.now() + 10 * 86400_000 });
+    const list = [free("1", "Alpha", "Steam"), lunaGame("a"), lunaGame("b")];
+    const t = rig({ freeList: list });
+    t.db.ensureUser("u1", "g1"); t.db.updateUser("u1", { free: 1 });
+    await runFreeGames(t);
+    assert.equal(t.sent.length, 1, "only the Steam game; the open Luna claims are not announced");
+    assert.match(t.sent[0].p.content, /Steam/);
+    list.push(lunaGame("c"));
+    await runFreeGames(t);
+    assert.equal(t.sent.length, 2); assert.match(t.sent[1].p.content, /Amazon Luna/); assert.match(t.sent[1].p.embeds[0].title, /Luna c/);
+    assert.equal(t.sent.filter(m => /Luna/.test(m.p.content)).length, 1, "no reminder for the quiet ones either");
+});
+
 test("free games: a reminder goes out once when an announced giveaway is about to end", async () => {
     const T0 = Date.UTC(2026, 0, 5, 12);
     const g = { ...free("1", "Alpha", "Steam"), expiry: T0 + 20 * 3600_000 };

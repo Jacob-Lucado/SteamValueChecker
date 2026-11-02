@@ -91,3 +91,13 @@ test("without Twitch keys the link is kept but nothing is checked", async () => 
     db.setStreamLink("g", "u9", { platform: "twitch", handle: "zed", via: "role", added: 1 });
     assert.deepEqual(await w.tick(), { live: 0, ended: 0 });
 });
+
+test("a manager can switch the automatic posts off for their server and back on", async () => {
+    const r = rig({ live: new Map([["alpha", { title: "Speedruns", game: "Celeste", url: "https://twitch.tv/alpha" }]]) });
+    r.db.setStreamLink("g", "u1", { platform: "twitch", handle: "alpha", via: "role", added: 1 });
+    r.db.setCommunity("g", { stream_auto: 0 });
+    assert.deepEqual(await r.watch.tick(), { live: 0, ended: 0 }); assert.equal(r.sent.length, 0, "off: nothing posted");
+    assert.equal(r.db.getCommunity("g").stream_auto, 0);
+    r.db.setCommunity("g", { stream_auto: 1 });
+    assert.equal((await r.watch.tick()).live, 1); assert.equal(r.sent.length, 1);
+});

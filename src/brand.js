@@ -4,11 +4,12 @@ export const BRAND_COLOR = 0xff9800;
 export const BRAND_NAME = "Steam Value Checker";
 
 const BAD = /^(⚠️|❌|🚫|⛔)/u;
+const GOOD = /^(✅|🎉|☑️|👍)/u;
 const noteOf = text => {
     const t = String(text).trim();
     const m = t.match(/^(\p{Extended_Pictographic}️?)\s*(.*)$/su);
     const bad = BAD.test(t);
-    return { color: bad ? 0xed4245 : BRAND_COLOR, description: m && !bad ? `${m[1]}  ${m[2]}` : t.slice(0, 4000) };
+    return { color: bad ? 0xed4245 : GOOD.test(t) ? 0x57f287 : BRAND_COLOR, description: m && !bad ? `${m[1]}  ${m[2]}` : t.slice(0, 4000) };
 };
 
 /** Brands one embed (plain object or an EmbedBuilder). Returns a new object; the original is left alone. */

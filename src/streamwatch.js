@@ -97,7 +97,8 @@ export function createStreamWatch({ db, streams, api, checkers = createCheckers(
     const misses = new Map(); // "guild:user" -> consecutive offline checks
     const can = watchable(env);
     async function tick() {
-        const links = db.allStreamLinks();
+        const off = new Map(); // servers where a manager switched the automatic posts off
+        const links = db.allStreamLinks().filter(l => { if (!off.has(l.guild_id)) off.set(l.guild_id, db.getCommunity(l.guild_id)?.stream_auto === 0); return !off.get(l.guild_id); });
         if (!links.length) return { live: 0, ended: 0 };
         const bySite = {};
         for (const l of links) if (can[l.platform]) (bySite[l.platform] ??= new Set()).add(l.handle.toLowerCase());

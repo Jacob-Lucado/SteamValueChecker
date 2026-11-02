@@ -4870,8 +4870,9 @@
         const roles = [["", "Not set"], ...(d.roles ?? []).map(r => [r.id, r.name])], chans = [["", "Not set"], ...(d.channels ?? []).map(c => [c.id, "#" + c.name])];
         const sr = select(roles, d.settings.streamer_role_id || ""), lc = select(chans, d.settings.live_channel || ""), pr = select(roles, d.settings.ping_stream || "");
         const sv = h("button", { class: "btn blue small", text: "Save settings" });
-        sv.addEventListener("click", () => run(sv, () => post("/api/streams/settings", { streamer_role_id: sr.value, live_channel: lc.value, ping_stream: pr.value }), "Saved."));
-        settings = h("div", { class: "panel" }, h("h3", { text: "Settings (managers)" }), h("div", { class: "grid two" }, field("Streamer role", sr), field("Live channel", lc)), field("Ping role (members opt in to it)", pr), h("div", { class: "row" }, sv),
+        const autoBox = h("input", { type: "checkbox", id: "stream-auto" }); autoBox.checked = d.settings.auto !== false;
+        sv.addEventListener("click", () => run(sv, () => post("/api/streams/settings", { streamer_role_id: sr.value, live_channel: lc.value, ping_stream: pr.value, auto: autoBox.checked }), "Saved."));
+        settings = h("div", { class: "panel" }, h("h3", { text: "Settings (managers)" }), h("div", { class: "grid two" }, field("Streamer role", sr), field("Live channel", lc)), field("Ping role (members opt in to it)", pr), h("label", { class: "check", for: "stream-auto" }, autoBox, " Post by itself when linked streamers go live"), h("div", { class: "row" }, sv),
           h("p", { class: "muted small", text: "The streamer role, moderators and managers can announce streams, and see the OBS overlay in the music player. Community setup makes all three for you." }));
       }
       holder.replaceChildren(...[picker, liveList, linkPanel, goPanel, pingPanel, settings].filter(Boolean));
