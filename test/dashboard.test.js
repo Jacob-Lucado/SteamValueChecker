@@ -608,6 +608,7 @@ test("the page has share-preview tags with the real address, plus robots and sit
     assert.match(robots, /Allow: \/grabber/);
     const map = await (await t.request("/sitemap.xml", { raw: true })).text();
     for (const p of ["/", "/grabber", "/terms.html", "/privacy.html"]) assert.ok(map.includes(`<loc>${ORIGIN}${p}</loc>`), p);
+    assert.match(map, /<loc>[^<]+\/grabber<\/loc><lastmod>\d{4}-\d\d-\d\d<\/lastmod>/);
     await t.close();
 });
 

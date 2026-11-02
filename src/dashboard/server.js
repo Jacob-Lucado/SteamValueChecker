@@ -7,7 +7,7 @@ import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes, createHash } from "node:crypto";
 import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -2555,7 +2555,11 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 return send(res, 200, `Contact: https://x.com/twit_user69\nExpires: ${expires}\nPreferred-Languages: en\nCanonical: ${origin}/.well-known/security.txt\nPolicy: ${origin}/privacy.html\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" });
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
-                return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${["/", "/grabber", "/terms.html", "/privacy.html"].map(p => `<url><loc>${origin}${p}</loc></url>`).join("")}</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                // Public pages only. The date is when the file behind each page last changed, so crawlers know what to revisit.
+                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"]];
+                const day = f => { try { return statSync(join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
+                const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
+                return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (url.pathname.startsWith("/auth/")) {
                 const r = authLimit.hit(clientIp(req));
