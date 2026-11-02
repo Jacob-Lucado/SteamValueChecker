@@ -103,7 +103,7 @@ test("the app asks for sign-in, and the config carries the FanaticalGrabber link
     assert.equal((await t.request("/api/me")).status, 401);
     assert.equal((await t.request("/api/wishlist")).status, 401);
     const c = await t.request("/api/config");
-    assert.equal(c.data.fanaticalUrl, "https://jacob-lucado.github.io/FanaticalGrabber/");
+    assert.equal(c.data.fanaticalUrl, "https://steamvaluechecker.com/grabber");
     assert.match(c.data.inviteUrl, /client_id=123/);
     assert.ok(c.data.regions.length >= 6);
     await t.close();
@@ -1535,6 +1535,25 @@ test("the terms and privacy policy are public pages on the bot's own site", asyn
     assert.equal(mdToHtml("[bad](javascript:alert(1))").includes("href"), false);
     for (const k of ["terms", "privacy"]) { const html = legalPage(k, "https://bot.example"); assert.match(html, /<title>/); assert.ok(!/github\.com/i.test(html)); assert.match(html, new RegExp(`canonical" href="https://bot.example/${k}.html"`)); }
     assert.equal(legalPage("nope", "x"), null);
+});
+
+test("the FanaticalGrabber page is served by the bot and its counter works from there", async () => {
+    const t = await setup();
+    try {
+        for (const path of ["/grabber", "/grabber.html"]) {
+            const r = await t.request(path, { raw: true });
+            assert.equal(r.status, 200, path);
+            const html = await r.text();
+            assert.match(html, /FanaticalGrabber/);
+            assert.ok(!html.includes("__ORIGIN__"), "share-preview address filled in");
+            assert.ok(!/<style|<script>|\sstyle="/.test(html), "no inline code, the site's security policy forbids it");
+        }
+        for (const f of ["/grabber.css", "/grabber.js", "/grabber-og.png", "/grabber-favicon.ico"]) assert.equal((await t.request(f, { raw: true })).status, 200, f);
+        const own = ORIGIN;
+        const hit = await t.request("/api/visits/fanaticalgrabber?new=1", { method: "POST", headers: { Origin: own }, raw: true });
+        assert.equal(hit.headers.get("access-control-allow-origin"), own);
+        assert.equal((await hit.json()).visitors >= 1, true, "a visit from the bot's own page is counted");
+    } finally { await t.close(); }
 });
 
 test("terms and privacy answer at .html and at the plain path", async () => {

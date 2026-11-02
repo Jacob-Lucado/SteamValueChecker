@@ -90,6 +90,14 @@ const FILES = {
     "/grabber-ad-cart.png": ["grabber-ad-cart.png", "image/png"],
     "/grabber-ad-paid.png": ["grabber-ad-paid.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
+    "/grabber": ["grabber.html", "text/html; charset=utf-8"],
+    "/grabber.html": ["grabber.html", "text/html; charset=utf-8"],
+    "/grabber.css": ["grabber.css", "text/css; charset=utf-8"],
+    "/grabber.js": ["grabber.js", "text/javascript; charset=utf-8"],
+    "/grabber-og.png": ["grabber-og.png", "image/png"],
+    "/grabber-favicon.ico": ["grabber-favicon.ico", "image/x-icon"],
+    "/grabber-favicon-32.png": ["grabber-favicon-32.png", "image/png"],
+    "/grabber-apple-touch-icon.png": ["grabber-apple-touch-icon.png", "image/png"],
     "/favicon.png": ["favicon.png", "image/png"],
     "/img/codes/genshin.jpg": ["img/codes/genshin.jpg", "image/jpeg"],
     "/img/codes/hsr.jpg": ["img/codes/hsr.jpg", "image/jpeg"],
@@ -2452,7 +2460,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         if (!body) {
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return send(res, 404, "Not found", { "Content-Type": "text/plain" }); }
             // The page's share-preview tags need the real public address, so it is filled in once here.
-            if (file === "index.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
+            if (file === "index.html" || file === "grabber.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
             cache.set(file, body);
             cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`);
         }
@@ -2480,7 +2488,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     }
 
     // Visit counter for the FanaticalGrabber web page (GitHub Pages). Public, tiny, totals only, and only that site may call it.
-    const VISIT_SITES = { fanaticalgrabber: "https://jacob-lucado.github.io", dashboard: origin }; // the dashboard counts its own visitors, same origin
+    const VISIT_SITES = { fanaticalgrabber: ["https://jacob-lucado.github.io", origin], dashboard: [origin] }; // the first is where the counter answers by default; the grabber page lives on the old GitHub address and on this site
     const seenVisitors = new Map(); // ip -> time, in memory only, so one address counts as a new visitor once a day
     const visitLimit = createLimiter({ windowMs: 3600_000, max: 40, now });
     const presentBySite = new Map(); // site -> (random per-tab id -> last seen). In memory only; nothing about a person is kept.
@@ -2491,8 +2499,9 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     const markPresent = (site, id) => { const present = presentFor(site); if (/^[a-z0-9]{8,32}$/i.test(id ?? "") && (present.size < 5000 || present.has(id))) present.set(id, now()); };
     function visits(req, res, url) {
         const [site, action] = url.pathname.slice("/api/visits/".length).split("/");
-        const allowed = VISIT_SITES[site];
-        if (!allowed || (action && action !== "ping")) throw new HttpError(404, "Not found.");
+        const sites = VISIT_SITES[site];
+        if (!sites || (action && action !== "ping")) throw new HttpError(404, "Not found.");
+        const allowed = sites.includes(req.headers.origin) ? req.headers.origin : sites[0];
         const cors = { "Access-Control-Allow-Origin": allowed, "Vary": "Origin", "Cross-Origin-Resource-Policy": "cross-origin" };
         const counts = () => ({ ...db.siteCounts(site), online: online(site) });
         if (req.method === "OPTIONS") return send(res, 204, "", { ...cors, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Max-Age": "86400" });
@@ -2531,7 +2540,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /auth/\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
-                return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url></urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url><url><loc>${origin}/grabber</loc></url></urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (url.pathname.startsWith("/auth/")) {
                 const r = authLimit.hit(clientIp(req));

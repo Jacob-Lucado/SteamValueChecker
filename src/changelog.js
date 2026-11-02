@@ -5,6 +5,7 @@ export const CHANGELOG = [
         "**One card at a time:** messages that used to stack several cards (a batch of free games, several wishlist alerts, bundle and giveaway alerts, long replies) now show one card with Previous / Next buttons and a jump menu. Each page keeps its own buttons.",
         "**Emoji packs:** `/manage emoji packs` browses emoji.gg packs one at a time and imports the one you pick (still only, animated only, or both, in batches of 50). The dashboard's Community page has the same with tick boxes. Emoji links from any website now work too, and animated Discord emoji keep their movement.",
         "**Terms and privacy:** the Terms of Service and Privacy Policy are pages on the bot's own site (`/terms.html` and `/privacy.html`), linked from the footer and `/bot privacy`.",
+        "**FanaticalGrabber page:** the extension's web page now lives on the bot's own site at `/grabber`, with the same live demo and visitor counter.",
         "**Paged help:** `/help` is now a clean paged embed with a menu for each topic.",
         "**Live radio:** `/music live` lists stations that are on the air right now, and you can paste any Icecast or Shoutcast stream link into `/play`.",
         "**Auto DJ:** managers pick a playlist and the bot keeps playing it when nobody has queued anything. Members send requests (`/music autodj submit`, or on the dashboard) and they play first.",

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FanaticalGrabber + Batch Redeem - Reveal, export and redeem Fanatical keys</title>
+<meta name="description" content="FanaticalGrabber reveals the game keys in your Fanatical orders in one click and exports them as TXT, CSV, JSON, Markdown, HTML or Excel. Batch Redeem then activates them on Steam.">
+<link rel="canonical" href="__ORIGIN__/grabber">
+<meta name="theme-color" content="#ff9800">
+<link rel="icon" href="/grabber-favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/grabber-favicon-32.png">
+<link rel="apple-touch-icon" href="/grabber-apple-touch-icon.png">
+
+<!-- Open Graph (Discord, Facebook, LinkedIn, Slack, iMessage, etc.) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FanaticalGrabber">
+<meta property="og:title" content="FanaticalGrabber + Batch Redeem - Reveal, export and redeem Fanatical keys">
+<meta property="og:description" content="FanaticalGrabber reveals the game keys in your Fanatical orders in one click and exports them as TXT, CSV, JSON, Markdown, HTML or Excel. Batch Redeem then activates them on Steam.">
+<meta property="og:url" content="__ORIGIN__/grabber">
+<meta property="og:image" content="__ORIGIN__/grabber-og.png?v=3">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="FanaticalGrabber and Batch Redeem panels side by side">
+
+<!-- X / Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="FanaticalGrabber + Batch Redeem - Reveal, export and redeem Fanatical keys">
+<meta name="twitter:description" content="FanaticalGrabber reveals the game keys in your Fanatical orders in one click and exports them as TXT, CSV, JSON, Markdown, HTML or Excel. Batch Redeem then activates them on Steam.">
+<meta name="twitter:image" content="__ORIGIN__/grabber-og.png?v=3">
+<link rel="stylesheet" href="/grabber.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/grabber">FanaticalGrabber</a>
+  <nav>
+    
+    <a href="#features">Features</a><a href="#install">Install</a><a href="#faq">FAQ</a>
+    
+    <a href="https://jacob-lucado.github.io/FanaticalGrabber/privacy.html">Privacy</a>
+    <a class="xlink" href="/">Steam Value Checker ↗</a>
+  </nav>
+</div></header>
+
+
+<main>
+<div class="wrap hero">
+  <div>
+    <h1>Reveal, export and redeem your Fanatical keys</h1>
+    <p>FanaticalGrabber adds a panel to your Fanatical orders page. It clicks every "Reveal Key" button for you, exports the keys in the format you pick, and redeems them on Steam in one batch.</p>
+    <div class="btns">
+      <a class="btn main" href="https://chromewebstore.google.com/detail/fanaticalgrabber/kmbpdeglijkfbkifilcckkeljagcdbnb" target="_blank" rel="noopener noreferrer">Add to Chrome</a>
+      <a class="btn alt" href="#features">See what it does</a>
+    </div>
+    <p class="note">Available on the Chrome Web Store. Works in Chrome, Edge, Brave, Opera and Vivaldi. Keys stay in your browser.</p>
+  </div>
+
+  <div>
+    <div class="demo-tabs" role="tablist" aria-label="Demo">
+      <button role="tab" aria-selected="true" data-demo="fanatical" id="tabF">On Fanatical</button>
+      <button role="tab" aria-selected="false" data-demo="steam" id="tabS">On Steam</button>
+    </div>
+    <div id="demoFanatical">
+    <div class="fg closed" id="fg">
+      <button class="fg-head" id="fgHead" aria-expanded="false"><span>FanaticalGrabber</span></button>
+      <div class="fg-body">
+        <div class="fg-stat" id="fgStatus">Status: Ready</div>
+        <div class="fg-stat" id="fgCount">Keys Revealed: 0</div>
+        <button class="b exp" id="fgExport" aria-expanded="false">Export ▾</button>
+        <div class="menu" id="fgMenu">
+          <button id="fgFiles" class="parent" aria-expanded="false">Save as file ▾</button>
+          <div class="sub" id="fgSub">
+            <button>Text (.txt)</button><button>CSV (.csv)</button><button>JSON (.json)</button>
+            <button>Markdown (.md)</button><button>HTML page (.html)</button><button>Excel (.xlsx)</button>
+          </div>
+          <button>Copy to clipboard</button>
+          <button>⏩ Queue for the Steam batch redeem</button>
+          <button id="fgSend" class="send">Send to Steam Value Checker</button>
+        </div>
+        <button class="b rev" id="fgReveal">Reveal All</button>
+        <button class="b red" id="fgRedeem">Redeem on Steam (Beta)</button>
+        <span class="fg-x">Follow Jacob Lucado</span>
+        <div class="fg-foot">© 2026 Jacob Lucado<br>FanaticalGrabber v2.8.2</div>
+      </div>
+    </div>
+    <p class="hint">This is a working demo of the panel. Click the orange bar to open it.</p>
+    </div>
+    <div id="demoSteam" hidden>
+      <div class="sg closed" id="sg">
+        <button class="sg-bar" id="sgBar" aria-expanded="false"><span>Batch Redeem</span></button>
+        <div class="sg-panel">
+          <button class="sg-head" id="sgHead" title="Click to minimise"><span>Batch Redeem<small>v2.8.2</small></span><span aria-hidden="true">–</span></button>
+          <div class="sg-body">
+            <div class="sg-banner info" id="sgBanner">Make sure you're logged into the Steam account you want the games on. Keys are redeemed one at a time, about 3 seconds apart, using your signed-in session.</div>
+            <textarea id="sgBox" spellcheck="false" placeholder="Paste Steam keys here, one per line or mixed in with other text. Format: AAAAA-BBBBB-CCCCC" aria-label="Steam keys"></textarea>
+            <div class="sg-row"><button class="go" id="sgGo">Redeem all</button><button id="sgStop" hidden>Stop</button><button id="sgFile">Open a .txt file</button><button id="sgQueue">Load keys from Fanatical</button><span class="sg-count" id="sgCount"></span></div>
+            <label class="sg-chk"><input type="checkbox" id="sgSkip"> Skip games I already own (only for keys loaded from Fanatical)</label>
+            <div class="sg-bar2"><i id="sgProg"></i></div>
+            <div class="sg-list" id="sgList" hidden></div>
+            <div class="sg-sum" id="sgSum" hidden></div>
+            <div class="sg-row"><button id="sgReport" hidden>Download report</button></div>
+            <div class="sg-foot">Keys never leave your browser except to Steam. Already-handled keys are remembered and skipped. (This demo is pretend.)</div>
+          </div>
+        </div>
+      </div>
+      <p class="hint">This is the Steam side. The real one appears on every Steam store page, and on the Activate a Product page it sits under Steam's own form. This demo does not contact Steam.</p>
+    </div>
+  </div>
+</div>
+
+<section id="features"><div class="wrap">
+  <h2>What it does</h2>
+  <p>The panel sits in the corner of your Fanatical page. A matching bar appears on Steam for redeeming.</p>
+  <div class="cols">
+    <div class="card">
+      <h3>Reveal All</h3>
+      <p>Clicks every "Reveal Key" button on the page. The clicks are spaced out so Fanatical does not get a burst of requests.</p>
+    </div>
+    <div class="card">
+      <h3>Save your keys your way</h3>
+      <p>Press Export and pick a format. Any keys still hidden are revealed first, so the export is complete.</p>
+      <div class="fmts"><span>TXT</span><span>CSV</span><span>JSON</span><span>Markdown</span><span>HTML</span><span>Excel</span><span>Clipboard</span></div>
+    </div>
+    <div class="card wide">
+      <h3>Send to Steam Value Checker <span class="tag">New</span></h3>
+      <p>Sends the game titles (never the keys) to the <a href="https://steamvaluechecker.com/" rel="noopener noreferrer" target="_blank">Steam Value Checker</a> Discord bot, with what you paid. Run <code>/library grabber</code> in Discord once to get a link code, then paste it into the panel.</p>
+    </div>
+    <div class="card steam wide">
+      <h3>Batch Redeem <span class="tag">New panel</span></h3>
+      <p>On Steam you will see a Batch Redeem bar. Open it, paste your keys (or open a .txt file, or load the ones you revealed on Fanatical) and it redeems them on the Steam account you are logged into. On the Activate a Product page the panel sits under Steam's own form.</p>
+      <ul class="tick">
+        <li>Paste keys mixed in with other text, or open a .txt file. It finds anything in Steam's <code>XXXXX-XXXXX-XXXXX</code> format and ignores the rest.</li>
+        <li>Load every unredeemed key from your Fanatical orders in one click. You can skip games you already own.</li>
+        <li>Remembers which keys were redeemed, already owned or already used, and skips them next time.</li>
+        <li>Waits 3 seconds between keys, shows progress, and has a Stop button.</li>
+        <li>Stops if you get logged out or Steam rate-limits you.</li>
+        <li>Gives you a CSV report with the result for every key.</li>
+        <li>You can drag the bar or the header to move it. It remembers the position.</li>
+      </ul>
+      <p class="mt14">Note: this uses the same redeem request Steam's own site uses. It is not an official API, so it could break if Steam changes it. Try a couple of keys first. Keys are only ever sent to Steam.</p>
+    </div>
+    <div class="card wide">
+      <h3>Also on Steam <span class="tag">New</span></h3>
+      <ul class="tick">
+        <li><b>Price card</b> on game pages: the best current price, the all-time low, and whether you own or wishlisted the game. Prices are in your currency. Needs your Steam Value Checker link code.</li>
+        <li><b>Bundle check</b>: on a bundle page, compares the bundle with buying the games one by one.</li>
+        <li><b>Cart check</b>: warns you at checkout if a game in your cart is cheaper elsewhere or you already own it.</li>
+        <li><b>Key vault</b>: keys you reveal are saved in your browser only, so you can see which ones are still unredeemed.</li>
+      </ul>
+    </div>
+    </div>
+  </div>
+</div></section>
+
+<section id="install"><div class="wrap">
+  <h2>Install</h2>
+  
+    <p>Install it from the Chrome Web Store. It updates itself.</p>
+  <p><a class="btn main" href="https://chromewebstore.google.com/detail/fanaticalgrabber/kmbpdeglijkfbkifilcckkeljagcdbnb" target="_blank" rel="noopener noreferrer">Add to Chrome</a></p>
+  <p class="note">Brave, Opera and Vivaldi can install from the Chrome Web Store too. Edge will ask you to allow extensions from other stores first.</p>
+  <h3>Then</h3>
+  <ol class="steps">
+    <li><b>Click Add to Chrome</b> on the Web Store page and confirm.</li>
+    <li><b>Head to your Fanatical orders</b> and click the orange <b>FanaticalGrabber</b> bar in the bottom right.</li>
+  </ol>
+  <p>Web Store installs update on their own, and the panel tells you when a new version is out.</p>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <h2>FAQ</h2>
+  <details><summary>Does it send my keys anywhere?</summary>
+    <p>No. Revealing, exporting and copying all happen in your browser. Keys go to Steam only when you press Redeem. The optional "Send to Steam Value Checker" button shares game titles, never keys. Details are in the <a href="https://jacob-lucado.github.io/FanaticalGrabber/privacy.html">privacy policy</a>.</p></details>
+  <details><summary>Where do I find the Steam panel?</summary>
+    <p>Open any page on <code>store.steampowered.com</code> and look for the Batch Redeem bar in the bottom right. Click it to open the panel. On the Activate a Product page it is already open under the form. Check that you are logged into the Steam account you want the games on.</p></details>
+  <details><summary>Can I move the panels?</summary>
+    <p>Yes. Drag the bar or the header, on Fanatical or on Steam. Each one remembers its own position, and when you minimise it, it returns to its usual corner.</p></details>
+  <details><summary>Does Redeem work for keys from other stores?</summary>
+    <p>Not for redeeming. Batch Redeem only handles Steam keys and skips anything that is not in Steam's format. Exports include every key.</p></details>
+  <details><summary>Why did Redeem say I'm not logged in?</summary>
+    <p>Log into <code>store.steampowered.com</code> in the same browser profile, then try again. Being signed into the Steam desktop app does not count.</p></details>
+  <details><summary>What if Steam rate-limits me?</summary>
+    <p>It stops immediately. Wait about an hour, then try again with smaller batches.</p></details>
+  <details><summary>Does it work in Firefox or Safari?</summary>
+    <p>No. It uses Chromium's extension system, so it needs a Chromium-based browser.</p></details>
+  <details><summary>Something broke. Where do I report it?</summary>
+    <p>Send me a message on <a href="https://x.com/twit_user69" rel="noopener noreferrer" target="_blank">X</a> with your browser, the version number in the panel footer, and the message or CSV report the panel gave you. Feature ideas are welcome too.</p></details>
+</div></section>
+</main>
+
+<script src="/grabber.js" defer></script>
+
+
+<footer><div class="wrap">
+  <span>© 2026 <a href="https://x.com/twit_user69" rel="noopener noreferrer" target="_blank">Jacob Lucado</a>. FanaticalGrabber v2.8.2</span>
+  <span>Not affiliated with Fanatical or Valve. Steam is a trademark of Valve Corporation.</span>
+  <span id="visits" hidden aria-live="polite"></span>
+</div></footer>
+</body>
+</html>
