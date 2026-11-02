@@ -14,6 +14,9 @@ export function adminUrlOf(publicUrl, raw) {
     } catch { return null; }
 }
 
+/** The music studio's own address: MUSIC_URL if set, else music. in front of the public domain (same rules as the admin panel). */
+export const musicUrlOf = (publicUrl, raw) => (raw ? publicUrlOf(raw) : (adminUrlOf(publicUrl, null) ?? "").replace("://admin.", "://music.") || null);
+
 // Reads settings from environment variables (loaded from .env by the entry points).
 export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIENT_ID", "ITAD_API_KEY"]) {
     const missing = required.filter(k => !env[k]);
@@ -39,8 +42,9 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
             publicUrl: publicUrlOf(env.DASHBOARD_URL),
             clientSecret: env.DISCORD_CLIENT_SECRET,
             adminUrl: adminUrlOf(publicUrlOf(env.DASHBOARD_URL), env.ADMIN_URL),
+            musicUrl: musicUrlOf(publicUrlOf(env.DASHBOARD_URL), env.MUSIC_URL),
             // One sign-in for the main site and the admin panel: the session cookie is set for the whole domain.
-            cookieDomain: env.COOKIE_DOMAIN || (adminUrlOf(publicUrlOf(env.DASHBOARD_URL), env.ADMIN_URL) ? new URL(publicUrlOf(env.DASHBOARD_URL)).hostname : null),
+            cookieDomain: env.COOKIE_DOMAIN || (adminUrlOf(publicUrlOf(env.DASHBOARD_URL), env.ADMIN_URL) || musicUrlOf(publicUrlOf(env.DASHBOARD_URL), env.MUSIC_URL) ? new URL(publicUrlOf(env.DASHBOARD_URL)).hostname : null),
             port: Number(env.DASHBOARD_PORT) || 3000,
             host: env.DASHBOARD_HOST || "127.0.0.1"
         } : null,

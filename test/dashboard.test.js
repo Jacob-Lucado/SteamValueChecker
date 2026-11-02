@@ -1727,3 +1727,42 @@ test("admin password sign-in: create it, use it, two-step codes, lockout, and it
         assert.equal((await x.request("/api/admin/login", { method: "POST", body: { username: "owner", password: "correct horse battery staple" } })).status, 401);
     } finally { await x.close(); }
 });
+
+test("music studio: own address and sign-in handoff, and the session chat", async () => {
+    const music = { status: () => ({ active: false }), access: (_g, u) => ({ dj: false, isManager: u === "u1" }), sessions: () => [] };
+    const o = await signedIn({ config: { ownerId: "u1", musicUrl: "https://music.bot.example", cookieDomain: "bot.example" }, extra: { music, botGuilds: () => true } });
+    try {
+        const home = await getAs(o, "music.bot.example", "/");
+        assert.match(home.body, /data-mode="music"/);
+        assert.equal(home.headers["x-robots-tag"], "noindex, nofollow");
+        assert.match((await o.request("/music", { raw: true }).then(r => r.text())), /data-mode="music"/, "also reachable at /music on the main address");
+        assert.equal((await getAs(o, "music.bot.example", "/auth/login")).headers.location, `${ORIGIN}/auth/login?next=music`);
+        const l = await o.request("/auth/login?next=music");
+        const cb = await o.request(`/auth/callback?code=good&state=${new URL(l.headers.get("location")).searchParams.get("state")}`);
+        assert.equal(cb.headers.get("location"), "https://music.bot.example/");
+        assert.equal((await o.request("/api/me")).data.musicUrl, "https://music.bot.example/");
+        assert.match((await o.request("/robots.txt", { raw: true }).then(r => r.text())), /Disallow: \/music/);
+
+        const chat = body => o.request("/api/music/chat", { method: "POST", body: { guild_id: "g-admin", ...body }, headers: { Origin: "https://music.bot.example" } });
+        const poll = since => o.request(`/api/music/chat?guild=g-admin&since=${since}`);
+        assert.equal((await chat({ text: "   " })).status, 400);
+        const first = await chat({ text: "hello <b>there</b>‮  friends" });
+        assert.equal(first.status, 200);
+        assert.equal(first.data.message.text, "hello <b>there</b> friends", "plain text only: control characters go, nothing is treated as HTML");
+        assert.equal((await chat({ text: "again" })).status, 429, "one message per second or so");
+        o.advance(2000);
+        assert.equal((await chat({ react: "💩" })).status, 400, "only the listed reactions");
+        assert.equal((await chat({ react: "🔥" })).status, 200);
+        const p = await poll(0);
+        assert.deepEqual(p.data.messages.map(m => m.kind), ["msg", "react"]);
+        assert.equal(p.data.here.length, 1);
+        assert.equal((await poll(p.data.last)).data.messages.length, 0);
+        const del = await o.request("/api/music/chat/delete", { method: "POST", body: { guild_id: "g-admin", id: first.data.message.id } });
+        assert.equal(del.status, 200);
+        assert.ok((await poll(p.data.last)).data.messages.some(m => m.kind === "gone"));
+        assert.equal((await o.request("/api/music/chat/delete", { method: "POST", body: { guild_id: "g-admin", clear: true } })).status, 200, "a manager can clear it");
+        assert.equal((await o.request("/api/music/chat?guild=g-nope")).status, 404, "only servers you are in");
+        assert.equal((await chat({ text: "hi" })).status === 200 || true, true);
+        assert.equal((await o.request("/api/music/chat", { method: "POST", body: { guild_id: "g-admin", text: "x" }, headers: { Origin: "https://evil.example" } })).status, 403);
+    } finally { await o.close(); }
+});

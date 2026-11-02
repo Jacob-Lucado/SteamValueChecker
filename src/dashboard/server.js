@@ -75,6 +75,7 @@ import { isHidden } from "../hidden.js";
 import { legalPage, legalFramePage } from "../legal.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
 import { MAX_KEYS } from "../gwstore.js";
+import { createMusicChat } from "../musicchat.js";
 import { checkPassword, burnTime, passwordProblem, USERNAME_RE, newTotpSecret, matchTotp, totpUri } from "../adminlogin.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
@@ -95,6 +96,9 @@ const FILES = {
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
+    "/music": ["music.html", "text/html; charset=utf-8"],
+    "/music.css": ["music.css", "text/css; charset=utf-8"],
+    "/music.js": ["music.js", "text/javascript; charset=utf-8"],
     "/admin": ["admin.html", "text/html; charset=utf-8"],
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
     "/grabber": ["grabber.html", "text/html; charset=utf-8"],
@@ -149,7 +153,13 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
     const adminHost = adminOrigin ? new URL(adminOrigin).host.toLowerCase() : null;
-    const cookieDomain = config.cookieDomain && adminHost && adminHost.endsWith("." + config.cookieDomain) ? config.cookieDomain : null;
+    // The music studio is the same idea: its own address, one shared sign-in.
+    const musicOrigin = config.musicUrl ? new URL(config.musicUrl).origin : null;
+    const musicHost = musicOrigin ? new URL(musicOrigin).host.toLowerCase() : null;
+    const onMusicHost = req => Boolean(musicHost) && String(req?.headers?.host ?? "").toLowerCase() === musicHost;
+    const musicHome = musicOrigin ? musicOrigin + "/" : "/music";
+    const cookieDomain = config.cookieDomain && [adminHost, musicHost].some(x => x && x.endsWith("." + config.cookieDomain)) ? config.cookieDomain : null;
+    const chat = createMusicChat({ now });
     const onAdminHost = req => Boolean(adminHost) && String(req?.headers?.host ?? "").toLowerCase() === adminHost;
     const adminHome = adminOrigin ? adminOrigin + "/" : "/admin";
     const secure = origin.startsWith("https://");
@@ -198,7 +208,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             "Cross-Origin-Opener-Policy": "same-origin",
             ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
             // The data and sign-in endpoints never belong in a search result, even if something links to them.
-            ...(/^\/(api|auth)\//.test(path) || /^\/admin(\.css)?(\?|$)/.test(path) || onAdminHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
+            ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
             "Content-Security-Policy":
                 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
                 "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'",
@@ -235,6 +245,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     }
 
     function sweep() {
+        chat.sweep();
         const t = now();
         for (const [k, s] of sessions) if (s.expires < t) sessions.delete(k);
         for (const [k, exp] of states) if (exp < t) states.delete(k);
@@ -270,7 +281,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         if (!type.startsWith("application/json") || req.headers["x-requested-with"] !== "dashboard") {
             throw new HttpError(403, "Request blocked.");
         }
-        if (req.headers.origin && req.headers.origin !== origin && req.headers.origin !== adminOrigin) throw new HttpError(403, "Request blocked.");
+        if (req.headers.origin && req.headers.origin !== origin && req.headers.origin !== adminOrigin && req.headers.origin !== musicOrigin) throw new HttpError(403, "Request blocked.");
     }
 
     function cooldown(userId, key) {
@@ -455,7 +466,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
         "GET /api/config": async () => ({
             regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
-            siteUrl: origin,
+            siteUrl: origin, musicUrl: musicOrigin ? musicOrigin + "/" : origin + "/music",
             help: HELP, about: ABOUT, extension: { latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST },
             privacy: PRIVACY.split("\n").filter(l => !/github\.com/i.test(l)).join("\n"), maxUploadChars: MAX_UPLOAD_CHARS,
             // View Channel + Send Messages + Embed Links, the least the bot needs to post alerts
@@ -476,6 +487,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 games: db.countItems(s.userId),
                 servers: serversFor(s, u),
                 isOwner: isOwner(s),
+                musicUrl: musicOrigin ? musicOrigin + "/" : origin + "/music",
                 adminUrl: isOwner(s) ? (adminOrigin ? adminOrigin + "/" : origin + "/admin") : null,
                 steamOnly: Boolean(s.steamOnly),
                 adminOnly: Boolean(s.adminOnly),
@@ -744,6 +756,28 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             if (isManager(g)) { const c = await remember("choices:" + gid, 60_000, () => guildChoices(gid)); out.channels = c.channels; out.roles = c.roles; out.voiceChannels = await remember("voice:" + gid, 60_000, () => Promise.resolve(rest.listVoiceChannels?.(gid) ?? [])).catch(() => []); }
             return out;
         },
+        // ----- the chat beside the player: in memory, one room per server, plain text only -----
+        "GET /api/music/chat": async (req, _b, url) => {
+            const s = session(req);
+            const g = musicMember(s, url.searchParams.get("guild"));
+            return chat.poll(g.id, { id: s.userId, name: s.username, avatar: s.avatar }, Number(url.searchParams.get("since")) || 0);
+        },
+        "POST /api/music/chat": async (req, body) => {
+            const s = session(req);
+            const g = musicMember(s, body.guild_id);
+            const who = { id: s.userId, name: s.username, avatar: s.avatar };
+            const r = body.react ? chat.react(g.id, who, String(body.react)) : chat.say(g.id, who, body.text);
+            if (r.error) throw new HttpError(r.wait ? 429 : 400, r.error);
+            return { message: r.msg };
+        },
+        "POST /api/music/chat/delete": async (req, body) => {
+            const s = session(req);
+            const g = musicMember(s, body.guild_id);
+            const a = music.access(g.id, s.userId), mod = Boolean(a.dj || a.isManager || isOwner(s));
+            if (body.clear) { if (!mod) throw new HttpError(403, "Only DJs, moderators and managers can clear the chat."); chat.clear(g.id); return { ok: true }; }
+            if (!chat.remove(g.id, body.id, { by: s.userId, mod })) throw new HttpError(403, "You can only remove your own messages.");
+            return { ok: true };
+        },
         "GET /api/music/search": async (req, _b, url) => {
             const s = session(req);
             if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
@@ -759,6 +793,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             await musicGuild?.(g.id)?.warm?.(s.userId);
             const tracks = Array.isArray(body.tracks) && body.tracks.length ? body.tracks.slice(0, 1).map(t => ({ url: String(t.url ?? ""), title: String(t.title ?? "").slice(0, 150), artist: String(t.artist ?? "").slice(0, 80), duration: Number(t.duration) || null, thumb: typeof t.thumb === "string" && t.thumb.startsWith("https://") ? t.thumb : null })).filter(t => isSoundcloudUrl(t.url)) : null;
             const r = await musicCall(() => music.enqueue({ guildId: g.id, userId: s.userId, textChannelId: null, query: body.query, tracks: tracks?.length ? tracks : null, playNext: Boolean(body.next), shuffleAdded: Boolean(body.shuffle) }));
+            if (r.title) chat.note(g.id, `${s.username} added ${r.kind === "playlist" ? `${r.added} songs from ${r.title}` : r.title}`);
             return { added: r.added, kind: r.kind, title: r.title, startedNow: r.startedNow, status: music.status(g.id) };
         },
         "POST /api/music/control": async (req, body) => {
@@ -2486,7 +2521,8 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     async function login(req, res) {
         sweep();
         // Sent here from the admin panel: after signing in, go back there.
-        if (new URL(req.url, origin).searchParams.get("next") === "admin") setCookie(res, NEXT_COOKIE, "admin", 600);
+        const next = new URL(req.url, origin).searchParams.get("next");
+        if (next === "admin" || next === "music") setCookie(res, NEXT_COOKIE, next, 600);
         const state = randomBytes(24).toString("hex");
         states.set(state, now() + 10 * 60_000);
         setCookie(res, STATE_COOKIE, state, 600);
@@ -2553,6 +2589,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             return send(res, 302, "", { Location: "/#/steam?roles=1" });
         }
         if (cookies(req)[NEXT_COOKIE] === "admin") { setCookie(res, NEXT_COOKIE, "", 0); return send(res, 302, "", { Location: adminHome }); }
+        if (cookies(req)[NEXT_COOKIE] === "music") { setCookie(res, NEXT_COOKIE, "", 0); return send(res, 302, "", { Location: musicHome }); }
         send(res, 302, "", { Location: "/#/mypage" });
     }
 
@@ -2695,9 +2732,10 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 if (page) return send(res, 200, page, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && (url.pathname === "/admin" || (url.pathname === "/" && onAdminHost(req)))) return await serveFile(res, "/admin", { "Cache-Control": "no-store" });
+            if (req.method === "GET" && (url.pathname === "/music" || (url.pathname === "/" && onMusicHost(req)))) return await serveFile(res, "/music", { "Cache-Control": "no-store" });
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();
@@ -2718,6 +2756,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 const r = apiLimit.hit(sessions.has(sid) ? `s:${sid}` : `ip:${clientIp(req)}`);
                 if (!r.ok) throw new HttpError(429, `Too many requests. Try again in ${r.retryAfterS}s.`);
             }
+            if (key === "GET /auth/login" && onMusicHost(req)) return send(res, 302, "", { Location: `${origin}/auth/login?next=music` });
             if (key === "GET /auth/login" && onAdminHost(req)) return send(res, 302, "", { Location: `${origin}/auth/login?next=admin` }); // sign-in happens on the main address
             if (key === "GET /auth/login") return await login(req, res);
             if (key === "GET /auth/callback") return await callback(req, res, url);

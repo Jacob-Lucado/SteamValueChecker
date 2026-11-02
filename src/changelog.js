@@ -7,6 +7,7 @@ export const CHANGELOG = [
         "**Terms and privacy:** the Terms of Service and Privacy Policy are pages on the bot's own site (`/terms.html` and `/privacy.html`), linked from the footer and `/bot privacy`.",
         "**Admin panel:** the owner's tools moved to their own panel (`admin.` in front of the bot's address, or `/admin`) with a sidebar, Ctrl+K search, live system health and an audit log. Everything from the old Admin page is still there.",
         "**Admin password sign-in:** the owner can add a username and password (and an optional authenticator code) as a second way into the admin panel, from the panel's Account and security page. Discord sign-in stays the main way in.",
+        "**Music studio:** a full-screen player of its own (`music.` in front of the bot's address, or `/music`) with the song cover and a live visualizer, drag-and-drop queue, search, radio, requests, saved playlists and a session chat with emoji reactions that float across everyone's screen. It's the same player as the dashboard's Music page, just built for listening.",
         "**FanaticalGrabber page:** the extension's web page now lives on the bot's own site at `/grabber`, with the same live demo and visitor counter.",
         "**Paged help:** `/help` is now a clean paged embed with a menu for each topic.",
         "**Live radio:** `/music live` lists stations that are on the air right now, and you can paste any Icecast or Shoutcast stream link into `/play`.",
