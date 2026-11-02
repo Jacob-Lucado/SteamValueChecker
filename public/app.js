@@ -4283,7 +4283,7 @@
           d.rewards.length ? h("ul", { class: "plain" }, d.rewards.map(r => h("li", {}, `${r.count} invited: `, h("b", { text: roleName(r.role_id) }), " ", save("Remove", () => post("/api/community/referral", { count: r.count, remove: true }), "btn gray small")))) : h("p", { class: "muted", text: "No role rewards yet." }),
           h("div", { class: "row" }, rCount, rRole, save("Add reward", () => post("/api/community/referral", { count: rCount.value, role_id: rRole.value }))));
         // emoji
-        const eText = h("textarea", { rows: "3", placeholder: "Paste custom emoji or Discord emoji links, up to 20. Example: <:pog:123456789012345678>" }), eOut = h("div"), eList = h("div", { class: "emoji-grid" });
+        const eText = h("textarea", { rows: "3", placeholder: "Paste custom emoji, Discord emoji links, or links to pictures on any website, up to 20. Example: <:pog:123456789012345678>" }), eOut = h("div"), eList = h("div", { class: "emoji-grid" });
         const loadEmoji = async () => { try { const r = await api("/api/community/emoji?guild=" + encodeURIComponent(GID())); eList.replaceChildren(...r.emojis.slice(0, 60).map(e => h("img", { src: e.url, alt: e.name, title: ":" + e.name + ":", width: "32", height: "32", loading: "lazy" }))); if (!r.emojis.length) eList.replaceChildren(h("span", { class: "muted", text: "No custom emoji yet." })); } catch { eList.replaceChildren(h("span", { class: "muted", text: "Could not read the emoji list." })); } };
         const upName = h("input", { type: "text", maxlength: "32", placeholder: "Name for the emoji (letters, numbers, _)", "aria-label": "Emoji name" });
         const upFile = h("input", { type: "file", accept: "image/png,image/gif,image/jpeg,image/webp", "aria-label": "Emoji image" });
@@ -4297,13 +4297,61 @@
           const r = await post("/api/community/emoji", { image_data: data, name: upName.value });
           toast("Added :" + r.added[0] + ":", "ok"); upFile.value = ""; upName.value = ""; loadEmoji();
         }));
+        // emoji.gg packs: pick a pack, untick what you don't want, import in batches
+        const packSort = select([["recent", "Newest"], ["downloads", "Most popular"], ["oldest", "Oldest"]], "recent");
+        const packBox = h("div", { class: "muted", text: "Loading packs…" });
+        const showPacks = async () => {
+          packBox.className = "muted"; packBox.replaceChildren("Loading packs…");
+          try {
+            const r = await api("/api/community/emoji-packs?guild=" + encodeURIComponent(GID()) + "&sort=" + packSort.value);
+            packBox.className = "";
+            packBox.replaceChildren(h("div", { class: "pack-grid" }, ...r.packs.map(p => {
+              const open = h("button", { class: "btn blue small", type: "button", text: "Open" });
+              open.addEventListener("click", () => openPack(p));
+              return h("div", { class: "pack-card" }, h("div", { class: "pack-previews" }, ...p.previews.map(u => h("img", { src: u, alt: "", width: "40", height: "40", loading: "lazy", referrerpolicy: "no-referrer" }))),
+                h("b", { text: p.title }), h("span", { class: "muted small", text: p.count ? p.count + " emoji" : "" }), open);
+            })));
+          } catch (e) { packBox.className = ""; packBox.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+        };
+        const openPack = async p => {
+          packBox.className = "muted"; packBox.replaceChildren("Reading the pack…");
+          let r; try { r = await api("/api/community/emoji-pack?guild=" + encodeURIComponent(GID()) + "&key=" + encodeURIComponent(p.key)); } catch (e) { packBox.className = ""; packBox.replaceChildren(h("div", { class: "notice warn", text: e.message }), (() => { const b = h("button", { class: "btn gray small", text: "Back" }); b.addEventListener("click", showPacks); return b; })()); return; }
+          packBox.className = "";
+          const boxes = r.emojis.map(e => { const c = h("input", { type: "checkbox", checked: true }); return { e, c, el: h("label", { class: "emoji-pick", title: ":" + e.name + ":" }, c, h("img", { src: e.url, alt: e.name, width: "40", height: "40", loading: "lazy", referrerpolicy: "no-referrer" }), h("span", { text: e.name })) }; });
+          const count = h("span", { class: "muted small" }), out = h("div");
+          const picked = () => boxes.filter(x => x.c.checked);
+          const sync = () => { count.textContent = `${picked().length} of ${boxes.length} ticked`; };
+          boxes.forEach(x => x.c.addEventListener("change", sync)); sync();
+          const only = (label, f) => { const b = h("button", { class: "btn gray small", type: "button", text: label }); b.addEventListener("click", () => { boxes.forEach(x => { x.c.checked = f(x.e); }); sync(); }); return b; };
+          const back = h("button", { class: "btn gray small", type: "button", text: "← All packs" }); back.addEventListener("click", showPacks);
+          const go = h("button", { class: "btn green", type: "button", text: "Import the ticked emoji" });
+          go.addEventListener("click", () => busy(go, async () => {
+            const ids = picked().map(x => x.e.id); if (!ids.length) { toast("Tick at least one emoji.", "warn"); return; }
+            let added = [], failed = [];
+            for (let n = 0; n < ids.length; n += 30) {
+              out.replaceChildren(h("p", { class: "muted", text: `Importing… ${Math.min(n, ids.length)} of ${ids.length}` }));
+              const res = await post("/api/community/emoji-pack", { key: p.key, ids: ids.slice(n, n + 30) });
+              added = added.concat(res.added); failed = failed.concat(res.failed);
+              if (res.full && res.full.static && res.full.animated) break;
+            }
+            out.replaceChildren(h("p", {}, added.length ? `Added ${added.length}: ${added.slice(0, 40).map(x => ":" + x + ":").join(" ")}` : "Nothing was added."), ...failed.slice(0, 6).map(f => h("p", { class: "muted small", text: `${f.name}: ${f.why}` })), failed.length > 6 ? h("p", { class: "muted small", text: `…and ${failed.length - 6} more were skipped.` }) : "");
+            if (added.length) loadEmoji();
+          }));
+          packBox.replaceChildren(h("div", { class: "row" }, back, h("b", { text: p.title }), h("a", { href: p.url, target: "_blank", rel: "noopener noreferrer", text: "emoji.gg ↗" })),
+            h("p", { class: "muted small", text: "Still and animated emoji have separate slots in a server, so tick only what fits. Check the pack's license on emoji.gg." }),
+            h("div", { class: "row" }, only("All", () => true), only("None", () => false), only("Still only", e => !e.animated), only("Animated only", e => e.animated), count),
+            h("div", { class: "pick-grid" }, ...boxes.map(x => x.el)), h("div", { class: "row" }, go), out);
+        };
+        packSort.addEventListener("change", showPacks);
+        showPacks();
         const emoji = h("div", { class: "panel" }, h("h3", { text: "Emoji import" }),
-          h("p", { class: "muted", text: "Copy emoji from other servers. Copy them from a message (they look like <:name:id>) and paste them here. Needs the Manage Expressions permission for the bot." }), eText,
+          h("p", { class: "muted", text: "Copy emoji from other servers (they look like <:name:id> in a message), paste a Discord emoji link, or paste a link to a picture on any website (PNG, GIF, JPG or WebP under 256 KB). Animated emoji keep their movement. Needs the Manage Expressions permission for the bot." }), eText,
           h("div", { class: "row" }, (() => { const b = h("button", { class: "btn blue", text: "Add the emoji" }); b.addEventListener("click", () => busy(b, async () => {
             const r = await post("/api/community/emoji", { text: eText.value });
             eOut.replaceChildren(h("p", {}, r.added.length ? `Added ${r.added.length}: ${r.added.map(n => ":" + n + ":").join(" ")}` : "Nothing was added."), ...r.failed.map(f => h("p", { class: "muted small", text: `${f.name}: ${f.why}` })));
             if (r.added.length) { eText.value = ""; loadEmoji(); }
           })); return b; })()), eOut,
+          h("h4", { text: "Emoji packs from emoji.gg" }), h("div", { class: "row" }, field("Show", packSort)), packBox,
           h("h4", { text: "Or add one image" }), h("p", { class: "muted small", text: "PNG, GIF, JPG or WebP under 256 KB. Square images work best." }), h("div", { class: "row" }, upFile, upName, upBtn),
           h("h4", { text: "This server's emoji" }), eList);
         loadEmoji();

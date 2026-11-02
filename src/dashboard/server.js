@@ -71,6 +71,7 @@ import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
 import { isHidden } from "../hidden.js";
+import { legalPage } from "../legal.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
 import { MAX_KEYS } from "../gwstore.js";
 
@@ -99,7 +100,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
+const COOLDOWNS = { cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -127,7 +128,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ emojigg = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     const secure = origin.startsWith("https://");
     const sessions = new Map();
@@ -315,7 +316,7 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
         return g;
     }
 
-    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, botId: config.clientId, publicUrl: config.publicUrl }) : null;
+    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, botId: config.clientId, publicUrl: config.publicUrl, ...(emojigg ? { emojigg, fetchImpl: emojigg.fetchImpl ?? globalThis.fetch } : {}) }) : null;
     /** Community actions: the same Discord permissions as the commands. Errors from the helper become normal dashboard errors. */
     const comm = async fn => {
         if (!cd) throw new HttpError(503, "Community features are not available on this bot.");
@@ -1666,6 +1667,22 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             } catch (e) { undo(); throw e; }
         },
 
+        "GET /api/community/emoji-packs": async (req, _b, url) => {
+            const s = session(req); managerGuild(s, url.searchParams.get("guild"));
+            cooldown(s.userId, "cemojipacks");
+            return comm(() => cd.emojiPacks(url.searchParams.get("sort") ?? "recent", Number(url.searchParams.get("page") ?? 1)));
+        },
+        "GET /api/community/emoji-pack": async (req, _b, url) => {
+            const s = session(req); managerGuild(s, url.searchParams.get("guild"));
+            cooldown(s.userId, "cemojipack");
+            return comm(() => cd.emojiPack(url.searchParams.get("key")));
+        },
+        "POST /api/community/emoji-pack": async (req, body) => {
+            const s = session(req); const g = managerGuild(s, String(body.guild_id)); botIn(g);
+            const undo = cooldown(s.userId, "cemojipackimp");
+            try { return await comm(() => cd.emojiPackImport(g.id, String(body.key ?? ""), body.ids)); } catch (e) { undo(); throw e; }
+        },
+
         "GET /api/servers/stats": async (req, _b, url) => {
             const s = session(req);
             const g = guildFor(s, url.searchParams.get("guild"));
@@ -2503,6 +2520,10 @@ export function createDashboard({ db, itad, rest, music = null, musicGuild = nul
             const key = `${req.method} ${url.pathname}`;
             if (url.pathname.startsWith("/api/visits/")) return visits(req, res, url);
 
+            if (req.method === "GET" && (url.pathname === "/terms" || url.pathname === "/privacy")) {
+                const page = legalPage(url.pathname.slice(1), origin);
+                if (page) return send(res, 200, page, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+            }
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
                 return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /auth/\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });

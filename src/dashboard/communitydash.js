@@ -7,10 +7,11 @@ import { honeypotPayload, HONEYPOT_TOPIC } from "../honeypot.js";
 import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { DiscordApiError } from "./discord.js";
+import { createEmojiGg, PACK_KEY_RE } from "../emojisource.js";
 
 export class CommunityError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
-export function createCommunityDash({ db, rest, community, membersIntent = () => true, botId, publicUrl = null, fetchImpl = globalThis.fetch }) {
+export function createCommunityDash({ db, rest, community, membersIntent = () => true, botId, publicUrl = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
     const fail = (status, m) => { throw new CommunityError(status, m); };
     const nameOf = async (gid, id) => (await rest.memberName(gid, id).catch(() => null)) ?? "Member";
     const named = (gid, rows) => Promise.all(rows.map(async r => ({ ...r, name: await nameOf(gid, r.user_id) })));
@@ -231,9 +232,33 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         db.bumpUsage("emoji_added"); db.bumpUsage("dash_emoji_upload");
         return { added: [clean], failed: [] };
     }
+    /** emoji.gg's pack list, newest or most popular first. */
+    async function emojiPacks(sort, pageNo) {
+        try { return { packs: await emojigg.packs({ sort, pageNo }) }; }
+        catch (e) { fail(502, `I couldn't load emoji.gg right now. ${e.message}`); }
+    }
+    /** Every emoji in one pack, so the page can show them and let the owner untick the ones they don't want. */
+    async function emojiPack(key) {
+        if (!PACK_KEY_RE.test(String(key))) fail(400, "That isn't a pack.");
+        try { return { emojis: await emojigg.pack(key) }; }
+        catch (e) { fail(502, `I couldn't read that pack. ${e.message}`); }
+    }
+    /** Imports the chosen emoji (by id) from a pack. A few dozen per request keeps it under the wait limits. */
+    async function emojiPackImport(gid, key, ids) {
+        if (!PACK_KEY_RE.test(String(key))) fail(400, "That isn't a pack.");
+        const want = new Set((Array.isArray(ids) ? ids : []).map(String));
+        if (!want.size) fail(400, "Tick at least one emoji.");
+        let all;
+        try { all = await emojigg.pack(key); } catch (e) { fail(502, `I couldn't read that pack. ${e.message}`); }
+        const items = all.filter(e => want.has(e.id)).map(e => ({ name: e.name, animated: e.animated, url: e.url }));
+        if (!items.length) fail(400, "None of those are in that pack.");
+        const r = await importEmojis({ api: rest, guildId: gid, items, fetchImpl, limit: 30, skipExisting: true });
+        db.bumpUsage("emoji_added", r.added.length); db.bumpUsage("dash_emoji_pack");
+        return r;
+    }
     async function inviteLink(gid, userId) {
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, leaderboard, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, inviteLink, xpPage };
+    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, leaderboard, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
 }

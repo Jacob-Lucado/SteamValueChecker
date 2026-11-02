@@ -21,7 +21,7 @@ export function renderPage(token, data, n) {
         rows.push({ type: 1, components: [{ type: 3, custom_id: `${JUMP_PREFIX}${token}`, placeholder: "Jump to…", options: data.pages.map((x, i) => ({ label: String(x.label ?? `Page ${i + 1}`).slice(0, 100) || `Page ${i + 1}`, value: String(i), default: i === page })) }] });
     }
     for (const r of p.rows ?? []) if (rows.length < 5) rows.push(r);
-    return { ...(data.content ? { content: data.content } : {}), embeds: [p.embed], components: rows };
+    return { ...(data.content ? { content: data.content } : {}), embeds: p.embeds ?? [p.embed], components: rows };
 }
 
 /**
@@ -29,7 +29,7 @@ export function renderPage(token, data, n) {
  * `store` is anything with savePager (the database).
  */
 export function pagedPayload(store, { content, pages, jump }) {
-    if (pages.length === 1) return { ...(content ? { content } : {}), embeds: [pages[0].embed], components: pages[0].rows ?? [] };
+    if (pages.length === 1) return { ...(content ? { content } : {}), embeds: pages[0].embeds ?? [pages[0].embed], components: pages[0].rows ?? [] };
     const token = randomBytes(5).toString("hex");
     const data = { content: content ?? null, pages, jump };
     store.savePager(token, data);

@@ -4,13 +4,13 @@ Last updated: October 26, 2026 (wishlist alerts added)
 
 Steam Value Checker is a Discord bot that prices a list of games and, if you choose, watches your wishlist and tells you when a game goes on sale. This page explains what it does with your data.
 
-**`/value` stores nothing. Wishlist alerts store the data listed under Storage, and only if you use `/wishlist`.**
+**`/games value` stores nothing. Wishlist alerts store the data listed under Storage, and only if you use `/me wishlist`.**
 
 ## What the bot receives
 
 - The game titles you type, or the titles in a file you upload.
 - The region, store, sort and `paid` options you choose.
-- Your Discord user ID. For `/value` it is held in memory only, to enforce a short cooldown and let you page through your own results. If you use wishlist alerts it is stored (see Storage).
+- Your Discord user ID. For `/games value` it is held in memory only, to enforce a short cooldown and let you page through your own results. If you use wishlist alerts it is stored (see Storage).
 
 ## What the bot does not want
 
@@ -21,57 +21,57 @@ Steam Value Checker is a Discord bot that prices a list of games and, if you cho
 
 - Game titles (and game IDs for wishlist alerts) are sent to **IsThereAnyDeal** (isthereanydeal.com) to look up prices. Their [privacy policy](https://isthereanydeal.com/privacy/) applies to that request. Nothing about you, other than the titles or game IDs, is sent.
 - If you use **Sign in through Steam**, you sign in on Steam's own page (steamcommunity.com). Steam tells the bot only your public SteamID64; the bot never sees your Steam password. It stores that ID, that it was verified, and your Discord name and picture so a later Steam sign-in can open your account.
-- If a moderator warns, times out, kicks or bans you in a server that uses the bot's moderation commands, the bot saves a case: your Discord ID, the moderator's ID, what was done, the reason they typed and when. Server managers can see their server's cases. `/mydata delete` removes cases about you; `/mydata export` includes them.
+- If a moderator warns, times out, kicks or bans you in a server that uses the bot's moderation commands, the bot saves a case: your Discord ID, the moderator's ID, what was done, the reason they typed and when. Server managers can see their server's cases. `/me mydata delete` removes cases about you; `/me mydata export` includes them.
 - If you choose **Linked Roles** on the Steam page, Discord asks you to allow the bot to update your Discord profile connection. The bot sends Discord your Steam name, whether it is verified, how many games you own and your hours played, and uses the permission once. It keeps no Discord token. You can remove the connection in Discord (Settings, Connections).
-- When you run `/wishlist import`, the bot asks **Steam** (steampowered.com and steamcommunity.com) for the public wishlist of the profile you gave. Steam's own policies apply to that request.
+- When you run `/me wishlist import`, the bot asks **Steam** (steampowered.com and steamcommunity.com) for the public wishlist of the profile you gave. Steam's own policies apply to that request.
 - Results are shown only to you (ephemeral replies) and are returned as an embed and a CSV file in that reply.
 
 ## Storage
 
-**`/value`**: nothing is stored. Prices are cached in memory for about 30 minutes and cleared when the bot restarts.
+**`/games value`**: nothing is stored. Prices are cached in memory for about 30 minutes and cleared when the bot restarts.
 
-**Wishlist alerts**: if you use `/wishlist`, the bot keeps a small database (SQLite) on the machine that runs it. It contains:
+**Wishlist alerts**: if you use `/me wishlist`, the bot keeps a small database (SQLite) on the machine that runs it. It contains:
 
 - Your Discord user ID.
 - The ID of the server where you last used a wishlist command (so the bot knows which server's alert channel to use).
 - Your wishlist: game titles, price-service game IDs, whether each came from Steam or was added by hand, your alert rule for each game, and the last price the bot alerted you about (to avoid repeat alerts).
 - Your Steam profile ID (SteamID64), only if you imported a Steam wishlist. It is a public identifier.
-- Friends you add with `/friend`: a nickname, an optional birthday (month and day only, no year) and an optional public wishlist page name. Deleted by `/mydata delete`.
-- Profile card: the gaming names you add (Steam, Xbox, PlayStation and so on), your card colour, which stats it shows and any banner or picture links are saved with your account, so the website and `/profilecard` draw the same card. They are part of `/mydata export` and removed by `/mydata delete`. Your browser loads picture links from their sites (which can see your address). When you run `/profilecard` or `/steam value`, or save the card from the website, the bot downloads those pictures once to draw them: only https links to images on public addresses, with a size limit. Nothing is uploaded to anyone else, and the picture is shown only to you unless you choose `public:true`.
+- Friends you add with `/me friend`: a nickname, an optional birthday (month and day only, no year) and an optional public wishlist page name. Deleted by `/me mydata delete`.
+- Profile card: the gaming names you add (Steam, Xbox, PlayStation and so on), your card colour, which stats it shows and any banner or picture links are saved with your account, so the website and `/me profilecard` draw the same card. They are part of `/me mydata export` and removed by `/me mydata delete`. Your browser loads picture links from their sites (which can see your address). When you run `/me profilecard` or `/me steam value`, or save the card from the website, the bot downloads those pictures once to draw them: only https links to images on public addresses, with a size limit. Nothing is uploaded to anyone else, and the picture is shown only to you unless you choose `public:true`.
 - Your settings: region, store filter, delivery choice (DM or channel), whether alerts are paused, a count of failed DM attempts, quiet hours and time zone, weekly digest choice, bundle alert choice, free game alert choice, and whether you opted in to sharing with your server.
-- If you use the library: the games you add, what you paid for each (only if you enter it), and one daily snapshot of the totals (number of games, total paid, total MSRP, cheapest price, and how many games are in your backlog, being played or finished) used for the value and backlog charts, `/library trend` and the leaderboard.
-- If you link Steam with `/steam link`: your public SteamID64 and, for each game you own, its Steam app ID, minutes played, when it was last played and, if the bot has a Steam API key, how many achievements you have unlocked of the total (used to mark a game Finished at 100%). The bot reads only what your public profile shows and never asks for a login. `/steam unlink` removes the link (and, if you choose, the games it added).
-- If you use the FanaticalGrabber extension's send button: a SHA-256 hash of your link code, when it was made and last used, and how many sends. The code itself is never stored. `/library grabber action:off` deletes it. The extension sends game titles only, never keys.
-- If you use batch redeem: keys you queue with `/redeem` are kept only until the batch finishes, you cancel it, or 24 hours pass, then erased. Keys you paste on the dashboard page go from your browser to the extension to Steam and never reach this server. For each settled key the bot keeps a SHA-256 hash and a masked hint (first and last five characters), the result and the game name, so repeats are skipped and `/redeem history:true` can list them. Clear it from the Batch redeem page.
-- If you use `/steam recap`: the hours added at each Steam sync (the day, the game and the minutes gained), kept for three years so the hours-tracked recap works.
+- If you use the library: the games you add, what you paid for each (only if you enter it), and one daily snapshot of the totals (number of games, total paid, total MSRP, cheapest price, and how many games are in your backlog, being played or finished) used for the value and backlog charts, `/me library trend` and the leaderboard.
+- If you link Steam with `/me steam link`: your public SteamID64 and, for each game you own, its Steam app ID, minutes played, when it was last played and, if the bot has a Steam API key, how many achievements you have unlocked of the total (used to mark a game Finished at 100%). The bot reads only what your public profile shows and never asks for a login. `/me steam unlink` removes the link (and, if you choose, the games it added).
+- If you use the FanaticalGrabber extension's send button: a SHA-256 hash of your link code, when it was made and last used, and how many sends. The code itself is never stored. `/me library grabber action:off` deletes it. The extension sends game titles only, never keys.
+- If you use batch redeem: keys you queue with `/games redeem` are kept only until the batch finishes, you cancel it, or 24 hours pass, then erased. Keys you paste on the dashboard page go from your browser to the extension to Steam and never reach this server. For each settled key the bot keeps a SHA-256 hash and a masked hint (first and last five characters), the result and the game name, so repeats are skipped and `/games redeem history:true` can list them. Clear it from the Batch redeem page.
+- If you use `/me steam recap`: the hours added at each Steam sync (the day, the game and the minutes gained), kept for three years so the hours-tracked recap works.
 - If you set a backlog challenge: your goal for each month. Progress is worked out from your library and the date you marked a game finished.
 - If you turn on a public page: visitors can mark a game as a gift. Only a hash of a random code from their browser is stored, with the game and the time, for 45 days. You are shown a count, never who or which.
 - If you wishlist a game that is not out yet: its release date, so you can be told on launch.
-- If you use `/compare`: only members who opted in with `/alerts share` can be compared, and the other person sees nothing. Only game titles and hours are shown.
-- If you use the calendar: server events a manager adds (title, notes, time, channel and who added it) are visible to that server's members and removed 30 days after they happen. If you make a calendar link, a SHA-256 hash of it, which servers it covers and when it was last used are stored. The link itself is never stored. `/calendar feed action:off` deletes it.
-- If you post with `/lfg`: the post (game, time, slots), who joined, and the Discord event ID if one was made. Posts are removed shortly after they close.
+- If you use `/server compare`: only members who opted in with `/alerts share` can be compared, and the other person sees nothing. Only game titles and hours are shown.
+- If you use the calendar: server events a manager adds (title, notes, time, channel and who added it) are visible to that server's members and removed 30 days after they happen. If you make a calendar link, a SHA-256 hash of it, which servers it covers and when it was last used are stored. The link itself is never stored. `/server calendar feed action:off` deletes it.
+- If you post with `/server lfg`: the post (game, time, slots), who joined, and the Discord event ID if one was made. Posts are removed shortly after they close.
 - Your alert history: what was sent, when, the price and how (DM or channel). It is deleted after 90 days.
 - If you use a server's shared list: the games you suggested and your votes.
 - A note of which bundles, giveaways and free games you were already told about, so you are not told twice (deleted after 120 days).
 
-For server admins: the alert channel ID you set with `/alertchannel`, and the ID of the admin who set it.
+For server admins: the alert channel ID you set with `/manage alertchannel`, and the ID of the admin who set it.
 
 **Server sharing is off by default.** If you opt in with `/alerts share` (or on the dashboard), other members of the server may see your name in a group alert (\"3 members are watching...\") and on the leaderboard, with your number of games and the percent you saved against MSRP. They never see your wishlist, what you paid or any prices you entered. Opt out at any time.
 
-**Server shared list:** games added to `/serverlist` and the votes on them are visible to everyone in that server.
+**Server shared list:** games added to `/server serverlist` and the votes on them are visible to everyone in that server.
 
 **Backups:** the bot owner may keep daily copies of the database (the last 7 by default). They hold the same data as above, so deleted data can remain in a backup until it rotates out, up to 7 days.
 
 **Owner statistics:** the bot owner can see totals (how many members, how many games, how many alerts) but not who watches what.
 
-Your data is kept until you delete it with `/mydata delete`. Removing the bot from a server clears that server's alert channel. `/mydata export` gives you a copy of everything stored about you.
+Your data is kept until you delete it with `/me mydata delete`. Removing the bot from a server clears that server's alert channel. `/me mydata export` gives you a copy of everything stored about you.
 
 User input and results are never written to logs. Error logs contain only technical error messages.
 Discord keeps your messages and the bot's replies according to Discord's own policies.
 
 ## Giveaways
 
-If a server manager runs a giveaway, the bot stores: the giveaway settings, your Discord user ID if you enter, who won each prize and its status, and the prize keys the manager entered. Keys are **encrypted** and are deleted once the winner confirms, when the giveaway is cancelled or the key is returned to the host, or automatically after a retention period (delivered keys after 14 days, leftover keys 7 days after the giveaway ends). Keys are sent only to the winner by DM or in a reply only they can see. When a winner confirms, a vouch message naming the winner is posted in the server. Giveaway records are removed 90 days after they finish, and `/mydata delete` removes your entries.
+If a server manager runs a giveaway, the bot stores: the giveaway settings, your Discord user ID if you enter, who won each prize and its status, and the prize keys the manager entered. Keys are **encrypted** and are deleted once the winner confirms, when the giveaway is cancelled or the key is returned to the host, or automatically after a retention period (delivered keys after 14 days, leftover keys 7 days after the giveaway ends). Keys are sent only to the winner by DM or in a reply only they can see. When a winner confirms, a vouch message naming the winner is posted in the server. Giveaway records are removed 90 days after they finish, and `/me mydata delete` removes your entries.
 
 **Error log**: the bot keeps recent error and crash messages (with the time) in memory and in a small file next to the database, so the bot owner can read them on the dashboard's Admin page. Tokens and keys are masked. Error messages can occasionally mention a Discord ID or command name.
 
@@ -86,7 +86,7 @@ If the bot's owner turns on the dashboard, you can sign in with Discord instead 
 
 ## How alerts reach you
 
-- **Direct message by default.** If you use wishlist alerts, the bot will message you without being asked each time. Pause them with `/alerts pause`, or delete your data with `/mydata delete`.
+- **Direct message by default.** If you use wishlist alerts, the bot will message you without being asked each time. Pause them with `/alerts pause`, or delete your data with `/me mydata delete`.
 - **Server channel as a fallback, or by choice.** If a DM cannot be delivered, or you choose channel delivery with `/alerts delivery`, the alert is posted in the alert channel a server admin set. **Everyone who can see that channel can see the game name, and you are mentioned.** If no channel is set, a failed DM is not delivered and the bot tries again on its next check.
 
 ## Sharing
@@ -95,10 +95,10 @@ The bot does not sell, share or transfer your data, other than the titles or gam
 
 ## Your control
 
-- `/mydata export` downloads everything stored about you.
-- `/mydata delete` deletes it all.
+- `/me mydata export` downloads everything stored about you.
+- `/me mydata delete` deletes it all.
 - `/alerts pause` stops alerts but keeps your list.
-- `/value` stores nothing, so there is nothing to delete for it. You can remove the bot from your server at any time.
+- `/games value` stores nothing, so there is nothing to delete for it. You can remove the bot from your server at any time.
 
 ## Contact
 
@@ -111,22 +111,22 @@ If this policy changes, the date above will be updated.
 
 ## Newer features
 
-- **Public wishlist page:** off by default. When you turn it on, anyone with the link can see your game names, artwork and today's best prices. Nothing else, and never your Discord account. Turn it off any time with `/publicpage enabled:false`.
-- **Backlog status:** the status you set on library games (backlog, playing, finished, dropped) is stored with your library and deleted with `/mydata delete`.
-- **One-off watches:** a game added with `/watch` is stored like a wishlist game and removed after its alert or after 30 days.
+- **Public wishlist page:** off by default. When you turn it on, anyone with the link can see your game names, artwork and today's best prices. Nothing else, and never your Discord account. Turn it off any time with `/me publicpage enabled:false`.
+- **Backlog status:** the status you set on library games (backlog, playing, finished, dropped) is stored with your library and deleted with `/me mydata delete`.
+- **One-off watches:** a game added with `/games watch` is stored like a wishlist game and removed after its alert or after 30 days.
 - **Server stats:** numbers for members who opted in with `/alerts share`. Counts and totals only; nobody is named for what they want.
 - **Status history:** the bot stores per-day uptime counts and a short log of outages. Nothing about people.
 
 ## Community features (servers that use them)
-- **XP and levels:** per server, your Discord ID with your XP, level, a count of counted messages and minutes in voice. Message text is never read or stored; the bot only notes that you sent one. Shown on `/rank`, `/levels` and the dashboard to people in that server.
-- **Invites and referrals:** which invite you joined with, who it belonged to, and when you joined and left, so inviters can be credited. Shown as counts and names of inviters in that server. Your own invite link is stored if you make one with `/invites link`.
+- **XP and levels:** per server, your Discord ID with your XP, level, a count of counted messages and minutes in voice. Message text is never read or stored; the bot only notes that you sent one. Shown on `/server rank`, `/server levels` and the dashboard to people in that server.
+- **Invites and referrals:** which invite you joined with, who it belonged to, and when you joined and left, so inviters can be credited. Shown as counts and names of inviters in that server. Your own invite link is stored if you make one with `/server invites link`.
 - **Welcome and leave notes:** the bot posts your name and avatar link in the server's welcome channel when you join, and optionally when you leave.
 - **Emoji import:** the bot downloads the emoji or image you ask it to add from Discord's own servers and uploads it to your server. Nothing is kept.
-- **Control:** `/mydata export` includes this data and `/mydata delete` removes your XP, joins and links (invites you made stay as counts without your name). If the bot leaves a server, that server's community data is deleted.
+- **Control:** `/me mydata export` includes this data and `/me mydata delete` removes your XP, joins and links (invites you made stay as counts without your name). If the bot leaves a server, that server's community data is deleted.
 - **Cross-server giveaways:** the post shows the host (the bot owner or a partner) and the partner's public links, and optional steps such as following an account. The bot cannot see whether you did them.
 
 ## Support tickets, notifications and language
-- **Tickets:** what you write in a ticket and the replies are stored with your Discord ID and name. They are visible to you, to the bot owner, and, if you picked a server that set up a ticket channel, to that server's staff. Never put a game key in a ticket; staff cannot see giveaway keys. Closed tickets are deleted after 6 months, and `/mydata delete` removes yours. `/mydata export` includes them.
+- **Tickets:** what you write in a ticket and the replies are stored with your Discord ID and name. They are visible to you, to the bot owner, and, if you picked a server that set up a ticket channel, to that server's staff. Never put a game key in a ticket; staff cannot see giveaway keys. Closed tickets are deleted after 6 months, and `/me mydata delete` removes yours. `/me mydata export` includes them.
 - **Notification center:** a copy of the title and short text of each alert sent to you, kept 60 days, only visible to you.
 - **Settings:** muted alert types, language and the last "what's new" you saw.
-- **Voice channels:** for `/gamenight` and the optional game night nudges the bot checks who is in a voice channel at that moment. It never records voice, audio or how long anyone was there, and only members who opted in with `/alerts share` are used.
+- **Voice channels:** for `/server gamenight` and the optional game night nudges the bot checks who is in a voice channel at that moment. It never records voice, audio or how long anyone was there, and only members who opted in with `/alerts share` are used.

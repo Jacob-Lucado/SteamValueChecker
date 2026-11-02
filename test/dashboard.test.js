@@ -1528,3 +1528,11 @@ test("alerts are not delivered to restricted people", async () => {
     const r = await n.deliver(db.getUser("777777"), { content: "hi" });
     assert.equal(r.ok, false); assert.equal(sent, 0);
 });
+
+test("the terms and privacy policy are public pages on the bot's own site", async () => {
+    const { legalPage, mdToHtml } = await import("../src/legal.js");
+    assert.match(mdToHtml("# T\n\n1. **Bold** [x](https://a.example) <b>\n- item"), /<h2>T<\/h2>[\s\S]*<strong>Bold<\/strong>[\s\S]*href="https:\/\/a.example"[\s\S]*&lt;b&gt;[\s\S]*<ul>\n<li>item/);
+    assert.equal(mdToHtml("[bad](javascript:alert(1))").includes("href"), false);
+    for (const k of ["terms", "privacy"]) { const html = legalPage(k, "https://bot.example"); assert.match(html, /<title>/); assert.ok(!/github\.com/i.test(html)); assert.match(html, new RegExp(`canonical" href="https://bot.example/${k}"`)); }
+    assert.equal(legalPage("nope", "x"), null);
+});

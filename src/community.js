@@ -6,6 +6,7 @@ export { levelFromXp, xpForNext };
 
 import { refreshLeaderboard } from "./leaderboard.js";
 import { forumTags, backfillForum } from "./requestsync.js";
+import { safeFetchImage, isEmojiGgCdn } from "./emojisource.js";
 import { HONEYPOT_NAME, HONEYPOT_TOPIC, honeypotPayload } from "./honeypot.js";
 const B = n => 1n << BigInt(n);
 export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(10), sendMessages: B(11), manageMessages: B(13), addReactions: B(6), connect: B(20),
@@ -501,25 +502,43 @@ export function bar(into, need, width = 12) {
 
 // ---------- emoji import ----------
 const EMOJI_RE = /<(a?):([A-Za-z0-9_]{2,32}):(\d{15,25})>/g;
-const CDN_RE = /https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/emojis\/(\d{15,25})\.(png|gif|webp|jpg|jpeg)(?:\?[^\s]*)?/gi;
+const CDN_RE = /https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/emojis\/(\d{15,25})\.(png|gif|webp|jpg|jpeg)(?:\?[^\s<>]*)?/gi;
+// Any other https picture link: ends in an image extension, with an optional query.
+const IMG_LINK_RE = /https:\/\/[^\s<>"'|]+?\.(png|gif|webp|jpe?g)(?:\?[^\s<>"'|]*)?(?=[\s<>"'|]|$)/gi;
 export const EMOJI_MAX_BYTES = 256 * 1024;
 export const EMOJI_BATCH = 20;
 
-/** Pulls custom emoji out of pasted text: `<:name:id>`, `<a:name:id>` or a Discord CDN emoji link. Returns [{ name, id, animated, url }]. */
+const cleanName = raw => String(raw).replace(/[^A-Za-z0-9_]/g, "_").replace(/^_+|_+$/g, "").slice(0, 32).padEnd(2, "_");
+
+/**
+ * Pulls emoji out of pasted text: `<:name:id>`, `<a:name:id>`, Discord emoji links, or a link to any picture on the web.
+ * Returns [{ name, id?, animated, url }]. A Discord link counts as animated when it ends in .gif or says animated=true
+ * (Discord's "Copy link" gives `.webp?animated=true` for those), and then the GIF is fetched so the movement is kept.
+ */
 export function parseEmojis(text) {
     const out = [], seen = new Set();
-    const add = (name, id, animated) => { if (seen.has(id)) return; seen.add(id); out.push({ name: name.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 32).padEnd(2, "_"), id, animated, url: `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}?size=128` }); };
+    const add = (name, id, animated) => { if (seen.has(id)) return; seen.add(id); out.push({ name: cleanName(name), id, animated, url: `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}?size=128` }); };
     const s = String(text ?? "");
     for (const m of s.matchAll(EMOJI_RE)) add(m[2], m[3], m[1] === "a");
-    for (const m of s.matchAll(CDN_RE)) add(`emoji_${m[1].slice(-6)}`, m[1], m[2].toLowerCase() === "gif");
+    const taken = [];
+    for (const m of s.matchAll(CDN_RE)) { taken.push(m[0]); add(`emoji_${m[1].slice(-6)}`, m[1], m[2].toLowerCase() === "gif" || /[?&]animated=true\b/i.test(m[0])); }
+    for (const m of s.matchAll(IMG_LINK_RE)) {
+        if (taken.includes(m[0])) continue;
+        let u; try { u = new URL(m[0]); } catch { continue; }
+        const file = decodeURIComponent(u.pathname.split("/").pop() ?? "").replace(/\.[^.]+$/, "").replace(/^\d+-/, "");
+        const key = u.origin + u.pathname;
+        if (seen.has(key)) continue; seen.add(key);
+        out.push({ name: cleanName(file || "emoji"), animated: m[1].toLowerCase() === "gif", url: u.toString() });
+    }
     return out.slice(0, EMOJI_BATCH);
 }
 
-/** Only Discord's own CDN may be fetched, so this cannot be pointed at anything else. */
+/** Discord's own CDN and emoji.gg's are fetched directly; anything else goes through the guarded downloader. */
 export const isDiscordCdn = url => { try { const u = new URL(url); return u.protocol === "https:" && ["cdn.discordapp.com", "media.discordapp.net"].includes(u.hostname); } catch { return false; } };
+const isTrusted = url => isDiscordCdn(url) || isEmojiGgCdn(url);
 
-async function download(url, fetchImpl) {
-    if (!isDiscordCdn(url)) throw new Error("not a Discord link");
+async function download(url, { fetchImpl, safeFetch }) {
+    if (!isTrusted(url)) return safeFetch(url, { maxBytes: EMOJI_MAX_BYTES + 1 });
     const res = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const type = String(res.headers?.get?.("content-type") ?? "image/png").split(";")[0].trim();
@@ -529,26 +548,34 @@ async function download(url, fetchImpl) {
 }
 
 /**
- * Copies emoji into a server. `items` are { name, url } (from parseEmojis, or one attached image). Stops at the server's emoji limit.
- * Returns { added: [names], failed: [{ name, why }] }. Too-big images are re-fetched smaller when the source allows it.
+ * Copies emoji into a server. `items` are { name, url } (from parseEmojis, a pack, or one attached image). Stops asking for a kind
+ * (still or animated) once Discord says that kind is full, and stops altogether without the permission.
+ * `only` can be "static" or "animated". Returns { added: [names], failed: [{ name, why }], full: { static, animated } }.
  */
-export async function importEmojis({ api, guildId, items, fetchImpl = globalThis.fetch, sleep = sleepDefault }) {
-    const added = [], failed = [];
+export async function importEmojis({ api, guildId, items, fetchImpl = globalThis.fetch, safeFetch = safeFetchImage, sleep = sleepDefault, limit = EMOJI_BATCH, only = null, skipExisting = false }) {
+    const added = [], failed = [], full = { static: false, animated: false };
     const taken = new Set((await api.listEmojis(guildId).catch(() => [])).map(e => e.name.toLowerCase()));
-    for (const it of items.slice(0, EMOJI_BATCH)) {
-        let name = it.name.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 32).padEnd(2, "_");
+    // A pack can be imported in several goes: what the server already has by that name is left alone, so the next go carries on.
+    const todo = items.filter(it => !((only === "static" && it.animated) || (only === "animated" && !it.animated)) && !(skipExisting && taken.has(cleanName(it.name).toLowerCase())));
+    const skipped = items.length - todo.length;
+    for (const it of todo.slice(0, limit)) {
+        const kind = it.animated ? "animated" : "static";
+        let name = cleanName(it.name);
+        if (full[kind]) { failed.push({ name, why: `this server has no free ${kind} emoji slots` }); continue; }
         if (taken.has(name.toLowerCase())) { let n = 2; while (taken.has(`${name.slice(0, 29)}_${n}`.toLowerCase())) n++; name = `${name.slice(0, 29)}_${n}`; }
         try {
-            let img = await download(it.url, fetchImpl);
-            if (img.buf.length > EMOJI_MAX_BYTES && /size=\d+/.test(it.url)) img = await download(it.url.replace(/size=\d+/, "size=64"), fetchImpl);
+            let img = await download(it.url, { fetchImpl, safeFetch });
+            if (img.buf.length > EMOJI_MAX_BYTES && /size=\d+/.test(it.url)) img = await download(it.url.replace(/size=\d+/, "size=64"), { fetchImpl, safeFetch });
             if (img.buf.length > EMOJI_MAX_BYTES) throw new Error("larger than 256 KB");
             await api.createEmoji(guildId, { name, image: `data:${img.type};base64,${img.buf.toString("base64")}` });
             taken.add(name.toLowerCase()); added.push(name); await sleep(400);
         } catch (e) {
-            const why = e?.status === 403 ? "I need the Manage Expressions permission" : e?.status === 400 ? "Discord refused it (the emoji slots may be full)" : e?.message ?? "failed";
+            const slots = e?.status === 400 && /maximum number of (animated )?emojis/i.test(String(e?.message ?? e?.detail ?? ""));
+            if (slots) full[/animated/i.test(String(e?.message ?? e?.detail ?? "")) ? "animated" : kind] = true;
+            const why = e?.status === 403 ? "I need the Manage Expressions permission" : e?.status === 400 ? (slots ? `this server has no free ${kind} emoji slots` : "Discord refused it (the name or the picture isn't allowed)") : e?.message ?? "failed";
             failed.push({ name, why });
             if (e?.status === 403) break;
         }
     }
-    return { added, failed };
+    return { added, failed, full, skipped, remaining: Math.max(0, todo.length - limit) };
 }

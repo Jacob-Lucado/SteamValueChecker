@@ -506,11 +506,13 @@ const emojiCmd = new SlashCommandBuilder()
     .setName("emoji")
     .setDescription("Server managers: add custom emoji to this server")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuildExpressions)
-    .addSubcommand(s => s.setName("import").setDescription("Copy emoji from other servers, or add an image as an emoji")
-        .addStringOption(o => o.setName("emojis").setDescription("Paste custom emoji (up to 20) or Discord emoji links"))
+    .addSubcommand(s => s.setName("import").setDescription("Copy emoji from other servers, or add pictures from a link or file")
+        .addStringOption(o => o.setName("emojis").setDescription("Paste custom emoji, Discord emoji links, or links to pictures anywhere (up to 20)"))
         .addAttachmentOption(o => o.setName("image").setDescription("An image to add (PNG, GIF or JPG, under 256 KB)"))
         .addStringOption(o => o.setName("name").setDescription("Name for the image").setMinLength(2).setMaxLength(32)))
-    .addSubcommand(s => s.setName("list").setDescription("The custom emoji this server has and how many slots are left"));
+    .addSubcommand(s => s.setName("list").setDescription("The custom emoji this server has and how many slots are left"))
+    .addSubcommand(s => s.setName("packs").setDescription("Browse emoji packs from emoji.gg and import one into this server")
+        .addStringOption(o => o.setName("sort").setDescription("Which packs first").addChoices({ name: "Newest", value: "recent" }, { name: "Most popular", value: "downloads" }, { name: "Oldest", value: "oldest" })));
 
 const bug = new SlashCommandBuilder().setName("bug").setDescription("Report a problem with the bot. It goes straight to the bot owner");
 

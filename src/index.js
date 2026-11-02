@@ -530,6 +530,7 @@ client.on(Events.InteractionCreate, async i => {
         return i.reply({ content: "Done. I won't send you promotions again. Alerts you set up yourself are not affected.", flags: MessageFlags.Ephemeral });
     }
     if (i.isButton() && i.customId.startsWith("rr:")) return communityUi.roleButton(i);
+    if (i.isButton() && i.customId.startsWith("emp:")) return communityUi.packButton(i);
     if (i.isButton() && i.customId === communityUi.verifyButtonId) return communityUi.verify(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
@@ -625,7 +626,7 @@ client.on(Events.InteractionCreate, async i => {
             case "help": return await i.reply({ ...helpPayload("start"), flags: MessageFlags.Ephemeral });
             case "dashboard": case "dash": return await i.reply(dashPayload(cfg.dashboard?.publicUrl ?? null, i.options.getString("page")));
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
-            case "privacy": return await embedReply(i, PRIVACY);
+            case "privacy": { const base = cfg.dashboard?.publicUrl?.replace(/\/$/, ""); return await embedReply(i, base ? `${PRIVACY}\n\nFull text: [Privacy Policy](${base}/privacy) · [Terms of Service](${base}/terms)` : PRIVACY); }
         } })();
         if (showTip && (i.replied || i.deferred)) {
             db.ensureUser(i.user.id, i.guildId);

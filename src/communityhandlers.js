@@ -4,6 +4,8 @@ import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isD
 import { UserError } from "./errors.js";
 import { isHidden } from "./hidden.js";
 import { refreshLeaderboard } from "./leaderboard.js";
+import { pagedPayload } from "./pager.js";
+import { createEmojiGg, PACK_KEY_RE } from "./emojisource.js";
 import { rankCardSvg, boardSvg, inviteCardSvg, toPng, artFor } from "./communitycards.js";
 
 const EPHEMERAL = 64;
@@ -12,7 +14,7 @@ const can = (i, bit) => Boolean(i.inGuild?.() && i.memberPermissions?.has(bit));
 const mention = id => `<@${id}>`;
 const LINKED_NOTE = "Optional: Discord can also require it for a role (Server Settings, Roles, the role, Links, then Steam Verified). That one step has to be done in Discord.";
 
-export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, fetchImpl = globalThis.fetch }) {
+export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
     const eph = (i, content) => i.reply({ content, flags: EPHEMERAL, allowedMentions: { parse: [] } });
     const needManager = i => { if (!can(i, BIT.manageGuild)) { eph(i, "Run this in your server with the Manage Server permission."); return false; } return true; };
 
@@ -205,6 +207,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             const stat = list.filter(e => !e.animated).length, anim = list.filter(e => e.animated).length;
             return eph(i, `This server has **${stat}** still and **${anim}** animated emoji.\n${list.slice(0, 40).map(e => `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`).join(" ") || "None yet."}`);
         }
+        if (sub === "packs") return packs(i);
         await i.deferReply({ flags: EPHEMERAL });
         const items = parseEmojis(i.options.getString("emojis") ?? "");
         const file = i.options.getAttachment("image");
@@ -217,6 +220,47 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         const r = await importEmojis({ api, guildId: i.guildId, items, fetchImpl });
         db.bumpUsage("emoji_added", r.added.length);
         return i.editReply({ content: [r.added.length ? `Added ${r.added.length}: ${r.added.map(n => `\`:${n}:\``).join(" ")}` : "Nothing was added.", ...r.failed.map(f => `• \`${f.name}\`: ${f.why}`)].join("\n").slice(0, 1900) });
+    }
+
+    // ---- emoji.gg packs: one pack per page, with buttons that import it ----
+    const PACK_IMPORT_MAX = 50;
+    async function packs(i) {
+        await i.deferReply({ flags: EPHEMERAL });
+        let list;
+        try { list = await emojigg.packs({ sort: i.options.getString("sort") ?? "recent" }); }
+        catch (e) { return i.editReply({ content: `I couldn't load the packs from emoji.gg right now. ${e.message}` }); }
+        list = list.slice(0, 25);
+        const pages = list.map(p => {
+            const imgs = p.previews.length ? p.previews : [];
+            const first = { color: 0x5865f2, title: p.title.slice(0, 256), url: p.url, description: [`${p.count ? `**${p.count}** emoji · ` : ""}from [emoji.gg](https://emoji.gg/packs)`, "Press a button to add it to this server. Still and animated emoji have separate slots, and a big pack goes in " + PACK_IMPORT_MAX + " at a time: press again for the next batch."].join("\n"), footer: { text: "Check each pack's license on emoji.gg before using it" }, ...(imgs[0] ? { image: { url: imgs[0] } } : {}) };
+            return {
+                label: p.title, embeds: [first, ...imgs.slice(1, 4).map(u => ({ url: p.url, image: { url: u } }))],
+                rows: [{ type: 1, components: [
+                    { type: 2, style: 3, label: "Import this pack", custom_id: `emp:a:${p.key}` },
+                    { type: 2, style: 2, label: "Still only", custom_id: `emp:s:${p.key}` },
+                    { type: 2, style: 2, label: "Animated only", custom_id: `emp:n:${p.key}` },
+                    { type: 2, style: 5, label: "View on emoji.gg", url: p.url }] }]
+            };
+        });
+        db.bumpUsage("emoji_packs_browsed");
+        return i.editReply({ ...pagedPayload(db, { content: `**Emoji packs** from emoji.gg (${list.length} shown)`, pages }) });
+    }
+    async function packButton(i) {
+        if (!i.inGuild() || (!can(i, BIT.expressions) && !can(i, BIT.manageGuild))) return eph(i, "You need the Manage Expressions permission for this.");
+        const [, mode, key] = /^emp:([asn]):(.+)$/.exec(i.customId) ?? [];
+        if (!key || !PACK_KEY_RE.test(key)) return eph(i, "That pack isn't available any more.");
+        await i.deferReply({ flags: EPHEMERAL });
+        let all;
+        try { all = await emojigg.pack(key); } catch (e) { return i.editReply({ content: `I couldn't read that pack. ${e.message}` }); }
+        const only = mode === "s" ? "static" : mode === "n" ? "animated" : null;
+        const r = await importEmojis({ api, guildId: i.guildId, items: all.map(e => ({ name: e.name, animated: e.animated, url: e.url })), fetchImpl, limit: PACK_IMPORT_MAX, only, skipExisting: true });
+        db.bumpUsage("emoji_added", r.added.length); db.bumpUsage("emoji_pack_imports");
+        const lines = [r.added.length ? `Added ${r.added.length}: ${r.added.slice(0, 40).map(n => `\`:${n}:\``).join(" ")}` : "Nothing new was added."];
+        if (r.remaining) lines.push(`${r.remaining} more are waiting. Press the button again for the next batch.`);
+        if (r.full.static || r.full.animated) lines.push(`This server's ${[r.full.static && "still", r.full.animated && "animated"].filter(Boolean).join(" and ")} emoji slots are full. A server boost adds more.`);
+        const other = r.failed.filter(f => !/no free/.test(f.why)).slice(0, 3);
+        lines.push(...other.map(f => `• \`${f.name}\`: ${f.why}`));
+        return i.editReply({ content: lines.join("\n").slice(0, 1900) });
     }
 
     // ---- role picker buttons (rr:<roleId>) ----
@@ -257,7 +301,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             default: throw new UserError("Unknown command");
         }
     }
-    return { handleCommand, roleButton, verify, verifyButtonId: VERIFY_ID };
+    return { handleCommand, roleButton, packButton, verify, verifyButtonId: VERIFY_ID };
 }
 
 export function setupSummary(r, publicUrl, guildId, membersIntent) {

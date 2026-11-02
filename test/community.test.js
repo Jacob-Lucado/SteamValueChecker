@@ -185,7 +185,7 @@ test("a member's own invite link is made once and credited to them", async () =>
 
 test("emoji: pasted emoji and links are found, and the import renames clashes and stops cleanly when full", async () => {
     const found = parseEmojis("hi <:pog:123456789012345678> and <a:dance:223456789012345678> again <:pog:123456789012345678> https://cdn.discordapp.com/emojis/323456789012345678.png?size=96 https://evil.example/emojis/423456789012345678.png");
-    assert.deepEqual(found.map(e => [e.name, e.animated]), [["pog", false], ["dance", true], ["emoji_345678", false]]);
+    assert.deepEqual(found.map(e => [e.name, e.animated]), [["pog", false], ["dance", true], ["emoji_345678", false], ["423456789012345678", false]], "a link to a picture on any site is an emoji too");
     assert.match(found[1].url, /\.gif/);
     const api = fakeApi();
     api.state.emojis.push({ id: "1", name: "pog" });
@@ -195,8 +195,12 @@ test("emoji: pasted emoji and links are found, and the import renames clashes an
     assert.ok(r.added.includes("pog_2"), "clash renamed");
     const big = await importEmojis({ api: fakeApi(), guildId: "G", items: [{ name: "big", url: "https://cdn.discordapp.com/emojis/1.png?size=128" }], sleep: noSleep, fetchImpl: async () => ({ ok: true, headers: { get: () => "image/png" }, arrayBuffer: async () => new Uint8Array(300 * 1024).buffer }) });
     assert.equal(big.failed[0].why, "larger than 256 KB");
-    const notCdn = await importEmojis({ api: fakeApi(), guildId: "G", items: [{ name: "x", url: "https://evil.example/a.png" }], sleep: noSleep, fetchImpl: async () => { throw new Error("must not fetch"); } });
-    assert.equal(notCdn.failed[0].why, "not a Discord link");
+    // other sites go through the guarded downloader, never the plain fetch
+    const seen = [];
+    const other = await importEmojis({ api: fakeApi(), guildId: "G", items: [{ name: "xx", url: "https://example.org/a.png" }], sleep: noSleep, fetchImpl: async () => { throw new Error("must not use the plain fetch"); }, safeFetch: async url => { seen.push(url); return { buf: Buffer.from([1, 2]), type: "image/png" }; } });
+    assert.deepEqual([other.added, seen], [["xx"], ["https://example.org/a.png"]]);
+    const refused = await importEmojis({ api: fakeApi(), guildId: "G", items: [{ name: "x", url: "https://example.org/a.png" }], sleep: noSleep, safeFetch: async () => { throw new Error("that address isn't allowed"); } });
+    assert.equal(refused.failed[0].why, "that address isn't allowed");
 });
 
 test("the role picker has a button per role and the invite permission number covers what is needed", () => {
@@ -226,7 +230,8 @@ async function dashSetup() {
     const connections = [];
     const rest = { authorizeUrl: (s, o) => `https://d.example/a?state=${s}${o?.linkedRoles ? "&linked=1" : ""}`, setRoleConnection: async (tok, body) => { connections.push({ tok, body }); }, login: async (_c, o) => ({ ...(o?.withToken ? { accessToken: "tok" } : {}), user: { id: "u1", username: "j", global_name: "J", avatar: null }, guilds: [{ id: "g1", name: "Mine", icon: null, owner: false, permissions: String(0x20) }, { id: "g2", name: "Other", icon: null, owner: false, permissions: "0" }] }),
         listChannels: api.listChannels, listRoles: api.listRoles, memberName: api.memberName, sendMessage: api.sendMessage, allChannels: api.allChannels, allRoles: api.allRoles, getGuild: api.getGuild, listEmojis: api.listEmojis, createEmoji: api.createEmoji };
-    const dash = createDashboard({ db, itad: {}, rest, community, membersIntent: () => false, botGuilds: () => true, config: { publicUrl: "http://localhost:3000", clientId: "bot", ownerId: "owner" } });
+    const emojigg = { fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => "image/png" }, arrayBuffer: async () => new Uint8Array([1, 2]).buffer }), packs: async ({ sort }) => [{ key: "1-demo", id: "1", title: "Demo " + sort, count: "2", previews: [], url: "https://emoji.gg/pack/1-demo" }], pack: async key => { if (key === "9-gone") throw new Error("nope"); return [{ id: "11", name: "aa", animated: false, url: "https://cdn3.emoji.gg/emojis/11-aa.png" }, { id: "12", name: "bb", animated: true, url: "https://cdn3.emoji.gg/emojis/12-bb.gif" }]; } };
+    const dash = createDashboard({ emojigg, db, itad: {}, rest, community, membersIntent: () => false, botGuilds: () => true, config: { publicUrl: "http://localhost:3000", clientId: "bot", ownerId: "owner" } });
     const addr = await dash.listen(0, "127.0.0.1");
     let cookie = "";
     const request = async (path, { method = "GET", body } = {}) => {
@@ -911,4 +916,85 @@ test("community setup builds the music category, posts the intro there and point
     assert.equal(db2.getMusicSettings("H").home_channel_id, old.state.channels.find(c => c.name === "Music 1").id, "the bot waits in Music 1");
     assert.equal(db2.getMusicSettings("H").stay, 1);
     assert.ok(old.state.sent.some(m => JSON.stringify(m.p).includes("Music is here")));
+});
+
+test("emoji: animated Discord links keep their movement, and the full kind of slot is reported", async () => {
+    const [a, b, c] = parseEmojis("https://cdn.discordapp.com/emojis/123456789012345678.webp?size=96&animated=true https://cdn.discordapp.com/emojis/223456789012345678.webp?size=96 https://media.discordapp.net/emojis/323456789012345678.gif");
+    assert.deepEqual([a.animated, b.animated, c.animated], [true, false, true]);
+    assert.match(a.url, /123456789012345678\.gif/); assert.match(b.url, /223456789012345678\.png/);
+    const api = fakeApi();
+    const kinds = [];
+    api.createEmoji = async (g, body) => { kinds.push(body.image.slice(0, 15)); if (kinds.length === 1) throw Object.assign(new Error("Maximum number of animated emojis reached (50)"), { status: 400 }); return { id: "x", name: body.name }; };
+    const fetchImpl = async url => ({ ok: true, status: 200, headers: { get: () => (/gif/.test(url) ? "image/gif" : "image/png") }, arrayBuffer: async () => new Uint8Array([1, 2]).buffer });
+    const r = await importEmojis({ api, guildId: "G", items: [{ name: "one", animated: true, url: "https://cdn.discordapp.com/emojis/1.gif" }, { name: "two", animated: true, url: "https://cdn.discordapp.com/emojis/2.gif" }, { name: "still", animated: false, url: "https://cdn.discordapp.com/emojis/3.png" }], fetchImpl, sleep: noSleep });
+    assert.deepEqual(r.added, ["still"], "a full animated list doesn't stop the still ones");
+    assert.equal(r.full.animated, true);
+    assert.match(r.failed[1].why, /no free animated/);
+});
+
+test("emoji: the guarded downloader refuses private addresses and non-images", async () => {
+    const { safeFetchImage } = await import("../src/emojisource.js");
+    for (const bad of ["http://example.org/a.png", "https://localhost/a.png", "https://127.0.0.1/a.png", "https://10.0.0.5/a.png", "https://user:pw@example.org/a.png", "https://example.org:8443/a.png"]) await assert.rejects(safeFetchImage(bad), /allowed|https|login|port/, bad);
+    const dns = (host, opts, cb) => cb(null, [{ address: "192.168.1.9", family: 4 }]);
+    await assert.rejects(safeFetchImage("https://sneaky.example/a.png", { lookupImpl: dns }), /allowed/);
+});
+
+const PACK_HTML = `<div><a href="/pack/369357-pumpkin-emotes"><img src="https://cdn3.emoji.gg/emojis/177688-angry.png"><img src="https://cdn3.emoji.gg/emojis/73371-grin.png"></a>
+<a href="/pack/369357-pumpkin-emotes">Pumpkin Emotes</a><span>445</span></div>
+<div><a href="https://emoji.gg/pack/444226-maomao"><img src="https://cdn3.emoji.gg/emojis/9784-maomao-nom.gif"></a><a href="https://emoji.gg/pack/444226-maomao"><b>Maomao &amp; friends</b></a><span>696</span></div>`;
+
+test("emoji.gg: packs and a pack's emoji are read from the page", async () => {
+    const { parsePackList, parsePackEmojis, createEmojiGg } = await import("../src/emojisource.js");
+    const list = parsePackList(PACK_HTML);
+    assert.deepEqual(list.map(p => [p.key, p.title, p.count, p.previews.length]), [["369357-pumpkin-emotes", "Pumpkin Emotes", "445", 2], ["444226-maomao", "Maomao & friends", "696", 1]]);
+    const em = parsePackEmojis(PACK_HTML + `<img src="https://cdn3.emoji.gg/emojis/9784-maomao-nom.gif">`);
+    assert.deepEqual(em.map(e => [e.name, e.animated]), [["angry", false], ["grin", false], ["maomao_nom", true]]);
+    const asked = [];
+    const gg = createEmojiGg({ fetchImpl: async url => { asked.push(url); return { ok: true, text: async () => PACK_HTML }; } });
+    assert.equal((await gg.pack("369357-pumpkin-emotes")).length, 3);
+    assert.ok(asked.length <= 2, "stops when a page brings nothing new");
+    await assert.rejects(gg.pack("../../etc/passwd"), /isn't a pack/);
+    await gg.packs({ sort: "downloads" }); assert.match(asked.at(-1), /sort=downloads/);
+});
+
+test("/manage emoji packs shows one pack at a time, and the buttons import it in batches", async () => {
+    const { createCommunityHandlers } = await import("../src/communityhandlers.js");
+    const db = openDb(":memory:"), api = fakeApi();
+    api.createEmoji = async (_g, b) => { api.state.emojis.push({ id: String(api.state.emojis.length + 1), name: b.name }); };
+    const html = PACK_HTML + Array.from({ length: 60 }, (_, n) => `<img src="https://cdn3.emoji.gg/emojis/${1000 + n}-e${n}.png">`).join("");
+    const fetchImpl = async url => (/cdn3/.test(url) ? { ok: true, status: 200, headers: { get: () => "image/png" }, arrayBuffer: async () => new Uint8Array([1, 2]).buffer } : { ok: true, text: async () => html });
+    const ui = createCommunityHandlers({ db, api, service: {}, fetchImpl });
+    const sent = [];
+    const mk = extra => ({ inGuild: () => true, guildId: "G", memberPermissions: { has: () => true }, deferReply: async () => {}, editReply: async v => { sent.push(v); }, reply: async v => { sent.push(v); }, ...extra });
+    await ui.handleCommand(mk({ commandName: "emoji", options: { getSubcommand: () => "packs", getString: () => null } }));
+    const first = sent[0];
+    assert.match(first.content, /Emoji packs/);
+    assert.equal(first.embeds[0].title, "Pumpkin Emotes");
+    assert.ok(first.components.at(-1).components.some(c => c.custom_id === "emp:a:369357-pumpkin-emotes"));
+    await ui.packButton(mk({ customId: "emp:a:369357-pumpkin-emotes" }));
+    assert.match(sent[1].content, /Added 50/); assert.match(sent[1].content, /13 more/);
+    await ui.packButton(mk({ customId: "emp:a:369357-pumpkin-emotes" }));
+    assert.match(sent[2].content, /Added 13/, "the next press carries on where it stopped");
+    await ui.packButton(mk({ customId: "emp:a:369357-pumpkin-emotes", memberPermissions: { has: () => false } }));
+    assert.match(sent[3].content, /Manage Expressions/);
+});
+
+test("dashboard: emoji packs list, open and import for managers only", async () => {
+    const t = await dashSetup();
+    const wait = () => new Promise(r => setTimeout(r, 350));
+    const list = await t.request("/api/community/emoji-packs?guild=g1&sort=downloads");
+    assert.equal(list.status, 200); assert.equal(list.data.packs[0].title, "Demo downloads");
+    assert.equal((await t.request("/api/community/emoji-packs?guild=g2")).status, 403, "not a manager there");
+    await wait();
+    const pack = await t.request("/api/community/emoji-pack?guild=g1&key=1-demo");
+    assert.deepEqual(pack.data.emojis.map(e => e.name), ["aa", "bb"]);
+    await wait();
+    assert.equal((await t.request("/api/community/emoji-pack?guild=g1&key=9-gone")).status, 502);
+    await wait();
+    assert.equal((await t.request("/api/community/emoji-pack?guild=g1&key=../x")).status, 400);
+    assert.equal((await t.request("/api/community/emoji-pack", { method: "POST", body: { guild_id: "g2", key: "1-demo", ids: ["11"] } })).status, 403);
+    assert.equal((await t.request("/api/community/emoji-pack", { method: "POST", body: { guild_id: "g1", key: "1-demo", ids: [] } })).status, 400);
+    await wait();
+    const done = await t.request("/api/community/emoji-pack", { method: "POST", body: { guild_id: "g1", key: "1-demo", ids: ["11", "12", "999"] } });
+    assert.equal(done.status, 200); assert.deepEqual(done.data.added, ["aa", "bb"]);
 });

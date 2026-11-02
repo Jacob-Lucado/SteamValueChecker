@@ -68,7 +68,7 @@ export const HELP_PAGES = [
         description: "Needs Manage Server (or the moderator role for `/mod`).",
         fields: [
             { name: "Setup", value: "`/manage setup` is a guided setup. `/manage community` `setup` builds the usual channels, roles, welcome and XP; `welcome`, `autorole`, `verifyrole`, `xp`, `levelrole`, `referral`, `status` tune it." },
-            { name: "Alerts and extras", value: "`/manage alertchannel` `set` / `clear` / `show` / `feed` / `hot` / `sales` / `digest` / `group` picks where alerts go. `/manage emoji` adds emoji. `/manage leaderboardrefresh` updates #leaderboard." },
+            { name: "Alerts and extras", value: "`/manage alertchannel` `set` / `clear` / `show` / `feed` / `hot` / `sales` / `digest` / `group` picks where alerts go. `/manage emoji` `import` (emoji or picture links from anywhere) / `list` / `packs` (browse emoji.gg packs and import one) adds emoji. `/manage leaderboardrefresh` updates #leaderboard." },
             { name: "Moderation", value: "`/mod` `warn` / `warnings` / `clearwarns` / `timeout` / `untimeout` / `kick` / `ban` / `unban` / `purge` / `cases` / `log`. Every action is logged in #mod-log." }
         ] },
     { key: "bot", label: "Bot and support", emoji: "🤖", title: "/bot",
