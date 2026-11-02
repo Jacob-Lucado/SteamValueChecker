@@ -43,3 +43,29 @@ test("release alerts: muting the release type keeps them out of DMs", async () =
     const { MUTABLE } = await import("../src/prefs.js");
     assert.ok(MUTABLE.includes("release"));
 });
+
+test("release alerts: held back while Steam still says coming soon, sent once it is out", async () => {
+    const s = setup();
+    s.db.setAppId("u1", "g-new", 123);
+    let soon = true;
+    const run = () => runReleases({ db: s.db, itad: s.itad, notifier: s.notifier, now: s.now, stillUpcoming: async () => soon });
+    await run();
+    s.advance(2 * DAY + 3600_000); // the price site's date has passed
+    let r = await run();
+    assert.equal(s.sent.length, 0, "Steam says not yet, so no alert");
+    assert.equal(r.early, 1);
+    soon = false;
+    await run();
+    assert.equal(s.sent.length, 1);
+    assert.match(s.sent[0].payload.embeds[0].title, /Soon Game/);
+});
+
+test("steamStillUpcoming reads coming_soon and gives null when it cannot tell", async () => {
+    const { steamStillUpcoming } = await import("../src/steamrelease.js");
+    const reply = body => async () => ({ ok: true, json: async () => body });
+    assert.equal(await steamStillUpcoming(901, reply({ 901: { success: true, data: { release_date: { coming_soon: true } } } })), true);
+    assert.equal(await steamStillUpcoming(902, reply({ 902: { success: true, data: { release_date: { coming_soon: false } } } })), false);
+    assert.equal(await steamStillUpcoming(903, reply({ 903: { success: false } })), null);
+    assert.equal(await steamStillUpcoming(904, async () => { throw new Error("down"); }), null);
+    assert.equal(await steamStillUpcoming(null, reply({})), null);
+});

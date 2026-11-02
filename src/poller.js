@@ -393,8 +393,8 @@ export async function runServerDigests({ db, itad, notifier, now = () => Date.no
  * Release-day alerts for wishlisted games that were not out yet when they were added. Release dates are looked up in small
  * batches (60 games a run), then each launch is announced once per member, within a week of the date.
  */
-export async function runReleases({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
-    const stats = { looked: 0, found: 0, delivered: 0, failed: 0, deferred: 0 };
+export async function runReleases({ db, itad, notifier, now = () => Date.now(), log = () => {}, stillUpcoming = async () => null }) {
+    const stats = { looked: 0, found: 0, delivered: 0, failed: 0, deferred: 0, early: 0 };
     for (const g of db.itemsNeedingRelease(60)) {
         try {
             const info = await itad.getTitle(g.itad_id);
@@ -414,6 +414,8 @@ export async function runReleases({ db, itad, notifier, now = () => Date.now(), 
         stats.found++;
         const user = db.getUser(it.discord_id);
         if (!user) continue;
+        // The price site's date can be a day ahead of the store. If Steam still says coming soon, hold the alert for the next run.
+        if (Number.isInteger(it.appid) && await stillUpcoming(it.appid) === true) { stats.early++; continue; }
         if (isQuiet(user, now())) { stats.deferred++; continue; }
         const sum = summarize(prices.get(it.region)?.get(it.itad_id), { majorOnly: user.stores === "major" });
         const embed = releaseEmbed({ title: it.title, releaseAt: it.release_at, best: sum.best, currency: sum.currency ?? "USD", url: sum.best?.url });

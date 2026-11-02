@@ -30,6 +30,7 @@ import { createNotifier } from "./notify.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
 import { runFriendReminders } from "./friends.js";
+import { steamStillUpcoming } from "./steamrelease.js";
 import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runGuildFeeds, runHotDeals, runSaleStarts, runServerDigests, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
@@ -259,7 +260,7 @@ client.once(Events.ClientReady, c => {
             const result = {};
             try { result.extras = await runExtras({ db, itad, notifier, log }); } catch (err) { ops.error("extras", err); }
             try { result.tags = await refreshTags({ db, appids: db.allAppsNeedingTags(30), delayMs: 1200 }); } catch (err) { ops.error("genre tags", err); }
-            try { result.releases = await runReleases({ db, itad, notifier, log }); } catch (err) { ops.error("releases", err); }
+            try { result.releases = await runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }); } catch (err) { ops.error("releases", err); }
             try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
             try { result.feeds = await runGuildFeeds({ db, itad, notifier, log }); } catch (err) { ops.error("server feeds", err); }
             try { result.hotDeals = await runHotDeals({ db, itad, notifier, log }); } catch (err) { ops.error("hot deals", err); }
