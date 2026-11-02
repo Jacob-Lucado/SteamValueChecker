@@ -316,11 +316,11 @@ fly launch --no-deploy --copy-config      # pick your app name; say no to a data
 fly volumes create svc_data --size 1 --region iad
 fly scale count 1                         # SQLite and dashboard sessions need exactly one machine
 fly secrets set DISCORD_TOKEN=... CLIENT_ID=... ITAD_API_KEY=... KEY_ENCRYPTION_SECRET=... \
-  DISCORD_CLIENT_SECRET=... DASHBOARD_URL=https://YOUR-APP.fly.dev OWNER_DISCORD_ID=...
+  DISCORD_CLIENT_SECRET=... DASHBOARD_URL=https://YOUR-DOMAIN OWNER_DISCORD_ID=...
 fly deploy
 ```
 
-Add `https://YOUR-APP.fly.dev/auth/callback` as a redirect under OAuth2 in the Discord Developer Portal.
+Add `https://YOUR-DOMAIN/auth/callback` as a redirect under OAuth2 in the Discord Developer Portal.
 
 
 ### Price insight, ProtonDB and the status page
@@ -333,4 +333,4 @@ Sale alerts now carry a 12 month price sparkline with a buy-now-or-wait note, an
 
 ## FanaticalGrabber visitor counter
 
-The web dashboard also serves a small public counter for the FanaticalGrabber page (`GET/POST /api/visits/fanaticalgrabber`, CORS-limited to `https://jacob-lucado.github.io`). It needs nothing beyond the dashboard running (`DASHBOARD_URL` + `DISCORD_CLIENT_SECRET`). Check it after a deploy: `https://<your-app>.fly.dev/api/visits/fanaticalgrabber` should return JSON like `{"views":0,"visitors":0,"since":null,"online":0}`.
+The web dashboard also serves a small public counter for the FanaticalGrabber page (`GET/POST /api/visits/fanaticalgrabber`, CORS-limited to `https://jacob-lucado.github.io`). It needs nothing beyond the dashboard running (`DASHBOARD_URL` + `DISCORD_CLIENT_SECRET`). Check it after a deploy: `https://<your-domain>/api/visits/fanaticalgrabber` should return JSON like `{"views":0,"visitors":0,"since":null,"online":0}`.
