@@ -2520,8 +2520,8 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const key = `${req.method} ${url.pathname}`;
             if (url.pathname.startsWith("/api/visits/")) return visits(req, res, url);
 
-            if (req.method === "GET" && (url.pathname === "/terms" || url.pathname === "/privacy")) {
-                const page = legalPage(url.pathname.slice(1), origin);
+            if (req.method === "GET" && /^\/(terms|privacy)(\.html)?$/.test(url.pathname)) {
+                const page = legalPage(url.pathname.slice(1).replace(/\.html$/, ""), origin);
                 if (page) return send(res, 200, page, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);

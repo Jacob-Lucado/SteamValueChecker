@@ -1533,6 +1533,19 @@ test("the terms and privacy policy are public pages on the bot's own site", asyn
     const { legalPage, mdToHtml } = await import("../src/legal.js");
     assert.match(mdToHtml("# T\n\n1. **Bold** [x](https://a.example) <b>\n- item"), /<h2>T<\/h2>[\s\S]*<strong>Bold<\/strong>[\s\S]*href="https:\/\/a.example"[\s\S]*&lt;b&gt;[\s\S]*<ul>\n<li>item/);
     assert.equal(mdToHtml("[bad](javascript:alert(1))").includes("href"), false);
-    for (const k of ["terms", "privacy"]) { const html = legalPage(k, "https://bot.example"); assert.match(html, /<title>/); assert.ok(!/github\.com/i.test(html)); assert.match(html, new RegExp(`canonical" href="https://bot.example/${k}"`)); }
+    for (const k of ["terms", "privacy"]) { const html = legalPage(k, "https://bot.example"); assert.match(html, /<title>/); assert.ok(!/github\.com/i.test(html)); assert.match(html, new RegExp(`canonical" href="https://bot.example/${k}.html"`)); }
     assert.equal(legalPage("nope", "x"), null);
+});
+
+test("terms and privacy answer at .html and at the plain path", async () => {
+    const t = await setup();
+    try {
+        for (const path of ["/terms.html", "/privacy.html", "/terms", "/privacy"]) {
+            const r = await t.request(path, { raw: true });
+            assert.equal(r.status, 200, path);
+            assert.match(r.headers.get("content-type"), /text\/html/);
+            assert.match(await r.text(), /<title>/);
+        }
+        assert.equal((await t.request("/terms.htm", { raw: true })).status, 404);
+    } finally { await t.close(); }
 });

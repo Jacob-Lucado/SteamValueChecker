@@ -1,4 +1,4 @@
-// The Terms of Service and Privacy Policy as ordinary web pages on the bot's own site (/terms and /privacy),
+// The Terms of Service and Privacy Policy as ordinary web pages on the bot's own site (/terms.html and /privacy.html; the plain /terms and /privacy work too),
 // so the links in the Discord developer portal and in the bot don't depend on where the code is kept.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -43,7 +43,7 @@ export function legalPage(kind, origin) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${d.title} · Steam Value Checker</title>
 <meta name="robots" content="index,follow">
-<link rel="canonical" href="${esc(origin)}/${kind}">
+<link rel="canonical" href="${esc(origin)}/${kind}.html">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="stylesheet" href="/style.css">
 <script src="/theme.js"></script>

@@ -626,7 +626,7 @@ client.on(Events.InteractionCreate, async i => {
             case "help": return await i.reply({ ...helpPayload("start"), flags: MessageFlags.Ephemeral });
             case "dashboard": case "dash": return await i.reply(dashPayload(cfg.dashboard?.publicUrl ?? null, i.options.getString("page")));
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
-            case "privacy": { const base = cfg.dashboard?.publicUrl?.replace(/\/$/, ""); return await embedReply(i, base ? `${PRIVACY}\n\nFull text: [Privacy Policy](${base}/privacy) · [Terms of Service](${base}/terms)` : PRIVACY); }
+            case "privacy": { const base = cfg.dashboard?.publicUrl?.replace(/\/$/, ""); return await embedReply(i, base ? `${PRIVACY}\n\nFull text: [Privacy Policy](${base}/privacy.html) · [Terms of Service](${base}/terms.html)` : PRIVACY); }
         } })();
         if (showTip && (i.replied || i.deferred)) {
             db.ensureUser(i.user.id, i.guildId);
