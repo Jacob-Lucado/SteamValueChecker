@@ -34,6 +34,9 @@
     if (!res.ok) throw new Error(data.error || "Something went wrong.");
     return data;
   }
+  const toSeconds = text => { const t = String(text).trim(); if (/^\d+$/.test(t)) return Number(t); const m = t.match(/^(?:(\d+):)?(\d+):(\d{1,2})$/) || t.match(/^()(\d+):(\d{1,2})$/); return m ? Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : NaN; };
+  const field = (label, control) => h("label", { class: "mu-field" }, h("span", { text: label }), control);
+  const check = (on, label) => { const i = h("input", { type: "checkbox" }); i.checked = Boolean(on); return [i, h("label", { class: "mu-check" }, i, " " + label)]; };
   const initials = name => String(name || "?").trim().slice(0, 2).toUpperCase();
   const avatar = (u, cls) => u.avatar ? h("img", { class: cls, src: u.avatar, alt: "", referrerpolicy: "no-referrer", loading: "lazy" }) : h("span", { class: cls, text: initials(u.name) });
   const themeBtn = () => {
@@ -60,8 +63,8 @@
     try { list = (await api("/api/music")).guilds; } catch (e) { return gate("Music isn't available", e.message, h("a", { class: "mu-link plain", href: "/", text: "Back" })); }
     guilds = list;
     if (!guilds.length) return gate("No servers yet", "I don't share a server with you yet. Add the bot to a server, then come back.", h("a", { class: "mu-link", href: me.inviteUrl || "/", text: "Back to the dashboard" }));
-    const saved = store.get("svc_music_guild");
-    gid = guilds.find(g => g.id === saved)?.id || (guilds.find(g => g.active) || guilds[0]).id;
+    const wanted = new URLSearchParams(location.search).get("guild"), saved = store.get("svc_music_guild");
+    gid = guilds.find(g => g.id === wanted)?.id || guilds.find(g => g.id === saved)?.id || (guilds.find(g => g.active) || guilds[0]).id;
     buildShell();
     selectGuild(gid, true);
   }
@@ -106,11 +109,12 @@
     ui.name = h("h1", { text: "" });
     const hero = h("section", { class: "mu-hero" }, ui.cover,
       h("div", { class: "mu-meta" }, ui.tags, ui.title, ui.artist, ui.eq, h("div", { class: "mu-prog" }, ui.pos, ui.bar, ui.dur),
-        h("div", { class: "mu-ctl" }, ui.prev, ui.play, ui.next, ui.stop, ui.shuf, ui.loop, ui.leave, h("label", { class: "mu-vol" }, "🔊", ui.vol))));
+        h("div", { class: "mu-ctl" }, ui.prev, ui.play, ui.next, ui.stop, ui.shuf, ui.loop, ui.leave, h("label", { class: "mu-vol" }, "🔊", ui.vol)),
+        h("form", { class: "mu-jump", onsubmit: e => { e.preventDefault(); const n = toSeconds(ui.jump.value); if (!Number.isFinite(n)) return toast("Type a time like 1:30.", "error"); control("seek", { value: n }); ui.jump.value = ""; } }, ui.jump = h("input", { type: "text", placeholder: "Jump to 1:30", size: "9", "aria-label": "Jump to a time" }), h("button", { class: "mu-mini", type: "submit", text: "Go" }))));
 
     // tabs
     const panes = {}, tabs = {};
-    const tabDefs = [["queue", "Queue"], ["search", "Add music"], ["radio", "Radio"], ["requests", "Requests"], ["playlists", "Playlists"]];
+    const tabDefs = [["queue", "Queue"], ["search", "Add music"], ["radio", "Radio"], ["requests", "Requests"], ["playlists", "Playlists"], ["autodj", "Auto DJ"], ["settings", "Settings"]];
     const tabBar = h("div", { class: "mu-tabs", role: "tablist" });
     for (const [id, label] of tabDefs) {
       tabs[id] = h("button", { class: "mu-tab", type: "button", role: "tab", onclick: () => showTab(id) }, label, h("b", { hidden: true }));
@@ -119,6 +123,8 @@
     }
     ui.panes = panes; ui.tabs = tabs;
     buildSearch(); buildRadio(); buildPlaylists();
+    ui.autoBox = h("div"); ui.setBox = h("div");
+    panes.autodj.append(ui.autoBox); panes.settings.append(ui.setBox);
     ui.queueList = h("div", { class: "mu-list" });
     panes.queue.append(ui.queueList);
     ui.reqList = h("div", { class: "mu-list" });
@@ -182,24 +188,33 @@
 
   // ---------- add music ----------
   function buildSearch() {
-    ui.q = h("input", { type: "search", placeholder: "Search SoundCloud, or paste a link or radio stream…", "aria-label": "Search for music", autocomplete: "off" });
+    ui.q = h("input", { type: "search", placeholder: "Search SoundCloud, or paste a song, playlist or radio stream link…", "aria-label": "Search for music", autocomplete: "off", maxlength: "300" });
     ui.qGo = h("button", { class: "mu-go", type: "submit", text: "Search" });
+    ui.qPlay = h("button", { class: "mu-go", type: "button", text: "Play" });
     ui.results = h("div", { class: "mu-list" });
-    const form = h("form", { class: "mu-form" }, ui.q, ui.qGo);
+    const [nextBox, nextLabel] = check(false, "Play next"), [shufBox, shufLabel] = check(false, "Shuffle if it's a playlist");
+    ui.opts = { next: nextBox, shuf: shufBox };
+    const doPlay = async () => { const q = ui.q.value.trim(); if (!q) return; await add({ query: q, next: nextBox.checked, shuffle: shufBox.checked }); ui.q.value = ""; ui.results.replaceChildren(); };
+    ui.qPlay.addEventListener("click", doPlay);
+    const form = h("form", { class: "mu-form" }, ui.q, ui.qGo, ui.qPlay);
     form.addEventListener("submit", async e => {
       e.preventDefault();
       const q = ui.q.value.trim(); if (!q) return;
-      if (/^https?:\/\//i.test(q)) { await add({ query: q }); ui.q.value = ""; ui.results.replaceChildren(); return; }
+      if (/^https?:\/\//i.test(q)) return doPlay();
       ui.qGo.disabled = true; ui.results.replaceChildren(h("p", { class: "mu-empty", text: "Searching…" }));
       try {
         const r = await api(`/api/music/search?guild=${encodeURIComponent(gid)}&q=${encodeURIComponent(q)}`);
         ui.results.replaceChildren(...(r.results.length ? r.results.map(t => trackRow(t, [
-          h("button", { class: "mu-mini go", type: "button", text: "Add", disabled: !can(), onclick: () => add({ tracks: [t] }, t.title) }),
-          h("button", { class: "mu-mini", type: "button", text: "Next", disabled: !can(), onclick: () => add({ tracks: [t], next: true }, t.title) })])) : [h("p", { class: "mu-empty", text: "Nothing found. Try different words." })]));
+          h("button", { class: "mu-mini go", type: "button", text: "Add", disabled: !can(), onclick: () => add({ tracks: [t], next: nextBox.checked }, t.title) }),
+          h("button", { class: "mu-mini", type: "button", text: "Next", disabled: !can(), onclick: () => add({ tracks: [t], next: true }, t.title) }),
+          data?.settings?.autodj && data?.settings?.autodj_submit ? h("button", { class: "mu-mini", type: "button", title: "Send it to the Auto DJ as a request", text: "Request", onclick: () => request({ tracks: [t] }) }) : null].filter(Boolean))) : [h("p", { class: "mu-empty", text: "Nothing found. Try different words." })]));
       } catch (err) { ui.results.replaceChildren(h("p", { class: "mu-empty", text: err.message })); }
       finally { ui.qGo.disabled = false; }
     });
-    ui.panes.search.append(h("p", { class: "mu-hint", text: "Press / anywhere to jump here. Playlists work too: paste a SoundCloud set link." }), form, ui.results);
+    ui.panes.search.append(h("p", { class: "mu-hint", text: "Press / anywhere to jump here. Paste a SoundCloud song, playlist (set) or artist link to queue it all (up to 100 songs), or a live radio stream link (an Icecast or Shoutcast address)." }), form, h("div", { class: "mu-opts" }, nextLabel, shufLabel), ui.results);
+  }
+  async function request(payload) {
+    try { const r = await api("/api/music/submit", { guild_id: gid, ...payload }); toast(r.added > 1 ? `Requested ${r.added} songs.` : "Requested. It plays before the Auto DJ's own songs."); await refresh(); } catch (e) { toast(e.message, "error"); }
   }
   function trackRow(t, acts, n = "") {
     return h("div", { class: "mu-row" }, h("span", { class: "n", text: n }),
@@ -269,6 +284,7 @@
     }
     for (const b of [ui.prev, ui.next, ui.play, ui.stop, ui.shuf, ui.loop, ui.leave]) b.disabled = !ok || (!t && b !== ui.leave && b !== ui.shuf) || (!dj && [ui.stop, ui.shuf, ui.loop, ui.leave, ui.play].includes(b));
     ui.prev.disabled = ui.prev.disabled || t?.live; ui.leave.disabled = !ok || !dj;
+    ui.jump.disabled = ui.jump.nextSibling.disabled = !ok || !dj || !t || t.live;
     ui.vol.disabled = !ok || !dj; if (document.activeElement !== ui.vol) ui.vol.value = String(st.volume);
     ui.bar.classList.toggle("seek", ok && dj && Boolean(t) && !t.live);
     ui.bar.classList.toggle("live", Boolean(t?.live));
@@ -298,13 +314,59 @@
     const rsig = JSON.stringify([d.submissions.map(r => r.id), a.canSubmit]);
     if (rsig !== ui.rsig) {
       ui.rsig = rsig;
-      ui.reqForm.replaceChildren(a.canSubmit ? h("p", { class: "mu-hint", text: "Send a song for the Auto DJ to play when the queue is empty. Use the Add music tab to find one, then press Request." }) : h("p", { class: "mu-hint", text: "Requests are off in this server." }));
+      const rq = h("input", { type: "text", placeholder: "SoundCloud song or playlist link, or words to search", maxlength: "300", "aria-label": "Request a song", disabled: !a.canSubmit });
+      const rg = h("button", { class: "mu-go", type: "submit", text: "Request", disabled: !a.canSubmit });
+      const rf = h("form", { class: "mu-form", onsubmit: e => { e.preventDefault(); if (rq.value.trim()) request({ query: rq.value }).then(() => { rq.value = ""; }); } }, rq, rg);
+      ui.reqForm.replaceChildren(h("p", { class: "mu-hint", text: a.canSubmit ? "Request a song for the Auto DJ. Requests play before its own songs, and they work even if you're not in the voice channel. Search results in the Add music tab have a Request button too." : "Requests are off in this server. A manager can turn them on under Auto DJ." }), rf);
       ui.reqList.replaceChildren(...(d.submissions.length ? d.submissions.map(r => trackRow(r, (r.mine || dj) ? [h("button", { class: "mu-mini bad", type: "button", text: "✕", "aria-label": "Remove request", onclick: async () => { try { await api("/api/music/submission", { guild_id: gid, id: r.id }); await refresh(); } catch (e) { toast(e.message, "error"); } } })] : [])).map((row, i) => { row.querySelector(".t span").textContent += ` · from ${d.submissions[i].name}`; return row; }) : [h("p", { class: "mu-empty", text: "No requests waiting." })]));
     }
-    if (!ui.plBuilt) { ui.plBuilt = true; }
     paintPlaylists();
+    const mgr = Boolean(d.channels);
+    ui.tabs.autodj.hidden = ui.tabs.settings.hidden = !mgr;
+    if (!mgr && ["autodj", "settings"].includes(store.get("svc_music_tab"))) showTab("queue");
+    if (mgr && ui.mgrKey !== gid) { ui.mgrKey = gid; buildManager(d); }
     ui.clear.hidden = !(dj || a.isManager || a.isBotOwner);
   }
+  // ---------- manager panels (Auto DJ and server settings), same as the dashboard's Music page ----------
+  const num = (v, lo, hi) => { const i = h("input", { type: "number", min: String(lo), max: String(hi), value: String(v) }); return i; };
+  const sel = (opts, value) => { const s = h("select"); for (const [v, t] of opts) { const o = h("option", { value: v, text: t }); if (v === value) o.selected = true; s.append(o); } return s; };
+  const press = async (btn, fn) => { const label = btn.textContent; btn.disabled = true; btn.textContent = "Working…"; try { await fn(); } catch (e) { toast(e.message, "error"); } finally { btn.disabled = false; btn.textContent = label; } };
+  function buildManager(d) {
+    const s = d.settings;
+    // Auto DJ
+    const [on, onL] = check(s.autodj, "Auto DJ is on"), [sub, subL] = check(s.autodj_submit, "Members can request songs (even from outside the voice channel)"), [shuf, shufL] = check(s.autodj_shuffle, "Shuffle the playlist");
+    const idle = num(s.autodj_idle, 5, 600);
+    const vc = sel([["", "Only when someone starts it"], ...(d.voiceChannels ?? []).map(c => [c.id, "🔊 " + c.name])], s.autodj_channel_id || "");
+    const link = h("input", { type: "text", maxlength: "300", placeholder: "SoundCloud playlist link", "aria-label": "Auto DJ playlist link" });
+    const saved = sel([["", "Or use one of my saved playlists…"], ...d.playlists.map(p => [p.name, `${p.name} (${p.count})`])], "");
+    const call = (extra, ok) => api("/api/music/autodj", { guild_id: gid, ...extra }).then(r => { toast(r.note || ok || "Saved."); ui.mgrKey = ""; return refresh(); });
+    const save = h("button", { class: "mu-go", type: "button", text: "Save Auto DJ settings" });
+    save.addEventListener("click", () => press(save, () => call({ autodj: on.checked, autodj_submit: sub.checked, autodj_shuffle: shuf.checked, autodj_idle: Number(idle.value), autodj_channel_id: vc.value })));
+    const useLink = h("button", { class: "mu-mini go", type: "button", text: "Use this playlist" });
+    useLink.addEventListener("click", () => press(useLink, () => call({ playlist_url: link.value })));
+    const useSaved = h("button", { class: "mu-mini go", type: "button", text: "Use it" });
+    useSaved.addEventListener("click", () => { if (!saved.value) return toast("Pick a saved playlist first.", "error"); press(useSaved, () => call({ saved_playlist: saved.value })); });
+    const clr = h("button", { class: "mu-mini bad", type: "button", text: "Remove playlist" });
+    clr.addEventListener("click", () => { if (confirm("Remove the Auto DJ's playlist?")) press(clr, () => call({ clear_playlist: true })); });
+    const pl = d.autodj.playlist;
+    ui.autoBox.replaceChildren(
+      h("p", { class: "mu-hint", text: "Keeps music going. When the bot sits in a voice channel with nothing playing for a while, it starts your playlist. Members' requests play first, and anyone's /play beats the playlist right away." }),
+      h("div", { class: "mu-set" }, onL, subL, shufL, field("Start after this many seconds of silence", idle), field("Join this voice channel by itself", vc), h("div", { class: "mu-actions" }, save)),
+      h("h3", { class: "mu-h", text: `Playlist (${d.autodj.count} song${d.autodj.count === 1 ? "" : "s"})` }),
+      h("div", { class: "mu-form" }, link, useLink), h("div", { class: "mu-form" }, saved, useSaved, d.autodj.count ? clr : null),
+      h("div", { class: "mu-list" }, ...(pl.length ? pl.slice(0, 50).map((t, i) => trackRow(t, [], String(i + 1))) : [h("p", { class: "mu-empty", text: "No playlist yet. Paste a SoundCloud playlist link above." })])));
+    // Server settings
+    const [en, enL] = check(s.enabled, "Music is on"), [ann, annL] = check(s.announce, "Post a message when each song starts"), [stay, stayL] = check(s.stay, "Stay in the last voice channel and wait for people"), [radio, radioL] = check(s.radio, "Allow live radio stream links");
+    const vol = num(s.volume, 1, 100), mq = num(s.max_queue, 5, 500), mm = num(s.max_minutes, 0, 600), lv = num(s.leave_minutes, 1, 60);
+    const role = sel([["", "Everyone can use the controls"], ...d.roles.filter(r => r.id !== d.guild.id).map(r => [r.id, "DJ role: " + r.name])], s.dj_role_id || "");
+    const chan = sel([["", "Where the song was added from"], ...d.channels.map(c => [c.id, "#" + c.name])], s.channel_id || "");
+    const save2 = h("button", { class: "mu-go", type: "button", text: "Save music settings" });
+    save2.addEventListener("click", () => press(save2, async () => { await api("/api/music/settings", { guild_id: gid, enabled: en.checked, announce: ann.checked, stay: stay.checked, radio: radio.checked, volume: Number(vol.value), max_queue: Number(mq.value), max_minutes: Number(mm.value), leave_minutes: Number(lv.value), dj_role_id: role.value, channel_id: chan.value }); toast("Saved."); ui.mgrKey = ""; await refresh(); }));
+    ui.setBox.replaceChildren(
+      h("p", { class: "mu-hint", text: "Only people with Manage Server see this. Moderators can always use the DJ controls. The bot needs Connect and Speak in your voice channels, plus Send Messages where it posts." }),
+      h("div", { class: "mu-set" }, enL, annL, stayL, radioL, field("Controls", role), field("Now-playing messages go to", chan), field("Starting volume (1-100)", vol), field("Most songs in the queue", mq), field("Longest song, minutes (0 = no limit)", mm), field("Leave after idle (minutes)", lv), h("div", { class: "mu-actions" }, save2)));
+  }
+
   let stampAt = Date.now();
   function tick() {
     const st = data?.status, t = st?.current;
@@ -327,7 +389,7 @@
   }
   function selectGuild(id, first) {
     gid = id; store.set("svc_music_guild", id);
-    ui.radioLoaded = false; ui.qsig = ui.rsig = lastSig = ""; ui.results.replaceChildren(); ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: "Open this tab to see stations." }));
+    ui.radioLoaded = false; ui.qsig = ui.rsig = lastSig = ""; ui.mgrKey = ""; ui.results.replaceChildren(); ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: "Open this tab to see stations." }));
     data = null; chatSince = 0; chatFirst = true; ui.msgs.replaceChildren();
     for (const [k, srv] of Object.entries(ui.srv)) srv.classList.toggle("on", k === id);
     refresh().then(() => { if (ui.panes.radio.classList.contains("on")) loadRadio(); });
