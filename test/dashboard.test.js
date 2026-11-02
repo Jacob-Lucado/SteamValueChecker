@@ -1872,6 +1872,14 @@ test("streams: only streamers, mods and managers get the overlay and go-live; an
         assert.equal(linked.status, 200); assert.deepEqual(linked.data.link, { platform: "twitch", handle: "jacob_tv", url: "https://twitch.tv/jacob_tv" });
         assert.equal(o.db.getStreamLink("g-member", "u1").via, "role");
         page = (await o.request("/api/streams?guild=g-member")).data; assert.equal(page.link.handle, "jacob_tv"); assert.equal(typeof page.watch.twitch, "boolean");
+        // the roster: anyone in the server can see who linked a channel and who is live (members who left are left out)
+        o.db.setStreamLink("g-member", "other1", { platform: "kick", handle: "otherguy", via: "role", added: 5 });
+        o.db.setStreamLive("g-member", "u1", { title: "Ranked", url: "https://twitch.tv/jacob_tv", game: "Overwatch", started: 1, channelId: "c1", messageId: "m", auto: true });
+        const roster = (await o.request("/api/streams/roster?guild=g-member")).data;
+        assert.deepEqual(roster.people.map(p => [p.userId, p.platform, p.handle, Boolean(p.live)]), [["u1", "twitch", "jacob_tv", true], ["other1", "kick", "otherguy", false]], "live streamers come first");
+        assert.equal(roster.people[0].url, "https://twitch.tv/jacob_tv"); assert.equal(roster.people[0].mine, true); assert.equal(roster.people[0].live.game, "Overwatch");
+        assert.equal((await o.request("/api/streams/roster?guild=g-nobody")).status >= 400, true, "not a member: no roster");
+        o.db.endStreamLive("g-member", "u1");
         assert.equal((await o.request("/api/streams/unlink", { method: "POST", body: { guild_id: "g-member" } })).status, 200); assert.ok(!o.db.getStreamLink("g-member", "u1"));
 
         // managers (g-admin) always can, and can change the settings

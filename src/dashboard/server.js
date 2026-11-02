@@ -903,6 +903,23 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const me = (await remember("mname:" + g.id + ":" + s.userId, 10 * 60_000, () => rest.memberName(g.id, s.userId)).catch(() => null)) || s.username || "Someone";
             return musicCall(() => streams.goLive(g.id, { id: s.userId, name: me, avatarUrl: null }, { title: body.title, url: body.url, game: body.game }));
         },
+        // everyone linked in a server, with who is live right now (any member may look: it is only public channel names)
+        "GET /api/streams/roster": async (req, _b, url) => {
+            const s = session(req); const g = musicMember(s, url.searchParams.get("guild"));
+            const live = new Map(db.listStreamLive(g.id).map(r => [r.user_id, r]));
+            const watch = watchable(process.env);
+            const people = (await Promise.all(db.listStreamLinks(g.id).map(async l => {
+                const m = await remember("smem:" + g.id + ":" + l.user_id, 10 * 60_000, () => rest.getMember(g.id, l.user_id)).catch(() => undefined);
+                if (m === null) return null; // left the server
+                const u = m?.user ?? {};
+                const avatar = m?.avatar ? `https://cdn.discordapp.com/guilds/${g.id}/users/${l.user_id}/avatars/${m.avatar}.png?size=96` : u.avatar ? `https://cdn.discordapp.com/avatars/${l.user_id}/${u.avatar}.png?size=96` : null;
+                const row = live.get(l.user_id);
+                return { userId: l.user_id, name: m?.nick || u.global_name || u.username || "Streamer", avatar, platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle).replace(/\/live$/, ""), checked: Boolean(watch[l.platform]), mine: l.user_id === s.userId,
+                    live: row ? { title: row.title, game: row.game, url: row.url, since: row.started } : null };
+            }))).filter(Boolean);
+            people.sort((a, b) => Number(Boolean(b.live)) - Number(Boolean(a.live)) || a.name.localeCompare(b.name));
+            return { guild: { id: g.id, name: g.name }, people, liveChannel: db.getCommunity(g.id).live_channel ? true : false, now: now() };
+        },
         "POST /api/streams/link": async (req, body) => {
             const s = session(req); const g = await streamAccess(s, body.guild_id);
             cooldown(s.userId, "streamlink");

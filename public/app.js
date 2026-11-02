@@ -137,7 +137,7 @@
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["streams", "Streams"], ["music", "Music"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["streams", "Streams"], ["streamers", "Streamers"], ["music", "Music"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
@@ -4880,6 +4880,57 @@
     load();
   }
 
+  // ---------- streamers: everyone who linked a channel in a server, and who is live ----------
+  async function streamersView() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const holder = h("div");
+    app.replaceChildren(pageHead("Streamers", "Everyone in your server who linked a Twitch, Kick or YouTube channel, and who is live right now."), holder);
+    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
+    const guild = serverPicker(servers, currentParam());
+    const st = { show: "all", site: "all" }, SITE = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
+    let data = null, timer = 0;
+    const alive = () => currentView() === "streamers" && holder.isConnected;
+    const ago = ms => { const m = Math.max(1, Math.round(ms / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+    const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label, "aria-pressed": String(on) }); b.addEventListener("click", fn); return b; };
+    guild.addEventListener("change", () => { data = null; load(); });
+    function draw() {
+      const all = data.people, liveN = all.filter(p => p.live).length;
+      const list = all.filter(p => (st.show === "all" || (st.show === "live") === Boolean(p.live)) && (st.site === "all" || p.platform === st.site));
+      const sites = [...new Set(all.map(p => p.platform))];
+      const card = p => {
+        const live = p.live;
+        const av = h("div", { class: "sr-av" + (live ? " live" : "") }, p.avatar ? h("img", { src: p.avatar, alt: "", width: "56", height: "56", referrerpolicy: "no-referrer", loading: "lazy" }) : h("span", { text: p.name.slice(0, 1).toUpperCase() }));
+        return h("div", { class: "sr-card " + p.platform + (live ? " live" : "") },
+          live ? h("div", { class: "sr-banner" }, h("span", { class: "sr-dot" }), "LIVE NOW", h("span", { class: "sr-since", text: " · " + ago(data.now - live.since) })) : null,
+          h("div", { class: "sr-top" }, av,
+            h("div", { class: "sr-id" }, h("strong", { text: p.name + (p.mine ? " (you)" : "") }),
+              h("a", { class: "sr-chan", href: p.url, target: "_blank", rel: "noopener noreferrer", text: SITE[p.platform] + " · " + p.handle + " ↗" })),
+            h("span", { class: "sr-pill " + p.platform, text: SITE[p.platform] })),
+          live ? h("div", { class: "sr-live" }, h("div", { class: "sr-title", text: live.title }), live.game ? h("div", { class: "sr-game", text: "🎮 " + live.game }) : null)
+            : h("div", { class: "sr-off" }, h("span", { class: "sr-dot off" }), p.checked ? "Offline" : "Not checked automatically"),
+          live ? h("a", { class: "btn green small sr-watch", href: live.url, target: "_blank", rel: "noopener noreferrer", text: "Watch the stream" }) : null);
+      };
+      holder.replaceChildren(
+        servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null,
+        h("div", { class: "sr-stats" },
+          h("div", { class: "sr-stat" }, h("b", { text: String(all.length) }), h("span", { text: "linked" })),
+          h("div", { class: "sr-stat" + (liveN ? " hot" : "") }, h("b", { text: String(liveN) }), h("span", { text: "live now" })),
+          h("div", { class: "sr-stat" }, h("b", { text: String(all.length - liveN) }), h("span", { text: "offline" })),
+          h("a", { class: "btn blue sr-link", href: "#/streams?guild=" + encodeURIComponent(guild.value), text: "Link your channel" })),
+        all.length ? h("div", { class: "panel fy-filters" },
+          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Show" }), chip("Everyone", st.show === "all", () => { st.show = "all"; draw(); }), chip("Live now", st.show === "live", () => { st.show = "live"; draw(); }), chip("Offline", st.show === "off", () => { st.show = "off"; draw(); })),
+          sites.length > 1 ? h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Site" }), chip("All", st.site === "all", () => { st.site = "all"; draw(); }), ...sites.map(x => chip(SITE[x], st.site === x, () => { st.site = x; draw(); }))) : null) : null,
+        list.length ? h("div", { class: "sr-grid" }, ...list.map(card)) : h("div", { class: "empty", text: all.length ? "Nobody matches that filter." : "Nobody has linked a channel in this server yet. Streamers (and moderators and managers) can link theirs on the Streams page or with /server stream link." }));
+    }
+    async function load() {
+      clearTimeout(timer);
+      try { data = await api("/api/streams/roster?guild=" + encodeURIComponent(guild.value)); draw(); }
+      catch (e) { holder.replaceChildren(servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null, h("div", { class: "notice warn", text: e.message })); }
+      timer = setTimeout(() => { if (alive()) load(); }, 30_000);
+    }
+    load();
+  }
+
   async function xpView() {
     const servers = state.me.servers.filter(g => g.bot !== false);
     const holder = h("div");
@@ -5027,7 +5078,7 @@
     load();
   }
 
-  const VIEWS = { streams: streamsView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

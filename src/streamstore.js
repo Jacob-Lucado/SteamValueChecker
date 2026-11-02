@@ -42,5 +42,6 @@ export function streamStore({ run, get, all, clean }) {
     const setStreamLink = (guildId, userId, o) => run("INSERT INTO stream_link (guild_id, user_id, platform, handle, via, added) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(guild_id, user_id) DO UPDATE SET platform = excluded.platform, handle = excluded.handle, via = excluded.via", guildId, userId, o.platform, o.handle, o.via ?? "role", o.added);
     const removeStreamLink = (guildId, userId) => run("DELETE FROM stream_link WHERE guild_id = ? AND user_id = ?", guildId, userId);
     const allStreamLinks = () => all("SELECT * FROM stream_link ORDER BY added").map(clean);
-    return { getStreamLink, setStreamLink, removeStreamLink, allStreamLinks, getStreamLive, listStreamLive, setStreamLive, endStreamLive, lastStreamPing, markStreamPing };
+    const listStreamLinks = guildId => all("SELECT * FROM stream_link WHERE guild_id = ? ORDER BY added", guildId).map(clean);
+    return { listStreamLinks, getStreamLink, setStreamLink, removeStreamLink, allStreamLinks, getStreamLive, listStreamLive, setStreamLive, endStreamLive, lastStreamPing, markStreamPing };
 }
