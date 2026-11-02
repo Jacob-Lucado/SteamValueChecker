@@ -56,6 +56,7 @@ export function settingsSummary(s) {
         s.channel_id ? `Now-playing messages go to <#${s.channel_id}>.` : "Now-playing messages go where `/play` was used.",
         `Up to **${s.max_queue}** songs in the queue${s.max_minutes ? `, **${s.max_minutes}** minutes max per song` : ""}.`,
         s.announce ? "I post a message when each song starts." : "No song-start messages.",
+        s.vc_status ? "The voice channel's status line shows the song that's playing." : "I leave the voice channel's status line alone.",
         s.stay ? "I wait in the last voice channel I was used in. When someone joins I go back to the last live station, or start the Auto DJ." : `I leave ${s.leave_minutes} minutes after the queue ends or everyone leaves.`,
         `Live radio links are **${s.radio ? "allowed" : "off"}**.`
     ].join("\n");
@@ -204,6 +205,7 @@ export function createMusicHandlers({ db, music, adapter, stations = null, playe
                     if (o.getBoolean("radio") !== null) patch.radio = o.getBoolean("radio") ? 1 : 0;
                     if (o.getBoolean("announce") !== null) patch.announce = o.getBoolean("announce") ? 1 : 0;
                     if (o.getBoolean("stay") !== null) patch.stay = o.getBoolean("stay") ? 1 : 0;
+                    if (o.getBoolean("channelstatus") !== null) patch.vc_status = o.getBoolean("channelstatus") ? 1 : 0;
                     const s = Object.keys(patch).length ? db.setMusicSettings(gid, patch) : db.getMusicSettings(gid);
                     return await reply({ content: (Object.keys(patch).length ? "Saved.\n" : "") + settingsSummary(s), flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
                 }

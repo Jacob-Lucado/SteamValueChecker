@@ -34,16 +34,16 @@ CREATE TABLE IF NOT EXISTS music_playlists (
 export const MUSIC_EXTRA_COLUMNS = [
     ["autodj", "INTEGER NOT NULL DEFAULT 0"], ["autodj_idle", "INTEGER NOT NULL DEFAULT 30"], ["autodj_channel_id", "TEXT"],
     ["autodj_submit", "INTEGER NOT NULL DEFAULT 1"], ["autodj_shuffle", "INTEGER NOT NULL DEFAULT 1"], ["autodj_playlist", "TEXT"], ["autodj_source", "TEXT"],
-    ["radio", "INTEGER NOT NULL DEFAULT 1"], ["home_channel_id", "TEXT"], ["last_radio", "TEXT"]
+    ["radio", "INTEGER NOT NULL DEFAULT 1"], ["home_channel_id", "TEXT"], ["last_radio", "TEXT"], ["vc_status", "INTEGER NOT NULL DEFAULT 1"]
 ];
 export const MUSIC_DEFAULTS = { enabled: 1, dj_role_id: null, channel_id: null, volume: 50, max_queue: 100, max_minutes: 0, announce: 1, leave_minutes: 5, stay: 0,
-    autodj: 0, autodj_idle: 30, autodj_channel_id: null, autodj_submit: 1, autodj_shuffle: 1, autodj_playlist: null, autodj_source: null, radio: 1, home_channel_id: null, last_radio: null };
+    autodj: 0, autodj_idle: 30, autodj_channel_id: null, autodj_submit: 1, autodj_shuffle: 1, autodj_playlist: null, autodj_source: null, radio: 1, home_channel_id: null, last_radio: null, vc_status: 1 };
 export const MAX_AUTO_TRACKS = 200, MAX_PENDING_PER_USER = 5, MAX_PENDING_PER_GUILD = 100;
 export const MAX_PLAYLISTS = 10, MAX_PLAYLIST_TRACKS = 100;
 
 export function musicStore({ run, get, all, clean, now }) {
     const getMusicSettings = guildId => ({ guild_id: String(guildId), ...MUSIC_DEFAULTS, ...(clean(get("SELECT * FROM music_settings WHERE guild_id = ?", String(guildId))) ?? {}) });
-    const FIELDS = ["enabled", "dj_role_id", "channel_id", "volume", "max_queue", "max_minutes", "announce", "leave_minutes", "stay", "autodj", "autodj_idle", "autodj_channel_id", "autodj_submit", "autodj_shuffle", "autodj_playlist", "autodj_source", "radio", "home_channel_id", "last_radio"];
+    const FIELDS = ["enabled", "dj_role_id", "channel_id", "volume", "max_queue", "max_minutes", "announce", "leave_minutes", "stay", "autodj", "autodj_idle", "autodj_channel_id", "autodj_submit", "autodj_shuffle", "autodj_playlist", "autodj_source", "radio", "home_channel_id", "last_radio", "vc_status"];
     const slimTrack = t => ({ url: t.url, title: String(t.title ?? "").slice(0, 150), artist: String(t.artist ?? "").slice(0, 80), duration: t.duration ?? null, thumb: t.thumb ?? null });
     /** The tracks the Auto DJ plays when nothing else is queued. */
     const getAutoPlaylist = guildId => { try { const v = JSON.parse(getMusicSettings(guildId).autodj_playlist ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };

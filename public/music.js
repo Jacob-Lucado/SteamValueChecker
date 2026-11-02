@@ -488,15 +488,15 @@
       h("div", { class: "mu-form" }, link, useLink), h("div", { class: "mu-form" }, saved, useSaved, d.autodj.count ? clr : null),
       h("div", { class: "mu-list" }, ...(pl.length ? pl.slice(0, 50).map((t, i) => trackRow(t, [], String(i + 1))) : [h("p", { class: "mu-empty", text: "No playlist yet. Paste a SoundCloud playlist link above." })])));
     // Server settings
-    const [en, enL] = check(s.enabled, "Music is on"), [ann, annL] = check(s.announce, "Post a message when each song starts"), [stay, stayL] = check(s.stay, "Stay in the last voice channel and wait for people"), [radio, radioL] = check(s.radio, "Allow live radio stream links");
+    const [en, enL] = check(s.enabled, "Music is on"), [ann, annL] = check(s.announce, "Post a message when each song starts"), [vcs, vcsL] = check(s.vc_status, "Show the song as the voice channel's status"), [stay, stayL] = check(s.stay, "Stay in the last voice channel and wait for people"), [radio, radioL] = check(s.radio, "Allow live radio stream links");
     const vol = num(s.volume, 1, 100), mq = num(s.max_queue, 5, 500), mm = num(s.max_minutes, 0, 600), lv = num(s.leave_minutes, 1, 60);
     const role = sel([["", "Everyone can use the controls"], ...d.roles.filter(r => r.id !== d.guild.id).map(r => [r.id, "DJ role: " + r.name])], s.dj_role_id || "");
     const chan = sel([["", "Where the song was added from"], ...d.channels.map(c => [c.id, "#" + c.name])], s.channel_id || "");
     const save2 = h("button", { class: "mu-go", type: "button", text: "Save music settings" });
-    save2.addEventListener("click", () => press(save2, async () => { await api("/api/music/settings", { guild_id: gid, enabled: en.checked, announce: ann.checked, stay: stay.checked, radio: radio.checked, volume: Number(vol.value), max_queue: Number(mq.value), max_minutes: Number(mm.value), leave_minutes: Number(lv.value), dj_role_id: role.value, channel_id: chan.value }); toast("Saved."); ui.mgrKey = ""; await refresh(); }));
+    save2.addEventListener("click", () => press(save2, async () => { await api("/api/music/settings", { guild_id: gid, enabled: en.checked, announce: ann.checked, vc_status: vcs.checked, stay: stay.checked, radio: radio.checked, volume: Number(vol.value), max_queue: Number(mq.value), max_minutes: Number(mm.value), leave_minutes: Number(lv.value), dj_role_id: role.value, channel_id: chan.value }); toast("Saved."); ui.mgrKey = ""; await refresh(); }));
     ui.setBox.replaceChildren(
       h("p", { class: "mu-hint", text: "Only people with Manage Server see this. Moderators can always use the DJ controls. The bot needs Connect and Speak in your voice channels, plus Send Messages where it posts." }),
-      h("div", { class: "mu-set" }, enL, annL, stayL, radioL, field("Controls", role), field("Now-playing messages go to", chan), field("Starting volume (1-100)", vol), field("Most songs in the queue", mq), field("Longest song, minutes (0 = no limit)", mm), field("Leave after idle (minutes)", lv), h("div", { class: "mu-actions" }, save2)));
+      h("div", { class: "mu-set" }, enL, annL, vcsL, stayL, radioL, field("Controls", role), field("Now-playing messages go to", chan), field("Starting volume (1-100)", vol), field("Most songs in the queue", mq), field("Longest song, minutes (0 = no limit)", mm), field("Leave after idle (minutes)", lv), h("div", { class: "mu-actions" }, save2)));
   }
 
   let stampAt = Date.now();

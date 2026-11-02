@@ -1057,6 +1057,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const int = (k, lo, hi, label) => { if (body[k] === undefined) return; const n = Math.round(Number(body[k])); if (!(n >= lo && n <= hi)) throw new HttpError(400, `${label} must be between ${lo} and ${hi}.`); patch[k] = n; };
             if (body.enabled !== undefined) patch.enabled = body.enabled ? 1 : 0;
             if (body.announce !== undefined) patch.announce = body.announce ? 1 : 0;
+            if (body.vc_status !== undefined) patch.vc_status = body.vc_status ? 1 : 0;
             if (body.stay !== undefined) patch.stay = body.stay ? 1 : 0;
             if (body.radio !== undefined) patch.radio = body.radio ? 1 : 0;
             int("volume", 1, 100, "Starting volume"); int("max_queue", 5, 500, "Queue size"); int("max_minutes", 0, 600, "Song length limit"); int("leave_minutes", 1, 60, "Leave time");

@@ -130,6 +130,8 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
         createEmoji: (guildId, body) => call(`/guilds/${encodeURIComponent(guildId)}/emojis`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
         createInvite: (channelId, body) => call(`/channels/${encodeURIComponent(channelId)}/invites`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
         listInvites: guildId => call(`/guilds/${encodeURIComponent(guildId)}/invites`, { headers: bot }),
+        /** The line of text under a voice channel's name. Needs the Set Voice Channel Status permission (or Manage Channels) there. */
+        setVoiceStatus: (channelId, text) => call(`/channels/${encodeURIComponent(channelId)}/voice-status`, { method: "PUT", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify({ status: String(text ?? "").slice(0, 500) }) }),
         editMessage: (channelId, messageId, payload) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
 
         // ---- moderation (the bot's own permissions) ----

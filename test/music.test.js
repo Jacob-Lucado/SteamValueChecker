@@ -99,7 +99,7 @@ test("DJ role rules", () => {
 function rig({ settings = {}, members = {}, tracks = null } = {}) {
     const db = openDb(":memory:");
     if (Object.keys(settings).length) db.setMusicSettings("g1", settings);
-    const log = [], posts = [], edits = [];
+    const log = [], posts = [], edits = [], statuses = [];
     const players = [];
     const voice = {
         VoiceConnectionStatus: { Ready: "ready", Disconnected: "disconnected", Signalling: "signalling", Connecting: "connecting" },
@@ -122,10 +122,10 @@ function rig({ settings = {}, members = {}, tracks = null } = {}) {
         voiceChannelOf: u => (u === "nobody" ? null : { id: u === "other" ? "c2" : "c1", name: "Lounge", canJoin: u !== "noperm", canSpeak: true }),
         humansIn: id => humans[id] ?? 0, channelName: () => "Lounge", voiceChannelInfo: id => ({ id, name: "Auto", canJoin: true, canSpeak: true })
     } : null);
-    const api = { sendMessage: async (ch, p) => { posts.push([ch, p]); return { id: "m" + posts.length }; }, editMessage: async (ch, id, p) => { edits.push([ch, id, p]); } };
+    const api = { sendMessage: async (ch, p) => { posts.push([ch, p]); return { id: "m" + posts.length }; }, editMessage: async (ch, id, p) => { edits.push([ch, id, p]); }, setVoiceStatus: async (ch, t) => { statuses.push([ch, t]); } };
     const timers = [];
     const m = createMusic({ db, source, voice, getGuild, api, panel: (gid, st) => ({ embeds: [{ title: st.current?.title }] }), setTimer: (fn, ms) => { const t = { fn, ms, unref() {} }; timers.push(t); return t; }, clearTimer: t => { if (t) t.cleared = true; } });
-    return { db, m, log, posts, edits, players, timers, humans };
+    return { db, m, log, posts, edits, players, timers, humans, statuses };
 }
 
 test("playing: join, start the first track, queue the rest, post the now-playing panel", async () => {
@@ -454,4 +454,17 @@ test("stay mode: the bot waits in its last channel, then goes back to the live s
     // leaving on purpose forgets the channel
     d.m.leave("g1", "u1");
     assert.equal(d.db.getMusicSettings("g1").home_channel_id, null);
+});
+
+
+test("the voice channel status shows the song, follows changes, clears when music stops, and respects the setting", async () => {
+    const r = rig();
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "some song" });
+    assert.equal(r.statuses.length, 1); assert.equal(r.statuses[0][0], "c1"); assert.match(r.statuses[0][1], /^🎵 .+/);
+    r.m.stop("g1", "u1");
+    assert.deepEqual(r.statuses.at(-1), ["c1", ""], "cleared when it stops");
+
+    const off = rig({ settings: { vc_status: 0 } });
+    await off.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "some song" });
+    assert.equal(off.statuses.length, 0, "turned off: the status is left alone");
 });

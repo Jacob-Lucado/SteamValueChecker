@@ -140,6 +140,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     }
 
     function teardown(g, { keepQueue = false } = {}) {
+        voiceStatus(g, null); // clear the line under the channel name before the channel id is forgotten
         clearTimer(g.leaveTimer); clearTimer(g.aloneTimer); g.leaveTimer = g.aloneTimer = null;
         try { g.stream?.kill(); } catch { /* */ }
         try { g.player?.stop(true); } catch { /* */ }
@@ -152,7 +153,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     // ---------- playing ----------
     async function playCurrent(g, { seek = 0, resume = false } = {}) {
         const track = g.queue.current;
-        if (!track) { g.playing = false; scheduleLeave(g); return null; }
+        if (!track) { g.playing = false; voiceStatus(g, null); scheduleLeave(g); return null; }
         clearTimer(g.leaveTimer); g.leaveTimer = null;
         g.votes.clear();
         try { g.stream?.kill(); } catch { /* */ }
@@ -182,6 +183,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         g.player.play(resource);
         g.swapping = false;
         if (seek === 0) announce(g, track);
+        voiceStatus(g, track);
         return track;
     }
     const withoutEmpty = o => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== ""));
@@ -250,6 +252,19 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         if (s.stay) return;
         g.leaveTimer = setTimer(() => { if (!g.playing) teardown(g); }, Math.max(1, s.leave_minutes) * 60_000);
         g.leaveTimer.unref?.();
+    }
+
+    // ---------- the voice channel's status line ("Set a channel status") shows the song ----------
+    /** Puts the current song under the voice channel's name, or clears it (track = null). Quietly gives up if the bot lacks the permission. */
+    function voiceStatus(g, track) {
+        const ch = g.voiceChannelId;
+        if (!api?.setVoiceStatus || !ch) return;
+        const on = db.getMusicSettings(g.guildId).vc_status;
+        const text = track && on ? `${track.live ? "📻" : "🎵"} ${[track.title, track.artist && !track.live ? track.artist : null].filter(Boolean).join(" — ")}`.replace(/\s+/g, " ").trim().slice(0, 120) : "";
+        if (text === (g.vcText ?? "") || (!text && !g.vcText)) return;
+        if (g.vcDenied === ch) return;
+        g.vcText = text;
+        Promise.resolve(api.setVoiceStatus(ch, text)).catch(e => { if (e?.status === 403 || e?.status === 404) g.vcDenied = ch; log?.(`voice status: ${e?.message ?? e}`); });
     }
 
     // ---------- the "now playing" post ----------
@@ -376,7 +391,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         refreshPanel(g);
         return seconds;
     }
-    function stop(gid, userId) { const w = who(gid, userId); needDj(w); const g = get(gid); if (!g?.connection) throw new UserError("I'm not playing anything."); g.autoSuppressed = true; g.autoMode = false; g.queue.reset(); g.swapping = true; try { g.player.stop(true); } catch { /* */ } g.swapping = false; g.playing = false; g.resource = null; retirePanel(g); scheduleLeave(g); }
+    function stop(gid, userId) { const w = who(gid, userId); needDj(w); const g = get(gid); if (!g?.connection) throw new UserError("I'm not playing anything."); g.autoSuppressed = true; g.autoMode = false; g.queue.reset(); g.swapping = true; try { g.player.stop(true); } catch { /* */ } g.swapping = false; g.playing = false; g.resource = null; voiceStatus(g, null); retirePanel(g); scheduleLeave(g); }
     function leave(gid, userId) { const w = who(gid, userId); needDj(w); const g = get(gid); if (!g?.connection) throw new UserError("I'm not in a voice channel."); db.setMusicSettings(gid, { home_channel_id: null }); teardown(g); }
     function setVolume(gid, userId, v) { const w = who(gid, userId); needDj(w); const g = must(gid); const n = Math.round(Number(v)); if (!(n >= 1 && n <= 100)) throw new UserError("Volume is 1 to 100."); g.volume = n; g.resource?.volume?.setVolume(n / 100); refreshPanel(g); return n; }
     function setLoop(gid, userId, mode) { const w = who(gid, userId); needDj(w); const g = must(gid); if (!LOOP_MODES.includes(mode)) throw new UserError("Loop can be off, track or queue."); g.queue.setLoop(mode); refreshPanel(g); return mode; }
