@@ -96,3 +96,9 @@
 .adm-login .row.center { justify-content: center; margin-top: 14px; }
 .adm-login .theme-btn { flex: none; }
 .adm-login .adm-login-form input { width: 100%; box-sizing: border-box; }
+/* Signed out: centred, with the logo behind it like the rest of the dashboard */
+.adm-body.adm-bare-body::before { display: block; }
+.adm.adm-bare { position: relative; z-index: 1; }
+.adm.adm-bare .adm-main { align-items: center; justify-content: center; min-height: 100vh; }
+.adm.adm-bare .adm-content { max-width: none; padding: 24px; display: flex; justify-content: center; }
+.adm.adm-bare .adm-login { margin: 0; width: min(440px, 100%); }

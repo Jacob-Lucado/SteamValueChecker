@@ -2598,6 +2598,7 @@
   /** The signed-out screen: username and password, or Discord. Nothing of the panel is shown until one of them works. */
   function adminLoginScreen() {
     admEl("adm").classList.add("adm-bare");
+    document.body.classList.add("adm-bare-body");
     document.title = "Sign in · Admin · Steam Value Checker";
     const user = h("input", { type: "text", name: "username", autocomplete: "username", autocapitalize: "none", spellcheck: "false", required: "" });
     const pass = h("input", { type: "password", name: "password", autocomplete: "current-password", required: "" });
