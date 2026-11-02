@@ -99,7 +99,7 @@ test("DJ role rules", () => {
 function rig({ settings = {}, members = {}, tracks = null } = {}) {
     const db = openDb(":memory:");
     if (Object.keys(settings).length) db.setMusicSettings("g1", settings);
-    const log = [], posts = [], edits = [], statuses = [];
+    const log = [], posts = [], edits = [], statuses = [], deleted = [];
     const players = [];
     const voice = {
         VoiceConnectionStatus: { Ready: "ready", Disconnected: "disconnected", Signalling: "signalling", Connecting: "connecting" },
@@ -122,10 +122,10 @@ function rig({ settings = {}, members = {}, tracks = null } = {}) {
         voiceChannelOf: u => (u === "nobody" ? null : { id: u === "other" ? "c2" : "c1", name: "Lounge", canJoin: u !== "noperm", canSpeak: true }),
         humansIn: id => humans[id] ?? 0, channelName: () => "Lounge", voiceChannelInfo: id => ({ id, name: "Auto", canJoin: true, canSpeak: true })
     } : null);
-    const api = { sendMessage: async (ch, p) => { posts.push([ch, p]); return { id: "m" + posts.length }; }, editMessage: async (ch, id, p) => { edits.push([ch, id, p]); }, setVoiceStatus: async (ch, t) => { statuses.push([ch, t]); } };
+    const api = { sendMessage: async (ch, p) => { posts.push([ch, p]); return { id: "m" + posts.length }; }, editMessage: async (ch, id, p) => { edits.push([ch, id, p]); }, deleteMessage: async (ch, id) => { deleted.push([ch, id]); }, setVoiceStatus: async (ch, t) => { statuses.push([ch, t]); } };
     const timers = [];
     const m = createMusic({ db, source, voice, getGuild, api, panel: (gid, st) => ({ embeds: [{ title: st.current?.title }] }), setTimer: (fn, ms) => { const t = { fn, ms, unref() {} }; timers.push(t); return t; }, clearTimer: t => { if (t) t.cleared = true; } });
-    return { db, m, log, posts, edits, players, timers, humans, statuses };
+    return { db, m, log, posts, edits, deleted, players, timers, humans, statuses };
 }
 
 test("playing: join, start the first track, queue the rest, post the now-playing panel", async () => {
@@ -467,4 +467,29 @@ test("the voice channel status shows the song, follows changes, clears when musi
     const off = rig({ settings: { vc_status: 0 } });
     await off.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "some song" });
     assert.equal(off.statuses.length, 0, "turned off: the status is left alone");
+});
+
+test("a bare SoundCloud profile link asks for their own uploads, not reposts", async () => {
+    const { profileTracksUrl, createSource } = await import("../src/musicsource.js");
+    assert.equal(profileTracksUrl("https://soundcloud.com/strangelanguagee"), "https://soundcloud.com/strangelanguagee/tracks");
+    assert.equal(profileTracksUrl("https://soundcloud.com/strangelanguagee/"), "https://soundcloud.com/strangelanguagee/tracks");
+    assert.equal(profileTracksUrl("https://soundcloud.com/a/b"), "https://soundcloud.com/a/b");
+    assert.equal(profileTracksUrl("https://soundcloud.com/a/sets/x"), "https://soundcloud.com/a/sets/x");
+    assert.equal(profileTracksUrl("https://soundcloud.com/discover"), "https://soundcloud.com/discover");
+    const seen = [];
+    const src = createSource({ exec: async (_c, args) => { seen.push(args.at(-1)); return JSON.stringify({ _type: "playlist", title: "strange language (Tracks)", entries: [{ url: "https://soundcloud.com/strangelanguagee/rolling", title: "Rolling" }] }); } });
+    const r = await src.resolve("https://soundcloud.com/strangelanguagee");
+    assert.equal(seen[0], "https://soundcloud.com/strangelanguagee/tracks");
+    assert.equal(r.kind, "playlist"); assert.equal(r.title, "strange language's tracks"); assert.equal(r.tracks.length, 1);
+});
+
+test("the old now-playing card is deleted when the next song posts its own", async () => {
+    const r = rig();
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "first" });
+    await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "second" });
+    const before = r.posts.length;
+    assert.deepEqual(r.deleted, []);
+    r.m.skip("g1", "u1"); await new Promise(res => setTimeout(res, 20));
+    assert.ok(r.posts.length > before, "a new card was posted");
+    assert.deepEqual(r.deleted, [["t1", "m" + before]]);
 });

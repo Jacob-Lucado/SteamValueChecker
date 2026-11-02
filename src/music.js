@@ -289,7 +289,10 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     function retirePanel(g) {
         clearTimer(g.liveTimer); g.liveTimer = null;
         const p = g.panel; g.panel = null;
-        if (p && api) api.editMessage(p.channelId, p.messageId, { components: [] }).catch(() => {});
+        if (!p || !api) return;
+        // Old now-playing cards are removed so the channel doesn't fill up. If the bot can't delete (missing permission), it just takes the buttons off.
+        const strip = () => api.editMessage(p.channelId, p.messageId, { components: [] }).catch(() => {});
+        if (api.deleteMessage) Promise.resolve(api.deleteMessage(p.channelId, p.messageId)).catch(strip); else strip();
     }
     async function refreshPanel(g) {
         if (!g.panel || !api || !panel) return;

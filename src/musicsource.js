@@ -12,6 +12,18 @@ export function isSoundcloudUrl(text) {
     try { const u = new URL(String(text).trim()); return u.protocol === "https:" && SC_HOST.test(u.hostname); } catch { return false; }
 }
 
+const NOT_A_PROFILE = new Set(["discover", "you", "stream", "search", "upload", "feed", "charts", "pages", "terms-of-use", "settings", "notifications", "messages", "mobile", "creators", "popular", "tags", "people", "go", "jobs", "imprint", "login"]);
+/** A bare profile link (soundcloud.com/name) lists everything they posted AND reposted. Their own uploads are what people mean, so ask for the Tracks page. Anything else is left alone. */
+export function profileTracksUrl(text) {
+    try {
+        const u = new URL(String(text).trim());
+        if (u.protocol !== "https:" || !/^(?:www\.|m\.)?soundcloud\.com$/i.test(u.hostname)) return String(text).trim();
+        const parts = u.pathname.split("/").filter(Boolean);
+        if (parts.length !== 1 || NOT_A_PROFILE.has(parts[0].toLowerCase())) return String(text).trim();
+        return `https://soundcloud.com/${parts[0]}/tracks`;
+    } catch { return String(text).trim(); }
+}
+
 /** yt-dlp lists some playlist tracks by their API address instead of a page link. Those only ever come from SoundCloud itself, never from a user. */
 const isSoundcloudApiUrl = text => { try { const u = new URL(String(text)); return u.protocol === "https:" && /^api(-v2)?\.soundcloud\.com$/i.test(u.hostname) && /^\/tracks\/\d+$/.test(u.pathname); } catch { return false; } };
 
@@ -69,7 +81,9 @@ export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: p
         /** A SoundCloud link: one track, or a set/profile with many. */
         async resolve(url) {
             if (!isSoundcloudUrl(url)) throw new Error("That isn't a SoundCloud link.");
-            const data = await json(["--flat-playlist", "-J", "--playlist-end", "100", "--", String(url).trim()]);
+            const data = await json(["--flat-playlist", "-J", "--playlist-end", "100", "--", profileTracksUrl(url)]);
+            const owner = /^(.*) \((?:All|Tracks)\)$/.exec(String(data.title ?? ""))?.[1];
+            if (owner) data.title = `${owner}'s tracks`;
             if (data._type === "playlist" || Array.isArray(data.entries)) {
                 const tracks = (data.entries ?? []).map(parseEntry).filter(Boolean);
                 return { kind: "playlist", title: String(data.title ?? "Playlist").slice(0, 120), tracks };
