@@ -126,6 +126,8 @@ input[type=file]::file-selector-button { background: var(--panel-2); color: var(
 .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
 .row > * { flex: 1 1 150px; }
 .row > .shrink { flex: 0 0 auto; }
+/* buttons keep their own size; only inputs and selects stretch to fill a row */
+.row > .btn, .row > button, .row > a.btn { flex: 0 0 auto; }
 .check { display: flex; gap: 10px; align-items: center; color: var(--text); font-size: 14.5px; font-weight: 400; margin: 10px 0; }
 .check input { width: auto; accent-color: var(--accent); }
 
@@ -479,6 +481,9 @@ pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-
 #nav .menu a.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--white); }
 .setup-row { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
 .setup-row:first-of-type { border-top: 0; }
+.setup-row > .btn, .setup-row > button { justify-self: start; }
+.panel > .row + .row { margin-top: 10px; }
+.panel > .row + div { margin-top: 12px; }
 @media (max-width: 640px) {
   .nav-group { position: static; }
   .menu { left: 16px; right: 16px; min-width: 0; }
