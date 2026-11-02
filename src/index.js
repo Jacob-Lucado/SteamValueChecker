@@ -15,7 +15,8 @@ import { collectAbout } from "./about.js";
 import { FANATICAL_GRABBER_URL, EXTENSION_STORE_URL, REGIONS } from "./constants.js";
 import { readFileSync } from "node:fs";
 import { ABOUT, PRIVACY, quickStart } from "./text.js";
-import { helpPayload, handleHelpPick } from "./helpui.js";
+import { helpPayload, handleHelpPick, configureHelp, isHelpNav } from "./helpui.js";
+import { brandInteraction, brandRest } from "./brand.js";
 import { pagedPayload, handlePager, tokenOf, PAGE_PREFIX, JUMP_PREFIX } from "./pager.js";
 import { legacyRoute, SERVER_ONLY_LEGACY } from "./commands.js";
 import { createStreams } from "./streamlive.js";
@@ -80,7 +81,7 @@ import { guildBannerSvg, toPng, artFor } from "./communitycards.js";
 let logoUri;
 const brandLogo = () => { try { return (logoUri ??= "data:image/png;base64," + readFileSync(new URL("../public/logo.png", import.meta.url)).toString("base64")); } catch { return null; } };
 import { grabberPromo, PROMO_OFF_ID } from "./promo.js";
-import { communitySetup, isFreshGuild } from "./community.js";
+import { communitySetup, isFreshGuild, botInviteUrl } from "./community.js";
 import { registerLinkedRoles } from "./linkedroles.js";
 
 const MAX_TITLES = 100;
@@ -192,6 +193,10 @@ const gwDiscord = {
     }
 };
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
+// every message the bot sends gets the same finish: colour, name and logo in the footer, bare text turned into a card
+const brandOpts = { logo: publicBase ? `${publicBase}/logo.png` : null };
+brandRest(botRest, brandOpts); brandRest(discord, brandOpts);
+configureHelp({ base: publicBase, supportUrl: cfg.creator?.url ?? null, inviteUrl: cfg.clientId ? botInviteUrl(cfg.clientId) : null });
 const tickets = createTicketService({ db, discord: gwDiscord, ownerId: cfg.ownerId, publicUrl: publicBase, log: m => (m.startsWith("[bug") ? console.error(m) : console.log(`[tickets] ${m}`)) });
 let codesBusy = false;
 const pollCodes = async () => {
@@ -521,6 +526,7 @@ async function handleValue(i) {
 }
 
 client.on(Events.InteractionCreate, async i => {
+    brandInteraction(i, brandOpts);
     // Restricted people get nothing from the bot (the owner can't be locked out).
     if (i.user?.id !== cfg.ownerId && db.isBanned(i.user?.id)) {
         if (!i.isAutocomplete()) await i.reply({ content: RESTRICTED_TEXT, flags: MessageFlags.Ephemeral }).catch(() => {});
@@ -542,7 +548,7 @@ client.on(Events.InteractionCreate, async i => {
         return;
     }
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
-    if (i.isStringSelectMenu() && i.customId === "help_pick") return handleHelpPick(i);
+    if ((i.isStringSelectMenu() && i.customId === "help_pick") || isHelpNav(i)) return handleHelpPick(i);
     if ((i.isButton() && i.customId.startsWith(PAGE_PREFIX)) || (i.isStringSelectMenu() && i.customId.startsWith(JUMP_PREFIX))) return handlePager(i, db);
     if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);
     if (i.isStringSelectMenu() && i.customId.startsWith("mu_pick:")) return musicUi ? musicUi.handleSelect(i) : musicOff(i);
@@ -669,9 +675,9 @@ client.on(Events.InteractionCreate, async i => {
 
 if (cfg.dashboard) {
     const d = cfg.dashboard;
-    const rest = createDiscordRest({
+    const rest = brandRest(createDiscordRest({
         clientId: cfg.clientId, clientSecret: d.clientSecret, botToken: cfg.token, redirectUri: `${d.publicUrl}/auth/callback`
-    });
+    }), brandOpts);
     // One broadcaster for the dashboard's Admin page and /bot grabberad, so only one announcement or promotion goes out at a time.
 const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), sendChannel: (id, p) => discord.sendChannel(id, p),
     guildInfo: id => { const g = client.guilds.cache.get(id); return g ? { name: g.name, icon: g.iconURL({ extension: "png", size: 256 }) } : null; },
