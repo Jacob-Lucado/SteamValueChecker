@@ -79,7 +79,8 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         const playMs = g.resource.playbackDuration ?? 0;
         return { playMs, ...g.viz.window(playMs, spanMs) };
     }
-    function position(g) { return Math.floor(g.offset + (g.resource?.playbackDuration ?? 0) / 1000); }
+    /** Seconds into the song, to a tenth. (Whole seconds made the progress bars on the web jump a little every time they refreshed.) */
+    function position(g) { return Math.round((g.offset + (g.resource?.playbackDuration ?? 0) / 1000) * 10) / 10; }
 
     // ---------- permission checks ----------
     /** Returns who this is and what they may do. Throws UserError with a plain reason when they can't use the player at all. */

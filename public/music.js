@@ -134,8 +134,10 @@
     panes.requests.append(ui.reqForm, ui.reqList);
 
     ui.vizBtn = h("button", { class: "mu-mini", type: "button", onclick: cycleViz });
+    ui.chatBtn = h("button", { class: "mu-mini", type: "button", title: "Show new chat messages floating over the player", onclick: () => { floatChatOn = !floatChatOn; store.set("svc_music_floatchat", floatChatOn ? "1" : "0"); paintChatBtn(); if (!floatChatOn) { floatQueue.length = 0; ui.float.querySelectorAll(".msg").forEach(n => n.remove()); } } });
+    paintChatBtn();
     paintVizBtn();
-    const stage = h("main", { class: "mu-stage" }, h("div", { class: "mu-top" }, ui.name, ui.pill, ui.listen, h("span", { class: "sp" }), ui.vizBtn), ui.note, hero, tabBar, ...Object.values(panes));
+    const stage = h("main", { class: "mu-stage" }, h("div", { class: "mu-top" }, ui.name, ui.pill, ui.listen, h("span", { class: "sp" }), ui.chatBtn, ui.vizBtn), ui.note, hero, tabBar, ...Object.values(panes));
 
     // chat
     ui.here = h("div", { class: "mu-here" });
@@ -307,8 +309,8 @@
     ui.bar.classList.toggle("seek", ok && dj && Boolean(t) && !t.live);
     ui.bar.classList.toggle("live", Boolean(t?.live));
     for (const [id, srv] of Object.entries(ui.srv)) { srv.classList.toggle("on", id === gid); srv.classList.toggle("live", Boolean(guilds.find(g => g.id === id)?.active)); }
-    tick(); clearInterval(tickTimer); if (t && !t.live && !st.paused) tickTimer = setInterval(tick, 500);
-    stampAt = Date.now();
+    syncClock(st, t);
+    tick(); clearInterval(tickTimer); if (t && !t.live && !st.paused) tickTimer = setInterval(tick, 250);
 
     // queue
     const qsig = JSON.stringify([st.next.map(x => x.url + x.title), ok, dj, st.total]);
@@ -384,7 +386,7 @@
     function pushNp() {
       const st = data?.status, t = st?.current, win = frame.contentWindow; let np;
       if (!st?.active || !t) np = { on: false };
-      else { const playing = Boolean(st.playing) && !st.paused; np = { on: true, playing: Boolean(st.playing), paused: Boolean(st.paused), id: `${t.url ?? ""}|${t.title}`, title: String(t.title ?? ""), artist: String(t.artist ?? ""), thumb: /^https:/.test(t.thumb ?? "") ? t.thumb : "", duration: t.duration || 0, live: Boolean(t.live || st.live), position: (st.position || 0) + (playing ? (performance.now() - (ui.ovStamp || performance.now())) / 1000 : 0), next: st.next?.[0]?.title ?? "", auto: Boolean(t.auto), volume: st.volume }; }
+      else { const playing = Boolean(st.playing) && !st.paused; np = { on: true, playing: Boolean(st.playing), paused: Boolean(st.paused), id: `${t.url ?? ""}|${t.title}`, title: String(t.title ?? ""), artist: String(t.artist ?? ""), thumb: /^https:/.test(t.thumb ?? "") ? t.thumb : "", duration: t.duration || 0, live: Boolean(t.live || st.live), position: clockNow(), next: st.next?.[0]?.title ?? "", auto: Boolean(t.auto), volume: st.volume }; }
       const live = o.preview === "live";
       hint.hidden = !(live && !np.on);
       ui.ov.now.textContent = live ? (np.on ? `Previewing what's playing right now: ${np.title}${np.artist ? " by " + np.artist : ""}.` : "") : "Showing the demo reel: made-up songs so you can see the fades and the song swap.";
@@ -499,11 +501,21 @@
       h("div", { class: "mu-set" }, enL, annL, vcsL, stayL, radioL, field("Controls", role), field("Now-playing messages go to", chan), field("Starting volume (1-100)", vol), field("Most songs in the queue", mq), field("Longest song, minutes (0 = no limit)", mm), field("Leave after idle (minutes)", lv), h("div", { class: "mu-actions" }, save2)));
   }
 
-  let stampAt = Date.now();
+  // The song position runs on a local clock. Each refresh from the server only nudges it (a big gap, like a seek or a new song, snaps it),
+  // so the bar glides instead of jumping forward and back with every poll.
+  const clock = { id: "", pos: 0, at: 0, running: false };
+  function syncClock(st, t) {
+    const now = performance.now(), id = t ? `${t.url ?? ""}|${t.title}` : "", running = Boolean(t) && !t.live && Boolean(st.playing) && !st.paused;
+    const est = clock.running && clock.id === id ? clock.pos + (now - clock.at) / 1000 : null;
+    const truth = Number(st.position) || 0;
+    clock.pos = running && est !== null && Math.abs(est - truth) < 1.5 ? est + (truth - est) * 0.2 : truth;
+    clock.id = id; clock.at = now; clock.running = running;
+  }
+  const clockNow = () => (clock.running ? clock.pos + (performance.now() - clock.at) / 1000 : clock.pos);
   function tick() {
     const st = data?.status, t = st?.current;
     if (!t || t.live) { ui.fill.style.width = "0%"; ui.pos.textContent = t?.live ? "LIVE" : "0:00"; ui.dur.textContent = ""; return; }
-    const p = st.paused ? st.position : st.position + (Date.now() - stampAt) / 1000, q = Math.min(p, t.duration || p);
+    const p = clockNow(), q = Math.min(p, t.duration || p);
     ui.fill.style.width = t.duration ? Math.min(100, (q / t.duration) * 100) + "%" : "0%";
     ui.pos.textContent = fmt(q); ui.dur.textContent = t.duration ? fmt(t.duration) : "";
   }
@@ -604,6 +616,38 @@
     s.style.left = (8 + Math.random() * 84) + "%"; s.style.setProperty("--dx", ((Math.random() - .5) * 120) + "px");
     ui.float.append(s); s.addEventListener("animationend", () => s.remove());
   }
+  // Chat on screen: new messages drift up over the player like the emoji do. Everything is plain text and kept small:
+  // links are hidden, long messages are cut, stretched-out letters are squeezed, and only a few show at once.
+  let floatChatOn = store.get("svc_music_floatchat") !== "0";
+  const floatQueue = []; let floatTimer = 0;
+  const FLOAT_MAX_ON_SCREEN = 4, FLOAT_MAX_QUEUE = 5, FLOAT_GAP_MS = 900, FLOAT_MAX_CHARS = 90;
+  function paintChatBtn() { ui.chatBtn.textContent = floatChatOn ? "💬 On screen" : "💬 Off"; ui.chatBtn.setAttribute("aria-pressed", String(floatChatOn)); }
+  /** What is safe and short enough to put on screen, or "" to skip the message. */
+  function screenText(raw) {
+    let t = String(raw ?? "").replace(/(https?:\/\/|www\.)\S+/gi, "🔗").replace(/\s+/g, " ").trim();
+    t = t.replace(/(.)\1{5,}/gu, "$1$1$1$1$1");                // "aaaaaaaaaaaa" -> "aaaaa"
+    t = t.split(" ").map(w => (w.length > 24 ? w.slice(0, 24) + "…" : w)).join(" "); // no one giant word
+    if (!/[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(t)) return "";    // nothing but symbols
+    return t.length > FLOAT_MAX_CHARS ? t.slice(0, FLOAT_MAX_CHARS - 1).trimEnd() + "…" : t;
+  }
+  function floatMessage(m) {
+    if (!floatChatOn || document.hidden || m.kind !== "msg") return;
+    const text = screenText(m.text); if (!text) return;
+    if (floatQueue.length >= FLOAT_MAX_QUEUE) floatQueue.shift(); // too busy: drop the oldest waiting one
+    floatQueue.push({ name: String(m.name ?? "").slice(0, 24), text, mine: m.userId === me.user.id });
+    if (!floatTimer) floatTimer = setTimeout(drainFloat, 0);
+  }
+  function drainFloat() {
+    floatTimer = 0;
+    if (!floatQueue.length) return;
+    if (ui.float.querySelectorAll(".msg").length < FLOAT_MAX_ON_SCREEN) {
+      const q = floatQueue.shift();
+      const b = h("div", { class: "msg" + (q.mine ? " me" : "") }, h("b", { text: q.mine ? "You" : q.name }), h("span", { text: q.text }));
+      b.style.left = (4 + Math.random() * 40) + "%"; b.style.setProperty("--dx", ((Math.random() - .5) * 80) + "px");
+      ui.float.append(b); b.addEventListener("animationend", () => b.remove());
+    }
+    if (floatQueue.length) floatTimer = setTimeout(drainFloat, FLOAT_GAP_MS);
+  }
   function renderMsg(m) {
     if (m.kind === "note") return h("div", { class: "mu-note-line", "data-id": m.id, text: m.text });
     const mine = m.userId === me.user.id, canDel = mine || data?.access?.dj || data?.access?.isManager || data?.access?.isBotOwner;
@@ -622,7 +666,7 @@
       if (m.kind === "gone") { ui.msgs.querySelector(`[data-id="${m.text}"]`)?.remove(); continue; }
       if (m.kind === "clear") { ui.msgs.replaceChildren(); continue; }
       if (m.kind === "react") { if (!chatFirst) floatEmoji(m.text, m.userId === me.user.id ? "" : m.name); continue; }
-      ui.msgs.querySelector(`[data-id="${m.id}"]`) || ui.msgs.append(renderMsg(m));
+      if (!ui.msgs.querySelector(`[data-id="${m.id}"]`)) { ui.msgs.append(renderMsg(m)); if (!chatFirst) floatMessage(m); }
     }
     chatSince = r.last; chatFirst = false;
     if (!ui.msgs.children.length) ui.msgs.replaceChildren(h("p", { class: "mu-chat-empty", text: "It's quiet. Say hi, or send a 🔥 when the song hits." }));

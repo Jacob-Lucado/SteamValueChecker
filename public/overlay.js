@@ -76,7 +76,10 @@
     }
     clearTimeout(offTimer); offTimer = 0;
     const changed = n.id !== wasId;
-    song = { id: n.id, position: n.position, duration: n.duration, live: n.live, at: performance.now(), playing: n.playing && !n.paused, n };
+    // keep the progress bar gliding: a small difference only nudges the clock, a big one (a seek, a new song) snaps it
+    const nowMs = performance.now(), est = song.playing && !changed ? song.position + (nowMs - song.at) / 1000 : null;
+    const pos = est !== null && Math.abs(est - n.position) < 1.5 ? est + (n.position - est) * 0.25 : n.position;
+    song = { id: n.id, position: pos, duration: n.duration, live: n.live, at: nowMs, playing: n.playing && !n.paused, n };
     root.classList.toggle("paused", Boolean(n.paused));
     if (changed) setSong(n, shown); else labelText.textContent = labelFor(n);
     if (n.paused) {

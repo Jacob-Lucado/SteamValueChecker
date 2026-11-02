@@ -138,7 +138,7 @@ html:has(.mu-body) { overflow: clip; }
 
 /* floating reactions */
 .mu-float { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
-.mu-float span { position: absolute; bottom: -10px; font-size: 34px; animation: mu-rise 3.2s ease-out forwards; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .4)); }
+.mu-float span:not(.msg span) { position: absolute; bottom: -10px; font-size: 34px; animation: mu-rise 3.2s ease-out forwards; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .4)); }
 .mu-float span small { display: block; font-size: 11px; text-align: center; color: var(--white); text-shadow: 0 1px 3px #000; }
 
 /* sign-in and empty states */
@@ -241,3 +241,11 @@ html:has(.mu-body) { overflow: clip; }
 .mu-ov-hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; padding: 12px 16px; border-radius: 14px; background: rgba(10, 16, 28, .85); color: #f4f8fd; font-size: 14px; max-width: 86%; text-align: center; }
 .mu-ov-hint[hidden] { display: none; }
 .mu-ov-now { margin: 8px 0 14px; min-height: 18px; }
+
+/* chat messages drifting over the player */
+.mu-float .msg { position: absolute; bottom: 6%; max-width: min(340px, 70%); padding: 8px 14px 9px; border-radius: 16px 16px 16px 4px; background: rgba(12, 18, 32, .78); border: 1px solid rgba(255, 255, 255, .12); color: #f4f8fd; font-size: 15px; line-height: 1.35; box-shadow: 0 10px 28px rgba(0, 0, 0, .35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); animation: mu-drift 7s ease-out forwards; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mu-float .msg b { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.mu-float .msg.me b { color: #9be7c1; }
+.mu-float .msg span { font-size: inherit; position: static; animation: none; filter: none; }
+@keyframes mu-drift { 0% { transform: translate(0, 24px) scale(.94); opacity: 0; } 8% { opacity: 1; transform: translate(0, 0) scale(1); } 80% { opacity: 1; } 100% { transform: translate(var(--dx, 0), -62vh); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mu-float .msg { animation-duration: 4s; } }
