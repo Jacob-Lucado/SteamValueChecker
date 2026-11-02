@@ -33,14 +33,20 @@ export function nowPlayingEmbed(st) {
 const btn = (id, label, style = 2, disabled = false) => ({ type: 2, style, label, custom_id: `mu:${id}`, disabled });
 
 /** `playerUrl` is the big player for this server. It becomes a link button; Discord link buttons need no handler. */
-export function controls(st, playerUrl = null) {
+export function controls(st, playerUrl = null, guildId = null) {
+    const listen = guildId && st.channelId ? voiceLink(guildId, st.channelId) : null;
+    const links = [...(listen ? [{ type: 2, style: 5, label: "🎧 Listen here", url: listen }] : []), ...(playerUrl ? [{ type: 2, style: 5, label: "🎛 Big player", url: playerUrl }] : [])];
     return [
         { type: 1, components: [btn("prev", "⏮"), btn(st.paused ? "resume" : "pause", st.paused ? "▶ Resume" : "⏸ Pause", st.paused ? 3 : 1), btn("skip", "⏭ Skip"), btn("stop", "⏹ Stop", 4), btn("loop", `🔁 ${LOOP_LABEL[st.loop]}`)] },
-        { type: 1, components: [btn("shuffle", "🔀 Shuffle"), btn("voldown", "🔉 -10"), btn("volup", "🔊 +10"), btn("queue", "📜 Queue"), ...(playerUrl ? [{ type: 2, style: 5, label: "🎛 Big player", url: playerUrl }] : [])] }
+        { type: 1, components: [btn("shuffle", "🔀 Shuffle"), btn("voldown", "🔉 -10"), btn("volup", "🔊 +10"), btn("queue", "📜 Queue")] },
+        ...(links.length ? [{ type: 1, components: links }] : [])
     ];
 }
 
-export const nowPlayingPayload = (st, playerUrl = null) => ({ embeds: [nowPlayingEmbed(st)], components: st.current ? controls(st, playerUrl) : [], allowed_mentions: { parse: [] } });
+export const nowPlayingPayload = (st, playerUrl = null, guildId = null) => ({ embeds: [nowPlayingEmbed(st)], components: st.current ? controls(st, playerUrl, guildId) : [], allowed_mentions: { parse: [] } });
+
+/** Opening this puts the person in the voice channel the music is playing in. */
+export const voiceLink = (guildId, channelId) => `https://discord.com/channels/${guildId}/${channelId}`;
 
 /** The link to the big player, opened on the right server. Null when the web dashboard isn't set up. */
 export function playerLink(base, guildId) {

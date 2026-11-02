@@ -259,8 +259,9 @@ test("the now-playing post, queue and search menu are well formed", () => {
     assert.equal(controls({ ...st, paused: true })[0].components[1].custom_id, "mu:resume");
     const link = playerLink("https://music.bot.example/", "123"); assert.equal(link, "https://music.bot.example/?guild=123");
     assert.equal(playerLink(null, "1"), null);
-    const withBtn = controls(st, link)[1].components; assert.equal(withBtn.length, 5, "a row holds at most five");
-    assert.deepEqual([withBtn[4].style, withBtn[4].url, withBtn[4].custom_id], [5, link, undefined], "a link button, no handler needed");
+    const rows = controls({ ...st, channelId: "77" }, link, "9"); assert.equal(rows.length, 3);
+    assert.deepEqual(rows[2].components.map(c => [c.label, c.style, c.url, c.custom_id]), [["🎧 Listen here", 5, "https://discord.com/channels/9/77", undefined], ["🎛 Big player", 5, link, undefined]], "link buttons need no handler");
+    assert.equal(controls(st, null, "9").length, 2, "no voice channel, no dashboard: no link row");
     assert.equal(nowPlayingPayload({ ...st, current: null }, link).components.length, 0);
     assert.match(queueEmbed(st).description, /\*\*1\.\*\*/);
     assert.match(queueEmbed({ ...st, next: [] }).description, /empty/);
