@@ -5,6 +5,8 @@ import { createQueue, LOOP_MODES } from "./musicqueue.js";
 import { isSoundcloudUrl, cleanQuery } from "./musicsource.js";
 import { parseRadioUrl } from "./musicradio.js";
 import { MAX_PENDING_PER_USER } from "./musicstore.js";
+import { createAnalyser } from "./musicviz.js";
+import { pipeline } from "node:stream";
 
 export const MAX_STREAMS = Number(process.env.MUSIC_MAX_STREAMS) || 6;
 
@@ -67,6 +69,15 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
             active: true, playing: g.playing && !paused, paused, channelId: g.voiceChannelId, channelName: getGuild(gid)?.channelName?.(g.voiceChannelId) ?? null,
             current: g.queue.current, position: position(g), next: g.queue.next.slice(0, 50), total: g.queue.size, loop: g.queue.loop, volume: g.volume, totalSeconds: g.queue.totalSeconds(), live: Boolean(g.queue.current?.live), auto
         };
+    }
+    /** What the music page needs to draw the visualizer: the next stretch of pictures, lined up with what is playing now. */
+    function viz(gid, spanMs = 200) {
+        const g = get(gid);
+        if (!g?.viz || !g.resource || !g.playing) return null;
+        const paused = g.player?.state?.status === "paused" || g.player?.state?.status === "autopaused";
+        if (paused) return { paused: true };
+        const playMs = g.resource.playbackDuration ?? 0;
+        return { playMs, ...g.viz.window(playMs, spanMs) };
     }
     function position(g) { return Math.floor(g.offset + (g.resource?.playbackDuration ?? 0) / 1000); }
 
@@ -161,7 +172,10 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         // Someone may have stopped everything while we were fetching.
         if (!g.connection || g.queue.current !== track) { try { s.kill(); } catch { /* */ } return null; }
         g.stream = s; g.offset = seek; g.failures = 0; if (!resume && seek === 0) g.resumes = 0;
-        const resource = voice.createAudioResource(s.stream, { inputType: voice.StreamType.Raw, inlineVolume: true });
+        // The sound passes through a listener on its way to Discord, so the music page can show a live visualizer.
+        let input = s.stream; g.viz = null;
+        try { if (typeof s.stream?.pipe === "function") { const tap = createAnalyser(); pipeline(s.stream, tap, () => {}); input = tap; g.viz = tap; } } catch { input = s.stream; g.viz = null; }
+        const resource = voice.createAudioResource(input, { inputType: voice.StreamType.Raw, inlineVolume: true });
         resource.volume?.setVolume((g.volume ?? 50) / 100);
         tuneEncoder(resource, getGuild(g.guildId)?.channelBitrate?.(g.voiceChannelId));
         g.resource = resource; g.playing = true; g.swapping = true;
@@ -552,5 +566,5 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     /** The bot was kicked from the channel, or the server removed it. */
     function onBotDisconnected(guildId) { const g = get(guildId); if (g?.connection) teardown(g); }
 
-    return { submit, listSubmissions, removeSubmission, clearSubmissions, setAutoPlaylist, clearAutoPlaylist, autoBoot, autoJoin, sessions, adminForce, status, access, who, enqueue, search, lookup, pause, resume, skip, skipTo, previous, seek, stop, leave, setVolume, setLoop, shuffle, remove, move, clear, onVoiceChange, onBotDisconnected, refreshPanel, get: gid => get(gid), shutdown: () => { for (const g of [...guilds.values()]) teardown(g); } };
+    return { viz, submit, listSubmissions, removeSubmission, clearSubmissions, setAutoPlaylist, clearAutoPlaylist, autoBoot, autoJoin, sessions, adminForce, status, access, who, enqueue, search, lookup, pause, resume, skip, skipTo, previous, seek, stop, leave, setVolume, setLoop, shuffle, remove, move, clear, onVoiceChange, onBotDisconnected, refreshPanel, get: gid => get(gid), shutdown: () => { for (const g of [...guilds.values()]) teardown(g); } };
 }

@@ -157,6 +157,32 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     const musicOrigin = config.musicUrl ? new URL(config.musicUrl).origin : null;
     const musicHost = musicOrigin ? new URL(musicOrigin).host.toLowerCase() : null;
     const onMusicHost = req => Boolean(musicHost) && String(req?.headers?.host ?? "").toLowerCase() === musicHost;
+    // Live visualizer: one open connection per viewer, fed from what the player is sending to Discord.
+    const vizOpen = new Map();
+    let vizTotal = 0;
+    function vizStream(req, res, url) {
+        const s = session(req);
+        if (!music?.viz) throw new HttpError(503, "The visualizer isn't available on this bot right now.");
+        const g = musicMember(s, url.searchParams.get("guild"));
+        if (vizTotal >= 150 || (vizOpen.get(s.userId) ?? 0) >= 3) throw new HttpError(429, "Too many visualizers are open. Close one and try again.");
+        vizTotal++; vizOpen.set(s.userId, (vizOpen.get(s.userId) ?? 0) + 1);
+        res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex" });
+        res.write("retry: 3000\n\n");
+        const born = now();
+        let quiet = 0, timer = 0, over = false;
+        const end = () => { if (over) return; over = true; clearInterval(timer); vizTotal--; vizOpen.set(s.userId, Math.max(0, (vizOpen.get(s.userId) ?? 1) - 1)); try { res.end(); } catch { /* gone */ } };
+        const tick = () => {
+            const live = sessions.get(cookies(req)[COOKIE]);
+            if (!live || live.expires < now() || now() - born > 4 * 3600_000) return end();
+            let v = null;
+            try { v = music.viz(g.id, 200); } catch { /* the player is busy; skip a beat */ }
+            if (!v || v.paused || !v.frames?.length) { if (quiet++ % 10 === 0) res.write(`data: {"p":0}\n\n`); return; } // a heartbeat about once a second while nothing plays
+            quiet = 0;
+            res.write(`data: ${JSON.stringify({ p: 1, m: Math.round(v.playMs), f: v.first, d: Buffer.concat(v.frames.map(x => Buffer.from(x))).toString("base64") })}\n\n`);
+        };
+        timer = setInterval(tick, 100); tick();
+        req.on("close", end); res.on("error", end);
+    }
     const musicHome = musicOrigin ? musicOrigin + "/" : "/music";
     const cookieDomain = config.cookieDomain && [adminHost, musicHost].some(x => x && x.endsWith("." + config.cookieDomain)) ? config.cookieDomain : null;
     const chat = createMusicChat({ now });
@@ -2892,6 +2918,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             }
 
             if (key === "POST /api/admin/login") { checkWrite(req); return json(res, 200, adminPasswordLogin(req, res, await readJson(req, 5_000))); }
+            if (key === "GET /api/music/viz") return vizStream(req, res, url);
             const handler = routes[key];
             if (!handler) throw new HttpError(404, "Not found.");
             let body = {};

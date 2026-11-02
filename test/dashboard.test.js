@@ -1766,3 +1766,24 @@ test("music studio: own address and sign-in handoff, and the session chat", asyn
         assert.equal((await o.request("/api/music/chat", { method: "POST", body: { guild_id: "g-admin", text: "x" }, headers: { Origin: "https://evil.example" } })).status, 403);
     } finally { await o.close(); }
 });
+
+test("music studio: the live visualizer stream needs a sign-in and a server you are in, and sends the levels", async () => {
+    const frame = Uint8Array.from({ length: 24 }, (_, i) => i * 10);
+    const music = { status: () => ({ active: true }), access: () => ({}), sessions: () => [], viz: () => ({ playMs: 1000, first: 46, frames: [frame, frame] }) };
+    const o = await signedIn({ extra: { music, botGuilds: () => true } });
+    try {
+        assert.equal((await o.request("/api/music/viz?guild=g-nope")).status, 404);
+        const ac = new AbortController();
+        const res = await fetch(o.base + "/api/music/viz?guild=g-admin", { headers: { Cookie: o.cookie() }, signal: ac.signal });
+        assert.equal(res.status, 200);
+        assert.match(res.headers.get("content-type"), /text\/event-stream/);
+        const reader = res.body.getReader(); let text = "";
+        while (!/data: \{"p":1/.test(text)) { const { value, done } = await reader.read(); if (done) break; text += Buffer.from(value).toString(); }
+        const msg = JSON.parse(text.split("data: ")[1].split("\n")[0]);
+        assert.deepEqual([msg.p, msg.m, msg.f], [1, 1000, 46]);
+        assert.equal(Buffer.from(msg.d, "base64").length, 48, "two pictures of 24 bars");
+        ac.abort();
+    } finally { await o.close(); }
+    const anon = await setup({ extra: { music, botGuilds: () => true } });
+    try { assert.equal((await anon.request("/api/music/viz?guild=g-admin")).status, 401); } finally { await anon.close(); }
+});

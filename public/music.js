@@ -131,7 +131,9 @@
     ui.reqForm = h("div");
     panes.requests.append(ui.reqForm, ui.reqList);
 
-    const stage = h("main", { class: "mu-stage" }, h("div", { class: "mu-top" }, ui.name, ui.pill, h("span", { class: "sp" })), ui.note, hero, tabBar, ...Object.values(panes));
+    ui.vizBtn = h("button", { class: "mu-mini", type: "button", onclick: cycleViz });
+    paintVizBtn();
+    const stage = h("main", { class: "mu-stage" }, h("div", { class: "mu-top" }, ui.name, ui.pill, h("span", { class: "sp" }), ui.vizBtn), ui.note, hero, tabBar, ...Object.values(panes));
 
     // chat
     ui.here = h("div", { class: "mu-here" });
@@ -150,9 +152,13 @@
       h("button", { type: "button", "data-v": "chat", text: "💬 Chat", onclick: () => setView("chat") }));
     ui.bottom = bottom;
     ui.art = h("div", { class: "mu-art" });
-    root.replaceChildren(ui.art, h("div", { class: "mu-veil" }), rail, stage, chat, bottom, ui.float);
+    ui.viz = h("canvas", { class: "mu-viz", "aria-hidden": "true" });
+    root.replaceChildren(ui.art, h("div", { class: "mu-veil" }), ui.viz, rail, stage, chat, bottom, ui.float);
     showTab(store.get("svc_music_tab") || "queue");
     document.addEventListener("keydown", onKey);
+    document.addEventListener("visibilitychange", () => { if (document.hidden) vizClose(); else vizOpen(); });
+    window.addEventListener("resize", sizeViz); window.addEventListener("svc-theme", () => { vizColors = null; });
+    sizeViz(); requestAnimationFrame(vizFrame);
     built = true;
   }
   function setView(v) { root.dataset.view = v; for (const b of ui.bottom.children) b.classList.toggle("on", b.dataset.v === v); if (v === "chat") scrollChat(true); }
@@ -167,6 +173,8 @@
     if (e.key === " " && data?.status?.current) { e.preventDefault(); ui.play.click(); }
     else if (e.key.toLowerCase() === "n") ui.next.click();
     else if (e.key === "/") { e.preventDefault(); showTab("search"); ui.q.focus(); }
+    else if (e.key === "[" || e.key === "]") { vizDelay = Math.max(0, Math.min(800, vizDelay + (e.key === "]" ? 20 : -20))); store.set("svc_music_viz_delay", String(vizDelay)); toast(`Visualizer delay ${vizDelay} ms. [ and ] line it up with what you hear.`); }
+    else if (e.key.toLowerCase() === "v") cycleViz();
   }
 
   // ---------- actions ----------
@@ -389,11 +397,78 @@
   }
   function selectGuild(id, first) {
     gid = id; store.set("svc_music_guild", id);
+    vizOpen(true);
     ui.radioLoaded = false; ui.qsig = ui.rsig = lastSig = ""; ui.mgrKey = ""; ui.results.replaceChildren(); ui.radioList.replaceChildren(h("p", { class: "mu-empty", text: "Open this tab to see stations." }));
     data = null; chatSince = 0; chatFirst = true; ui.msgs.replaceChildren();
     for (const [k, srv] of Object.entries(ui.srv)) srv.classList.toggle("on", k === id);
     refresh().then(() => { if (ui.panes.radio.classList.contains("on")) loadRadio(); });
     loop(); chatLoop();
+  }
+
+  // ---------- live visualizer: the bot measures the sound it sends to Discord and streams the levels here ----------
+  const BANDS = 24, HOP = 1024, RATE = 48000;
+  const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let vizMode = store.get("svc_music_viz") || (reduced ? "off" : "bars"), vizDelay = Number(store.get("svc_music_viz_delay")) || 200;
+  let es = null, vizQueue = [], vizLast = -1, vizLastM = 0, vizFresh = 0, vizColors = null;
+  const cur = new Float32Array(BANDS), aim = new Float32Array(BANDS);
+  const MODES = { bars: "Visualizer: bars", mirror: "Visualizer: mirror", off: "Visualizer: off" };
+  function paintVizBtn() { ui.vizBtn.textContent = "✦ " + MODES[vizMode].replace("Visualizer: ", ""); ui.vizBtn.title = `${MODES[vizMode]}. Press V to change it, [ and ] to line it up with the sound.`; }
+  function cycleViz() { vizMode = vizMode === "bars" ? "mirror" : vizMode === "mirror" ? "off" : "bars"; store.set("svc_music_viz", vizMode); paintVizBtn(); if (vizMode === "off") vizClose(); else vizOpen(); }
+  function vizClose() { if (es) { es.close(); es = null; } }
+  function vizOpen(fresh) {
+    if (fresh) { vizClose(); vizQueue = []; vizLast = -1; vizLastM = 0; }
+    if (vizMode === "off" || es || document.hidden || !window.EventSource || !gid) return;
+    es = new EventSource("/api/music/viz?guild=" + encodeURIComponent(gid));
+    es.onmessage = ev => {
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (!m.p) { vizFresh = 0; return; }
+      const bin = atob(m.d), n = Math.floor(bin.length / BANDS), at = performance.now();
+      if (m.m < vizLastM - 500 || m.f < vizLast - 100) { vizQueue = []; vizLast = m.f - 1; } // a new song, or a jump
+      vizLastM = m.m;
+      for (let i = 0; i < n; i++) {
+        const idx = m.f + i; if (idx <= vizLast) continue; vizLast = idx;
+        const v = new Uint8Array(BANDS); for (let b = 0; b < BANDS; b++) v[b] = bin.charCodeAt(i * BANDS + b);
+        vizQueue.push({ at: at + ((idx * HOP) / RATE) * 1000 - m.m + vizDelay, v });
+      }
+      if (vizQueue.length > 200) vizQueue.splice(0, vizQueue.length - 200);
+    };
+    es.onerror = () => { if (es && es.readyState === 2) { es = null; } };
+  }
+  function sizeViz() {
+    const r = ui.viz.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    ui.viz.width = Math.round(r.width * dpr); ui.viz.height = Math.round(r.height * dpr);
+  }
+  function vizFrame(t) {
+    requestAnimationFrame(vizFrame);
+    if (!built) return;
+    const now = performance.now();
+    let got = false;
+    while (vizQueue.length && vizQueue[0].at <= now) { const f = vizQueue.shift(); for (let b = 0; b < BANDS; b++) aim[b] = f.v[b] / 255; got = true; vizFresh = now; }
+    const live = now - vizFresh < 700 && data?.status?.playing;
+    for (let b = 0; b < BANDS; b++) {
+      const to = live ? aim[b] : 0;
+      cur[b] = to > cur[b] ? cur[b] + (to - cur[b]) * 0.65 : cur[b] + (to - cur[b]) * (live ? 0.18 : 0.08); // rise quickly, fall gently
+    }
+    root.classList.toggle("viz-live", live && vizMode !== "off");
+    if (live) { const eq = ui.eq.children; for (let i = 0; i < eq.length; i++) eq[i].style.transform = `scaleY(${Math.max(0.08, cur[Math.floor((i / eq.length) * BANDS)] ** 1.2).toFixed(3)})`; }
+    else if (!root.classList.contains("playing")) for (const i of ui.eq.children) i.style.transform = "";
+    const bass = (cur[0] + cur[1] + cur[2]) / 3;
+    ui.art.style.setProperty("--pulse", (1.1 + bass * 0.07).toFixed(3));
+    const c = ui.viz.getContext("2d"), W = ui.viz.width, H = ui.viz.height;
+    c.clearRect(0, 0, W, H);
+    if (vizMode === "off" || (!live && cur[0] < 0.01 && cur[8] < 0.01)) return;
+    if (!vizColors) { const cs = getComputedStyle(document.documentElement); vizColors = [cs.getPropertyValue("--accent").trim() || "#4da3ff", cs.getPropertyValue("--accent-2").trim() || "#7c6cff"]; }
+    const N = 56, gap = W / N, bw = gap * 0.64, lift = vizMode === "mirror" ? H / 2 : H;
+    const grad = c.createLinearGradient(0, vizMode === "mirror" ? H * 0.2 : H * 0.35, 0, lift);
+    grad.addColorStop(0, vizColors[1] + "00"); grad.addColorStop(1, vizColors[0] + (vizMode === "mirror" ? "55" : "66"));
+    c.fillStyle = grad;
+    for (let i = 0; i < N; i++) {
+      const pos = (i / (N - 1)) * (BANDS - 1), lo = Math.floor(pos), v = cur[lo] + (cur[Math.min(BANDS - 1, lo + 1)] - cur[lo]) * (pos - lo);
+      const h2 = Math.max(2, (v ** 1.35) * H * (vizMode === "mirror" ? 0.3 : 0.5)), x = i * gap + (gap - bw) / 2, r = Math.min(bw / 2, 10);
+      c.beginPath();
+      if (vizMode === "mirror") { c.roundRect(x, lift - h2, bw, h2 * 2, r); } else { c.roundRect(x, lift - h2, bw, h2 + r, [r, r, 0, 0]); }
+      c.fill();
+    }
   }
 
   // ---------- chat ----------
