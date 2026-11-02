@@ -1,3 +1,9 @@
+// A bare "example.com" is easy to type into a secret; read it as https so the bot still starts.
+export function publicUrlOf(raw) {
+    const v = String(raw).trim().replace(/\/+$/, "");
+    return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
 // Reads settings from environment variables (loaded from .env by the entry points).
 export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIENT_ID", "ITAD_API_KEY"]) {
     const missing = required.filter(k => !env[k]);
@@ -20,7 +26,7 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
         // Prices are cached for 30 minutes, so checking more often than that gains nothing.
         // The web dashboard starts only when these are set. DASHBOARD_URL is the public address, e.g. https://bot.example.com
         dashboard: env.DASHBOARD_URL && env.DISCORD_CLIENT_SECRET ? {
-            publicUrl: env.DASHBOARD_URL.replace(/\/+$/, ""),
+            publicUrl: publicUrlOf(env.DASHBOARD_URL),
             clientSecret: env.DISCORD_CLIENT_SECRET,
             port: Number(env.DASHBOARD_PORT) || 3000,
             host: env.DASHBOARD_HOST || "127.0.0.1"

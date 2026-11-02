@@ -174,3 +174,10 @@ test("game night says who has no games on record, and points them to /steam link
     assert.match(field.value, /<@c>/);
     assert.match(field.value, /\/me steam link/);
 });
+
+test("a dashboard address typed without https still loads as https", async () => {
+    const { loadConfig } = await import("../src/config.js");
+    const base = { DISCORD_TOKEN: "t", CLIENT_ID: "1", ITAD_API_KEY: "k", DISCORD_CLIENT_SECRET: "s" };
+    assert.equal(loadConfig({ ...base, DASHBOARD_URL: "steamvaluechecker.com" }).dashboard.publicUrl, "https://steamvaluechecker.com");
+    assert.equal(loadConfig({ ...base, DASHBOARD_URL: " https://steamvaluechecker.com/ " }).dashboard.publicUrl, "https://steamvaluechecker.com");
+});
