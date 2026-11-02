@@ -343,7 +343,7 @@
     ui.clear.hidden = !(dj || a.isManager || a.isBotOwner);
   }
   // ---------- stream overlay: a compact player for OBS, with a live demo and the private link for this server ----------
-  const OV_DEFAULTS = { style: "card", theme: "dark", accent: "4da3ff", scale: 1, anchor: "bl", art: 1, progress: 1, viz: 1, label: 1, next: 0, mode: "always", hold: 10, pause: 6 };
+  const OV_DEFAULTS = { style: "card", theme: "dark", accent: "4da3ff", scale: 1, anchor: "bl", art: 1, progress: 1, viz: 1, label: 1, next: 0, bg: 100, opacity: 100, mode: "always", hold: 10, pause: 6 };
   const OV_SIZES = { card: [520, 170], minimal: [500, 120], bar: [820, 120], square: [330, 410], vinyl: [520, 180], neon: [520, 150], poster: [390, 390], ticker: [690, 80], compact: [360, 100] };
   function buildStream() {
     let o = { ...OV_DEFAULTS };
@@ -354,7 +354,7 @@
       const p = new URLSearchParams();
       if (withToken) p.set("token", ui.ov.token); else p.set("demo", "1");
       p.set("style", o.style); p.set("theme", o.theme); p.set("accent", o.accent); if (o.scale !== 1) p.set("scale", String(o.scale)); p.set("anchor", o.anchor);
-      for (const k of ["art", "progress", "viz", "label", "next"]) if (o[k] !== OV_DEFAULTS[k]) p.set(k, String(o[k]));
+      for (const k of ["art", "progress", "viz", "label", "next", "bg", "opacity"]) if (o[k] !== OV_DEFAULTS[k]) p.set(k, String(o[k]));
       if (o.mode === "popup") { p.set("mode", "popup"); p.set("hold", String(o.hold)); }
       if (o.pause !== OV_DEFAULTS.pause) p.set("pause", String(o.pause));
       return p.toString();
@@ -371,6 +371,7 @@
     const scale = h("input", { type: "range", min: "0.6", max: "2", step: "0.1", value: String(o.scale), "aria-label": "Size" });
     const scaleOut = h("span", { class: "mu-val", text: o.scale + "×" });
     scale.addEventListener("input", () => { o.scale = Number(scale.value); scaleOut.textContent = o.scale + "×"; refresh(); });
+    const slider = (key, min, label) => { const r = h("input", { type: "range", min: String(min), max: "100", step: "5", value: String(o[key]), "aria-label": label }); const out = h("span", { class: "mu-val", text: o[key] + "%" }); r.addEventListener("input", () => { o[key] = Number(r.value); out.textContent = o[key] + "%"; refresh(); }); return h("div", { class: "mu-inline" }, r, out); };
     const pause = h("input", { type: "number", min: "0", max: "300", value: String(o.pause), "aria-label": "Seconds before it hides when paused" });
     pause.addEventListener("change", () => { o.pause = Math.max(0, Math.min(300, Number(pause.value) || 0)); refresh(); });
     const hold = h("input", { type: "number", min: "3", max: "120", value: String(o.hold), "aria-label": "Seconds to show each new song" });
@@ -388,7 +389,7 @@
     ui.ov.size = h("p", { class: "mu-hint" });
     const optionsGrid = h("div", { class: "mu-set" },
       field("Look", sel("style", [["card", "Card"], ["vinyl", "Spinning record"], ["neon", "Neon outline"], ["poster", "Poster (big cover)"], ["square", "Square cover"], ["bar", "Wide bar"], ["ticker", "Slim strip"], ["compact", "Small chip"], ["minimal", "Minimal text"]])), field("Theme", sel("theme", [["dark", "Dark"], ["light", "Light"], ["glass", "Frosted glass"], ["clear", "Clear (no background)"]])),
-      field("Accent colour", color), field("Size", h("div", { class: "mu-inline" }, scale, scaleOut)), field("Where it sits", anchors),
+      field("Accent colour", color), field("Size", h("div", { class: "mu-inline" }, scale, scaleOut)), field("Card background opacity", slider("bg", 0, "Card background opacity")), field("Whole overlay opacity", slider("opacity", 10, "Whole overlay opacity")), field("Where it sits", anchors),
       field("When it shows", sel("mode", [["always", "Whenever music is playing"], ["popup", "Pop up for each new song"]])), field("Seconds to show each new song", hold), field("Hide after pausing (seconds, 0 = stay)", pause),
       box("art", "Cover art"), box("progress", "Progress bar"), box("viz", "Live visualizer"), box("label", "“Now playing” label"), box("next", "Up next"));
     ui.panes.stream.append(

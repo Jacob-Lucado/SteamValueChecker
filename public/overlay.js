@@ -12,9 +12,11 @@
     accent: hex("accent", "#4da3ff"), accent2: hex("accent2", "#7c6cff"), scale: num("scale", 1, 0.5, 3),
     anchor: pick("anchor", ["tl", "tc", "tr", "ml", "mc", "mr", "bl", "bc", "br"], "bl"),
     progress: flag("progress", true), viz: flag("viz", true), art: flag("art", true), label: flag("label", true), next: flag("next", false),
-    popup: q.get("mode") === "popup", hold: num("hold", 10, 3, 120), hideAfterPause: num("pause", 6, 0, 300), delay: num("delay", 200, 0, 1000)
+    popup: q.get("mode") === "popup", hold: num("hold", 10, 3, 120), hideAfterPause: num("pause", 6, 0, 300), delay: num("delay", 200, 0, 1000),
+    bg: num("bg", 100, 0, 100), opacity: num("opacity", 100, 10, 100)
   };
   const root = document.getElementById("ov");
+  root.style.setProperty("--bgop", String(cfg.bg / 100)); root.style.opacity = String(cfg.opacity / 100);
   root.dataset.style = cfg.style; root.dataset.theme = cfg.theme;
   root.dataset.anchor = [cfg.anchor[0] === "t" ? "t" : cfg.anchor[0] === "m" ? "m" : "b", cfg.anchor[1] === "l" ? "l" : cfg.anchor[1] === "r" ? "r" : "c"].join(" ");
   root.style.setProperty("--accent", cfg.accent); root.style.setProperty("--accent2", cfg.accent2);
