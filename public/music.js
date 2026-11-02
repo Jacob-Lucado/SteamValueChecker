@@ -168,6 +168,7 @@
     if (!ui.panes[id]) id = "queue";
     for (const k of Object.keys(ui.panes)) { ui.panes[k].classList.toggle("on", k === id); ui.tabs[k].classList.toggle("on", k === id); ui.tabs[k].setAttribute("aria-selected", String(k === id)); }
     store.set("svc_music_tab", id);
+    root.classList.toggle("on-stream", id === "stream");
     if (id === "radio" && !ui.radioLoaded) loadRadio();
     if (id === "stream") streamOpen();
   }
