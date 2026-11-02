@@ -155,7 +155,8 @@
     ui.art = h("div", { class: "mu-art" });
     ui.viz = h("canvas", { class: "mu-viz", "aria-hidden": "true" });
     root.replaceChildren(ui.art, h("div", { class: "mu-veil" }), ui.viz, rail, stage, chat, bottom, ui.float);
-    showTab(store.get("svc_music_tab") || "queue");
+    const wantTab = new URLSearchParams(location.search).get("tab");
+    showTab(ui.panes[wantTab] ? wantTab : (store.get("svc_music_tab") || "queue"));
     document.addEventListener("keydown", onKey);
     document.addEventListener("visibilitychange", () => { if (document.hidden) vizClose(); else vizOpen(); });
     window.addEventListener("resize", sizeViz); window.addEventListener("svc-theme", () => { vizColors = null; });

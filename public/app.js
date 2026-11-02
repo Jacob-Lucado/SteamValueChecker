@@ -3459,7 +3459,8 @@
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(pageHead("Music", "Play SoundCloud songs, playlists and live radio in a voice channel. Join one in your server, then add music here or with /play."), holder);
     const big = h("a", { class: "btn blue", href: "#", target: "_blank", rel: "noopener", text: "View the big music player ↗", title: "Opens the full-screen player with session chat" });
-    app.insertBefore(h("div", { class: "row" }, big), holder);
+    const stream = h("a", { class: "btn gray", href: "#", target: "_blank", rel: "noopener", text: "Stream overlay for OBS ↗", title: "A compact now-playing card for your stream, with a link just for this server" });
+    app.insertBefore(h("div", { class: "row" }, big, stream), holder);
     const fmt = sec => { sec = Math.max(0, Math.floor(sec || 0)); const hh = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return (hh ? hh + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
     const toSeconds = text => { const t = String(text).trim().toLowerCase(); if (/^\d+$/.test(t)) return Number(t); const m = t.match(/^(?:(\d+):)?(\d+):(\d{1,2})$/) || t.match(/^()(\d+):(\d{1,2})$/); if (m) return Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]); return NaN; };
     const TIERS = { manager: ["Server manager", "You can change every music setting and control the player."], moderator: ["Moderator", "You can control the player and take down any request."], dj: ["DJ", "You can control the player."], listener: ["Listener", "You can add songs and vote to skip. Only DJs, moderators and managers use the other controls when this server has a DJ role."] };
@@ -3483,7 +3484,7 @@
       if (rebuild || !built) { built = true; build(d); } else update(d);
       clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); }, 3000);
     }
-    const bigLink = () => { const base = state.cfg?.musicUrl || "/music"; big.href = base + (base.includes("?") ? "&" : "?") + "guild=" + encodeURIComponent(pick.value); };
+    const bigLink = () => { const base = state.cfg?.musicUrl || "/music"; const q = base + (base.includes("?") ? "&" : "?") + "guild=" + encodeURIComponent(pick.value); big.href = q; stream.href = q + "&tab=stream"; };
     bigLink();
     pick.addEventListener("change", () => { bigLink(); try { localStorage.setItem("svc_music_guild", pick.value); } catch { /* fine */ } stop(); built = false; load(true); });
 
