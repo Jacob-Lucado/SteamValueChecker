@@ -96,6 +96,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         if (b.channel_id !== undefined) patch.welcome_channel = await channelOk(gid, b.channel_id || null);
         if (b.message !== undefined) { const m = String(b.message ?? "").trim(); if (m.length > 1000) fail(400, "Keep the message under 1000 characters."); patch.welcome_msg = m || null; }
         if (b.dm !== undefined) patch.welcome_dm = b.dm ? 1 : 0;
+        if (b.card !== undefined) patch.welcome_card = b.card ? 1 : 0;
         if (b.leave !== undefined) patch.leave_on = b.leave ? 1 : 0;
         if (b.log_channel_id !== undefined) patch.log_channel = await channelOk(gid, b.log_channel_id || null);
         return db.setCommunity(gid, patch);

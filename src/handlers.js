@@ -15,8 +15,10 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
+import { newsPayload } from "./render.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
+import { createNews, newsForUser } from "./news.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
 import { compareLibraries } from "./compare.js";
@@ -78,7 +80,7 @@ const withCard = (spec, name, alt, embed) => {
     catch { return { embeds: [embed] }; }
 };
 
-export function createHandlers({ db, itad, publicUrl = null, getStatus = () => null, getAbout = () => null }) {
+export function createHandlers({ db, itad, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
     // ---------- /me wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");
@@ -307,6 +309,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                             { name: "Weekly digest", value: describeDigest(user), inline: true },
                             { name: "Bundle, giveaway and subscription alerts", value: user.bundles === 0 ? "Off" : "On", inline: true },
                             { name: "Free game alerts", value: user.free ? "On" : "Off", inline: true },
+                            { name: "News and patch notes", value: ["Off", "Patch notes only", "Every announcement"][user.news ?? 0], inline: true },
                             { name: "Server group alerts and leaderboard", value: user.share ? "Opted in" : "Not shared", inline: true }
                         ]
                     }]
@@ -365,6 +368,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { bundles: on ? 1 : 0 });
                 return eph(i, on ? "You will be told when a wishlist game is in a bundle, being given away, or joins or leaves a subscription like Game Pass." : "Bundle and giveaway alerts are off.");
+            }
+            case "news": {
+                const mode = i.options.getInteger("mode", true);
+                db.updateUser(user.discord_id, { news: mode });
+                return eph(i, mode === 0 ? "News alerts are off." : `You will get ${mode === 1 ? "patch notes" : "every announcement"} for the Steam games you own or wishlist. Your first check is quiet, so only new posts reach you. Link Steam or import your wishlist if you haven't, so I know your games.`);
             }
             case "freegames": {
                 const on = i.options.getBoolean("enabled", true);
@@ -552,6 +560,13 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const view = await libraryView(db, itad, user, { snapshot: false });
                 if (!view.rows.length) throw new UserError("Your library is empty. Use `/me library add` or `/me library import`.");
                 return void await i.editReply({ embeds: [backlogEmbed(view, playNext(view.rows))] });
+            }
+            if (sub === "news") {
+                const { known, posts } = await newsForUser(db, newsSource, user.discord_id);
+                if (!known) throw new UserError("I don't know any of your Steam games yet. Link Steam with `/me steam link` or import your wishlist, then try again.");
+                const payload = newsPayload(posts, { pager: db });
+                if (!payload) throw new UserError("No recent news for your games right now.");
+                return void await i.editReply(payload);
             }
             if (sub === "trend") {
                 const view = await libraryView(db, itad, user);

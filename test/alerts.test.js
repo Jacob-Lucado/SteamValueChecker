@@ -69,3 +69,19 @@ test("re-alerts need a real drop, not a few cents of exchange-rate noise", async
     assert.equal(evaluate(item({ last_alert_price: 0 }), summary(0)).action, "none");
     assert.equal(evaluate(item(), summary(0)).action, "alert", "the first time it goes free still alerts");
 });
+
+test("sale countdowns: shown only for a real end date that is still ahead", async () => {
+    const { saleEnds, alertEmbed } = await import("../src/render.js");
+    const { summarize } = await import("../src/report.js");
+    const { current } = await import("../src/alerts.js");
+    const now = Date.UTC(2026, 10, 2, 12);
+    assert.match(saleEnds(now + 9 * 3600_000, now), /^⏰ Sale ends <t:\d+:R>/);
+    assert.match(saleEnds(now + 3 * 86400_000, now), /^⏳/);
+    assert.equal(saleEnds(null, now), null); assert.equal(saleEnds(now - 1000, now), null); assert.equal(saleEnds(now + 400 * 86400_000, now), null, "years away means no real end");
+    const entry = { deals: [{ shop: { name: "Steam" }, price: { amount: 5, currency: "USD" }, regular: { amount: 20 }, cut: 75, expiry: "2099-01-01T00:00:00Z" }, { shop: { name: "GOG" }, price: { amount: 4, currency: "USD" }, regular: { amount: 20 }, cut: 80, expiry: new Date(Date.now() + 5 * 3600_000).toISOString() }] };
+    const n = current(summarize(entry));
+    assert.equal(n.shop, "GOG"); assert.ok(n.expiry > Date.now());
+    const e = alertEmbed({ title: "G", id: 1 }, n, { trigger: "any" });
+    assert.match(e.description, /Sale ends <t:\d+:R>/);
+    assert.doesNotMatch(alertEmbed({ title: "G" }, { ...n, expiry: null }, { trigger: "any" }).description, /Sale ends/);
+});

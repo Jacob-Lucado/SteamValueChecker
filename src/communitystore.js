@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS self_roles (
 );
 `;
 
-const SETTABLE = new Set(["welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
+const SETTABLE = new Set(["welcome_card", "welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
     "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_promos", "streamer_role_id", "live_channel", "ping_stream", "stream_auto", "meme_channel", "meme_on", "meme_hours", "meme_at", "announce_channel", "rules_channel", "rules_text", "lb_channel", "requests_channel", "honeypot_channel", "setup_keys", "lb_message_id", "lb_hours", "lb_at"]);
 
 /** XP needed to go from `level` to the next one. */
@@ -113,7 +113,7 @@ export function levelFromXp(xp) {
 
 export function communityStore({ run, get, all, clean, now }) {
     const getCommunity = guildId => clean(get("SELECT * FROM community WHERE guild_id = ?", guildId))
-        ?? { guild_id: guildId, welcome_on: 1, welcome_channel: null, welcome_msg: null, welcome_dm: 0, leave_on: 0, autorole_id: null, log_channel: null, xp_on: 1, xp_mult: 1,
+        ?? { guild_id: guildId, welcome_card: 1, welcome_on: 1, welcome_channel: null, welcome_msg: null, welcome_dm: 0, leave_on: 0, autorole_id: null, log_channel: null, xp_on: 1, xp_mult: 1,
             levelup_mode: "same", levelup_channel: null, referral_xp: 100, mod_role_id: null, member_role_id: null, setup_at: null, verified_role_id: null, mod_log_channel: null, ping_deals: null, ping_free: null, ping_giveaway: null, ping_lfg: null, ping_codes: null, ping_promos: null, streamer_role_id: null, live_channel: null, meme_channel: null, meme_on: 1, meme_hours: 1, meme_at: null, ping_stream: null, stream_auto: 1, announce_channel: null, rules_channel: null, rules_text: null, lb_channel: null, requests_channel: null, honeypot_channel: null, lb_message_id: null, lb_hours: 5, lb_at: null };
     function setCommunity(guildId, patch) {
         run("INSERT OR IGNORE INTO community (guild_id) VALUES (?)", guildId);

@@ -478,10 +478,10 @@ export function renderWelcome(template, { userId, username, server, count, invit
         .replaceAll("{count}", String(count)).replaceAll("{inviter}", inviterId ? `<@${inviterId}>` : "someone");
 }
 
-export function welcomePayload({ settings, userId, username, avatarUrl, server, count, inviterId }) {
+export function welcomePayload({ settings, userId, username, avatarUrl, server, count, inviterId, card = false }) {
     const text = renderWelcome(settings.welcome_msg, { userId, username, server, count, inviterId });
     return {
-        embeds: [{ color: 0x57f287, title: `Welcome, ${String(username).slice(0, 60)}!`, description: text, ...(avatarUrl ? { thumbnail: { url: avatarUrl } } : {}), footer: { text: `Member #${count}` },
+        embeds: [{ color: 0x57f287, title: `Welcome, ${String(username).slice(0, 60)}!`, description: text, ...(card ? { image: { url: "attachment://welcome.png" } } : avatarUrl ? { thumbnail: { url: avatarUrl } } : {}), footer: { text: `Member #${count}` },
             ...(inviterId ? { fields: [{ name: "Invited by", value: `<@${inviterId}>`, inline: true }] } : {}) }],
         allowed_mentions: { parse: [], users: [userId, ...(inviterId ? [inviterId] : [])] }
     };

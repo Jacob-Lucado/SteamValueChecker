@@ -149,6 +149,8 @@ export function alertEmbed(item, now, { trigger, lower = false, verdict = null, 
         { name: "Discount", value: pct > 0 ? `${pct}% off` : "-", inline: true }
     ];
     if (now.atl !== null) fields.push({ name: "All-time low", value: money(now.atl, c), inline: true });
+    const ends = saleEnds(now.expiry);
+    if (ends) lines.push(ends);
     if (proton && protonLabel(proton)) lines.push(protonLabel(proton));
     if (insight) fields.push({ name: "Last 12 months", value: `\`${insight.spark}\`\n${insight.text}`.slice(0, 1000), inline: false });
     const art_ = art ? artUrl(item) : undefined;
@@ -213,6 +215,11 @@ export function wishlistEmbed(rows, page, currency) {
 
 const PURPLE = 0x8b7bff;
 const stamp = ms => `<t:${Math.floor(ms / 1000)}:R>`;
+/** "Sale ends in 9 hours", only when the store gave an end date that is still ahead (and not years away, which means no real end). */
+export function saleEnds(expiry, now = Date.now()) {
+    if (!Number.isFinite(expiry) || expiry <= now || expiry - now > 90 * 86400_000) return null;
+    return `${expiry - now <= 86400_000 ? "⏰" : "⏳"} Sale ends ${stamp(expiry)} (<t:${Math.floor(expiry / 1000)}:f>)`;
+}
 
 /** A watched game appeared in a bundle. `hit` is { item, bundle }. */
 export function bundleEmbed({ item, bundle }) {
@@ -251,7 +258,7 @@ const subIcon = name => SUB_ICON[Object.keys(SUB_ICON).find(k => String(name).to
 export function digestItems(rows, currency, { limit = 25 } = {}) {
     return rows.filter(r => r.discount > 0 && r.best).sort((a, b) => b.discount - a.discount).slice(0, limit).map(r => ({
         gid: r.itad_id ?? null, title: r.title, image: artUrl(r) ?? null, price: money(r.best.price, currency), discount: Math.round(r.discount * 100), shop: r.best.shop,
-        low: Boolean(r.verdict && r.verdict.level === "great"), url: safeUrl(r.best.url) ?? null
+        low: Boolean(r.verdict && r.verdict.level === "great"), url: safeUrl(r.best.url) ?? null, ends: r.best.expiry && r.best.expiry > Date.now() && r.best.expiry - Date.now() < 90 * 86400_000 ? r.best.expiry : null
     }));
 }
 
@@ -261,7 +268,7 @@ export function digestEmbed(rows, currency, { limit = 10 } = {}) {
     const lines = onSale.slice(0, limit).map(r => {
         const tag = r.verdict && r.verdict.level === "great" ? " (all-time low)" : "";
         const link = safeUrl(r.best.url);
-        return `${link ? `[**${r.title}**](${link})` : `**${r.title}**`}: ${money(r.best.price, currency)} (-${Math.round(r.discount * 100)}%) at ${r.best.shop}${tag}`;
+        return `${link ? `[**${r.title}**](${link})` : `**${r.title}**`}: ${money(r.best.price, currency)} (-${Math.round(r.discount * 100)}%) at ${r.best.shop}${tag}${r.best.expiry && r.best.expiry > Date.now() && r.best.expiry - Date.now() < 30 * 86400_000 ? ` · ends ${stamp(r.best.expiry)}` : ""}`;
     });
     if (onSale.length > limit) lines.push(`…and ${onSale.length - limit} more. Open /me wishlist view for the full list.`);
     return { color: COLOR, title: "Your weekly wishlist digest", description: `${onSale.length} of ${rows.length} games are on sale.\n\n${lines.join("\n")}`.slice(0, 4000), footer: { text: "Turn off with /alerts digest  •  Prices by IsThereAnyDeal" } };
@@ -351,6 +358,8 @@ export function checkEmbed(title, now, verdict, advice = null, subs = []) {
         { name: "1-year low", value: money(now.low1y, c), inline: true },
         { name: "All-time low", value: money(now.atl, c), inline: true }
     ];
+    const ends = saleEnds(now.expiry);
+    if (ends) fields.push({ name: "Sale ends", value: ends.replace(/^\S+ Sale ends /, "") });
     if (advice) fields.push({ name: `${{ buy: "🟢", lean_buy: "🟢", lean_wait: "🟡", wait: "🟠" }[advice.verdict]} Buy now or wait? ${advice.label}`, value: advice.reasons.join(" ") });
     if (subs?.length) fields.push({ name: "📦 Included with", value: subs.slice(0, 5).map(s => `**${s.name}**${s.leaving ? ` (leaves ${stamp(s.leaving)})` : ""}`).join("  •  ") + "\nIf you have it, you may not need to buy this." });
     return {
@@ -433,6 +442,24 @@ export function freeArt(g) {
 
 const SHOP_ICON = { steam: "🎮", epic: "🛒", gog: "🟣", itch: "🎲", humble: "💚", ubisoft: "🔷", amazon: "📦", prime: "📦" };
 export const shopIcon = shop => SHOP_ICON[Object.keys(SHOP_ICON).find(k => String(shop).toLowerCase().includes(k))] ?? "🎁";
+
+/** Steam news for games a member owns or wants: one card per post, paged when there are several. `posts` carry `gameTitle`. */
+export function newsEmbed(p) {
+    return {
+        color: p.patch ? 0x57f287 : 0x66c0f4, title: `${p.patch ? "🛠️" : "📰"} ${p.gameTitle}: ${p.title}`.slice(0, 256), url: safeUrl(p.url),
+        description: p.summary || "Open the post to read it.", timestamp: new Date(p.date).toISOString(),
+        image: safeUrl(p.image) ? { url: p.image } : undefined, thumbnail: safeUrl(p.image) ? undefined : { url: steamArt(p.appid) },
+        footer: { text: `${p.patch ? "Patch notes" : "Announcement"}  •  Steam news  •  /alerts news to change this` }
+    };
+}
+export function newsPayload(posts, { pager = null } = {}) {
+    const list = posts.filter(p => safeUrl(p.url)).slice(0, 8);
+    if (!list.length) return null;
+    const row = p => ({ type: 1, components: [linkButton("Read the post", safeUrl(p.url))] });
+    const content = list.length === 1 ? `News for ${list[0].gameTitle}` : `${list.length} news posts for your games`;
+    if (pager && list.length > 1) return pagedPayload(pager, { content, pages: list.map(p => ({ embed: newsEmbed(p), rows: [row(p)], label: p.gameTitle })) });
+    return { content, embeds: list.slice(0, 4).map(newsEmbed), components: list.length === 1 ? [row(list[0])] : [] };
+}
 
 /** "Next on Epic": free games that haven't started yet, as one message with a card each. */
 export function epicSoonPayload(games) {

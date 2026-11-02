@@ -1,6 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.05", date: "2026-11-05", title: "Fewer commands, bigger music", items: [
+        "**Patch notes and news:** turn on `/alerts news` (or pick it on the dashboard's Alerts page) and the bot tells you about new patch notes, or every announcement, for the Steam games you own or wishlist. `/me library news` shows the latest right now. Your first check is quiet, so only new posts reach you.",
+        "**Sale countdowns:** alerts, `/me wishlist check` and the weekly digest now say when a sale ends (\"ends in 9 hours\") whenever the store gives an end date.",
+        "**Welcome cards:** the welcome message for new members now comes with a picture card showing their avatar, name and member number. Servers can turn it off with `/manage welcome card:false` or on the dashboard's Community page.",
         "**Coming soon on Epic:** members with free game alerts (and servers with the free game feed) now hear about next week's free Epic games before they start, with the date and time they go live.",
         "**Subscriptions:** the bundle alerts now also tell you when a wishlist game joins a subscription like Game Pass or Prime Gaming, and when it's about to leave one. `/me wishlist check` shows which subscriptions include the game. The same switch as bundle alerts (`/alerts bundles`) controls them.",
         "**Go-live switch:** managers can turn the automatic go-live posts off (and back on) for their server, with the checkbox in the Streams page settings or `/server stream setup auto:`. Linked channels stay linked while it's off.",

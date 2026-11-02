@@ -772,6 +772,7 @@
     const share = h("input", { type: "checkbox", checked: s.share });
     const free = h("input", { type: "checkbox", checked: s.free });
     const freeDlc = h("input", { type: "checkbox", checked: s.free_dlc !== false });
+    const newsMode = select([["0", "Off"], ["1", "Patch notes only"], ["2", "Every announcement"]], String(s.news ?? 0));
     /** Game code and giveaway news alerts: the rows go into "What to tell me about" and are saved with everything else. */
     function codeAlertRows() {
       const box = h("div", {}, h("p", { class: "muted small", text: "Loading game code options…" }));
@@ -795,7 +796,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, min_discount: Number(minDisc.value || 0)
+        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -818,6 +819,7 @@
         h("label", { class: "check" }, bundles, "A wishlist game is in a bundle, is given away, or joins or leaves a subscription (Game Pass and so on)"),
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
+        h("div", { class: "row" }, field("Patch notes and news for the Steam games I own or wishlist", newsMode)),
         codeRows.box),
       h("div", { class: "panel" },
         h("h3", { text: "Quiet hours and weekly digest" }),
@@ -1963,6 +1965,24 @@
       } catch (e) { grabberOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
+    // Patch notes and announcements for the Steam games in the library and on the wishlist, loaded when asked for.
+    function newsPanel() {
+      const out = h("div", { class: "muted small", text: "Patch notes and announcements for the Steam games you play and want. Turn on alerts for them under Alerts." });
+      const go = h("button", { class: "btn blue small", text: "Show the latest" });
+      go.addEventListener("click", () => busy(go, async () => {
+        const d = await api("/api/library/news");
+        if (!d.known) { out.className = "notice warn"; out.textContent = "I don't know any of your Steam games yet. Link Steam on the Steam page or import your wishlist."; return; }
+        if (!d.posts.length) { out.className = "muted small"; out.textContent = "No recent news for your games right now."; return; }
+        out.className = "news-list";
+        out.replaceChildren(...d.posts.map(p => h("a", { class: "news-card" + (p.patch ? " patch" : ""), href: p.url, target: "_blank", rel: "noopener noreferrer" },
+          p.image ? h("img", { src: p.image, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : steamArt(p.appid, "news-art", 120, 56),
+          h("div", { class: "news-text" }, h("div", { class: "news-game", text: (p.patch ? "🛠️ Patch notes · " : "📰 ") + p.game + " · " + new Date(p.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) }),
+            h("div", { class: "news-title", text: p.title }), h("div", { class: "muted small", text: p.summary || "" })))));
+        go.textContent = "Refresh";
+      }));
+      return h("div", { class: "panel" }, h("div", { class: "row" }, h("h3", { text: "News for your games" }), go), out);
+    }
+
     const offered = [];
     const nextOut = h("div");
     const nextBtn = h("button", { class: "btn green", text: "Pick for me", onclick: () => busy(nextBtn, async () => {
@@ -2173,6 +2193,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
+          newsPanel(),
           challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(() => load()), chart, backlogChart || "",
           h("div", { class: "panel" }, libHead, h("div", { class: "library-controls" }, search, statusFilter, sortBy), filterPanel, bar, tableHost));
       } catch (e) { body.className = ""; body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
@@ -3426,9 +3447,9 @@
   const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
 
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
-  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", news: "News and patch notes", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
-  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫", codes: "🔑", promo: "🎟️" };
+  const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", news: "🛠️", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫", codes: "🔑", promo: "🎟️" };
 
   // Alert text is written for Discord (## headings, **bold**, <t:...> times). Show it as plain words on the website.
   function plainDiscord(text) {
@@ -3458,7 +3479,7 @@
           g.image ? h("img", { src: g.image, alt: "", loading: "lazy", width: "120", height: "56", referrerpolicy: "no-referrer", onerror: e => e.currentTarget.remove() }) : h("span", { class: "noimg" }),
           h("div", { class: "note-info" },
             h("div", {}, g.url && /^https:\/\//.test(g.url) ? h("a", { href: g.url, target: "_blank", rel: "noopener noreferrer", text: g.title + " ↗" }) : h("strong", { text: g.title })),
-            h("div", { class: "muted small", text: `${g.price} · -${g.discount}% at ${g.shop}${g.low ? " · all-time low" : ""}` }),
+            h("div", { class: "muted small", text: `${g.price} · -${g.discount}% at ${g.shop}${g.low ? " · all-time low" : ""}${g.ends ? " · ends " + new Date(g.ends).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}` }),
             g.gid ? h("a", { class: "small", href: "#/g/" + encodeURIComponent(g.gid), text: "Price history and details" }) : ""))))); 
     }
     const link = n.url && /^https:\/\//.test(n.url);
@@ -4641,7 +4662,7 @@
         const wCh = chSel(st.welcome_channel), logCh = chSel(st.log_channel), wMsg = h("textarea", { rows: "3", maxlength: "1000", placeholder: st.defaultWelcome }); wMsg.value = st.welcome_msg || "";
         const auto = roSel(st.autorole_id, "No automatic role");
         const welcome = h("div", { class: "panel" }, h("h3", { text: "Welcome new members" }),
-          h("div", { class: "row" }, toggle(st.welcome_on, "/api/community/welcome", "enabled", "Turn off", "Turn on"), toggle(st.welcome_dm, "/api/community/welcome", "dm", "Stop private welcome", "Also send a private welcome"), toggle(st.leave_on, "/api/community/welcome", "leave", "Stop leave notes", "Post a note when someone leaves")),
+          h("div", { class: "row" }, toggle(st.welcome_on, "/api/community/welcome", "enabled", "Turn off", "Turn on"), toggle(st.welcome_dm, "/api/community/welcome", "dm", "Stop private welcome", "Also send a private welcome"), toggle(st.welcome_card !== 0, "/api/community/welcome", "card", "Stop the picture card", "Show a picture card"), toggle(st.leave_on, "/api/community/welcome", "leave", "Stop leave notes", "Post a note when someone leaves")),
           field("Welcome channel", wCh), field("Log channel (joins, who invited them)", logCh), field("Message", wMsg),
           h("p", { class: "muted small", text: "Use " + st.fields.join(" ") + ". Leave empty for the default message." }),
           h("div", { class: "row" }, save("Save welcome", () => post("/api/community/welcome", { channel_id: wCh.value, log_channel_id: logCh.value, message: wMsg.value }))),

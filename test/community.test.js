@@ -1017,3 +1017,26 @@ test("dashboard: emoji packs list, open and import for managers only", async () 
     const done = await t.request("/api/community/emoji-pack", { method: "POST", body: { guild_id: "g1", key: "1-demo", ids: ["11", "12", "999"] } });
     assert.equal(done.status, 200); assert.deepEqual(done.data.added, ["aa", "bb"]);
 });
+
+test("welcome card: the picture is attached when on, the plain welcome goes out when it can't be drawn or is switched off", async () => {
+    const png = Buffer.from("png-bytes");
+    const asked = [];
+    const run = async (renderCard, settings = {}) => {
+        const db = openDb(":memory:"), api = fakeApi();
+        const svc = createCommunity({ db, api, renderCard: async o => { asked.push(o); return renderCard(o); } });
+        db.setCommunity("G", { welcome_channel: "wc", ...settings });
+        await svc.onJoin({ guildId: "G", guildName: "Game Junkies", count: 42, member: { id: "n1", username: "Newbie", avatar: null } });
+        return api.state.sent.find(m => m.id === "wc").p;
+    };
+    const first = await run(async () => png);
+    const msg = first;
+    assert.equal(msg.files[0].name, "welcome.png"); assert.equal(msg.files[0].data, png);
+    assert.equal(msg.embeds[0].image.url, "attachment://welcome.png"); assert.equal(msg.embeds[0].thumbnail, undefined);
+    assert.deepEqual([asked[0].name, asked[0].server, asked[0].count], ["Newbie", "Game Junkies", 42]);
+    const failed = await run(async () => { throw new Error("no fonts"); });
+    const plain = failed;
+    assert.equal(plain.files, undefined); assert.equal(plain.embeds[0].image, undefined);
+    asked.length = 0;
+    const off = await run(async () => png, { welcome_card: 0 });
+    assert.equal(off.files, undefined); assert.equal(asked.length, 0, "not even drawn");
+});

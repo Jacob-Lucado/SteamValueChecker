@@ -1,5 +1,6 @@
 // Slash commands for the community features: /manage community, /server rank, /server levels, /server invites, /manage emoji, and the role-picker buttons.
 // No discord.js import: everything the handlers need comes from the interaction object and the shared REST helper.
+import { renderWelcomeCard } from "./cardimg.js";
 import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
 import { UserError } from "./errors.js";
 import { isHidden } from "./hidden.js";
@@ -58,15 +59,23 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         if (sub === "status") return i.reply({ embeds: [statusEmbed(db, gid, publicUrl, membersIntent())], flags: EPHEMERAL });
         if (sub === "welcome") {
             const o = i.options, patch = {};
-            const on = o.getBoolean("enabled"), ch = o.getChannel("channel"), msg = o.getString("message"), dmOn = o.getBoolean("dm"), leave = o.getBoolean("leave");
+            const on = o.getBoolean("enabled"), ch = o.getChannel("channel"), msg = o.getString("message"), dmOn = o.getBoolean("dm"), leave = o.getBoolean("leave"), card = o.getBoolean("card");
             if (on !== null) patch.welcome_on = on ? 1 : 0;
             if (ch) patch.welcome_channel = ch.id;
             if (msg !== null) patch.welcome_msg = msg.trim() || null;
             if (dmOn !== null) patch.welcome_dm = dmOn ? 1 : 0;
             if (leave !== null) patch.leave_on = leave ? 1 : 0;
+            if (card !== null) patch.welcome_card = card ? 1 : 0;
             const c = Object.keys(patch).length ? db.setCommunity(gid, patch) : db.getCommunity(gid);
             if (o.getBoolean("test")) {
-                const sample = welcomePayload({ settings: c, userId: i.user.id, username: i.user.username, avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }), server: i.guild?.name ?? "the server", count: (i.guild?.memberCount ?? 1), inviterId: null });
+                const sample = welcomePayload({ settings: c, userId: i.user.id, username: i.user.username, avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }), server: i.guild?.name ?? "the server", count: (i.guild?.memberCount ?? 1), inviterId: null, card: c.welcome_card !== 0 });
+                if (c.welcome_card !== 0) {
+                    try {
+                        const png = await renderWelcomeCard({ name: i.user.username, server: i.guild?.name ?? "the server", count: (i.guild?.memberCount ?? 1), avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }) });
+                        return i.reply({ ...sample, content: "This is what a new member sees:", files: [{ attachment: Buffer.from(png), name: "welcome.png" }], flags: EPHEMERAL });
+                    } catch { /* falls back to the plain sample below */ }
+                    return i.reply({ ...welcomePayload({ settings: c, userId: i.user.id, username: i.user.username, avatarUrl: i.user.displayAvatarURL?.({ extension: "png", size: 128 }), server: i.guild?.name ?? "the server", count: (i.guild?.memberCount ?? 1), inviterId: null }), content: "This is what a new member sees:", flags: EPHEMERAL });
+                }
                 return i.reply({ ...sample, content: "This is what a new member sees:", flags: EPHEMERAL });
             }
             const warn = membersIntent() ? "" : "\n⚠️ The bot cannot see new members yet: turn on **Server Members Intent** for the bot in the Discord Developer Portal.";

@@ -151,9 +151,15 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
 
         editMessage: (channelId, messageId, payload) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "PATCH", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
         async sendMessage(channelId, payload) {
-            return call(`/channels/${encodeURIComponent(channelId)}/messages`, {
-                method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload)
-            });
+            const url = `/channels/${encodeURIComponent(channelId)}/messages`;
+            const files = Array.isArray(payload?.files) ? payload.files.filter(f => f?.name && f.data) : [];
+            if (!files.length) return call(url, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+            // Pictures go up as a multipart form: the message as JSON, then each file (the content type is set by the form itself).
+            const { files: _drop, ...rest } = payload;
+            const form = new FormData();
+            form.append("payload_json", JSON.stringify({ ...rest, attachments: files.map((f, n) => ({ id: n, filename: f.name, ...(f.description ? { description: String(f.description).slice(0, 1000) } : {}) })) }));
+            files.forEach((f, n) => form.append(`files[${n}]`, new Blob([f.data], { type: f.contentType ?? "image/png" }), f.name));
+            return call(url, { method: "POST", headers: { ...bot }, body: form });
         }
     };
 }

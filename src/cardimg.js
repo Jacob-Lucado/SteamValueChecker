@@ -273,3 +273,35 @@ export async function renderSteamValue({ db, itad, userId, fetchImpl = fetch }) 
     const avatar = snap.card?.avatar ? await fetchImageDataUri(snap.card.avatar, { fetchImpl }) : null;
     return svgToPng(valueSvg({ stats, currency: snap.currency, link: snap.link, card: snap.card }, { avatar: avatar ?? undefined }));
 }
+
+/** The picture under a welcome message: the new member's avatar, their name and which member they are. `avatar` is a data: URI or null. */
+export function welcomeSvg({ name, server, count, avatar = null, accent = "#ff9800" }) {
+    const n = cut(String(name ?? "friend"), 22), s = cut(String(server ?? "the server"), 34);
+    const size = n.length > 16 ? 64 : n.length > 11 ? 78 : 92, ax = 190, ay = 210, R = 105;
+    const lines = [];
+    for (let x = -420; x < 1300; x += 44) lines.push(`<line x1="${x}" y1="420" x2="${x + 420}" y2="0" stroke="${accent}" stroke-opacity="0.09" stroke-width="2"/>`);
+    const initial = esc([...n][0]?.toUpperCase() ?? "?");
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b1f2a"/><stop offset="1" stop-color="#0b0d12"/></linearGradient>
+<radialGradient id="glow" cx="170" cy="210" r="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${accent}" stop-opacity="0.28"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient>
+<clipPath id="av"><circle cx="${ax}" cy="${ay}" r="${R}"/></clipPath>
+</defs>
+<rect width="1200" height="420" rx="0" fill="url(#bg)"/><rect width="1200" height="420" fill="url(#glow)"/>${lines.join("")}
+<rect x="0" y="0" width="10" height="420" fill="${accent}"/><rect x="0" y="414" width="1200" height="6" fill="${accent}" fill-opacity="0.8"/>
+<circle cx="${ax}" cy="${ay}" r="${R + 12}" fill="#0b0d12"/><circle cx="${ax}" cy="${ay}" r="${R + 7}" fill="${accent}"/>
+${avatar ? `<image href="${avatar}" x="${ax - R}" y="${ay - R}" width="${R * 2}" height="${R * 2}" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
+        : `<circle cx="${ax}" cy="${ay}" r="${R}" fill="#262b38"/><text x="${ax}" y="${ay + 34}" text-anchor="middle" font-size="96" font-weight="700" fill="${accent}">${initial}</text>`}
+<text x="360" y="130" font-size="30" font-weight="600" fill="${accent}" letter-spacing="8">WELCOME</text>
+<text x="358" y="${130 + size + 12}" font-size="${size}" font-weight="700" fill="#ffffff">${esc(n)}</text>
+<text x="360" y="${130 + size + 70}" font-size="36" fill="#c8cedb">to <tspan font-weight="600" fill="#ffffff">${esc(s)}</tspan></text>
+<rect x="360" y="${130 + size + 108}" width="${Math.round(tw("Member #" + count, 28, true)) + 48}" height="52" rx="26" fill="${accent}" fill-opacity="0.16" stroke="${accent}" stroke-width="2"/>
+<text x="${360 + 24}" y="${130 + size + 143}" font-size="28" font-weight="600" fill="#ffffff">Member #${esc(count)}</text>
+</svg>`;
+}
+
+/** The welcome picture as PNG. Falls back to a letter when the avatar can't be fetched. */
+export async function renderWelcomeCard({ name, server, count, avatarUrl = null, fetchImpl = fetch }) {
+    const avatar = avatarUrl ? await fetchImageDataUri(avatarUrl, { fetchImpl }).catch(() => null) : null;
+    return svgToPng(welcomeSvg({ name, server, count, avatar: avatar?.uri ?? avatar ?? null }), 1000);
+}

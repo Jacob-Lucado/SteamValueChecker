@@ -210,7 +210,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "digest", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "digest_day", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "last_digest_at", "INTEGER");
+    addColumn("community", "welcome_card", "INTEGER NOT NULL DEFAULT 1");
     addColumn("users", "bundles", "INTEGER NOT NULL DEFAULT 1");
+    addColumn("users", "news", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE INDEX IF NOT EXISTS users_guild ON users(guild_id, share)");
@@ -320,7 +322,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -384,6 +386,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const clearAlerted = itemId => run("UPDATE items SET last_alert_price = NULL WHERE id = ?", itemId);
 
     const freeUsers = () => all("SELECT * FROM users WHERE free = 1 AND paused = 0").map(clean);
+    const newsUsers = () => all("SELECT * FROM users WHERE news > 0 AND paused = 0").map(clean);
     const digestUsers = () => all("SELECT * FROM users WHERE digest = 1 AND paused = 0").map(clean);
 
     /** Everything the poller needs: items of users who have not paused alerts. */
@@ -724,7 +727,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
-        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, setGuildChannel, getGuild, clearGuildChannel,
+        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,

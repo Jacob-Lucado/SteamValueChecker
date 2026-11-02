@@ -9,7 +9,8 @@ import { isDlc } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
-import { epicSoonPayload } from "./render.js";
+import { epicSoonPayload, newsPayload } from "./render.js";
+import { isPatchNote } from "./news.js";
 import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
 import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
@@ -496,6 +497,57 @@ export async function runEpicSoon({ db, soon, notifier, now = () => Date.now(), 
         if (!payload || !(await notifier.postGuild(guild.guild_id, payload, "free"))) continue;
         for (const g of fresh.slice(0, 4)) db.guildMarkSeen(guild.guild_id, `epicsoon:${g.id}`);
         stats.guilds++;
+    }
+    return stats;
+}
+
+
+/**
+ * Patch notes and announcements for the games members own or wish for (Steam games only). A member's first look is quiet,
+ * posts older than two weeks are never sent, and each post is told once. Members pick "patch notes only" or "everything".
+ */
+export async function runNews({ db, news, notifier, now = () => Date.now(), log = () => {} }) {
+    const stats = { found: 0, delivered: 0, failed: 0, deferred: 0 };
+    const users = db.newsUsers();
+    if (!users.length) return stats;
+    const games = new Map(); // appid -> title, per member
+    const mine = new Map(), popularity = new Map();
+    for (const u of users) {
+        const own = new Map();
+        const lib = db.listLibrary(u.discord_id).filter(g => Number.isInteger(g.appid)).sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0) || (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 40);
+        for (const g of lib) own.set(g.appid, g.title);
+        for (const it of db.listItems(u.discord_id).filter(i => Number.isInteger(i.appid)).slice(0, 30)) own.set(it.appid, it.title);
+        mine.set(u.discord_id, own);
+        for (const [id, t] of own) { games.set(id, t); popularity.set(id, (popularity.get(id) ?? 0) + 1); }
+    }
+    const wanted = [...popularity].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+    let feed;
+    try { feed = await news.forApps(wanted); } catch (err) { log(`news lookup failed: ${err.code ?? err.name}`); return stats; }
+    const recent = now() - 14 * 86400_000;
+    for (const user of users) {
+        const first = !db.hasSeen(user.discord_id, "newsstart");
+        const hits = [];
+        for (const [appid, title] of mine.get(user.discord_id) ?? []) {
+            for (const p of feed.get(appid) ?? []) {
+                if (p.date < recent || db.hasSeen(user.discord_id, `news:${p.gid}`)) continue;
+                if (first) { db.markSeen(user.discord_id, `news:${p.gid}`); continue; }
+                if (user.news === 1 && !p.patch) continue;
+                hits.push({ ...p, gameTitle: title });
+            }
+        }
+        if (first) db.markSeen(user.discord_id, "newsstart");
+        if (!hits.length) continue;
+        hits.sort((a, b) => b.date - a.date);
+        stats.found += hits.length;
+        if (isQuiet(user, now())) { stats.deferred += hits.length; continue; }
+        const part = hits.slice(0, 8);
+        const payload = newsPayload(part, { pager: db });
+        if (!payload) continue;
+        const res = await notifier.deliver(user, payload, "news");
+        if (!res.ok) { stats.failed += part.length; continue; }
+        stats.delivered += part.length;
+        for (const p of part) db.markSeen(user.discord_id, `news:${p.gid}`);
+        db.logAlert({ discord_id: user.discord_id, title: `${part[0].gameTitle}${part.length > 1 ? ` +${part.length - 1} more` : ""}`, kind: "news", price: 0, shop: "Steam news", via: res.via });
     }
     return stats;
 }

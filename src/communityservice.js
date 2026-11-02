@@ -7,7 +7,7 @@ import { isHidden } from "./hidden.js";
 export const BETA_ROLE = "Beta Tester", BETA_COLOR = 0x2ecc71;
 const avatarOf = u => (u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null);
 
-export function createCommunity({ db, api, dm = null, dashboardUrl = null, ownerId = null, now = () => Date.now(), rng = Math.random }) {
+export function createCommunity({ db, api, dm = null, dashboardUrl = null, ownerId = null, now = () => Date.now(), rng = Math.random, renderCard = null }) {
     const bump = (guildId, key) => { if (!isHidden(guildId)) db.bumpUsage(key); }; // feature counters never include a hidden test server
     const last = new Map();          // `${guild}:${user}` -> last time XP was earned from a message
     const invites = new Map();       // guildId -> Map(code -> { uses, maxUses, inviterId })
@@ -104,7 +104,11 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         }
         if (c.welcome_on && c.welcome_channel) {
             bump(guildId, "welcomes");
-            await api.sendMessage(c.welcome_channel, welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId })).catch(() => {});
+            let png = null;
+            if (c.welcome_card !== 0 && renderCard) { try { png = await renderCard({ name: member.username, server: guildName, count, avatarUrl: avatarOf(member) }); } catch { /* the plain welcome still goes out */ } }
+            const payload = welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId, card: Boolean(png) });
+            if (png) payload.files = [{ name: "welcome.png", data: png, description: `Welcome ${member.username}, member number ${count}` }];
+            await api.sendMessage(c.welcome_channel, payload).catch(() => api.sendMessage(c.welcome_channel, welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId })).catch(() => {}));
         }
         if (c.welcome_dm && dm && !rejoin) { bump(guildId, "welcome_dms"); await dm(member.id, welcomeDmPayload({ server: guildName, dashboardUrl })).catch(() => bump(guildId, "welcome_dm_failed")); }
         if (c.log_channel) await api.sendMessage(c.log_channel, { content: `📥 <@${member.id}> joined (member #${count}).${via ? ` Invite \`${via.code}\`${inviterId ? ` from <@${inviterId}>` : ""}.${beta ? " Given the Beta Tester role." : ""}` : " The invite could not be told."}`, allowed_mentions: { parse: [] } }).catch(() => {});

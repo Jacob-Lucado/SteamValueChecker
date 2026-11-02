@@ -1892,3 +1892,17 @@ test("streams: only streamers, mods and managers get the overlay and go-live; an
         assert.equal((await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-admin", live_channel: "nope" } })).status, 400);
     } finally { await o.close(); }
 });
+
+test("library news: your games' latest posts, and a clear answer when no Steam games are known", async () => {
+    const posts = [{ gid: "5", appid: 1245620, title: "Patch 1.2", date: Date.now() - 3600_000, summary: "Fixes.", patch: true, url: "https://store.steampowered.com/news/app/1245620/view/5", image: null }];
+    const t = await setup({ extra: { news: { forApps: async ids => new Map(ids.map(id => [id, posts])), health: () => ({}) } } });
+    await t.signIn();
+    const none = await t.request("/api/library/news");
+    assert.equal(none.status, 200); assert.deepEqual(none.data, { known: false, posts: [] });
+    t.db.syncSteamGames("u1", [{ itad_id: "id-elden", title: "Elden Ring", appid: 1245620, minutes: 5, lastPlayed: 1790000000 }]);
+    t.advance(5000);
+    const got = await t.request("/api/library/news");
+    assert.equal(got.data.known, true); assert.deepEqual(got.data.posts.map(p => [p.game, p.title, p.patch]), [["Elden Ring", "Patch 1.2", true]]);
+    assert.equal((await t.request("/api/library/news")).status, 429, "cooldown");
+    await t.close();
+});
