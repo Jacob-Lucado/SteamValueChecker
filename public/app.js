@@ -610,98 +610,130 @@
       loadList();
     }) });
 
+    // ----- the list: filter toolbar and cards, laid out like the For you page -----
+    const W = { sort: "sale", sale: false, prio: false, hideOwned: false, q: "", page: 0 };
+    const PER = 24; let data = null; const picked = new Set();
+    const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label, "aria-pressed": String(on) }); b.addEventListener("click", fn); return b; };
+    const sorters = { sale: null, cut: (a, b) => b.discount - a.discount, price: (a, b) => (a.best?.price ?? Infinity) - (b.best?.price ?? Infinity), name: (a, b) => a.title.localeCompare(b.title) };
+    const listBox = h("div"), drawers = h("div");
+    const drawer = (title, ...kids) => h("div", { class: "wl-drawer panel", hidden: true }, h("h3", { text: title }), h("div", { class: "wl-drawer-body" }, ...kids));
+    const importDrawer = drawer("Import from Steam",
+      linked ? h("p", { class: "muted small", text: "Uses the Steam account you signed in with. Your wishlist must be public (Steam Profile > Edit Profile > Privacy Settings > Game details). Run it again to sync." })
+        : h("p", { class: "muted small", text: "Sign in through Steam once and the bot knows your account everywhere. No links to paste." }),
+      h("div", { class: "row" }, linked ? importBtn : steamLoginBtn()),
+      linked ? null : h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Profile", profile), importBtn));
+    const addDrawer = drawer("Add a game", field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField),
+      h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("div", { class: "row" }, addBtn));
+
+    function draw() {
+      const cur = data.currency, rows = data.rows;
+      const q = W.q.trim().toLowerCase();
+      let list = rows.filter(r => (!W.sale || r.discount > 0) && (!W.prio || r.priority) && (!W.hideOwned || !r.owned) && (!q || r.title.toLowerCase().includes(q)));
+      if (sorters[W.sort]) list = [...list].sort(sorters[W.sort]);
+      const pages = Math.max(1, Math.ceil(list.length / PER));
+      W.page = Math.min(W.page, pages - 1);
+      const sort = select([["sale", "Sales first"], ["cut", "Biggest discount"], ["price", "Lowest price"], ["name", "Name (A-Z)"]], W.sort);
+      sort.addEventListener("change", () => { W.sort = sort.value; W.page = 0; draw(); });
+      const search = h("input", { type: "search", class: "wl-search", placeholder: "Search your wishlist", value: W.q, "aria-label": "Search your wishlist", maxlength: "60" });
+      search.addEventListener("input", () => { W.q = search.value; W.page = 0; const pos = search.selectionStart; draw(); const s2 = listBox.parentElement.querySelector(".wl-search"); if (s2) { s2.focus(); s2.setSelectionRange(pos, pos); } });
+      const set = (k, v) => () => { W[k] = v; W.page = 0; draw(); };
+      const onSale = rows.filter(r => r.discount > 0 && !r.owned).length, ownedN = rows.filter(r => r.owned).length;
+
+      const allRule = h("div", { class: "rule inline" }, ...ruleControl({ type: "any" }, async (type, value) => {
+        const r = await api("/api/wishlist/alert", { type, value });
+        toast(`${r.updated} games will now alert on: ${r.label}.`, "ok"); loadList();
+      }, "Apply to all"));
+      const count = h("span", { class: "muted small", text: picked.size + " selected" });
+      const bulkRule = h("div", { class: "rule inline" }, ...ruleControl({ type: "any" }, async (type, value) => {
+        if (!picked.size) throw new Error("Select at least one game first.");
+        const r = await api("/api/wishlist/bulk", { action: "alert", itad_ids: [...picked], type, value });
+        toast(`${r.updated} games will alert on: ${r.label}.`, "ok"); loadList();
+      }, "Apply to selected"));
+      const removeSel = h("button", { class: "btn red small", type: "button", text: "Remove selected" });
+      removeSel.addEventListener("click", () => busy(removeSel, async () => {
+        if (!picked.size) throw new Error("Select at least one game first.");
+        const r = await api("/api/wishlist/bulk", { action: "remove", itad_ids: [...picked] });
+        state.me.games -= r.removed; picked.clear(); toast(`Removed ${r.removed} games.`, "ok"); loadList();
+      }));
+      const selectAll = h("input", { type: "checkbox", "aria-label": "Select every game shown" });
+      selectAll.checked = list.length > 0 && list.every(r => picked.has(r.itad_id));
+      selectAll.addEventListener("change", () => { for (const r of list) { if (selectAll.checked) picked.add(r.itad_id); else picked.delete(r.itad_id); } draw(); });
+      const cleanBtn = h("button", { class: "btn gray small", type: "button", text: "Remove them" });
+      cleanBtn.addEventListener("click", () => busy(cleanBtn, async () => { const c = await api("/api/wishlist/cleanup", {}); state.me.games -= c.removed; toast(`Removed ${c.removed} owned game${c.removed === 1 ? "" : "s"}.`, "ok"); loadList(); }));
+
+      const prev = h("button", { class: "pg-btn wide", type: "button", text: "‹ Prev", onclick: () => { W.page--; draw(); listBox.scrollIntoView({ block: "start" }); } }); prev.disabled = W.page === 0;
+      const next = h("button", { class: "pg-btn wide", type: "button", text: "Next ›", onclick: () => { W.page++; draw(); listBox.scrollIntoView({ block: "start" }); } }); next.disabled = W.page >= pages - 1;
+      listBox.replaceChildren(
+        ownedN ? h("div", { class: "notice" }, `${ownedN} game${ownedN === 1 ? " is" : "s are"} already in your library. `, cleanBtn) : null,
+        h("div", { class: "panel fy-filters" },
+          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Sort" }), sort, search),
+          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Show" }), chip("On sale now", W.sale, set("sale", !W.sale)), chip("Priority", W.prio, set("prio", !W.prio)), chip("Hide owned", W.hideOwned, set("hideOwned", !W.hideOwned)))),
+        h("p", { class: "muted small", text: `${list.length} of ${rows.length} game${rows.length === 1 ? "" : "s"} · ${onSale} on sale right now` }),
+        list.length ? h("div", { class: "fy-grid wl-grid" }, ...list.slice(W.page * PER, (W.page + 1) * PER).map(r => wishCard(r, cur, loadList, (id, on) => { if (on) picked.add(id); else picked.delete(id); count.textContent = picked.size + " selected"; }, picked.has(r.itad_id)))) : h("div", { class: "empty", text: "No games match those filters." }),
+        pages > 1 ? h("div", { class: "lib-pager" }, h("div", { class: "pg-nav" }, prev, h("span", { class: "muted small", text: `Page ${W.page + 1} of ${pages}` }), next)) : null,
+        h("details", { class: "wl-drawer panel" }, h("summary", { text: "Alert rules and bulk edit" }),
+          h("div", { class: "wl-drawer-body" }, h("h4", { text: "One rule for every game" }), allRule,
+            h("h4", { text: "Several games at once" }), h("div", { class: "rule inline" }, h("label", { class: "check" }, selectAll, "Select all shown"), count, bulkRule, removeSel))));
+    }
     async function loadList() {
       try {
-        const data = await api("/api/wishlist");
-        if (!data.rows.length) { list.replaceChildren(h("div", { class: "empty", text: "Your wishlist is empty. Import your Steam wishlist or add a game above." })); list.className = ""; return; }
-        list.className = "";
-        const cur = data.currency;
-        const all = h("div", { class: "panel" }, h("h3", { text: "Alert rule for every game" }),
-          h("div", { class: "rule inline" }, ...ruleControl({ type: "any" }, async (type, value) => {
-            const r = await api("/api/wishlist/alert", { type, value });
-            toast(`${r.updated} games will now alert on: ${r.label}.`, "ok");
-            loadList();
-          }, "Apply to all")));
-        const picked = new Set();
-        const count = h("span", { class: "muted small", text: "0 selected" });
-        const sync = () => { count.textContent = picked.size + " selected"; };
-        const bulkRule = h("div", { class: "rule inline" }, ...ruleControl({ type: "any" }, async (type, value) => {
-          if (!picked.size) throw new Error("Select at least one game first.");
-          const r = await api("/api/wishlist/bulk", { action: "alert", itad_ids: [...picked], type, value });
-          toast(`${r.updated} games will alert on: ${r.label}.`, "ok"); loadList();
-        }, "Apply to selected"));
-        const removeSel = h("button", { class: "btn red small", text: "Remove selected" });
-        removeSel.addEventListener("click", () => busy(removeSel, async () => {
-          if (!picked.size) throw new Error("Select at least one game first.");
-          const r = await api("/api/wishlist/bulk", { action: "remove", itad_ids: [...picked] });
-          state.me.games -= r.removed; toast(`Removed ${r.removed} games.`, "ok"); loadList();
-        }));
-        const rows = data.rows.map(r => wishRow(r, cur, loadList, (id, on) => { if (on) picked.add(id); else picked.delete(id); sync(); }));
-        const selectAll = h("input", { type: "checkbox", "aria-label": "Select all games" });
-        selectAll.addEventListener("change", () => {
-          rows.forEach(el => { const c = el.querySelector("input.pick"); if (c.checked !== selectAll.checked) c.click(); });
-        });
-        const bulk = h("div", { class: "panel" }, h("h3", { text: "Several games at once" }),
-          h("div", { class: "rule inline" }, h("label", { class: "check" }, selectAll, "Select all"), count, bulkRule, removeSel));
-        const ownedN = data.rows.filter(r => r.owned).length;
-        const cleanBtn = h("button", { class: "btn gray small", text: "Remove them" });
-        cleanBtn.addEventListener("click", () => busy(cleanBtn, async () => { const c = await api("/api/wishlist/cleanup", {}); state.me.games -= c.removed; toast(`Removed ${c.removed} owned game${c.removed === 1 ? "" : "s"}.`, "ok"); loadList(); }));
-        const cleanup = ownedN ? h("div", { class: "notice" }, `${ownedN} game${ownedN === 1 ? " is" : "s are"} already in your library. `, cleanBtn) : "";
-        list.replaceChildren(cleanup, all, bulk, ...rows);
-      } catch (e) {
-        list.className = "";
-        list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
-      }
+        data = await api("/api/wishlist");
+        if (!data.rows.length) { listBox.replaceChildren(h("div", { class: "empty", text: "Your wishlist is empty. Import your Steam wishlist or add a game above." })); return; }
+        draw();
+      } catch (e) { listBox.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
     app.replaceChildren(
       pageHead("Wishlist", "Sales first. You are alerted according to each game's rule."),
-      h("div", { class: "grid two" },
-        h("div", { class: "panel" }, h("h3", { text: "Import from Steam" }),
-          linked ? h("p", { class: "muted", text: "Uses the Steam account you signed in with. Your wishlist must be public (Steam Profile > Edit Profile > Privacy Settings > Game details). Run it again to sync." })
-            : h("p", { class: "muted", text: "Sign in through Steam once and the bot knows your account everywhere. No links to paste." }),
-          h("div", { class: "row" }, linked ? importBtn : steamLoginBtn()),
-          linked ? null : h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Profile", profile), importBtn)),
-        h("div", { class: "panel" }, h("h3", { text: "Add a game" }), field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField), h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("p", {}), addBtn)),
-      list);
-    loadList();
+      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; } })),
+      importDrawer, addDrawer,
+      listBox);
+    listBox.className = "muted"; listBox.textContent = "Loading prices…";
+    loadList().then(() => { listBox.className = ""; });
   }
 
-  function wishRow(r, cur, reload, onPick) {
-    const best = r.best;
-    const sale = r.discount > 0;
-    const pct = Math.round(r.discount * 100);
-    const remove = h("button", { class: "btn red small", text: "Remove" });
+  function wishCard(r, cur, reload, onPick, isPicked) {
+    const sale = r.discount > 0, pct = Math.round(r.discount * 100), best = r.best;
+    const remove = h("button", { class: "btn red small", type: "button", text: "Remove" });
     remove.addEventListener("click", () => busy(remove, async () => { await api("/api/wishlist/remove", { itad_id: r.itad_id }); state.me.games--; reload(); }));
-    const snooze = h("button", { class: "btn gray small", text: "Snooze 7d", title: "No alerts for this game for 7 days" });
+    const snooze = h("button", { class: "btn gray small", type: "button", text: "Snooze 7 days", title: "No alerts for this game for 7 days" });
     snooze.addEventListener("click", () => busy(snooze, async () => { await api("/api/wishlist/snooze", { itad_id: r.itad_id, days: 7 }); toast("Snoozed for 7 days.", "ok"); }));
-    const chartHolder = h("div", { class: "wide" });
-    const hist = h("button", { class: "btn gray small", text: "Price history" });
+    const chartHolder = h("div", { class: "wl-chart" });
+    const hist = h("button", { class: "btn gray small", type: "button", text: "Price history" });
     hist.addEventListener("click", () => {
       if (chartHolder.firstChild) { chartHolder.replaceChildren(); return; }
       busy(hist, async () => {
         const d = await api("/api/wishlist/history?itad_id=" + encodeURIComponent(r.itad_id));
         if (!d.points.length) { chartHolder.replaceChildren(h("p", { class: "muted small", text: "No price history yet." })); return; }
-        chartHolder.replaceChildren(d.advice ? h("div", { class: "notice " + (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "warn") }, h("b", { text: (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "") + "Buy now or wait? " + d.advice.label + ". " }), d.advice.reasons.join(" ")) : "",
+        chartHolder.replaceChildren(d.advice ? h("div", { class: "notice " + (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "warn") }, h("b", { text: "Buy now or wait? " + d.advice.label + ". " }), d.advice.reasons.join(" ")) : null,
           h("p", { class: "muted small", text: "Lowest store price over the last year, " + r.title }),
           lineChart([{ name: "Price", cls: "s0", points: d.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }));
       });
     });
-    const star = h("button", { class: "btn gray small", text: r.priority ? "Priority" : "Priority", title: "Priority games are listed first and alert even in quiet hours", "aria-pressed": String(Boolean(r.priority)) });
+    const star = h("button", { class: "btn gray small", type: "button", text: r.priority ? "★ Priority" : "☆ Priority", title: "Priority games are listed first and alert even in quiet hours", "aria-pressed": String(Boolean(r.priority)) });
     star.addEventListener("click", () => busy(star, async () => { await api("/api/wishlist/priority", { itad_id: r.itad_id, starred: !r.priority }); reload(); }));
-    const pick = h("input", { type: "checkbox", class: "pick", "aria-label": "Select " + r.title });
+    const pick = h("input", { type: "checkbox", class: "pick", "aria-label": "Select " + r.title }); pick.checked = Boolean(isPicked);
     pick.addEventListener("change", () => onPick && onPick(r.itad_id, pick.checked));
-    return h("div", { class: "wish" + (sale ? " sale" : "") },
-      h("div", {}, h("div", { class: "name" }, pick, " ", r.priority ? "" : "", h("a", { href: "#/g/" + r.itad_id, class: "game-link", text: r.title }), " ", verdictBadge(r.verdict), r.owned ? h("span", { class: "badge none", text: "Owned" }) : ""), h("div", { class: "meta", text: `${r.source === "steam" ? "From Steam" : "Added by hand"} · alert: ${r.alert}${r.atl !== null ? " · all-time low " + money(r.atl, cur) : ""}${r.release_at ? " · releases " + new Date(r.release_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " (you will be told)" : ""}` })),
-      h("div", { class: "price-box" },
-        h("span", { class: "badge" + (sale ? "" : " none"), text: sale ? "-" + pct + "%" : "–" }),
-        sale && r.regular !== null && h("span", { class: "was", text: money(r.regular, cur) }),
-        h("span", { class: "now", text: best ? money(best.price, cur) : "no price" }),
-        best && h("span", { class: "muted small", text: best.shop })),
+    const more = h("div", { class: "wl-more", hidden: true },
       h("div", { class: "rule" }, ...ruleControl({ type: r.trigger_type, value: r.trigger_value }, async (type, value) => {
-        await api("/api/wishlist/alert", { itad_id: r.itad_id, type, value });
-        toast("Rule saved.", "ok"); reload();
-      }), star, snooze, hist, remove), chartHolder);
+        await api("/api/wishlist/alert", { itad_id: r.itad_id, type, value }); toast("Rule saved.", "ok"); reload();
+      })),
+      h("div", { class: "wl-btns" }, star, snooze, hist, remove), chartHolder);
+    const toggle = h("button", { class: "wl-toggle", type: "button", "aria-expanded": "false", "aria-label": "Alert rule and actions for " + r.title, text: "⋯" });
+    const card = h("div", { class: "wl-card" + (sale && !r.owned ? " sale" : "") });
+    toggle.addEventListener("click", () => { const open = more.hidden; more.hidden = !open; card.classList.toggle("open", open); toggle.setAttribute("aria-expanded", String(open)); });
+    card.append(
+      h("div", { class: "wl-main" },
+        h("label", { class: "wl-pick" }, pick),
+        steamArt(r.appid, "fy-art", 460, 215, r.itad_id),
+        h("div", { class: "fy-info" },
+          h("a", { href: "#/g/" + r.itad_id, class: "fy-title game-link", text: r.title }),
+          h("span", { class: "muted small", text: [best?.shop, r.alert].filter(Boolean).join(" · ") }),
+          h("span", { class: "wl-tags" }, verdictBadge(r.verdict), r.owned ? h("span", { class: "badge none", text: "Owned" }) : null, r.priority ? h("span", { class: "badge none", text: "★ Priority" }) : null, r.release_at ? h("span", { class: "badge none", text: "Out " + new Date(r.release_at).toLocaleDateString() }) : null)),
+        h("div", { class: "fy-price" }, sale ? h("span", { class: "fy-cut", text: "-" + pct + "%" }) : null, h("b", { class: sale ? "" : "wl-flat", text: best ? money(best.price, cur) : "no price" }), sale && r.regular !== null ? h("s", { text: money(r.regular, cur) }) : null),
+        toggle),
+      more);
+    return card;
   }
 
   // ---------- alerts ----------
