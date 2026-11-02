@@ -7,6 +7,7 @@ import {
 } from "discord.js";
 import { loadConfig } from "./config.js";
 import { createItad, ItadError } from "./itad.js";
+import { createLuna, withLuna } from "./luna.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
@@ -94,7 +95,7 @@ const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../packag
 // Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
 const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey] });
 logs.capture();
-const itad = createItad({ apiKey: cfg.itadKey });
+const itad = withLuna(createItad({ apiKey: cfg.itadKey }), createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) }));
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
 const MEMBERS_INTENT = await (async () => {

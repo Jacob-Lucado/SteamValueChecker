@@ -297,6 +297,7 @@ branding/       Logo and banner
 - **Steam wishlist import is untested against live Steam.** It uses Steam's `IWishlistService/GetWishlist` endpoint, which needs only a public profile. If Steam changes it, import fails with an error and manual `/me wishlist add` still works.
 - Alerts are best effort and run on a schedule, so a short sale can be missed.
 - **Bundle, giveaway and price-history features use ITAD endpoints that have only been tested against fake responses**, like the rest of the live API calls. If ITAD changes a response, those features fail quietly and the rest keeps working.
+- **Amazon Luna claims** come from Luna's own claims page, which has no API: a headless Chromium (installed in the Docker image, path in `LUNA_CHROMIUM`) opens it for a few seconds every two hours and reads the games the page loads. If Luna changes the page the games just stop appearing; the other stores are unaffected. Set `LUNA_CLAIMS=off` to switch it off.
 - **Free game alerts show whatever IsThereAnyDeal lists as a giveaway.** Whether that includes every Steam free-to-keep promotion is unverified. The buttons open the store page: the bot cannot claim for you, because that needs your store login.
 - The leaderboard ranks by percent saved, because members shop in different currencies.
 - The ITAD endpoints and field names follow ITAD's public documentation. If ITAD changes its API, the table shows `-` for fields it can't find.
