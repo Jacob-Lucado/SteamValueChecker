@@ -1843,6 +1843,7 @@ test("streams: only streamers, mods and managers get the overlay and go-live; an
         assert.equal((await o.request("/api/music/overlay?guild=g-member")).status, 403);
         assert.equal((await o.request("/api/music/overlay", { method: "POST", body: { guild_id: "g-member", action: "create" } })).status, 403);
         assert.equal((await o.request("/api/streams/live", { method: "POST", body: { guild_id: "g-member", url: "https://twitch.tv/x", title: "t" } })).status, 403);
+        assert.equal((await o.request("/api/streams/link", { method: "POST", body: { guild_id: "g-member", channel: "https://twitch.tv/abc" } })).status, 403, "a plain member can't link a channel");
         assert.equal((await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-member", live_channel: "c2" } })).status, 403, "settings are for managers");
 
         let page = (await o.request("/api/streams?guild=g-member")).data;
@@ -1862,6 +1863,16 @@ test("streams: only streamers, mods and managers get the overlay and go-live; an
         assert.equal((await o.request("/api/streams/live", { method: "POST", body: { guild_id: "g-member", url: "javascript:alert(1)" } })).status, 400);
         page = (await o.request("/api/streams?guild=g-member")).data; assert.equal(page.live.length, 1); assert.equal(page.live[0].mine, true);
         assert.equal((await o.request("/api/streams/end", { method: "POST", body: { guild_id: "g-member" } })).status, 200);
+
+        // linking a channel so the bot posts by itself: streamers only, real channel links only
+        const link = body => { o.advance(3_000); return o.request("/api/streams/link", { method: "POST", body: { guild_id: "g-member", ...body } }); };
+        assert.equal((await link({ channel: "https://evil.example/x" })).status, 400);
+        assert.equal((await link({ channel: "https://twitch.tv/directory" })).status, 400);
+        const linked = await link({ channel: "https://www.twitch.tv/Jacob_TV" });
+        assert.equal(linked.status, 200); assert.deepEqual(linked.data.link, { platform: "twitch", handle: "jacob_tv", url: "https://twitch.tv/jacob_tv" });
+        assert.equal(o.db.getStreamLink("g-member", "u1").via, "role");
+        page = (await o.request("/api/streams?guild=g-member")).data; assert.equal(page.link.handle, "jacob_tv"); assert.equal(typeof page.watch.twitch, "boolean");
+        assert.equal((await o.request("/api/streams/unlink", { method: "POST", body: { guild_id: "g-member" } })).status, 200); assert.ok(!o.db.getStreamLink("g-member", "u1"));
 
         // managers (g-admin) always can, and can change the settings
         assert.equal((await o.request("/api/music?guild=g-admin")).data.access.canStream, true);

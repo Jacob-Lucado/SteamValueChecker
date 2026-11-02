@@ -38,7 +38,7 @@ export function createStreams({ db, api, now = () => Date.now() }) {
     const settings = guildId => db.getCommunity(guildId);
 
     /** `who` is { id, name, avatarUrl }. Returns { posted, pinged }. */
-    async function goLive(guildId, who, { title, url, game = null }) {
+    async function goLive(guildId, who, { title, url, game = null, auto = false }) {
         const c = settings(guildId);
         if (!c.live_channel) throw new UserError("This server has no stream channel yet. A manager can pick one with `/server stream setup` or on the dashboard's Streams page.");
         const link = cleanStreamUrl(url);
@@ -55,7 +55,7 @@ export function createStreams({ db, api, now = () => Date.now() }) {
             catch (e) { if (e?.status === 403 || e?.status === 404) throw new UserError("I can't post in the stream channel. Give me View Channel, Send Messages and Embed Links there."); throw e; }
             messageId = m?.id ?? null;
         }
-        db.setStreamLive(guildId, who.id, { title: t, url: link, game: g, started: existing?.started ?? now(), channelId: c.live_channel, messageId });
+        db.setStreamLive(guildId, who.id, { title: t, url: link, game: g, started: existing?.started ?? now(), channelId: c.live_channel, messageId, auto });
         if (ping) db.markStreamPing(guildId, who.id, now());
         return { posted: true, pinged: ping, edited: Boolean(existing), channelId: c.live_channel };
     }

@@ -269,6 +269,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "lb_hours", "INTEGER NOT NULL DEFAULT 5");
     addColumn("community", "lb_at", "INTEGER");
     for (const c of ["streamer_role_id", "live_channel", "ping_stream", "meme_channel"]) addColumn("community", c, "TEXT");
+    addColumn("stream_live", "auto", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "meme_on", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_hours", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_at", "INTEGER");
     for (const c of ["ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_promos"]) addColumn("community", c, "TEXT");
     addColumn("promo_codes", "added_at", "INTEGER");
@@ -691,7 +692,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             tickets.deleteUserTickets(discordId);
             requests.forgetRequestUser(discordId);
             community.forgetCommunityUser(discordId);
-            for (const t of ["stream_live", "stream_pinged", "stream_overlay"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
+            for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");

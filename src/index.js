@@ -20,6 +20,7 @@ import { pagedPayload, handlePager, tokenOf, PAGE_PREFIX, JUMP_PREFIX } from "./
 import { legacyRoute, SERVER_ONLY_LEGACY } from "./commands.js";
 import { createStreams } from "./streamlive.js";
 import { createStreamHandlers } from "./streamhandlers.js";
+import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
 import { UserError } from "./errors.js";
@@ -137,7 +138,11 @@ const modUi = createModHandlers({ db, mod: moderation });
 const streams = createStreams({ db, api: botRest });
 const memes = createMemes();
 const memeUi = createMemeHandlers({ db, api: botRest, memes });
-const streamUi = createStreamHandlers({ db, streams, ownerId: cfg.ownerId, publicUrl: cfg.dashboard?.publicUrl ?? null });
+const streamSites = watchable(process.env);
+const streamWatch = createStreamWatch({ db, streams, api: botRest, log: m => console.log(`[stream watch] ${m}`),
+    // someone who linked as a role-holder must still hold the streamer or moderator role
+    access: async l => { if (l.via !== "role") return true; const c = db.getCommunity(l.guild_id); const m = await botRest.getMember(l.guild_id, l.user_id).catch(() => null); if (!m) return true; return Boolean((c.streamer_role_id && m.roles?.includes(c.streamer_role_id)) || (c.mod_role_id && m.roles?.includes(c.mod_role_id))); } });
+const streamUi = createStreamHandlers({ db, streams, ownerId: cfg.ownerId, publicUrl: cfg.dashboard?.publicUrl ?? null, canWatch: p => Boolean(streamSites[p]) });
 const communityUi = createCommunityHandlers({ db, api: botRest, service: community, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
 // Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).
 const voiceMap = guildId => {
@@ -405,6 +410,11 @@ client.once(Events.ClientReady, () => { status.start(); registerLinkedRoles(botR
 client.once(Events.ClientReady, () => { // refresh each server's #leaderboard when it is due
     const tick = () => tickLeaderboards({ db, api: botRest, base: publicBase, has: id => client.guilds.cache.has(id), log: m => console.log(`[leaderboard] ${m}`) }).catch(() => {});
     setTimeout(tick, 60_000).unref?.(); setInterval(tick, 10 * 60_000).unref?.();
+});
+client.once(Events.ClientReady, () => { // notice when linked streamers go live or finish
+    let busy = false;
+    const tick = () => { if (busy) return; busy = true; streamWatch.tick().catch(e => console.log(`[stream watch] ${e.message}`)).finally(() => { busy = false; }); };
+    setTimeout(tick, 75_000).unref?.(); setInterval(tick, CHECK_EVERY_MS).unref?.();
 });
 client.once(Events.ClientReady, () => { // post a meme in every server whose timer is up (checked every five minutes)
     let busy = false;

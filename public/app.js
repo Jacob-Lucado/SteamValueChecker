@@ -4787,13 +4787,37 @@
 
   // ---------- server XP: leaderboard, your card, level rewards, how XP works, and the prize shop teaser ----------
   // ---------- streams: go live, pings, and the streamer settings ----------
+  /** Loads the shared stream-overlay panel (public/overlayui.js and .css) once. */
+  const overlayAssets = (() => {
+    let p = null;
+    const load = (tag, attrs) => new Promise((res, rej) => { const e = document.createElement(tag); Object.assign(e, attrs); e.onload = res; e.onerror = rej; document.head.append(e); });
+    return () => (p ??= Promise.all([window.SvcOverlayPanel ? 0 : load("script", { src: "/overlayui.js" }), document.querySelector('link[href="/overlayui.css"]') ? 0 : load("link", { rel: "stylesheet", href: "/overlayui.css" })]).catch(e => { p = null; throw e; }));
+  })();
+
   async function streamsView() {
     const servers = state.me.servers.filter(g => g.bot !== false);
     const holder = h("div");
-    app.replaceChildren(pageHead("Streams", "Tell your server when you go live, and choose whether you get pinged when others do. In Discord: /server stream."), holder);
+    app.replaceChildren(pageHead("Streams", "Link your channel and the bot posts when you go live, by itself. Choose whether you get pinged when others do, and set up your OBS overlay. In Discord: /server stream."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
     const guild = serverPicker(servers, currentParam());
-    guild.addEventListener("change", () => load());
+    guild.addEventListener("change", () => { musicData = null; if (ov) ov.reload(); load(); });
+    // the OBS overlay panel, fed by what is actually playing (same panel as the music page and the studio)
+    let ov = null, ovBox = null, musicData = null, ovViz = null, ovVizGuild = "";
+    const alive = () => currentView() === "streams" && holder.isConnected;
+    async function pollMusic() {
+      if (!alive()) { if (ovViz) { ovViz.close(); ovViz = null; } return; }
+      try { musicData = await api("/api/music?guild=" + encodeURIComponent(guild.value)); } catch { musicData = null; }
+      if (ov && musicData?.access?.canStream) {
+        ovBox.hidden = false; ov.update();
+        if (!ovViz || ovVizGuild !== guild.value) { ovViz?.close(); ovVizGuild = guild.value; ovViz = window.EventSource ? new EventSource("/api/music/viz?guild=" + encodeURIComponent(guild.value)) : null; if (ovViz) ovViz.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.p) ov.viz(m); } catch { /* ignore */ } }; }
+      } else if (ovBox) ovBox.hidden = true;
+      setTimeout(pollMusic, 3000);
+    }
+    async function mountOverlay(into) {
+      try { await overlayAssets(); } catch { return; }
+      if (!ov) { ov = window.SvcOverlayPanel({ api, toast, getData: () => musicData, getGuild: () => guild.value, storeKey: "svc_music_ov" }); ovBox = h("div", { class: "panel" }, h("h3", { text: "Stream overlay for OBS" }), ov.el); pollMusic(); }
+      into.append(ovBox);
+    }
     async function load() {
       holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
       let d;
@@ -4817,12 +4841,26 @@
         pingPanel = h("div", { class: "panel" }, h("h3", { text: "Go-live pings" }), h("p", { class: "muted small", text: d.optedIn === null ? "I can't tell if you have the ping role right now, but the button still works." : on ? "You're opted in. You'll be pinged in the live channel whenever someone goes live." : "Get pinged in the live channel whenever someone in this server goes live." }), h("div", { class: "row" }, b));
       }
 
+      let linkPanel = null;
+      if (d.can.go) {
+        const NAMES = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
+        const url = h("input", { type: "url", placeholder: "https://twitch.tv/yourname", maxlength: "200", value: d.link ? d.link.url.replace(/\/live$/, "") : "", "aria-label": "Your channel link" });
+        const save = h("button", { class: "btn blue", type: "button", text: d.link ? "Update link" : "Link my channel", disabled: unset });
+        save.addEventListener("click", () => run(save, () => post("/api/streams/link", { channel: url.value }), "Linked. I'll post when you go live."));
+        const off = d.link ? h("button", { class: "btn gray", type: "button", text: "Unlink" }) : null;
+        off?.addEventListener("click", () => run(off, () => post("/api/streams/unlink", {}), "Unlinked."));
+        const note = d.link ? (d.watch[d.link.platform] ? `Linked to ${NAMES[d.link.platform]} (${d.link.handle}). I check every couple of minutes. When you go live I post in the live channel and ping the people who opted in, and I close the post when you finish.` : `Linked to ${NAMES[d.link.platform]} (${d.link.handle}), but this bot can't check ${NAMES[d.link.platform]} automatically yet. Use Go live below when you start.`)
+          : "Link your Twitch, Kick or YouTube channel once and I'll notice when you go live, so you never have to post it yourself.";
+        linkPanel = h("div", { class: "panel" }, h("h3", { text: "Your channel" }), unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
+          h("p", { class: "muted small", text: note }), field("Channel link (Twitch, Kick or YouTube)", url), h("div", { class: "row" }, save, off));
+      }
+
       let goPanel;
       if (d.can.go) {
         const url = h("input", { type: "url", placeholder: "https://twitch.tv/yourname", maxlength: "300" }), title = h("input", { type: "text", placeholder: "What are you streaming?", maxlength: "120" }), game = h("input", { type: "text", placeholder: "Game (optional)", maxlength: "60" });
         const go = h("button", { class: "btn blue", text: "🔴 Go live", disabled: unset });
         go.addEventListener("click", () => run(go, async () => { const r = await post("/api/streams/live", { url: url.value, title: title.value, game: game.value }); toast(r.edited ? "Updated your post." : r.pinged ? "You're live! Everyone who opted in was pinged." : "You're live!", "ok"); }));
-        goPanel = h("div", { class: "panel" }, h("h3", { text: "Go live" }), unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
+        goPanel = h("div", { class: "panel" }, h("h3", { text: linkPanel ? "Go live by hand" : "Go live" }), unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
           h("div", { class: "grid two" }, field("Stream link", url), field("Title", title)), field("Game", game), h("div", { class: "row" }, go),
           h("p", { class: "muted small", text: "Posts in the live channel. If you went live in the last half hour, it updates your post instead of pinging again." }));
       } else goPanel = h("div", { class: "panel" }, h("h3", { text: "Go live" }), h("p", { class: "muted", text: d.settings.streamer_role_id ? "Only people with the streamer role, moderators and managers can announce streams here. Ask a manager for the role." : "This server hasn't picked a streamer role yet." }));
@@ -4836,7 +4874,8 @@
         settings = h("div", { class: "panel" }, h("h3", { text: "Settings (managers)" }), h("div", { class: "grid two" }, field("Streamer role", sr), field("Live channel", lc)), field("Ping role (members opt in to it)", pr), h("div", { class: "row" }, sv),
           h("p", { class: "muted small", text: "The streamer role, moderators and managers can announce streams, and see the OBS overlay in the music player. Community setup makes all three for you." }));
       }
-      holder.replaceChildren(...[picker, liveList, goPanel, pingPanel, settings].filter(Boolean));
+      holder.replaceChildren(...[picker, liveList, linkPanel, goPanel, pingPanel, settings].filter(Boolean));
+      if (d.can.go) mountOverlay(holder);
     }
     load();
   }
