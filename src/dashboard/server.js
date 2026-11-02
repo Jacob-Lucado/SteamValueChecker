@@ -34,6 +34,7 @@ import { forYou } from "../foryou.js";
 import { libraryAnalytics } from "../analytics.js";
 import { steamLoginUrl, verifySteamLogin } from "../steamopenid.js";
 import { UserError } from "../errors.js";
+import { createStreams, canStreamIn } from "../streamlive.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
@@ -123,7 +124,7 @@ const COOKIE = "svc_session";
 const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived than the Discord one
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
-const COOLDOWNS = { cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
+const COOLDOWNS = { cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -186,12 +187,12 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         timer = setInterval(tick, 100); tick();
         req.on("close", end); res.on("error", end);
     }
-    // The OBS overlay: a private link per server, no sign-in. It gets the song that is playing and (optionally) the visualizer levels, nothing else.
+    // The OBS overlay: a private link for each person and server, no sign-in. It gets the song that is playing and (optionally) the visualizer levels, nothing else.
     const overlayOpen = new Map();
     let overlayTotal = 0;
     function overlayStream(req, res, url) {
         const token = url.searchParams.get("token") ?? "";
-        const gid = db.guildForOverlay(token);
+        const ov = db.overlayByToken(token), gid = ov?.guild_id;
         if (!gid || !music) throw new HttpError(404, "This overlay link isn't valid. Make a new one in the music studio's Settings.");
         const lim = overlayLimit.hit(clientIp(req));
         if (!lim.ok) throw new HttpError(429, `Too many tries. Try again in ${lim.retryAfterS}s.`);
@@ -202,7 +203,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         res.write("retry: 2000\n\n");
         const born = now();
         let n = 0, timer = 0, over = false, lastNp = "";
-        const end = () => { if (over) return; over = true; clearInterval(timer); overlayTotal--; overlayOpen.set(token, Math.max(0, (overlayOpen.get(token) ?? 1) - 1)); try { res.end(); } catch { /* gone */ } };
+        const end = () => { if (over) return; over = true; clearInterval(timer); clearInterval(recheck); overlayTotal--; overlayOpen.set(token, Math.max(0, (overlayOpen.get(token) ?? 1) - 1)); try { res.end(); } catch { /* gone */ } };
         const np = () => {
             let st = null;
             try { st = music.status(gid); } catch { /* busy */ }
@@ -211,8 +212,12 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 : { on: false, playing: false };
             return body;
         };
+        // A link made through the streamer role stops working soon after the role is taken away. (Managers and the bot owner keep theirs until they reset it.)
+        const recheck = ov.via === "role" ? setInterval(async () => {
+            try { if (!canStreamIn(db.getCommunity(gid), { roleIds: await rolesIn(gid, ov.user_id) })) db.removeOverlay(gid, ov.user_id); } catch { /* keep going */ }
+        }, 60_000) : 0;
         const tick = () => {
-            if (!db.guildForOverlay(token) || now() - born > 12 * 3600_000) return end(); // reset or removed: the old link stops at once
+            if (db.overlayByToken(token)?.user_id !== ov.user_id || now() - born > 12 * 3600_000) return end(); // reset or removed: the old link stops at once
             if (n % 10 === 0) { const b = np(); const s = JSON.stringify(b); res.write(`event: np\ndata: ${s}\n\n`); lastNp = s; }
             if (wantViz) {
                 let v = null;
@@ -379,6 +384,17 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         if (!g || !botGuilds?.(g.id)) throw new HttpError(404, "I'm not in that server, or you're not in it.");
         return g;
     };
+    // ----- streams: who may announce one, show the OBS overlay, or change the settings -----
+    const streams = rest?.sendMessage ? createStreams({ db, api: rest, now }) : null;
+    const rolesIn = (gid, uid) => remember("mroles:" + gid + ":" + uid, 20_000, async () => { try { return (await rest.getMember?.(gid, uid))?.roles ?? []; } catch { return []; } }).catch(() => []);
+    /** Streamers, moderators, managers and the bot owner. Returns the server entry, or throws. */
+    const streamAccess = async (s, guildId) => {
+        const g = musicMember(s, guildId);
+        const ok = canStreamIn(db.getCommunity(g.id), { isManager: isManager(g), isBotOwner: isOwner(s), roleIds: isManager(g) || isOwner(s) ? [] : await rolesIn(g.id, s.userId) });
+        if (!ok) throw new HttpError(403, "Only moderators, managers and people with this server's streamer role can do that.");
+        return g;
+    };
+    const mayStream = async (s, g) => { try { await streamAccess(s, g.id); return true; } catch { return false; } };
     /** Player errors are plain sentences meant for people, so they go back as they are. */
     const musicCall = async fn => { try { return await fn(); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; } };
     async function guildChoices(guildId, withRoles = true) {
@@ -819,7 +835,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const subs = db.listSubmissions(gid);
             const names = Object.fromEntries(await Promise.all([...new Set(subs.slice(0, 50).map(r => r.user_id))].map(async id => [id, (await remember("name:" + g.id + ":" + id, 10 * 60_000, () => rest.memberName(g.id, id)).catch(() => null)) || "Member " + id.slice(-4)])));
             const out = {
-                guild: { id: g.id, name: g.name }, settings, status: music.status(gid), access: { ...music.access(gid, s.userId), isBotOwner: isOwner(s) }, playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })),
+                guild: { id: g.id, name: g.name }, settings, status: music.status(gid), access: { ...music.access(gid, s.userId), isBotOwner: isOwner(s), canStream: await mayStream(s, g) }, playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })),
                 autodj: { playlist: db.getAutoPlaylist(gid).slice(0, 100), count: db.getAutoPlaylist(gid).length, lastStation: (() => { try { return lastRadio ? JSON.parse(lastRadio).title ?? null : null; } catch { return null; } })() },
                 submissions: subs.slice(0, 50).map(r => ({ id: r.id, userId: r.user_id, name: names[r.user_id], title: r.title, artist: r.artist, url: r.url, thumb: r.thumb, duration: r.duration, mine: r.user_id === s.userId }))
             };
@@ -850,15 +866,62 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         },
         // The OBS overlay link for a server. Only people with Manage Server can see or change it.
         "GET /api/music/overlay": async (req, _b, url) => {
-            const g = managedGuild(req, url.searchParams.get("guild"));
-            const o = db.getOverlay(g.id);
+            const s = session(req), g = await streamAccess(s, url.searchParams.get("guild"));
+            const o = db.getOverlay(g.id, s.userId);
             return { on: Boolean(o), token: o?.token ?? null, base: musicOrigin ? musicOrigin + "/overlay" : origin + "/overlay" };
         },
         "POST /api/music/overlay": async (req, body) => {
-            const g = managedGuild(req, body.guild_id);
-            if (body.action === "remove") { db.removeOverlay(g.id); return { on: false, token: null }; }
+            const s = session(req), g = await streamAccess(s, body.guild_id);
+            if (body.action === "remove") { db.removeOverlay(g.id, s.userId); return { on: false, token: null }; }
             if (body.action !== "create" && body.action !== "reset") throw new HttpError(400, "Unknown action.");
-            return { on: true, token: db.resetOverlay(g.id) };
+            return { on: true, token: db.resetOverlay(g.id, s.userId, isOwner(s) ? "owner" : isManager(g) ? "manager" : "role") };
+        },
+        // ----- going live: the streamer role, the live channel and the opt-in ping -----
+        "GET /api/streams": async (req, _b, url) => {
+            const s = session(req); const g = musicMember(s, url.searchParams.get("guild"));
+            const c = db.getCommunity(g.id), mgr = isManager(g) || isOwner(s), roleIds = mgr ? [] : await rolesIn(g.id, s.userId);
+            const out = {
+                guild: { id: g.id, name: g.name }, me: s.userId,
+                settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream },
+                live: db.listStreamLive(g.id).map(r => ({ userId: r.user_id, title: r.title, url: r.url, game: r.game, since: r.started, mine: r.user_id === s.userId })),
+                can: { go: canStreamIn(c, { roleIds, isManager: isManager(g), isBotOwner: isOwner(s) }), manage: mgr },
+                optedIn: streams ? await streams.optedIn(g.id, s.userId) : null
+            };
+            if (mgr) { const ch = await remember("choices:" + g.id, 60_000, () => guildChoices(g.id)); out.channels = ch.channels; out.roles = ch.roles; }
+            return out;
+        },
+        "POST /api/streams/live": async (req, body) => {
+            const s = session(req); const g = await streamAccess(s, body.guild_id);
+            if (!streams) throw new HttpError(503, "Streams aren't available on this bot right now.");
+            cooldown(s.userId, "streamlive");
+            const me = (await remember("mname:" + g.id + ":" + s.userId, 10 * 60_000, () => rest.memberName(g.id, s.userId)).catch(() => null)) || s.username || "Someone";
+            return musicCall(() => streams.goLive(g.id, { id: s.userId, name: me, avatarUrl: null }, { title: body.title, url: body.url, game: body.game }));
+        },
+        "POST /api/streams/end": async (req, body) => {
+            const s = session(req); const g = musicMember(s, body.guild_id);
+            if (!streams) throw new HttpError(503, "Streams aren't available on this bot right now.");
+            const target = body.user_id && body.user_id !== s.userId ? String(body.user_id) : s.userId;
+            if (target !== s.userId && !(isManager(g) || isOwner(s))) throw new HttpError(403, "Only managers can end someone else's stream.");
+            const me = (await remember("mname:" + g.id + ":" + target, 10 * 60_000, () => rest.memberName(g.id, target)).catch(() => null)) || "Someone";
+            await musicCall(() => streams.endLive(g.id, { id: target, name: me }));
+            return { ok: true };
+        },
+        "POST /api/streams/ping": async (req, body) => {
+            const s = session(req); const g = musicMember(s, body.guild_id);
+            if (!streams) throw new HttpError(503, "Streams aren't available on this bot right now.");
+            cooldown(s.userId, "streamping");
+            const r = await musicCall(() => streams.setOptIn(g.id, s.userId, Boolean(body.on)));
+            return { optedIn: r.on };
+        },
+        "POST /api/streams/settings": async (req, body) => {
+            const s = session(req); const g = musicMember(s, body.guild_id);
+            if (!(isManager(g) || isOwner(s))) throw new HttpError(403, "You need the Manage Server permission there.");
+            const ch = await remember("choices:" + g.id, 60_000, () => guildChoices(g.id));
+            const patch = {};
+            const pick = (k, list) => { if (!(k in body)) return; const v = body[k] ? String(body[k]) : null; if (v && !list.some(x => x.id === v)) throw new HttpError(400, "That isn't in this server."); return v; };
+            for (const [k, list] of [["streamer_role_id", ch.roles], ["live_channel", ch.channels], ["ping_stream", ch.roles]]) { const v = pick(k, list); if (v !== undefined) patch[k] = v; }
+            const c = db.setCommunity(g.id, patch);
+            return { settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream } };
         },
         "GET /api/music/search": async (req, _b, url) => {
             const s = session(req);

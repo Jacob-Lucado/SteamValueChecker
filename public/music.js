@@ -277,6 +277,9 @@
     ui.name.textContent = guilds.find(g => g.id === gid)?.name || "";
     ui.pill.className = "mu-pill" + (ok ? " good" : " warn");
     ui.pill.textContent = ok ? `🔊 In ${a.voiceName}` : !a.enabled ? "Music is off here" : !a.inVoice ? "Not in a voice channel" : "Different voice channel";
+    const streamOk = Boolean(a.canStream);
+    ui.tabs.stream.hidden = !streamOk;
+    if (!streamOk && ui.panes.stream.classList.contains("on")) showTab("queue");
     ui.listen.hidden = !(st.active && st.channelId);
     if (!ui.listen.hidden) ui.listen.href = `https://discord.com/channels/${encodeURIComponent(gid)}/${encodeURIComponent(st.channelId)}`;
     ui.note.hidden = ok;
@@ -395,7 +398,7 @@
     ui.panes.stream.append(
       h("p", { class: "mu-hint", text: "A compact now-playing card for your stream. It fades in when a song starts, swaps with a shine when it changes, and fades out when the music stops. Try the styles here, then paste the link into OBS." }),
       h("div", { class: "mu-ov-stage" }, frame, h("button", { class: "mu-mini mu-ov-replay", type: "button", text: "↻ Replay demo", onclick: () => { frame.src = "/overlay?" + params(false) + "&r=" + Date.now(); } })),
-      optionsGrid, h("h3", { class: "mu-h", text: "Your link for this server" }), ui.ov.linkBox, ui.ov.size);
+      optionsGrid, h("h3", { class: "mu-h", text: "Your own link for this server" }), ui.ov.linkBox, ui.ov.size);
     frame.src = "/overlay?" + params(false);
   }
   function paintUrl() {
@@ -405,8 +408,8 @@
     if (v.token) v.url.value = `${v.base}?${v.params(true)}`;
   }
   async function streamOpen() {
-    const v = ui.ov, mgr = Boolean(data?.channels);
-    if (!mgr) { v.linkBox.replaceChildren(h("p", { class: "mu-empty", text: "Only people with Manage Server can see or create the link. Ask a manager of this server, or use the demo above to pick a look and share the settings." })); return; }
+    const v = ui.ov;
+    if (!data?.access?.canStream) return;
     try {
       const r = await api("/api/music/overlay?guild=" + encodeURIComponent(gid));
       v.token = r.token; v.base = r.base || v.base; drawLink(r.on);
@@ -414,9 +417,9 @@
   }
   function drawLink(on) {
     const v = ui.ov;
-    if (!on) { v.token = null; v.linkBox.replaceChildren(h("p", { class: "mu-hint", text: "No link yet for this server. The link is private: anyone who has it can see the song that's playing, nothing else." }), h("div", { class: "mu-form" }, v.make)); v.size.hidden = true; return; }
+    if (!on) { v.token = null; v.linkBox.replaceChildren(h("p", { class: "mu-hint", text: "No link yet for this server. This link is yours alone: it's made for your account, so nobody else shares it and resetting it only affects you. Anyone who has it can see the song that's playing here, nothing else." }), h("div", { class: "mu-form" }, v.make)); v.size.hidden = true; return; }
     v.size.hidden = false; paintUrl();
-    v.linkBox.replaceChildren(h("div", { class: "mu-form" }, v.url, v.show, v.copy), h("div", { class: "mu-form" }, v.reset, v.off), h("p", { class: "mu-hint", text: "Keep it private like a password. Make a new link any time and the old one stops working." }));
+    v.linkBox.replaceChildren(h("div", { class: "mu-form" }, v.url, v.show, v.copy), h("div", { class: "mu-form" }, v.reset, v.off), h("p", { class: "mu-hint", text: "Keep it private like a password. Make a new link any time and the old one stops working. It also stops working if you lose your streamer or moderator role." }));
   }
   async function overlayCall(action) {
     try { const r = await api("/api/music/overlay", { guild_id: gid, action }); ui.ov.token = r.token; drawLink(r.on); toast(action === "remove" ? "Overlay turned off." : action === "reset" ? "New link made. The old one no longer works." : "Link created."); } catch (e) { toast(e.message, "error"); }

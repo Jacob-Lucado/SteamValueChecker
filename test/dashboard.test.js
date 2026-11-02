@@ -14,7 +14,7 @@ const MANAGE = String(0x20);
 
 const deal = (amount, regular) => ({ shop: { name: "GOG" }, price: { amount, currency: "USD" }, regular: { amount: regular, currency: "USD" }, cut: 0, url: "https://deal.example/x" });
 
-async function setup({ sendFails = false, guildsOf, config = {}, giveawayService = null, extra = {}, itadExtra = {} } = {}) {
+async function setup({ sendFails = false, guildsOf, config = {}, giveawayService = null, extra = {}, itadExtra = {}, restExtra = {} } = {}) {
     const db = openDb(":memory:");
     let clock = 1_000_000;
     const sent = [];
@@ -36,7 +36,8 @@ async function setup({ sendFails = false, guildsOf, config = {}, giveawayService
         },
         sendMessage: async (id, p) => { if (sendFails) throw new DiscordApiError(403, "no"); sent.push({ id, p }); },
         memberName: async (g, id) => (id === "u1" ? "Jacob" : null),
-        listRoles: async () => [{ id: "r1", name: "Boosters" }]
+        listRoles: async () => [{ id: "r1", name: "Boosters" }, { id: "sr", name: "Streamer" }, { id: "pr", name: "Stream pings" }],
+        ...restExtra
     };
     const itad = {
         lookupTitles: async titles => titles.map(t => (/^zzz/i.test(t) ? { title: t, id: null } : { title: t, id: "id-" + t.toLowerCase().replace(/\W+/g, ""), approx: false, matched: t })),
@@ -1827,5 +1828,45 @@ test("stream overlay: managers make the private link, the stream needs only that
         assert.match(page.headers.get("content-security-policy"), /frame-ancestors 'self'/);
         assert.match(page.headers.get("x-robots-tag"), /noindex/);
         assert.match(await (await fetch(o.base + "/robots.txt")).text(), /Disallow: \/overlay/);
+    } finally { await o.close(); }
+});
+
+test("streams: only streamers, mods and managers get the overlay and go-live; anyone can opt in to pings", async () => {
+    const posts = [], roleCalls = []; let myRoles = [];
+    const mk = () => signedIn({ extra: { music, botGuilds: () => true }, restExtra: { getMember: async () => ({ roles: myRoles }), sendMessage: async (c, p) => { posts.push([c, p]); return { id: "m1" }; }, editMessage: async () => {}, addRole: async (...a) => roleCalls.push(["add", ...a]), removeRole: async (...a) => roleCalls.push(["remove", ...a]) } });
+    const music = { status: () => ({ active: true, playing: false, current: null, next: [] }), access: () => ({}), sessions: () => [] };
+    let o = await mk();
+    try {
+        o.db.setCommunity("g-member", { streamer_role_id: "sr", live_channel: "c1", ping_stream: "pr", mod_role_id: "modr" });
+        const mine = async () => (await o.request("/api/music?guild=g-member")).data.access.canStream;
+        assert.equal(await mine(), false, "a plain member has no stream access");
+        assert.equal((await o.request("/api/music/overlay?guild=g-member")).status, 403);
+        assert.equal((await o.request("/api/music/overlay", { method: "POST", body: { guild_id: "g-member", action: "create" } })).status, 403);
+        assert.equal((await o.request("/api/streams/live", { method: "POST", body: { guild_id: "g-member", url: "https://twitch.tv/x", title: "t" } })).status, 403);
+        assert.equal((await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-member", live_channel: "c2" } })).status, 403, "settings are for managers");
+
+        let page = (await o.request("/api/streams?guild=g-member")).data;
+        assert.deepEqual([page.can.go, page.can.manage, page.optedIn], [false, false, false]);
+        assert.equal((await o.request("/api/streams/ping", { method: "POST", body: { guild_id: "g-member", on: true } })).data.optedIn, true);
+        assert.deepEqual(roleCalls[0], ["add", "g-member", "u1", "pr"]);
+
+        await o.close(); myRoles = ["sr"]; o = await mk(); // given the streamer role
+        o.db.setCommunity("g-member", { streamer_role_id: "sr", live_channel: "c1", ping_stream: "pr", mod_role_id: "modr" });
+        assert.equal(await mine(), true, "the streamer role unlocks it");
+        assert.equal((await o.request("/api/music/overlay", { method: "POST", body: { guild_id: "g-member", action: "create" } })).status, 200);
+        o.advance(2_000_000); // past the ping cooldown on the test clock
+        const live = await o.request("/api/streams/live", { method: "POST", body: { guild_id: "g-member", url: "https://twitch.tv/jacob", title: "Ranked", game: "Overwatch" } });
+        assert.equal(live.status, 200); assert.equal(live.data.pinged, true);
+        assert.equal(posts[0][0], "c1"); assert.equal(posts[0][1].content, "<@&pr>");
+        o.advance(10_000);
+        assert.equal((await o.request("/api/streams/live", { method: "POST", body: { guild_id: "g-member", url: "javascript:alert(1)" } })).status, 400);
+        page = (await o.request("/api/streams?guild=g-member")).data; assert.equal(page.live.length, 1); assert.equal(page.live[0].mine, true);
+        assert.equal((await o.request("/api/streams/end", { method: "POST", body: { guild_id: "g-member" } })).status, 200);
+
+        // managers (g-admin) always can, and can change the settings
+        assert.equal((await o.request("/api/music?guild=g-admin")).data.access.canStream, true);
+        const set = await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-admin", streamer_role_id: "sr", live_channel: "c2", ping_stream: "pr" } });
+        assert.equal(set.status, 200); assert.deepEqual(set.data.settings, { streamer_role_id: "sr", live_channel: "c2", ping_stream: "pr" });
+        assert.equal((await o.request("/api/streams/settings", { method: "POST", body: { guild_id: "g-admin", live_channel: "nope" } })).status, 400);
     } finally { await o.close(); }
 });

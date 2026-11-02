@@ -20,7 +20,7 @@ export const HELP_PAGES = [
         fields: [
             { name: "🎮 /games", value: "Price games, check bundles, free games, sales, codes, sale prep." },
             { name: "👤 /me  ·  🔔 /alerts", value: "Your wishlist, library, Steam link, friends and data; how you get sale alerts." },
-            { name: "🏠 /server", value: "Giveaways, game nights, levels, boards, events, invites." },
+            { name: "🏠 /server", value: "Giveaways, game nights, levels, boards, events, invites, streams." },
             { name: "🎵 /music  ·  /play  ·  /player", value: "SoundCloud and live radio in voice, with an Auto DJ. `/player` opens the big player." },
             { name: "🛠 /manage  ·  🛡 /mod", value: "Setup and community tools for managers; moderation for mods." },
             { name: "🤖 /bot  ·  /dashboard", value: "Status, changelog, support and ideas. `/dashboard` opens the website." }
@@ -53,6 +53,7 @@ export const HELP_PAGES = [
             { name: "Play together", value: "`/server gamenight` (in voice) shows what everyone owns. `/server lfg` `post` / `list` / `close` finds players. `/server compare` lines your library up against a friend's." },
             { name: "Shared lists and boards", value: "`/server serverlist` `add` / `view` / `vote` / `remove`: a wishlist your server shares. `/server leaderboard` and `/server serverstats` show boards for members who opted in." },
             { name: "Levels and invites", value: "`/server rank` your level and place. `/server levels` the top members. `/server invites` `me` / `top` / `link`." },
+            { name: "Streams", value: "`/server stream` `live` posts your stream in the live channel (streamers, moderators, managers), `end` marks it finished, `ping` turns the go-live ping on or off for you, `list` shows who is live, `setup` (managers) picks the streamer role, channel and ping role." },
             { name: "Events and giveaways", value: "`/server calendar` shows releases, sales and server events.\n`/server giveaway` `create` / `list` / `info` / `end` / `cancel` / `reroll` / `replace` / `setup` runs key giveaways.\n`/server promos` `list` shows drops like SteelSeries or NVIDIA (managers: `add` / `end` / `channel` / `ping` / `news`)." }
         ] },
     { key: "music", label: "Music", emoji: "🎵", title: "/music, /play and /player",

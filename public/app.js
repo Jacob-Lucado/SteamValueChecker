@@ -137,7 +137,7 @@
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["streams", "Streams"], ["music", "Music"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
@@ -3460,7 +3460,7 @@
     app.replaceChildren(pageHead("Music", "Play SoundCloud songs, playlists and live radio in a voice channel. Join one in your server, then add music here or with /play."), holder);
     const big = h("a", { class: "btn blue", href: "#", target: "_blank", rel: "noopener", text: "View the big music player ↗", title: "Opens the full-screen player with session chat" });
     const stream = h("a", { class: "btn gray", href: "#", target: "_blank", rel: "noopener", text: "Stream overlay for OBS ↗", title: "A compact now-playing card for your stream, with a link just for this server" });
-    app.insertBefore(h("div", { class: "row" }, big, stream), holder);
+    stream.style.display = "none"; app.insertBefore(h("div", { class: "row" }, big, stream), holder);
     const fmt = sec => { sec = Math.max(0, Math.floor(sec || 0)); const hh = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return (hh ? hh + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
     const toSeconds = text => { const t = String(text).trim().toLowerCase(); if (/^\d+$/.test(t)) return Number(t); const m = t.match(/^(?:(\d+):)?(\d+):(\d{1,2})$/) || t.match(/^()(\d+):(\d{1,2})$/); if (m) return Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]); return NaN; };
     const TIERS = { manager: ["Server manager", "You can change every music setting and control the player."], moderator: ["Moderator", "You can control the player and take down any request."], dj: ["DJ", "You can control the player."], listener: ["Listener", "You can add songs and vote to skip. Only DJs, moderators and managers use the other controls when this server has a DJ role."] };
@@ -3566,7 +3566,7 @@
         s.autodj_submit ? h("div", { class: "lookup-row" }, q, go, find) : "", results,
         subs.length ? h("div", { class: "scroll-y tall" }, ...rows) : h("p", { class: "muted", text: "No requests right now." }), clearBtn);
     }
-    function update(d) { paintNow(d); paintQueue(d); paintReqs(d); for (const f of syncers) f(d); }
+    function update(d) { paintNow(d); paintQueue(d); paintReqs(d); stream.style.display = d.access?.canStream ? "" : "none"; for (const f of syncers) f(d); }
 
     // ----- parts that stay put while you type -----
     function addPanel(d) {
@@ -4726,6 +4726,61 @@
   }
 
   // ---------- server XP: leaderboard, your card, level rewards, how XP works, and the prize shop teaser ----------
+  // ---------- streams: go live, pings, and the streamer settings ----------
+  async function streamsView() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const holder = h("div");
+    app.replaceChildren(pageHead("Streams", "Tell your server when you go live, and choose whether you get pinged when others do. In Discord: /server stream."), holder);
+    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
+    const guild = serverPicker(servers, currentParam());
+    guild.addEventListener("change", () => load());
+    async function load() {
+      holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+      let d;
+      try { d = await api("/api/streams?guild=" + encodeURIComponent(guild.value)); } catch (e) { return holder.replaceChildren(servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null, h("div", { class: "notice warn", text: e.message })); }
+      const gid = guild.value, post = (path, body) => api(path, { guild_id: gid, ...body });
+      const run = (btn, fn, msg) => busy(btn, async () => { await fn(); if (msg) toast(msg, "ok"); load(); });
+      const picker = servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null;
+      const unset = !d.settings.live_channel;
+
+      const liveList = h("div", { class: "panel" }, h("h3", { text: "Live now" }),
+        d.live.length ? h("ul", { class: "plain" }, d.live.map(r => {
+          const end = (d.can.manage || r.mine) ? h("button", { class: "btn gray small", text: "End", onclick: e => run(e.currentTarget, () => post("/api/streams/end", { user_id: r.userId }), "Marked as ended.") }) : null;
+          return h("li", {}, "🔴 ", h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer", text: r.title }), r.game ? " · " + r.game : "", " ", end);
+        })) : h("p", { class: "muted", text: "Nobody is streaming right now." }));
+
+      let pingPanel;
+      if (!d.settings.ping_stream) pingPanel = h("div", { class: "panel" }, h("h3", { text: "Go-live pings" }), h("p", { class: "muted", text: "Pings aren't set up in this server yet." + (d.can.manage ? " Pick a ping role below." : " Ask a manager to set one up.") }));
+      else {
+        const on = d.optedIn === true, b = h("button", { class: "btn small " + (on ? "gray" : "blue"), text: on ? "Stop pinging me" : "Ping me when someone goes live" });
+        b.addEventListener("click", () => run(b, () => post("/api/streams/ping", { on: !on }), on ? "No more stream pings." : "You'll get pinged when someone goes live."));
+        pingPanel = h("div", { class: "panel" }, h("h3", { text: "Go-live pings" }), h("p", { class: "muted small", text: d.optedIn === null ? "I can't tell if you have the ping role right now, but the button still works." : on ? "You're opted in. You'll be pinged in the live channel whenever someone goes live." : "Get pinged in the live channel whenever someone in this server goes live." }), h("div", { class: "row" }, b));
+      }
+
+      let goPanel;
+      if (d.can.go) {
+        const url = h("input", { type: "url", placeholder: "https://twitch.tv/yourname", maxlength: "300" }), title = h("input", { type: "text", placeholder: "What are you streaming?", maxlength: "120" }), game = h("input", { type: "text", placeholder: "Game (optional)", maxlength: "60" });
+        const go = h("button", { class: "btn blue", text: "🔴 Go live", disabled: unset });
+        go.addEventListener("click", () => run(go, async () => { const r = await post("/api/streams/live", { url: url.value, title: title.value, game: game.value }); toast(r.edited ? "Updated your post." : r.pinged ? "You're live! Everyone who opted in was pinged." : "You're live!", "ok"); }));
+        goPanel = h("div", { class: "panel" }, h("h3", { text: "Go live" }), unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
+          h("div", { class: "grid two" }, field("Stream link", url), field("Title", title)), field("Game", game), h("div", { class: "row" }, go),
+          h("p", { class: "muted small", text: "Posts in the live channel. If you went live in the last half hour, it updates your post instead of pinging again." }));
+      } else goPanel = h("div", { class: "panel" }, h("h3", { text: "Go live" }), h("p", { class: "muted", text: d.settings.streamer_role_id ? "Only people with the streamer role, moderators and managers can announce streams here. Ask a manager for the role." : "This server hasn't picked a streamer role yet." }));
+
+      let settings = null;
+      if (d.can.manage) {
+        const roles = [["", "Not set"], ...(d.roles ?? []).map(r => [r.id, r.name])], chans = [["", "Not set"], ...(d.channels ?? []).map(c => [c.id, "#" + c.name])];
+        const sr = select(roles, d.settings.streamer_role_id || ""), lc = select(chans, d.settings.live_channel || ""), pr = select(roles, d.settings.ping_stream || "");
+        const sv = h("button", { class: "btn blue small", text: "Save settings" });
+        sv.addEventListener("click", () => run(sv, () => post("/api/streams/settings", { streamer_role_id: sr.value, live_channel: lc.value, ping_stream: pr.value }), "Saved."));
+        settings = h("div", { class: "panel" }, h("h3", { text: "Settings (managers)" }), h("div", { class: "grid two" }, field("Streamer role", sr), field("Live channel", lc)), field("Ping role (members opt in to it)", pr), h("div", { class: "row" }, sv),
+          h("p", { class: "muted small", text: "The streamer role, moderators and managers can announce streams, and see the OBS overlay in the music player. Community setup makes all three for you." }));
+      }
+      holder.replaceChildren(...[picker, liveList, goPanel, pingPanel, settings].filter(Boolean));
+    }
+    load();
+  }
+
   async function xpView() {
     const servers = state.me.servers.filter(g => g.bot !== false);
     const holder = h("div");
@@ -4873,7 +4928,7 @@
     load();
   }
 
-  const VIEWS = { music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { streams: streamsView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

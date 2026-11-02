@@ -463,6 +463,22 @@ const invitesCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("top").setDescription("Who has brought in the most members"))
     .addSubcommand(s => s.setName("link").setDescription("Get your own invite link. Everyone who joins with it counts for you"));
 
+const streamCmd = new SlashCommandBuilder()
+    .setName("stream")
+    .setDescription("Tell the server you're live and choose whether to be pinged when others are")
+    .addSubcommand(s => s.setName("live").setDescription("Announce your stream in the live channel (streamers, moderators and managers)")
+        .addStringOption(o => o.setName("link").setDescription("Your stream address, like https://twitch.tv/yourname").setRequired(true).setMaxLength(300))
+        .addStringOption(o => o.setName("title").setDescription("What you're streaming").setMaxLength(120))
+        .addStringOption(o => o.setName("game").setDescription("The game").setMaxLength(60)))
+    .addSubcommand(s => s.setName("end").setDescription("Mark your stream as finished"))
+    .addSubcommand(s => s.setName("ping").setDescription("Get pinged when someone in this server goes live, or stop")
+        .addBooleanOption(o => o.setName("enabled").setDescription("On or off (leave empty to switch)")))
+    .addSubcommand(s => s.setName("list").setDescription("Who is live right now"))
+    .addSubcommand(s => s.setName("setup").setDescription("Managers: pick the streamer role, live channel and ping role")
+        .addRoleOption(o => o.setName("streamerrole").setDescription("People with this role can announce streams"))
+        .addChannelOption(o => o.setName("channel").setDescription("Where go-live posts appear").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addRoleOption(o => o.setName("pingrole").setDescription("The opt-in role that gets pinged")));
+
 const modCmd = new SlashCommandBuilder()
     .setName("mod")
     .setDescription("Moderators: warn, time out, kick, ban and clean up. Every action is logged")
@@ -656,7 +672,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, streamCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -667,7 +683,7 @@ export const commands = [
 const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "mydata"] },
-    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "rank", "levels", "serverstats", "leaderboard"], groups: ["giveaway", "promos", "serverlist", "lfg", "calendar", "invites"] },
+    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "rank", "levels", "serverstats", "leaderboard"], groups: ["giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];

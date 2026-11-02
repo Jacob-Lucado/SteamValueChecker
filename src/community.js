@@ -45,6 +45,7 @@ export const TEMPLATE = {
         { key: "mod", name: "Moderator", color: 0x3498db, hoist: true, mentionable: true, permissions: [PERM.kick, PERM.ban, PERM.manageMessages, PERM.moderate, PERM.moveMembers, PERM.muteMembers, PERM.deafenMembers, PERM.manageNicknames, PERM.viewAuditLog] },
         { key: "member", name: "Member", color: 0x2ecc71 },
         { key: "verified", name: "Steam Verified", color: 0x66c0f4 },
+        { key: "streamer", name: "Streamer", color: 0x9146ff, hoist: true },
         { key: "regular", name: "Regular", color: 0x1abc9c, level: 5 },
         { key: "veteran", name: "Veteran", color: 0x9b59b6, level: 15 },
         { key: "legend", name: "Legend", color: 0xf1c40f, level: 30 }
@@ -52,7 +53,7 @@ export const TEMPLATE = {
     selfRoles: [
         { name: "PC", emoji: "🖥️" }, { name: "PlayStation", emoji: "🎮" }, { name: "Xbox", emoji: "🟩" }, { name: "Nintendo", emoji: "🔴" },
         { name: "Deal pings", emoji: "💸" }, { name: "Free game pings", emoji: "🎁" }, { name: "Giveaway pings", emoji: "🎉" }, { name: "LFG pings", emoji: "🤝" },
-        { name: "Game code pings", emoji: "🔑" }, { name: "Promo drop pings", emoji: "🎟️" }
+        { name: "Game code pings", emoji: "🔑" }, { name: "Promo drop pings", emoji: "🎟️" }, { name: "Stream pings", emoji: "📺" }
     ],
     categories: [
         { name: "📢 INFORMATION", channels: [
@@ -75,6 +76,8 @@ export const TEMPLATE = {
             { key: "gamechat", name: "game-chat", topic: "What are you playing?" },
             { key: "gamenight", name: "game-night", topic: "Plan the next session together" },
             { key: "wishlists", name: "wishlists-and-deals", topic: "Share wishlists and sales. Try /me wishlist import" }] },
+        { name: "📺 STREAMS", channels: [
+            { key: "live", name: "stream-live", topic: "Streamers post here when they go live. Pick the Stream pings role in #roles to get pinged. Streamers: /server stream live", readonly: true }] },
         { name: "💸 DEALS & GIVEAWAYS", channels: [
             { key: "deals", name: "deal-alerts", topic: "Sales and free games from Steam Value Checker", readonly: true },
             { key: "drops", name: "promo-drops", topic: "Key giveaways from SteelSeries, NVIDIA and others, posted once each and marked when they end", readonly: true },
@@ -300,7 +303,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
-    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_promos: pingOf("Promo drop pings") });
+    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_promos: pingOf("Promo drop pings"), ping_stream: pingOf("Stream pings"), streamer_role_id: roleIds.streamer, live_channel: chIds.live ?? null });
     db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, honeypot_channel: chIds.honeypot ?? db.getCommunity(guildId).honeypot_channel ?? null, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
@@ -326,6 +329,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/server promos add` or on the dashboard, and can turn on news watching with `/server promos news`." });
     await say(api, chIds.tickets, { content: "Member tickets from `/bot support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
+    if (chIds.live) await say(api, chIds.live, { content: "When a streamer goes live they use `/server stream live` (or the dashboard's Streams page) and it shows up here. Pick the **Stream pings** role in the roles channel to get pinged." });
     await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), music in <#${chIds.musiccmd}> (join a Music voice channel and use /play), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
     await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
 
@@ -343,7 +347,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 }
 
 /** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
-export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops", "musiccmd", "music1", "music2"]);
+export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops", "musiccmd", "music1", "music2", "live"]);
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
 
 /** What a second run does: create only the template channels this server has never been given. */
@@ -355,7 +359,8 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     const modRole = (prev.mod_role_id && existingRoles.some(r => r.id === prev.mod_role_id) ? prev.mod_role_id : null) ?? existingRoles.find(r => r.name.toLowerCase() === "moderator" && !r.managed)?.id ?? null;
     const bot = { id: botId, type: 1, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages | PERM.createInvite | B(14)), deny: "0" };
     const mod = modRole ? [{ id: modRole, type: 0, allow: str(PERM.viewChannel | PERM.sendMessages | PERM.manageMessages), deny: "0" }] : [];
-    const overwrites = kind => kind === "forum" ? [{ id: everyone, type: 0, allow: "0", deny: str(PERM.createThreads) }, bot, ...mod] : [];
+    const overwrites = kind => kind === "forum" ? [{ id: everyone, type: 0, allow: "0", deny: str(PERM.createThreads) }, bot, ...mod]
+        : kind === "readonly" ? [{ id: everyone, type: 0, allow: "0", deny: str(PERM.sendMessages | PERM.createThreads | PERM.createPrivateThreads) }, bot, ...mod] : [];
     const chIds = {}, chCats = {};
     for (const cat of TEMPLATE.categories) {
         for (const c of cat.channels ?? []) {
@@ -367,7 +372,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
                 if (!catCh) { catCh = await guard(() => api.createChannel(guildId, { name: cat.name, type: 4, ...(cat.staff ? { permission_overwrites: [{ id: everyone, type: 0, allow: "0", deny: str(PERM.viewChannel) }, bot, ...mod] } : {}) }), `create the ${cat.name} category`); created.categories.push(cat.name); existingChannels.push({ ...catCh, type: 4, name: cat.name }); await wait(); }
                 const body = c.forum
                     ? { name: c.name, type: 15, parent_id: catCh.id, topic: c.topic, available_tags: forumTags(), default_reaction_emoji: { emoji_name: "👍" }, permission_overwrites: overwrites("forum") }
-                    : { name: c.name, type: 0, parent_id: catCh.id, topic: c.topic };
+                    : { name: c.name, type: 0, parent_id: catCh.id, topic: c.topic, ...(c.readonly && c.key === "live" ? { permission_overwrites: overwrites("readonly") } : {}) };
                 ex = await api.createChannel(guildId, body).catch(e => {
                     if (e?.status === 403) throw Object.assign(new Error(`I could not create #${c.name}. I need the Manage Channels permission.`), { userFacing: true });
                     notes.push(c.forum ? "Could not create the #feature-requests forum (forums need the server's Community features turned on)." : `Could not create #${c.name}.`); return null;
@@ -408,8 +413,20 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     if (chIds.drops && created.channels.includes("promo-drops")) await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/server promos add` or on the dashboard, and can turn on news watching with `/server promos news`." });
     if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
-    // the opt-in ping roles for codes and promos, for servers that were set up before they existed
-    const newPings = TEMPLATE.selfRoles.filter(r => ["Game code pings", "Promo drop pings"].includes(r.name));
+    // the streamer role, for servers that were set up before it existed
+    if (!prev.streamer_role_id) {
+        let sr = existingRoles.find(x => x.name.toLowerCase() === "streamer" && !x.managed);
+        if (!sr) {
+            const def = TEMPLATE.roles.find(x => x.key === "streamer");
+            sr = await api.createRole(guildId, { name: def.name, color: def.color, hoist: true, mentionable: false, permissions: "0" }).catch(() => { notes.push("Could not create the Streamer role (I need Manage Roles)."); return null; });
+            if (sr) { created.roles.push(def.name); await wait(); }
+        }
+        if (sr) db.setCommunity(guildId, { streamer_role_id: sr.id });
+    }
+    if (chIds.live && !db.getCommunity(guildId).live_channel) db.setCommunity(guildId, { live_channel: chIds.live });
+    if (chIds.live && created.channels.includes("stream-live")) await say(api, chIds.live, { content: "When a streamer goes live they use `/server stream live` (or the dashboard's Streams page) and it shows up here. Pick the **Stream pings** role in the roles channel to get pinged." });
+    // the opt-in ping roles for codes and promos (and streams), for servers that were set up before they existed
+    const newPings = TEMPLATE.selfRoles.filter(r => ["Game code pings", "Promo drop pings", "Stream pings"].includes(r.name));
     const madeRoles = [];
     for (const r of newPings) {
         let ex = existingRoles.find(x => x.name.toLowerCase() === r.name.toLowerCase() && !x.managed);
@@ -419,7 +436,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
             created.roles.push(r.name); madeRoles.push(r); await wait();
         }
         db.addSelfRole(guildId, ex.id, r.name);
-        const col = r.name === "Game code pings" ? "ping_codes" : "ping_promos";
+        const col = r.name === "Game code pings" ? "ping_codes" : r.name === "Stream pings" ? "ping_stream" : "ping_promos";
         if (!db.getCommunity(guildId)[col]) db.setCommunity(guildId, { [col]: ex.id });
     }
     if (madeRoles.length) {
