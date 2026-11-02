@@ -71,7 +71,7 @@ import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
 import { autoImage } from "../giveaway.js";
 import { isHidden } from "../hidden.js";
-import { legalPage } from "../legal.js";
+import { legalPage, legalFramePage } from "../legal.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
 import { MAX_KEYS } from "../gwstore.js";
 
@@ -90,6 +90,8 @@ const FILES = {
     "/grabber-ad-cart.png": ["grabber-ad-cart.png", "image/png"],
     "/grabber-ad-paid.png": ["grabber-ad-paid.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
+    "/terms.pdf": ["terms.pdf", "application/pdf"],
+    "/privacy.pdf": ["privacy.pdf", "application/pdf"],
     "/grabber": ["grabber.html", "text/html; charset=utf-8"],
     "/grabber.html": ["grabber.html", "text/html; charset=utf-8"],
     "/grabber.css": ["grabber.css", "text/css; charset=utf-8"],
@@ -185,7 +187,9 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             ...(/^\/(api|auth)\//.test(path) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
             "Content-Security-Policy":
                 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
-                "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+                "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'",
+            // The terms and privacy PDFs are shown in a frame on our own pages, so they may be framed by us and by no one else.
+            ...(/^\/[a-z-]+\.pdf(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "frame-ancestors 'self'", "Content-Disposition": "inline" } : {}),
             ...headers
         });
         res.end(body);
@@ -2538,7 +2542,8 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             if (url.pathname.startsWith("/api/visits/")) return visits(req, res, url);
 
             if (req.method === "GET" && /^\/(terms|privacy)(\.html)?$/.test(url.pathname)) {
-                const page = legalPage(url.pathname.slice(1).replace(/\.html$/, ""), origin);
+                const kind = url.pathname.slice(1).replace(/\.html$/, "");
+                const page = url.pathname.endsWith(".html") ? legalFramePage(kind, origin) : legalPage(kind, origin); // .html shows the PDF, the plain path the same text as a web page
                 if (page) return send(res, 200, page, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);

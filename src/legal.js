@@ -60,3 +60,50 @@ ${body}
 </html>
 `;
 }
+
+/** A self-contained, print-ready version of one document: the source for the PDF (scripts/legal-pdf.mjs). */
+export function legalPrintHtml(kind) {
+    const d = DOCS[kind]; if (!d) return null;
+    const body = mdToHtml(read(d.file).split("\n").filter(l => !/github\.com/i.test(l)).join("\n"));
+    if (!body) return null;
+    return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>${d.title} - Steam Value Checker</title>
+<style>
+body { font: 11pt/1.55 Georgia, "Times New Roman", serif; color: #111; margin: 0; }
+h2 { font: 700 20pt/1.2 Helvetica, Arial, sans-serif; margin: 0 0 6pt; }
+h3, h4 { font: 700 13pt/1.3 Helvetica, Arial, sans-serif; margin: 16pt 0 4pt; }
+p, li { margin: 0 0 7pt; }
+ul, ol { padding-left: 20pt; margin: 0 0 8pt; }
+code { font: 10pt Menlo, Consolas, monospace; background: #f1f1f1; padding: 0 2pt; }
+a { color: #1a4fa0; text-decoration: none; }
+</style></head><body>
+${body}
+</body></html>
+`;
+}
+
+/** The page behind /terms.html and /privacy.html: the PDF in a frame, with plain links for anything that cannot show a PDF. */
+export function legalFramePage(kind, origin) {
+    const d = DOCS[kind]; if (!d || !read(d.file)) return null;
+    return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${d.title} · Steam Value Checker</title>
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="${esc(origin)}/${kind}.html">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="stylesheet" href="/style.css">
+<script src="/theme.js"></script>
+</head>
+<body class="legal-frame">
+<main class="legal wide">
+<p><a href="/">← Steam Value Checker</a></p>
+<iframe class="legal-pdf" src="/${kind}.pdf" title="${d.title}"></iframe>
+<p class="muted small">Can't see the document? <a href="/${kind}.pdf">Open the PDF</a> or <a href="/${kind}">read it as a web page</a>.</p>
+</main>
+</body>
+</html>
+`;
+}

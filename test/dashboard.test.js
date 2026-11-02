@@ -1579,6 +1579,19 @@ test("safety headers: noindex on data and sign-in routes, locked-down browser fe
 test("terms and privacy answer at .html and at the plain path", async () => {
     const t = await setup();
     try {
+        for (const k of ["terms", "privacy"]) {
+            const frame = await (await t.request(`/${k}.html`, { raw: true })).text();
+            assert.match(frame, new RegExp(`<iframe[^>]+src="/${k}\\.pdf"`), `${k}.html frames the PDF`);
+            const pdf = await t.request(`/${k}.pdf`, { raw: true });
+            assert.equal(pdf.status, 200);
+            assert.equal(pdf.headers.get("content-type"), "application/pdf");
+            assert.equal(pdf.headers.get("x-frame-options"), "SAMEORIGIN");
+            assert.match(pdf.headers.get("content-security-policy"), /frame-ancestors 'self'/);
+            assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString(), "%PDF-");
+            const text = await (await t.request(`/${k}`, { raw: true })).text();
+            assert.ok(!text.includes("<iframe"), `${k} stays a plain web page`);
+        }
+        assert.match((await t.request("/", { raw: true })).headers.get("x-frame-options"), /DENY/, "everything else still refuses framing");
         for (const path of ["/terms.html", "/privacy.html", "/terms", "/privacy"]) {
             const r = await t.request(path, { raw: true });
             assert.equal(r.status, 200, path);

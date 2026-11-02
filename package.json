@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node src/index.js",
     "register": "node src/register.js",
+    "legal-pdf": "node scripts/legal-pdf.mjs",
     "test": "node --test"
   },
   "dependencies": {
