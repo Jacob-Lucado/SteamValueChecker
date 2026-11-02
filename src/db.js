@@ -16,6 +16,7 @@ import { auditSchema, auditStore } from "./auditstore.js";
 import { adminLoginSchema, adminLoginStore } from "./adminlogin.js";
 import { overlaySchema, overlayStore } from "./overlaystore.js";
 import { streamSchema, streamStore } from "./streamstore.js";
+import { memeSchema, memeStore } from "./memestore.js";
 import { steamSchema, steamStore } from "./steamstore.js";
 import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { redeemSchema, redeemStore } from "./redeemstore.js";
@@ -175,6 +176,7 @@ ${auditSchema}
 ${adminLoginSchema}
 ${overlaySchema}
 ${streamSchema}
+${memeSchema}
 ${communitySchema}
 ${steamSchema}
 ${grabberSchema}
@@ -266,7 +268,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "lb_message_id", "TEXT");
     addColumn("community", "lb_hours", "INTEGER NOT NULL DEFAULT 5");
     addColumn("community", "lb_at", "INTEGER");
-    for (const c of ["streamer_role_id", "live_channel", "ping_stream"]) addColumn("community", c, "TEXT");
+    for (const c of ["streamer_role_id", "live_channel", "ping_stream", "meme_channel"]) addColumn("community", c, "TEXT");
+    addColumn("community", "meme_on", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_hours", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_at", "INTEGER");
     for (const c of ["ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_promos"]) addColumn("community", c, "TEXT");
     addColumn("promo_codes", "added_at", "INTEGER");
     addColumn("giveaways", "host_name", "TEXT");
@@ -299,6 +302,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const adminLogin = adminLoginStore({ run, get, now });
     const overlay = overlayStore({ run, get, all, now });
     const streamLive = streamStore({ run, get, all, clean });
+    const memes = memeStore({ run, all });
     const gifts = giftStore({ run, get, all, now });
     const friends = friendStore({ run, get, all, now });
     const challenges = challengeStore({ run, all });
@@ -724,6 +728,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamLive, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

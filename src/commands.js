@@ -464,6 +464,15 @@ const invitesCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("top").setDescription("Who has brought in the most members"))
     .addSubcommand(s => s.setName("link").setDescription("Get your own invite link. Everyone who joins with it counts for you"));
 
+const memesCmd = new SlashCommandBuilder()
+    .setName("memes")
+    .setDescription("Auto memes: the bot posts a fresh meme in the memes channel on a timer")
+    .addSubcommand(s => s.setName("setup").setDescription("Choose the channel, how often, or turn it off")
+        .addChannelOption(o => o.setName("channel").setDescription("Where the memes go").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addIntegerOption(o => o.setName("hours").setDescription("Post one every…").addChoices(...[1, 2, 3, 6, 12, 24].map(n => ({ name: `${n} hour${n === 1 ? "" : "s"}`, value: n }))))
+        .addBooleanOption(o => o.setName("enabled").setDescription("Turn auto memes on or off")))
+    .addSubcommand(s => s.setName("now").setDescription("Post a meme right now"));
+
 const streamCmd = new SlashCommandBuilder()
     .setName("stream")
     .setDescription("Tell the server you're live and choose whether to be pinged when others are")
@@ -675,7 +684,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, streamCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -687,7 +696,7 @@ const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "mydata"] },
     { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "rank", "levels", "serverstats", "leaderboard"], groups: ["giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
-    { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji"] },
+    { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];
 const KEEP = ["help", "dashboard", "alerts", "mod", "music", "play", "player"];

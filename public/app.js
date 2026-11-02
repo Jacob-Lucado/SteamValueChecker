@@ -4731,8 +4731,16 @@
           h("p", { class: "muted small", text: st.lb_at ? "Last updated " + new Date(st.lb_at).toLocaleString() + "." : "Not posted yet." }),
           h("div", { class: "row" }, save("Save", () => post("/api/community/leaderboard", { channel_id: lbCh.value, hours: lbHours.value })),
             save("Save and refresh now", () => post("/api/community/leaderboard", { channel_id: lbCh.value, hours: lbHours.value, refresh: true }), "btn green small")));
+        const mCh = chSel(st.meme_channel || (ch.channels.find(c => c.name === "memes") || {}).id), mHours = h("select", { "aria-label": "How often" }, ...[1, 2, 3, 6, 12, 24].map(n => h("option", { value: String(n), text: n === 1 ? "Every hour" : `Every ${n} hours`, selected: n === (st.meme_hours || 1) })));
+        const mOn = h("input", { type: "checkbox", checked: st.meme_on !== 0 });
+        const mBody = () => ({ channel_id: mCh.value, hours: mHours.value, enabled: mOn.checked });
+        const memeP = h("div", { class: "panel" }, h("h3", { text: "Auto memes" }),
+          h("p", { class: "muted", text: "The bot posts a fresh gaming and internet meme in this channel on a timer. Nothing marked NSFW is used and a server never gets the same post twice." }),
+          field("Memes channel", mCh), field("How often", mHours), h("label", { class: "check" }, mOn, " Post memes automatically"),
+          h("p", { class: "muted small", text: st.meme_at ? "Last meme " + new Date(st.meme_at).toLocaleString() + "." : "None posted yet." }),
+          h("div", { class: "row" }, save("Save", () => post("/api/community/memes", mBody())), save("Save and post one now", () => post("/api/community/memes", { ...mBody(), now: true }), "btn green small")));
         // group everything a manager can customise into tabs
-        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Emoji", [emoji]]];
+        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Memes", [memeP]], ["Emoji", [emoji]]];
         const tabBar = h("div", { class: "tabs" }), body = h("div");
         const show = n => { mgrTab = n; [...tabBar.children].forEach((b, k) => b.classList.toggle("active", k === n)); body.replaceChildren(...groups[n][1]); };
         groups.forEach(([label], n) => tabBar.append(h("button", { class: "tab small", type: "button", text: label, onclick: () => show(n) })));

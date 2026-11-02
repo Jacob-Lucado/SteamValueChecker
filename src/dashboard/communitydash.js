@@ -6,12 +6,14 @@ import { backfillForum } from "../requestsync.js";
 import { honeypotPayload, HONEYPOT_TOPIC } from "../honeypot.js";
 import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
+import { createMemes, postMeme, MEME_HOURS } from "../memes.js";
 import { DiscordApiError } from "./discord.js";
 import { createEmojiGg, PACK_KEY_RE } from "../emojisource.js";
 
 export class CommunityError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
 export function createCommunityDash({ db, rest, community, membersIntent = () => true, botId, publicUrl = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
+    const memeSource = createMemes({ fetchImpl });
     const fail = (status, m) => { throw new CommunityError(status, m); };
     const nameOf = async (gid, id) => (await rest.memberName(gid, id).catch(() => null)) ?? "Member";
     const named = (gid, rows) => Promise.all(rows.map(async r => ({ ...r, name: await nameOf(gid, r.user_id) })));
@@ -157,6 +159,21 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         const c = db.getCommunity(gid);
         return { refreshed, lb_channel: c.lb_channel, lb_hours: c.lb_hours, lb_at: c.lb_at };
     }
+    /** Auto memes: the channel, how often, on or off, and a meme right now. */
+    async function memesSettings(gid, b) {
+        const patch = {};
+        if (b.channel_id !== undefined) { patch.meme_channel = await channelOk(gid, b.channel_id || null); patch.meme_at = null; }
+        if (b.hours !== undefined) { const n = Number(b.hours); if (!MEME_HOURS.includes(n)) fail(400, "Pick 1, 2, 3, 6, 12 or 24 hours."); patch.meme_hours = n; }
+        if (b.enabled !== undefined) patch.meme_on = b.enabled ? 1 : 0;
+        if (Object.keys(patch).length) db.setCommunity(gid, patch);
+        let posted = false;
+        if (b.now) {
+            try { await postMeme({ db, api: rest, memes: memeSource, guildId: gid }); posted = true; }
+            catch (e) { if (e instanceof UserError) fail(400, e.message); throw e; }
+        }
+        const c = db.getCommunity(gid);
+        return { posted, meme_channel: c.meme_channel, meme_hours: c.meme_hours, meme_on: c.meme_on, meme_at: c.meme_at };
+    }
     /** Saves the rules text (empty means the standard rules) and, when asked, posts them in the rules channel. */
     async function rules(gid, b) {
         const text = String(b.text ?? "").trim();
@@ -260,5 +277,5 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, leaderboard, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
+    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
 }

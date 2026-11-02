@@ -70,6 +70,7 @@ export const HELP_PAGES = [
         fields: [
             { name: "Setup", value: "`/manage setup` is a guided setup. `/manage community` `setup` builds the usual channels, roles, welcome and XP; `welcome`, `autorole`, `verifyrole`, `xp`, `levelrole`, `referral`, `status` tune it." },
             { name: "Alerts and extras", value: "`/manage alertchannel` `set` / `clear` / `show` / `feed` / `hot` / `sales` / `digest` / `group` picks where alerts go. `/manage emoji` `import` (emoji or picture links from anywhere) / `list` / `packs` (browse emoji.gg packs and import one) adds emoji. `/manage leaderboardrefresh` updates #leaderboard." },
+            { name: "Auto memes", value: "`/manage memes` `setup` picks the memes channel, how often (every 1 to 24 hours) or turns it off, `now` posts one right away. Servers set up with the community setup get it on automatically in #memes." },
             { name: "Moderation", value: "`/mod` `warn` / `warnings` / `clearwarns` / `timeout` / `untimeout` / `kick` / `ban` / `unban` / `purge` / `cases` / `log`. Every action is logged in #mod-log." }
         ] },
     { key: "bot", label: "Bot and support", emoji: "🤖", title: "/bot",

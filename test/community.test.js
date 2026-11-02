@@ -605,6 +605,25 @@ test("dashboard: managers set the leaderboard channel and hours and refresh it n
     await t.close();
 });
 
+test("dashboard: managers set the memes channel, how often, and turn auto memes off", async () => {
+    const t = await dashSetup();
+    const post = body => t.request("/api/community/memes", { method: "POST", body: { guild_id: "g1", ...body } });
+    assert.equal((await t.request("/api/community/memes", { method: "POST", body: { guild_id: "g2", hours: 3 } })).status, 403);
+    assert.equal((await post({ hours: 5 })).status, 400, "only the offered intervals");
+    assert.equal((await post({ now: true })).status, 400, "needs a channel first");
+    const ok = await post({ channel_id: "c1", hours: 6, enabled: false });
+    assert.equal(ok.status, 200);
+    const c = t.db.getCommunity("g1"); assert.equal(c.meme_channel, "c1"); assert.equal(c.meme_hours, 6); assert.equal(c.meme_on, 0);
+    await t.close();
+});
+
+test("community setup points auto memes at #memes", async () => {
+    const db = openDb(":memory:");
+    await communitySetup({ api: fakeApi(), db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.ok(db.getCommunity("G").meme_channel, "memes channel stored");
+    assert.equal(db.getCommunity("G").meme_on, 1);
+});
+
 test("setup still builds the server when my role lacks the Moderator permissions, and the invite link asks for them", async () => {
     for (const bit of [7, 22, 23, 24, 27]) assert.ok(BigInt(BOT_PERMISSIONS) & (1n << BigInt(bit)), `invite includes permission bit ${bit}`);
     const api = fakeApi(); api.state.denyPermRoles = true;

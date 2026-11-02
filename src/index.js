@@ -72,6 +72,7 @@ import { startPresence } from "./presence.js";
 import { createModeration } from "./moderation.js";
 import { createModHandlers } from "./modhandlers.js";
 import { tickLeaderboards } from "./leaderboard.js";
+import { createMemes, createMemeHandlers, tickMemes } from "./memes.js";
 import { createBroadcaster } from "./broadcast.js";
 import { honeypotHit } from "./honeypot.js";
 import { guildBannerSvg, toPng, artFor } from "./communitycards.js";
@@ -134,6 +135,8 @@ const community = createCommunity({ db, api: botRest, dm: (id, p) => discord.sen
 const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
 const modUi = createModHandlers({ db, mod: moderation });
 const streams = createStreams({ db, api: botRest });
+const memes = createMemes();
+const memeUi = createMemeHandlers({ db, api: botRest, memes });
 const streamUi = createStreamHandlers({ db, streams, ownerId: cfg.ownerId, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const communityUi = createCommunityHandlers({ db, api: botRest, service: community, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
 // Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).
@@ -403,6 +406,11 @@ client.once(Events.ClientReady, () => { // refresh each server's #leaderboard wh
     const tick = () => tickLeaderboards({ db, api: botRest, base: publicBase, has: id => client.guilds.cache.has(id), log: m => console.log(`[leaderboard] ${m}`) }).catch(() => {});
     setTimeout(tick, 60_000).unref?.(); setInterval(tick, 10 * 60_000).unref?.();
 });
+client.once(Events.ClientReady, () => { // post a meme in every server whose timer is up (checked every five minutes)
+    let busy = false;
+    const tick = () => { if (busy) return; busy = true; tickMemes({ db, api: botRest, memes, has: id => client.guilds.cache.has(id), log: m => console.log(`[memes] ${m}`) }).catch(() => {}).finally(() => { busy = false; }); };
+    setTimeout(tick, 90_000).unref?.(); setInterval(tick, 5 * 60_000).unref?.();
+});
 client.once(Events.ClientReady, async () => { if (!MEMBERS_INTENT) return; for (const g of client.guilds.cache.values()) { await community.refreshInvites(g.id); await new Promise(r => setTimeout(r, 300)); } });
 const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
 /** Splits long text at line breaks so each piece fits one embed description (4096). Discord allows 6000 characters across a message's embeds. */
@@ -619,6 +627,7 @@ client.on(Events.InteractionCreate, async i => {
             case "gamenight": return await handlers.handleGameNight(i);
             case "lfg": return await lfgUi.handleCommand(i);
             case "stream": return await streamUi.handleCommand(i);
+            case "memes": return await memeUi.handleCommand(i);
             case "calendar": return await calendarUi.handle(i);
             case "setup": return await setupUi.handleCommand(i);
             case "mod": return await modUi.handleCommand(i);
