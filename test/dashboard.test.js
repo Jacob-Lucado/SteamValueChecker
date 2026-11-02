@@ -1547,5 +1547,8 @@ test("terms and privacy answer at .html and at the plain path", async () => {
             assert.match(await r.text(), /<title>/);
         }
         assert.equal((await t.request("/terms.htm", { raw: true })).status, 404);
+        const head = await t.request("/terms.html", { raw: true, method: "HEAD" });
+        assert.equal(head.status, 200);
+        assert.match(head.headers.get("content-type"), /text\/html/);
     } finally { await t.close(); }
 });

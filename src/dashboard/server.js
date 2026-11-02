@@ -2516,6 +2516,8 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
 
     const server = http.createServer(async (req, res) => {
         try {
+            // Link checkers (Discord's developer portal among them) ask with HEAD first. Answer it like a GET; Node drops the body.
+            if (req.method === "HEAD") req.method = "GET";
             const url = new URL(req.url, origin);
             const key = `${req.method} ${url.pathname}`;
             if (url.pathname.startsWith("/api/visits/")) return visits(req, res, url);
