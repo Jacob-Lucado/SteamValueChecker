@@ -9,6 +9,7 @@ import { isDlc } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
+import { epicSoonPayload } from "./render.js";
 import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
 import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
@@ -154,9 +155,28 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
     try { giveaways = await itad.getGiveaways(); }
     catch (err) { log(`giveaway lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; }
 
+    // Subscriptions: a wishlist game that joins one, or is about to leave one. A member's first look is quiet (what's already there isn't news).
+    const subsBy = new Map();
+    for (const [region, ids] of regions) {
+        try { if (typeof itad.getSubs === "function") subsBy.set(region, await itad.getSubs([...ids], region)); }
+        catch (err) { log(`subscription lookup failed for ${region}: ${err.code ?? err.name}`); stats.error = stats.error ?? (err.code ?? err.name); }
+    }
+    const subStart = new Set(); // members whose first look happens in this run
     const perUser = new Map();
     for (const it of items) {
         const hits = [];
+        const mySubs = subsBy.get(it.region)?.get(it.itad_id);
+        if (mySubs) {
+            if (!db.hasSeen(it.discord_id, SUBS_MARKER)) subStart.add(it.discord_id);
+            for (const s of mySubs) {
+                const key = `sub:${s.id}:${it.itad_id}`;
+                if (!db.hasSeen(it.discord_id, key)) { if (subStart.has(it.discord_id)) db.markSeen(it.discord_id, key); else hits.push({ kind: "sub", key, item: it, sub: s }); }
+                if (s.leaving && s.leaving - now() <= SUB_LEAVING_MS) {
+                    const lkey = `subleave:${s.id}:${it.itad_id}:${new Date(s.leaving).toISOString().slice(0, 10)}`;
+                    if (!db.hasSeen(it.discord_id, lkey)) hits.push({ kind: "subleave", key: lkey, item: it, sub: s });
+                }
+            }
+        }
         for (const b of bundlesBy.get(it.region)?.get(it.itad_id) ?? []) {
             const key = `bundle:${b.id}:${it.itad_id}`;
             if (!db.hasSeen(it.discord_id, key)) hits.push({ kind: "bundle", key, item: it, bundle: b });
@@ -171,6 +191,7 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
         }
     }
 
+    for (const id of subStart) db.markSeen(id, SUBS_MARKER);
     for (const [userId, hits] of perUser) {
         stats.found += hits.length;
         const user = db.getUser(userId);
@@ -185,7 +206,7 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
                 db.markSeen(userId, h.key);
                 db.logAlert({
                     discord_id: userId, itad_id: h.item.itad_id, title: h.item.title, kind: h.kind,
-                    price: h.kind === "bundle" ? h.bundle.price : 0, shop: (h.bundle ?? h.giveaway).shop, via: res.via
+                    price: h.kind === "bundle" ? h.bundle.price : 0, shop: h.sub ? h.sub.name : (h.bundle ?? h.giveaway).shop, via: res.via
                 });
             }
         }
@@ -199,6 +220,8 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
  * Each giveaway is announced once per member.
  */
 const LAST_CHANCE_MS = 24 * 3600_000;
+const SUBS_MARKER = "substart";
+const SUB_LEAVING_MS = 14 * 86400_000; // "leaving soon" starts two weeks before the game goes
 const QUIET_START = [{ prefix: "luna:", marker: "freestart:luna" }]; // Amazon Luna's games are already open when it first shows up
 
 export async function runFreeGames({ db, itad, notifier, now = () => Date.now(), log = () => {}, fetchImpl = globalThis.fetch }) {
@@ -437,6 +460,42 @@ export async function runReleases({ db, itad, notifier, now = () => Date.now(), 
         stats.delivered++;
         db.markSeen(it.discord_id, `release:${it.itad_id}`);
         db.logAlert({ discord_id: it.discord_id, itad_id: it.itad_id, title: it.title, kind: "release", price: sum.best?.price ?? null, shop: sum.best?.shop ?? null, via: res.via });
+    }
+    return stats;
+}
+
+
+/**
+ * "Next on Epic": free games that start within the next week, told once to members who turned on free game alerts
+ * and posted once in the alert channel of servers that turned on the free game feed.
+ */
+export async function runEpicSoon({ db, soon, notifier, now = () => Date.now(), log = () => {} }) {
+    const stats = { found: 0, delivered: 0, failed: 0, deferred: 0, guilds: 0 };
+    let list;
+    try { list = await soon.list(); } catch (err) { log(`epic lookup failed: ${err.code ?? err.name}`); return stats; }
+    if (!list.length) return stats;
+    for (const user of db.freeUsers()) {
+        const fresh = list.filter(g => !db.hasSeen(user.discord_id, `epicsoon:${g.id}`));
+        if (!fresh.length) continue;
+        stats.found += fresh.length;
+        if (isQuiet(user, now())) { stats.deferred += fresh.length; continue; }
+        const payload = epicSoonPayload(fresh);
+        if (!payload) continue;
+        const res = await notifier.deliver(user, payload, "free");
+        if (!res.ok) { stats.failed += fresh.length; continue; }
+        stats.delivered += fresh.length;
+        for (const g of fresh.slice(0, 4)) {
+            db.markSeen(user.discord_id, `epicsoon:${g.id}`);
+            db.logAlert({ discord_id: user.discord_id, title: g.title, kind: "free", price: 0, shop: "Epic Games Store (soon)", via: res.via });
+        }
+    }
+    for (const guild of db.guildsWithFreeFeed()) {
+        const fresh = list.filter(g => !db.guildHasSeen(guild.guild_id, `epicsoon:${g.id}`));
+        if (!fresh.length) continue;
+        const payload = epicSoonPayload(fresh);
+        if (!payload || !(await notifier.postGuild(guild.guild_id, payload, "free"))) continue;
+        for (const g of fresh.slice(0, 4)) db.guildMarkSeen(guild.guild_id, `epicsoon:${g.id}`);
+        stats.guilds++;
     }
     return stats;
 }

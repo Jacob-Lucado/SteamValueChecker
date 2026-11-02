@@ -8,6 +8,7 @@ import {
 import { loadConfig } from "./config.js";
 import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
+import { createEpicSoon } from "./epicsoon.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
@@ -36,7 +37,7 @@ import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
 import { runFriendReminders } from "./friends.js";
 import { steamStillUpcoming } from "./steamrelease.js";
-import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runGuildFeeds, runHotDeals, runSaleStarts, runServerDigests, schedule } from "./poller.js";
+import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runEpicSoon, runGuildFeeds, runHotDeals, runSaleStarts, runServerDigests, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
@@ -95,7 +96,9 @@ const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../packag
 // Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
 const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey] });
 logs.capture();
-const itad = withLuna(createItad({ apiKey: cfg.itadKey }), createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) }));
+const luna = createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) });
+const epicSoon = createEpicSoon();
+const itad = withLuna(createItad({ apiKey: cfg.itadKey }), luna);
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
 const MEMBERS_INTENT = await (async () => {
@@ -281,6 +284,7 @@ client.once(Events.ClientReady, c => {
             try { result.tags = await refreshTags({ db, appids: db.allAppsNeedingTags(30), delayMs: 1200 }); } catch (err) { ops.error("genre tags", err); }
             try { result.releases = await runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }); } catch (err) { ops.error("releases", err); }
             try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
+            try { result.epicSoon = await runEpicSoon({ db, soon: epicSoon, notifier, log }); } catch (err) { ops.error("epic soon", err); }
             try { result.feeds = await runGuildFeeds({ db, itad, notifier, log }); } catch (err) { ops.error("server feeds", err); }
             try { result.hotDeals = await runHotDeals({ db, itad, notifier, log }); } catch (err) { ops.error("hot deals", err); }
             try { result.saleStarts = await runSaleStarts({ db, notifier, log }); } catch (err) { ops.error("sale starts", err); }
@@ -407,6 +411,16 @@ const status = createStatusMonitor({
             staleAfter(beat.alerts, cfg.checkEveryMinutes * 60_000) ? { state: "degraded", detail: "The last check is overdue" } : { state: "operational" } },
         ...(giveaways ? { giveaways: { name: "Giveaway engine", desc: "Ends giveaways on time and delivers prize keys", critical: false, check: () =>
             staleAfter(beat.giveaways, 60_000) ? { state: "degraded", detail: "The last run is overdue" } : { state: "operational" } } } : {}),
+        freesources: { name: "Free game sources", desc: "Amazon Luna claims and Epic's upcoming free games", critical: false, check: () => {
+            const bad = [["Amazon Luna", luna.health()], ["Epic Games Store", epicSoon.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
+            return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${h.lastError})`).join(" or ")}` } : { state: "operational" };
+        } },
+        golive: { name: "Go-live detection", desc: "Noticing when linked Twitch, Kick and YouTube streamers go live", critical: false, check: () => {
+            const h = streamWatch.health();
+            if (!h.linked) return { state: "operational" };
+            if (h.failed.length) return { state: "degraded", detail: `Can't check ${h.failed.join(" and ")}` };
+            return h.lastTickAt && Date.now() - h.lastTickAt > 15 * 60_000 ? { state: "degraded", detail: "The last check is overdue" } : { state: "operational" };
+        } },
         dashboard: { name: "Web dashboard", desc: "This website and its API", critical: false, check: () => ({ state: "operational" }) }
     }
 });

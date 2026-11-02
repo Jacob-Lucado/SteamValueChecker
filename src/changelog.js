@@ -1,6 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.05", date: "2026-11-05", title: "Fewer commands, bigger music", items: [
+        "**Coming soon on Epic:** members with free game alerts (and servers with the free game feed) now hear about next week's free Epic games before they start, with the date and time they go live.",
+        "**Subscriptions:** the bundle alerts now also tell you when a wishlist game joins a subscription like Game Pass or Prime Gaming, and when it's about to leave one. `/me wishlist check` shows which subscriptions include the game. The same switch as bundle alerts (`/alerts bundles`) controls them.",
         "**Go-live switch:** managers can turn the automatic go-live posts off (and back on) for their server, with the checkbox in the Streams page settings or `/server stream setup auto:`. Linked channels stay linked while it's off.",
         "**Amazon Luna claims:** the monthly games you can claim with Prime on Amazon Luna now show up with the other free games. You get an alert when a new one opens, a last-chance reminder before it ends, and they're in `/games freegames` (filter by Amazon Luna) and on the dashboard. Each card says which store the game is delivered through (Epic, GOG or Amazon Games).",
         "**Fancier /help and embeds:** `/help` is now a branded card with the logo, a banner, a jump menu, Back / Next buttons and Dashboard, Add to a server and Support links. Every card and message the bot sends now gets the same orange colour and a footer with the logo, and plain text replies show up as cards (messages that ping someone stay as text so the ping still works).",

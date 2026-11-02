@@ -21,7 +21,7 @@ import { UserError } from "../src/errors.js";
 const deal = (amount, regular, shop = "GOG") => ({ shop: { name: shop }, price: { amount, currency: "USD" }, regular: { amount: regular, currency: "USD" }, cut: 0, url: "https://deal.example/x" });
 const HOUR = 3600_000;
 
-function rig({ prices = {}, bundles = new Map(), giveaways = new Map(), freeList = [] } = {}) {
+function rig({ prices = {}, bundles = new Map(), giveaways = new Map(), freeList = [], subs = null } = {}) {
     const db = openDb(":memory:");
     const sent = [], posts = [];
     const discord = {
@@ -33,7 +33,8 @@ function rig({ prices = {}, bundles = new Map(), giveaways = new Map(), freeList
         lookupTitles: async titles => titles.map(t => (/^zzz/i.test(t) ? { title: t, id: null } : { title: t, id: "id-" + t.toLowerCase().replace(/\W+/g, ""), approx: false, matched: t })),
         getBundles: async ids => new Map(ids.map(id => [id, bundles.get(id) ?? []])),
         getGiveaways: async () => giveaways,
-        getGiveawayList: async () => freeList
+        getGiveawayList: async () => freeList,
+        ...(subs ? { getSubs: async ids => new Map(ids.map(id => [id, subs.get(id) ?? []])) } : {})
     };
     return { db, sent, posts, itad, notifier: createNotifier({ db, discord }) };
 }
@@ -219,6 +220,25 @@ test("bundles and giveaways: announced once per member, and respect the opt-out"
     assert.deepEqual(t.db.listAlerts("u1").map(a => a.kind).sort(), ["bundle", "giveaway"]);
     const s2 = await runExtras(t);
     assert.equal(s2.found, 0);
+});
+
+test("subscriptions: a quiet first look, then an alert when a wishlist game joins, and one when it is about to leave", async () => {
+    const subs = new Map([["a", [{ id: 6, name: "Game Pass", leaving: null }]]]);
+    const t = rig({ subs });
+    watch(t.db, "u1", ["a", "b"]);
+    const s1 = await runExtras(t);
+    assert.equal(s1.found, 0, "what is already in a subscription isn't news the first time");
+    subs.set("b", [{ id: 6, name: "Game Pass", leaving: null }]);
+    const s2 = await runExtras(t);
+    assert.equal(s2.delivered, 1); assert.match(t.sent[0].p.embeds[0].title, /Title b is on Game Pass/);
+    assert.equal(t.sent[0].p.components.length, 0, "no link button, there is nothing to open");
+    subs.set("a", [{ id: 6, name: "Game Pass", leaving: Date.now() + 5 * 86400_000 }]);
+    const s3 = await runExtras(t);
+    assert.equal(s3.delivered, 1); assert.match(t.sent[1].p.embeds[0].title, /Title a is leaving Game Pass/);
+    assert.equal((await runExtras(t)).found, 0, "each is told once");
+    assert.deepEqual(t.db.listAlerts("u1").map(a => a.kind).sort(), ["sub", "subleave"]);
+    const off = rig({ subs: new Map([["a", []]]) }); watch(off.db, "u2", ["a"]); off.db.updateUser("u2", { bundles: 0 });
+    assert.equal((await runExtras(off)).found, 0, "the bundles switch turns these off too");
 });
 
 test("weekly digest is sent once, and snapshots are made once a day", async () => {

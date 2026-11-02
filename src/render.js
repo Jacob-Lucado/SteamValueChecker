@@ -231,6 +231,21 @@ export function giveawayEmbed({ item, giveaway }) {
     return { color: GREEN, title: `🎁 ${item.title} is free right now`, url: safeUrl(giveaway.url), thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields, footer: { text: "Giveaway alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
 }
 
+/** A watched game joined a subscription (Game Pass, Prime Gaming...), or is about to leave one. */
+export function subEmbed({ item, sub, kind }) {
+    const leaving = kind === "subleave";
+    const fields = [{ name: "Service", value: `${subIcon(sub.name)} ${sub.name}`, inline: true }];
+    if (sub.leaving) fields.push({ name: leaving ? "Leaves" : "Until", value: `${stamp(sub.leaving)}\n<t:${Math.floor(sub.leaving / 1000)}:D>`, inline: true });
+    return {
+        color: leaving ? 0xfaa61a : GREEN, title: leaving ? `⏳ ${item.title} is leaving ${sub.name}` : `📦 ${item.title} is on ${sub.name}`,
+        description: leaving ? `If you want to play it with ${sub.name}, don't wait.` : `It's in the ${sub.name} catalogue now, so you may not need to buy it.`,
+        thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields,
+        footer: { text: "Subscription alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" }
+    };
+}
+const SUB_ICON = { "game pass": "🎮", "prime": "📦", "luna": "🌙", "humble": "💚", "ubisoft": "🔷", "ea play": "🅴", "playstation": "🎮", "ps plus": "🎮" };
+const subIcon = name => SUB_ICON[Object.keys(SUB_ICON).find(k => String(name).toLowerCase().includes(k))] ?? "📦";
+
 /** Weekly digest: best sales on the wishlist. Returns null when nothing is on sale. */
 /** The games behind a digest, as plain data the dashboard can expand: picture, price, discount and a link to the deal. */
 export function digestItems(rows, currency, { limit = 25 } = {}) {
@@ -326,7 +341,7 @@ export function groupEmbed(title, count, now) {
 }
 
 /** One game's price and lows, for /me wishlist check. */
-export function checkEmbed(title, now, verdict, advice = null) {
+export function checkEmbed(title, now, verdict, advice = null, subs = []) {
     const c = now.currency ?? "USD";
     const fields = [
         { name: "Price now", value: money(now.price, c), inline: true },
@@ -337,6 +352,7 @@ export function checkEmbed(title, now, verdict, advice = null) {
         { name: "All-time low", value: money(now.atl, c), inline: true }
     ];
     if (advice) fields.push({ name: `${{ buy: "🟢", lean_buy: "🟢", lean_wait: "🟡", wait: "🟠" }[advice.verdict]} Buy now or wait? ${advice.label}`, value: advice.reasons.join(" ") });
+    if (subs?.length) fields.push({ name: "📦 Included with", value: subs.slice(0, 5).map(s => `**${s.name}**${s.leaving ? ` (leaves ${stamp(s.leaving)})` : ""}`).join("  •  ") + "\nIf you have it, you may not need to buy this." });
     return {
         color: verdict && verdict.level === "great" ? GREEN : COLOR,
         title, url: safeUrl(now.url), fields,
@@ -418,6 +434,27 @@ export function freeArt(g) {
 const SHOP_ICON = { steam: "🎮", epic: "🛒", gog: "🟣", itch: "🎲", humble: "💚", ubisoft: "🔷", amazon: "📦", prime: "📦" };
 export const shopIcon = shop => SHOP_ICON[Object.keys(SHOP_ICON).find(k => String(shop).toLowerCase().includes(k))] ?? "🎁";
 
+/** "Next on Epic": free games that haven't started yet, as one message with a card each. */
+export function epicSoonPayload(games) {
+    const list = games.filter(g => safeUrl(g.url)).slice(0, 4);
+    if (!list.length) return null;
+    const big = list.length <= 2;
+    const embeds = list.map((g, n) => ({
+        color: 0x0078f2, title: `🔜 ${g.title}`.slice(0, 256), url: safeUrl(g.url),
+        description: `## FREE ${stamp(g.start)}  •  🛒 Epic Games Store\nIt becomes free to keep on <t:${Math.floor(g.start / 1000)}:f>${g.end ? ` and stays free until <t:${Math.floor(g.end / 1000)}:f>` : ""}.`,
+        fields: [
+            { name: "Starts", value: stamp(g.start), inline: true },
+            ...(g.end ? [{ name: "Ends", value: stamp(g.end), inline: true }] : []),
+            ...(g.regular ? [{ name: "Normally", value: `~~${money(g.regular.amount, g.regular.currency)}~~ **free**`, inline: true }] : [])
+        ],
+        image: big && safeUrl(g.art) ? { url: g.art } : undefined, thumbnail: !big && safeUrl(g.art) ? { url: g.art } : undefined,
+        footer: n === list.length - 1 ? { text: "Nothing to claim yet. We'll ping you again when it's live  •  Data from the Epic Games Store" } : undefined
+    }));
+    const content = list.length === 1 ? "Coming soon: a free game on Epic" : `Coming soon: ${list.length} free games on Epic`;
+    const link = (label, url) => ({ type: 2, style: 5, label: label.slice(0, 80), url });
+    return { content, embeds, components: [{ type: 1, components: [link("Epic free games page", "https://store.epicgames.com/en-US/free-games"), ...(list.length === 1 ? [link("Game page", list[0].url)] : [])] }] };
+}
+
 /** The same cards as a free-game alert, headed as a reminder that the offer is about to end. */
 export function lastChancePayload(shop, games) {
     const p = freeGamesPayload(shop, games);
@@ -459,22 +496,22 @@ export function freeGamesPayload(shop, games, { pager = null } = {}) {
     return { content, embeds, components: [{ type: 1, components: row }] };
 }
 
-/** A message of bundle and giveaway alerts for one member: one card at a time when there are several. */
+/** A message of bundle, giveaway and subscription alerts for one member: one card at a time when there are several. */
 export function extrasPayload(hits, { pager = null } = {}) {
-    const cards = hits.map(h => (h.kind === "bundle" ? bundleEmbed(h) : giveawayEmbed(h)));
+    const cards = hits.map(h => (h.kind === "bundle" ? bundleEmbed(h) : h.kind === "sub" || h.kind === "subleave" ? subEmbed(h) : giveawayEmbed(h)));
     const rows = extrasButtons(hits);
     if (pager && hits.length > 1) return pagedPayload(pager, { content: `${hits.length} deals from your wishlist.`, pages: hits.map((h, n) => ({ embed: cards[n], rows: rows[n] ? [rows[n]] : [], label: h.item.title })) });
-    return { embeds: cards, components: rows };
+    return { embeds: cards, components: rows.filter(Boolean).slice(0, 5) };
 }
 
 /** Link buttons under bundle and giveaway alerts, one per card. */
 export function extrasButtons(hits) {
     return hits.map(h => {
         const url = safeUrl((h.bundle ?? h.giveaway)?.url);
-        if (!url) return null;
+        if (!url) return null; // subscription alerts have no link
         const label = h.kind === "bundle" ? "View bundle" : "Claim it";
         return { type: 1, components: [linkButton(hits.length > 1 ? `${label}: ${short(h.item.title, 28)}` : label, url)] };
-    }).filter(Boolean);
+    });
 }
 
 const num = n => (n === null || n === undefined ? "-" : Number(n).toLocaleString("en-US"));

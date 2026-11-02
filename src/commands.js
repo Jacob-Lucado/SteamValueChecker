@@ -340,7 +340,7 @@ alerts
             { name: "Thursday", value: 4 }, { name: "Friday", value: 5 }, { name: "Saturday", value: 6 })))
     .addSubcommand(s => s.setName("mindiscount").setDescription("Only alert me for sales of at least this percent off (starred games always come through)")
         .addIntegerOption(o => o.setName("percent").setDescription("0 to 90. 0 means any discount").setRequired(true).setMinValue(0).setMaxValue(90)))
-    .addSubcommand(s => s.setName("bundles").setDescription("Alerts when a wishlist game is in a bundle or given away")
+    .addSubcommand(s => s.setName("bundles").setDescription("Alerts when a wishlist game is in a bundle, given away or joins a subscription")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("freegames").setDescription("Get told when a game is free to claim on Steam, Epic, GOG and others")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true))

@@ -182,7 +182,9 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             if (now.price === null) throw new UserError("No current price found for that game.");
             let advice = null;
             try { advice = buyOrWait(await itad.getHistory(found.item.itad_id, user.region), now.price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => money(n, now.currency) }); } catch { /* the check works without it */ }
-            await i.editReply({ embeds: [checkEmbed(found.item.title, now, dealVerdict(now), advice)] });
+            let subs = [];
+            try { subs = (await itad.getSubs?.([found.item.itad_id], user.region))?.get(found.item.itad_id) ?? []; } catch { /* the check works without it */ }
+            await i.editReply({ embeds: [checkEmbed(found.item.title, now, dealVerdict(now), advice, subs)] });
         } catch (err) {
             await failed(i, "wishlist check", err);
         }
@@ -303,7 +305,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                             { name: "Server alert channel", value: guild ? `<#${guild.channel_id}>` : "Not set (DMs only)", inline: true },
                             { name: "Quiet hours", value: describeQuiet(user), inline: true },
                             { name: "Weekly digest", value: describeDigest(user), inline: true },
-                            { name: "Bundle and giveaway alerts", value: user.bundles === 0 ? "Off" : "On", inline: true },
+                            { name: "Bundle, giveaway and subscription alerts", value: user.bundles === 0 ? "Off" : "On", inline: true },
                             { name: "Free game alerts", value: user.free ? "On" : "Off", inline: true },
                             { name: "Server group alerts and leaderboard", value: user.share ? "Opted in" : "Not shared", inline: true }
                         ]
@@ -362,7 +364,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             case "bundles": {
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { bundles: on ? 1 : 0 });
-                return eph(i, on ? "You will be told when a wishlist game is in a bundle or being given away." : "Bundle and giveaway alerts are off.");
+                return eph(i, on ? "You will be told when a wishlist game is in a bundle, being given away, or joins or leaves a subscription like Game Pass." : "Bundle and giveaway alerts are off.");
             }
             case "freegames": {
                 const on = i.options.getBoolean("enabled", true);

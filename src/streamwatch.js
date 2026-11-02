@@ -95,10 +95,12 @@ export function createCheckers({ fetchImpl = globalThis.fetch, env = process.env
  */
 export function createStreamWatch({ db, streams, api, checkers = createCheckers(), env = process.env, now = () => Date.now(), log = () => {}, access = null }) {
     const misses = new Map(); // "guild:user" -> consecutive offline checks
+    const health = { lastTickAt: null, linked: 0, failed: [] }; // for the status page
     const can = watchable(env);
     async function tick() {
         const off = new Map(); // servers where a manager switched the automatic posts off
         const links = db.allStreamLinks().filter(l => { if (!off.has(l.guild_id)) off.set(l.guild_id, db.getCommunity(l.guild_id)?.stream_auto === 0); return !off.get(l.guild_id); });
+        health.linked = links.length; health.lastTickAt = now(); health.failed = [];
         if (!links.length) return { live: 0, ended: 0 };
         const bySite = {};
         for (const l of links) if (can[l.platform]) (bySite[l.platform] ??= new Set()).add(l.handle.toLowerCase());
@@ -106,6 +108,7 @@ export function createStreamWatch({ db, streams, api, checkers = createCheckers(
         for (const [site, set] of Object.entries(bySite)) {
             try { liveBy[site] = await checkers[site]([...set]); } catch (e) { failed.add(site); log(`${site} check failed: ${e.message}`); }
         }
+        health.failed = [...failed];
         let started = 0, ended = 0;
         for (const l of links) {
             if (!can[l.platform] || failed.has(l.platform)) continue; // can't tell: leave things as they are
@@ -128,5 +131,5 @@ export function createStreamWatch({ db, streams, api, checkers = createCheckers(
         }
         return { live: started, ended };
     }
-    return { tick, can };
+    return { tick, can, health: () => ({ ...health, failed: [...health.failed] }) };
 }

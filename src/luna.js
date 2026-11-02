@@ -68,13 +68,14 @@ export async function fetchWithBrowser({ executablePath = process.env.LUNA_CHROM
  */
 export function createLuna({ fetchData = fetchWithBrowser, now = () => Date.now(), ttlMs = 2 * 3600_000, retryMs = 20 * 60_000, log = () => {}, enabled = true } = {}) {
     let cache = null, at = 0, failedAt = 0, running = null, warned = false;
+    const state = { lastOkAt: null, lastErrorAt: null, lastError: null };
     async function refresh() {
         try {
             const list = parseLunaClaims(await fetchData(), now());
-            cache = list; at = now(); failedAt = 0;
+            cache = list; at = now(); failedAt = 0; state.lastOkAt = at;
             if (list.length) log(`${list.length} Luna claims`);
         } catch (err) {
-            failedAt = now();
+            failedAt = now(); state.lastErrorAt = failedAt; state.lastError = err.code ?? err.message;
             if (!warned) { warned = true; log(`Luna claims unavailable: ${err.code ?? err.message}`); }
         } finally { running = null; }
     }
@@ -85,7 +86,7 @@ export function createLuna({ fetchData = fetchWithBrowser, now = () => Date.now(
         if (running && (!cache || now() - at >= 24 * 3600_000)) await running; // nothing usable yet: wait for it
         return cache && now() - at < 24 * 3600_000 ? cache.filter(g => !g.expiry || g.expiry > now()) : [];
     }
-    return { list };
+    return { list, health: () => ({ enabled, ...state }) };
 }
 
 /** Adds Luna's claims to an ITAD-style `getGiveawayList`, without ever letting a Luna problem break it. */

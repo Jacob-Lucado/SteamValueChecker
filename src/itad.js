@@ -336,6 +336,31 @@ export function createItad({
         return out;
     }
 
+    /**
+     * The subscriptions (Game Pass, Prime Gaming and so on) each game is in right now.
+     * Returns Map(itadId -> [{ id, name, leaving }]) where `leaving` is a time in ms or null. Cached like the other lookups.
+     */
+    async function getSubs(ids, country = "US") {
+        const out = new Map(), need = [];
+        for (const id of ids) { const hit = getCached(`subs:${country}:${id}`); if (hit !== undefined) out.set(id, hit); else need.push(id); }
+        for (const part of chunk(need, 200)) {
+            const data = await call("POST", "/games/subs/v1", { country }, part);
+            const found = new Map(part.map(id => [id, []]));
+            for (const row of Array.isArray(data) ? data : []) {
+                if (!found.has(row?.id)) continue;
+                const list = [];
+                for (const s of Array.isArray(row.subs) ? row.subs : []) {
+                    const leaving = isoOrNull(s?.leaving);
+                    if (!s?.name || (leaving !== null && leaving < now())) continue;
+                    list.push({ id: Number(s.id) || String(s.name), name: String(s.name).slice(0, 60), leaving });
+                }
+                found.set(row.id, list);
+            }
+            for (const [id, list] of found) { setCached(`subs:${country}:${id}`, list); out.set(id, list); }
+        }
+        return out;
+    }
+
     /** Every active giveaway: [{ id, title, shop, url, expiry, gameIds }]. One call, cached. */
     async function getGiveawayList() {
         const hit = getCached("giveaway-list");
@@ -432,5 +457,5 @@ export function createItad({
         return points;
     }
 
-    return { steamAppIds, lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getDealsPool, getHistory, health, _cache: cache };
+    return { steamAppIds, lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getSubs, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getDealsPool, getHistory, health, _cache: cache };
 }

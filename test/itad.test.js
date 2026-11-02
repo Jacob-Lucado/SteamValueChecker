@@ -105,3 +105,18 @@ test("auth and server errors are clear, and never leak the API key", async () =>
     const down = createItad({ apiKey: "TOPSECRET", fetchImpl: async () => { throw new Error("connect ECONNREFUSED https://x?key=TOPSECRET"); } });
     await assert.rejects(() => down.getPrices(["a"]), e => e.code === "network" && !e.message.includes("TOPSECRET"));
 });
+
+test("subscriptions: one batch call, leaving dates read, ended ones dropped, cached", async () => {
+    const log = [];
+    const itad = createItad({ apiKey: "KEY", minGapMs: 0, now: () => Date.UTC(2026, 10, 2), fetchImpl: fakeFetch({
+        "/games/subs/v1": () => json([
+            { id: "a", subs: [{ id: 6, name: "Game Pass", leaving: null }, { id: 1, name: "Prime Gaming", leaving: "2026-11-20T18:00:00+00:00" }, { id: 9, name: "Old", leaving: "2026-10-01T00:00:00+00:00" }] },
+            { id: "b", subs: [] }, { id: "zz", subs: [{ id: 1, name: "Not asked for" }] }
+        ])
+    }, log) });
+    const out = await itad.getSubs(["a", "b", "c"], "US");
+    assert.deepEqual(out.get("a").map(s => [s.name, s.leaving]), [["Game Pass", null], ["Prime Gaming", Date.parse("2026-11-20T18:00:00Z")]]);
+    assert.deepEqual(out.get("b"), []); assert.deepEqual(out.get("c"), [], "a game the answer skipped has none");
+    assert.deepEqual(log[0].body, ["a", "b", "c"]);
+    await itad.getSubs(["a", "b"], "US"); assert.equal(log.length, 1, "cached");
+});
