@@ -2578,7 +2578,7 @@
     ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
-    ["Operations", [["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."]]]
+    ["Operations", [["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
   const ADMIN_PAGES = Object.fromEntries(ADMIN_NAV.flatMap(([, items]) => items.map(([id, title, icon, sub]) => [id, { title, icon, sub }])));
   let adminCtx = null, adminCtxAt = 0, adminTimer = 0;
@@ -2595,10 +2595,112 @@
     app.replaceChildren(h("div", { class: "adm-center" }, h("div", { class: "panel" }, h("h2", { text: title }), h("p", { class: "muted", text }), h("div", { class: "row" }, actions))));
   }
 
+  /** The signed-out screen: username and password, or Discord. Nothing of the panel is shown until one of them works. */
+  function adminLoginScreen() {
+    admEl("adm").classList.add("adm-bare");
+    document.title = "Sign in · Admin · Steam Value Checker";
+    const user = h("input", { type: "text", name: "username", autocomplete: "username", autocapitalize: "none", spellcheck: "false", required: "" });
+    const pass = h("input", { type: "password", name: "password", autocomplete: "current-password", required: "" });
+    const code = h("input", { type: "text", name: "code", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "7", placeholder: "123456" });
+    const codeRow = field("Authenticator code", code); codeRow.hidden = true;
+    const msg = h("p", { class: "adm-login-msg", role: "alert", hidden: "" });
+    const go = h("button", { class: "btn blue big", type: "submit", text: "Sign in" });
+    const form = h("form", { class: "adm-login-form", novalidate: "" }, field("Username", user), field("Password", pass), codeRow, msg, go);
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      msg.hidden = true; go.disabled = true;
+      try {
+        const r = await api("/api/admin/login", { username: user.value, password: pass.value, code: code.value });
+        if (r.needCode) { codeRow.hidden = false; code.focus(); msg.textContent = "Enter the 6-digit code from your authenticator app."; msg.hidden = false; return; }
+        location.reload();
+      } catch (err) { msg.textContent = err.message || "Could not sign in."; msg.hidden = false; }
+      finally { go.disabled = false; }
+    });
+    app.replaceChildren(h("div", { class: "adm-center adm-login" }, h("div", { class: "panel" },
+      h("img", { src: "/logo.png", alt: "", width: "48", height: "48" }), h("h2", { text: "Admin panel" }), h("p", { class: "muted", text: "Only the bot owner can sign in." }),
+      form, h("div", { class: "adm-or" }, h("span", { text: "or" })),
+      h("a", { class: "btn gray big", href: "/auth/login?next=admin", text: "Sign in with Discord" }), h("div", { class: "row center" }, themeButton()))));
+    user.focus();
+  }
+
+  /** Create or change the username and password, and turn the two-step code on or off. */
+  async function adminAccount(body, fail) {
+    let info;
+    try { info = await api("/api/admin/account"); } catch (e) { return fail(e); }
+    const redraw = () => adminAccount(body, fail);
+    const pw = (label, ac) => h("input", { type: "password", autocomplete: ac, "aria-label": label, required: "" });
+    const when = t => t ? new Date(t).toLocaleString() : "never";
+    const note = h("p", { class: "muted small" });
+    const status = h("div", { class: "panel" }, h("h3", { text: "Sign-in methods" }),
+      h("p", {}, h("b", { text: "Discord" }), " is always on. It is the main way in and cannot be removed."),
+      h("p", {}, h("b", { text: "Username and password" }), info.exists ? ` is on for “${info.username}”. Last used: ${when(info.lastLogin)}.` : " is not set up yet."),
+      info.exists ? h("p", {}, h("b", { text: "Two-step code" }), info.totp ? " is on." : " is off.") : null,
+      info.viaPassword ? h("p", { class: "muted small", text: "You are signed in with the password right now. This kind of sign-in lasts 12 hours and only opens this panel." }) : null);
+
+    const uName = h("input", { type: "text", autocomplete: "username", autocapitalize: "none", spellcheck: "false", value: info.username || "", "aria-label": "Username", required: "" });
+    const pNew = pw("New password", "new-password"), pNew2 = pw("Repeat the new password", "new-password"), pCur = pw("Current password", "current-password");
+    const save = h("button", { class: "btn blue", type: "submit", text: info.exists ? "Save changes" : "Create sign-in" });
+    const form = h("form", { class: "adm-form", novalidate: "" },
+      field("Username", uName), field(info.exists ? "New password" : "Password", pNew), field("Repeat the password", pNew2),
+      info.exists ? field("Current password (to confirm it is you)", pCur) : null,
+      h("p", { class: "muted small", text: "Use at least 12 characters. A few random words in a row is easy to remember and hard to guess. The password is stored only as a salted hash, never as text." }), save);
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      if (pNew.value !== pNew2.value) return toast("The two passwords don't match.", "error");
+      await busy(save, async () => {
+        await api("/api/admin/account/save", { username: uName.value, password: pNew.value, current: pCur.value });
+        toast(info.exists ? "Saved. Other password sign-ins were ended." : "Done. You can now sign in with this username and password.");
+        redraw();
+      });
+    });
+    const setup = h("div", { class: "panel" }, h("h3", { text: info.exists ? "Change the username or password" : "Create a username and password" }), form);
+
+    const parts = [status, setup];
+    if (info.exists) {
+      // Two-step code
+      const two = h("div", { class: "panel" }, h("h3", { text: "Two-step code" }), h("p", { class: "muted", text: "Adds a 6-digit code from an authenticator app (Google Authenticator, Authy, 1Password and so on) to the password sign-in. Strongly recommended." }));
+      if (info.totp) {
+        const cur = pw("Current password", "current-password");
+        const off = h("button", { class: "btn red", type: "button", text: "Turn off two-step code" });
+        off.addEventListener("click", () => busy(off, async () => { await api("/api/admin/account/totp/disable", { current: cur.value }); toast("Two-step code is off."); redraw(); }));
+        two.append(field("Current password", cur), h("div", { class: "row" }, off));
+      } else {
+        const cur = pw("Current password", "current-password");
+        const begin = h("button", { class: "btn blue", type: "button", text: "Set up two-step code" });
+        const slot = h("div");
+        begin.addEventListener("click", () => busy(begin, async () => {
+          const r = await api("/api/admin/account/totp/start", { current: cur.value });
+          const code = h("input", { type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "7", placeholder: "123456", "aria-label": "Code from the app" });
+          const on = h("button", { class: "btn green", type: "button", text: "Check the code and turn it on" });
+          on.addEventListener("click", () => busy(on, async () => { await api("/api/admin/account/totp/enable", { code: code.value }); toast("Two-step code is on."); redraw(); }));
+          slot.replaceChildren(
+            h("p", { text: "In your authenticator app choose “Enter a setup key” and paste this key. Pick “time based” if asked." }),
+            h("div", { class: "adm-secret" }, h("code", { text: r.secret.replace(/(.{4})/g, "$1 ").trim() }),
+              h("button", { class: "btn gray small", type: "button", text: "Copy", onclick: () => { navigator.clipboard?.writeText(r.secret).then(() => toast("Copied.")).catch(() => {}); } })),
+            h("p", { class: "muted small", text: "Or open this link on the phone that has the app:" }), h("a", { href: r.uri, text: "Add to authenticator app" }),
+            field("Then type the 6-digit code it shows", code), h("div", { class: "row" }, on));
+        }));
+        two.append(field("Current password", cur), h("div", { class: "row" }, begin), slot);
+      }
+      // Remove
+      const rm = pw("Current password", "current-password");
+      const del = h("button", { class: "btn red", type: "button", text: "Remove username and password" });
+      del.addEventListener("click", () => busy(del, async () => {
+        await api("/api/admin/account/remove", { current: rm.value });
+        if (info.viaPassword) return location.reload();
+        toast("Removed."); redraw();
+      }));
+      parts.push(two, h("div", { class: "panel" }, h("h3", { text: "Remove the password sign-in" }), h("p", { class: "muted", text: "Discord sign-in keeps working. Any open password sessions end." }), field("Current password", rm), h("div", { class: "row" }, del)));
+    }
+    parts.push(h("div", { class: "panel" }, h("h3", { text: "Good to know" }),
+      h("p", { class: "muted small", text: "Five wrong tries in a row lock the password sign-in for 15 minutes (longer if it keeps happening). Discord sign-in is never locked. Every sign-in and change is written to the audit log, without any passwords." }), note));
+    body.replaceChildren(...parts);
+  }
+
   async function adminBoot() {
     try { state.cfg = await api("/api/config"); } catch (e) { return adminCenter("Can't reach the bot", e.message); }
     try { state.me = await api("/api/me"); } catch { state.me = null; }
-    if (!state.me) return adminCenter("Admin panel", "Sign in with the Discord account that owns the bot.", h("a", { class: "btn blue big", href: "/auth/login?next=admin", text: "Sign in with Discord" }));
+    if (!state.me) return adminLoginScreen();
     if (!state.me.isOwner) return adminCenter("Owner only", "This account isn't the bot owner, so there's nothing to see here.",
       h("a", { class: "btn gray", href: state.cfg.siteUrl || "/", text: "Back to Steam Value Checker" }),
       h("button", { class: "btn gray", type: "button", text: "Sign out", onclick: async () => { try { await api("/auth/logout", {}); } catch { /* already out */ } location.reload(); } }));
@@ -2653,6 +2755,7 @@
     const fail = e => body.replaceChildren(h("div", { class: "notice warn", text: e.message || "Something went wrong." }));
     if (page === "system") return void adminSystem(body, fail);
     if (page === "audit") return void adminAudit(body);
+    if (page === "account") return void adminAccount(body, fail);
     adminContext().then(ctx => {
       const tab = ctx.TABS.find(t => t[0] === page);
       const nodes = tab[2]();
@@ -4787,7 +4890,7 @@
     try {
       if (!state.cfg) state.cfg = await api("/api/config");
       try { const x = await api("/api/about"); state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null; } catch { state.about = null; state.creator = null; }
-      try { state.me = await api("/api/me"); } catch { state.me = null; }
+      try { state.me = await api("/api/me"); if (state.me?.adminOnly) state.me = null; } catch { state.me = null; } // a password sign-in opens the admin panel only
     } catch (e) {
       app.replaceChildren(h("div", { class: "notice warn", text: e.message }));
       return;

@@ -75,6 +75,7 @@ import { isHidden } from "../hidden.js";
 import { legalPage, legalFramePage } from "../legal.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
 import { MAX_KEYS } from "../gwstore.js";
+import { checkPassword, burnTime, passwordProblem, USERNAME_RE, newTotpSecret, matchTotp, totpUri } from "../adminlogin.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 const FILES = {
@@ -112,6 +113,7 @@ const FILES = {
 const SESSION_MS = 7 * 24 * 3600_000;
 const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
+const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived than the Discord one
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const COOLDOWNS = { cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000 };
@@ -159,6 +161,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     const cache = new Map();
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
+    const loginLimit = createLimiter({ windowMs: 60_000, max: 8, now });
     const authLimit = createLimiter({ windowMs: 60_000, max: config.authPerMinute ?? 20, now });
     const names = new Map(); // "guild:user" -> { name, until }
 
@@ -243,6 +246,8 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     function session(req) {
         const s = sessions.get(cookies(req)[COOKIE]);
         if (!s || s.expires < now()) throw new HttpError(401, "Please sign in with Discord.");
+        // A username and password sign-in opens the admin panel and nothing else, even though the cookie is shared across the site.
+        if (s.adminOnly && !/^\/api\/(admin\/|me$|config$)/.test(String(req.url).split("?")[0])) throw new HttpError(401, "Please sign in with Discord.");
         if (s.userId && s.userId !== config.ownerId && db.isBanned(s.userId)) {
             sessions.delete(cookies(req)[COOKIE]);
             throw Object.assign(new HttpError(403, RESTRICTED_TEXT), { restricted: true });
@@ -254,7 +259,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
     /** The signed-in session if there is one, otherwise null (for public pages that show a little more to staff). */
     function softSession(req) {
         const s = sessions.get(cookies(req)[COOKIE]);
-        return s && s.expires >= now() && !(s.userId && s.userId !== config.ownerId && db.isBanned(s.userId)) ? s : null;
+        return s && !s.adminOnly && s.expires >= now() && !(s.userId && s.userId !== config.ownerId && db.isBanned(s.userId)) ? s : null;
     }
     const STAFF_PERMS = ["moderate", "kick", "ban", "manageMessages"];
     /** Owner, Manage Server, Administrator or any moderator permission in that server. */
@@ -318,6 +323,38 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
             const detail = Object.entries(body ?? {}).filter(([k, v]) => AUDIT_FIELDS.includes(k) && ["string", "number", "boolean"].includes(typeof v) && String(v).length <= 120).map(([k, v]) => `${k}=${v}`).join(" ");
             db.logAudit({ actor: s.userId, action: path.replace("/api/admin/", ""), target: body?.id ?? body?.guild_id ?? null, detail: detail || null });
         } catch { /* the action already happened; a missing log line must not undo it */ }
+    }
+    /** Re-asks for the password before a sensitive change. Wrong answers count toward the same lockout as sign-in. */
+    function verifyCurrent(row, password) {
+        const t = now();
+        if (row.locked_until > t) throw new HttpError(429, `Too many wrong passwords. Try again in ${Math.ceil((row.locked_until - t) / 60000)} minutes.`);
+        if (!password || !checkPassword(String(password), row.salt, row.hash)) { db.failAdminLogin(config.ownerId, now()); throw new HttpError(403, "That is not your current password."); }
+    }
+    /** Username and password (plus an authenticator code when turned on). The reply never says which part was wrong. */
+    function adminPasswordLogin(req, res, b) {
+        const ip = clientIp(req);
+        const r = loginLimit.hit(ip);
+        if (!r.ok) throw new HttpError(429, `Too many tries. Try again in ${r.retryAfterS}s.`);
+        const row = config.ownerId ? db.getAdminLoginByName(String(b.username ?? "").trim().toLowerCase()) : null;
+        const wrong = () => new HttpError(401, "Wrong username or password.");
+        if (!row) { burnTime(); throw wrong(); }
+        const t = now();
+        if (row.locked_until > t) { burnTime(); throw new HttpError(429, "This sign-in is locked for a while after too many wrong tries. Use Discord, or wait."); }
+        if (!checkPassword(String(b.password ?? ""), row.salt, row.hash)) {
+            const lock = db.failAdminLogin(row.owner_id, t);
+            try { db.logAudit({ actor: row.owner_id, action: "login-failed", target: null, detail: `ip=${ip}${lock ? " locked" : ""}` }); } catch { /* best effort */ }
+            throw wrong();
+        }
+        let step = 0;
+        if (row.totp_on) {
+            if (!String(b.code ?? "").trim()) return { needCode: true };
+            step = matchTotp(row.totp_secret, b.code, t, row.totp_step);
+            if (!step) { db.failAdminLogin(row.owner_id, t); throw new HttpError(401, "That code is not right."); }
+        }
+        db.okAdminLogin(row.owner_id, step, t);
+        startSession(res, { userId: row.owner_id, username: row.username, avatar: null, guilds: [], adminOnly: true }, ADMIN_SESSION_MS);
+        try { db.logAudit({ actor: row.owner_id, action: "login-password", target: null, detail: `ip=${ip}` }); } catch { /* best effort */ }
+        return { ok: true };
     }
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     let broadcasterInstance = null;
@@ -441,6 +478,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 isOwner: isOwner(s),
                 adminUrl: isOwner(s) ? (adminOrigin ? adminOrigin + "/" : origin + "/admin") : null,
                 steamOnly: Boolean(s.steamOnly),
+                adminOnly: Boolean(s.adminOnly),
                 giveaways: Boolean(giveaways),
                 library: db.countLibrary(s.userId),
                 unread: db.unreadNotifications(s.userId),
@@ -2054,6 +2092,67 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 admin: { host: adminHost, sharedCookie: Boolean(cookieDomain) }
             };
         },
+        // The owner's own username and password, a second way into this panel. Changing anything needs the current password again.
+        "GET /api/admin/account": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const r = db.getAdminLogin(config.ownerId);
+            return { exists: Boolean(r), username: r?.username ?? null, created: r?.created ?? null, lastLogin: r?.last_login ?? null, totp: Boolean(r?.totp_on), pendingTotp: Boolean(r?.totp_secret && !r?.totp_on), viaPassword: Boolean(s.adminOnly) };
+        },
+        "POST /api/admin/account/save": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const prev = db.getAdminLogin(config.ownerId);
+            if (prev) verifyCurrent(prev, b.current);
+            const username = String(b.username ?? "").trim().toLowerCase();
+            if (!USERNAME_RE.test(username)) throw new HttpError(400, "The username needs 3 to 32 letters, numbers, dots, dashes or underscores, starting with a letter or number.");
+            const bad = passwordProblem(b.password, username);
+            if (bad) throw new HttpError(400, bad);
+            db.saveAdminLogin(config.ownerId, username, String(b.password));
+            const mine = cookies(req)[COOKIE];
+            for (const [k, v] of sessions) if (v.adminOnly && k !== mine) sessions.delete(k); // other password sessions end when the password changes
+            return { ok: true, username };
+        },
+        "POST /api/admin/account/remove": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const prev = db.getAdminLogin(config.ownerId);
+            if (!prev) return { ok: true };
+            verifyCurrent(prev, b.current);
+            db.removeAdminLogin(config.ownerId);
+            for (const [k, v] of sessions) if (v.adminOnly) sessions.delete(k);
+            return { ok: true };
+        },
+        "POST /api/admin/account/totp/start": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const prev = db.getAdminLogin(config.ownerId);
+            if (!prev) throw new HttpError(400, "Make a username and password first.");
+            verifyCurrent(prev, b.current);
+            const secret = newTotpSecret();
+            db.setAdminTotp(config.ownerId, secret, false);
+            return { secret, uri: totpUri(secret, prev.username) };
+        },
+        "POST /api/admin/account/totp/enable": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const r = db.getAdminLogin(config.ownerId);
+            if (!r?.totp_secret) throw new HttpError(400, "Start the setup first.");
+            const step = matchTotp(r.totp_secret, b.code, now(), r.totp_step);
+            if (!step) throw new HttpError(400, "That code is not right. Check the clock on your phone and try the next one.");
+            db.setAdminTotp(config.ownerId, r.totp_secret, true);
+            db.useAdminTotpStep(config.ownerId, step);
+            return { ok: true };
+        },
+        "POST /api/admin/account/totp/disable": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const r = db.getAdminLogin(config.ownerId);
+            if (!r) return { ok: true };
+            verifyCurrent(r, b.current);
+            db.setAdminTotp(config.ownerId, null, false);
+            return { ok: true };
+        },
         "GET /api/admin/stats": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -2457,12 +2556,12 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
         send(res, 302, "", { Location: "/#/mypage" });
     }
 
-    function startSession(res, data) {
+    function startSession(res, data, ttl = SESSION_MS) {
         if (sessions.size >= MAX_SESSIONS) sweep();
         if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value);
         const id = randomBytes(32).toString("hex");
-        sessions.set(id, { ...data, expires: now() + SESSION_MS });
-        setCookie(res, COOKIE, id, SESSION_MS / 1000);
+        sessions.set(id, { ...data, expires: now() + ttl });
+        setCookie(res, COOKIE, id, ttl / 1000);
     }
 
     // ---- Sign in through Steam (OpenID). Steam proves the account; a Discord account is what the bot's alerts attach to. ----
@@ -2753,6 +2852,7 @@ export function createDashboard({ emojigg = null, db, itad, rest, music = null, 
                 });
             }
 
+            if (key === "POST /api/admin/login") { checkWrite(req); return json(res, 200, adminPasswordLogin(req, res, await readJson(req, 5_000))); }
             const handler = routes[key];
             if (!handler) throw new HttpError(404, "Not found.");
             let body = {};

@@ -76,3 +76,23 @@
   .adm-content { padding: 16px 14px 50px; }
 }
 @media (prefers-reduced-motion: reduce) { .adm-side, .adm-quick a { transition: none; } }
+
+/* Signed out: just the sign-in card, none of the panel around it */
+.adm.adm-bare { grid-template-columns: minmax(0, 1fr); }
+.adm.adm-bare .adm-side, .adm.adm-bare .adm-top, .adm.adm-bare .adm-scrim { display: none; }
+.adm-login { margin-top: 9vh; }
+.adm-login .panel > img { border-radius: 12px; margin-bottom: 6px; }
+.adm-login-form { display: flex; flex-direction: column; gap: 12px; text-align: left; margin-top: 14px; }
+.adm-login-form .btn, .adm-login .btn.big { width: 100%; justify-content: center; text-align: center; box-sizing: border-box; }
+.adm-login-msg { margin: 0; color: var(--bad); font-size: 13.5px; }
+.adm-or { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.adm-or::before, .adm-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.adm-form { display: flex; flex-direction: column; gap: 12px; max-width: 460px; }
+.adm-secret { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.adm-secret code { font-size: 15px; letter-spacing: .08em; padding: 8px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: var(--radius-sm); word-break: break-all; }
+.adm-form .btn { align-self: flex-start; }
+.adm-content .panel > .row > .btn, .adm-content .panel .adm-secret .btn { flex: 0 0 auto; width: auto; }
+.adm-content .panel input[type=password], .adm-content .panel input[type=text]:not(.adm-wide) { max-width: 460px; width: 100%; box-sizing: border-box; }
+.adm-login .row.center { justify-content: center; margin-top: 14px; }
+.adm-login .theme-btn { flex: none; }
+.adm-login .adm-login-form input { width: 100%; box-sizing: border-box; }

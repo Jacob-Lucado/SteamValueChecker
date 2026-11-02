@@ -1657,3 +1657,73 @@ test("terms and privacy answer at .html and at the plain path", async () => {
         assert.match(head.headers.get("content-type"), /text\/html/);
     } finally { await t.close(); }
 });
+
+test("admin password sign-in: create it, use it, two-step codes, lockout, and it opens the admin panel only", async () => {
+    const { totpCode } = await import("../src/adminlogin.js");
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const post = (p, body) => o.request(p, { method: "POST", body });
+    const login = body => o.request("/api/admin/login", { method: "POST", body });
+    try {
+        assert.equal((await o.request("/api/admin/account")).data.exists, false);
+        assert.equal((await post("/api/admin/account/save", { username: "Owner", password: "short" })).status, 400);
+        assert.equal((await post("/api/admin/account/save", { username: "x", password: "a long enough password" })).status, 400);
+        assert.equal((await post("/api/admin/account/save", { username: "boss", password: "boss and then some" })).status, 400, "may not contain the username");
+        const saved = await post("/api/admin/account/save", { username: "Owner.One", password: "correct horse battery staple" });
+        assert.equal(saved.data.username, "owner.one");
+        assert.equal(JSON.stringify(o.db.getAdminLogin("u1")).includes("correct horse"), false, "only a hash is kept");
+        assert.equal((await post("/api/admin/account/save", { username: "owner.one", password: "another long password here" })).status, 403, "changing needs the current password");
+        assert.equal((await post("/api/admin/account/save", { username: "owner.one", password: "another long password here", current: "correct horse battery staple" })).status, 200);
+
+        await post("/auth/logout", {});
+        assert.equal((await o.request("/api/me")).status, 401);
+        assert.equal((await login({ username: "nobody", password: "another long password here" })).status, 401);
+        assert.equal((await login({ username: "owner.one", password: "wrong wrong wrong wrong" })).status, 401);
+        assert.equal((await login({ username: "owner.one", password: "another long password here" })).status, 200);
+        const me = await o.request("/api/me");
+        assert.equal(me.data.isOwner, true);
+        assert.equal(me.data.adminOnly, true);
+        assert.equal((await o.request("/api/admin/system")).status, 200);
+        assert.equal((await o.request("/api/wishlist")).status, 401, "not the rest of the dashboard");
+        assert.equal((await o.request("/api/notifications")).status, 401);
+        assert.equal((await o.request("/api/mydata/download", { raw: true })).status, 401);
+
+        // two-step code
+        const start = await post("/api/admin/account/totp/start", { current: "another long password here" });
+        assert.equal(start.status, 200);
+        assert.equal((await post("/api/admin/account/totp/enable", { code: "000000" })).status, 400);
+        const step = () => Math.floor(1_000_000 / 30000); // the test clock starts at 1,000,000 ms
+        assert.equal((await post("/api/admin/account/totp/enable", { code: totpCode(start.data.secret, step()) })).status, 200);
+        await post("/auth/logout", {});
+        const need = await login({ username: "owner.one", password: "another long password here" });
+        assert.equal(need.data.needCode, true);
+        assert.equal((await o.request("/api/me")).status, 401, "no session until the code is right");
+        assert.equal((await login({ username: "owner.one", password: "another long password here", code: "123456" })).status, 401);
+        const good = totpCode(start.data.secret, step() + 1); // setup used this step, so the next is the first usable
+        assert.equal((await login({ username: "owner.one", password: "another long password here", code: good })).status, 200);
+        await post("/auth/logout", {});
+        assert.equal((await login({ username: "owner.one", password: "another long password here", code: good })).status, 401, "a code works once");
+    } finally { await o.close(); }
+
+    // lockout after five wrong tries, and the right password is refused while locked
+    const l = await signedIn({ config: { ownerId: "u1" } });
+    try {
+        await l.request("/api/admin/account/save", { method: "POST", body: { username: "owner", password: "correct horse battery staple" } });
+        await l.request("/auth/logout", { method: "POST", body: {} });
+        for (let i = 0; i < 5; i++) { l.advance(20_000); await l.request("/api/admin/login", { method: "POST", body: { username: "owner", password: "nope nope nope nope" } }); }
+        l.advance(20_000);
+        assert.equal((await l.request("/api/admin/login", { method: "POST", body: { username: "owner", password: "correct horse battery staple" } })).status, 429);
+        l.advance(16 * 60_000);
+        assert.equal((await l.request("/api/admin/login", { method: "POST", body: { username: "owner", password: "correct horse battery staple" } })).status, 200);
+        assert.ok((await l.request("/api/admin/audit")).data.rows.some(r => r.action === "login-password"));
+        // removing it ends password sessions
+        assert.equal((await l.request("/api/admin/account/remove", { method: "POST", body: { current: "correct horse battery staple" } })).status, 200);
+        assert.equal((await l.request("/api/me")).status, 401);
+    } finally { await l.close(); }
+
+    // not the owner: no login possible
+    const x = await signedIn({ config: { ownerId: "someone-else" } });
+    try {
+        assert.equal((await x.request("/api/admin/account/save", { method: "POST", body: { username: "owner", password: "correct horse battery staple" } })).status, 403);
+        assert.equal((await x.request("/api/admin/login", { method: "POST", body: { username: "owner", password: "correct horse battery staple" } })).status, 401);
+    } finally { await x.close(); }
+});
