@@ -399,7 +399,9 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             case "refund": {
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { refund: on ? 1 : 0 });
-                return eph(i, on ? "You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count." : "Refund reminders are off.");
+                const priced = on ? db.paidGameCount(user.discord_id) : 0;
+                const extra = on ? ` You will also hear if a game still in its refund window drops below what you paid, so a refund and rebuy would save money. That part only works with prices from the extension's purchase sync (Steam purchase history).${priced ? "" : " None of your games have a price recorded yet, so it will stay quiet until you run that sync."}` : "";
+                return eph(i, on ? `You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count.${extra}` : "Refund reminders are off.");
             }
             case "achievements": {
                 const on = i.options.getBoolean("enabled", true);

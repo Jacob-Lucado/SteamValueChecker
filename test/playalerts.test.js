@@ -82,3 +82,22 @@ test("achievement heads-up: quiet first look, then once per nearly complete game
     assert.equal((await runAchievementNudges({ db: w.db, notifier: w.notifier, now: w.now })).found, 0);
     assert.deepEqual(prefsPatch({ achv: true }, {}), { achv: 1 });
 });
+
+test("refund price drop: only inside the window, under 2 hours, with a recorded price the Steam price now beats, once", async () => {
+    const { runRefundDrops, refundDropEmbed } = await import("../src/playalerts.js");
+    const w = world();
+    w.db.syncSteamGames("u1", []);
+    w.at(T0 + DAY);
+    w.db.syncSteamGames("u1", [{ itad_id: "g", title: "Gamma", appid: 1, minutes: 20 }, { itad_id: "h", title: "Hush", appid: 2, minutes: 20 }, { itad_id: "n", title: "NoPrice", appid: 3, minutes: 20 }]);
+    const rowId = id => w.db.listLibrary("u1").find(r => r.itad_id === id).id;
+    w.db.setLibraryPaid("u1", rowId("g"), 40); w.db.setLibraryPaid("u1", rowId("h"), 20);
+    const price = { g: 25, h: 19.5, n: 5 };
+    const itad = { getPrices: async ids => new Map(ids.map(id => [id, { deals: [{ shop: { name: "Steam" }, price: { amount: price[id], currency: "USD" } }, { shop: { name: "GOG" }, price: { amount: 1, currency: "USD" } }] }])) };
+    w.at(T0 + 3 * DAY);
+    const s = await runRefundDrops({ db: w.db, itad, notifier: w.notifier, now: w.now });
+    assert.equal(s.delivered, 1);
+    assert.match(w.sent.at(-1).p.embeds[0].title, /Gamma is cheaper/); assert.match(w.sent.at(-1).p.embeds[0].description, /\$40\.00/);
+    assert.equal((await runRefundDrops({ db: w.db, itad, notifier: w.notifier, now: w.now })).found, 0);
+    assert.match(refundDropEmbed({ title: "X", paid: 10, price: 5, daysLeft: 1 }).description, /1 day left/);
+    assert.equal(w.db.paidGameCount("u1"), 2);
+});

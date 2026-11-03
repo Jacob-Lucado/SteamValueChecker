@@ -844,7 +844,7 @@
         h("label", { class: "check" }, bundles, "A wishlist game is in a bundle, is given away, or joins or leaves a subscription (Game Pass and so on)"),
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
-        h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played"),
+        h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played, or when it drops below what I paid (that part needs the extension's purchase sync)"),
         h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
         h("label", { class: "check" }, yearOn, "My year in games card, sent at the end of December"),

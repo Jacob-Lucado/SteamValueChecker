@@ -39,7 +39,7 @@ import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
-import { runRefundWarnings, runMilestones } from "./playalerts.js";
+import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
 import { runFriendReminders } from "./friends.js";
@@ -293,6 +293,7 @@ client.once(Events.ClientReady, c => {
             result.dlcLists = await ops.job("dlc lists", async () => ({ checked: await refreshDlc({ db, appids: db.appsNeedingDlc(30) }) }));
             result.dlc = await ops.job("dlc sales", () => runDlcSales({ db, itad, notifier, log }));
             result.refund = await ops.job("refund warnings", () => runRefundWarnings({ db, notifier }));
+            result.refundDrops = await ops.job("refund price drops", () => runRefundDrops({ db, itad, notifier }));
             result.milestones = await ops.job("milestones", () => runMilestones({ db, notifier }));
             result.achv = await ops.job("achievement nudges", () => runAchievementNudges({ db, notifier }));
             result.nudge = await ops.job("backlog pick", () => runBacklogNudge({ db, notifier }));

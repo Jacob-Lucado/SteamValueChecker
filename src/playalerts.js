@@ -1,6 +1,6 @@
 // Two small play-based alerts: a heads-up before the refund window closes, and cards for playtime milestones.
 // Both only look at the member's own Steam library rows, so they need no outside lookups.
-import { steamArt } from "./render.js";
+import { steamArt, money } from "./render.js";
 import { isQuiet } from "./timeutil.js";
 
 const DAY = 86400_000;
@@ -80,6 +80,52 @@ export async function runMilestones({ db, notifier, now = () => Date.now() }) {
         stats.delivered += part.length;
         // Every lower milestone for the same game counts as told as well.
         for (const r of part) { for (const h of MILESTONE_HOURS.filter(h => h <= r.hours)) db.markSeen(id, `mile:${r.itad_id}:${h}`); db.logAlert({ discord_id: id, itad_id: r.itad_id, title: r.title, kind: "milestones", via: res.via }); }
+    }
+    return stats;
+}
+
+export const REFUND_DROP_MIN_PERCENT = 0.1; // the price has to be at least 10% under what was paid
+export const REFUND_DROP_MIN_SAVING = 1;
+
+export function refundDropEmbed({ title, appid, paid, price, currency, daysLeft }) {
+    const c = currency ?? "USD", save = paid - price;
+    return {
+        color: 0x57f287, title: `💸 ${title} is cheaper than you paid`,
+        description: `You paid **${money(paid, c)}** and Steam now has it at **${money(price, c)}** (${money(save, c)} less). You are still inside the refund window with under 2 hours played, about ${Math.max(1, Math.ceil(daysLeft))} day${daysLeft > 1 ? "s" : ""} left. You could refund it and buy it again at the lower price.`,
+        thumbnail: Number.isInteger(appid) ? { url: steamArt(appid) } : undefined,
+        footer: { text: "Needs prices from the extension's purchase sync  •  Assumes the same currency as your alerts  •  Turn off with /alerts refund" }
+    };
+}
+
+/** Inside the refund window and under what the member paid: the price dropped, so refunding and rebuying would save money. Only games with a recorded price count. */
+export async function runRefundDrops({ db, itad, notifier, now = () => Date.now() }) {
+    const stats = { checked: 0, found: 0, delivered: 0, failed: 0, deferred: 0 };
+    for (const user of db.refundUsers()) {
+        const id = user.discord_id, t = now();
+        const rows = db.refundCandidates(id, t - REFUND_DAYS * DAY).filter(r => r.paid > 0 && r.added_at + REFUND_DAYS * DAY > t);
+        if (!rows.length) continue;
+        stats.checked++;
+        let prices;
+        try { prices = await itad.getPrices(rows.map(r => r.itad_id), user.region); } catch { continue; }
+        const hits = [];
+        for (const r of rows) {
+            const deals = (prices.get(r.itad_id)?.deals ?? []).filter(d => d.shop?.name === "Steam" && Number.isFinite(d.price?.amount));
+            if (!deals.length) continue;
+            const best = deals.reduce((a, b) => (b.price.amount < a.price.amount ? b : a));
+            const price = best.price.amount, saving = r.paid - price;
+            if (price <= 0 || saving < REFUND_DROP_MIN_SAVING || saving / r.paid < REFUND_DROP_MIN_PERCENT) continue;
+            const key = `refunddrop:${r.itad_id}:${Math.round(price * 100)}`;
+            if (db.hasSeen(id, key)) continue;
+            hits.push({ ...r, price, currency: best.price.currency, key, daysLeft: (r.added_at + REFUND_DAYS * DAY - t) / DAY });
+        }
+        if (!hits.length) continue;
+        stats.found += hits.length;
+        if (isQuiet(user, t)) { stats.deferred += hits.length; continue; }
+        const part = hits.slice(0, 5);
+        const res = await notifier.deliver(user, { embeds: part.map(h => refundDropEmbed({ title: h.title, appid: h.appid, paid: h.paid, price: h.price, currency: h.currency, daysLeft: h.daysLeft })) }, "refund");
+        if (!res.ok) { stats.failed += part.length; continue; }
+        stats.delivered += part.length;
+        for (const h of part) { db.markSeen(id, h.key); db.logAlert({ discord_id: id, itad_id: h.itad_id, title: h.title, kind: "refund", price: h.price, via: res.via }); }
     }
     return stats;
 }
