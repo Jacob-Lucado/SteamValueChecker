@@ -58,3 +58,37 @@ test("playtests: off by default, old posts ignored, prefs", async () => {
     assert.equal(playtestEmbed(post("g", "Demo"), "demo", { watchers: 1 }).footer.text.includes("watching"), false);
     assert.deepEqual(prefsPatch({ playtest: true }, {}), { playtest: 1 });
 });
+
+// ---------- the dashboard page ----------
+import { playtestBoard } from "../src/playboard.js";
+
+test("playtest board: merges the site and Steam news, flags wishlist and owned, and drops the old and the unrelated", async () => {
+    const w = world();
+    w.setFeed(new Map([[10, [post("g1", "Closed Playtest signups open"), post("g0", "Welcome"), post("old", "Open Beta", { date: T0 - 90 * 86400_000 })]], [20, [post("g9", "Demo available", { appid: 20 })]]]));
+    const abg = { latest: async () => [
+        { id: "s1", game: "Wish Game", type: "Beta Sign Up", kind: "signup", url: "https://www.alphabetagamer.com/wish", date: T0 - 7200_000, summary: "Join.", image: null },
+        { id: "s2", game: "Stranger Game", type: "Beta Demo", kind: "demo", url: "https://www.alphabetagamer.com/s", date: T0 - 9000_000, summary: "", image: null },
+        { id: "s3", game: "Ancient Game", type: "Alpha Demo", kind: "alpha", url: "https://www.alphabetagamer.com/a", date: T0 - 100 * 86400_000, summary: "", image: null }
+    ] };
+    const b = await playtestBoard({ db: w.db, news: w.news, abg, userId: "u1", now: T0 });
+    const by = id => b.items.find(x => x.id === id);
+    assert.deepEqual(b.sources, { steam: true, abg: true });
+    assert.ok(!by("abg:s3") && !by("steam:old") && !by("steam:g0"), "old and unrelated posts are left out");
+    assert.equal(by("abg:s1").wishlist, true);
+    assert.equal(by("abg:s2").wishlist, false);
+    assert.equal(by("steam:g9").owned, true);
+    assert.equal(by("steam:g9").kind, "demo");
+    assert.ok(!by("steam:g1"), "the Steam post for a game the site already lists the same week is not shown twice");
+    assert.deepEqual(b.items.map(x => x.date), [...b.items.map(x => x.date)].sort((a, c) => c - a), "newest first");
+});
+
+test("playtest board: one source failing still gives the other, and nothing needs a wishlist", async () => {
+    const w = world();
+    const abg = { latest: async () => { throw new Error("down"); } };
+    const b = await playtestBoard({ db: w.db, news: { forApps: async () => { throw new Error("steam down"); } }, abg, userId: "u1", now: T0 });
+    assert.deepEqual(b.sources, { steam: false, abg: false });
+    assert.deepEqual(b.items, []);
+    const ok = await playtestBoard({ db: w.db, news: null, abg: { latest: async () => [{ id: "z", game: "Z", type: "Open Beta", kind: "beta", url: "https://www.alphabetagamer.com/z", date: T0 - 1000, summary: "", image: null }] }, userId: "nobody", now: T0 });
+    assert.equal(ok.items.length, 1);
+    assert.equal(ok.items[0].label, "Beta");
+});

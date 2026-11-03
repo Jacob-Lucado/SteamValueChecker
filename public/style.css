@@ -1059,3 +1059,11 @@ body.wiz-open { overflow: hidden; }
   .wiz-foot .row .btn { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .wiz, .wiz-slide { animation: none; } .wiz-bar span { transition: none; } }
+
+/* Playtests page */
+.pt-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pt-kind { font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: color-mix(in srgb, #eb459e 18%, transparent); color: #eb459e; }
+.pt-kind.pt-demo { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.pt-kind.pt-beta { background: rgba(242, 184, 75, .16); color: var(--warn); }
+.pt-kind.pt-weekend { background: var(--good-bg); color: var(--good); }
+.pt-sum { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

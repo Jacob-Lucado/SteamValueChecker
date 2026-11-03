@@ -77,6 +77,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/me publicpage enabled: name:` | A public, shareable page of your wishlist and best prices at `#/u/name`. Shows only game names, art and prices |
 | `/bot status` | Live health checks, uptime and incidents (the same data as the dashboard Status page) |
 | First-run wizard | `public/app.js` (`startTour`): a nine-part tour then a six-step setup in one dialog. Skipping the tour asks to confirm and still runs setup. Opens when `me.tour` is true (not yet welcomed); progress is kept in localStorage (`svc.wizard`) so the Steam sign-in redirect resumes at the same step. **Take the tour** on My page replays it |
+| Playtests page | `src/playboard.js` + `GET /api/playtests`: merges Steam news posts for the member's wishlist and library (classified by `classifyPost`) with the Alpha Beta Gamer feed, flags wishlist and owned games. The page (`playtestsView` in `public/app.js`) re-fetches every 5 minutes while visible and marks new items; the sources cache for 50 and 30 minutes |
 | `/me library status\|backlog` | Mark games backlog, playing, played, finished or dropped; see unplayed spend and what to play next |
 | `/server serverstats` | A server's numbers for members who opted in: most wanted games, savings, top of the server list. Counts only |
 | `/manage alertchannel feed enabled:` | Post new free games (not DLC) in the alert channel for everyone |

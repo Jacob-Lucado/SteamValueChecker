@@ -1962,3 +1962,16 @@ test("library news: your games' latest posts, and a clear answer when no Steam g
     assert.equal((await t.request("/api/library/news")).status, 429, "cooldown");
     await t.close();
 });
+
+test("playtests page data needs sign-in and lists what the sources found", async () => {
+    const abg = { latest: async () => [{ id: "s1", game: "Some Game", type: "Beta Demo", kind: "demo", url: "https://www.alphabetagamer.com/x", date: Date.now() - 3600_000, summary: "Try it.", image: null }] };
+    const t = await setup({ extra: { abg, news: { forApps: async () => new Map() } }, config: {} });
+    assert.equal((await t.request("/api/playtests")).status, 401);
+    await t.signIn();
+    const r = await t.request("/api/playtests");
+    assert.equal(r.status, 200);
+    assert.equal(r.data.items.length, 1);
+    assert.equal(r.data.items[0].label, "Demo");
+    assert.equal(r.data.sources.abg, true);
+    await t.close();
+});
