@@ -42,7 +42,6 @@ import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
-import { createSpotify } from "./spotify.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
@@ -238,7 +237,7 @@ let music = null, musicUi = null;
 const stations = createStations({ probe: probeRadio });
 try {
     const voice = await import("@discordjs/voice");
-    music = createMusic({ db, source: createSource(), spotify: createSpotify(), voice, getGuild: musicGuild, api: botRest, panel: (gid, st) => nowPlayingPayload(st, playerLink(playerBase, gid), gid), log: m => console.log(`[music] ${m}`) });
+    music = createMusic({ db, source: createSource(), voice, getGuild: musicGuild, api: botRest, panel: (gid, st) => nowPlayingPayload(st, playerLink(playerBase, gid), gid), log: m => console.log(`[music] ${m}`) });
     musicUi = createMusicHandlers({ db, music, adapter: musicGuild, stations, playerBase });
 } catch (err) { console.error(`[music] turned off: ${err.message}`); }
 const musicOff = i => (i.isRepliable?.() ? i.reply({ content: "Music isn't available on this bot right now.", flags: MessageFlags.Ephemeral }).catch(() => {}) : null);

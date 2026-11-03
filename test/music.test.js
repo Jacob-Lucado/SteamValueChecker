@@ -96,7 +96,7 @@ test("DJ role rules", () => {
 });
 
 // ---------- the player, with a stand-in for Discord's voice library ----------
-function rig({ settings = {}, members = {}, tracks = null, spotify = null, search = null } = {}) {
+function rig({ settings = {}, members = {}, tracks = null } = {}) {
     const db = openDb(":memory:");
     if (Object.keys(settings).length) db.setMusicSettings("g1", settings);
     const log = [], posts = [], edits = [], statuses = [], deleted = [];
@@ -110,7 +110,7 @@ function rig({ settings = {}, members = {}, tracks = null, spotify = null, searc
         createAudioResource: (stream, o) => ({ stream, o, playbackDuration: 5000, volume: { v: null, setVolume(x) { this.v = x; } } })
     };
     const source = {
-        search: search ?? (async q => (q.includes("nothing") ? [] : [T(1, { title: `Result for ${q}` })])),
+        search: async q => (q.includes("nothing") ? [] : [T(1, { title: `Result for ${q}` })]),
         resolve: async url => (url.includes("/sets/") ? { kind: "playlist", title: "My Set", tracks: [T(1), T(2), T(3)] } : { kind: "track", title: "One", tracks: [T(1)] }),
         radioProbe: async url => ({ url, title: "Test FM", artist: "Live radio", duration: null, thumb: null, live: true, radio: true }),
         details: async t => ({ ...t, duration: 180, thumb: "https://i/x.jpg" }),
@@ -124,7 +124,7 @@ function rig({ settings = {}, members = {}, tracks = null, spotify = null, searc
     } : null);
     const api = { sendMessage: async (ch, p) => { posts.push([ch, p]); return { id: "m" + posts.length }; }, editMessage: async (ch, id, p) => { edits.push([ch, id, p]); }, deleteMessage: async (ch, id) => { deleted.push([ch, id]); }, setVoiceStatus: async (ch, t) => { statuses.push([ch, t]); } };
     const timers = [];
-    const m = createMusic({ db, source, voice, getGuild, api, spotify, panel: (gid, st) => ({ embeds: [{ title: st.current?.title }] }), setTimer: (fn, ms) => { const t = { fn, ms, unref() {} }; timers.push(t); return t; }, clearTimer: t => { if (t) t.cleared = true; } });
+    const m = createMusic({ db, source, voice, getGuild, api, panel: (gid, st) => ({ embeds: [{ title: st.current?.title }] }), setTimer: (fn, ms) => { const t = { fn, ms, unref() {} }; timers.push(t); return t; }, clearTimer: t => { if (t) t.cleared = true; } });
     return { db, m, log, posts, edits, deleted, players, timers, humans, statuses };
 }
 
@@ -514,29 +514,4 @@ test("the station list has hip hop and R&B, and an unfiltered pick mixes every k
     const mix = await st.pick(); assert.equal(mix.length, 25);
     assert.ok(new Set(mix.map(t => t.cat)).size >= 6, "every kind represented");
     assert.ok((await st.pick("hiphop")).every(t => t.cat === "hiphop"));
-});
-
-test("spotify links: the songs are read, matched on SoundCloud, queued, and the reply says what matched", async () => {
-    const asked = [];
-    const spotify = { read: async url => { asked.push(url); return { kind: "playlist", title: "Road trip", owner: "Jacob", total: 40, tracks: [
-        { title: "Song One", artist: "Band A", durationMs: 200_000 }, { title: "Song Two", artist: "Band B", durationMs: 180_000 }, { title: "Lost Song", artist: "Band C", durationMs: 100_000 }] }; } };
-    const search = async q => (q.includes("lost") ? [] : [{ url: `https://soundcloud.com/x/${q.replace(/\W+/g, "-")}`, title: q.includes("one") ? "Song One" : "Song Two", artist: q.includes("one") ? "Band A" : "Band B", duration: q.includes("one") ? 201 : 181, thumb: null }]);
-    const r = rig({ spotify, search });
-    const a = await r.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=1" });
-    assert.equal(a.kind, "playlist"); assert.equal(a.title, "Road trip"); assert.equal(a.added, 2);
-    assert.deepEqual(a.spotify, { total: 40, asked: 3, matched: 2, missing: ["Band C - Lost Song"] });
-    assert.match(addedEmbed(a).footer.text, /From Spotify, played from SoundCloud: 2 of 3 matched \(the first 3 of 40 songs\)\. Not found: Band C - Lost Song/);
-    assert.equal(asked.length, 1);
-    // it isn't mistaken for a radio stream even with radio turned off in the server
-    const off = rig({ spotify, search, settings: { radio: 0 } });
-    assert.equal((await off.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC" })).added, 2);
-});
-
-test("spotify links: a private link, nothing matching and a bot without Spotify each give a plain message", async () => {
-    const bad = rig({ spotify: { read: async () => { throw Object.assign(new Error("There are no songs I can read in that Spotify link."), { userFacing: true }); } } });
-    await assert.rejects(bad.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M" }), /no songs I can read/);
-    const none = rig({ spotify: { read: async () => ({ kind: "track", title: "X", total: 1, tracks: [{ title: "Zzz", artist: "Q", durationMs: null }] }) }, search: async () => [] });
-    await assert.rejects(none.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC" }), /couldn't find any of those songs/);
-    const unset = rig();
-    await assert.rejects(unset.m.enqueue({ guildId: "g1", userId: "u1", textChannelId: "t1", query: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC" }), /Spotify links aren't set up/);
 });

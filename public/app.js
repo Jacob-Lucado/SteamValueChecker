@@ -3782,7 +3782,7 @@
       reqBox.style.display = s.autodj ? "" : "none";
       if (!s.autodj) return;
       if (typing(reqBox)) return;
-      const q = h("input", { type: "text", placeholder: "SoundCloud or Spotify song or playlist link, or words to search", maxlength: "300", "aria-label": "Request a song" });
+      const q = h("input", { type: "text", placeholder: "SoundCloud song or playlist link, or words to search", maxlength: "300", "aria-label": "Request a song" });
       const go = h("button", { class: "btn green", type: "button", text: "Request" }), find = h("button", { class: "btn blue", type: "button", text: "Search" });
       const results = h("div");
       go.disabled = find.disabled = !(a.enabled && s.autodj_submit);
@@ -3806,11 +3806,11 @@
 
     // ----- parts that stay put while you type -----
     function addPanel(d) {
-      const q = h("input", { type: "text", placeholder: "SoundCloud or Spotify link (song, album or playlist), a live radio stream link, or words to search for", maxlength: "300", "aria-label": "Song, playlist, stream link or search" });
+      const q = h("input", { type: "text", placeholder: "SoundCloud link (song or playlist), a live radio stream link, or words to search for", maxlength: "300", "aria-label": "Song, playlist, stream link or search" });
       const next = h("input", { type: "checkbox" }), shuf = h("input", { type: "checkbox" });
       const results = h("div");
       const play = h("button", { class: "btn green", type: "button", text: "Play" }), find = h("button", { class: "btn blue", type: "button", text: "Search" });
-      const add = (extra = {}) => api("/api/music/play", { guild_id: gid(), query: q.value, next: next.checked, shuffle: shuf.checked, ...extra }).then(r => { toast((r.startedNow ? `Playing: ${r.title}` : r.added > 1 ? `Added ${r.added} songs.` : "Added to the queue.") + (r.spotify ? ` Matched ${r.spotify.matched} of ${r.spotify.asked} Spotify songs on SoundCloud.` : ""), "ok"); q.value = ""; results.replaceChildren(); return load(false); });
+      const add = (extra = {}) => api("/api/music/play", { guild_id: gid(), query: q.value, next: next.checked, shuffle: shuf.checked, ...extra }).then(r => { toast(r.startedNow ? `Playing: ${r.title}` : r.added > 1 ? `Added ${r.added} songs.` : "Added to the queue.", "ok"); q.value = ""; results.replaceChildren(); return load(false); });
       play.addEventListener("click", () => busy(play, () => add()));
       q.addEventListener("keydown", e => { if (e.key === "Enter" && !play.disabled) play.click(); });
       find.addEventListener("click", () => busy(find, async () => {
@@ -3850,7 +3850,7 @@
       const on = h("input", { type: "checkbox", checked: Boolean(s.autodj) }), sub = h("input", { type: "checkbox", checked: Boolean(s.autodj_submit) }), shuf = h("input", { type: "checkbox", checked: Boolean(s.autodj_shuffle) });
       const idle = h("input", { type: "number", min: "5", max: "600", value: String(s.autodj_idle) });
       const vc = h("select", {}, h("option", { value: "", text: "Only when someone starts it (stays in the channel it's already in)" }), ...(d.voiceChannels ?? []).map(c => h("option", { value: c.id, text: "🔊 " + c.name, selected: c.id === s.autodj_channel_id })));
-      const link = h("input", { type: "text", maxlength: "300", placeholder: "SoundCloud or Spotify playlist link", "aria-label": "Auto DJ playlist link" });
+      const link = h("input", { type: "text", maxlength: "300", placeholder: "SoundCloud playlist link", "aria-label": "Auto DJ playlist link" });
       const savedSel = select([["", "Or use one of my saved playlists…"], ...d.playlists.map(p => [p.name, `${p.name} (${p.count})`])], "");
       const save = h("button", { class: "btn green", type: "button", text: "Save Auto DJ settings" });
       const call = (extra, ok) => api("/api/music/autodj", { guild_id: gid(), ...extra }).then(r => { toast(r.note || ok || "Saved.", "ok"); return load(true); });

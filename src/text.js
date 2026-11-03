@@ -21,7 +21,7 @@ export const HELP_PAGES = [
             { name: "🎮 /games", value: "Price games, check bundles, free games, sales, codes, sale prep." },
             { name: "👤 /me  ·  🔔 /alerts", value: "Your wishlist, library, Steam link, friends and data; how you get sale alerts." },
             { name: "🏠 /server", value: "Giveaways, game nights, levels, boards, events, invites, streams." },
-            { name: "🎵 /music  ·  /play  ·  /player", value: "SoundCloud, Spotify links and live radio in voice, with an Auto DJ. `/player` opens the big player." },
+            { name: "🎵 /music  ·  /play  ·  /player", value: "SoundCloud and live radio in voice, with an Auto DJ. `/player` opens the big player." },
             { name: "🛠 /manage  ·  🛡 /mod", value: "Setup and community tools for managers; moderation for mods." },
             { name: "🤖 /bot  ·  /dashboard", value: "Status, changelog, support and ideas. `/dashboard` opens the website." }
         ] },
@@ -57,7 +57,7 @@ export const HELP_PAGES = [
             { name: "Events and giveaways", value: "`/server calendar` shows releases, sales and server events.\n`/server giveaway` `create` / `list` / `info` / `end` / `cancel` / `reroll` / `replace` / `setup` runs key giveaways.\n`/server promos` `list` shows drops like SteelSeries or NVIDIA (managers: `add` / `end` / `channel` / `ping` / `news`)." }
         ] },
     { key: "music", label: "Music", emoji: "🎵", title: "/music, /play and /player",
-        description: "SoundCloud songs, playlists and live radio in your voice channel, and Spotify links (a song, album or playlist is played from SoundCloud, since Spotify's own audio can't be played). Join one first. `/player` opens the big player on the web: queue, search, radio, a live visualizer, a session chat and a Stream tab for OBS.",
+        description: "SoundCloud songs, playlists and live radio in your voice channel. Join one first. `/player` opens the big player on the web: queue, search, radio, a live visualizer, a session chat and a Stream tab for OBS.",
         fields: [
             { name: "Start something", value: "`/play` (or `/music play`) a link or words. `/music search` picks from results. `/music live` lists stations on the air right now." },
             { name: "Controls", value: "`nowplaying`, `queue`, `pause`, `resume`, `skip`, `skipto`, `previous`, `seek`, `stop`, `leave`, `volume`, `loop`, `shuffle`, `remove`, `move`, `clear`." },
