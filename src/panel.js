@@ -51,6 +51,7 @@ export function createPanels({ db }) {
             if (!(err instanceof UserError)) { console.error(`panel ${id}:`, err); out = { page: p.pageOf?.(arg) ?? p.pages[0][0], notice: "Something went wrong. Try again in a moment." }; }
             else out = { page: p.pageOf?.(arg) ?? p.pages[0][0], notice: err.message };
         }
+        if (out.done) return;
         if (out.modal) return i.showModal(out.modal);
         const view = await p.render(mkCtx(i), out.page, out.notice);
         return i.update(view);

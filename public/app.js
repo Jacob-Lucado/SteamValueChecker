@@ -3504,10 +3504,27 @@
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
+  /** Every command menu, as the bot shows it: hub, area, and how to type each command. Loaded from the bot's real command list. */
+  function commandGuidePanel() {
+    const body = h("div", { class: "cmd-guide" }, h("p", { class: "muted", text: "Loading the command list…" }));
+    const panel = h("div", { class: "panel" }, h("h3", { text: "Commands and menus" }),
+      h("p", { class: "muted small", text: "In Discord, type the hub name and pick menu (for example /server menu). It opens a private panel where you choose an area and a command, and run the simple ones with a button. /alerts status opens your alert settings panel." }), body);
+    api("/api/commands").then(d => {
+      body.replaceChildren(...d.hubs.map(hub => h("details", { class: "cmd-hub" },
+        h("summary", {}, h("strong", { text: "/" + hub.name }), " ", h("span", { class: "muted", text: hub.description })),
+        hub.menu ? h("p", { class: "muted small" }, "Open the menu with ", h("code", { text: "/" + hub.name + " menu" }), ".") : null,
+        ...hub.areas.map(a => h("div", { class: "cmd-area" },
+          h("div", { class: "chips" }, h("h4", { text: a.label }), a.page ? h("a", { class: "btn gray small", href: "#/" + a.page, text: "Open in the dashboard" }) : null),
+          h("ul", { class: "cmd-list" }, ...a.items.map(i => h("li", {}, h("code", { text: i.usage }), " ", i.desc))))))));
+    }).catch(e => body.replaceChildren(h("div", { class: "notice warn", text: e.message })));
+    return panel;
+  }
+
   function helpView() {
     app.replaceChildren(
       pageHead("Help", "The dashboard does everything the Discord commands do."),
       h("div", { class: "panel" }, h("h3", { text: "Using the bot" }), md(state.cfg.help)),
+      commandGuidePanel(),
       h("div", { class: "panel" }, h("h3", { text: "Privacy" }), md(state.cfg.privacy)),
       fanaticalCard());
   }

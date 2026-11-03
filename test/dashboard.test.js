@@ -2073,3 +2073,19 @@ test("extension extras: playtest badge, server counts, wishlist add, stream spot
     assert.deepEqual(Object.keys(b).sort(), ["free", "playtests", "unread"]); assert.ok(b.free.length >= 1); assert.ok(b.playtests.includes("p1") && !b.playtests.includes("d1"), "wishlist-only demos are not counted for everyone");
     await t.close();
 });
+
+test("command guide: the Help page lists every menu from the real command definitions", async () => {
+    const o = await signedIn();
+    try {
+        const r = await o.request("/api/commands");
+        assert.equal(r.status, 200);
+        const names = r.data.hubs.map(h => h.name);
+        for (const n of ["games", "me", "server", "manage", "bot", "mod", "alerts"]) assert.ok(names.includes(n), n);
+        const server = r.data.hubs.find(h => h.name === "server");
+        assert.equal(server.menu, true);
+        const stream = server.areas.find(a => a.label === "stream");
+        assert.equal(stream.page, "streamer");
+        assert.ok(stream.items.some(i => i.usage.startsWith("/server stream live")));
+        assert.ok(!JSON.stringify(r.data).includes('"menu","desc'), "the menu command itself is not listed as a task");
+    } finally { await o.close(); }
+});

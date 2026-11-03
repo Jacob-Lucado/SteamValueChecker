@@ -2,6 +2,7 @@ import { ApplicationCommandType, ApplicationIntegrationType, ChannelType, Contex
 
 import { REGIONS, ALERT_TYPES } from "./constants.js";
 import { CATEGORIES } from "./stations.js";
+import { MENU } from "./hubpanel.js";
 export { REGIONS };
 
 // Commands that work anywhere: installed on a server, or on a person's own account (DMs, group chats, any server).
@@ -537,6 +538,7 @@ const modCmd = new SlashCommandBuilder()
     .setName("mod")
     .setDescription("Moderators: warn, time out, kick, ban and clean up. Every action is logged")
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addSubcommand(s => s.setName("menu").setDescription("Open the guided menu: browse every moderation command and run it"))
     .addSubcommand(s => s.setName("warn").setDescription("Warn a member (they get a private message and it is logged)")
         .addUserOption(o => o.setName("user").setDescription("Who to warn").setRequired(true))
         .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400)))
@@ -753,6 +755,7 @@ export const hubCommands = [
         if (hub.perm) b.setDefaultMemberPermissions(hub.perm);
         const j = KINDS[hub.kind](b).toJSON();
         j.options = [
+            MENU,
             ...hub.flat.map(n => { const c = byName.get(n); return { type: 1, name: c.name, description: c.description, options: c.options ?? [] }; }),
             ...hub.groups.map(n => { const c = byName.get(n); return { type: 2, name: c.name, description: c.description, options: c.options }; })
         ];

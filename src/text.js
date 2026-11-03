@@ -23,7 +23,8 @@ export const HELP_PAGES = [
             { name: "🏠 /server", value: "Giveaways, game nights, levels, boards, events, invites, streams." },
             { name: "🎵 /music  ·  /play  ·  /player", value: "SoundCloud and live radio in voice, with an Auto DJ. `/player` opens the big player." },
             { name: "🛠 /manage  ·  🛡 /mod", value: "Setup and community tools for managers; moderation for mods." },
-            { name: "🤖 /bot  ·  /dashboard", value: "Status, changelog, support and ideas. `/dashboard` opens the website." }
+            { name: "🤖 /bot  ·  /dashboard", value: "Status, changelog, support and ideas. `/dashboard` opens the website." },
+            { name: "🧭 Not sure what to type?", value: "Every hub has a menu: `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu`, `/mod menu`. Pick an area, pick a command, see how it works, and run the simple ones with a button. `/alerts status` opens your alert settings with dropdowns." }
         ] },
     { key: "games", label: "Games and prices", emoji: "🎮", title: "/games",
         description: "Prices come from IsThereAnyDeal. Nothing here needs a login.",

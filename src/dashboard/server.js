@@ -30,6 +30,8 @@ import { botInviteUrl } from "../community.js";
 import { connectionPayload } from "../linkedroles.js";
 import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
+import { hubCommands } from "../commands.js";
+import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
 import { forYou } from "../foryou.js";
 import { libraryAnalytics } from "../analytics.js";
@@ -656,6 +658,8 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             }), unread: db.unreadNotifications(s.userId) };
         },
         "POST /api/notifications/read": async (req) => { const s = session(req); userRow(s); db.readNotifications(s.userId); return { unread: 0 }; },
+
+        "GET /api/commands": async () => remember("commandguide", 3600_000, () => ({ hubs: commandGuide(hubCommands) })),
 
         "GET /api/changelog": async (req) => {
             const s = session(req); const u = userRow(s);

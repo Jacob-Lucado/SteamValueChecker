@@ -1068,3 +1068,12 @@ body.wiz-open { overflow: hidden; }
 .pt-kind.pt-weekend { background: var(--good-bg); color: var(--good); }
 .pt-sum { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .np-card img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; border-radius: 10px; }
+
+/* Command guide on the Help page */
+.cmd-hub { border-top: 1px solid var(--line, rgba(255,255,255,.08)); padding: .6em 0; }
+.cmd-hub > summary { cursor: pointer; padding: .2em 0; }
+.cmd-area { margin: .8em 0 .2em; }
+.cmd-area h4 { margin: 0 .6em 0 0; }
+.cmd-list { margin: .4em 0 0; padding-left: 1.1em; }
+.cmd-list li { margin: .3em 0; }
+.cmd-list code { word-break: break-word; }

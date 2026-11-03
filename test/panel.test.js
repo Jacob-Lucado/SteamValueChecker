@@ -51,3 +51,51 @@ test("every alerts page serializes within Discord limits", async () => {
         assert.ok(v.embeds[0].description.length < 4000);
     }
 });
+
+test("hub menus read the real command list and can run commands that need no input", async () => {
+    const { hubCommands } = await import("../src/commands.js");
+    const { hubPanel, catalog, needsInput } = await import("../src/hubpanel.js");
+    const db = openDb(":memory:"); db.ensureUser("u1", null);
+    const p = createPanels({ db });
+    const ran = [];
+    for (const json of hubCommands.filter(c => ["games", "me", "server", "manage", "bot", "mod"].includes(c.name))) {
+        assert.ok(json.options.some(o => o.name === "menu"), `${json.name} has a menu`);
+        assert.ok(json.options.length <= 25);
+        p.register(`hub-${json.name}`, hubPanel({ json, runner: async (i, hub, path) => { ran.push([hub, ...path]); } }));
+        const o = fake(db, "x"); await p.open(o, `hub-${json.name}`);
+        for (const r of o.out.reply.components) r.toJSON();
+        const areas = catalog(json);
+        assert.ok(areas.length >= 1);
+        for (let a = 0; a < areas.length; a++) {
+            const sel = fake(db, `pn:hub-${json.name}:area`, { values: [String(a)] }); await p.handle(sel);
+            for (const r of sel.out.update.components) r.toJSON();
+            assert.ok(sel.out.update.embeds[0].description.length <= 4000);
+            for (let c = 0; c < areas[a].items.length; c++) {
+                const cm = fake(db, `pn:hub-${json.name}:cmd:${a}`, { values: [String(c)] }); await p.handle(cm);
+                for (const r of cm.out.update.components) r.toJSON();
+            }
+        }
+    }
+    const json = hubCommands.find(c => c.name === "bot");
+    const area = catalog(json)[0], idx = area.items.findIndex(x => !needsInput(x));
+    p.register("hub-bot", hubPanel({ json, runner: async (i, hub, path) => { ran.push([hub, ...path]); } }));
+    const run = fake(db, "pn:hub-bot:run:a0.c" + idx); await p.handle(run);
+    assert.deepEqual(ran.at(-1), ["bot", area.items[idx].path[0]]);
+    assert.equal(run.out.update, undefined);
+    const need = area.items.findIndex(x => needsInput(x));
+    if (need >= 0) { const bad = fake(db, "pn:hub-bot:run:a0.c" + need); await p.handle(bad); assert.match(bad.out.update.embeds[0].description, /chat box/); }
+});
+
+test("a replayed command routes like a typed one", async () => {
+    const { replayAsCommand } = await import("../src/hubpanel.js");
+    const { legacyRoute } = await import("../src/commands.js");
+    let seen;
+    const real = { user: { id: "u1" }, isButton: () => true, reply: async c => { seen.replied = c; }, guildId: "g" };
+    await replayAsCommand(real, "me", ["wishlist", "view"], async (px) => {
+        seen = { chat: px.isChatInputCommand(), button: px.isButton(), route: legacyRoute(px.commandName, px.options.getSubcommandGroup(false), px.options.getSubcommand(false)), name: px.options.getString("x"), user: px.user.id };
+        await px.reply("hi");
+    });
+    assert.deepEqual(seen.route, { command: "wishlist", sub: "view" });
+    assert.equal(seen.chat, true); assert.equal(seen.button, false); assert.equal(seen.name, null); assert.equal(seen.replied, "hi");
+    await assert.rejects(replayAsCommand(real, "bot", ["status"], async px => px.options.getString("x", true)), /needs details/);
+});

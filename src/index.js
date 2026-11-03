@@ -23,7 +23,8 @@ import { ABOUT, PRIVACY, quickStart } from "./text.js";
 import { helpPayload, handleHelpPick, configureHelp, isHelpNav } from "./helpui.js";
 import { brandInteraction, brandRest } from "./brand.js";
 import { pagedPayload, handlePager, tokenOf, PAGE_PREFIX, JUMP_PREFIX } from "./pager.js";
-import { legacyRoute, SERVER_ONLY_LEGACY } from "./commands.js";
+import { legacyRoute, SERVER_ONLY_LEGACY, hubCommands } from "./commands.js";
+import { hubPanel, replayAsCommand } from "./hubpanel.js";
 import { createStreams } from "./streamlive.js";
 import { createStreamHandlers } from "./streamhandlers.js";
 import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
@@ -136,6 +137,15 @@ setInterval(() => { try { db.purgeHiddenGuilds(); } catch { /* try again next ti
 const nowPlaying = createNowPlaying({ apiKey: cfg.steamApiKey });
 const panels = createPanels({ db });
 panels.register("alerts", alertPanel({ db }));
+// "Run it" in a hub menu replays the command as if it had been typed, minus options (only commands with none are offered).
+const runFromPanel = (i, hub, path) => replayAsCommand(i, hub, path, onInteraction);
+const HUB_MENUS = ["games", "me", "server", "manage", "bot", "mod"];
+const GLANCE = {
+    me: ctx => { const u = ctx.user; return ["", `Watching **${ctx.db.countItems(u.discord_id)}** games · prices in **${u.region}** · alerts ${u.paused ? "paused" : "on"}`]; }
+};
+for (const json of hubCommands.filter(c => HUB_MENUS.includes(c.name))) {
+    panels.register(`hub-${json.name}`, hubPanel({ json, glance: GLANCE[json.name], dashUrl: cfg.dashboard?.publicUrl ?? null, runner: runFromPanel }));
+}
 const handlers = createHandlers({ panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
@@ -583,8 +593,8 @@ async function handleValue(i) {
     }
 }
 
-client.on(Events.InteractionCreate, async i => {
-    brandInteraction(i, brandOpts);
+async function onInteraction(i, again = false) {
+    if (!again) brandInteraction(i, brandOpts);
     // Restricted people get nothing from the bot (the owner can't be locked out).
     if (i.user?.id !== cfg.ownerId && db.isBanned(i.user?.id)) {
         if (!i.isAutocomplete()) await i.reply({ content: RESTRICTED_TEXT, flags: MessageFlags.Ephemeral }).catch(() => {});
@@ -654,6 +664,9 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isMessageContextMenuCommand()) return void handlers.handleMessageContext(i).catch(err => console.error(`[context] ${err.stack ?? err.message}`));
     if (i.isUserContextMenuCommand()) return void handlers.handleContextMenu(i).catch(err => console.error(`[context] ${err.stack ?? err.message}`));
     if (!i.isChatInputCommand()) return;
+    if (!again && i.options.getSubcommand(false) === "menu" && panels.has(`hub-${i.commandName}`)) {
+        return void panels.open(i, `hub-${i.commandName}`).catch(err => console.error(`[menu] ${err.message}`));
+    }
     console.log(`[command] /${i.hubName ? i.hubName + " " : ""}${i.commandName}${i.options?.getSubcommand?.(false) ? " " + i.options.getSubcommand(false) : ""}`);
     const known = db.getUser(i.user.id);
     const showTip = !known?.tipped && !["help", "about", "privacy", "mydata", "changelog"].includes(i.commandName);
@@ -736,7 +749,8 @@ client.on(Events.InteractionCreate, async i => {
         const msg = { content: "Something went wrong on the bot's side. Please try again in a moment.", flags: MessageFlags.Ephemeral };
         try { if (i.deferred || i.replied) await i.followUp(msg); else await i.reply(msg); } catch { /* the interaction may already be gone */ }
     }
-});
+}
+client.on(Events.InteractionCreate, i => onInteraction(i));
 
 if (cfg.dashboard) {
     const d = cfg.dashboard;
