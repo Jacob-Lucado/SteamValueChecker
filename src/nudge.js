@@ -37,3 +37,36 @@ export async function runBacklogNudge({ db, notifier, now = () => Date.now() }) 
     }
     return stats;
 }
+
+export const ACH_MAX_LEFT = 3, ACH_MIN_PERCENT = 0.85, ACH_MIN_MINUTES = 300;
+
+export function achievementEmbed({ title, appid, left, done, total }) {
+    return {
+        color: 0xfee75c, title: `🏅 ${left === 1 ? "One achievement" : `${left} achievements`} left in ${title}`,
+        description: `You have **${done} of ${total}** achievements in **${title}**. ${left === 1 ? "One more" : "A few more"} and it is 100%.`,
+        thumbnail: Number.isInteger(appid) ? { url: steamArt(appid) } : undefined,
+        footer: { text: "Counts update when your Steam library syncs  •  Turn this off with /alerts achievements" }
+    };
+}
+
+/** Games a member has played for hours and is nearly complete in. The first check is quiet, and each game is mentioned once. */
+export async function runAchievementNudges({ db, notifier, now = () => Date.now() }) {
+    const stats = { checked: 0, found: 0, delivered: 0, failed: 0, deferred: 0 };
+    for (const user of db.achvUsers()) {
+        const id = user.discord_id;
+        const near = db.achievementGames(id).filter(g => g.minutes >= ACH_MIN_MINUTES && g.ach_total - g.ach_done <= ACH_MAX_LEFT && g.ach_done / g.ach_total >= ACH_MIN_PERCENT);
+        stats.checked++;
+        const first = !db.hasSeen(id, "achstart");
+        const fresh = near.filter(g => !db.hasSeen(id, `ach:${g.itad_id}`));
+        if (first) { for (const g of near) db.markSeen(id, `ach:${g.itad_id}`); db.markSeen(id, "achstart"); continue; }
+        if (!fresh.length) continue;
+        stats.found += fresh.length;
+        if (isQuiet(user, now())) { stats.deferred += fresh.length; continue; }
+        const part = fresh.sort((a, b) => (a.ach_total - a.ach_done) - (b.ach_total - b.ach_done)).slice(0, 4);
+        const res = await notifier.deliver(user, { embeds: part.map(g => achievementEmbed({ title: g.title, appid: g.appid, left: g.ach_total - g.ach_done, done: g.ach_done, total: g.ach_total })) }, "achv");
+        if (!res.ok) { stats.failed += part.length; continue; }
+        stats.delivered += part.length;
+        for (const g of part) { db.markSeen(id, `ach:${g.itad_id}`); db.logAlert({ discord_id: id, itad_id: g.itad_id, title: g.title, kind: "achv", via: res.via }); }
+    }
+    return stats;
+}

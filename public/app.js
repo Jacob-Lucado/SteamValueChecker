@@ -157,6 +157,14 @@
   let openMenu = null;
   function closeMenu() { if (openMenu) { openMenu.btn.setAttribute("aria-expanded", "false"); openMenu.menu.hidden = true; openMenu = null; } }
   document.addEventListener("click", e => { if (openMenu && !openMenu.wrap.contains(e.target)) closeMenu(); });
+  // "/" jumps to the search box on the current page, like most sites with a list.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target, tag = (t?.tagName ?? "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+    const box = [...document.querySelectorAll("input[type=search]")].find(el => el.offsetParent !== null);
+    if (box) { e.preventDefault(); box.focus(); box.select?.(); }
+  });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && openMenu) { const b = openMenu.btn; closeMenu(); b.focus(); } });
   window.addEventListener("hashchange", closeMenu);
   const STEAM_ICON = "M12 2a10 10 0 0 0-9.96 9.1l5.35 2.2a2.8 2.8 0 0 1 1.6-.5h.15l2.4-3.45v-.05a3.75 3.75 0 1 1 3.75 3.75h-.1l-3.4 2.45a2.8 2.8 0 0 1-5.55.45L2.3 14.2A10 10 0 1 0 12 2z";
@@ -785,6 +793,7 @@
     const freeDlc = h("input", { type: "checkbox", checked: s.free_dlc !== false });
     const dlcOn = h("input", { type: "checkbox", checked: Boolean(s.dlc) });
     const refundOn = h("input", { type: "checkbox", checked: Boolean(s.refund) });
+    const achvOn = h("input", { type: "checkbox", checked: Boolean(s.achv) });
     const nudgeOn = h("input", { type: "checkbox", checked: Boolean(s.nudge) });
     const yearOn = h("input", { type: "checkbox", checked: Boolean(s.yearly) });
     const milesOn = h("input", { type: "checkbox", checked: Boolean(s.milestones) });
@@ -812,7 +821,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
+        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, achv: achvOn.checked, news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -836,6 +845,7 @@
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
         h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played"),
+        h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
         h("label", { class: "check" }, yearOn, "My year in games card, sent at the end of December"),
         h("label", { class: "check" }, milesOn, "A card when a game passes 100, 250, 500, 1000 or 2000 hours"),
@@ -3490,7 +3500,7 @@
   const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
 
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
-  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", news: "News and patch notes", dlc: "DLC sales", refund: "Refund reminders", milestones: "Playtime milestones", yearly: "Year in games", nudge: "Backlog pick", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", news: "News and patch notes", dlc: "DLC sales", refund: "Refund reminders", milestones: "Playtime milestones", yearly: "Year in games", nudge: "Backlog pick", achv: "Achievements", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
   const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", news: "🛠️", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫", codes: "🔑", promo: "🎟️" };
 

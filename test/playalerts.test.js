@@ -67,3 +67,18 @@ test("backlog pick: once a month, the biggest unplayed spend, nothing for an emp
     assert.equal((await runBacklogNudge({ db: w.db, notifier: w.notifier, now: w.now })).delivered, 1);
     assert.deepEqual(prefsPatch({ nudge: true }, {}), { nudge: 1 });
 });
+
+test("achievement heads-up: quiet first look, then once per nearly complete game that was played a lot", async () => {
+    const { runAchievementNudges } = await import("../src/nudge.js");
+    const w = world(); w.db.updateUser("u1", { achv: 1 });
+    w.db.syncSteamGames("u1", [{ itad_id: "a", title: "Alpha", appid: 1, minutes: 900 }, { itad_id: "b", title: "Beta", appid: 2, minutes: 900 }, { itad_id: "c", title: "Short", appid: 3, minutes: 60 }]);
+    w.db.setAchievements("u1", "a", { done: 40, total: 50 }); w.db.setAchievements("u1", "c", { done: 9, total: 10 });
+    assert.equal((await runAchievementNudges({ db: w.db, notifier: w.notifier, now: w.now })).found, 0); // first look
+    w.db.setAchievements("u1", "a", { done: 48, total: 50 }); w.db.setAchievements("u1", "b", { done: 29, total: 30 });
+    const s = await runAchievementNudges({ db: w.db, notifier: w.notifier, now: w.now });
+    assert.equal(s.delivered, 2);
+    const titles = w.sent.at(-1).p.embeds.map(e => e.title).join("|");
+    assert.match(titles, /One achievement left in Beta/); assert.match(titles, /2 achievements left in Alpha/); assert.doesNotMatch(titles, /Short/);
+    assert.equal((await runAchievementNudges({ db: w.db, notifier: w.notifier, now: w.now })).found, 0);
+    assert.deepEqual(prefsPatch({ achv: true }, {}), { achv: 1 });
+});

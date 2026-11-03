@@ -38,7 +38,7 @@ import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
-import { runBacklogNudge } from "./nudge.js";
+import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runRefundWarnings, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
@@ -294,6 +294,7 @@ client.once(Events.ClientReady, c => {
             result.dlc = await ops.job("dlc sales", () => runDlcSales({ db, itad, notifier, log }));
             result.refund = await ops.job("refund warnings", () => runRefundWarnings({ db, notifier }));
             result.milestones = await ops.job("milestones", () => runMilestones({ db, notifier }));
+            result.achv = await ops.job("achievement nudges", () => runAchievementNudges({ db, notifier }));
             result.nudge = await ops.job("backlog pick", () => runBacklogNudge({ db, notifier }));
             result.yearly = await ops.job("year in games", () => runYearInGames({ db, notifier, render: (userId, name) => renderRecap({ db, userId, name }) }));
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));

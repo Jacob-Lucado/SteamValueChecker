@@ -181,5 +181,8 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     const playedGames = (userId, minMinutes) => all("SELECT itad_id, title, appid, minutes FROM library WHERE discord_id = ? AND minutes >= ?", userId, minMinutes).map(clean);
     const yearlyUsers = () => all("SELECT * FROM users WHERE yearly = 1 AND paused = 0").map(clean);
     const nudgeUsers = () => all("SELECT * FROM users WHERE nudge = 1 AND paused = 0").map(clean);
-    return { nudgeUsers, yearlyUsers, milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    const achvUsers = () => all("SELECT * FROM users WHERE achv = 1 AND paused = 0").map(clean);
+    /** Games with synced achievement counts that are partly done. */
+    const achievementGames = userId => all("SELECT itad_id, title, appid, minutes, ach_done, ach_total FROM library WHERE discord_id = ? AND ach_total > 0 AND ach_done < ach_total", userId).map(clean);
+    return { achvUsers, achievementGames, nudgeUsers, yearlyUsers, milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

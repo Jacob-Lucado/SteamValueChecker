@@ -401,6 +401,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.updateUser(user.discord_id, { refund: on ? 1 : 0 });
                 return eph(i, on ? "You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count." : "Refund reminders are off.");
             }
+            case "achievements": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { achv: on ? 1 : 0 });
+                return eph(i, on ? "You will get a heads-up when a game you have played for 5 hours or more is within 3 achievements of 100%. It needs Steam linked and achievements synced (`/me steam sync`). Your first check is quiet." : "Achievement heads-ups are off.");
+            }
             case "nudge": {
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { nudge: on ? 1 : 0 });

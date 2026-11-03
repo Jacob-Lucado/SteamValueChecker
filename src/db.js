@@ -218,6 +218,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "milestones", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "yearly", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "nudge", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("users", "achv", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE INDEX IF NOT EXISTS users_guild ON users(guild_id, share)");
@@ -327,7 +328,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
