@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS app_tags (
     cats       TEXT NOT NULL DEFAULT '',
     fetched_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS app_dlc (
+    appid      INTEGER PRIMARY KEY,
+    dlc        TEXT NOT NULL DEFAULT '',
+    fetched_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS hour_goals (
     discord_id TEXT PRIMARY KEY REFERENCES users(discord_id) ON DELETE CASCADE,
     year       INTEGER NOT NULL,
@@ -150,5 +155,20 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         `SELECT appid FROM (SELECT appid FROM library WHERE appid IS NOT NULL UNION SELECT appid FROM items WHERE appid IS NOT NULL)
          WHERE appid NOT IN (SELECT appid FROM app_tags WHERE fetched_at > ?) LIMIT ?`, now() - 30 * 86400_000, limit).map(r => r.appid);
 
-    return { saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    // ---- DLC lists, so a sale on an add-on for a game someone plays can be told to them ----
+    const DLC_MIN_MINUTES = 120; // a game they tried for two hours or more
+    const saveAppDlc = (appid, ids) => run("INSERT INTO app_dlc (appid, dlc, fetched_at) VALUES (?,?,?) ON CONFLICT(appid) DO UPDATE SET dlc = excluded.dlc, fetched_at = excluded.fetched_at", appid, [...new Set(ids)].slice(0, 400).join(","), now());
+    /** Played games (any member who turned DLC alerts on) whose DLC list is missing or older than two weeks, most played first. */
+    const appsNeedingDlc = (limit = 30) => all(
+        `SELECT l.appid, MAX(l.minutes) AS minutes FROM library l JOIN users u ON u.discord_id = l.discord_id
+          WHERE u.dlc = 1 AND u.paused = 0 AND l.appid IS NOT NULL AND l.minutes >= ?
+            AND l.appid NOT IN (SELECT appid FROM app_dlc WHERE fetched_at > ?)
+          GROUP BY l.appid ORDER BY minutes DESC LIMIT ?`, DLC_MIN_MINUTES, now() - 14 * 86400_000, limit).map(r => r.appid);
+    /** One member's played games that have add-ons: [{ appid, title, dlc: [appid, ...] }]. */
+    const ownedWithDlc = userId => all(
+        `SELECT l.appid, l.title, d.dlc FROM library l JOIN app_dlc d ON d.appid = l.appid
+          WHERE l.discord_id = ? AND l.minutes >= ? AND d.dlc != '' ORDER BY l.minutes DESC LIMIT 150`, userId, DLC_MIN_MINUTES)
+        .map(r => ({ appid: r.appid, title: r.title, dlc: String(r.dlc).split(",").map(Number).filter(Number.isInteger) }));
+    const dlcUsers = () => all("SELECT * FROM users WHERE dlc = 1 AND paused = 0").map(clean);
+    return { saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

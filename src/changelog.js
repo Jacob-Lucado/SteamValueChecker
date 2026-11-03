@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.09", date: "2026-11-09", title: "DLC sales and an installable dashboard", items: [
+        "**DLC sale alerts:** turn on `/alerts dlc` (or the checkbox in Alert settings) and the bot tells you when DLC or add-ons for a game you play go 40% off or more. It looks at the Steam games you have played for two hours or more, and your own minimum discount still applies. Your first check is quiet.",
+        "**Install the dashboard:** the site can now be added to your phone's home screen or installed as an app from your browser, with shortcuts to your wishlist, free games and alert settings.",
+    ] },
     { version: "2026.11.08", date: "2026-11-08", title: "Steam reviews on your alerts", items: [
         "**Steam reviews:** sale alerts and `/me wishlist check` now show how Steam players rate the game (for example \"Very Positive on Steam: 92% of 18,420 reviews are positive\"), so you can tell a good deal on a good game from a good deal on a bad one. Games with very few reviews show nothing.",
     ] },

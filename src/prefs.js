@@ -52,6 +52,7 @@ export function prefsPatch(input, user) {
     if (has("share")) patch.share = input.share ? 1 : 0;
     if (has("free")) patch.free = input.free ? 1 : 0;
     if (has("free_dlc")) patch.free_dlc = input.free_dlc ? 1 : 0;
+    if (has("dlc")) patch.dlc = input.dlc ? 1 : 0;
     if (has("news")) patch.news = [0, 1, 2].includes(Number(input.news)) ? Number(input.news) : 0;
     if (has("muted")) {
         const list = (Array.isArray(input.muted) ? input.muted : String(input.muted ?? "").split(",")).map(x => String(x).trim()).filter(Boolean);
@@ -65,13 +66,13 @@ export function prefsPatch(input, user) {
     return patch;
 }
 
-export const MUTABLE = ["alert", "bundle", "free", "news", "digest", "release", "friend", "codes", "promo"];
+export const MUTABLE = ["alert", "bundle", "free", "news", "dlc", "digest", "release", "friend", "codes", "promo"];
 
 /** The new settings in a form that is safe to send to the browser. */
 export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? "UTC",
-        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0,
+        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, dlc: Boolean(u.dlc),
         min_discount: u.min_discount ?? 0, muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
     };
 }

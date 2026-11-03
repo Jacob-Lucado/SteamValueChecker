@@ -382,6 +382,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.updateUser(user.discord_id, { news: mode });
                 return eph(i, mode === 0 ? "News alerts are off." : `You will get ${mode === 1 ? "patch notes" : "every announcement"} for the Steam games you own or wishlist. Your first check is quiet, so only new posts reach you. Link Steam or import your wishlist if you haven't, so I know your games.`);
             }
+            case "dlc": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { dlc: on ? 1 : 0 });
+                return eph(i, on ? "You will be told when DLC and add-ons for the games you play (two hours or more, from your Steam library) go on a big sale. Your first check is quiet, so only new sales reach you." : "DLC sale alerts are off.");
+            }
             case "freegames": {
                 const on = i.options.getBoolean("enabled", true);
                 const dlc = i.options.getBoolean("dlc");

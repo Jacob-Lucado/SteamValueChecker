@@ -513,6 +513,32 @@ test("per-game quiet: snooze for a while, mute until switched back on, and the w
     await t.close();
 });
 
+test("installable: a valid manifest, every icon it names, and the page and security rules that let a browser use it", async () => {
+    const t = await signedIn();
+    const m = await t.request("/manifest.webmanifest", { raw: true });
+    assert.equal(m.status, 200); assert.match(m.headers.get("content-type"), /application\/manifest\+json/);
+    const man = JSON.parse(await m.text());
+    assert.equal(man.display, "standalone"); assert.equal(man.start_url, "/"); assert.ok(man.name && man.short_name.length <= 12);
+    const sizes = man.icons.map(i => i.sizes); assert.ok(sizes.includes("192x192") && sizes.includes("512x512"), "the two sizes browsers ask for");
+    assert.ok(man.icons.some(i => i.purpose === "maskable"));
+    for (const i of [...man.icons, ...man.shortcuts.flatMap(x => x.icons)]) { const r = await t.request(i.src, { raw: true }); assert.equal(r.status, 200, i.src); assert.equal(r.headers.get("content-type"), "image/png"); }
+    for (const sc of man.shortcuts) assert.match(sc.url, /^\/#\//);
+    const page = await t.request("/");
+    assert.match(page.text, /<link rel="manifest" href="\/manifest\.webmanifest">/);
+    assert.match(page.headers.get("content-security-policy"), /manifest-src 'self'/);
+    await t.close();
+});
+
+test("settings: the DLC sale switch is saved and read back", async () => {
+    const t = await signedIn();
+    t.db.ensureUser("u1");
+    assert.equal((await t.request("/api/me")).data.settings.dlc, false);
+    const r = await t.request("/api/settings", { method: "POST", body: { dlc: true } });
+    assert.equal(r.status, 200); assert.equal(r.data.settings.dlc, true); assert.equal(t.db.getUser("u1").dlc, 1);
+    assert.equal((await t.request("/api/settings", { method: "POST", body: { dlc: false } })).data.settings.dlc, false);
+    await t.close();
+});
+
 test("admin page: owner only", async () => {
     const t = await signedIn();
     assert.equal((await t.request("/api/admin/stats")).status, 403);

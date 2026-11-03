@@ -120,6 +120,10 @@ const FILES = {
     "/grabber-favicon-32.png": ["grabber-favicon-32.png", "image/png"],
     "/grabber-apple-touch-icon.png": ["grabber-apple-touch-icon.png", "image/png"],
     "/favicon.png": ["favicon.png", "image/png"],
+    "/manifest.webmanifest": ["manifest.webmanifest", "application/manifest+json; charset=utf-8"],
+    "/icon-192.png": ["icon-192.png", "image/png"],
+    "/icon-512.png": ["icon-512.png", "image/png"],
+    "/icon-maskable-512.png": ["icon-maskable-512.png", "image/png"],
     "/img/codes/genshin.jpg": ["img/codes/genshin.jpg", "image/jpeg"],
     "/img/codes/hsr.jpg": ["img/codes/hsr.jpg", "image/jpeg"],
     "/img/codes/zzz.jpg": ["img/codes/zzz.jpg", "image/jpeg"]
@@ -275,7 +279,7 @@ export function createDashboard({ emojigg = null, news = null, db, itad, rest, m
     const squeeze = (buf, enc, quality) => (enc === "br" ? brotliCompressSync(buf, { params: { [zc.BROTLI_PARAM_QUALITY]: quality } }) : gzipSync(buf, { level: Math.min(9, quality) }));
     const CSP =
 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
-        "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'";
+        "connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'";
     const send = (res, status, body, headers = {}) => {
         const type = String(headers["Content-Type"] ?? "");
         if (COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && body && Buffer.byteLength(body) > 1024) {
@@ -746,7 +750,7 @@ export function createDashboard({ emojigg = null, news = null, db, itad, rest, m
                 throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
             }
             patch.delivery = nextDelivery;
-            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "news", "min_discount", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "dlc", "news", "min_discount", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
             Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };

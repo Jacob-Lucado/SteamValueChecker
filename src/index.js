@@ -36,6 +36,7 @@ import { isHidden } from "./hidden.js";
 import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
+import { refreshDlc, runDlcSales } from "./dlc.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
 import { runFriendReminders } from "./friends.js";
@@ -286,6 +287,8 @@ client.once(Events.ClientReady, c => {
             const result = {};
             result.extras = await ops.job("extras", () => runExtras({ db, itad, notifier, log }));
             result.tags = await ops.job("genre tags", () => refreshTags({ db, appids: db.allAppsNeedingTags(30), delayMs: 1200 }));
+            result.dlcLists = await ops.job("dlc lists", async () => ({ checked: await refreshDlc({ db, appids: db.appsNeedingDlc(30) }) }));
+            result.dlc = await ops.job("dlc sales", () => runDlcSales({ db, itad, notifier, log }));
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
             result.free = await ops.job("free games", () => runFreeGames({ db, itad, notifier, log }));
             result.news = await ops.job("news", () => runNews({ db, news, notifier, log }));
