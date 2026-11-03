@@ -21,9 +21,11 @@ export async function playtestBoard({ db, news = null, abg = null, userId, now =
 
     if (abg) {
         try {
+            const wishApps = new Set(wish.map(i => i.appid).filter(Number.isInteger));
             for (const x of (await abg.latest()).filter(p => p.date >= since)) {
+                if (x.wishlistOnly && !(isWished(x.game) || wishApps.has(x.appid))) continue; // the Steam demo list is only for wishlist games
                 const kind = ABG_FILTER[x.kind] ?? "beta";
-                items.push({ id: "abg:" + x.id, source: "Alpha Beta Gamer", kind, label: ABG_LABEL[x.kind] ?? "Beta", game: x.game, title: x.type ? `${x.game} – ${x.type}` : x.game, url: safeUrl(x.url), date: x.date, image: safeUrl(x.image) ? x.image : null, summary: x.summary, wishlist: isWished(x.game), owned: isOwned(x.game) });
+                items.push({ id: "abg:" + x.id, source: x.sourceName ?? "Alpha Beta Gamer", kind, label: x.label ?? ABG_LABEL[x.kind] ?? "Beta", game: x.game, title: x.type ? `${x.game} – ${x.type}` : x.game, url: safeUrl(x.url), date: x.date, image: safeUrl(x.image) ? x.image : null, summary: x.summary, wishlist: isWished(x.game) || wishApps.has(x.appid), owned: isOwned(x.game) });
             }
             sources.abg = true;
         } catch (err) { log(`playtest board: alpha beta gamer ${err.code ?? err.name}`); }

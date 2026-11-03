@@ -46,7 +46,7 @@ import { grabberPromo } from "../promo.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
 import { playtestBoard } from "../playboard.js";
-import { createAbgFeed } from "../abgfeed.js";
+import { createPlaytestSources } from "../playsources.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
 import { extractKeys } from "../redeemstore.js";
@@ -2223,7 +2223,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, playt
         // Playtests, betas and demos from Steam news and Alpha Beta Gamer. The page asks again every few minutes by itself.
         "GET /api/playtests": async (req) => {
             const s = session(req);
-            return playtestBoard({ db, news: news ?? (news = createNews()), abg: abg ?? (abg = createAbgFeed()), userId: s.userId, now: now(), log });
+            return playtestBoard({ db, news: news ?? (news = createNews()), abg: abg ?? (abg = createPlaytestSources()), userId: s.userId, now: now(), log });
         },
 
         // ----- giveaways (server managers) -----

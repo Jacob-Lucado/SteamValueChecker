@@ -350,7 +350,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 
 /** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
 export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops", "musiccmd", "music1", "music2", "live", "playtests"]);
-const PLAYTEST_INTRO = { content: "Free playtests, betas and demos are posted here once each, found from Steam announcements and the Alpha Beta Gamer site. Pick the **Playtest pings** role in the roles channel to get pinged. Managers can change the channel, the role, or limit it to games members watch on the dashboard." };
+const PLAYTEST_INTRO = { content: "Free playtests, betas and demos are posted here once each, found from Steam announcements, Alpha Beta Gamer, GamerPower and itch.io, and never twice. Pick the **Playtest pings** role in the roles channel to get pinged. Managers can change the channel or the role on the dashboard." };
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
 
 /** What a second run does: create only the template channels this server has never been given. */

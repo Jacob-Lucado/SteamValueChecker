@@ -866,7 +866,7 @@
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
         h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played, or when it drops below what I paid (that part needs the extension's purchase sync)"),
-        field("Playtests, demos and betas (Steam announcements and Alpha Beta Gamer)", playSel),
+        field("Playtests, demos and betas (Steam, Alpha Beta Gamer, GamerPower and itch.io)", playSel),
         h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
         h("label", { class: "check" }, yearOn, "My year in games card, sent at the end of December"),
@@ -1127,7 +1127,7 @@
           else if (manual) toast("Already up to date.", "ok");
         }
         seen = ids; data = d; failed = false; loadedAt = Date.now();
-        notes.replaceChildren(...[!d.sources.abg && h("div", { class: "notice warn", text: "The Alpha Beta Gamer list could not be reached just now, so only Steam announcements are shown." }), !d.sources.steam && d.watching === 0 && h("p", { class: "muted small", text: "Add games to your wishlist or link Steam and their Steam announcements show up here too." })].filter(Boolean));
+        notes.replaceChildren(...[!d.sources.abg && h("div", { class: "notice warn", text: "The playtest sites could not be reached just now, so only Steam announcements are shown." }), !d.sources.steam && d.watching === 0 && h("p", { class: "muted small", text: "Add games to your wishlist or link Steam and their Steam announcements show up here too." })].filter(Boolean));
         draw();
       } catch (e) { failed = true; if (!data) list.replaceChildren(h("div", { class: "notice warn", text: e.message })); else if (manual) toast(e.message, "error"); }
       tick();
@@ -1140,7 +1140,7 @@
     const onVis = () => { if (!alive()) return document.removeEventListener("visibilitychange", onVis); if (!document.hidden && Date.now() - loadedAt >= PLAYTEST_POLL_MS) load(false); };
     document.addEventListener("visibilitychange", onVis);
     const on = state.me && state.me.settings && state.me.settings.playtest;
-    app.replaceChildren(pageHead("Playtests", "Playtests, betas, demos and free weekends happening now. It reads the Steam announcements of games on your wishlist or in your library, and the Alpha Beta Gamer site for games Steam news never mentions."),
+    app.replaceChildren(pageHead("Playtests", "Playtests, betas, demos and free weekends happening now. It reads the Steam announcements of games on your wishlist or in your library, and Alpha Beta Gamer, GamerPower, itch.io and Steam's new demos for games Steam news never mentions."),
       h("div", { class: "panel" }, h("div", { class: "row free-bar" }, search,
         h("label", { class: "check" }, mineBox, " ", h("span", { text: "On my wishlist" })), h("label", { class: "check" }, ownBox, " ", h("span", { text: "Hide games I own" })), refreshBtn, stamp),
         h("p", { class: "muted small" }, on ? "Your playtest alerts are on. " : "Want a message when one shows up? ", h("a", { href: "#/alerts", text: on ? "Change them in Alert settings." : "Turn on playtest alerts." }))),
@@ -4177,7 +4177,7 @@
     { nav: "Deals", title: "Deals, free games and codes", lead: "When you are not waiting on a specific game, these pages find something worth buying or claiming.",
       points: [["For you", "Current discounts ranked by your taste, library and wishlist."], ["Check a deal", "Price any game by region and see which bundles include it."], ["Sale planner", "During a Steam sale, set a budget and let the best savings fill your cart. Afterwards see what your alerts caught."], ["Free games", "Everything free right now on Steam, Epic, GOG and more, with store filters and a DLC tab."], ["Codes, promos and the calendar", "Working codes for popular games, key giveaways, release dates and sale dates in one place."]] },
     { nav: "Early access", title: "Playtests, demos and news", lead: "Hear about a game before it launches, or when something changes in one you already play.",
-      points: [["Playtest watcher", "Betas, demos, free weekends and sign-ups from Steam announcements and the Alpha Beta Gamer site. Choose wishlist games only, or every one found."], ["News and patch notes", "Announcements for the Steam games you own or wishlist. Patch notes only, or everything."], ["DLC sales", "A heads-up when add-ons for games you really play are heavily discounted."], ["Release dates", "Told when a wishlist game gets a date, or when it moves."]] },
+      points: [["Playtest watcher", "Betas, demos, free weekends and sign-ups from Steam announcements, Alpha Beta Gamer, GamerPower and itch.io. Choose wishlist games only, or every one found."], ["News and patch notes", "Announcements for the Steam games you own or wishlist. Patch notes only, or everything."], ["DLC sales", "A heads-up when add-ons for games you really play are heavily discounted."], ["Release dates", "Told when a wishlist game gets a date, or when it moves."]] },
     { nav: "Friends", title: "Friends, gifts and sharing", lead: "Games are better shared. None of this is on unless you turn it on.",
       points: [["Friends and gifts", "Save birthdays and public wishlist links, then see what is on sale for them before the day."], ["Your public page", "Share a wishlist page with a link. Friends can quietly claim a gift so nobody buys it twice, and the page uses your profile card colour."], ["Profile card", "A picture of your library with the stats and colours you choose, ready to post."], ["Compare libraries", "See what you and a friend both own, with hours side by side."]] },
     { nav: "Servers", title: "Servers and Discord", lead: "Add the bot to a server and it becomes a community toolkit. The dashboard is where managers run it.",

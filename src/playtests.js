@@ -6,6 +6,7 @@
 // for games its sharing members watch, with the role mentioned.
 import { steamArt, safeUrl } from "./render.js";
 import { sameGame } from "./abgfeed.js";
+import { gameKeys, kindGroup } from "./playsources.js";
 import { isQuiet } from "./timeutil.js";
 import { UserError } from "./errors.js";
 
@@ -42,12 +43,12 @@ const button = post => ({ type: 1, components: [{ type: 2, style: 5, label: "Ope
 const ABG_KINDS = { signup: ["🧪", "Beta sign-up"], playtest: ["🧪", "Playtest"], demo: ["🎮", "Beta demo"], alpha: ["🅰️", "Alpha"], beta: ["🔧", "Beta"] };
 /** A post from alphabetagamer.com as a card. `watchers` is how many sharing members of a server have the game on their wishlist. */
 export function abgEmbed(item, { watchers = 0 } = {}) {
-    const [icon, label] = ABG_KINDS[item.kind] ?? ABG_KINDS.beta;
+    const [icon, kindLabel] = ABG_KINDS[item.kind] ?? ABG_KINDS.beta, label = item.label ?? kindLabel;
     return {
         color: 0xeb459e, title: `${icon} ${label}: ${item.game}`.slice(0, 256), url: safeUrl(item.url),
         description: item.summary || "Open the post for how to join.", timestamp: new Date(item.date).toISOString(),
         image: safeUrl(item.image) ? { url: item.image } : undefined,
-        footer: { text: `${watchers > 0 ? `${watchers} member${watchers === 1 ? "" : "s"} here ${watchers === 1 ? "has" : "have"} this on a wishlist  •  ` : ""}Found on Alpha Beta Gamer  •  /alerts playtests to change this` }
+        footer: { text: `${watchers > 0 ? `${watchers} member${watchers === 1 ? "" : "s"} here ${watchers === 1 ? "has" : "have"} this on a wishlist  •  ` : ""}Found on ${item.sourceName ?? "Alpha Beta Gamer"}  •  /alerts playtests to change this` }
     };
 }
 
@@ -93,22 +94,27 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
         for (const [appid, title] of mine.get(id) ?? []) for (const { p, kind } of hitsFor(appid)) {
             const key = `pt:${p.gid}`;
             if (db.hasSeen(id, key)) continue;
-            if (firstSteam) { db.markSeen(id, key); continue; }
-            hits.push({ embed: playtestEmbed({ ...p, gameTitle: title }, kind), url: p.url, date: p.date, key, game: title, source: "steam" });
+            if (firstSteam) { db.markSeen(id, key); db.markSeen(id, gameKeys({ game: title, kind }, now()).mark); continue; }
+            const gk = gameKeys({ game: title, kind }, now());
+            if (gk.check.some(k => db.hasSeen(id, k))) { db.markSeen(id, key); continue; }
+            hits.push({ embed: playtestEmbed({ ...p, gameTitle: title }, kind), url: p.url, date: p.date, key, gk: gk.mark, group: kindGroup(kind), game: title, source: "steam" });
         }
         if (firstSteam) db.markSeen(id, "ptstart");
-        const names = wished.get(id) ?? [];
+        const names = wished.get(id) ?? [], appids = new Set(mine.get(id)?.keys() ?? []);
         for (const item of site) {
             const key = `abg:${item.id}`;
             if (db.hasSeen(id, key)) continue;
-            const onList = names.some(n => sameGame(n, item.game));
+            const onList = names.some(n => sameGame(n, item.game)) || (item.appid != null && appids.has(item.appid));
             if (!all && !onList) continue;
-            if (firstSite || (all && firstAll && !onList)) { db.markSeen(id, key); continue; } // the first look at the site is quiet
-            // A wishlist game already announced on Steam this round is not announced again from the site.
-            if (hits.some(h => sameGame(h.game, item.game))) { db.markSeen(id, key); continue; }
-            hits.push({ embed: abgEmbed(item), url: item.url, date: item.date, key, game: item.game, source: "abg" });
+            if (item.wishlistOnly && !onList) continue; // Steam's demo list is far too long to post whole
+            const gk = gameKeys(item, now()), src = item.source ?? "abg";
+            const newSrc = src !== "abg" && !db.hasSeen(id, `abgsrc:${src}`); // a source added later also gets a quiet first look
+            if (firstSite || newSrc || (all && firstAll && !onList)) { db.markSeen(id, key); db.markSeen(id, gk.mark); continue; } // the first look at the site is quiet
+            // The same game announced by another source (or by Steam) recently is not announced again.
+            if (gk.check.some(k => db.hasSeen(id, k)) || hits.some(h => sameGame(h.game, item.game) && (h.group === kindGroup(item.kind) || h.source === "steam"))) { db.markSeen(id, key); continue; }
+            hits.push({ embed: abgEmbed(item), url: item.url, date: item.date, key, gk: gk.mark, group: kindGroup(item.kind), game: item.game, source: item.source ?? "abg", sourceName: item.sourceName ?? "Alpha Beta Gamer" });
         }
-        if (site.length) { db.markSeen(id, "abgstart"); if (all) db.markSeen(id, "abgall"); }
+        if (site.length) { db.markSeen(id, "abgstart"); if (all) db.markSeen(id, "abgall"); for (const src of new Set(site.map(x => x.source ?? "abg"))) db.markSeen(id, `abgsrc:${src}`); }
         stats.checked++;
         if (!hits.length) continue;
         stats.found += hits.length;
@@ -117,8 +123,8 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
         const res = await notifier.deliver(user, { embeds: part.map(h => h.embed), components: part.length === 1 ? [button({ url: part[0].url })] : [] }, "playtest");
         if (!res.ok) { stats.failed += part.length; continue; }
         stats.delivered += part.length;
-        for (const h of part) db.markSeen(id, h.key);
-        db.logAlert({ discord_id: id, title: `${part[0].game}${part.length > 1 ? ` +${part.length - 1} more` : ""}`, kind: "playtest", price: 0, shop: part[0].source === "abg" ? "Alpha Beta Gamer" : "Steam news", via: res.via });
+        for (const h of part) { db.markSeen(id, h.key); db.markSeen(id, h.gk); }
+        db.logAlert({ discord_id: id, title: `${part[0].game}${part.length > 1 ? ` +${part.length - 1} more` : ""}`, kind: "playtest", price: 0, shop: part[0].source === "steam" ? "Steam news" : (part[0].sourceName ?? "Alpha Beta Gamer"), via: res.via });
     }
 
     for (const g of guilds) {
@@ -128,25 +134,31 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
         const everything = Boolean(g.playtest_channel) || Boolean(db.getCommunity(gid)?.playtest_all);
         const apps = guildApps.get(gid) ?? [];
         const hits = [];
+        const gkey = (item, now_) => { const k = gameKeys(item, now_); return { mark: `ptg:${gid}:${k.mark}`, check: k.check.map(x => `ptg:${gid}:${x}`) }; };
         for (const a of apps) for (const { p, kind } of hitsFor(a.appid)) {
-            const key = `ptg:${gid}:${p.gid}`;
+            const key = `ptg:${gid}:${p.gid}`, gk = gkey({ game: a.title, kind }, now());
             if (db.getMeta(key) != null) continue;
-            if (first) { db.setMeta(key, "1"); continue; }
-            hits.push({ embed: playtestEmbed({ ...p, gameTitle: a.title }, kind, { watchers: a.watchers }), url: p.url, date: p.date, key, game: a.title });
+            if (first) { db.setMeta(key, "1"); db.setMeta(gk.mark, "1"); continue; }
+            if (gk.check.some(k => db.getMeta(k) != null)) { db.setMeta(key, "1"); continue; }
+            hits.push({ embed: playtestEmbed({ ...p, gameTitle: a.title }, kind, { watchers: a.watchers }), url: p.url, date: p.date, key, gk: gk.mark, group: kindGroup(kind), source: "steam", game: a.title });
         }
         for (const item of site) {
             const key = `ptg:${gid}:abg:${item.id}`;
             if (db.getMeta(key) != null) continue;
-            const match = apps.find(a => sameGame(a.title, item.game));
+            const match = apps.find(a => sameGame(a.title, item.game) || (item.appid != null && a.appid === item.appid));
             if (!everything && !match) continue;
-            if (first) { db.setMeta(key, "1"); continue; }
-            if (hits.some(h => sameGame(h.game, item.game))) { db.setMeta(key, "1"); continue; }
-            hits.push({ embed: abgEmbed(item, { watchers: match?.watchers ?? 0 }), url: item.url, date: item.date, key, game: item.game });
+            if (item.wishlistOnly && !match) continue; // Steam's demo list is far too long to post whole
+            const gk = gkey(item, now()), src = item.source ?? "abg";
+            const newSrc = src !== "abg" && db.getMeta(`ptg:src:${gid}:${src}`) == null;
+            if (first || newSrc) { db.setMeta(key, "1"); db.setMeta(gk.mark, "1"); continue; }
+            if (gk.check.some(k => db.getMeta(k) != null) || hits.some(h => sameGame(h.game, item.game) && (h.group === kindGroup(item.kind) || h.source === "steam"))) { db.setMeta(key, "1"); continue; }
+            hits.push({ embed: abgEmbed(item, { watchers: match?.watchers ?? 0 }), url: item.url, date: item.date, key, gk: gk.mark, group: kindGroup(item.kind), source: item.source ?? "abg", game: item.game });
         }
+        for (const src of new Set(site.map(x => x.source ?? "abg"))) if (db.getMeta(`ptg:src:${gid}:${src}`) == null) db.setMeta(`ptg:src:${gid}:${src}`, "1");
         // Switching on "every playtest" later starts quiet too: what the site already listed is not dumped on the server.
         if (everything && site.length && db.getMeta(`ptg:all:${gid}`) == null) {
             db.setMeta(`ptg:all:${gid}`, "1");
-            if (!first) { for (const h of hits.filter(h => h.key.includes(":abg:") && !apps.some(a => sameGame(a.title, h.game)))) db.setMeta(h.key, "1"); continue; }
+            if (!first) { for (const h of hits.filter(h => h.key.includes(":abg:") && !apps.some(a => sameGame(a.title, h.game)))) { db.setMeta(h.key, "1"); db.setMeta(h.gk, "1"); } continue; }
         }
         if (first && (site.length || apps.length)) db.setMeta(startKey, String(now()));
         stats.checked++;
@@ -158,7 +170,7 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
             const ok = g.playtest_channel ? await notifier.postChannel(g.playtest_channel, payload, g.ping_playtest || null) : await notifier.postGuild(gid, payload, "playtest");
             if (!ok) { stats.failed++; continue; }
             stats.posted++;
-            db.setMeta(h.key, "1");
+            db.setMeta(h.key, "1"); db.setMeta(h.gk, "1");
         }
     }
     return stats;
@@ -185,14 +197,15 @@ export async function refreshPlaytestChannel({ db, news, abg = null, notifier, g
     if (apps.length && news) { try { feed = await news.forApps(apps.map(a => a.appid)); } catch (err) { log(`playtest refresh: steam news ${err.code ?? err.name}`); } }
     const found = [];
     for (const item of site) {
-        const match = apps.find(a => sameGame(a.title, item.game));
-        found.push({ embed: abgEmbed(item, { watchers: match?.watchers ?? 0 }), url: item.url, date: item.date, key: `ptg:${guildId}:abg:${item.id}`, game: item.game });
+        const match = apps.find(a => sameGame(a.title, item.game) || (item.appid != null && a.appid === item.appid));
+        if (item.wishlistOnly && !match) continue;
+        found.push({ embed: abgEmbed(item, { watchers: match?.watchers ?? 0 }), url: item.url, date: item.date, key: `ptg:${guildId}:abg:${item.id}`, game: item.game, kind: item.kind });
     }
     for (const a of apps) for (const p of feed.get(a.appid) ?? []) {
         const kind = classifyPost(p);
         if (!kind || p.date < since) continue;
         if (found.some(x => sameGame(x.game, a.title) && Math.abs(x.date - p.date) < 5 * 86400_000)) continue;
-        found.push({ embed: playtestEmbed({ ...p, gameTitle: a.title }, kind, { watchers: a.watchers }), url: p.url, date: p.date, key: `ptg:${guildId}:${p.gid}`, game: a.title });
+        found.push({ embed: playtestEmbed({ ...p, gameTitle: a.title }, kind, { watchers: a.watchers }), url: p.url, date: p.date, key: `ptg:${guildId}:${p.gid}`, game: a.title, kind });
     }
     found.sort((x, y) => y.date - x.date);
     const chosen = found.slice(0, cap).reverse();
@@ -202,7 +215,7 @@ export async function refreshPlaytestChannel({ db, news, abg = null, notifier, g
         if (ok) posted++; else failed++;
         if (!ok && !posted) break; // the first one failing means the channel is out of reach: stop instead of trying them all
     }
-    if (posted) for (const h of found) db.setMeta(h.key, "1");
+    if (posted) for (const h of found) { db.setMeta(h.key, "1"); db.setMeta(`ptg:${guildId}:${gameKeys(h, now()).mark}`, "1"); }
     if (!posted && chosen.length) throw new UserError("I could not post in the playtest channel. Check that I can see it and send messages and embeds there.");
     return { found: found.length, posted, failed, channel: c.playtest_channel };
 }

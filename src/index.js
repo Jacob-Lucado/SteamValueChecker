@@ -41,6 +41,7 @@ import { runYearInGames } from "./yearly.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createAbgFeed } from "./abgfeed.js";
+import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
@@ -108,7 +109,8 @@ logs.capture();
 const luna = createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) });
 const epicSoon = createEpicSoon();
 const news = createNews();
-const abg = createAbgFeed();
+// Every playtest source in one list (Alpha Beta Gamer, GamerPower, itch.io, Steam's new demos), with duplicates between them removed.
+const abg = createPlaytestSources({ abg: createAbgFeed(), log: m => console.warn(`[playtests] ${m}`) });
 const itad = withLuna(createItad({ apiKey: cfg.itadKey }), luna);
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
