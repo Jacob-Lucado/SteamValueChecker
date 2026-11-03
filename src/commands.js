@@ -270,7 +270,8 @@ const status = new SlashCommandBuilder()
 const publicpage = new SlashCommandBuilder()
     .setName("publicpage")
     .setDescription("A public page of your wishlist and its best prices that you can share, for gifts")
-    .addBooleanOption(o => o.setName("enabled").setDescription("Turn the page on or off").setRequired(true))
+    .addBooleanOption(o => o.setName("share").setDescription("Post your page link in this channel for everyone to see"))
+    .addBooleanOption(o => o.setName("enabled").setDescription("Turn the page on or off"))
     .addStringOption(o => o.setName("name").setDescription("Page name, 3 to 24 letters, numbers, - or _").setMinLength(3).setMaxLength(24))
     .addBooleanOption(o => o.setName("reset_claims").setDescription("Clear every \"I'm gifting this\" mark visitors made on your page"));
 

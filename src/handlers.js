@@ -842,15 +842,35 @@ export function createHandlers({ db, itad, nowPlaying = null, publicUrl = null, 
     }
 
     // ---------- /me publicpage ----------
+    /** A public card for "here is my wishlist": a few game names (all of which the page shows anyway) and a button to open it. */
+    function sharePayload(u, who) {
+        const games = db.listItems(u.discord_id).filter(x => x.source !== "watch"), owned = new Set(db.listLibrary(u.discord_id).map(x => x.itad_id));
+        const wanted = games.filter(x => !owned.has(x.itad_id)).sort((a, b) => Number(b.priority) - Number(a.priority));
+        const url = publicUrl ? `${publicUrl}/#/u/${u.profile_slug}` : null;
+        const embed = { color: 0x4da3ff, title: `🎁 ${who}'s wishlist`, ...(url ? { url } : {}),
+            description: wanted.length ? `${wanted.length} game${wanted.length === 1 ? "" : "s"} on the list, with today's best prices. Open it to see them, and mark one as "I'm gifting this" so nobody doubles up.\n\n` + wanted.slice(0, 6).map(x => `• ${x.title}`).join("\n") + (wanted.length > 6 ? `\n…and ${wanted.length - 6} more` : "") : "Open it to see what is on the list, and mark a game as \"I'm gifting this\" so nobody doubles up.",
+            footer: { text: "Only game names, art and prices are shown  •  /me publicpage to get your own" } };
+        return { embeds: [embed], components: url ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open the wishlist", url }] }] : [], allowedMentions: { parse: [] } };
+    }
+
     async function handlePublicPage(i) {
         try {
             db.ensureUser(i.user.id, i.guildId);
-            const r = setProfile(db, i.user.id, { enabled: i.options.getBoolean("enabled", true), slug: i.options.getString("name") });
-            const cleared = i.options.getBoolean("reset_claims") ? db.clearGiftClaims(i.user.id) : 0;
+            const wantOn = i.options.getBoolean("enabled"), share = i.options.getBoolean("share") === true, name = i.options.getString("name"), reset = i.options.getBoolean("reset_claims") === true;
+            const link = slug => (publicUrl && slug ? `${publicUrl}/#/u/${slug}` : null);
+            if (wantOn === null && !name && !reset) {
+                // Nothing to change: show (or post) the link.
+                const u = db.getUser(i.user.id);
+                if (!u?.profile_public || !u.profile_slug) return eph(i, "Your public page is off. Turn it on with `/me publicpage enabled:true name:yourname`, then share it with `/me publicpage share:true`.");
+                if (!share) return eph(i, `Your page: ${link(u.profile_slug) ?? "**" + u.profile_slug + "**"}\nPost it for everyone in this channel with \`/me publicpage share:true\`.`);
+                return await i.reply(sharePayload(u, i.member?.displayName ?? i.user.globalName ?? i.user.username));
+            }
+            const r = setProfile(db, i.user.id, { enabled: wantOn ?? Boolean(db.getUser(i.user.id)?.profile_public), slug: name });
+            const cleared = reset ? db.clearGiftClaims(i.user.id) : 0;
+            if (share && r.public) { await i.reply(sharePayload(db.getUser(i.user.id), i.member?.displayName ?? i.user.globalName ?? i.user.username)); return; }
             if (!r.public) return eph(i, "Your public page is off. Nobody can open it." + (cleared ? ` Cleared ${cleared} gift claim${cleared === 1 ? "" : "s"}.` : ""));
-            const link = publicUrl ? `${publicUrl}/#/u/${r.slug}` : null;
-            const n = db.countGiftClaims(i.user.id);
-            return eph(i, `Your page is on${link ? `: ${link}` : `, as **${r.slug}**`}\nIt shows only game names, art and today's best prices. Never your Discord account.\n` +
+            const n = db.countGiftClaims(i.user.id), shown = link(r.slug);
+            return eph(i, `Your page is on${shown ? `: ${shown}` : `, as **${r.slug}**`}\nIt shows only game names, art and today's best prices. Never your Discord account.\n` +
                 `Visitors can mark a game as "I'm gifting this" so nobody doubles up. You are not told who, or which games` + (n ? `, only that **${n}** ${n === 1 ? "is" : "are"} claimed right now.` : ".") +
                 (cleared ? ` Cleared ${cleared} just now.` : n ? " Add `reset_claims: true` to clear them." : ""));
         } catch (err) { await failed(i, "publicpage", err); }
