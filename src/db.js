@@ -403,7 +403,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const releasedItems = () => all(
         `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.muted
            FROM items i JOIN users u ON u.discord_id = i.discord_id
-          WHERE u.paused = 0 AND i.release_wait = 1 AND i.release_at IS NOT NULL AND i.release_at <= ? AND i.release_at > ?`, now(), now() - 7 * 86400_000).map(clean);
+          WHERE u.paused = 0 AND i.release_wait = 1 AND i.release_at IS NOT NULL AND i.release_at <= ? AND i.release_at > ? AND (i.snooze_until IS NULL OR i.snooze_until < ?)`, now(), now() - 7 * 86400_000, now()).map(clean);
     const activeItems = () => all(
         `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.bundles, u.share, u.min_discount
            FROM items i JOIN users u ON u.discord_id = i.discord_id

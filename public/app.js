@@ -696,8 +696,19 @@
     const sale = r.discount > 0, pct = Math.round(r.discount * 100), best = r.best;
     const remove = h("button", { class: "btn red small", type: "button", text: "Remove" });
     remove.addEventListener("click", () => busy(remove, async () => { await api("/api/wishlist/remove", { itad_id: r.itad_id }); state.me.games--; reload(); }));
-    const snooze = h("button", { class: "btn gray small", type: "button", text: "Snooze 7 days", title: "No alerts for this game for 7 days" });
-    snooze.addEventListener("click", () => busy(snooze, async () => { await api("/api/wishlist/snooze", { itad_id: r.itad_id, days: 7 }); toast("Snoozed for 7 days.", "ok"); }));
+    // One control for this game's alerts: on, snoozed for a while, or muted until switched back on.
+    const quiet = r.snoozed_until && r.snoozed_until - Date.now() > 100 * 86400_000 ? "mute" : r.snoozed_until ? "snooze" : "on";
+    const snooze = select([["on", quiet === "snooze" ? "Snoozed until " + new Date(r.snoozed_until).toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " (change)" : "Alerts on"], ["7", "Snooze 7 days"], ["30", "Snooze 30 days"], ["mute", "Mute this game"], ["off", "Turn alerts back on"]], quiet);
+    snooze.setAttribute("aria-label", "Alerts for " + r.title); snooze.className = "small";
+    if (quiet === "mute") snooze.title = "Muted: no alerts of any kind for this game";
+    snooze.addEventListener("change", () => {
+      const v = snooze.value; if (v === "on") return;
+      busy(snooze, async () => {
+        await api("/api/wishlist/snooze", v === "mute" ? { itad_id: r.itad_id, muted: true } : v === "off" ? { itad_id: r.itad_id, days: 0 } : { itad_id: r.itad_id, days: Number(v) });
+        toast(v === "mute" ? "Muted. No alerts for " + r.title + " until you turn them back on." : v === "off" ? "Alerts are back on." : "Snoozed for " + v + " days.", "ok");
+        reload();
+      });
+    });
     const chartHolder = h("div", { class: "wl-chart" });
     const hist = h("button", { class: "btn gray small", type: "button", text: "Price history" });
     hist.addEventListener("click", () => {
@@ -827,12 +838,25 @@
         h("div", { class: "row" }, field("Quiet from", qs), field("Until", qe), field("Your time zone", tz)),
         h("label", { class: "check" }, digest, "Weekly digest of your wishlist sales, sent from 9:00 in your time zone on"), field("Day", digestDay)),
       muteToggles(),
+      samplePanel(),
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),
         h("label", { class: "check" }, share, "Count me in group alerts (“3 members are watching…”) and on the savings leaderboard. Shows only my name, my game count and my percent saved.")),
       h("p", { class: "muted", text: `Watching ${state.me.games} game${state.me.games === 1 ? "" : "s"}. Prices are checked about once an hour.` }),
       h("p", { class: "muted small" }, "Everything the bot has sent you is kept on the ", h("a", { href: "#/notifications", text: "Notifications" }), " page, including what you muted."),
       save);
+  }
+
+  /** Buttons that send one sample alert of each kind to the member's own DMs. */
+  function samplePanel() {
+    const KINDS = [["sale", "Sale"], ["free", "Free game"], ["bundle", "Bundle"], ["sub", "Subscription"], ["news", "Patch notes"], ["release", "Release day"]];
+    return h("div", { class: "panel" }, h("h3", { text: "See how alerts look" }),
+      h("p", { class: "muted small", text: "Send yourself a sample of any alert by Discord DM. It is marked as a sample and isn't a real deal." }),
+      h("div", { class: "row chips" }, ...KINDS.map(([kind, label]) => {
+        const b = h("button", { type: "button", class: "btn gray small", text: label });
+        b.addEventListener("click", () => busy(b, async () => { await api("/api/alerts/test", { kind }); toast("Sample sent. Check your DMs.", "ok"); }));
+        return b;
+      })));
   }
 
   function publicPagePanel() {
@@ -2850,6 +2874,15 @@
         h("div", { class: "grid four" }, tile("Uptime", up(p.uptimeS), b.version ? "Version " + b.version : p.node), tile("Discord ping", b.pingMs != null ? b.pingMs + " ms" : "–", b.servers != null ? b.servers + " servers" : null),
           tile("Memory", p.rssMb + " MB", `${p.heapMb} MB of ${p.heapLimitMb} MB heap`), tile("Event loop lag", p.lagMs + " ms", lagBad ? "Slow: something is blocking" : "Healthy")),
         h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
+        h("div", { class: "panel" }, h("h3", { text: "Background jobs" }),
+          sys.jobs && sys.jobs.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Job", "Last run", "Took", "Result", "Failures"].map(c => h("th", { text: c })))),
+            h("tbody", {}, sys.jobs.map(j => {
+              const ago = j.lastRun ? up(Math.round((Date.now() - j.lastRun) / 1000)) + " ago" : "never";
+              const bad = Boolean(j.lastError), stale = j.lastRun && Date.now() - j.lastRun > 3 * 3600_000;
+              const det = j.detail ? Object.entries(j.detail).map(([k, v]) => `${v} ${k}`).join(", ") : "";
+              return h("tr", {}, h("td", {}, h("b", { text: j.name })), h("td", { text: ago, class: stale ? "bad" : "" }), h("td", { text: j.ms != null ? (j.ms < 1000 ? j.ms + " ms" : (j.ms / 1000).toFixed(1) + " s") : "–" }),
+                h("td", { class: bad ? "bad" : "", text: (bad ? "⚠️ " + j.lastError : "✅ ok") + (det ? " · " + det : "") }), h("td", { text: j.failures + " of " + j.runs }));
+            })))) : h("p", { class: "muted", text: "No job has run yet since the bot started. They run every few minutes." })),
         h("div", { class: "panel" }, h("h3", { text: "Recent errors" }),
           sys.errors.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Where" }), h("th", { text: "When" })])), h("tbody", {}, sys.errors.map(e => h("tr", {}, h("td", { text: String(e.where) }), h("td", { text: new Date(e.at).toLocaleString() })))))) : h("p", { class: "muted", text: "None since the bot started." })),
         h("p", { class: "muted small", text: "This page refreshes by itself every 10 seconds." }));
@@ -3501,8 +3534,24 @@
           ...prizes.map(p => h("div", { class: "kv" }, h("span", {}, h("b", { text: p.label + " " }), h("span", { class: "muted", text: `${p.title} · ${PRIZE_STATUS[p.status] || p.status}${p.status === "assigned" && p.deadline ? " · claim by " + new Date(p.deadline).toLocaleString() : ""}` })),
             p.link ? ext(p.link, "Open in Discord") : null))) : null,
         h("p", { class: "muted small" }, "Choose what is sent to Discord in ", h("a", { href: "#/alerts", text: "Alert settings" }), "."),
-        h("div", { class: "panel" }, h("h3", { text: "Recent" }),
-          d.items.length ? h("div", { class: "cards" }, ...d.items.map(noteCard)) : h("p", { class: "muted", text: "Nothing yet. Alerts will show up here." }))].filter(Boolean));
+        (() => {
+          // Filter what is kept here by kind of alert and by words in the title.
+          const KIND = { alert: "Sales", sale: "Sales", bundle: "Bundles", free: "Free games", news: "News", digest: "Digest", release: "Releases", codes: "Codes", promo: "Promos", friend: "Friends" };
+          const kinds = [...new Set(d.items.map(n => n.type).filter(Boolean))];
+          let kind = "", q = "";
+          const list = h("div", { class: "cards" });
+          const paint = () => {
+            const rows = d.items.filter(n => (!kind || n.type === kind) && (!q || (String(n.title) + " " + String(n.body || "")).toLowerCase().includes(q)));
+            list.replaceChildren(...(rows.length ? rows.map(noteCard) : [h("p", { class: "muted", text: d.items.length ? "Nothing matches." : "Nothing yet. Alerts will show up here." })]));
+            chips.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.kind || "") === kind)));
+          };
+          const chip = (k, text) => { const b = h("button", { type: "button", class: "chip", "data-kind": k, text }); b.addEventListener("click", () => { kind = k; paint(); }); return b; };
+          const chips = h("div", { class: "row chips" }, chip("", "All"), ...kinds.map(k => chip(k, KIND[k] || k[0].toUpperCase() + k.slice(1))));
+          const search = h("input", { type: "search", placeholder: "Search your alerts", "aria-label": "Search your alerts" });
+          search.addEventListener("input", () => { q = search.value.trim().toLowerCase(); paint(); });
+          paint();
+          return h("div", { class: "panel" }, h("h3", { text: "Recent" }), d.items.length > 3 ? h("div", { class: "lookup-row" }, search) : null, d.items.length > 3 && kinds.length > 1 ? chips : null, list);
+        })()].filter(Boolean));
       if (d.unread) { await api("/api/notifications/read", {}); state.me.unread = 0; renderChrome(); }
     } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
@@ -4665,7 +4714,13 @@
           h("div", { class: "row" }, toggle(st.welcome_on, "/api/community/welcome", "enabled", "Turn off", "Turn on"), toggle(st.welcome_dm, "/api/community/welcome", "dm", "Stop private welcome", "Also send a private welcome"), toggle(st.welcome_card !== 0, "/api/community/welcome", "card", "Stop the picture card", "Show a picture card"), toggle(st.leave_on, "/api/community/welcome", "leave", "Stop leave notes", "Post a note when someone leaves")),
           field("Welcome channel", wCh), field("Log channel (joins, who invited them)", logCh), field("Message", wMsg),
           h("p", { class: "muted small", text: "Use " + st.fields.join(" ") + ". Leave empty for the default message." }),
-          h("div", { class: "row" }, save("Save welcome", () => post("/api/community/welcome", { channel_id: wCh.value, log_channel_id: logCh.value, message: wMsg.value }))),
+          h("div", { class: "row" }, save("Save welcome", () => post("/api/community/welcome", { channel_id: wCh.value, log_channel_id: logCh.value, message: wMsg.value })),
+            (() => {
+              const shot = h("img", { class: "welcome-prev", alt: "Preview of the welcome picture card", hidden: true });
+              const b = h("button", { type: "button", class: "btn gray", text: "Preview the picture card" });
+              b.addEventListener("click", () => busy(b, async () => { const r = await post("/api/community/welcome/preview", {}); shot.src = r.image; shot.hidden = false; }));
+              return h("span", { class: "welcome-prev-wrap" }, b, shot);
+            })()),
           field("Role every new member gets", auto), h("div", { class: "row" }, save("Save role", () => post("/api/community/autorole", { role_id: auto.value }))));
         const vRole = roSel(st.verified_role_id, "No Steam Verified role");
         const verify = h("div", { class: "panel" }, h("h3", { text: "Steam verification" }),

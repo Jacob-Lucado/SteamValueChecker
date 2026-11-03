@@ -284,20 +284,20 @@ client.once(Events.ClientReady, c => {
         async () => {
             const log = m => console.log(`[maintenance] ${m}`);
             const result = {};
-            try { result.extras = await runExtras({ db, itad, notifier, log }); } catch (err) { ops.error("extras", err); }
-            try { result.tags = await refreshTags({ db, appids: db.allAppsNeedingTags(30), delayMs: 1200 }); } catch (err) { ops.error("genre tags", err); }
-            try { result.releases = await runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }); } catch (err) { ops.error("releases", err); }
-            try { result.free = await runFreeGames({ db, itad, notifier, log }); } catch (err) { ops.error("free games", err); }
-            try { result.news = await runNews({ db, news, notifier, log }); } catch (err) { ops.error("news", err); }
-            try { result.epicSoon = await runEpicSoon({ db, soon: epicSoon, notifier, log }); } catch (err) { ops.error("epic soon", err); }
-            try { result.feeds = await runGuildFeeds({ db, itad, notifier, log }); } catch (err) { ops.error("server feeds", err); }
-            try { result.hotDeals = await runHotDeals({ db, itad, notifier, log }); } catch (err) { ops.error("hot deals", err); }
-            try { result.saleStarts = await runSaleStarts({ db, notifier, log }); } catch (err) { ops.error("sale starts", err); }
-            try { result.serverDigests = await runServerDigests({ db, itad, notifier, names: id => client.guilds.cache.get(id)?.name, log }); } catch (err) { ops.error("server digests", err); }
-            try { result.friends = await runFriendReminders({ db, itad, notifier, log }); } catch (err) { ops.error("friend reminders", err); }
-            try { result.digests = await runDigests({ db, itad, notifier, log }); } catch (err) { ops.error("digests", err); }
-            try { result.snapshots = await runSnapshots({ db, itad, log }); } catch (err) { ops.error("snapshots", err); }
-            try { result.steamSync = await runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }); } catch (err) { ops.error("steam auto-sync", err); }
+            result.extras = await ops.job("extras", () => runExtras({ db, itad, notifier, log }));
+            result.tags = await ops.job("genre tags", () => refreshTags({ db, appids: db.allAppsNeedingTags(30), delayMs: 1200 }));
+            result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
+            result.free = await ops.job("free games", () => runFreeGames({ db, itad, notifier, log }));
+            result.news = await ops.job("news", () => runNews({ db, news, notifier, log }));
+            result.epicSoon = await ops.job("epic soon", () => runEpicSoon({ db, soon: epicSoon, notifier, log }));
+            result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log }));
+            result.hotDeals = await ops.job("hot deals", () => runHotDeals({ db, itad, notifier, log }));
+            result.saleStarts = await ops.job("sale starts", () => runSaleStarts({ db, notifier, log }));
+            result.serverDigests = await ops.job("server digests", () => runServerDigests({ db, itad, notifier, names: id => client.guilds.cache.get(id)?.name, log }));
+            result.friends = await ops.job("friend reminders", () => runFriendReminders({ db, itad, notifier, log }));
+            result.digests = await ops.job("digests", () => runDigests({ db, itad, notifier, log }));
+            result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
+            result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); } catch (err) { ops.error("cleanup", err); }
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }

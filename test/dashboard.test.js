@@ -489,6 +489,30 @@ test("alert history lists the member's own alerts", async () => {
     await t.close();
 });
 
+test("sample alerts: sent to the member's own DMs, only a known kind, and not in a rush", async () => {
+    const dms = [];
+    const t = await signedIn({ extra: () => ({ dm: async (id, p) => { dms.push([id, p]); } }) });
+    const post = (path, body) => t.request(path, { method: "POST", body });
+    assert.equal((await post("/api/alerts/test", { kind: "nope" })).status, 400);
+    const ok = await post("/api/alerts/test", { kind: "sale" });
+    assert.equal(ok.status, 200); assert.equal(dms.length, 1); assert.equal(dms[0][0], "u1"); assert.match(dms[0][1].content, /Sample alert/);
+    assert.equal((await post("/api/alerts/test", { kind: "free" })).status, 429, "five seconds between samples");
+    await t.close();
+});
+
+test("per-game quiet: snooze for a while, mute until switched back on, and the wishlist says which", async () => {
+    const t = await signedIn();
+    t.db.ensureUser("u1"); t.db.addItems("u1", [{ itad_id: "g1", title: "Hades" }]);
+    const post = body => t.request("/api/wishlist/snooze", { method: "POST", body: { itad_id: "g1", ...body } });
+    const active = () => !t.db.listItems("u1")[0].snooze_until; // the poller skips a game that has a snooze time
+    assert.ok(active());
+    assert.equal((await post({ days: 7 })).status, 200); assert.ok(!active(), "snoozed");
+    const m = await post({ muted: true }); assert.equal(m.data.muted, true); assert.ok(m.data.snoozed_until - (await t.request("/api/wishlist/snooze", { method: "POST", body: { itad_id: "g1", days: 1 } })).data.snoozed_until > 3000 * 86400_000, "muted is for good"); await post({ muted: true });
+    assert.equal((await post({ days: 0 })).status, 200); assert.ok(active(), "switched back on");
+    assert.equal((await t.request("/api/wishlist/snooze", { method: "POST", body: { itad_id: "nope", muted: true } })).status, 404);
+    await t.close();
+});
+
 test("admin page: owner only", async () => {
     const t = await signedIn();
     assert.equal((await t.request("/api/admin/stats")).status, 403);
@@ -1621,7 +1645,7 @@ test("admin panel: own address, sign-in handoff, audit trail, system page, and n
         const sys = await o.request("/api/admin/system");
         assert.equal(sys.status, 200);
         assert.ok(sys.data.process.rssMb > 0);
-        assert.ok(sys.data.deploy.startedAt <= Date.now() && sys.data.deploy.startedAt > Date.now() - 3600_000, "when this process started"); assert.ok("release" in sys.data.deploy && "machine" in sys.data.deploy);
+        assert.ok(sys.data.deploy.startedAt <= Date.now() && sys.data.deploy.startedAt > Date.now() - 3600_000, "when this process started"); assert.ok("release" in sys.data.deploy && "machine" in sys.data.deploy); assert.ok(Array.isArray(sys.data.jobs));
         assert.equal(sys.data.admin.host, "admin.bot.example");
         assert.equal(sys.data.admin.sharedCookie, true);
     } finally { await o.close(); }

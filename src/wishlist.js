@@ -39,7 +39,8 @@ export async function viewRows(db, itad, user) {
             best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
             alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value,
             low1y: now.low1y, low3m: now.low3m, verdict: dealVerdict(now),
-            release_at: it.release_at && it.release_at > Date.now() ? it.release_at : null
+            release_at: it.release_at && it.release_at > Date.now() ? it.release_at : null,
+            snoozed_until: it.snooze_until && it.snooze_until > Date.now() ? it.snooze_until : null
         };
     });
     rows.sort((a, b) => Number(a.owned) - Number(b.owned) || Number(b.priority) - Number(a.priority) || b.discount - a.discount || a.title.localeCompare(b.title));

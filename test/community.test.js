@@ -264,6 +264,9 @@ test("dashboard community page: members see standing and boards, managers also g
     assert.equal(t.db.getCommunity("g1").welcome_channel, "c1");
     assert.equal(t.db.getCommunity("g1").welcome_dm, 1);
     assert.equal((await t.request("/api/community/welcome", { method: "POST", body: { guild_id: "g1", channel_id: "nope" } })).status, 400);
+    const prev = await t.request("/api/community/welcome/preview", { method: "POST", body: { guild_id: "g1" } });
+    assert.equal(prev.status, 200); assert.match(prev.data.image, /^data:image\/png;base64,iVBOR/, "a real picture");
+    assert.equal((await t.request("/api/community/welcome/preview", { method: "POST", body: { guild_id: "g2" } })).status, 403, "only managers");
     assert.equal((await t.request("/api/community/xp", { method: "POST", body: { guild_id: "g1", multiplier: 2, announce: "off" } })).status, 200);
     assert.equal((await t.request("/api/community/xp", { method: "POST", body: { guild_id: "g1", multiplier: 99 } })).status, 400);
     assert.equal((await t.request("/api/community/levelrole", { method: "POST", body: { guild_id: "g1", level: 10, role_id: "nope" } })).status, 400);
