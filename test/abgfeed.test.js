@@ -122,3 +122,15 @@ test("playtests: a server with a playtest channel gets the posts there, with the
     await runV(); v.add(fresh); await runV();
     assert.deepEqual(cp, [{ c: "PT2", role: null }]);
 });
+
+test("playtests: the channel is role based, so it posts everything with no 'post every playtest' switch and no member alerts on", async () => {
+    const w = world(0); // no member has /alerts playtests on
+    w.db.setCommunity("G", { ping_playtest: "ROLE", playtest_channel: "PT", playtest_all: 0 });
+    const posts = [];
+    const notifier = { ...w.notifier, postChannel: async (c, p, role) => { posts.push({ c, role, title: p.embeds[0].title }); return true; } };
+    const run = () => runPlaytests({ db: w.db, news: w.news, abg: w.abg, notifier, now: () => T0 });
+    await run(); w.add(fresh); await run();
+    assert.equal(posts.length, 1, "a game nobody here watches is still posted");
+    assert.equal(posts[0].role, "ROLE");
+    assert.equal(w.sent.length, 0, "no member DMs");
+});

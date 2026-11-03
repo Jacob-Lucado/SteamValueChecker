@@ -122,7 +122,9 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
 
     for (const g of guilds) {
         const gid = g.guild_id, startKey = `ptg:start:${gid}`, first = db.getMeta(startKey) == null;
-        const everything = Boolean(db.getCommunity(gid)?.playtest_all);
+        // A playtest channel posts every playtest the bot finds, whatever members have set for their own alerts. The switch only matters
+        // for servers that have no playtest channel and post to the alert channel instead.
+        const everything = Boolean(g.playtest_channel) || Boolean(db.getCommunity(gid)?.playtest_all);
         const apps = guildApps.get(gid) ?? [];
         const hits = [];
         for (const a of apps) for (const { p, kind } of hitsFor(a.appid)) {
