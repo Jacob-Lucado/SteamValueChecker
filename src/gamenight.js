@@ -59,7 +59,7 @@ export function gameNightEmbed(r) {
         footer: { text: `${r.hidden ? `${r.hidden} not counted (not opted in)  •  ` : ""}Only members who opted in with /alerts share are included` } };
 }
 
-export const gameNightButtons = (channelId = "0") => [{ type: 1, components: [{ type: 2, style: 1, label: "Pick a game for us", custom_id: `${GN_PICK}:${channelId}` }] }];
+export const gameNightButtons = (channelId = "0") => [{ type: 1, components: [{ type: 2, style: 1, label: "Pick a game for us", custom_id: `${GN_PICK}:${channelId}` }, { type: 2, style: 2, label: "Start a vote", custom_id: `gn_poll:${channelId}` }] }];
 
 /** One game chosen at random from what everyone owns, else from what almost everyone owns. */
 export function pickGame(r, rand = Math.random) {
@@ -104,3 +104,40 @@ export function voiceBuyEmbed(g) {
         description: `${g.users.map(u => `<@${u}>`).join(" ")}\nIt just dropped to **${money(g.now.price, g.now.currency ?? "USD")}**${off}${g.now.shop ? ` at ${g.now.shop}` : ""}. Buy it together for game night?`,
         footer: { text: "Only members who opted in with /alerts share are included  •  /manage setup to turn this off" } };
 }
+
+// ---------- vote on what to play ----------
+export const GN_POLL = "gn_poll", GN_VOTE = "gn_vote";
+const POLL_OPTIONS = 5, POLL_OPEN_MS = 6 * 3600_000;
+
+/** Up to five games everyone owns (else almost everyone), picked at random so the same few don't come up every time. */
+export function pollOptions(r, rand = Math.random) {
+    const pool = [...(r.allOwn.length ? r.allOwn : r.almost)];
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    return pool.slice(0, POLL_OPTIONS).map(g => ({ id: g.id, title: g.title }));
+}
+
+export function pollState(options, now = Date.now()) { return { options, votes: {}, until: now + POLL_OPEN_MS }; }
+
+/** Records one vote per person (voting again moves it). Returns false when the vote is closed or the option is unknown. */
+export function castVote(state, userId, index, now = Date.now()) {
+    if (now > state.until || !Number.isInteger(index) || index < 0 || index >= state.options.length) return false;
+    state.votes[userId] = index;
+    return true;
+}
+
+export function pollTally(state) {
+    const counts = state.options.map(() => 0);
+    for (const v of Object.values(state.votes)) counts[v]++;
+    return counts;
+}
+
+export function pollEmbed(state, now = Date.now()) {
+    const counts = pollTally(state), total = counts.reduce((a, b) => a + b, 0), open = now <= state.until, top = Math.max(...counts);
+    const lines = state.options.map((o, i) => `${counts[i] === top && top > 0 ? "🏆" : "▫️"} **${o.title}**: ${counts[i]} vote${counts[i] === 1 ? "" : "s"}`);
+    return { color: 0xff9800, title: "What should we play?", description: `${lines.join("\n")}\n\n${total} vote${total === 1 ? "" : "s"} so far. ${open ? "Tap a game to vote. You can change your vote." : "Voting is closed."}`, footer: { text: "Games everyone in the voice channel owns  •  Voting stays open for 6 hours" } };
+}
+
+export const pollButtons = (options, open = true) => {
+    const row = options.map((o, i) => ({ type: 2, style: 2, label: `${i + 1}. ${o.title}`.slice(0, 80), custom_id: `${GN_VOTE}:${i}`, disabled: !open }));
+    return [{ type: 1, components: row }];
+};

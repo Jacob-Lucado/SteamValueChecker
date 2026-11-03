@@ -11,7 +11,7 @@ import { freeMenu, shopSlug } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
-import { gameNight, gameNightEmbed, gameNightButtons, pickGame } from "./gamenight.js";
+import { gameNight, gameNightEmbed, gameNightButtons, pickGame, pollOptions, pollState, castVote, pollEmbed, pollButtons } from "./gamenight.js";
 import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
@@ -277,6 +277,35 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             const g = pickGame(r);
             return await i.reply({ content: g ? `🎲 Tonight: **${g.title}**${g.missing ? ` (missing: ${g.missing.map(m => `<@${m}>`).join(", ")})` : ""}` : "There is nothing everyone owns yet. See the buy list.", allowedMentions: { parse: [] } });
         } catch (err) { return eph(i, err instanceof UserError ? err.message : "I could not pick one. Try again."); }
+    }
+
+    /** "Start a vote": posts a poll for the group in the channel. Votes live in the key-value store under the poll message. */
+    async function handleGameNightPoll(i) {
+        const channelId = i.customId.split(":")[1];
+        try {
+            const user = db.ensureUser(i.user.id, i.guildId);
+            const r = await gameNight({ db, itad, userIds: inVoice(i.guild, channelId), region: user.region });
+            const options = pollOptions(r);
+            if (options.length < 2) return await eph(i, "There aren't enough games the group owns to vote on yet. See the buy list instead.");
+            const state = pollState(options);
+            await i.reply({ embeds: [pollEmbed(state)], components: pollButtons(options), allowedMentions: { parse: [] } });
+            const sent = await i.fetchReply();
+            db.setMeta(`poll:${sent.id}`, JSON.stringify(state));
+            try { db.prunePolls(); } catch { /* old votes can wait */ }
+        } catch (err) { return eph(i, err instanceof UserError ? err.message : "I could not start a vote. Try again."); }
+    }
+
+    async function handlePollVote(i) {
+        try {
+            const raw = db.getMeta(`poll:${i.message.id}`);
+            if (!raw) return await eph(i, "That vote is no longer available.");
+            const state = JSON.parse(raw);
+            if (!castVote(state, i.user.id, Number(i.customId.split(":")[1]))) {
+                return await i.update({ embeds: [pollEmbed(state)], components: pollButtons(state.options, false) });
+            }
+            db.setMeta(`poll:${i.message.id}`, JSON.stringify(state));
+            return await i.update({ embeds: [pollEmbed(state)], components: pollButtons(state.options) });
+        } catch (err) { return eph(i, "I could not record that vote. Try again."); }
     }
 
     async function handleChangelog(i) {
@@ -944,5 +973,5 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "message menu", err); }
     }
 
-    return { handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

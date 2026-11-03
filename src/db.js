@@ -568,6 +568,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     /** Members of a server who share their library and own a game, most played first. */
     const ownersOf = (guildId, itadId) => all("SELECT u.discord_id, l.minutes FROM users u JOIN library l ON l.discord_id = u.discord_id WHERE u.share = 1 AND u.guild_id = ? AND l.itad_id = ? ORDER BY l.minutes DESC, u.discord_id", guildId, itadId).map(clean);
     const sharingMembers = guildId => all("SELECT discord_id FROM users WHERE share = 1 AND guild_id = ?", guildId).map(r => r.discord_id);
+    /** Votes on old game night polls are only kept for a day after they close. */
+    const prunePolls = (t = now()) => run("DELETE FROM status_meta WHERE key LIKE 'poll:%' AND json_extract(value, '$.until') < ?", t - 86400_000).changes;
     const setGameNight = (guildId, on) => (on ? run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = '1'", `gamenight:${guildId}`) : run("DELETE FROM status_meta WHERE key = ?", `gamenight:${guildId}`));
     const gameNightOn = guildId => getMeta(`gamenight:${guildId}`) === "1";
     const guildsWithGameNight = () => all("SELECT key FROM status_meta WHERE key LIKE 'gamenight:%'").map(r => ({ guild_id: r.key.slice(10) }));
@@ -746,7 +748,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
-        purgeHiddenGuilds, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
+        purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };

@@ -1038,6 +1038,9 @@ test("gift claims: visitors mark a game, others see it taken, the owner only see
     const pub = (tok) => t.request("/api/public/wishlist?slug=jacob" + (tok ? "&t=" + tok : ""));
     const gift = (body) => t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id, ...body } });
     assert.equal((await pub(A)).data.games[0].claim, null);
+    assert.equal((await pub(A)).data.accent, "#66c0f4", "the default card colour tints the page");
+    t.db.setCardPrefs("u1", { theme: "forest" });
+    assert.equal((await pub(A)).data.accent, "#5fd38d");
     assert.equal((await gift({ token: "short" })).status, 400);
     assert.equal((await gift({ token: A })).data.claim, "mine");
     assert.equal((await pub(A)).data.games[0].claim, "mine");

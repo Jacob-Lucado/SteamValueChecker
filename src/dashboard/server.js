@@ -40,7 +40,7 @@ import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
 import { profileCardData, renderProfileCard, renderSteamValue, renderRecap, renderWelcomeCard } from "../cardimg.js";
-import { PLATFORMS, mergePrefs, viewPrefs } from "../cardprefs.js";
+import { PLATFORMS, THEMES, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
 import { addBundle, bundleView } from "../bundles.js";
@@ -2060,7 +2060,10 @@ export function createDashboard({ emojigg = null, news = null, db, itad, rest, m
             const s = softSession(req);
             const canMark = Boolean(s && page.guild_id && !isHidden(page.guild_id) && isStaff(s.guilds.find(x => x.id === page.guild_id)));
             const { guild_id: _g, ...rest } = page;
-            return { ...rest, canMark };
+            // The colour picked for their profile card also tints their wishlist page. Only the fixed theme colours can come out of this.
+            const owner = db.getProfileBySlug(page.slug);
+            const accent = THEMES[viewPrefs(owner ? db.getCardPrefs(owner.discord_id) : {}).theme]?.[1] ?? null;
+            return { ...rest, canMark, accent };
         },
         // Moderators and owners flag a wishlist game as "up for giveaway soon". It lives in the member's server, so only that server's staff can do it.
         "POST /api/wishlist/soon": async (req, body) => {

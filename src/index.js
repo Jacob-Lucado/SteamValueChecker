@@ -586,6 +586,8 @@ client.on(Events.InteractionCreate, async i => {
     if ((i.isButton() && i.customId.startsWith(PAGE_PREFIX)) || (i.isStringSelectMenu() && i.customId.startsWith(JUMP_PREFIX))) return handlePager(i, db);
     if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);
     if (i.isStringSelectMenu() && i.customId.startsWith("mu_pick:")) return musicUi ? musicUi.handleSelect(i) : musicOff(i);
+    if (i.isButton() && i.customId.startsWith("gn_poll:")) return handlers.handleGameNightPoll(i);
+    if (i.isButton() && i.customId.startsWith("gn_vote:")) return handlers.handlePollVote(i);
     if (i.isButton() && i.customId.startsWith("gn_pick:")) return handlers.handleGameNightButton(i);
     if (i.isButton() && i.customId.startsWith("lfg_")) return lfgUi.handleButton(i);
     if ((i.isButton() || i.isAnySelectMenu?.()) && i.customId.startsWith("su_")) return setupUi.handleComponent(i);

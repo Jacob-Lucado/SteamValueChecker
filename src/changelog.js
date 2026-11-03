@@ -1,6 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.10", date: "2026-11-10", title: "Refund reminders, milestones and right-click shortcuts", items: [
+        "**Vote on game night:** the game night card has a **Start a vote** button. It posts up to five games everyone owns, people tap to vote (and can change their vote), and the tally updates live for six hours.",
+        "**Saved views:** on the Wishlist page, name your current sort and filters and bring them back from the Views menu. They are saved in the browser you use.",
+        "**Wishlist page colour:** a member's public wishlist page now uses the colour they picked for their profile card.",
         "**Refund and rebuy:** with `/alerts refund` on, you also hear when a game still inside its refund window drops below what you paid on Steam, so a refund and rebuy would save money. It needs prices from the extension's purchase sync; games without a recorded price are skipped, and `/alerts refund` tells you if none are recorded yet.",
         "**Achievement heads-up:** `/alerts achievements` (off by default) tells you when a game you have played for 5 hours or more is within 3 achievements of 100%. Counts come from your last Steam sync.",
         "**Press / to search:** on the dashboard, `/` jumps to the search box on pages that have one.",
