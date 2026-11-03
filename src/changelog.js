@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.08", date: "2026-11-08", title: "Steam reviews on your alerts", items: [
+        "**Steam reviews:** sale alerts and `/me wishlist check` now show how Steam players rate the game (for example \"Very Positive on Steam: 92% of 18,420 reviews are positive\"), so you can tell a good deal on a good game from a good deal on a bad one. Games with very few reviews show nothing.",
+    ] },
     { version: "2026.11.07", date: "2026-11-07", title: "Sample alerts and price charts", items: [
         "**Price chart on game checks:** `/me wishlist check` now comes with a picture of the game's price over the last year, with its lowest price and today's price marked.",
         "**Release dates:** you hear when a wishlist game gets a release date, and when a date is pushed back or brought forward by two days or more. Same switch as release-day alerts.",

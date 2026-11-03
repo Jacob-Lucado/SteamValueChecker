@@ -11,7 +11,7 @@ export function sampleAlert(kind, { now = Date.now(), currency = "USD" } = {}) {
     const item = { title: "Sample Quest", priority: false };
     let p;
     switch (kind) {
-        case "sale": p = { embeds: [alertEmbed(item, { price: 7.49, regular: 29.99, discount: 0.75, shop: "Steam", currency, atl: 6.99, url: SHOP, expiry: now + 2 * day }, { trigger: "any price drop" })] }; break;
+        case "sale": p = { embeds: [alertEmbed(item, { price: 7.49, regular: 29.99, discount: 0.75, shop: "Steam", currency, atl: 6.99, url: SHOP, expiry: now + 2 * day }, { trigger: "any price drop", reviews: { desc: "Very Positive", pct: 92, total: 18420 } })] }; break;
         case "free": p = freeGamesPayload("Epic Games Store", [{ id: "sample", title: "Sample Quest", url: SHOP, expiry: now + day, type: "game" }]); break;
         case "bundle": p = { embeds: [bundleEmbed({ item, bundle: { title: "Sample Quest Bundle", shop: "Humble Bundle", price: 12, currency, url: SHOP, expiry: now + 5 * day, tiers: [] } })] }; break;
         case "sub": p = { embeds: [subEmbed({ item, sub: { name: "Game Pass", leaving: now + 20 * day }, kind: "sub" })] }; break;

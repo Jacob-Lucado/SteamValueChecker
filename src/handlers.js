@@ -17,6 +17,7 @@ import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
+import { steamReviews } from "./reviews.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
@@ -188,7 +189,8 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             try { history = await itad.getHistory(found.item.itad_id, user.region); advice = buyOrWait(history, now.price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => money(n, now.currency) }); } catch { /* the check works without it */ }
             let subs = [];
             try { subs = (await itad.getSubs?.([found.item.itad_id], user.region))?.get(found.item.itad_id) ?? []; } catch { /* the check works without it */ }
-            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs);
+            const reviews = await steamReviews(found.item.appid).catch(() => null);
+            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs, reviews);
             let chart = null;
             try { chart = history ? renderHistoryChart({ title: found.item.title, points: history, currency: now.currency, now: now.price }) : null; } catch { /* the card is fine without the picture */ }
             if (chart) embed.image = { url: "attachment://price-history.png" };
