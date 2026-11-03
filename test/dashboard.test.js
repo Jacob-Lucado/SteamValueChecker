@@ -2040,3 +2040,36 @@ test("game club: anyone in the server can look, only managers change it", async 
         assert.equal((await o.request("/api/club?guild=" + g)).data.club, null);
     } finally { await o.close(); }
 });
+
+test("extension extras: playtest badge, server counts, wishlist add, stream spotlight and the toolbar badge all need the link code", async () => {
+    const abg = { latest: async () => [{ id: "d1", game: "Counter Thing", appid: 10, kind: "demo", label: "Demo", sourceName: "Steam demos", url: "https://store.steampowered.com/app/10", date: Date.now(), wishlistOnly: true }, { id: "p1", game: "Other", kind: "playtest", sourceName: "GamerPower", url: "https://gp.example/x", date: Date.now() }] };
+    const t = await signedIn({ extra: { abg }, itadExtra: { lookupShopIds: async (_s, ids) => new Map(ids.map(i => ["id-" + i.slice(4)].length ? [i, "id-" + i.slice(4)] : [i, null])) } });
+    const made = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+    const tok = made.data.token, H = { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" };
+    const call = async (path, method = "GET", body) => { t.advance(2_000); const r = await fetch(t.base + path, { method, headers: H, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, data: await r.json() }; };
+    for (const [p, m] of [["/api/grabber/badge", "GET"], ["/api/grabber/wishlist", "POST"], ["/api/grabber/spotlight", "POST"]]) assert.equal((await fetch(t.base + p, { method: m })).status, 401, p + " needs the link code");
+    // a member of the server who shares and owns the game
+    t.db.ensureUser("u2", "g-admin"); t.db.updateUser("u2", { share: 1, guild_id: "g-admin" }); t.db.syncSteamGames("u2", [{ itad_id: "id-10", title: "Counter Thing", appid: 10, minutes: 60, lastPlayed: 1 }]);
+    t.db.ensureUser("u1", "g-admin"); t.db.updateUser("u1", { guild_id: "g-admin" });
+    const g = (await call("/api/grabber/game?appid=10&name=Counter%20Thing")).data;
+    assert.equal(g.playtest.label, "Demo"); assert.equal(g.social.owners, 1); assert.equal(g.overlay, false);
+    assert.equal((await call("/api/grabber/game?appid=11&name=Other")).data.playtest.source, "GamerPower", "the sites match by name");
+    // wishlist add, then again
+    let w = (await call("/api/grabber/wishlist", "POST", { appid: 10, name: "Counter Thing" })).data;
+    assert.deepEqual([w.added, w.existing], [true, false]);
+    w = (await call("/api/grabber/wishlist", "POST", { appid: 10, name: "Counter Thing" })).data; assert.equal(w.existing, true);
+    assert.equal((await call("/api/grabber/wishlist", "POST", { appid: 10, name: "" })).status, 400);
+    // spotlight needs an overlay link first
+    assert.equal((await call("/api/grabber/spotlight", "POST", { appid: 10, name: "Counter Thing" })).data.status, "no_overlay");
+    const card = (await t.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
+    assert.equal((await call("/api/grabber/spotlight", "POST", { appid: 10, name: "Counter Thing" })).data.status, "ok");
+    const seen = await (await fetch(t.base + "/api/streamcard/data?token=" + card.token)).json();
+    assert.equal(seen.cards[0].spot, true); assert.equal(seen.cards[0].title, "Counter Thing");
+    const line = await (await fetch(t.base + "/api/streamcard/text?kind=deal&token=" + card.token)).text();
+    assert.ok(!/Counter Thing/.test(line) || /off/.test(line), "the spotlight never replaces the !deals answer");
+    t.advance(11 * 60_000);
+    assert.ok(!(await (await fetch(t.base + "/api/streamcard/data?token=" + card.token)).json()).cards.some(c => c.spot), "it fades after ten minutes");
+    const b = (await call("/api/grabber/badge")).data;
+    assert.deepEqual(Object.keys(b).sort(), ["free", "playtests", "unread"]); assert.ok(b.free.length >= 1); assert.ok(b.playtests.includes("p1") && !b.playtests.includes("d1"), "wishlist-only demos are not counted for everyone");
+    await t.close();
+});

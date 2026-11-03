@@ -50,6 +50,7 @@ import { whoIsPlaying } from "../nowplaying.js";
 import { streamCardData, streamCardLine, chatCommandSets, STREAMCARD_KINDS } from "../streamcard.js";
 import { clubProgress, setPick } from "../gameclub.js";
 import { createStreamGiveaways } from "../streamgiveaway.js";
+import { playtestFor, socialFor, setSpotlight, getSpotlight, badgeFor } from "../extapi.js";
 import { createPlaytestSources } from "../playsources.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -144,7 +145,7 @@ const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived t
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const MUTE_DAYS = 3650;
-const COOLDOWNS = { streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
+const COOLDOWNS = { grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -211,9 +212,9 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
     /** The overlay cards for a streamer's link. Kept five minutes, so OBS and chat bots can ask as often as they like. */
     const cardsFor = async (o, kinds) => {
         const base = await baseCards(o, kinds.filter(k => k !== "game"));
-        if (!kinds.includes("game")) return base;
-        const g = await gameNow(o.user_id).catch(() => null);
-        return { ...base, cards: g ? [g, ...base.cards] : base.cards };
+        if (!kinds.includes("game") && !getSpotlight(db, o.user_id, now())) return base;
+        const g = await gameNow(o.user_id).catch(() => null), spot = getSpotlight(db, o.user_id, now());
+        return { ...base, cards: [...(spot ? [spot] : []), ...(g ? [g] : []), ...base.cards] };
     };
     /** The game this streamer is in right now (Steam's own current-game field, kept for a minute), with the hours they have in it. */
     async function gameNow(userId) {
@@ -239,7 +240,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         const o = db.streamCardByToken(String(url.searchParams.get("token") ?? "")), kind = String(url.searchParams.get("kind") ?? "");
         if (!o || !STREAMCARD_KINDS.includes(kind)) return send(res, 404, "This link isn't valid.", { "Content-Type": "text/plain; charset=utf-8" });
         let line;
-        try { line = streamCardLine((await cardsFor(o, STREAMCARD_KINDS)).cards, kind); } catch { line = "Can't look that up right now."; }
+        try { line = streamCardLine((await cardsFor(o, STREAMCARD_KINDS)).cards.filter(c => !c.spot), kind); } catch { line = "Can't look that up right now."; }
         return send(res, 200, line, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
     }
     const overlayOpen = new Map();
@@ -3214,6 +3215,34 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
                 return json(res, 200, { items });
             }
 
+            if (key === "POST /api/grabber/wishlist" || key === "POST /api/grabber/spotlight" || key === "GET /api/grabber/badge") {
+                // Extension helpers with the member's link code: add to the wishlist, spotlight a game on the stream overlay, and the toolbar badge.
+                const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
+                const uid = m ? db.grabberUserForToken(m[1]) : null;
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /me library grabber.");
+                if (key === "GET /api/grabber/badge") { cooldown(uid, "grabberbadge"); return json(res, 200, await badgeFor({ db, itad, abg: abg ?? null, userId: uid, now: now() })); }
+                if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
+                cooldown(uid, "grabberact");
+                const body = await readJson(req, 2_000);
+                const appid = Number(body.appid), name = String(body.name ?? "").replace(/\s+/g, " ").trim().slice(0, 100);
+                if (!Number.isInteger(appid) || appid <= 0 || appid > 1e9 || !name) throw new HttpError(400, "Bad request.");
+                const id = (await itad.lookupShopIds(STEAM_SHOP_ID, [`app/${appid}`])).get(`app/${appid}`);
+                if (!id) throw new HttpError(404, "I could not match that game to price data.");
+                const user = db.ensureUser(uid) && db.getUser(uid);
+                if (key === "POST /api/grabber/wishlist") {
+                    const r = db.addItems(uid, [{ itad_id: id, title: name }], { source: "extension" });
+                    if (r.skippedForLimit) throw new HttpError(400, "Your list is full (200 games). Remove one first.");
+                    db.setAppId(uid, id, appid);
+                    return json(res, 200, { added: !r.existing, existing: Boolean(r.existing), public: Boolean(user.profile_public && user.profile_slug) });
+                }
+                if (!db.getStreamCard(uid)) return json(res, 200, { status: "no_overlay" });
+                const sum = summarize((await itad.getPrices([id], grabberRegion(user, body.cc))).get(id), { majorOnly: user?.stores === "major" });
+                const price = sum.best?.price ?? sum.steam;
+                if (price == null) return json(res, 200, { status: "no_price" });
+                const until = setSpotlight(db, uid, { appid, title: name, price, regular: sum.msrp, discount: sum.msrp ? Math.max(0, Math.round((1 - price / sum.msrp) * 100)) : 0, currency: sum.currency, shop: sum.best?.shop ?? "Steam" }, now());
+                return json(res, 200, { status: "ok", until });
+            }
+
             if (key === "GET /api/grabber/game") {
                 // Called by the extension on a Steam store page, with the member's link code. Returns prices and whether they own or wishlisted it.
                 const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
@@ -3232,7 +3261,10 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
                     found: true, currency: sum.currency, msrp: sum.msrp, steam: sum.steam, cut: sum.cut,
                     best: sum.best ? { price: sum.best.price, shop: sum.best.shop } : null, atl: sum.atl, low1y: sum.low1y,
                     owned: db.listLibrary(uid).some(g => g.itad_id === id),
-                    wishlisted: db.listItems(uid).some(g => g.itad_id === id)
+                    wishlisted: db.listItems(uid).some(g => g.itad_id === id),
+                    playtest: await playtestFor({ abg, appid, name: String(url.searchParams.get("name") ?? "").slice(0, 100), now: now() }),
+                    social: await socialFor({ db, nowPlaying, userId: uid, appid }),
+                    overlay: Boolean(db.getStreamCard(uid))
                 });
             }
 

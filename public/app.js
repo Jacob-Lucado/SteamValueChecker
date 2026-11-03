@@ -2178,7 +2178,8 @@
         const off = link && h("button", { class: "btn red small", text: "Turn off" });
         if (off) off.addEventListener("click", () => busy(off, async () => { await api("/api/grabber/token", { action: "off" }); toast("Link turned off.", "ok"); grabberLoad(); }));
         grabberOut.className = "";
-        grabberOut.replaceChildren(h("p", { class: "muted small", text: link ? `Linked. ${link.sends} send${link.sends === 1 ? "" : "s"} so far${link.used_at ? `, last ${new Date(link.used_at).toLocaleDateString()}` : ""}.` : "Not linked. Press Connect the extension and you are done, no code to paste." }), h("p", {}, connect, " ", h("details", { class: "paste" }, h("summary", { text: "Or make a code to paste by hand" }), h("p", {}, make, " ", off))));
+        const unlocks = h("div", { class: "notice" }, h("b", { text: "The extension needs this link to work with the bot. " }), "Without it the extension only reveals and redeems keys. With it you also get, on Steam store pages: prices and your library status, playtest and demo badges, how many members of your server own the game, one-click wishlist and stream spotlight, and a toolbar count of new free games and alerts. Linking sends game names only, never keys.");
+        grabberOut.replaceChildren(unlocks, h("p", { class: "muted small", text: link ? `Linked. ${link.sends} send${link.sends === 1 ? "" : "s"} so far${link.used_at ? `, last ${new Date(link.used_at).toLocaleDateString()}` : ""}.` : "Not linked. Press Connect the extension and you are done, no code to paste." }), h("p", {}, connect, " ", h("details", { class: "paste" }, h("summary", { text: "Or make a code to paste by hand" }), h("p", {}, make, " ", off))));
       } catch (e) { grabberOut.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
@@ -5397,6 +5398,7 @@
     app.replaceChildren(pageHead("Streamer hub", "Everything for streamers in one place: announce when you go live, the overlays for OBS, your gift-me wishlist, and who else is streaming. In Discord: /server stream."),
       h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null,
         h("div", { class: "chips" }, jump("sh-live", "Go live and pings"), jump("sh-cards", "Deals overlay"), jump("sh-gift", "Gift me page"), jump("sh-roster", "Who is live"))),
+      h("div", { class: "notice" }, h("b", { text: "What these need: " }), "your Discord sign-in with the bot in your server. The Playing now card, !game and Now playing also need Steam linked (Steam page) and Game details set to Public. The browser extension features (spotlight, wishlist from a store page) need the extension linked with the bot: ", h("a", { href: "#/library", text: "Library, Connect the extension" }), "."),
       goBox, streamCardPanel(), h("div", { id: "sh-gift" }, publicPagePanel()),
       h("div", { class: "panel" }, h("h3", { text: "Discord commands" }), h("p", { class: "muted small", text: "/server stream link links your Twitch, Kick or YouTube channel. /server stream live, title and game post or update a go-live message. /server stream end closes it. /server stream ping turns the go-live pings on or off for you. /alerts share and /server nowplaying let friends see you in a game." })),
       rosterBox);

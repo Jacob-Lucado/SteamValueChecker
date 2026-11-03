@@ -19,7 +19,7 @@
     const card = el("div", "card"), body = el("div");
     if (c.kind === "deal") {
       const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; if (c.appid) img.src = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + Number(c.appid) + "/header.jpg"; else img.hidden = true; card.append(img);
-      body.append(el("div", "tag", "On sale now"), el("div", "name", c.title));
+      body.append(el("div", "tag", c.spot ? "Spotlight" : "On sale now"), el("div", "name", c.title));
       const p = el("div", "line"), pr = el("span", "price", money(c.price, c.currency)); p.append(pr);
       if (c.discount) p.append(el("span", "off", "-" + Math.round(c.discount) + "%"));
       if (c.regular) p.append(el("s", null, money(c.regular, c.currency)));
@@ -55,5 +55,5 @@
       else if (r.status === 404) cards = [];
     } catch { /* keep what we have */ }
   }
-  (async () => { await load(); idx = -1; show(); setInterval(show, cfg.hold * 1000); setInterval(load, 120_000); })();
+  (async () => { await load(); idx = -1; show(); setInterval(show, cfg.hold * 1000); setInterval(load, 45_000); })();
 })();
