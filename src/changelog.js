@@ -1,6 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.11", date: "2026-11-11", title: "Playtests page and a guided first run", items: [
+        "**Refresh the playtest channel:** server managers can run `/manage community playtests` (or press **Post current playtests now** in the dashboard's Ping roles panel) to post what is listed right now, not only what is new. It posts the newest 8 (up to 15), oldest first, without pinging the role, and the regular check won't repeat them. Once a minute at most.",
         "**Playtests page:** a new page under Free & codes lists every playtest, beta, demo and free weekend the bot can see: Steam announcements for games on your wishlist or in your library, plus the Alpha Beta Gamer site. Filter by type, show only your wishlist, hide games you own, or search. It checks again every five minutes by itself, marks what is new since you opened it, and pauses while the tab is hidden.",
         "**First-run tutorial and setup:** new members now get a guided welcome on the dashboard: a nine-part tour of every area, then a six-step setup for region and stores, delivery, Steam, alerts and your server. The tour can be skipped (it asks to confirm) and setup still follows. Replay it any time with **Take the tour** on My page.",
     ] },

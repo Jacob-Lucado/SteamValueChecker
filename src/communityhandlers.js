@@ -16,7 +16,7 @@ const can = (i, bit) => Boolean(i.inGuild?.() && i.memberPermissions?.has(bit));
 const mention = id => `<@${id}>`;
 const LINKED_NOTE = "Optional: Discord can also require it for a role (Server Settings, Roles, the role, Links, then Steam Verified). That one step has to be done in Discord.";
 
-export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
+export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, playtests = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
     const eph = (i, content) => i.reply({ content, flags: EPHEMERAL, allowedMentions: { parse: [] } });
     const needManager = i => { if (!can(i, BIT.manageGuild)) { eph(i, "Run this in your server with the Manage Server permission."); return false; } return true; };
 
@@ -41,6 +41,7 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
     }
 
     // ---- /manage community ----
+    const ptLast = new Map();
     async function community(i) {
         const sub = i.options.getSubcommand();
         if (!i.inGuild()) return eph(i, "Use this in a server.");
@@ -56,6 +57,18 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             } catch (e) {
                 return i.editReply({ content: e.userFacing ? e.message : "I could not finish the setup. Check my permissions (Manage Channels, Manage Roles) and try again; anything already built is kept." });
             }
+        }
+        if (sub === "playtests") {
+            if (!playtests) return eph(i, "Playtests are not set up on this bot.");
+            const wait = 60_000 - (Date.now() - (ptLast.get(gid) ?? 0));
+            if (wait > 0) return eph(i, `The playtest channel was just refreshed. Try again in ${Math.ceil(wait / 1000)}s.`);
+            ptLast.set(gid, Date.now());
+            await i.deferReply({ flags: EPHEMERAL });
+            try {
+                const r = await playtests.refresh(gid, { limit: i.options.getInteger("count") ?? 8 });
+                if (!r.posted) { ptLast.delete(gid); return i.editReply({ content: "Nothing is listed right now, so there was nothing to post. New ones are posted on their own." }); }
+                return i.editReply({ content: `Posted the ${r.posted} newest of ${r.found} listed playtest${r.found === 1 ? "" : "s"} in <#${r.channel}>, oldest first, without pinging the role. New ones are posted on their own.` });
+            } catch (e) { ptLast.delete(gid); return i.editReply({ content: e instanceof UserError ? e.message : "I could not refresh the playtest channel just now. Try again in a bit." }); }
         }
         if (sub === "status") return i.reply({ embeds: [statusEmbed(db, gid, publicUrl, membersIntent())], flags: EPHEMERAL });
         if (sub === "welcome") {

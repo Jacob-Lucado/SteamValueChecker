@@ -137,7 +137,7 @@ const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived t
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const MUTE_DAYS = 3650;
-const COOLDOWNS = { sample: 5_000, libnews: 3_000, streamlink: 2_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
+const COOLDOWNS = { sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -165,7 +165,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ emojigg = null, news = null, abg = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ emojigg = null, news = null, abg = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -1959,6 +1959,17 @@ export function createDashboard({ emojigg = null, news = null, abg = null, db, i
             const s = session(req), g = managerGuild(s, String(body.guild_id));
             const undo = body.now ? cooldown(s.userId, "memenow") : () => {};
             try { return await comm(() => cd.memesSettings(g.id, body)); } catch (e) { undo(); throw e; }
+        },
+        // Posts what is listed right now into the playtest channel (not only new ones). Server managers only, once a minute.
+        "POST /api/community/playtests": async (req, body) => {
+            const s = session(req), g = managerGuild(s, String(body.guild_id));
+            if (!playtests) throw new HttpError(503, "Playtests are not set up on this bot.");
+            const undo = cooldown(s.userId, "ptrefresh");
+            try {
+                const r = await comm(() => playtests.refresh(g.id, { limit: body.count }));
+                if (!r.posted) { undo(); return { ok: true, posted: 0, found: r.found }; }
+                return { ok: true, posted: r.posted, found: r.found };
+            } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
         },
         "POST /api/community/pings": async (req, body) => comm(() => cd.pings(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/autorole": async (req, body) => comm(() => cd.autorole(managerGuild(session(req), String(body.guild_id)).id, body)),

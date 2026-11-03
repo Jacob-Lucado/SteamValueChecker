@@ -223,7 +223,7 @@ test("community data is exported and deleted with the person", () => {
 });
 
 // ---------- the dashboard side ----------
-async function dashSetup() {
+async function dashSetup(extra = {}) {
     const db = openDb(":memory:");
     const api = fakeApi({ channels: [{ id: "c1", type: 0, name: "alerts" }], roles: [{ id: "r1", name: "A" }, { id: "r2", name: "B" }] });
     const community = createCommunity({ db, api });
@@ -231,7 +231,7 @@ async function dashSetup() {
     const rest = { authorizeUrl: (s, o) => `https://d.example/a?state=${s}${o?.linkedRoles ? "&linked=1" : ""}`, setRoleConnection: async (tok, body) => { connections.push({ tok, body }); }, login: async (_c, o) => ({ ...(o?.withToken ? { accessToken: "tok" } : {}), user: { id: "u1", username: "j", global_name: "J", avatar: null }, guilds: [{ id: "g1", name: "Mine", icon: null, owner: false, permissions: String(0x20) }, { id: "g2", name: "Other", icon: null, owner: false, permissions: "0" }] }),
         listChannels: api.listChannels, listRoles: api.listRoles, memberName: api.memberName, sendMessage: api.sendMessage, allChannels: api.allChannels, allRoles: api.allRoles, getGuild: api.getGuild, listEmojis: api.listEmojis, createEmoji: api.createEmoji };
     const emojigg = { fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => "image/png" }, arrayBuffer: async () => new Uint8Array([1, 2]).buffer }), packs: async ({ sort }) => [{ key: "1-demo", id: "1", title: "Demo " + sort, count: "2", previews: [], url: "https://emoji.gg/pack/1-demo" }], pack: async key => { if (key === "9-gone") throw new Error("nope"); return [{ id: "11", name: "aa", animated: false, url: "https://cdn3.emoji.gg/emojis/11-aa.png" }, { id: "12", name: "bb", animated: true, url: "https://cdn3.emoji.gg/emojis/12-bb.gif" }]; } };
-    const dash = createDashboard({ emojigg, db, itad: {}, rest, community, membersIntent: () => false, botGuilds: () => true, config: { publicUrl: "http://localhost:3000", clientId: "bot", ownerId: "owner" } });
+    const dash = createDashboard({ ...extra, emojigg, db, itad: {}, rest, community, membersIntent: () => false, botGuilds: () => true, config: { publicUrl: "http://localhost:3000", clientId: "bot", ownerId: "owner" } });
     const addr = await dash.listen(0, "127.0.0.1");
     let cookie = "";
     const request = async (path, { method = "GET", body } = {}) => {
@@ -1100,4 +1100,50 @@ test("the new-member welcome mentions playtests and the right-click shortcuts", 
     assert.match(names, /Playtests/); assert.match(names, /Play together/);
     assert.ok(e.title.length + e.description.length + e.fields.reduce((a, f) => a + f.name.length + f.value.length, 0) + e.footer.text.length < 5500, "well inside Discord's embed limit");
     assert.ok(e.fields.every(f => f.value.length <= 1024) && e.fields.length <= 25);
+});
+
+test("playtest refresh: posts what is listed now (not only new), oldest first, without the role ping, and the next check doesn't repeat it", async () => {
+    const { refreshPlaytestChannel, runPlaytests } = await import("../src/playtests.js");
+    const T = Date.parse("2026-11-03T15:00:00Z");
+    const db = openDb(":memory:", { now: () => T });
+    db.setCommunity("G", { ping_playtest: "ROLE", playtest_channel: "PT" });
+    const items = [1, 2, 3, 4].map(n => ({ id: "i" + n, game: "Game " + n, type: "Beta Demo", kind: "demo", url: "https://www.alphabetagamer.com/g" + n, date: T - n * 3600_000, summary: "", image: null }));
+    const abg = { latest: async () => items };
+    const posts = [];
+    const notifier = { postChannel: async (c, p, role) => { posts.push({ c, role, title: p.embeds[0].title }); return true; }, postGuild: async () => true };
+    const r = await refreshPlaytestChannel({ db, news: { forApps: async () => new Map() }, abg, notifier, guildId: "G", limit: 3, now: () => T });
+    assert.deepEqual([r.found, r.posted], [4, 3]);
+    assert.deepEqual(posts.map(p => p.title.replace(/^\S+ /, "")), ["Beta demo: Game 3", "Beta demo: Game 2", "Beta demo: Game 1"], "newest last");
+    assert.ok(posts.every(p => p.c === "PT" && p.role === null), "no role ping");
+    await runPlaytests({ db, news: { forApps: async () => new Map() }, abg, notifier, now: () => T });
+    assert.equal(posts.length, 3, "the regular check doesn't repeat them, even the one that was over the limit");
+    // no channel, and a channel that can't be posted in
+    db.setCommunity("H", {});
+    await assert.rejects(refreshPlaytestChannel({ db, news: null, abg, notifier, guildId: "H", now: () => T }), /no playtest channel/);
+    db.setCommunity("I", { playtest_channel: "X" });
+    await assert.rejects(refreshPlaytestChannel({ db, news: null, abg, notifier: { postChannel: async () => false }, guildId: "I", now: () => T }), /could not post/);
+});
+
+test("dashboard: managers can post the current playtests now, once a minute", async () => {
+    const calls = [];
+    const t = await dashSetup({ playtests: { refresh: async (g, o) => { calls.push([g, o.limit]); return { found: 5, posted: 5, channel: "PT" }; } } });
+    const post = body => t.request("/api/community/playtests", { method: "POST", body: { guild_id: "g1", ...body } });
+    assert.equal((await t.request("/api/community/playtests", { method: "POST", body: { guild_id: "g2" } })).status, 403);
+    const ok = await post({ count: 6 });
+    assert.equal(ok.status, 200); assert.deepEqual([ok.data.posted, ok.data.found], [5, 5]); assert.deepEqual(calls, [["g1", 6]]);
+    assert.equal((await post({})).status, 429, "cooldown");
+    await t.close();
+});
+
+test("/manage community playtests: managers only, with a cooldown", async () => {
+    const { createCommunityHandlers } = await import("../src/communityhandlers.js");
+    const { createCommunity } = await import("../src/communityservice.js");
+    const db = openDb(":memory:"), api = fakeApi();
+    let n = 0;
+    const h = createCommunityHandlers({ db, api, service: createCommunity({ db, api }), playtests: { refresh: async () => { n++; return { found: 4, posted: 4, channel: "PT" }; } } });
+    const mk = perm => { const out = {}; return { out, commandName: "community", inGuild: () => true, guildId: "G", memberPermissions: { has: () => perm }, options: { getSubcommand: () => "playtests", getInteger: () => null },
+        deferReply: async () => {}, editReply: async p => { out.reply = p; }, reply: async p => { out.reply = p; } }; };
+    const no = mk(false); await h.handleCommand(no); assert.match(no.out.reply.content, /Manage Server/); assert.equal(n, 0);
+    const a = mk(true); await h.handleCommand(a); assert.match(a.out.reply.content, /Posted the 4 newest of 4/); assert.match(a.out.reply.content, /<#PT>/);
+    const b = mk(true); await h.handleCommand(b); assert.match(b.out.reply.content, /Try again in/); assert.equal(n, 1);
 });

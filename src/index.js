@@ -39,7 +39,7 @@ import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
-import { runPlaytests } from "./playtests.js";
+import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
@@ -159,7 +159,8 @@ const streamWatch = createStreamWatch({ db, streams, api: botRest, log: m => con
     // someone who linked as a role-holder must still hold the streamer or moderator role
     access: async l => { if (l.via !== "role") return true; const c = db.getCommunity(l.guild_id); const m = await botRest.getMember(l.guild_id, l.user_id).catch(() => null); if (!m) return true; return Boolean((c.streamer_role_id && m.roles?.includes(c.streamer_role_id)) || (c.mod_role_id && m.roles?.includes(c.mod_role_id))); } });
 const streamUi = createStreamHandlers({ db, streams, ownerId: cfg.ownerId, publicUrl: cfg.dashboard?.publicUrl ?? null, canWatch: p => Boolean(streamSites[p]) });
-const communityUi = createCommunityHandlers({ db, api: botRest, service: community, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
+const playtestRefresh = { refresh: (guildId, { limit } = {}) => refreshPlaytestChannel({ db, news, abg, notifier, guildId, limit, log: m => console.warn(`[playtests] ${m}`) }) };
+const communityUi = createCommunityHandlers({ db, api: botRest, service: community, playtests: playtestRefresh, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
 // Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).
 const voiceMap = guildId => {
     const g = client.guilds.cache.get(guildId);
@@ -728,7 +729,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, abg, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ news, abg, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

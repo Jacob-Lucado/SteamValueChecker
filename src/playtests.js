@@ -7,6 +7,7 @@
 import { steamArt, safeUrl } from "./render.js";
 import { sameGame } from "./abgfeed.js";
 import { isQuiet } from "./timeutil.js";
+import { UserError } from "./errors.js";
 
 export const PLAYTEST_KINDS = {
     playtest: { icon: "🧪", label: "Playtest", re: /\bplay[\s-]?tests?\b/i },
@@ -161,4 +162,47 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
         }
     }
     return stats;
+}
+
+
+const REFRESH_WINDOW_MS = 45 * 86400_000;
+export const REFRESH_MAX = 15;
+
+/**
+ * Posts what is listed right now into a server's playtest channel, not just what is new since the last check. A manager runs this
+ * when the channel is empty or after changing it. It never pings the role, posts the newest `limit` listings oldest first so the
+ * newest ends up at the bottom, and marks everything it saw as posted so the regular check doesn't repeat it.
+ */
+export async function refreshPlaytestChannel({ db, news, abg = null, notifier, guildId, limit = 8, now = () => Date.now(), log = () => {} }) {
+    const c = db.getCommunity(guildId);
+    if (!c?.playtest_channel) throw new UserError("This server has no playtest channel yet. Run `/manage community setup`, or pick one on the dashboard under Community, Ping roles.");
+    const cap = Math.min(REFRESH_MAX, Math.max(1, Math.round(Number(limit)) || 8));
+    const since = now() - REFRESH_WINDOW_MS;
+    let site = [];
+    if (abg) { try { site = (await abg.latest()).filter(x => x.date >= since); } catch (err) { log(`playtest refresh: alpha beta gamer ${err.code ?? err.name ?? err.message}`); } }
+    const apps = db.guildWatchedApps(guildId);
+    let feed = new Map();
+    if (apps.length && news) { try { feed = await news.forApps(apps.map(a => a.appid)); } catch (err) { log(`playtest refresh: steam news ${err.code ?? err.name}`); } }
+    const found = [];
+    for (const item of site) {
+        const match = apps.find(a => sameGame(a.title, item.game));
+        found.push({ embed: abgEmbed(item, { watchers: match?.watchers ?? 0 }), url: item.url, date: item.date, key: `ptg:${guildId}:abg:${item.id}`, game: item.game });
+    }
+    for (const a of apps) for (const p of feed.get(a.appid) ?? []) {
+        const kind = classifyPost(p);
+        if (!kind || p.date < since) continue;
+        if (found.some(x => sameGame(x.game, a.title) && Math.abs(x.date - p.date) < 5 * 86400_000)) continue;
+        found.push({ embed: playtestEmbed({ ...p, gameTitle: a.title }, kind, { watchers: a.watchers }), url: p.url, date: p.date, key: `ptg:${guildId}:${p.gid}`, game: a.title });
+    }
+    found.sort((x, y) => y.date - x.date);
+    const chosen = found.slice(0, cap).reverse();
+    let posted = 0, failed = 0;
+    for (const h of chosen) {
+        const ok = await notifier.postChannel(c.playtest_channel, { embeds: [h.embed], components: [button({ url: h.url })] }, null);
+        if (ok) posted++; else failed++;
+        if (!ok && !posted) break; // the first one failing means the channel is out of reach: stop instead of trying them all
+    }
+    if (posted) for (const h of found) db.setMeta(h.key, "1");
+    if (!posted && chosen.length) throw new UserError("I could not post in the playtest channel. Check that I can see it and send messages and embeds there.");
+    return { found: found.length, posted, failed, channel: c.playtest_channel };
 }
