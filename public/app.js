@@ -5316,7 +5316,16 @@
         settings = h("div", { class: "panel" }, h("h3", { text: "Settings (managers)" }), h("div", { class: "grid two" }, field("Streamer role", sr), field("Live channel", lc)), field("Ping role (members opt in to it)", pr), h("label", { class: "check", for: "stream-auto" }, autoBox, " Post by itself when linked streamers go live"), h("div", { class: "row" }, sv),
           h("p", { class: "muted small", text: "The streamer role, moderators and managers can announce streams, and see the OBS overlay in the music player. Community setup makes all three for you." }));
       }
-      holder.replaceChildren(...[picker, liveList, linkPanel, goPanel, pingPanel, settings].filter(Boolean));
+      let gwPanel = null;
+      if (d.can.go) {
+        const gGame = h("input", { type: "text", maxlength: "80", placeholder: "Which game" }), gKey = h("input", { type: "password", maxlength: "200", placeholder: "The key", autocomplete: "off" }), gMin = h("input", { type: "number", min: "5", max: "720", value: "60" });
+        const gb = h("button", { class: "btn blue", type: "button", text: "🎁 Start a giveaway", disabled: unset });
+        gb.addEventListener("click", () => run(gb, async () => { await post("/api/streams/giveaway", { game: gGame.value, key: gKey.value, minutes: Number(gMin.value) }); gKey.value = ""; }, "Giveaway posted in the live channel."));
+        gwPanel = h("div", { class: "panel" }, h("h3", { text: "Giveaway for your viewers" }),
+          h("p", { class: "muted small", text: "Give away one key while you are live. It is posted in the live channel and draws a winner when you end your stream, or when the time is up. The winner gets the key from the bot by message. You must be marked live first." }),
+          h("div", { class: "grid two" }, field("Game", gGame), field("Key (kept private)", gKey)), field("Longest it runs, in minutes", gMin), h("div", { class: "row" }, gb));
+      }
+      holder.replaceChildren(...[picker, liveList, linkPanel, goPanel, gwPanel, pingPanel, settings].filter(Boolean));
       if (d.can.go) mountOverlay(holder);
     }
     load();
@@ -5326,8 +5335,21 @@
   /** The deals overlay panel: a private link for OBS that rotates the best wishlist deal, a free game and a "gift me" card. */
   function streamCardPanel() {
     const panel = h("div", { class: "panel", id: "sh-cards" });
-    const KINDS = [["deal", "Best deal on my wishlist"], ["free", "A free game that is live now"], ["gift", "“Gift me” with my public wishlist page"]];
+    const KINDS = [["game", "The game I am playing right now"], ["deal", "Best deal on my wishlist"], ["free", "A free game that is live now"], ["gift", "“Gift me” with my public wishlist page"]];
     const copy = async text => { try { await navigator.clipboard.writeText(text); toast("Copied.", "ok"); } catch { toast("Select the link and copy it by hand.", "warn"); } };
+    /** Chat bot commands for Twitch, Kick and YouTube chat: viewers type !deals, !free or !wishlist. */
+    function chatBox(d) {
+      const tools = Object.entries(d.chat || {});
+      if (!tools.length) return null;
+      const sel = select(tools.map(([k, t]) => [k, t.label]), tools[0][0]);
+      const area = h("textarea", { readonly: true, rows: "3", "aria-label": "Chat commands" });
+      const fill = () => { area.value = d.chat[sel.value].lines.join("\n"); };
+      sel.addEventListener("change", fill); fill();
+      const cp = h("button", { class: "btn gray small", type: "button", text: "Copy commands" }); cp.addEventListener("click", () => copy(area.value));
+      return h("div", { class: "subpanel" }, h("h4", { text: "Chat commands (Twitch, Kick, YouTube)" }),
+        h("p", { class: "muted small", text: "Paste these into your chat bot. Viewers type !deals, !free or !wishlist and get your best deal, a free game right now, or your gift-me page. The lines hold your private link, so keep them to yourself. In Discord: /server stream chat." }),
+        field("Your chat bot", sel), area, h("div", { class: "row" }, cp));
+    }
     async function draw() {
       let d;
       try { d = await api("/api/streamcard"); } catch (e) { panel.replaceChildren(h("h3", { text: "Deals overlay for OBS" }), h("div", { class: "notice warn", text: e.message })); return; }
@@ -5360,7 +5382,8 @@
         h("h4", { text: "Look" }), h("div", { class: "grid two" }, field("Where", anchor), field("Colors", theme), field("Seconds per card", hold), field("Size (1 is normal)", scale)),
         field("Your private link (keep it to yourself)", link),
         h("div", { class: "row" }, copyBtn, h("a", { class: "btn gray small", href: link.value, target: "_blank", rel: "noopener noreferrer", text: "Open it" }), reset, off),
-        h("p", { class: "muted small", text: "In OBS: add a Browser source, paste the link, set width 600 and height 200. Anyone with the link can see these cards, so make a new one if it leaks." }));
+        h("p", { class: "muted small", text: "In OBS: add a Browser source, paste the link, set width 600 and height 200. Anyone with the link can see these cards, so make a new one if it leaks." }),
+        chatBox(d));
     }
     draw();
     return panel;

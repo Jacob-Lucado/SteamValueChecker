@@ -2,13 +2,14 @@
 import { UserError } from "./errors.js";
 import { canStreamIn } from "./streamlive.js";
 import { parseChannel, channelUrl } from "./streamwatch.js";
+import { chatCommandSets } from "./streamcard.js";
 
 const EPHEMERAL = 64;
 const MANAGE_GUILD = 1n << 5n;
 
 export const rolesOf = member => (Array.isArray(member?.roles) ? member.roles : [...(member?.roles?.cache?.keys?.() ?? [])]);
 
-export function createStreamHandlers({ db, streams, ownerId = null, publicUrl = null, canWatch = () => true }) {
+export function createStreamHandlers({ db, streams, streamGw = null, ownerId = null, publicUrl = null, canWatch = () => true }) {
     const eph = (i, content) => (i.replied || i.deferred ? i.editReply(typeof content === "string" ? { content } : content) : i.reply(typeof content === "string" ? { content, flags: EPHEMERAL, allowedMentions: { parse: [] } } : { ...content, flags: EPHEMERAL, allowedMentions: { parse: [] } }));
     const isManager = i => Boolean(i.memberPermissions?.has(MANAGE_GUILD));
     const who = i => ({ id: i.user.id, name: i.member?.displayName ?? i.user.globalName ?? i.user.username, avatarUrl: i.user.displayAvatarURL?.({ size: 128, extension: "png" }) ?? null });
@@ -33,6 +34,22 @@ export function createStreamHandlers({ db, streams, ownerId = null, publicUrl = 
                     db.setStreamLink(gid, i.user.id, { platform, handle, via, added: Date.now() });
                     const name = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" }[platform];
                     return await eph(i, canWatch(platform) ? `Linked ${name}: ${channelUrl(platform, handle)}\nWhen you go live I'll post in <#${c.live_channel}> by myself (and ping the people who opted in), and close the post when you finish. Use \`/server stream unlink\` to stop.` : `Linked ${name}: ${channelUrl(platform, handle)}\nI can't check ${name} automatically on this bot yet, so use \`/server stream live\` when you start.`);
+                }
+                case "giveaway": {
+                    if (!mayGo) throw new UserError("Only streamers, moderators and managers can run a stream giveaway here.");
+                    if (!streamGw?.enabled()) throw new UserError("Giveaways aren't set up on this bot.");
+                    await i.deferReply({ flags: EPHEMERAL });
+                    const r = await streamGw.start(gid, who(i), { game: i.options.getString("game", true), key: i.options.getString("key", true), minutes: i.options.getInteger("minutes") ?? 60 });
+                    return await eph(i, `Your giveaway is up in <#${r.channelId}>. It draws a winner when you end your stream (\`/server stream end\`), or <t:${Math.floor(r.endsAt / 1000)}:R> at the latest. The winner gets the key from me by message.`);
+                }
+                case "chat": {
+                    if (!publicUrl) throw new UserError("The dashboard isn't set up on this bot, so there is no link to make.");
+                    const base = publicUrl.replace(/\/$/, "");
+                    const token = db.getStreamCard(i.user.id)?.token ?? db.resetStreamCard(i.user.id);
+                    const sets = chatCommandSets(k => `${base}/api/streamcard/text?token=${token}&kind=${k}`), want = i.options.getString("bot");
+                    const picked = want && sets[want] ? [[want, sets[want]]] : Object.entries(sets);
+                    return await eph(i, { embeds: [{ color: 0x9146ff, title: "💬 Chat commands for your stream", description: "Paste these into your chat bot. Viewers type `!deals`, `!free` or `!wishlist` and get the best deal on your wishlist, a game that is free right now, or your gift-me page. It works in Twitch, Kick and YouTube chat, wherever your chat bot runs.",
+                        fields: [...picked.map(([, t]) => ({ name: t.label, value: "```\n" + t.lines.join("\n") + "\n```" })), { name: "Keep it private", value: "These lines contain your private link. Anyone who can see your chat bot's commands can see it. Made a mess? Make a new link on the Streamer hub and paste the commands again." }], footer: { text: "Streamer hub on the dashboard has these with copy buttons" } }] });
                 }
                 case "unlink": { const had = db.getStreamLink(gid, i.user.id); db.removeStreamLink(gid, i.user.id); return await eph(i, had ? "Unlinked your channel. I won't post when you go live any more." : "You didn't have a channel linked."); }
                 case "end": { await i.deferReply({ flags: EPHEMERAL }); await streams.endLive(gid, who(i)); return await eph(i, "Marked your stream as ended. Thanks for streaming!"); }

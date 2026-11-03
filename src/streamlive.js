@@ -34,7 +34,7 @@ export const endedPayload = ({ userId, name, title, url, ms }) => ({
     components: [], allowed_mentions: { parse: [] }
 });
 
-export function createStreams({ db, api, now = () => Date.now() }) {
+export function createStreams({ db, api, now = () => Date.now(), onEnd = null }) {
     const settings = guildId => db.getCommunity(guildId);
 
     /** `who` is { id, name, avatarUrl }. Returns { posted, pinged }. */
@@ -63,6 +63,7 @@ export function createStreams({ db, api, now = () => Date.now() }) {
     async function endLive(guildId, who) {
         const row = db.endStreamLive(guildId, who.id);
         if (!row) throw new UserError("You aren't marked as live. Use `/server stream live` when you start.");
+        if (onEnd) await onEnd(guildId, who.id);
         if (row.message_id) await api.editMessage(row.channel_id, row.message_id, endedPayload({ userId: who.id, name: who.name, title: row.title, url: row.url, ms: now() - row.started })).catch(() => {});
         return row;
     }

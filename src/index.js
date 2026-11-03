@@ -42,6 +42,7 @@ import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createNowPlaying, runSquadUps } from "./nowplaying.js";
 import { createClubHandlers, runGameClubs } from "./gameclub.js";
+import { createStreamGiveaways } from "./streamgiveaway.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
@@ -156,14 +157,15 @@ const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.da
 const community = createCommunity({ db, api: botRest, renderCard: renderWelcomeCard, dm: (id, p) => discord.sendDm(id, p), dashboardUrl: cfg.dashboard?.publicUrl ?? null, ownerId: cfg.ownerId });
 const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
 const modUi = createModHandlers({ db, mod: moderation });
-const streams = createStreams({ db, api: botRest });
+const streamGw = createStreamGiveaways({ db, giveaways: () => giveaways });
+const streams = createStreams({ db, api: botRest, onEnd: (g, u) => streamGw.onEnd(g, u) });
 const memes = createMemes();
 const memeUi = createMemeHandlers({ db, api: botRest, memes });
 const streamSites = watchable(process.env);
 const streamWatch = createStreamWatch({ db, streams, api: botRest, log: m => console.log(`[stream watch] ${m}`),
     // someone who linked as a role-holder must still hold the streamer or moderator role
     access: async l => { if (l.via !== "role") return true; const c = db.getCommunity(l.guild_id); const m = await botRest.getMember(l.guild_id, l.user_id).catch(() => null); if (!m) return true; return Boolean((c.streamer_role_id && m.roles?.includes(c.streamer_role_id)) || (c.mod_role_id && m.roles?.includes(c.mod_role_id))); } });
-const streamUi = createStreamHandlers({ db, streams, ownerId: cfg.ownerId, publicUrl: cfg.dashboard?.publicUrl ?? null, canWatch: p => Boolean(streamSites[p]) });
+const streamUi = createStreamHandlers({ db, streams, streamGw, ownerId: cfg.ownerId, publicUrl: cfg.dashboard?.publicUrl ?? null, canWatch: p => Boolean(streamSites[p]) });
 const playtestRefresh = { refresh: (guildId, { limit } = {}) => refreshPlaytestChannel({ db, news, abg, notifier, guildId, limit, log: m => console.warn(`[playtests] ${m}`) }) };
 const communityUi = createCommunityHandlers({ db, api: botRest, service: community, playtests: playtestRefresh, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
 // Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).

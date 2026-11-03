@@ -13,7 +13,7 @@
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const money = (n, cur) => { try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur || "USD" }).format(n); } catch { return Number(n).toFixed(2); } };
   const safeImg = u => (/^https:\/\//i.test(u || "") ? u : "");
-  const DEMO = [{ kind: "deal", title: "Hades II", price: 23.99, regular: 29.99, discount: 20, currency: "USD", shop: "Steam", appid: 1145350 }, { kind: "free", title: "Example Free Game", shop: "Epic Games Store" }, { kind: "gift", text: "Gift me a game", url: "https://example.com/#/u/you" }];
+  const DEMO = [{ kind: "game", title: "Elden Ring", appid: 1245620, hours: 142.5 }, { kind: "deal", title: "Hades II", price: 23.99, regular: 29.99, discount: 20, currency: "USD", shop: "Steam", appid: 1145350 }, { kind: "free", title: "Example Free Game", shop: "Epic Games Store" }, { kind: "gift", text: "Gift me a game", url: "https://example.com/#/u/you" }];
 
   function build(c) {
     const card = el("div", "card"), body = el("div");
@@ -24,6 +24,9 @@
       if (c.discount) p.append(el("span", "off", "-" + Math.round(c.discount) + "%"));
       if (c.regular) p.append(el("s", null, money(c.regular, c.currency)));
       body.append(p); if (c.shop) body.append(el("div", "line", "at " + c.shop));
+    } else if (c.kind === "game") {
+      const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + Number(c.appid) + "/header.jpg"; card.append(img);
+      body.append(el("div", "tag", "Playing now"), el("div", "name", c.title)); if (c.hours) body.append(el("div", "line", c.hours + " hours in this game"));
     } else if (c.kind === "free") {
       const a = safeImg(c.art); if (a) { const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = a; card.append(img); }
       body.append(el("div", "tag", "Free right now"), el("div", "name", c.title), el("div", "line", [c.shop, c.expiry ? "until " + new Date(c.expiry).toLocaleDateString() : ""].filter(Boolean).join(" · ")));

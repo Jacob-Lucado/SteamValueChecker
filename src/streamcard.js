@@ -3,13 +3,13 @@
 // The link shows only public things: game names, prices and the public page address. Never a Discord id or anything private.
 import { randomBytes } from "node:crypto";
 
-export const STREAMCARD_KINDS = ["deal", "free", "gift"];
+export const STREAMCARD_KINDS = ["game", "deal", "free", "gift"];
 
 export const streamCardSchema = `
 CREATE TABLE IF NOT EXISTS stream_card (
     user_id TEXT PRIMARY KEY,
     token   TEXT NOT NULL UNIQUE,
-    kinds   TEXT NOT NULL DEFAULT 'deal,free,gift',
+    kinds   TEXT NOT NULL DEFAULT 'game,deal,free,gift',
     created INTEGER NOT NULL
 );
 `;
@@ -30,6 +30,36 @@ export function streamCardStore({ run, get, now }) {
         removeStreamCard: userId => run("DELETE FROM stream_card WHERE user_id = ?", String(userId)),
         streamCardByToken: token => /^svcd_[A-Za-z0-9_-]{32}$/.test(String(token ?? "")) ? row(get("SELECT * FROM stream_card WHERE token = ?", String(token))) : null
     };
+}
+
+/** One short plain-text line for a chat command (!deals, !free, !wishlist). Kept well under Twitch's 500 character limit. */
+export function streamCardLine(cards, kind) {
+    const c = (cards ?? []).find(x => x.kind === kind);
+    if (kind === "deal") {
+        if (!c) return "No deals on my wishlist right now.";
+        let money = n => Number(n).toFixed(2);
+        try { const f = new Intl.NumberFormat("en-US", { style: "currency", currency: c.currency || "USD" }); money = n => f.format(n); } catch { /* plain number */ }
+        return `${c.title} is ${c.discount}% off: ${money(c.price)}${c.regular ? ` (was ${money(c.regular)})` : ""}${c.shop ? " at " + c.shop : ""}`.slice(0, 300);
+    }
+    if (kind === "free") {
+        if (!c) return "No free games right now.";
+        const until = c.expiry && Number.isFinite(Date.parse(c.expiry)) ? " until " + new Date(c.expiry).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
+        return `Free right now: ${c.title}${c.shop ? " on " + c.shop : ""}${until}`.slice(0, 300);
+    }
+    if (kind === "game") return c ? `Playing ${c.title}${c.hours ? ` (${c.hours}h played)` : ""}` : "Not in a game right now.";
+    return c ? `Gift me a game: ${c.url}` : "I don't have a public wishlist page yet.";
+}
+
+/** The chat commands a streamer pastes into their chat bot. `url(kind)` is the address that returns the line for that command. */
+export function chatCommandSets(url) {
+    const NAMES = [["game", "game"], ["deals", "deal"], ["free", "free"], ["wishlist", "gift"]];
+    const tools = {
+        nightbot: { label: "Nightbot", line: (n, u) => `!commands add !${n} $(urlfetch ${u})` },
+        streamelements: { label: "StreamElements", line: (n, u) => `!command add ${n} \${customapi.${u}}` },
+        streamlabs: { label: "Streamlabs Cloudbot", line: (n, u) => `!addcommand !${n} {readapi.${u}}` },
+        fossabot: { label: "Fossabot", line: (n, u) => `!command add ${n} $(customapi ${u})` }
+    };
+    return Object.fromEntries(Object.entries(tools).map(([k, t]) => [k, { label: t.label, lines: NAMES.map(([n, kind]) => t.line(n, url(kind))) }]));
 }
 
 /**

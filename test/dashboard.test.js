@@ -1985,7 +1985,7 @@ test("stream cards overlay: a private link per person that shows the best deal, 
         o.advance(5_000);
         await o.request("/api/wishlist/add", { method: "POST", body: { title: "Hades" } });
         const made = (await o.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
-        assert.match(made.token, /^svcd_[A-Za-z0-9_-]{32}$/); assert.deepEqual(made.kinds, ["deal", "free", "gift"]);
+        assert.match(made.token, /^svcd_[A-Za-z0-9_-]{32}$/); assert.deepEqual(made.kinds, ["game", "deal", "free", "gift"]);
         // the overlay page asks with no cookie at all
         const ask = async token => { const r = await fetch(o.base + "/api/streamcard/data?token=" + token); return { status: r.status, data: await r.json().catch(() => null) }; };
         let got = await ask(made.token);
@@ -2004,6 +2004,19 @@ test("stream cards overlay: a private link per person that shows the best deal, 
         assert.equal((await ask(made.token)).status, 404); assert.equal((await ask(fresh.token)).status, 200);
         assert.equal((await o.request("/api/streamcard", { method: "POST", body: { action: "remove" } })).data.on, false);
         assert.equal((await ask(fresh.token)).status, 404);
+        // chat bot commands: plain text lines, same private link
+        const mk = (await o.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
+        const info = (await o.request("/api/streamcard")).data;
+        assert.deepEqual(Object.keys(info.chat), ["nightbot", "streamelements", "streamlabs", "fossabot"]);
+        assert.ok(info.chat.nightbot.lines[1].startsWith("!commands add !deals $(urlfetch ") && info.chat.nightbot.lines[1].includes(mk.token));
+        const txt = async (k, t = mk.token) => { const r = await fetch(o.base + "/api/streamcard/text?token=" + t + "&kind=" + k); return { status: r.status, type: r.headers.get("content-type"), body: await r.text() }; };
+        assert.equal((await txt("game")).body, "Not in a game right now.");
+        let t = await txt("deal"); assert.equal(t.status, 200); assert.match(t.type, /text\/plain/); assert.equal(t.body, "Hades is 50% off: $10.00 (was $20.00) at GOG");
+        t = await txt("free"); assert.equal(t.body, "Free right now: Alpha on Epic");
+        t = await txt("gift"); assert.match(t.body, /^Gift me a game: .*#\/u\/jacob$/);
+        assert.equal((await txt("nope")).status, 404); assert.equal((await txt("deal", "svcd_" + "x".repeat(32))).status, 404);
+        await o.request("/api/streamcard", { method: "POST", body: { action: "remove" } });
+        assert.equal((await txt("deal")).status, 404);
         const page = await fetch(o.base + "/streamcard");
         assert.equal(page.status, 200); assert.match(await page.text(), /streamcard\.js/);
     } finally { await o.close(); }

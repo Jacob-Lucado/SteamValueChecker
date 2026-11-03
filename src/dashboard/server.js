@@ -47,8 +47,9 @@ import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
 import { playtestBoard } from "../playboard.js";
 import { whoIsPlaying } from "../nowplaying.js";
-import { streamCardData, STREAMCARD_KINDS } from "../streamcard.js";
+import { streamCardData, streamCardLine, chatCommandSets, STREAMCARD_KINDS } from "../streamcard.js";
 import { clubProgress, setPick } from "../gameclub.js";
+import { createStreamGiveaways } from "../streamgiveaway.js";
 import { createPlaytestSources } from "../playsources.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -143,7 +144,7 @@ const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived t
 const STATE_COOKIE = "svc_state";
 const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const MUTE_DAYS = 3650;
-const COOLDOWNS = { sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
+const COOLDOWNS = { streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -207,6 +208,40 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         req.on("close", end); res.on("error", end);
     }
     // The OBS overlay: a private link for each person and server, no sign-in. It gets the song that is playing and (optionally) the visualizer levels, nothing else.
+    /** The overlay cards for a streamer's link. Kept five minutes, so OBS and chat bots can ask as often as they like. */
+    const cardsFor = async (o, kinds) => {
+        const base = await baseCards(o, kinds.filter(k => k !== "game"));
+        if (!kinds.includes("game")) return base;
+        const g = await gameNow(o.user_id).catch(() => null);
+        return { ...base, cards: g ? [g, ...base.cards] : base.cards };
+    };
+    /** The game this streamer is in right now (Steam's own current-game field, kept for a minute), with the hours they have in it. */
+    async function gameNow(userId) {
+        const link = db.getSteamLink(userId);
+        if (!link || !nowPlaying?.enabled) return null;
+        const v = (await nowPlaying.lookup([link.steamid])).get(String(link.steamid));
+        if (!v?.appid || !v.game) return null;
+        const lib = db.listLibrary(userId).find(x => x.appid === v.appid);
+        return { kind: "game", title: v.game, appid: v.appid, hours: lib?.minutes ? Math.round(lib.minutes / 6) / 10 : null };
+    }
+    const baseCards = (o, kinds) => remember("scard:" + o.token + ":" + kinds.join(), 5 * 60_000, () => {
+        const u = db.getUser(o.user_id);
+        return streamCardData({
+            kinds, user: null,
+            deals: async () => (await viewRows(db, itad, u)).rows,
+            free: async () => (await enrichFree(await itad.getGiveawayList())).filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => ({ title: g.title, shop: g.shop, expiry: g.expiry, art: freeArt(g) ?? null })),
+            giftUrl: u?.profile_slug && u.profile_public ? `${origin}/#/u/${u.profile_slug}` : null
+        });
+    });
+    // One line of text for a chat bot command (!deals, !free, !wishlist). Same private link as the overlay.
+    async function streamCardText(req, res, url) {
+        if (!overlayLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain; charset=utf-8" });
+        const o = db.streamCardByToken(String(url.searchParams.get("token") ?? "")), kind = String(url.searchParams.get("kind") ?? "");
+        if (!o || !STREAMCARD_KINDS.includes(kind)) return send(res, 404, "This link isn't valid.", { "Content-Type": "text/plain; charset=utf-8" });
+        let line;
+        try { line = streamCardLine((await cardsFor(o, STREAMCARD_KINDS)).cards, kind); } catch { line = "Can't look that up right now."; }
+        return send(res, 200, line, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+    }
     const overlayOpen = new Map();
     let overlayTotal = 0;
     function overlayStream(req, res, url) {
@@ -404,7 +439,8 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         return g;
     };
     // ----- streams: who may announce one, show the OBS overlay, or change the settings -----
-    const streams = rest?.sendMessage ? createStreams({ db, api: rest, now }) : null;
+    const streamGw = createStreamGiveaways({ db, giveaways: () => giveaways, now });
+    const streams = rest?.sendMessage ? createStreams({ db, api: rest, now, onEnd: (g, u) => streamGw.onEnd(g, u) }) : null;
     const rolesIn = (gid, uid) => remember("mroles:" + gid + ":" + uid, 20_000, async () => { try { return (await rest.getMember?.(gid, uid))?.roles ?? []; } catch { return []; } }).catch(() => []);
     /** Streamers, moderators, managers and the bot owner. Returns the server entry, or throws. */
     const streamAccess = async (s, guildId) => {
@@ -919,6 +955,15 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             cooldown(s.userId, "streamlive");
             const me = (await remember("mname:" + g.id + ":" + s.userId, 10 * 60_000, () => rest.memberName(g.id, s.userId)).catch(() => null)) || s.username || "Someone";
             return musicCall(() => streams.goLive(g.id, { id: s.userId, name: me, avatarUrl: null }, { title: body.title, url: body.url, game: body.game }));
+        },
+        // A giveaway for the viewers of this stream: one key, drawn when the stream ends.
+        "POST /api/streams/giveaway": async (req, body) => {
+            const s = session(req); const g = await streamAccess(s, body.guild_id);
+            if (!streamGw.enabled()) throw new HttpError(503, "Giveaways aren't set up on this bot.");
+            cooldown(s.userId, "streamgw");
+            const me = (await remember("mname:" + g.id + ":" + s.userId, 10 * 60_000, () => rest.memberName(g.id, s.userId)).catch(() => null)) || s.username || "Someone";
+            const r = await musicCall(() => streamGw.start(g.id, { id: s.userId, name: me }, { game: body.game, key: body.key, minutes: body.minutes }));
+            return { ok: true, channelId: r.channelId, endsAt: r.endsAt };
         },
         // everyone linked in a server, with who is live right now (any member may look: it is only public channel names)
         "GET /api/streams/roster": async (req, _b, url) => {
@@ -1816,7 +1861,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         // The streamer's deals overlay for OBS: their own private link, no server needed.
         "GET /api/streamcard": async (req) => {
             const s = session(req), o = db.getStreamCard(s.userId), u = userRow(s);
-            return { on: Boolean(o), token: o?.token ?? null, kinds: o?.kinds ?? STREAMCARD_KINDS, base: origin + "/streamcard", slug: u.profile_slug ?? null, public: Boolean(u.profile_public) };
+            return { on: Boolean(o), token: o?.token ?? null, kinds: o?.kinds ?? STREAMCARD_KINDS, base: origin + "/streamcard", chat: o ? chatCommandSets(k => `${origin}/api/streamcard/text?token=${o.token}&kind=${k}`) : null, slug: u.profile_slug ?? null, public: Boolean(u.profile_public) };
         },
         "POST /api/streamcard": async (req, body) => {
             const s = session(req); userRow(s);
@@ -1832,13 +1877,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
             const o = db.streamCardByToken(String(url.searchParams.get("token") ?? ""));
             if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
-            const u = db.getUser(o.user_id);
-            return await remember("scard:" + o.token + ":" + o.kinds.join(), 5 * 60_000, () => streamCardData({
-                kinds: o.kinds, user: null,
-                deals: async () => (await viewRows(db, itad, u)).rows,
-                free: async () => (await enrichFree(await itad.getGiveawayList())).filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => ({ title: g.title, shop: g.shop, expiry: g.expiry, art: freeArt(g) ?? null })),
-                giftUrl: u?.profile_slug && u.profile_public ? `${origin}/#/u/${u.profile_slug}` : null
-            }));
+            return await cardsFor(o, o.kinds);
         },
         // Game club: the server's game of the month. Anyone in the server can look; Manage Server changes it.
         "GET /api/club": async (req, _b, url) => {
@@ -3200,6 +3239,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (key === "POST /api/admin/login") { checkWrite(req); return json(res, 200, adminPasswordLogin(req, res, await readJson(req, 5_000))); }
             if (key === "GET /api/music/viz") return vizStream(req, res, url);
             if (key === "GET /api/overlay/stream") return overlayStream(req, res, url);
+            if (key === "GET /api/streamcard/text") return await streamCardText(req, res, url);
             const handler = routes[key];
             if (!handler) throw new HttpError(404, "Not found.");
             let body = {};

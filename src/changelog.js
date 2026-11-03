@@ -2,6 +2,8 @@
 export const CHANGELOG = [
     { version: "2026.11.12", date: "2026-11-12", title: "Streamer hub, Now playing and Game club", items: [
         "**Game club:** `/server club pick` sets the server's game of the month; the Game club page and `/server club status` show who is playing, finished or has not started, and a card is posted weekly in the club channel.",
+        "**Chat commands for streamers:** `/server stream chat` (and the hub) gives `!game`, `!deals`, `!free` and `!wishlist` lines to paste into Nightbot, StreamElements, Streamlabs or Fossabot, so viewers in Twitch, Kick or YouTube chat get answers.",
+        "**Stream giveaways:** `/server stream giveaway` gives one key to your viewers while you are live. It draws when your stream ends. The deals overlay also has a Playing now card.",
         "**Streamer hub:** one page (Streamers in the menu) with go-live posts and pings, your channel link, the music overlay, the new deals overlay, your public gift-me wishlist and who is live.",
         "**Deals overlay for OBS:** a private link that rotates the best deal on your wishlist, a free game right now and a gift-me card. Pick the cards, corner, colours and speed.",
         "**Now playing:** `/server nowplaying` and a dashboard page show who in your server is in a game. Members opt in with `join:true`. Setup adds a #now-playing channel and Squad pings role for squad-up posts when two or more play the same game.",
