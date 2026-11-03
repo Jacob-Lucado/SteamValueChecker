@@ -354,6 +354,8 @@ alerts
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("milestones").setDescription("A card when a game passes 100, 250, 500, 1000 or 2000 hours (off by default)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
+    .addSubcommand(s => s.setName("yearinreview").setDescription("Get your year in games card at the end of December (off by default)")
+        .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("codes").setDescription("Get a DM when a new game code drops (Borderlands, Genshin, Star Rail, Zenless)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true))
         .addStringOption(o => o.setName("game").setDescription("Only some games: pick one to add or drop it").addChoices(...CODE_GAME_CHOICES))
@@ -362,7 +364,7 @@ alerts
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("mute").setDescription("Stop DMs for one kind of alert (you can still read them on the dashboard's Notifications page)")
         .addStringOption(o => o.setName("type").setDescription("Which alerts").setRequired(true).addChoices(
-            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "News and patch notes", value: "news" }, { name: "DLC sale alerts", value: "dlc" }, { name: "Refund reminders", value: "refund" }, { name: "Playtime milestones", value: "milestones" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }, { name: "Friend birthday reminders", value: "friend" }, { name: "Game code alerts", value: "codes" }, { name: "Promo news alerts", value: "promo" }))
+            { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "News and patch notes", value: "news" }, { name: "DLC sale alerts", value: "dlc" }, { name: "Refund reminders", value: "refund" }, { name: "Playtime milestones", value: "milestones" }, { name: "Year in games card", value: "yearly" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }, { name: "Friend birthday reminders", value: "friend" }, { name: "Game code alerts", value: "codes" }, { name: "Promo news alerts", value: "promo" }))
         .addBooleanOption(o => o.setName("muted").setDescription("True to mute, false to get them again").setRequired(true)))
     .addSubcommand(s => s.setName("language").setDescription("Language for the bot's buttons and messages")
         .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices({ name: "English", value: "en" }, { name: "Español", value: "es" }, { name: "Français", value: "fr" })))

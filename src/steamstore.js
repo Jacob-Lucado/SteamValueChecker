@@ -179,5 +179,6 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     };
     const milestoneUsers = () => all("SELECT * FROM users WHERE milestones = 1 AND paused = 0").map(clean);
     const playedGames = (userId, minMinutes) => all("SELECT itad_id, title, appid, minutes FROM library WHERE discord_id = ? AND minutes >= ?", userId, minMinutes).map(clean);
-    return { milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    const yearlyUsers = () => all("SELECT * FROM users WHERE yearly = 1 AND paused = 0").map(clean);
+    return { yearlyUsers, milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

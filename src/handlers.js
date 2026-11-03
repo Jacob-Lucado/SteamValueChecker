@@ -394,6 +394,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 db.updateUser(user.discord_id, { refund: on ? 1 : 0 });
                 return eph(i, on ? "You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count." : "Refund reminders are off.");
             }
+            case "yearinreview": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { yearly: on ? 1 : 0 });
+                return eph(i, on ? "You will get your year in games card (hours, months, top games) by DM from December 26. It needs Steam linked. You can see it any time with `/me steam recap`." : "The year in games card is off.");
+            }
             case "milestones": {
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { milestones: on ? 1 : 0 });

@@ -536,6 +536,8 @@ test("settings: the DLC sale switch is saved and read back", async () => {
     const r = await t.request("/api/settings", { method: "POST", body: { dlc: true } });
     assert.equal(r.status, 200); assert.equal(r.data.settings.dlc, true); assert.equal(t.db.getUser("u1").dlc, 1);
     assert.equal((await t.request("/api/settings", { method: "POST", body: { dlc: false } })).data.settings.dlc, false);
+    const r2 = await t.request("/api/settings", { method: "POST", body: { refund: true, milestones: true, yearly: true } });
+    assert.deepEqual([r2.data.settings.refund, r2.data.settings.milestones, r2.data.settings.yearly], [true, true, true]);
     await t.close();
 });
 
