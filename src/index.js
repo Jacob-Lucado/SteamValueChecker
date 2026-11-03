@@ -40,6 +40,7 @@ import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runPlaytests } from "./playtests.js";
+import { createAbgFeed } from "./abgfeed.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
@@ -107,6 +108,7 @@ logs.capture();
 const luna = createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) });
 const epicSoon = createEpicSoon();
 const news = createNews();
+const abg = createAbgFeed();
 const itad = withLuna(createItad({ apiKey: cfg.itadKey }), luna);
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
@@ -302,7 +304,7 @@ client.once(Events.ClientReady, c => {
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
             result.free = await ops.job("free games", () => runFreeGames({ db, itad, notifier, log }));
             result.news = await ops.job("news", () => runNews({ db, news, notifier, log }));
-            result.playtests = await ops.job("playtests", () => runPlaytests({ db, news, notifier, log }));
+            result.playtests = await ops.job("playtests", () => runPlaytests({ db, news, abg, notifier, log }));
             result.epicSoon = await ops.job("epic soon", () => runEpicSoon({ db, soon: epicSoon, notifier, log }));
             result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log }));
             result.hotDeals = await ops.job("hot deals", () => runHotDeals({ db, itad, notifier, log }));

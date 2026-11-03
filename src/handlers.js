@@ -433,9 +433,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 return eph(i, on ? `You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count.${extra}` : "Refund reminders are off.");
             }
             case "playtests": {
-                const on = i.options.getBoolean("enabled", true);
-                db.updateUser(user.discord_id, { playtest: on ? 1 : 0 });
-                return eph(i, on ? "You will be told when a Steam game on your wishlist (that you don't own) announces a playtest, demo, beta or free weekend. It reads the game's Steam announcements, so it needs the game imported from Steam (`/me wishlist import`). Your first check is quiet." : "Playtest and demo alerts are off.");
+                const mode = i.options.getInteger("mode", true);
+                db.updateUser(user.discord_id, { playtest: mode });
+                return eph(i, mode === 0 ? "Playtest and demo alerts are off." : mode === 1
+                    ? "You will be told when a game on your wishlist (that you don't own) has a playtest, demo, beta or free weekend. It reads the game's Steam announcements and the Alpha Beta Gamer site. Steam announcements need the game imported from Steam (`/me wishlist import`). Your first check is quiet."
+                    : "You will be told about every free playtest, beta and demo the bot finds, from Steam announcements for your wishlist games and from the Alpha Beta Gamer site. Expect a few a day. Your first check is quiet, and `/alerts quiethours` still applies.");
             }
             case "achievements": {
                 const on = i.options.getBoolean("enabled", true);
