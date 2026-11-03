@@ -2008,3 +2008,22 @@ test("stream cards overlay: a private link per person that shows the best deal, 
         assert.equal(page.status, 200); assert.match(await page.text(), /streamcard\.js/);
     } finally { await o.close(); }
 });
+
+test("game club: anyone in the server can look, only managers change it", async () => {
+    const o = await signedIn({ extra: { botGuilds: () => true } });
+    try {
+        const g = "g-admin";
+        let r = (await o.request("/api/club?guild=" + g)).data;
+        assert.equal(r.club, null); assert.equal(r.canManage, true); assert.ok(r.channels.some(c => c.id === "c1"));
+        assert.equal((await o.request("/api/club", { method: "POST", body: { guild_id: g, action: "pick", title: "Elden Ring" }, headers: { Origin: "https://evil.example" } })).status, 403);
+        assert.equal((await o.request("/api/club", { method: "POST", body: { guild_id: g, action: "pick", title: "  " } })).status, 400);
+        assert.equal((await o.request("/api/club", { method: "POST", body: { guild_id: g, action: "pick", title: "Elden Ring" } })).status, 200);
+        assert.equal((await o.request("/api/club", { method: "POST", body: { guild_id: g, action: "channel", channel_id: "nope" } })).status, 400);
+        assert.equal((await o.request("/api/club", { method: "POST", body: { guild_id: g, action: "channel", channel_id: "c1" } })).status, 200);
+        r = (await o.request("/api/club?guild=" + g)).data;
+        assert.equal(r.club.title, "Elden Ring"); assert.equal(r.channel, "c1");
+        assert.equal((await o.request("/api/club", { method: "POST", body: { guild_id: "g-member", action: "pick", title: "X" } })).status, 403, "not a manager there");
+        await o.request("/api/club", { method: "POST", body: { guild_id: g, action: "off" } });
+        assert.equal((await o.request("/api/club?guild=" + g)).data.club, null);
+    } finally { await o.close(); }
+});

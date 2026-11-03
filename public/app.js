@@ -136,7 +136,7 @@
     { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
-    { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
+    { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
     { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["streams", "Go live"], ["streamers", "Who is live"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
@@ -1150,6 +1150,40 @@
       notes, bar, list);
     list.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
     await load(false); schedule();
+  }
+
+  /** The server's game of the month: the pick, who is playing or finished, and (for managers) the controls. */
+  async function clubView() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const guild = serverPicker(servers), out = h("div");
+    app.replaceChildren(pageHead("Game club", "One game a month for the whole server. Members who share their library (/alerts share) show up with their hours and achievements. In Discord: /server club."),
+      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null), out);
+    async function load() {
+      if (!servers.length) { out.replaceChildren(h("p", { class: "muted", text: "Invite the bot to a server first." })); return; }
+      let d;
+      try { d = await api("/api/club?guild=" + encodeURIComponent(guild.value)); } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
+      const post = body => api("/api/club", { guild_id: guild.value, ...body });
+      const parts = [];
+      if (d.club) {
+        const row = r => h("li", {}, h("b", { text: r.name }), ` ${r.hours}h`, r.ach_total ? `, ${r.ach_done}/${r.ach_total} achievements` : "", r.finished ? " ✅" : r.started ? " ▶️" : " ⏳ not started");
+        parts.push(h("div", { class: "panel" }, h("h3", { text: d.club.title }), h("p", { class: "muted", text: d.club.month + " pick. " + d.owners.length + " of " + d.sharing + " sharing members own it." }),
+          d.club.appid ? ext("https://store.steampowered.com/app/" + d.club.appid + "/", "Steam page", "btn gray small") : null,
+          d.owners.length ? h("ul", { class: "plain" }, d.owners.map(row)) : h("p", { class: "muted", text: "Nobody who shares their library owns it yet." })));
+      } else parts.push(h("div", { class: "empty", text: "No pick yet." + (d.canManage ? " Set one below." : " A server manager can set one.") }));
+      if (d.canManage) {
+        const title = h("input", { type: "text", maxlength: "100", placeholder: "Game title", value: d.club ? d.club.title : "" });
+        const chSel = select([["", "Not set"], ...d.channels.map(c => [c.id, "#" + c.name])], d.channel || "");
+        const run = (btn, fn, msg) => busy(btn, async () => { await fn(); toast(msg, "ok"); load(); });
+        const pick = h("button", { class: "btn blue", type: "button", text: "Set this month's pick" }), sv = h("button", { class: "btn gray small", type: "button", text: "Save channel" }), off = h("button", { class: "btn red small", type: "button", text: "Turn the club off" });
+        pick.addEventListener("click", () => run(pick, () => post({ action: "pick", title: title.value }), "Pick saved."));
+        sv.addEventListener("click", () => run(sv, () => post({ action: "channel", channel_id: chSel.value }), "Saved."));
+        off.addEventListener("click", () => run(off, () => post({ action: "off" }), "Game club is off."));
+        parts.push(h("div", { class: "panel" }, h("h3", { text: "Manage (Manage Server)" }), field("Game of the month", title), h("div", { class: "row" }, pick),
+          field("Weekly card channel (posted once a week, and when the month ends)", chSel), h("div", { class: "row" }, sv, off)));
+      }
+      out.replaceChildren(...parts);
+    }
+    guild.addEventListener("change", load); await load();
   }
 
   const NOWPLAYING_POLL_MS = 60_000;
@@ -5545,7 +5579,7 @@
     load();
   }
 
-  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

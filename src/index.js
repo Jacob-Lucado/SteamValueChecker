@@ -41,6 +41,7 @@ import { runYearInGames } from "./yearly.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createNowPlaying, runSquadUps } from "./nowplaying.js";
+import { createClubHandlers, runGameClubs } from "./gameclub.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
@@ -253,6 +254,7 @@ const gw = createGiveawayHandlers({ db, giveaways });
 const lfg = createLfgService({ db, discord: gwDiscord, log: m => console.log(`[lfg] ${m}`) });
 const lfgUi = createLfgHandlers({ db, lfg });
 const calendar = createCalendarService({ db, discord: gwDiscord, log: m => console.log(`[calendar] ${m}`) });
+const clubUi = createClubHandlers({ db });
 const calendarUi = createCalendarHandlers({ db, calendar, publicUrl: publicBase });
 
 // Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
@@ -309,6 +311,7 @@ client.once(Events.ClientReady, c => {
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
             result.free = await ops.job("free games", () => runFreeGames({ db, itad, notifier, log }));
             result.news = await ops.job("news", () => runNews({ db, news, notifier, log }));
+            result.gameClub = await ops.job("game club", () => runGameClubs({ db, notifier, log }));
             result.playtests = await ops.job("playtests", () => runPlaytests({ db, news, abg, notifier, log }));
             result.epicSoon = await ops.job("epic soon", () => runEpicSoon({ db, soon: epicSoon, notifier, log }));
             result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log }));
@@ -706,6 +709,7 @@ client.on(Events.InteractionCreate, async i => {
             case "watch": return await handlers.handleWatch(i);
             case "serverstats": return await handlers.handleServerStats(i);
             case "nowplaying": return await handlers.handleNowPlaying(i);
+            case "club": return await clubUi.handle(i);
             case "publicpage": return await handlers.handlePublicPage(i);
             case "friend": return await handlers.handleFriend(i);
             case "mydata": return await handlers.handleMyData(i);

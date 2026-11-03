@@ -48,6 +48,7 @@ import { createNews, newsForUser } from "../news.js";
 import { playtestBoard } from "../playboard.js";
 import { whoIsPlaying } from "../nowplaying.js";
 import { streamCardData, STREAMCARD_KINDS } from "../streamcard.js";
+import { clubProgress, setPick } from "../gameclub.js";
 import { createPlaytestSources } from "../playsources.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -1838,6 +1839,24 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
                 free: async () => (await enrichFree(await itad.getGiveawayList())).filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => ({ title: g.title, shop: g.shop, expiry: g.expiry, art: freeArt(g) ?? null })),
                 giftUrl: u?.profile_slug && u.profile_public ? `${origin}/#/u/${u.profile_slug}` : null
             }));
+        },
+        // Game club: the server's game of the month. Anyone in the server can look; Manage Server changes it.
+        "GET /api/club": async (req, _b, url) => {
+            const s = session(req), g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const club = db.getClub(g.id), canManage = isManager(g) || isOwner(s);
+            const channels = canManage ? (await rest.listChannels(g.id).catch(() => [])).filter(c => c.type === undefined || c.type === 0 || c.type === 5).map(c => ({ id: c.id, name: c.name })) : [];
+            if (!club?.title) return { club: null, canManage, channels, channel: club?.channel_id ?? null };
+            const prog = clubProgress(db, club);
+            const owners = await Promise.all(prog.owners.map(async r => ({ ...r, name: (await rest.memberName(g.id, r.userId).catch(() => null)) || "Member " + String(r.userId).slice(-4) })));
+            return { club: { title: club.title, appid: club.appid, month: club.month, channel: club.channel_id }, owners, sharing: prog.sharing, canManage, channels, channel: club.channel_id };
+        },
+        "POST /api/club": async (req, body) => {
+            const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));
+            if (!(isManager(g) || isOwner(s))) throw new HttpError(403, "You need the Manage Server permission to change the game club.");
+            if (body.action === "off") { db.removeClub(g.id); return { ok: true }; }
+            if (body.action === "channel") { const id = String(body.channel_id ?? ""); if (id && !(await rest.listChannels(g.id).catch(() => [])).some(c => c.id === id)) throw new HttpError(400, "That channel is not in this server."); db.setClub(g.id, { channel_id: id || null }); return { ok: true }; }
+            if (body.action === "pick") { try { setPick(db, g.id, body.title, s.userId, now()); } catch (e) { throw new HttpError(400, e.message); } return { ok: true }; }
+            throw new HttpError(400, "Unknown action.");
         },
         "GET /api/nowplaying": async (req, _b, url) => {
             // Same rules as /server nowplaying: members who turned it on (/alerts nowplaying) and share their library.
