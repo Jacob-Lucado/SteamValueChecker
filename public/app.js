@@ -4086,53 +4086,212 @@
   }
 
   // My page: every feature as a card with its status, a switch where one is simple, and a link to set it up. Cards can be pinned, hidden and reordered (kept on this device).
-  // First-login tour: a short card that points at the real menu items one at a time. Shown once per account; "Take the tour" replays it.
-  function startTour() {
-    const steps = [
-      { title: "Welcome", text: "A 30 second look around. Use the arrow keys or the buttons, and Esc to leave any time." },
-      { sel: "#nav", title: "The menu", text: "Pages are grouped into Library, Deals, Free & codes, Friends, Servers, Account and Help. Pick one and its pages show as tabs just below the menu." },
-      { href: "#/mypage", title: "My page", text: "Every feature as a card. Switch the simple ones on here, pin the ones you use and make a profile card." },
-      { href: "#/wishlist", title: "Wishlist", text: "Import your Steam wishlist or add games. Pick the rule for each one: any sale, a percent off, a price or an all-time low." },
-      { href: "#/library", title: "Library", text: "What you own and paid, your backlog, spend, challenge and trophies." },
-      { href: "#/steam", title: "Steam", text: "Link your public profile for hours played, hours tracked over time and a taste profile." },
-      { href: "#/free", title: "Free games", text: "Everything free to claim right now on Steam, Epic, GOG and more, with store filters." },
-      { href: "#/alerts", title: "Alert settings", text: "Choose DM or a server channel, quiet hours, a weekly digest and free game alerts." },
-      { href: "#/notifications", title: "Notifications", text: "A copy of every alert, so a missed DM is never lost." },
-      { href: "#/help", title: "Help and support", text: "The full command list lives in Help, and Support reaches a human. Press / anywhere to search." }
-    ];
-    document.getElementById("tour")?.remove();
-    const root = h("div", { id: "tour", class: "tour", role: "dialog", "aria-modal": "false", "aria-labelledby": "tour-title" });
-    let n = 0, ringed = null, shownMenu = null;
-    const finish = () => {
-      root.remove(); document.removeEventListener("keydown", onKey, true); if (ringed) ringed.classList.remove("tour-ring"); if (shownMenu) shownMenu.hidden = true;
+  // First-run guide: a centred dialog with a detailed tour of the dashboard, then a short setup. The tour can be skipped (after a
+  // confirmation); setup always follows. Shown once per account, and "Take the tour" on My page replays it.
+  const WIZ_KEY = "svc.wizard";
+  const TOUR_SLIDES = [
+    { nav: "Welcome", title: "Welcome to Steam Value Checker", lead: "This dashboard and the Discord bot are one account. Change something here and the bot follows, change it in Discord and it shows up here. The next few screens explain each part. Then we set up your alerts, which takes about two minutes.",
+      points: [["Price alerts that fit you", "Add the games you want and get told when one is cheap enough, by your own rules."], ["Everything you own, valued", "See what your library is worth, what you paid and what you have not played yet."], ["Free games and deals", "A live list of what is free right now and which discounts suit your taste."], ["Built for servers", "Share with friends, vote on what to play and run giveaways and playtest channels."]] },
+    { nav: "Finding your way", title: "Finding your way around", lead: "The menu at the top groups pages by what you are doing. Pick a group and its pages appear as tabs underneath.",
+      points: [["Library, Deals, Free & codes", "Your games, price tools, and everything free or code-based."], ["Friends and Servers", "Birthdays and gifts on one side, the servers you share with the bot on the other."], ["Press / to search", "On any page with a search box, / jumps straight to it. The search button in the menu finds pages and settings."], ["My page", "Every feature as a card with its status. Switch the simple ones on there, pin the ones you use."], ["Install it", "Your browser can add this site to your home screen or desktop as an app. Look for Install in the address bar or share menu."]] },
+    { nav: "Wishlist", title: "Wishlist and sale alerts", lead: "Your wishlist is the heart of the bot. Every game on it is watched, and you choose what counts as a good price.",
+      points: [["Import or add", "Import your public Steam wishlist in one click, or add any game by title."], ["A rule for each game", "Alert on any sale, a percent off, a price you set, or only at an all-time low."], ["Priority and quiet", "Star the ones you care about. Snooze a game for a week or a month, or mute it until you want it back."], ["Saved views", "Name a sort and filter combination, like Sale, hide owned, and bring it back later."], ["Buy or wait", "The check card compares today with the game's history, shows its Steam review score and charts the last year."]] },
+    { nav: "Alerts", title: "How alerts reach you", lead: "Alerts arrive by direct message or in a server channel. Everything is also kept on the Notifications page, so a missed message is never lost.",
+      points: [["Delivery and quiet hours", "Pick DM or a channel, set the hours you never want to be pinged and your time zone. Held alerts arrive afterwards."], ["Minimum discount", "Ignore small sales by setting a floor, like 30 percent."], ["Many kinds of alert", "Sales, bundles, free games, news and patch notes, DLC sales, release dates, refund reminders, milestones, playtests and more. Each has its own switch."], ["Try before you trust", "Alert settings can send you a sample of any kind, marked as a sample, so you see exactly what it looks like."], ["Notifications page", "Filter by kind, search, and mute a kind from there."]] },
+    { nav: "Library", title: "Library, Steam and your backlog", lead: "Tell the bot what you own and it can show you what it is worth and what to play next.",
+      points: [["Add what you own", "Link Steam to sync it, import a list, or add games with what you paid."], ["Value and spending", "Total value against what you paid, savings, and spending by month."], ["Backlog and challenge", "Mark games Backlog, Playing, Played, Finished or Dropped. Set a monthly goal and keep a streak."], ["Hours and achievements", "With Steam linked you get hours played, a yearly recap card, playtime milestones and near-complete achievement alerts."], ["The browser extension", "FanaticalGrabber reveals Fanatical keys and fills in what you paid from Steam purchase history. That also powers refund-and-rebuy alerts."]] },
+    { nav: "Deals", title: "Deals, free games and codes", lead: "When you are not waiting on a specific game, these pages find something worth buying or claiming.",
+      points: [["For you", "Current discounts ranked by your taste, library and wishlist."], ["Check a deal", "Price any game by region and see which bundles include it."], ["Sale planner", "During a Steam sale, set a budget and let the best savings fill your cart. Afterwards see what your alerts caught."], ["Free games", "Everything free right now on Steam, Epic, GOG and more, with store filters and a DLC tab."], ["Codes, promos and the calendar", "Working codes for popular games, key giveaways, release dates and sale dates in one place."]] },
+    { nav: "Early access", title: "Playtests, demos and news", lead: "Hear about a game before it launches, or when something changes in one you already play.",
+      points: [["Playtest watcher", "Betas, demos, free weekends and sign-ups from Steam announcements and the Alpha Beta Gamer site. Choose wishlist games only, or every one found."], ["News and patch notes", "Announcements for the Steam games you own or wishlist. Patch notes only, or everything."], ["DLC sales", "A heads-up when add-ons for games you really play are heavily discounted."], ["Release dates", "Told when a wishlist game gets a date, or when it moves."]] },
+    { nav: "Friends", title: "Friends, gifts and sharing", lead: "Games are better shared. None of this is on unless you turn it on.",
+      points: [["Friends and gifts", "Save birthdays and public wishlist links, then see what is on sale for them before the day."], ["Your public page", "Share a wishlist page with a link. Friends can quietly claim a gift so nobody buys it twice, and the page uses your profile card colour."], ["Profile card", "A picture of your library with the stats and colours you choose, ready to post."], ["Compare libraries", "See what you and a friend both own, with hours side by side."]] },
+    { nav: "Servers", title: "Servers and Discord", lead: "Add the bot to a server and it becomes a community toolkit. The dashboard is where managers run it.",
+      points: [["Community setup", "One click builds channels, roles, a welcome flow, an XP system, support tickets, music and a playtests channel."], ["Share with your server", "Opt in with Share and members can compare libraries, see who owns a game, find co-op picks and plan game night with a vote."], ["Right-click shortcuts", "Right-click a member in Discord for Compare libraries, Play together, See their wishlist and Gift ideas. Right-click a game title to price it, add it or see who owns it."], ["Commands", "Everything here also has a slash command: /games, /me, /server and /alerts. /help lists them all."]] }
+  ];
+
+  function startTour(opts) {
+    const o = opts || {};
+    document.getElementById("wiz")?.remove();
+    const opener = document.activeElement;
+    const me = state.me, S = () => state.me.settings;
+    const steps = [];
+    TOUR_SLIDES.forEach((t, i) => steps.push({ phase: "tour", nav: t.nav, render: () => tourBody(t, i) }));
+    const setupFns = [setupRegion, setupDelivery, setupSteam, setupAlerts, setupServer, setupDone];
+    setupFns.forEach(fn => steps.push(fn()));
+    const firstSetup = steps.findIndex(x => x.phase === "setup");
+    let n = 0, confirming = false;
+    try { const saved = JSON.parse(localStorage.getItem(WIZ_KEY) || "null"); if (saved && !o.replay && Number.isInteger(saved.n) && saved.n >= firstSetup && saved.n < steps.length) n = saved.n; } catch { /* a fresh start is fine */ }
+    const remember = () => { try { localStorage.setItem(WIZ_KEY, JSON.stringify({ n })); } catch { /* optional */ } };
+
+    const root = h("div", { id: "wiz", class: "wiz", role: "presentation" });
+    const dlg = h("div", { class: "wiz-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "wiz-title", tabindex: "-1" });
+    root.append(dlg);
+    document.body.append(root); document.body.classList.add("wiz-open");
+
+    const finish = async () => {
+      document.removeEventListener("keydown", onKey, true); root.remove(); document.body.classList.remove("wiz-open");
+      try { localStorage.removeItem(WIZ_KEY); } catch { /* ignore */ }
       if (state.me) { state.me.tour = false; api("/api/tour/done", {}).catch(() => {}); }
+      try { state.me = Object.assign({}, state.me, await api("/api/me")); } catch { /* the cached copy is fine */ }
+      if (opener && opener.focus) opener.focus();
+      if (currentView() === "mypage") route();
     };
-    function show() {
-      const s = steps[n];
-      if (ringed) ringed.classList.remove("tour-ring");
-      if (shownMenu) { shownMenu.hidden = true; shownMenu = null; }
-      const target = s.sel ? document.querySelector(s.sel) : s.href ? document.querySelector('#nav a[data-pages~="' + s.href.replace("#/", "") + '"]') : null;
-      ringed = target;
-      const menu = target && target.closest(".menu");
-      if (menu) { menu.hidden = false; shownMenu = menu; }
-      if (target) { target.classList.add("tour-ring"); target.scrollIntoView({ block: "nearest" }); }
-      const back = h("button", { class: "btn gray small", type: "button", text: "Back", disabled: n === 0, onclick: () => { n--; show(); } });
-      const next = h("button", { class: "btn blue small", type: "button", text: n === steps.length - 1 ? "Done" : "Next", onclick: () => { if (n === steps.length - 1) finish(); else { n++; show(); } } });
-      const skip = h("button", { class: "btn gray small", type: "button", text: "Skip", onclick: finish });
-      root.replaceChildren(h("div", { class: "tour-card" },
-        h("div", { class: "muted small", text: "Step " + (n + 1) + " of " + steps.length }),
-        h("h3", { id: "tour-title", text: s.title }), h("p", { text: s.text }),
-        h("div", { class: "row" }, skip, back, next)));
-      next.focus();
+
+    function tourBody(t, i) {
+      return h("div", { class: "wiz-slide" },
+        h("div", { class: "wiz-kicker", text: "Part " + (i + 1) + " of " + TOUR_SLIDES.length }),
+        h("h2", { id: "wiz-title", text: t.title }), h("p", { class: "wiz-lead", text: t.lead }),
+        h("ul", { class: "wiz-points" }, t.points.map(([head, text]) => h("li", {}, h("strong", { text: head }), h("span", { text })))));
+    }
+    // ----- setup steps: each returns { phase, nav, render(), save?() } -----
+    function setupFrame(kicker, title, lead, ...body) {
+      return h("div", { class: "wiz-slide" }, h("div", { class: "wiz-kicker", text: kicker }), h("h2", { id: "wiz-title", text: title }), h("p", { class: "wiz-lead", text: lead }), ...body);
+    }
+    function setupRegion() {
+      const region = select(state.cfg.regions.map(r => [r.value, r.name]), S().region);
+      const stores = select([["major", "Major stores only (recommended)"], ["all", "All tracked stores, including key sites"]], S().stores);
+      return { phase: "setup", nav: "Region", render: () => setupFrame("Setup 1 of 6", "Where do you shop?", "Prices are looked up for your region, so the currency and the stores match what you can actually buy.",
+        h("div", { class: "wiz-form" }, field("Region and currency", region), field("Which stores count", stores))),
+        save: async () => { const r = await api("/api/settings", { region: region.value, stores: stores.value }); state.me.settings = r.settings; } };
+    }
+    function setupDelivery() {
+      const myTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "UTC"; } })();
+      const withChannel = state.me.servers.filter(g => g.alertChannel);
+      const dm = h("input", { type: "radio", name: "wiz-delivery", value: "dm", checked: S().delivery !== "channel" });
+      const ch = h("input", { type: "radio", name: "wiz-delivery", value: "channel", checked: S().delivery === "channel", disabled: !withChannel.length });
+      const server = select(withChannel.map(g => [g.id, g.name]), S().guild_id || (withChannel[0] && withChannel[0].id) || "");
+      const qs = h("input", { type: "time", value: S().quiet_start || "" }), qe = h("input", { type: "time", value: S().quiet_end || "" });
+      const tz = h("input", { type: "text", value: S().tz && S().tz !== "UTC" ? S().tz : myTz, maxlength: "60", "aria-label": "Time zone" });
+      return { phase: "setup", nav: "Delivery", render: () => setupFrame("Setup 2 of 6", "Where should alerts go?", "Direct messages are the simplest. If you would rather keep them out of your DMs, a server alert channel works too.",
+        h("div", { class: "wiz-form" },
+          h("label", { class: "check" }, dm, " Send them to me as direct messages"),
+          h("label", { class: "check" }, ch, " Post them in a server alert channel", withChannel.length ? "" : " (no server you are in has one yet)"),
+          withChannel.length ? field("Which server", server) : null,
+          h("div", { class: "row" }, field("Quiet hours start", qs), field("Quiet hours end", qe)),
+          field("Your time zone", tz),
+          h("p", { class: "muted small", text: "Leave quiet hours empty to be told any time. Alerts held during quiet hours arrive when they end." }))),
+        save: async () => {
+          const body = { delivery: ch.checked ? "channel" : "dm", tz: tz.value.trim() || "UTC", quiet_start: qs.value || null, quiet_end: qe.value || null };
+          if (ch.checked) body.guild_id = server.value;
+          const r = await api("/api/settings", body); state.me.settings = r.settings;
+        } };
+    }
+    function setupSteam() {
+      const linked = () => Boolean(state.me.steam && state.me.steam.linked);
+      const out = h("div", { class: "wiz-form" });
+      const draw = () => {
+        const importBtn = h("button", { class: "btn green", type: "button", text: "Import my Steam wishlist" });
+        importBtn.addEventListener("click", () => busy(importBtn, async () => {
+          const r = await api("/api/wishlist/import", { profile: "" });
+          state.me.games += r.added; toast(`Imported ${r.added} new game${r.added === 1 ? "" : "s"}.`, "ok"); draw();
+        }));
+        out.replaceChildren(
+          h("div", { class: "wiz-status" + (linked() ? " ok" : ""), text: linked() ? "Steam is linked to your account." : "Steam is not linked yet." }),
+          linked() ? h("div", { class: "row" }, importBtn, h("span", { class: "muted small", text: state.me.games ? state.me.games + " game" + (state.me.games === 1 ? "" : "s") + " on your wishlist" : "Your Steam wishlist must be public for this to work." })) : h("div", { class: "row" }, (() => { const a = steamLoginBtn("Link Steam", "btn steam"); a.addEventListener("click", remember); return a; })(), h("span", { class: "muted small", text: "You come straight back here afterwards." })),
+          h("p", { class: "muted small", text: "Linking is optional. It unlocks the wishlist import, hours played, your library and recap. You can do it later from the Steam page." }));
+      };
+      return { phase: "setup", nav: "Steam", render: () => { draw(); return setupFrame("Setup 3 of 6", "Bring in your games", "Linking your public Steam profile fills your wishlist and library for you, so alerts can start right away.", out); },
+        save: async () => {} };
+    }
+    function setupAlerts() {
+      const sw = (key, label, hint) => { const c = h("input", { type: "checkbox", checked: Boolean(S()[key]) }); return { key, c, node: h("label", { class: "check wiz-sw" }, c, h("span", {}, h("b", { text: label }), hint ? h("em", { text: hint }) : null)) }; };
+      const core = [sw("free", "Free games", "Told when a game is free to claim."), sw("bundles", "Bundles and giveaways", "When a wishlist game is in one."), sw("digest", "Weekly digest", "One summary of your wishlist sales.")];
+      const extra = [sw("dlc", "DLC sales", "Big discounts on add-ons for games you play."), sw("refund", "Refund reminders", "Before the 14 day window closes."), sw("milestones", "Playtime milestones", "At 100, 250, 500, 1000 and 2000 hours."), sw("achv", "Almost-done achievements", "When you are a few short of 100 percent."), sw("nudge", "Monthly backlog pick", "One unplayed game to try."), sw("yearly", "Year in games", "Your recap card, sent in late December.")];
+      const news = select([["0", "Off"], ["1", "Patch notes only"], ["2", "Every announcement"]], String(S().news ?? 0));
+      const play = select([["0", "Off"], ["1", "Only games on my wishlist"], ["2", "Every playtest and demo found"]], String(S().playtest ?? 0));
+      const minDisc = h("input", { type: "number", min: "0", max: "90", step: "5", value: String(S().min_discount || 0), class: "short-num", "aria-label": "Minimum discount percent" });
+      return { phase: "setup", nav: "Alerts", render: () => setupFrame("Setup 4 of 6", "Choose your alerts", "Sale alerts for your wishlist are always on. Pick the extras you want. Everything here can be changed later on the Alerts page.",
+        h("div", { class: "wiz-form" },
+          h("div", { class: "wiz-group" }, h("h4", { text: "Good to have" }), ...core.map(x => x.node)),
+          h("div", { class: "wiz-group" }, h("h4", { text: "Extras" }), ...extra.map(x => x.node)),
+          h("div", { class: "row" }, field("News and patch notes", news), field("Playtests and demos", play), field("Ignore sales under (% off)", minDisc)))),
+        save: async () => {
+          const body = { news: Number(news.value), playtest: Number(play.value), min_discount: Number(minDisc.value || 0) };
+          for (const x of [...core, ...extra]) body[x.key] = x.c.checked;
+          const r = await api("/api/settings", body); state.me.settings = r.settings;
+        } };
+    }
+    function setupServer() {
+      const share = h("input", { type: "checkbox", checked: Boolean(S().share) });
+      const inv = state.cfg && state.cfg.inviteUrl;
+      const withBot = state.me.servers.filter(g => g.bot);
+      return { phase: "setup", nav: "Server", render: () => setupFrame("Setup 5 of 6", "Bring it to your server", "The bot works for you alone, but it is better with friends. This step is optional.",
+        h("div", { class: "wiz-form" },
+          h("div", { class: "wiz-status" + (withBot.length ? " ok" : ""), text: withBot.length ? "The bot is set up in " + withBot.length + " of your servers." : "The bot is not set up in any of your servers yet." }),
+          inv ? h("div", { class: "row" }, ext(inv, "Add the bot to a server", "btn blue"), h("span", { class: "muted small", text: "Then open Servers and run community setup." })) : null,
+          h("label", { class: "check wiz-sw" }, share, h("span", {}, h("b", { text: "Share my library with my server" }), h("em", { text: "Lets members compare libraries, see who owns a game and find co-op picks. Only titles and hours, and you can turn it off any time." })))) ),
+        save: async () => { const r = await api("/api/settings", { share: share.checked }); state.me.settings = r.settings; } };
+    }
+    function setupDone() {
+      const sample = h("button", { class: "btn gray", type: "button", text: "Send me a sample alert" });
+      sample.addEventListener("click", () => busy(sample, async () => { await api("/api/alerts/test", { kind: "sale" }); toast("Check your Discord DMs.", "ok"); }));
+      return { phase: "setup", nav: "Done", last: true, render: () => {
+        const rows = (state.me.setup || []).map(t => h("li", { class: t.done ? "done" : "" }, h("span", { class: "wiz-tick", text: t.done ? "Done" : t.optional ? "Optional" : "To do" }), t.text));
+        return setupFrame("Setup 6 of 6", "You are all set", "Here is where things stand. The checklist stays on your home page until it is finished, and you can replay this guide from My page.",
+          h("ul", { class: "wiz-check" }, rows), h("div", { class: "row" }, sample));
+      } };
+    }
+
+    // ----- frame -----
+    const cur = () => steps[n];
+    const inTour = () => cur().phase === "tour";
+    function frame() {
+      const st = cur(), tourCount = firstSetup, setupCount = steps.length - firstSetup;
+      const idx = inTour() ? n : n - firstSetup, total = inTour() ? tourCount : setupCount;
+      const header = h("div", { class: "wiz-head" },
+        h("div", { class: "wiz-brand", text: "Steam Value Checker" }),
+        h("div", { class: "wiz-phases", role: "list" }, h("span", { role: "listitem", class: inTour() ? "on" : "done", text: "1  Tour" }), h("span", { role: "listitem", class: inTour() ? "" : "on", text: "2  Setup" })),
+        inTour() ? h("button", { class: "btn gray small wiz-skip", type: "button", text: "Skip tutorial", onclick: () => { confirming = true; draw(); } }) : h("span", { class: "wiz-skip-gap" }));
+      const rail = h("ol", { class: "wiz-rail", "aria-label": inTour() ? "Tour steps" : "Setup steps" },
+        steps.filter(x => x.phase === st.phase).map((x, i) => h("li", { class: i === idx ? "on" : i < idx ? "past" : "" }, h("span", { class: "wiz-num", text: String(i + 1) }), x.nav)));
+      const bar = h("div", { class: "wiz-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(total), "aria-valuenow": String(idx + 1), "aria-label": inTour() ? "Tour progress" : "Setup progress" }, (() => { const f = h("span"); f.style.width = Math.round(((idx + 1) / total) * 100) + "%"; return f; })());
+      const back = h("button", { class: "btn gray", type: "button", text: "Back", disabled: n === 0, onclick: () => go(-1) });
+      const nextLabel = st.last ? "Finish" : n === firstSetup - 1 ? "Continue to setup" : "Next";
+      const next = h("button", { class: "btn blue wiz-next", type: "button", text: nextLabel, onclick: () => go(1) });
+      const body = h("div", { class: "wiz-body", tabindex: "-1" }, st.render());
+      return h("div", { class: "wiz-shell" }, header, bar, h("div", { class: "wiz-main" }, rail, body), h("div", { class: "wiz-foot" }, h("span", { class: "muted small wiz-count", text: (inTour() ? "Tour" : "Setup") + " " + (idx + 1) + " of " + total }), h("div", { class: "row" }, back, next)));
+    }
+    function confirmBox() {
+      const keep = h("button", { class: "btn blue", type: "button", text: "Keep going", onclick: () => { confirming = false; draw(); } });
+      const yes = h("button", { class: "btn gray", type: "button", text: "Yes, skip the tutorial", onclick: () => { confirming = false; n = firstSetup; remember(); draw(); } });
+      return h("div", { class: "wiz-confirm", role: "alertdialog", "aria-labelledby": "wiz-title", "aria-describedby": "wiz-confirm-text" },
+        h("h2", { id: "wiz-title", text: "Are you sure you want to skip the tutorial?" }),
+        h("p", { id: "wiz-confirm-text", text: "It only takes a couple of minutes and covers things that are easy to miss, like per-game rules, quiet hours and the server tools. You can replay it any time from My page. Either way, you will still go through setup next." }),
+        h("div", { class: "row" }, keep, yes));
+    }
+    async function go(d) {
+      if (d > 0 && cur().save) {
+        const btn = dlg.querySelector(".wiz-next");
+        try { if (btn) { btn.disabled = true; } await cur().save(); } catch (e) { toast(e.message || "That did not save.", "error"); if (btn) btn.disabled = false; return; }
+      }
+      if (d > 0 && cur().last) return finish();
+      n = Math.max(0, Math.min(steps.length - 1, n + d)); if (!inTour()) remember(); draw();
+    }
+    function draw() {
+      dlg.replaceChildren(confirming ? confirmBox() : frame());
+      dlg.setAttribute("aria-label", "");
+      const target = confirming ? dlg.querySelector(".wiz-confirm .btn.blue") : dlg.querySelector(".wiz-next");
+      if (target) target.focus();
+      const body = dlg.querySelector(".wiz-body"); if (body) body.scrollTop = 0;
     }
     function onKey(e) {
-      if (e.key === "Escape") { e.preventDefault(); finish(); }
-      else if (e.key === "ArrowRight" && n < steps.length - 1) { n++; show(); }
-      else if (e.key === "ArrowLeft" && n > 0) { n--; show(); }
+      if (!document.getElementById("wiz")) return;
+      if (e.key === "Escape") { e.preventDefault(); if (confirming) { confirming = false; draw(); } else if (inTour()) { confirming = true; draw(); } return; }
+      if (e.key === "Tab") { // keep focus inside the dialog
+        const f = [...dlg.querySelectorAll("button, a[href], input, select, textarea, [tabindex='0']")].filter(x => !x.disabled && x.offsetParent !== null);
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        else if (!dlg.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+        return;
+      }
+      const typing = /^(input|select|textarea)$/i.test((e.target && e.target.tagName) || "");
+      if (!confirming && inTour() && !typing) { if (e.key === "ArrowRight" && n < steps.length - 1) { e.preventDefault(); go(1); } else if (e.key === "ArrowLeft" && n > 0) { e.preventDefault(); go(-1); } }
     }
     document.addEventListener("keydown", onKey, true);
-    document.body.append(root);
-    show();
+    draw();
   }
 
   async function myPageView() {
@@ -4208,7 +4367,7 @@
     }
     const bar = h("div", { class: "mp-bar" });
     const on = CARDS.filter(c => c.status && c.status()[0]).length, tot = CARDS.filter(c => c.status).length;
-    const tourBtn = h("button", { class: "btn gray small", type: "button", text: "Take the tour", onclick: startTour });
+    const tourBtn = h("button", { class: "btn gray small", type: "button", text: "Take the tour", onclick: () => startTour({ replay: true }) });
     app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), tourBtn, myBanner(art), artBox, bar, grid, publicPagePanel());
     drawArt(artBox, art);
     draw();

@@ -76,6 +76,7 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 | `/games codes latest\|channel\|games\|ping` | Limited-time game codes (Borderlands SHiFT, Genshin Impact, Honkai: Star Rail, Zenless Zone Zero). `latest` lists working codes. Managers pick the channel, the games and a role to ping; the same settings are on the dashboard under Servers, Game codes. Sources: a community SHiFT list on GitHub and two HoYoverse code lists (`api.ennead.cc`, `hoyo-codes.seria.moe`), checked every 20 minutes (`src/codesource.js`) |
 | `/me publicpage enabled: name:` | A public, shareable page of your wishlist and best prices at `#/u/name`. Shows only game names, art and prices |
 | `/bot status` | Live health checks, uptime and incidents (the same data as the dashboard Status page) |
+| First-run wizard | `public/app.js` (`startTour`): a nine-part tour then a six-step setup in one dialog. Skipping the tour asks to confirm and still runs setup. Opens when `me.tour` is true (not yet welcomed); progress is kept in localStorage (`svc.wizard`) so the Steam sign-in redirect resumes at the same step. **Take the tour** on My page replays it |
 | `/me library status\|backlog` | Mark games backlog, playing, played, finished or dropped; see unplayed spend and what to play next |
 | `/server serverstats` | A server's numbers for members who opted in: most wanted games, savings, top of the server list. Counts only |
 | `/manage alertchannel feed enabled:` | Post new free games (not DLC) in the alert channel for everyone |
