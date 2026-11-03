@@ -66,6 +66,12 @@ export function queueEmbed(st, page = 0) {
     };
 }
 
+/** What to tell someone who pasted a Spotify link: it plays from SoundCloud, so some songs are different uploads or missing. */
+export function spotifyNote(s) {
+    const cap = s.total > s.asked ? ` (the first ${s.asked} of ${s.total} songs)` : "";
+    return `From Spotify, played from SoundCloud: ${s.matched} of ${s.asked} matched${cap}${s.missing?.length ? `. Not found: ${s.missing.slice(0, 3).join(", ")}${s.missing.length > 3 ? "…" : ""}` : ""}`;
+}
+
 export function addedEmbed(r) {
     const t = r.first;
     const many = r.added > 1;
@@ -73,7 +79,7 @@ export function addedEmbed(r) {
         color: COLOR, title: r.startedNow ? "🎶 Playing now" : many ? `➕ Added ${r.added} tracks` : "➕ Added to the queue",
         description: many ? `**${short(r.title, 100)}**\n${r.added} tracks${r.durationSec ? ` · ${fmtTime(r.durationSec)}` : ""}` : `${link(t)}${t.artist ? ` by **${short(t.artist, 50)}**` : ""}${t.duration ? ` · \`${fmtTime(t.duration)}\`` : ""}`,
         ...(t.thumb && !many ? { thumbnail: { url: t.thumb } } : {}),
-        footer: { text: [!r.startedNow && r.position ? `Position ${r.position} in the queue` : null, r.tooLong ? `${r.tooLong} skipped for being too long` : null, r.trimmed ? `${r.trimmed} didn't fit in the queue` : null].filter(Boolean).join(" · ") || "SoundCloud" }
+        footer: { text: [!r.startedNow && r.position ? `Position ${r.position} in the queue` : null, r.tooLong ? `${r.tooLong} skipped for being too long` : null, r.trimmed ? `${r.trimmed} didn't fit in the queue` : null, r.spotify ? spotifyNote(r.spotify) : null].filter(Boolean).join(" · ") || "SoundCloud" }
     };
 }
 

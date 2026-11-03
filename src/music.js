@@ -3,6 +3,7 @@
 import { UserError } from "./errors.js";
 import { createQueue, LOOP_MODES } from "./musicqueue.js";
 import { isSoundcloudUrl, cleanQuery } from "./musicsource.js";
+import { isSpotifyUrl, matchSongs } from "./spotify.js";
 import { parseRadioUrl } from "./musicradio.js";
 import { MAX_PENDING_PER_USER } from "./musicstore.js";
 import { createAnalyser } from "./musicviz.js";
@@ -47,7 +48,7 @@ export function tuneEncoder(resource, channelBitrate) {
     const target = Math.max(32_000, Math.min(MAX_BITRATE, Number(channelBitrate) || 64_000));
     try { enc.setBitrate(target); enc.setFEC?.(false); enc.setPLP?.(0); } catch { /* an encoder without these controls keeps its defaults */ }
 }
-export function createMusic({ db, source, voice, getGuild, api = null, panel = null, log = () => {}, setTimer = setTimeout, clearTimer = clearTimeout }) {
+export function createMusic({ db, source, voice, getGuild, api = null, spotify = null, panel = null, log = () => {}, setTimer = setTimeout, clearTimer = clearTimeout }) {
     const guilds = new Map();
 
     const get = gid => guilds.get(String(gid)) ?? null;
@@ -309,10 +310,23 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     }
     const sourceError = err => (err?.missing ? new UserError(err.message) : new UserError("SoundCloud didn't answer that. Try again in a moment, or try a different search."));
 
+    /** A Spotify track, album or playlist: read its song list, then find each song on SoundCloud (Spotify's own audio can't be played). */
+    async function fromSpotify(q) {
+        if (!spotify) throw new UserError("Spotify links aren't set up on this bot. Paste a SoundCloud link or search for the song.");
+        let list;
+        try { list = await spotify.read(q); } catch (err) { throw err?.userFacing ? new UserError(err.message) : sourceError(err); }
+        let m;
+        try { m = await matchSongs(list.tracks, (s, n) => source.search(s, n)); } catch (err) { throw sourceError(err); }
+        const seen = new Set(), tracks = m.tracks.filter(t => !seen.has(t.url) && seen.add(t.url));
+        if (!tracks.length) throw new UserError(m.failed ? "SoundCloud didn't answer just now, so I couldn't match those songs. Try again in a moment." : "I couldn't find any of those songs on SoundCloud.");
+        return { kind: list.kind === "track" ? "track" : "playlist", title: list.title, tracks, spotify: { total: list.total, asked: list.tracks.length, matched: tracks.length, missing: m.missing.slice(0, 5) } };
+    }
+
     /** Looks up what a play request means: a SoundCloud link or search words. */
     async function lookup(query, { allowRadio = true } = {}) {
         const q = String(query ?? "").trim();
         if (!q) throw new UserError("Give me a SoundCloud link or something to search for.");
+        if (isSpotifyUrl(q)) return fromSpotify(q);
         // Any other web address is treated as a live radio stream (Icecast, Shoutcast or a direct MP3/AAC address).
         if (/^https?:\/\//i.test(q) && !isSoundcloudUrl(q)) {
             if (!allowRadio) throw new UserError("Paste a SoundCloud link, or type what to search for.");
@@ -336,7 +350,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     async function enqueue({ guildId, userId, textChannelId, query = null, tracks = null, playNext = false, shuffleAdded = false }) {
         const w = who(guildId, userId);
         const g = state(guildId);
-        if (!tracks && /^https?:\/\//i.test(String(query ?? "").trim()) && !isSoundcloudUrl(String(query).trim()) && !w.settings.radio) throw new UserError("Live stream links are turned off in this server. A manager can allow them on the dashboard.");
+        if (!tracks && /^https?:\/\//i.test(String(query ?? "").trim()) && !isSoundcloudUrl(String(query).trim()) && !isSpotifyUrl(query) && !w.settings.radio) throw new UserError("Live stream links are turned off in this server. A manager can allow them on the dashboard.");
         let found = tracks ? { kind: tracks.length > 1 ? "playlist" : "track", title: tracks[0]?.title ?? "", tracks } : await lookup(query);
         let list = found.tracks.map(t => ({ ...t, requestedBy: String(userId) }));
         const limit = w.settings.max_minutes * 60;
@@ -356,7 +370,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         else refreshPanel(g);
         db.bumpUsage?.("music_play");
         if (added > 1 || list.slice(0, added).some(t => !t.duration)) hydrate(g, list.slice(0, added)).catch(() => {});
-        return { kind: found.kind, title: found.title, added, first: list[0], position: startedNow ? 0 : (playNext ? 1 : before), startedNow, tooLong, trimmed: list.length - added, durationSec: list.slice(0, added).reduce((t, x) => t + (x.duration ?? 0), 0) };
+        return { kind: found.kind, title: found.title, added, first: list[0], position: startedNow ? 0 : (playNext ? 1 : before), startedNow, tooLong, trimmed: list.length - added, durationSec: list.slice(0, added).reduce((t, x) => t + (x.duration ?? 0), 0), spotify: found.spotify ?? null };
     }
 
     function pause(gid, userId) { const w = who(gid, userId); needDj(w); const g = must(gid); if (!g.player.pause(true)) throw new UserError("It's already paused."); refreshPanel(g); return status(gid); }
@@ -523,7 +537,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
         if (tracks) { list = tracks; src = label ? `Saved playlist: ${label}` : null; }
         else {
             const q = String(link ?? "").trim();
-            if (!isSoundcloudUrl(q)) throw new UserError("Paste a SoundCloud playlist (or song) link.");
+            if (!isSoundcloudUrl(q) && !isSpotifyUrl(q)) throw new UserError("Paste a SoundCloud or Spotify playlist (or song) link.");
             const found = await lookup(q, { allowRadio: false });
             list = found.tracks; src = q;
         }
