@@ -170,5 +170,14 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
           WHERE l.discord_id = ? AND l.minutes >= ? AND d.dlc != '' ORDER BY l.minutes DESC LIMIT 150`, userId, DLC_MIN_MINUTES)
         .map(r => ({ appid: r.appid, title: r.title, dlc: String(r.dlc).split(",").map(Number).filter(Number.isInteger) }));
     const dlcUsers = () => all("SELECT * FROM users WHERE dlc = 1 AND paused = 0").map(clean);
-    return { saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    const refundUsers = () => all("SELECT * FROM users WHERE refund = 1 AND paused = 0").map(clean);
+    /** Steam games added to a library after the first import, under two hours played, not gifted, newer than `since`. */
+    const refundCandidates = (userId, since) => {
+        const link = get("SELECT linked_at FROM steam_links WHERE discord_id = ?", userId);
+        if (!link) return [];
+        return all("SELECT itad_id, title, appid, minutes, added_at FROM library WHERE discord_id = ? AND appid IS NOT NULL AND minutes < 120 AND COALESCE(gifted,0) = 0 AND added_at >= ? AND added_at > ?", userId, since, link.linked_at + 6 * 3600_000).map(clean);
+    };
+    const milestoneUsers = () => all("SELECT * FROM users WHERE milestones = 1 AND paused = 0").map(clean);
+    const playedGames = (userId, minMinutes) => all("SELECT itad_id, title, appid, minutes FROM library WHERE discord_id = ? AND minutes >= ?", userId, minMinutes).map(clean);
+    return { milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

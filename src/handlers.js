@@ -4,7 +4,8 @@
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
-import { setProfile } from "./profile.js";
+import { setProfile, publicWishlist } from "./profile.js";
+import { CONTEXT_COMPARE, CONTEXT_WISHLIST } from "./commands.js";
 import { salesEmbed, upcomingSales, salesBefore } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
@@ -16,6 +17,7 @@ import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
+import { contextWishlistEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
 import { steamReviews } from "./reviews.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
@@ -386,6 +388,16 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { dlc: on ? 1 : 0 });
                 return eph(i, on ? "You will be told when DLC and add-ons for the games you play (two hours or more, from your Steam library) go on a big sale. Your first check is quiet, so only new sales reach you." : "DLC sale alerts are off.");
+            }
+            case "refund": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { refund: on ? 1 : 0 });
+                return eph(i, on ? "You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count." : "Refund reminders are off.");
+            }
+            case "milestones": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { milestones: on ? 1 : 0 });
+                return eph(i, on ? "You will get a card when a game of yours passes 100, 250, 500, 1000 or 2000 hours. Your first check is quiet, so only new milestones reach you." : "Playtime milestone cards are off.");
             }
             case "freegames": {
                 const on = i.options.getBoolean("enabled", true);
@@ -832,19 +844,40 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         return i.respond(suggest(db.listItems(i.user.id), focused.value));
     }
 
-    async function handleCompare(i) {
-        const friend = i.options.getUser("friend", true);
-        const pub = i.options.getBoolean("public") === true;
+    /** Compares the caller's library with another member's. `pub` posts it for the channel instead of only the caller. */
+    async function compareWith(i, friend, pub) {
         const reply = content => i.reply({ content, flags: MessageFlags.Ephemeral });
         if (!i.guildId) return reply("Use this in a server, so I know who you can compare with.");
         if (friend.id === i.user.id) return reply("That is you. Pick someone else.");
+        if (friend.bot) return reply("Bots don't have a library.");
         if (!db.sharingMembers(i.guildId).includes(friend.id)) return reply(`${friend.displayName ?? friend.username} has not opted in. They can turn it on with \`/alerts share\`.`);
         db.ensureUser(i.user.id, i.guildId);
         const r = compareLibraries(db, i.user.id, friend.id);
         if (!r.a.games) return reply("Your library is empty. Use `/me library add`, `/me library import` or `/me steam link` first.");
         if (!r.b.games) return reply(`${friend.displayName ?? friend.username} has no games in their library yet.`);
-        return i.reply({ ...withCard(compareSpec(r, "You", friend.displayName ?? friend.username), "compare.png", "Library comparison", compareEmbed(r, "You", friend.displayName ?? friend.username)), ...(pub ? {} : { flags: MessageFlags.Ephemeral }) });
+        const name = friend.displayName ?? friend.username;
+        return i.reply({ ...withCard(compareSpec(r, "You", name), "compare.png", "Library comparison", compareEmbed(r, "You", name)), ...(pub ? {} : { flags: MessageFlags.Ephemeral }) });
+    }
+    async function handleCompare(i) {
+        return compareWith(i, i.options.getUser("friend", true), i.options.getBoolean("public") === true);
     }
 
-    return { handleFriend, handleCompare, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    /** Right-click a member: compare libraries, or see their public wishlist. Only the caller sees the answer. */
+    async function handleContextMenu(i) {
+        try {
+            const target = i.targetUser;
+            if (i.commandName === CONTEXT_COMPARE) return await compareWith(i, target, false);
+            if (i.commandName !== CONTEXT_WISHLIST) return;
+            if (target.bot) return eph(i, "Bots don't have a wishlist.");
+            const them = db.getUser(target.id);
+            const name = target.displayName ?? target.username;
+            if (!them?.profile_public || !them.profile_slug) return eph(i, `${name} hasn't shared a wishlist page. They can turn one on with \`/me publicpage\`.`);
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            const page = await publicWishlist(db, itad, them.profile_slug);
+            if (!page) return void await i.editReply(`${name} hasn't shared a wishlist page.`);
+            await i.editReply({ embeds: [contextWishlistEmbed(name, page, publicUrl ? `${publicUrl}/#/u/${page.slug}` : null)] });
+        } catch (err) { await failed(i, "context menu", err); }
+    }
+
+    return { handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

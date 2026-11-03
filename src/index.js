@@ -37,6 +37,7 @@ import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
+import { runRefundWarnings, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
 import { runFriendReminders } from "./friends.js";
@@ -289,6 +290,8 @@ client.once(Events.ClientReady, c => {
             result.tags = await ops.job("genre tags", () => refreshTags({ db, appids: db.allAppsNeedingTags(30), delayMs: 1200 }));
             result.dlcLists = await ops.job("dlc lists", async () => ({ checked: await refreshDlc({ db, appids: db.appsNeedingDlc(30) }) }));
             result.dlc = await ops.job("dlc sales", () => runDlcSales({ db, itad, notifier, log }));
+            result.refund = await ops.job("refund warnings", () => runRefundWarnings({ db, notifier }));
+            result.milestones = await ops.job("milestones", () => runMilestones({ db, notifier }));
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
             result.free = await ops.job("free games", () => runFreeGames({ db, itad, notifier, log }));
             result.news = await ops.job("news", () => runNews({ db, news, notifier, log }));
@@ -615,6 +618,7 @@ client.on(Events.InteractionCreate, async i => {
         catch (err) { console.error(`[claim] ${err.name}: ${err.message}`); }
         return;
     }
+    if (i.isUserContextMenuCommand()) return void handlers.handleContextMenu(i).catch(err => console.error(`[context] ${err.stack ?? err.message}`));
     if (!i.isChatInputCommand()) return;
     console.log(`[command] /${i.hubName ? i.hubName + " " : ""}${i.commandName}${i.options?.getSubcommand?.(false) ? " " + i.options.getSubcommand(false) : ""}`);
     const known = db.getUser(i.user.id);

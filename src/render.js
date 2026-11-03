@@ -384,6 +384,19 @@ export function checkEmbed(title, now, verdict, advice = null, subs = [], review
     };
 }
 
+/** A member's shared wishlist as a short card: the best deals first. `page` is publicWishlist()'s result. */
+export function contextWishlistEmbed(name, page, link = null) {
+    const games = page.games ?? [];
+    if (!games.length) return { color: COLOR, title: `${name}'s wishlist`, description: "Nothing on it yet.", url: safeUrl(link) ?? undefined };
+    const line = g => `• **${g.title}**: ${g.price != null ? `${money(g.price, g.currency)}${g.shop ? ` at ${g.shop}` : ""}${g.discount > 0 ? ` (${g.discount}% off)` : ""}` : "no price yet"}${g.claim ? " 🎁 someone's on it" : ""}`;
+    const onSale = games.filter(g => g.discount > 0).length;
+    return {
+        color: COLOR, title: `${name}'s wishlist`, url: safeUrl(link) ?? undefined,
+        description: `${games.length} game${games.length === 1 ? "" : "s"}${onSale ? `, ${onSale} on sale right now` : ""}. Best deals first:\n${games.slice(0, 8).map(line).join("\n")}${games.length > 8 ? `\n…and ${games.length - 8} more` : ""}`.slice(0, 4000),
+        footer: { text: "Shared by them with /me publicpage  •  Prices by IsThereAnyDeal" }
+    };
+}
+
 /** The server's shared list with votes and prices. */
 export function serverListEmbed(rows, currency, limit = 15) {
     if (!rows.length) return { color: COLOR, title: "Server wishlist", description: "Nothing here yet. Add a game with `/server serverlist add`." };

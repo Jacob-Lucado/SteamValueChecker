@@ -784,6 +784,8 @@
     const free = h("input", { type: "checkbox", checked: s.free });
     const freeDlc = h("input", { type: "checkbox", checked: s.free_dlc !== false });
     const dlcOn = h("input", { type: "checkbox", checked: Boolean(s.dlc) });
+    const refundOn = h("input", { type: "checkbox", checked: Boolean(s.refund) });
+    const milesOn = h("input", { type: "checkbox", checked: Boolean(s.milestones) });
     const newsMode = select([["0", "Off"], ["1", "Patch notes only"], ["2", "Every announcement"]], String(s.news ?? 0));
     /** Game code and giveaway news alerts: the rows go into "What to tell me about" and are saved with everything else. */
     function codeAlertRows() {
@@ -808,7 +810,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
+        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -831,6 +833,8 @@
         h("label", { class: "check" }, bundles, "A wishlist game is in a bundle, is given away, or joins or leaves a subscription (Game Pass and so on)"),
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
+        h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played"),
+        h("label", { class: "check" }, milesOn, "A card when a game passes 100, 250, 500, 1000 or 2000 hours"),
         h("label", { class: "check" }, dlcOn, "A big sale on DLC and add-ons for games I play (Steam library, two hours or more)"),
         h("div", { class: "row" }, field("Patch notes and news for the Steam games I own or wishlist", newsMode)),
         codeRows.box),
@@ -3482,7 +3486,7 @@
   const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
 
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
-  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", news: "News and patch notes", dlc: "DLC sales", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", news: "News and patch notes", dlc: "DLC sales", refund: "Refund reminders", milestones: "Playtime milestones", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
   const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", news: "🛠️", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫", codes: "🔑", promo: "🎟️" };
 
