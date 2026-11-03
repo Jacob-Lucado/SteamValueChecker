@@ -170,3 +170,16 @@ test("alerts panel More page: mute, code games, history; area status lines never
         assert.ok(Array.isArray(lines) && lines.length >= 1, k);
     }
 });
+
+test("area status shows real rows, not only counts", async () => {
+    const { areaGlance } = await import("../src/panelglance.js");
+    const { p, db } = setup();
+    db.addItems("u1", [{ itad_id: "a", title: "Hades" }, { itad_id: "b", title: "Celeste" }]);
+    db.createLfg({ guild_id: "g1", channel_id: "c", creator_id: "u1", game: "Deep Rock", starts_at: Date.now() + 3600_000, slots: 4 });
+    db.setStreamLive("g1", "u1", { title: "T", url: "https://x.example", game: "Hades", started: Date.now() });
+    const g = areaGlance(db), ctx = { user: db.getUser("u1"), i: { guildId: "g1" } };
+    const w = g(ctx, "me", "wishlist").join("\n");
+    assert.match(g(ctx, "server", "lfg").join("\n"), /• Deep Rock <t:/);
+    assert.match(g(ctx, "server", "stream").join("\n"), /<@u1> playing Hades/);
+    assert.match(w, /\*\*2\*\* games/); assert.match(w, /• Celeste/); assert.match(w, /• Hades/);
+});
