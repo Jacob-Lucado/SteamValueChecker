@@ -74,8 +74,9 @@ export function createNotifier({ db, discord }) {
     }
 
     /** Posts to one channel (such as a voice channel's text chat) without mentioning anyone. */
-    async function postChannel(channelId, payload) {
-        try { await discord.sendChannel(channelId, { ...payload, allowedMentions: { parse: [] } }); return true; } catch { return false; }
+    async function postChannel(channelId, payload, pingRole = null) {
+        const out = pingRole ? { ...payload, content: `<@&${pingRole}>${payload.content ? " " + payload.content : ""}`, allowedMentions: { roles: [pingRole] } } : { ...payload, allowedMentions: { parse: [] } };
+        try { await discord.sendChannel(channelId, out); return true; } catch { return false; }
     }
 
     return { deliver, postGuild, postChannel };

@@ -222,6 +222,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "playtest", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "ping_playtest", "TEXT");
     addColumn("community", "playtest_all", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("community", "playtest_channel", "TEXT");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE INDEX IF NOT EXISTS users_guild ON users(guild_id, share)");
@@ -395,7 +396,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const clearAlerted = itemId => run("UPDATE items SET last_alert_price = NULL WHERE id = ?", itemId);
 
     const freeUsers = () => all("SELECT * FROM users WHERE free = 1 AND paused = 0").map(clean);
-    const guildsWithPlaytest = () => all("SELECT guild_id, ping_playtest FROM community WHERE ping_playtest IS NOT NULL AND ping_playtest != ''").map(clean);
+    const guildsWithPlaytest = () => all("SELECT guild_id, ping_playtest, playtest_channel FROM community WHERE (ping_playtest IS NOT NULL AND ping_playtest != '') OR (playtest_channel IS NOT NULL AND playtest_channel != '')").map(clean);
     const playtestUsers = () => all("SELECT * FROM users WHERE playtest >= 1 AND paused = 0").map(clean);
     /** Steam games on the wishlists of members who share in a server, with how many members watch each. */
     const guildWatchedApps = guildId => all(`SELECT i.appid AS appid, MIN(i.title) AS title, COUNT(DISTINCT u.discord_id) AS watchers

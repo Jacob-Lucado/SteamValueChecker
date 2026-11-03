@@ -115,6 +115,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         const patch = {};
         for (const k of ["deals", "free", "giveaway", "lfg", "playtest"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
         if (b.playtest_all !== undefined) patch.playtest_all = b.playtest_all ? 1 : 0;
+        if (b.playtest_channel !== undefined) patch.playtest_channel = await channelOk(gid, b.playtest_channel || null);
         return db.setCommunity(gid, patch);
     }
     /** Support: where member tickets go and who answers them. */

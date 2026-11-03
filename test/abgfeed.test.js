@@ -104,3 +104,21 @@ test("playtests from the site: a site outage doesn't stop Steam announcements, a
     assert.equal(abgEmbed({ game: "G", kind: "signup", url: "https://x.test/", date: T0, summary: "" }).title, "🧪 Beta sign-up: G");
     assert.deepEqual([prefsPatch({ playtest: 2 }, {}), prefsPatch({ playtest: true }, {}), prefsPatch({ playtest: 9 }, {}), prefsPatch({ playtest: "x" }, {})], [{ playtest: 2 }, { playtest: 1 }, { playtest: 2 }, { playtest: 0 }]);
 });
+
+test("playtests: a server with a playtest channel gets the posts there, with the role mentioned", async () => {
+    const w = world(0);
+    w.db.setCommunity("G", { ping_playtest: "ROLE", playtest_channel: "PT", playtest_all: 1 });
+    const channelPosts = [];
+    const notifier = { ...w.notifier, postChannel: async (c, p, role) => { channelPosts.push({ c, p, role }); return true; } };
+    const run = () => runPlaytests({ db: w.db, news: w.news, abg: w.abg, notifier, now: () => T0 });
+    await run(); w.add(fresh); await run();
+    assert.equal(channelPosts.length, 1); assert.equal(channelPosts[0].c, "PT"); assert.equal(channelPosts[0].role, "ROLE");
+    assert.equal(w.posted.length, 0, "not also sent to the alert channel");
+    // a channel with no role still works, and needs no alert channel
+    const v = world(0); v.db.setCommunity("G", { playtest_channel: "PT2", playtest_all: 1 });
+    const cp = [];
+    const n2 = { ...v.notifier, postChannel: async (c, p, role) => { cp.push({ c, role }); return true; } };
+    const runV = () => runPlaytests({ db: v.db, news: v.news, abg: v.abg, notifier: n2, now: () => T0 });
+    await runV(); v.add(fresh); await runV();
+    assert.deepEqual(cp, [{ c: "PT2", role: null }]);
+});

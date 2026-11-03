@@ -1060,3 +1060,44 @@ test("growth: joins and leaves per day for the last month, people only, zero day
     assert.equal(g.trackedHere, 3, "a, c and the older member are still here");
     assert.deepEqual(db.growth("other", 7).days.map(d => d.joins), [0, 0, 0, 0, 0, 0, 0]);
 });
+
+test("setup makes a #playtests channel and a Playtest pings role, and connects them; an older server gets them on the next run", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    const c = db.getCommunity("G");
+    const ch = api.state.channels.find(x => x.name === "playtests");
+    assert.ok(ch, "the channel exists"); assert.equal(c.playtest_channel, ch.id); assert.equal(c.playtest_all, 1);
+    assert.equal(api.state.roles.find(r => r.id === c.ping_playtest)?.name, "Playtest pings");
+    assert.ok(api.state.sent.some(m => m.id === ch.id && /Playtest pings/.test(JSON.stringify(m.p))), "the channel gets an intro");
+    // a server built before this existed
+    api.state.channels.splice(api.state.channels.findIndex(x => x.name === "playtests"), 1);
+    api.state.roles.splice(api.state.roles.findIndex(r => r.name === "Playtest pings"), 1);
+    db.setCommunity("G", { playtest_channel: null, ping_playtest: null, playtest_all: 0, setup_keys: JSON.stringify(JSON.parse(db.getCommunity("G").setup_keys).filter(k => k !== "playtests")) });
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.ok(r.created.channels.includes("playtests")); assert.ok(r.created.roles.includes("Playtest pings"));
+    const c2 = db.getCommunity("G");
+    assert.equal(c2.playtest_channel, api.state.channels.find(x => x.name === "playtests").id); assert.ok(c2.ping_playtest);
+    // a channel the manager already picked is left alone
+    db.setCommunity("G", { playtest_channel: "mine" });
+    await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "o", sleep: noSleep, pace: 0 });
+    assert.equal(db.getCommunity("G").playtest_channel, "mine");
+});
+
+test("postChannel can mention a role, and nobody else", async () => {
+    const { createNotifier } = await import("../src/notify.js");
+    const db = openDb(":memory:"), posts = [];
+    const n = createNotifier({ db, discord: { sendDm: async () => {}, sendChannel: async (id, p) => { posts.push({ id, p }); } } });
+    await n.postChannel("C", { embeds: [{ title: "x" }] }, "R1");
+    await n.postChannel("C", { embeds: [{ title: "y" }] });
+    assert.equal(posts[0].p.content, "<@&R1>"); assert.deepEqual(posts[0].p.allowedMentions, { roles: ["R1"] });
+    assert.equal(posts[1].p.content, undefined); assert.deepEqual(posts[1].p.allowedMentions, { parse: [] });
+});
+
+test("the new-member welcome mentions playtests and the right-click shortcuts", async () => {
+    const { welcomeDmPayload } = await import("../src/community.js");
+    const e = welcomeDmPayload({ server: "S" }).embeds[0];
+    const names = e.fields.map(f => f.name).join("|");
+    assert.match(names, /Playtests/); assert.match(names, /Play together/);
+    assert.ok(e.title.length + e.description.length + e.fields.reduce((a, f) => a + f.name.length + f.value.length, 0) + e.footer.text.length < 5500, "well inside Discord's embed limit");
+    assert.ok(e.fields.every(f => f.value.length <= 1024) && e.fields.length <= 25);
+});

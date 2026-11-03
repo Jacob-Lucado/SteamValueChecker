@@ -55,7 +55,7 @@ export const PLAYTEST_MODES = { off: 0, wishlist: 1, all: 2 };
 
 export async function runPlaytests({ db, news, abg = null, notifier, now = () => Date.now(), log = () => {} }) {
     const stats = { checked: 0, found: 0, delivered: 0, failed: 0, deferred: 0, posted: 0 };
-    const users = db.playtestUsers(), guilds = db.guildsWithPlaytest().filter(g => db.getGuild(g.guild_id)?.channel_id);
+    const users = db.playtestUsers(), guilds = db.guildsWithPlaytest().filter(g => g.playtest_channel || db.getGuild(g.guild_id)?.channel_id);
     if (!users.length && !guilds.length) return stats;
     const recent = now() - RECENT_MS;
 
@@ -150,7 +150,9 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
         if (!hits.length || first) continue;
         stats.found += hits.length;
         for (const h of hits.sort((x, y) => y.date - x.date).slice(0, PER_GUILD_RUN)) {
-            const ok = await notifier.postGuild(gid, { embeds: [h.embed], components: [button({ url: h.url })] }, "playtest");
+            const payload = { embeds: [h.embed], components: [button({ url: h.url })] };
+            // A playtest channel gets the post with the role mentioned; without one it goes to the server's alert channel.
+            const ok = g.playtest_channel ? await notifier.postChannel(g.playtest_channel, payload, g.ping_playtest || null) : await notifier.postGuild(gid, payload, "playtest");
             if (!ok) { stats.failed++; continue; }
             stats.posted++;
             db.setMeta(h.key, "1");

@@ -53,7 +53,7 @@ export const TEMPLATE = {
     selfRoles: [
         { name: "PC", emoji: "🖥️" }, { name: "PlayStation", emoji: "🎮" }, { name: "Xbox", emoji: "🟩" }, { name: "Nintendo", emoji: "🔴" },
         { name: "Deal pings", emoji: "💸" }, { name: "Free game pings", emoji: "🎁" }, { name: "Giveaway pings", emoji: "🎉" }, { name: "LFG pings", emoji: "🤝" },
-        { name: "Game code pings", emoji: "🔑" }, { name: "Promo drop pings", emoji: "🎟️" }, { name: "Stream pings", emoji: "📺" }
+        { name: "Game code pings", emoji: "🔑" }, { name: "Promo drop pings", emoji: "🎟️" }, { name: "Stream pings", emoji: "📺" }, { name: "Playtest pings", emoji: "🧪" }
     ],
     categories: [
         { name: "📢 INFORMATION", channels: [
@@ -81,6 +81,7 @@ export const TEMPLATE = {
         { name: "💸 DEALS & GIVEAWAYS", channels: [
             { key: "deals", name: "deal-alerts", topic: "Sales and free games from Steam Value Checker", readonly: true },
             { key: "drops", name: "promo-drops", topic: "Key giveaways from SteelSeries, NVIDIA and others, posted once each and marked when they end", readonly: true },
+            { key: "playtests", name: "playtests", topic: "Free playtests, betas and demos, posted once each. Pick the Playtest pings role in #roles to get pinged", readonly: true },
             { key: "codes", name: "game-codes", topic: "Limited-time game codes (SHiFT and more), posted once each and marked when they end", readonly: true },
             { key: "giveaways", name: "giveaways", topic: "Game key giveaways", readonly: true },
             { key: "vouches", name: "vouches", topic: "Winners confirm their keys worked", readonly: true }] },
@@ -303,7 +304,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
-    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_promos: pingOf("Promo drop pings"), ping_stream: pingOf("Stream pings"), streamer_role_id: roleIds.streamer, live_channel: chIds.live ?? null });
+    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_playtest: pingOf("Playtest pings"), playtest_channel: chIds.playtests ?? null, playtest_all: chIds.playtests ? 1 : 0, ping_promos: pingOf("Promo drop pings"), ping_stream: pingOf("Stream pings"), streamer_role_id: roleIds.streamer, live_channel: chIds.live ?? null });
     db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, meme_channel: chIds.memes ?? db.getCommunity(guildId).meme_channel, honeypot_channel: chIds.honeypot ?? db.getCommunity(guildId).honeypot_channel ?? null, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
@@ -323,14 +324,15 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.verify, verifyPanel(roleIds.verified));
     await say(api, chIds.welcome, { embeds: [{ color: 0x57f287, title: `Welcome to ${gname}`, description: `New here? Start with <#${chIds.rules}>, pick your roles in <#${chIds.roles}>, then say hi in <#${chIds.introductions}>.\n\nNew members are greeted in this channel.` }] });
     await refreshLeaderboard({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not post the leaderboard (check my permissions in #leaderboard)."));
-    await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts." });
+    await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts. Right-click a member and open Apps to compare libraries or find games to play together." });
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/me wishlist import` to get your own alerts." });
+    if (chIds.playtests) await say(api, chIds.playtests, PLAYTEST_INTRO);
     await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });
     await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/server promos add` or on the dashboard, and can turn on news watching with `/server promos news`." });
     await say(api, chIds.tickets, { content: "Member tickets from `/bot support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
     if (chIds.live) await say(api, chIds.live, { content: "When a streamer goes live they use `/server stream live` (or the dashboard's Streams page) and it shows up here. Pick the **Stream pings** role in the roles channel to get pinged." });
-    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), music in <#${chIds.musiccmd}> (join a Music voice channel and use /play), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
+    await say(api, chIds.botlogs, { content: `Setup finished. Created ${created.channels.length} channels and ${created.roles.length} roles. Connected: alerts and free games in <#${chIds.deals}>, giveaways in <#${chIds.giveaways}>, tickets in <#${chIds.tickets}> (members open them in <#${chIds.help}>), bug reports in <#${chIds.bugs}>, announcements in <#${chIds.announcements}>, ${chIds.playtests ? `playtests and demos in <#${chIds.playtests}> (with the Playtest pings role), ` : ""}XP leaderboard in <#${chIds.leaderboard}> (refreshes every 5 hours), music in <#${chIds.musiccmd}> (join a Music voice channel and use /play), moderation log in <#${chIds.modlog}>, member log in <#${chIds.memberlog}>. Bot notices land here.` });
     await say(api, chIds.memberlog, { content: "Joins, leaves and which invite each member used are logged here." });
 
     // ---- server settings (all best effort: a missing permission only skips that part) ----
@@ -347,7 +349,8 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 }
 
 /** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
-export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops", "musiccmd", "music1", "music2", "live"]);
+export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops", "musiccmd", "music1", "music2", "live", "playtests"]);
+const PLAYTEST_INTRO = { content: "Free playtests, betas and demos are posted here once each, found from Steam announcements and the Alpha Beta Gamer site. Pick the **Playtest pings** role in the roles channel to get pinged. Managers can change the channel, the role, or limit it to games members watch on the dashboard." };
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
 
 /** What a second run does: create only the template channels this server has never been given. */
@@ -423,10 +426,12 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
         }
         if (sr) db.setCommunity(guildId, { streamer_role_id: sr.id });
     }
+    if (chIds.playtests && !db.getCommunity(guildId).playtest_channel) db.setCommunity(guildId, { playtest_channel: chIds.playtests, ...(created.channels.includes("playtests") ? { playtest_all: 1 } : {}) });
+    if (chIds.playtests && created.channels.includes("playtests")) await say(api, chIds.playtests, PLAYTEST_INTRO);
     if (chIds.live && !db.getCommunity(guildId).live_channel) db.setCommunity(guildId, { live_channel: chIds.live });
     if (chIds.live && created.channels.includes("stream-live")) await say(api, chIds.live, { content: "When a streamer goes live they use `/server stream live` (or the dashboard's Streams page) and it shows up here. Pick the **Stream pings** role in the roles channel to get pinged." });
     // the opt-in ping roles for codes and promos (and streams), for servers that were set up before they existed
-    const newPings = TEMPLATE.selfRoles.filter(r => ["Game code pings", "Promo drop pings", "Stream pings"].includes(r.name));
+    const newPings = TEMPLATE.selfRoles.filter(r => ["Game code pings", "Promo drop pings", "Stream pings", "Playtest pings"].includes(r.name));
     const madeRoles = [];
     for (const r of newPings) {
         let ex = existingRoles.find(x => x.name.toLowerCase() === r.name.toLowerCase() && !x.managed);
@@ -436,7 +441,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
             created.roles.push(r.name); madeRoles.push(r); await wait();
         }
         db.addSelfRole(guildId, ex.id, r.name);
-        const col = r.name === "Game code pings" ? "ping_codes" : r.name === "Stream pings" ? "ping_stream" : "ping_promos";
+        const col = r.name === "Game code pings" ? "ping_codes" : r.name === "Stream pings" ? "ping_stream" : r.name === "Playtest pings" ? "ping_playtest" : "ping_promos";
         if (!db.getCommunity(guildId)[col]) db.setCommunity(guildId, { [col]: ex.id });
     }
     if (madeRoles.length) {
@@ -460,6 +465,8 @@ export function welcomeDmPayload({ server, dashboardUrl = null }) {
             { name: "🎁 Free games", value: "`/games freegames` shows what you can grab for free right now on Steam, Epic, GOG and more." },
             { name: "🎮 Your library", value: "Sign in with Steam on the dashboard to see what your library is worth, your hours, and what to play next." },
             { name: "🏆 In this server", value: "You earn XP and levels by chatting and hanging out in voice (`/server rank`, `/server levels`). Grab your own invite link with `/server invites link`, and verify your Steam account in #verify for the Steam Verified role." },
+            { name: "🧪 Playtests and demos", value: "Free playtests, betas and demos are posted in the playtests channel. Pick the **Playtest pings** role in the roles channel to get pinged, or run `/alerts playtests` to get them by DM for your wishlist games (or every one)." },
+            { name: "🤝 Play together", value: "Turn on `/alerts share` and the server can see which games you own. Then right-click a member and open Apps for **Compare libraries**, **Play together** or **Gift ideas**, or right-click a game title in chat for **Who owns this?**" },
             { name: "🎵 Music", value: "Join a Music voice channel and run `/play` with a SoundCloud song or playlist link in #music-commands. `/music` has the rest: queue, skip, loop and saved playlists." },
             { name: "🔔 Control it", value: "`/alerts` lets you set quiet hours and pick how I notify you. `/help` lists every command, and `/me mydata delete` wipes your data whenever you want." }
         ],
