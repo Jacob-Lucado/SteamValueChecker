@@ -46,6 +46,7 @@ import { grabberPromo } from "../promo.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
 import { playtestBoard } from "../playboard.js";
+import { whoIsPlaying } from "../nowplaying.js";
 import { createPlaytestSources } from "../playsources.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -165,7 +166,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ emojigg = null, news = null, abg = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -752,7 +753,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, playt
                 throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
             }
             patch.delivery = nextDelivery;
-            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "news", "min_discount", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "nowplaying", "playtest", "news", "min_discount", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
             Object.assign(patch, prefsPatch(prefInput, u));
             db.updateUser(s.userId, patch);
             return { settings: publicSettings(db.getUser(s.userId)) };
@@ -1806,6 +1807,15 @@ export function createDashboard({ emojigg = null, news = null, abg = null, playt
             const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
             const ids = db.sharingMembers(g.id).slice(0, 60);
             return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
+        },
+        "GET /api/nowplaying": async (req, _b, url) => {
+            // Same rules as /server nowplaying: members who turned it on (/alerts nowplaying) and share their library.
+            const s = session(req);
+            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            if (!nowPlaying?.enabled) return { enabled: false, games: [], watching: 0 };
+            const r = await whoIsPlaying(db, nowPlaying, g.id);
+            const games = await Promise.all(r.games.map(async x => ({ appid: x.appid, game: x.game, players: await Promise.all(x.players.map(async p => ({ userId: p.userId, name: (await rest.memberName(g.id, p.userId).catch(() => null)) || p.name || "Member " + String(p.userId).slice(-4) }))) })));
+            return { enabled: true, games, watching: r.watching };
         },
         "GET /api/compare": async (req, _b, url) => {
             // Same rules as /server compare: a friend in one of your servers who turned on sharing (/alerts share).

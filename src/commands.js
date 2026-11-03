@@ -402,6 +402,11 @@ const serverstats = new SlashCommandBuilder()
     .setName("serverstats")
     .setDescription("This server's numbers: most wanted games, savings and top savers (members who opted in)");
 
+const nowplayingCmd = new SlashCommandBuilder()
+    .setName("nowplaying")
+    .setDescription("Who in this server is in a game right now (members who turned it on)")
+    .addBooleanOption(o => o.setName("join").setDescription("Turn yourself on or off the board and squad-up posts (off by default)"));
+
 const profilecard = new SlashCommandBuilder()
     .setName("profilecard")
     .setDescription("Your shareable game profile card as a picture: library, hours, trophies and your gaming names")
@@ -708,7 +713,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -719,7 +724,7 @@ export const commands = [
 const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "mydata"] },
-    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "rank", "levels", "serverstats", "leaderboard"], groups: ["giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
+    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];

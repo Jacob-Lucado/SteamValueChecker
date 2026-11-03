@@ -41,6 +41,7 @@ import { sanitize } from "./parse.js";
 import { UserError } from "./errors.js";
 import { codeGames, describeGames } from "./codes.js";
 import { expandGames } from "./codesource.js";
+import { whoIsPlaying, nowPlayingEmbed } from "./nowplaying.js";
 import { boardSvg, artFor } from "./communitycards.js";
 import { panelSvg, toPng, challengeSpec, spendSpec, trendSpec, compareSpec, badgesSpec, statusSpec, serverStatsSpec } from "./panelcards.js";
 export { UserError };
@@ -91,7 +92,7 @@ export function gameTitleFromText(text) {
     return t.length >= 2 ? t : null;
 }
 
-export function createHandlers({ db, itad, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
+export function createHandlers({ db, itad, nowPlaying = null, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
     // ---------- /me wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");
@@ -789,6 +790,23 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
     }
 
     // ---------- /server serverstats ----------
+    async function handleNowPlaying(i) {
+        try {
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            const join = i.options.getBoolean("join");
+            if (join !== null) {
+                db.ensureUser(i.user.id, null); db.updateUser(i.user.id, { nowplaying: join ? 1 : 0 });
+                if (!join) return await i.editReply({ content: "You are off the Now playing board and out of squad-up posts." });
+                const link = db.getSteamLink(i.user.id), u = db.getUser(i.user.id);
+                const todo = [!link && "link Steam with `/me steam link`", !u.share && "turn on `/alerts share` so your server may see you", "set Game details to Public in your Steam privacy settings (Steam only reports what you are playing when it is)"].filter(Boolean);
+                return await i.editReply({ content: `You are on. Members of your server can see which game you are in right now (\`/server nowplaying\`), and when two or more of you are in the same game the bot may post a squad-up card naming you. Only the game and your name, never your friends list or anything else. To make it work: ${todo.join("; ")}.` });
+            }
+            if (!nowPlaying?.enabled) return await i.editReply({ content: "Now playing isn't set up on this bot yet (it needs a Steam API key)." });
+            const gid = await homeGuild(i);
+            await i.editReply({ embeds: [nowPlayingEmbed(await whoIsPlaying(db, nowPlaying, gid), { serverName: i.guild?.name ?? "this server" })], allowedMentions: { parse: [] } });
+        } catch (err) { await failed(i, "nowplaying", err); }
+    }
+
     async function handleServerStats(i) {
         try {
             await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -980,5 +998,5 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         } catch (err) { await failed(i, "message menu", err); }
     }
 
-    return { handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

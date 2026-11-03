@@ -40,6 +40,7 @@ import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
+import { createNowPlaying, runSquadUps } from "./nowplaying.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
@@ -128,7 +129,8 @@ const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
 setInterval(() => { try { db.purgeHiddenGuilds(); } catch { /* try again next time */ } }, 30 * 60_000).unref();
-const handlers = createHandlers({ db, itad, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
+const nowPlaying = createNowPlaying({ apiKey: cfg.steamApiKey });
+const handlers = createHandlers({ db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const cardUi = createCardHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
@@ -462,6 +464,12 @@ client.once(Events.ClientReady, () => { // notice when linked streamers go live 
     const tick = () => { if (busy) return; busy = true; streamWatch.tick().catch(e => console.log(`[stream watch] ${e.message}`)).finally(() => { busy = false; }); };
     setTimeout(tick, 75_000).unref?.(); setInterval(tick, CHECK_EVERY_MS).unref?.();
 });
+client.once(Events.ClientReady, () => { // squad-up posts: two or more members in the same game (checked every three minutes)
+    if (!nowPlaying.enabled) return;
+    let busy = false;
+    const tick = () => { if (busy) return; busy = true; runSquadUps({ db, src: nowPlaying, notifier, log: m => console.log(`[now playing] ${m}`) }).catch(e => console.log(`[now playing] ${e.message}`)).finally(() => { busy = false; }); };
+    setTimeout(tick, 100_000).unref?.(); setInterval(tick, 3 * 60_000).unref?.();
+});
 client.once(Events.ClientReady, () => { // post a meme in every server whose timer is up (checked every five minutes)
     let busy = false;
     const tick = () => { if (busy) return; busy = true; tickMemes({ db, api: botRest, memes, has: id => client.guilds.cache.has(id), log: m => console.log(`[memes] ${m}`) }).catch(() => {}).finally(() => { busy = false; }); };
@@ -697,6 +705,7 @@ client.on(Events.InteractionCreate, async i => {
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
             case "serverstats": return await handlers.handleServerStats(i);
+            case "nowplaying": return await handlers.handleNowPlaying(i);
             case "publicpage": return await handlers.handlePublicPage(i);
             case "friend": return await handlers.handleFriend(i);
             case "mydata": return await handlers.handleMyData(i);
@@ -731,7 +740,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, abg, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

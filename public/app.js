@@ -136,7 +136,7 @@
     { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
-    { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
+    { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["streams", "Streams"], ["streamers", "Streamers"], ["music", "Music"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -816,6 +816,7 @@
     const playSel = select([["0", "Off"], ["1", "Only games on my wishlist"], ["2", "Every playtest and demo found"]], String(s.playtest ?? 0));
     const achvOn = h("input", { type: "checkbox", checked: Boolean(s.achv) });
     const nudgeOn = h("input", { type: "checkbox", checked: Boolean(s.nudge) });
+    const nowOn = h("input", { type: "checkbox", checked: Boolean(s.nowplaying) });
     const yearOn = h("input", { type: "checkbox", checked: Boolean(s.yearly) });
     const milesOn = h("input", { type: "checkbox", checked: Boolean(s.milestones) });
     const newsMode = select([["0", "Off"], ["1", "Patch notes only"], ["2", "Every announcement"]], String(s.news ?? 0));
@@ -842,7 +843,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
+        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -869,6 +870,7 @@
         field("Playtests, demos and betas (Steam, Alpha Beta Gamer, GamerPower and itch.io)", playSel),
         h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
+        h("label", { class: "check" }, nowOn, "Show the game I am in on my server's Now playing board (needs Steam linked, library sharing and public game details)"),
         h("label", { class: "check" }, yearOn, "My year in games card, sent at the end of December"),
         h("label", { class: "check" }, milesOn, "A card when a game passes 100, 250, 500, 1000 or 2000 hours"),
         h("label", { class: "check" }, dlcOn, "A big sale on DLC and add-ons for games I play (Steam library, two hours or more)"),
@@ -1147,6 +1149,45 @@
       notes, bar, list);
     list.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
     await load(false); schedule();
+  }
+
+  const NOWPLAYING_POLL_MS = 60_000;
+  /** Who in a server is in a game right now. Reads Steam through the bot, so it stays current without a refresh. */
+  async function nowPlayingView() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const guild = serverPicker(servers), out = h("div"), stamp = h("span", { class: "muted small" });
+    let timer = null, loadedAt = 0;
+    const alive = () => document.body.contains(out) && currentView() === "nowplaying";
+    const on = Boolean(state.me.settings && state.me.settings.nowplaying);
+    async function load() {
+      if (!servers.length) { out.replaceChildren(h("p", { class: "muted", text: "Invite the bot to a server first." })); return; }
+      try {
+        const d = await api("/api/nowplaying?guild=" + encodeURIComponent(guild.value));
+        if (!alive()) return;
+        loadedAt = Date.now();
+        if (!d.enabled) { out.replaceChildren(h("div", { class: "notice warn", text: "This bot has no Steam API key set, so it cannot see what people are playing." })); return; }
+        out.replaceChildren(d.games.length
+          ? h("div", { class: "grid three" }, d.games.map(g => h("div", { class: "panel np-card" },
+              h("img", { src: "https://cdn.cloudflare.steamstatic.com/steam/apps/" + g.appid + "/header.jpg", alt: "", loading: "lazy", referrerpolicy: "no-referrer" }),
+              h("h3", { text: g.game }), h("p", { class: "muted", text: g.players.map(p => p.name).join(", ") }),
+              g.players.length >= 2 ? h("span", { class: "chip ok", text: g.players.length + " playing together" }) : null,
+              ext("https://store.steampowered.com/app/" + g.appid + "/", "Steam page", "btn gray small"))))
+          : h("div", { class: "empty", text: d.watching ? "Nobody who shares their activity is in a game right now." : "Nobody in this server has turned this on yet." }),
+          h("p", { class: "muted small", text: d.watching + (d.watching === 1 ? " member shares" : " members share") + " what they play." }));
+      } catch (e) { if (!loadedAt) out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    const toggle = h("button", { class: "btn " + (on ? "gray" : "green"), type: "button", text: on ? "Leave the board" : "Show me on the board" });
+    toggle.addEventListener("click", () => busy(toggle, async () => {
+      const r = await api("/api/settings", { nowplaying: !state.me.settings.nowplaying });
+      state.me.settings = r.settings; toast(r.settings.nowplaying ? "You are on the board. Link Steam, turn on sharing and make Game details public so it can see you." : "You are off the board.", "ok"); nowPlayingView();
+    }));
+    guild.addEventListener("change", load);
+    app.replaceChildren(pageHead("Now playing", "Who in your server is in a game right now. Members choose to show up here, and two or more in the same game can trigger a squad-up post."),
+      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, h("div", { class: "row" }, toggle, stamp)), out);
+    out.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
+    await load();
+    clearInterval(timer);
+    timer = setInterval(() => { if (!alive()) return clearInterval(timer); stamp.textContent = loadedAt ? "Refreshes by itself every minute." : ""; if (!document.hidden) load(); }, NOWPLAYING_POLL_MS);
   }
 
   // ---------- game codes ----------
@@ -5017,11 +5058,11 @@
           field("Steam Verified role", vRole), h("div", { class: "row" }, save("Save", () => post("/api/community/verifyrole", { role_id: vRole.value }))),
           h("p", { class: "muted small", text: "Want Discord itself to require it? In Discord open Server Settings, Roles, pick the role, open Links, and add this bot's Steam Verified condition. That one step can only be done in Discord." }));
         // ping roles
-        const pDeals = roSel(st.ping_deals, "Nobody"), pFree = roSel(st.ping_free, "Nobody"), pGw = roSel(st.ping_giveaway, "Nobody"), pLfg = roSel(st.ping_lfg, "Nobody"), pPlay = roSel(st.ping_playtest, "Nobody"), pPlayAll = h("input", { type: "checkbox", checked: Boolean(st.playtest_all) }), pPlayCh = chSel(st.playtest_channel);
+        const pDeals = roSel(st.ping_deals, "Nobody"), pFree = roSel(st.ping_free, "Nobody"), pGw = roSel(st.ping_giveaway, "Nobody"), pLfg = roSel(st.ping_lfg, "Nobody"), pPlay = roSel(st.ping_playtest, "Nobody"), pPlayAll = h("input", { type: "checkbox", checked: Boolean(st.playtest_all) }), pPlayCh = chSel(st.playtest_channel), pSquad = roSel(st.ping_squad, "Nobody"), pSquadCh = chSel(st.squad_channel);
         const pings = h("div", { class: "panel" }, h("h3", { text: "Ping roles" }),
           h("p", { class: "muted", text: "Members opt in to these roles in #roles. The bot pings them (and nobody else) when it posts." }),
-          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), field("Playtest ping role", pPlay), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
-          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
+          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
+          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),
@@ -5444,7 +5485,7 @@
     load();
   }
 
-  const VIEWS = { streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

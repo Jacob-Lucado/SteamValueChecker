@@ -1067,3 +1067,4 @@ body.wiz-open { overflow: hidden; }
 .pt-kind.pt-beta { background: rgba(242, 184, 75, .16); color: var(--warn); }
 .pt-kind.pt-weekend { background: var(--good-bg); color: var(--good); }
 .pt-sum { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.np-card img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; border-radius: 10px; }
