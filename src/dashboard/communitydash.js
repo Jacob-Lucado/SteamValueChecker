@@ -113,7 +113,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
     /** The opt-in roles the bot pings: free-game posts, deal posts, new giveaways and looking-for-group posts. Empty means nobody is pinged. */
     async function pings(gid, b) {
         const patch = {};
-        for (const k of ["deals", "free", "giveaway", "lfg"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
+        for (const k of ["deals", "free", "giveaway", "lfg", "playtest"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
         return db.setCommunity(gid, patch);
     }
     /** Support: where member tickets go and who answers them. */

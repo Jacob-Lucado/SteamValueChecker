@@ -432,6 +432,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const extra = on ? ` You will also hear if a game still in its refund window drops below what you paid, so a refund and rebuy would save money. That part only works with prices from the extension's purchase sync (Steam purchase history).${priced ? "" : " None of your games have a price recorded yet, so it will stay quiet until you run that sync."}` : "";
                 return eph(i, on ? `You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count.${extra}` : "Refund reminders are off.");
             }
+            case "playtests": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { playtest: on ? 1 : 0 });
+                return eph(i, on ? "You will be told when a Steam game on your wishlist (that you don't own) announces a playtest, demo, beta or free weekend. It reads the game's Steam announcements, so it needs the game imported from Steam (`/me wishlist import`). Your first check is quiet." : "Playtest and demo alerts are off.");
+            }
             case "achievements": {
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { achv: on ? 1 : 0 });

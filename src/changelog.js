@@ -1,6 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.10", date: "2026-11-10", title: "Refund reminders, milestones and right-click shortcuts", items: [
+        "**Playtest watcher:** `/alerts playtests` (off by default) tells you when a wishlist game you don't own announces a playtest, demo, beta or free weekend. Servers can also pick a **Playtests** ping role in the dashboard's Ping roles panel: the bot then posts those announcements in the alert channel for games the server's sharing members watch, and pings the role. No member is named.",
         "**Vote on game night:** the game night card has a **Start a vote** button. It posts up to five games everyone owns, people tap to vote (and can change their vote), and the tally updates live for six hours.",
         "**Saved views:** on the Wishlist page, name your current sort and filters and bring them back from the Views menu. They are saved in the browser you use.",
         "**Wishlist page colour:** a member's public wishlist page now uses the colour they picked for their profile card.",

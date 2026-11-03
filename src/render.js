@@ -118,7 +118,7 @@ export function toCsv(rows, currency) {
 }
 
 const GREEN = 0x57f287;
-const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
+export const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 
 export const STOP_ID = "alert_stop";
 export const SNOOZE_ID = "alert_snooze", BELOW_ID = "alert_below", BELOW_MODAL_ID = "alert_m_below";

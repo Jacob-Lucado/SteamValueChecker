@@ -45,7 +45,7 @@ export const HELP_PAGES = [
     { key: "alerts", label: "Sale alerts", emoji: "🔔", title: "/alerts",
         description: "How and where you hear about price drops. Only you see the replies.",
         fields: [
-            { name: "Settings", value: "`/alerts` `status`, `delivery`, `pause` / `resume`, `region`, `stores`, `quiethours`, `digest`, `mindiscount`, `bundles`, `news`, `dlc`, `refund`, `milestones`, `yearinreview`, `nudge`, `achievements`, `freegames`, `codes`, `promos`, `mute`, `language`, `share`, `history`." }
+            { name: "Settings", value: "`/alerts` `status`, `delivery`, `pause` / `resume`, `region`, `stores`, `quiethours`, `digest`, `mindiscount`, `bundles`, `news`, `dlc`, `refund`, `milestones`, `yearinreview`, `nudge`, `achievements`, `playtests`, `freegames`, `codes`, `promos`, `mute`, `language`, `share`, `history`." }
         ] },
     { key: "server", label: "Your server", emoji: "🏠", title: "/server",
         description: "Things for everyone in a server. `/server serverlist`, `leaderboard`, `serverstats` and `calendar` use the server you last used the bot in when you ask in a DM.",

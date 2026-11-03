@@ -219,6 +219,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "yearly", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "nudge", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "achv", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("users", "playtest", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("community", "ping_playtest", "TEXT");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE INDEX IF NOT EXISTS users_guild ON users(guild_id, share)");
@@ -328,7 +330,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -392,6 +394,13 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const clearAlerted = itemId => run("UPDATE items SET last_alert_price = NULL WHERE id = ?", itemId);
 
     const freeUsers = () => all("SELECT * FROM users WHERE free = 1 AND paused = 0").map(clean);
+    const guildsWithPlaytest = () => all("SELECT guild_id, ping_playtest FROM community WHERE ping_playtest IS NOT NULL AND ping_playtest != ''").map(clean);
+    const playtestUsers = () => all("SELECT * FROM users WHERE playtest = 1 AND paused = 0").map(clean);
+    /** Steam games on the wishlists of members who share in a server, with how many members watch each. */
+    const guildWatchedApps = guildId => all(`SELECT i.appid AS appid, MIN(i.title) AS title, COUNT(DISTINCT u.discord_id) AS watchers
+                          FROM items i JOIN users u ON u.discord_id = i.discord_id
+                          WHERE u.share = 1 AND u.guild_id = ? AND i.source != 'watch' AND i.appid IS NOT NULL
+                          GROUP BY i.appid ORDER BY watchers DESC, title LIMIT 60`, guildId).map(clean);
     const newsUsers = () => all("SELECT * FROM users WHERE news > 0 AND paused = 0").map(clean);
     const digestUsers = () => all("SELECT * FROM users WHERE digest = 1 AND paused = 0").map(clean);
 
@@ -745,7 +754,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
-        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
+        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
