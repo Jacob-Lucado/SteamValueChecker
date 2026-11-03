@@ -29,6 +29,8 @@ import { createStreamHandlers } from "./streamhandlers.js";
 import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
 import { openDb } from "./db.js";
 import { createHandlers } from "./handlers.js";
+import { createPanels, PANEL_PREFIX } from "./panel.js";
+import { alertPanel } from "./alertpanel.js";
 import { UserError } from "./errors.js";
 import { registerCommands } from "./registercmds.js";
 import { createLogBuffer, ACTIVITY } from "./logbuffer.js";
@@ -132,7 +134,9 @@ const db = openDb(cfg.dbPath);
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
 setInterval(() => { try { db.purgeHiddenGuilds(); } catch { /* try again next time */ } }, 30 * 60_000).unref();
 const nowPlaying = createNowPlaying({ apiKey: cfg.steamApiKey });
-const handlers = createHandlers({ db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
+const panels = createPanels({ db });
+panels.register("alerts", alertPanel({ db }));
+const handlers = createHandlers({ panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const cardUi = createCardHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
@@ -601,6 +605,7 @@ client.on(Events.InteractionCreate, async i => {
         try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : i.commandName === "music" ? (musicUi?.handleAutocomplete(i) ?? i.respond([])) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
     }
+    if ((i.isButton() || i.isAnySelectMenu?.() || i.isModalSubmit()) && i.customId.startsWith(PANEL_PREFIX)) return panels.handle(i);
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if ((i.isStringSelectMenu() && i.customId === "help_pick") || isHelpNav(i)) return handleHelpPick(i);
     if ((i.isButton() && i.customId.startsWith(PAGE_PREFIX)) || (i.isStringSelectMenu() && i.customId.startsWith(JUMP_PREFIX))) return handlePager(i, db);

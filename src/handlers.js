@@ -92,7 +92,7 @@ export function gameTitleFromText(text) {
     return t.length >= 2 ? t : null;
 }
 
-export function createHandlers({ db, itad, nowPlaying = null, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
+export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
     // ---------- /me wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");
@@ -339,6 +339,7 @@ export function createHandlers({ db, itad, nowPlaying = null, publicUrl = null, 
         const sub = i.options.getSubcommand();
         switch (sub) {
             case "status": {
+                if (panels?.has("alerts")) return panels.open(i, "alerts");
                 const guild = db.getGuild(user.guild_id);
                 return i.reply({
                     flags: MessageFlags.Ephemeral,

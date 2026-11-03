@@ -313,7 +313,7 @@ const CODE_GAME_CHOICES = [{ name: "Borderlands (all of them)", value: "borderla
 const alerts = new SlashCommandBuilder()
     .setName("alerts")
     .setDescription("How and where you get sale alerts")
-    .addSubcommand(s => s.setName("status").setDescription("See your alert settings"))
+    .addSubcommand(s => s.setName("status").setDescription("Open your alert settings: toggles, dropdowns and quiet hours"))
     .addSubcommand(s => s.setName("delivery").setDescription("Get alerts by DM or in the server's alert channel")
         .addStringOption(o => o.setName("mode").setDescription("Where alerts go").setRequired(true).addChoices(
             { name: "Direct message (falls back to the server channel if DMs are closed)", value: "dm" },

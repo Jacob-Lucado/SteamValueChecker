@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.13", date: "2026-11-13", title: "Settings panels", items: [
+        "**`/alerts status` is now a settings panel:** one private message with dropdowns and buttons for every alert, where they go, quiet hours, digest and minimum discount. Every old `/alerts` command still works."
+    ] },
     { version: "2026.11.12", date: "2026-11-12", title: "Streamer hub, Now playing and Game club", items: [
         "**Game club:** `/server club pick` sets the server's game of the month; the Game club page and `/server club status` show who is playing, finished or has not started, and a card is posted weekly in the club channel.",
         "**Share your wishlist page:** `/me publicpage share:true` posts your page in the channel as a card with a button. `/me publicpage` on its own shows your link. The dashboard has a Copy link button.",
