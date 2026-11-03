@@ -50,6 +50,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             const tk = db.getTicketSettings(gid);
             out.support = { ticket_channel: tk.channel_id, staff_role_id: tk.staff_role_id };
             out.announcements = db.listAnnouncements(gid, 8);
+            out.growth = db.growth(gid, 30);
             out.defaultRules = TEMPLATE.rules.join("\n\n");
         }
         return out;

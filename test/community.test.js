@@ -1043,3 +1043,20 @@ test("welcome card: the picture is attached when on, the plain welcome goes out 
     const off = await run(async () => png, { welcome_card: 0 });
     assert.equal(off.files, undefined); assert.equal(asked.length, 0, "not even drawn");
 });
+
+test("growth: joins and leaves per day for the last month, people only, zero days kept", () => {
+    let t = Date.parse("2026-11-10T12:00:00Z");
+    const db = openDb(":memory:", { now: () => t });
+    t = Date.parse("2026-11-03T08:00:00Z"); db.recordJoin("G", "a", null, null); db.recordJoin("G", "b", null, null);
+    t = Date.parse("2026-11-05T08:00:00Z"); db.recordLeave("G", "b"); db.recordJoin("G", "c", null, null);
+    t = Date.parse("2026-09-01T08:00:00Z"); db.recordJoin("G", "old", null, null); // long before the window
+    t = Date.parse("2026-11-10T12:00:00Z");
+    const g = db.growth("G", 30);
+    assert.equal(g.days.length, 30); assert.equal(g.days.at(-1).day, "2026-11-10");
+    assert.equal(g.joins, 3); assert.equal(g.leaves, 1); assert.equal(g.net, 2);
+    assert.deepEqual(g.days.find(d => d.day === "2026-11-03"), { day: "2026-11-03", joins: 2, leaves: 0 });
+    assert.deepEqual(g.days.find(d => d.day === "2026-11-05"), { day: "2026-11-05", joins: 1, leaves: 1 });
+    assert.equal(g.days.find(d => d.day === "2026-11-04").joins, 0);
+    assert.equal(g.trackedHere, 3, "a, c and the older member are still here");
+    assert.deepEqual(db.growth("other", 7).days.map(d => d.joins), [0, 0, 0, 0, 0, 0, 0]);
+});

@@ -11,7 +11,7 @@ import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
 import { epicSoonPayload, newsPayload } from "./render.js";
 import { isPatchNote } from "./news.js";
-import { releaseEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
+import { releaseEmbed, releaseDateEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
 import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
@@ -430,6 +430,37 @@ export async function runServerDigests({ db, itad, notifier, now = () => Date.no
  * Release-day alerts for wishlisted games that were not out yet when they were added. Release dates are looked up in small
  * batches (60 games a run), then each launch is announced once per member, within a week of the date.
  */
+/**
+ * Tells members when a wishlist game gets a release date, or when its date moves by two days or more.
+ * What they last saw is kept as "reldate:<game>:<day>" (or ":none"). The first look at a game only remembers its date, so nobody is
+ * told about dates that were already known, and a game added today doesn't announce itself.
+ */
+export async function runReleaseDates({ db, notifier, now = () => Date.now(), stats = {}, log = () => {} }) {
+    stats.dates = stats.dates ?? 0;
+    const FAR = 500 * 86400_000, MIN_MOVE = 2 * 86400_000;
+    for (const it of db.upcomingItems()) {
+        const at = it.release_at && it.release_at - now() < FAR ? it.release_at : null;
+        const day = at ? new Date(at).toISOString().slice(0, 10) : "none";
+        const key = `reldate:${it.itad_id}:${day}`;
+        const prior = db.seenWith(it.discord_id, `reldate:${it.itad_id}:`);
+        if (prior.includes(key)) continue;
+        if (!prior.length || day === "none") { db.markSeen(it.discord_id, key); continue; } // a first look, or a date that went away: say nothing
+        const wasDay = prior.map(k => k.split(":").pop()).find(d => d !== "none");
+        const was = wasDay ? Date.parse(wasDay) : null;
+        if (was && Math.abs(at - was) < MIN_MOVE) { db.markSeen(it.discord_id, key); continue; }
+        const user = db.getUser(it.discord_id);
+        if (!user) continue;
+        if (isQuiet(user, now())) { stats.deferred = (stats.deferred ?? 0) + 1; continue; } // tried again on the next run
+        const embed = releaseDateEmbed({ title: it.title, releaseAt: at, was, appid: it.appid ?? null });
+        const res = await notifier.deliver(user, { embeds: [embed] }, "release");
+        if (!res.ok) { stats.failed = (stats.failed ?? 0) + 1; continue; }
+        stats.dates++; stats.delivered = (stats.delivered ?? 0) + 1;
+        db.markSeen(it.discord_id, key);
+        db.logAlert({ discord_id: it.discord_id, itad_id: it.itad_id, title: it.title, kind: "release", via: res.via });
+    }
+    return stats;
+}
+
 export async function runReleases({ db, itad, notifier, now = () => Date.now(), log = () => {}, stillUpcoming = async () => null }) {
     const stats = { looked: 0, found: 0, delivered: 0, failed: 0, deferred: 0, early: 0 };
     for (const g of db.itemsNeedingRelease(60)) {
@@ -439,6 +470,7 @@ export async function runReleases({ db, itad, notifier, now = () => Date.now(), 
             stats.looked++;
         } catch (err) { log(`release lookup failed: ${err.code ?? err.name}`); stats.error = err.code ?? err.name; break; }
     }
+    await runReleaseDates({ db, notifier, now, stats, log });
     const due = db.releasedItems().filter(it => !db.hasSeen(it.discord_id, `release:${it.itad_id}`));
     if (!due.length) return stats;
     const byRegion = new Map();

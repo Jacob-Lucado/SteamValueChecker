@@ -170,6 +170,23 @@ export function communityStore({ run, get, all, clean, now }) {
     };
     const inviteTop = (guildId, limit = 10) => all("SELECT inviter_id AS user_id, COUNT(*) AS total, SUM(CASE WHEN left_at IS NULL THEN 1 ELSE 0 END) AS active FROM invite_joins WHERE guild_id = ? AND inviter_id IS NOT NULL GROUP BY inviter_id ORDER BY active DESC, total DESC LIMIT ?", guildId, limit)
         .map(r => ({ user_id: r.user_id, total: Number(r.total), active: Number(r.active ?? 0) }));
+    /**
+     * Joins and leaves per day for the last `days` days (UTC days, oldest first, empty days as zero), plus totals.
+     * Bots are never recorded, so these are people only. A rejoin counts as a join and, earlier, a leave.
+     */
+    const growth = (guildId, days = 30) => {
+        const DAY = 86400_000, end = Math.floor(now() / DAY) * DAY, start = end - (days - 1) * DAY;
+        const dayKey = ms => new Date(ms).toISOString().slice(0, 10);
+        const byDay = new Map();
+        for (let d = 0; d < days; d++) byDay.set(dayKey(start + d * DAY), { day: dayKey(start + d * DAY), joins: 0, leaves: 0 });
+        for (const r of all("SELECT joined_at, left_at FROM invite_joins WHERE guild_id = ? AND (joined_at >= ? OR left_at >= ?)", guildId, start, start)) {
+            const j = byDay.get(dayKey(r.joined_at)); if (j && r.joined_at >= start) j.joins++;
+            if (r.left_at && r.left_at >= start) { const l = byDay.get(dayKey(r.left_at)); if (l) l.leaves++; }
+        }
+        const list = [...byDay.values()], joins = list.reduce((n, d) => n + d.joins, 0), leaves = list.reduce((n, d) => n + d.leaves, 0);
+        const tracked = get("SELECT COUNT(*) AS total, SUM(CASE WHEN left_at IS NULL THEN 1 ELSE 0 END) AS here FROM invite_joins WHERE guild_id = ?", guildId);
+        return { days: list, joins, leaves, net: joins - leaves, trackedHere: Number(tracked.here ?? 0), trackedEver: Number(tracked.total ?? 0) };
+    };
     const whoInvited = (guildId, userId) => clean(get("SELECT inviter_id, code, joined_at FROM invite_joins WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1", guildId, userId));
     const getInviteLink = (guildId, userId) => get("SELECT code FROM invite_links WHERE guild_id = ? AND user_id = ?", guildId, userId)?.code ?? null;
     const setInviteLink = (guildId, userId, code) => run("INSERT INTO invite_links (guild_id, user_id, code) VALUES (?,?,?) ON CONFLICT(guild_id, user_id) DO UPDATE SET code = excluded.code", guildId, userId, code);
@@ -250,6 +267,6 @@ export function communityStore({ run, get, all, clean, now }) {
     const forgetCommunityGuild = guildId => { for (const t of ["community", "member_xp", "level_roles", "invite_joins", "invite_links", "referral_rewards", "self_roles", "mod_cases", "announcements"]) run(`DELETE FROM ${t} WHERE guild_id = ?`, guildId); };
 
     return { getCommunity, setCommunity, allCommunity, getXp, addXp, setXp, xpRank, xpTop, countXpMembers, listLevelRoles, setLevelRole, removeLevelRole,
-        recordJoin, recordLeave, everJoined, inviteStats, inviteTop, whoInvited, getInviteLink, setInviteLink, inviteLinkOwner, listRewards, setReward, removeReward,
+        recordJoin, recordLeave, growth, everJoined, inviteStats, inviteTop, whoInvited, getInviteLink, setInviteLink, inviteLinkOwner, listRewards, setReward, removeReward,
         listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, modCounts, addAnnouncement, listAnnouncements, communityExport, forgetCommunityUser, forgetCommunityGuild };
 }

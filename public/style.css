@@ -984,3 +984,12 @@ button.chip:hover { filter: brightness(1.12); }
 button.chip[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .welcome-prev { display: block; width: 100%; max-width: 480px; margin-top: 10px; border-radius: 12px; }
 .welcome-prev-wrap { display: block; width: 100%; }
+.grow-bars { display: flex; align-items: flex-end; gap: 3px; height: 130px; margin: 14px 0 4px; }
+.grow-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
+.grow-col .pair { display: flex; align-items: flex-end; gap: 1px; width: 100%; height: 100%; }
+.grow-col i { display: block; flex: 1; min-height: 1px; border-radius: 2px 2px 0 0; }
+.grow-col i.j { background: var(--good, #3ba55d); }
+.grow-col i.l { background: var(--muted, #888); opacity: .6; }
+.grow-col span { font-size: 10px; color: var(--muted, #888); height: 12px; white-space: nowrap; }
+div select.wl-quiet, select.wl-quiet { width: auto; max-width: 260px; padding: 6px 10px; font-size: 13px; }
+div select.wl-quiet { width: auto; max-width: 260px; }

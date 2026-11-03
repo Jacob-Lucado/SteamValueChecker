@@ -399,6 +399,14 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const setRelease = (itadId, releaseAt) => run(
         `UPDATE items SET release_at = ?, release_wait = CASE WHEN release_check IS NULL AND ? > ? THEN 1 ELSE release_wait END, release_check = ? WHERE itad_id = ?`,
         releaseAt, releaseAt ?? 0, now(), now(), itadId);
+    /** Wishlist entries (alerts on, not snoozed, not owned) whose release date has been looked up and is still ahead or unknown. */
+    const upcomingItems = () => all(
+        `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.muted
+           FROM items i JOIN users u ON u.discord_id = i.discord_id
+          WHERE u.paused = 0 AND i.release_check IS NOT NULL AND (i.release_at IS NULL OR i.release_at > ?) AND (i.snooze_until IS NULL OR i.snooze_until < ?)
+            AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = i.discord_id AND l.itad_id = i.itad_id)`, now(), now()).map(clean);
+    /** The "already told" keys a person has that start with a prefix. */
+    const seenWith = (discordId, prefix) => all("SELECT key FROM seen WHERE discord_id = ? AND key LIKE ? ORDER BY at DESC, rowid DESC", discordId, `${prefix}%`).map(r => r.key);
     /** Wishlist entries flagged as unreleased that came out within the last week. */
     const releasedItems = () => all(
         `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.muted
@@ -727,7 +735,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
-        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, setRelease, releasedItems, digestUsers, freeUsers, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
+        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,

@@ -16,6 +16,7 @@ import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
+import { renderHistoryChart } from "./historychart.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
@@ -183,10 +184,15 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             const now = { ...current(s), currency: s.currency };
             if (now.price === null) throw new UserError("No current price found for that game.");
             let advice = null;
-            try { advice = buyOrWait(await itad.getHistory(found.item.itad_id, user.region), now.price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => money(n, now.currency) }); } catch { /* the check works without it */ }
+            let history = null;
+            try { history = await itad.getHistory(found.item.itad_id, user.region); advice = buyOrWait(history, now.price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => money(n, now.currency) }); } catch { /* the check works without it */ }
             let subs = [];
             try { subs = (await itad.getSubs?.([found.item.itad_id], user.region))?.get(found.item.itad_id) ?? []; } catch { /* the check works without it */ }
-            await i.editReply({ embeds: [checkEmbed(found.item.title, now, dealVerdict(now), advice, subs)] });
+            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs);
+            let chart = null;
+            try { chart = history ? renderHistoryChart({ title: found.item.title, points: history, currency: now.currency, now: now.price }) : null; } catch { /* the card is fine without the picture */ }
+            if (chart) embed.image = { url: "attachment://price-history.png" };
+            await i.editReply({ embeds: [embed], files: chart ? [{ attachment: chart, name: "price-history.png", description: `Price history of ${found.item.title} over the last year` }] : [] });
         } catch (err) {
             await failed(i, "wishlist check", err);
         }

@@ -208,11 +208,14 @@ export function finishedLeague(db, guildId, nowMs = Date.now(), { limit = 10 } =
  * "games" is how many games are in their library. Both are plain counts, so they are fair across currencies.
  * Returns [{ discord_id, score, label }], biggest first.
  */
-export const EXTRA_BOARDS = { hours: "Hours played this year", games: "Biggest library" };
+export const EXTRA_BOARDS = { hours: "Hours played this year", games: "Biggest library", completed: "Most games finished (all time)" };
 export function extraBoard(db, guildId, board, nowMs = Date.now(), { limit = 10 } = {}) {
     if (board === "hours") {
         const from = new Date(Date.UTC(new Date(nowMs).getUTCFullYear(), 0, 1)).toISOString().slice(0, 10);
         return db.sharedHours(guildId, from).slice(0, limit).map(r => ({ discord_id: r.discord_id, score: r.minutes, label: `${Math.round(r.minutes / 60).toLocaleString("en-US")} hours` }));
+    }
+    if (board === "completed") {
+        return db.sharedFinished(guildId, 0, Number.MAX_SAFE_INTEGER).slice(0, limit).map(r => ({ discord_id: r.discord_id, score: r.done, label: `${r.done.toLocaleString("en-US")} finished` }));
     }
     if (board === "games") {
         return db.sharedLeaderboard(guildId).filter(r => r.games > 0).sort((a, b) => b.games - a.games).slice(0, limit).map(r => ({ discord_id: r.discord_id, score: r.games, label: `${r.games.toLocaleString("en-US")} games` }));

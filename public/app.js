@@ -699,7 +699,7 @@
     // One control for this game's alerts: on, snoozed for a while, or muted until switched back on.
     const quiet = r.snoozed_until && r.snoozed_until - Date.now() > 100 * 86400_000 ? "mute" : r.snoozed_until ? "snooze" : "on";
     const snooze = select([["on", quiet === "snooze" ? "Snoozed until " + new Date(r.snoozed_until).toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " (change)" : "Alerts on"], ["7", "Snooze 7 days"], ["30", "Snooze 30 days"], ["mute", "Mute this game"], ["off", "Turn alerts back on"]], quiet);
-    snooze.setAttribute("aria-label", "Alerts for " + r.title); snooze.className = "small";
+    snooze.setAttribute("aria-label", "Alerts for " + r.title); snooze.className = "wl-quiet";
     if (quiet === "mute") snooze.title = "Muted: no alerts of any kind for this game";
     snooze.addEventListener("change", () => {
       const v = snooze.value; if (v === "on") return;
@@ -1366,7 +1366,7 @@
   }
 
   async function board(g, into) {
-    const BOARDS = [["savings", "Most saved vs MSRP"], ["finished", "Backlog league (this month)"], ["hours", "Hours played this year"], ["games", "Biggest library"]];
+    const BOARDS = [["savings", "Most saved vs MSRP"], ["finished", "Backlog league (this month)"], ["hours", "Hours played this year"], ["games", "Biggest library"], ["completed", "Most games finished (all time)"]];
     const pick = h("select", { "aria-label": "Leaderboard" }, BOARDS.map(([v, t]) => h("option", { value: v, text: t })));
     const list = h("div");
     const note = h("p", { class: "muted small" });
@@ -4629,8 +4629,22 @@
           h("p", { class: "muted", text: d.verify.steamVerified ? "Your Steam account is verified. Press the button to get the role in this server." : "Prove your Steam account to get the Steam Verified role. You sign in on Steam's own page." }),
           h("div", { class: "row" }, vBtn, h("a", { class: "btn gray", href: "/auth/linked", text: "Connect Linked Roles" }))) : null;
         const boards = h("div", { class: "grid two" }, board("Top inviters", d.inviteTop, r => `${r.active} here · ${r.total} joined`), h("div", { class: "panel" }, h("h3", { text: "Levels and XP" }), h("p", { class: "muted", text: `You are level ${me.level}${me.rank ? `, #${me.rank} in the server` : ""}.` }), h("a", { class: "btn blue", href: "#/xp/" + GID(), text: "Open the Server XP page" })));
-        holder.replaceChildren(...[picker, intent, standing, verifyPanel, boards, rewards, d.manager ? manager(d) : null].filter(Boolean));
+        holder.replaceChildren(...[picker, intent, standing, verifyPanel, boards, rewards, d.manager && d.growth ? growthPanel(d.growth) : null, d.manager ? manager(d) : null].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    // Joins and leaves for the last 30 days, people only. Only members the bot saw join are counted, so it fills in from when the bot arrived.
+    function growthPanel(g) {
+      const peak = Math.max(1, ...g.days.map(d => Math.max(d.joins, d.leaves)));
+      const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub && h("div", { class: "s", text: sub }));
+      const bars = h("div", { class: "grow-bars", role: "img", "aria-label": "People joining and leaving per day, last 30 days" }, g.days.map((d, n) => {
+        const j = h("i", { class: "j" }), l = h("i", { class: "l" });
+        j.style.height = Math.round(d.joins / peak * 100) + "%"; l.style.height = Math.round(d.leaves / peak * 100) + "%";
+        return h("div", { class: "grow-col", title: `${new Date(d.day + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}: ${d.joins} joined, ${d.leaves} left` }, h("div", { class: "pair" }, j, l), n % 7 === 0 ? h("span", { text: d.day.slice(5) }) : h("span", { text: "" }));
+      }));
+      return h("div", { class: "panel" }, h("h3", { text: "Member growth, last 30 days" }),
+        h("div", { class: "grid four" }, tile("Joined", String(g.joins)), tile("Left", String(g.leaves)), tile("Net", (g.net > 0 ? "+" : "") + g.net, g.net >= 0 ? "growing" : "shrinking"), tile("Tracked here now", String(g.trackedHere), `of ${g.trackedEver} the bot has seen join`)),
+        g.trackedEver ? bars : h("p", { class: "muted", text: "Nothing yet. The bot records people as they join, so this fills in from now on." }),
+        h("p", { class: "muted small", text: "People only: bots are never counted. Green is joining, grey is leaving." }));
     }
     let mgrTab = 0;
     /** The announcement designer: every part of the embed is editable, with a live preview that looks like Discord. */
@@ -4714,13 +4728,12 @@
           h("div", { class: "row" }, toggle(st.welcome_on, "/api/community/welcome", "enabled", "Turn off", "Turn on"), toggle(st.welcome_dm, "/api/community/welcome", "dm", "Stop private welcome", "Also send a private welcome"), toggle(st.welcome_card !== 0, "/api/community/welcome", "card", "Stop the picture card", "Show a picture card"), toggle(st.leave_on, "/api/community/welcome", "leave", "Stop leave notes", "Post a note when someone leaves")),
           field("Welcome channel", wCh), field("Log channel (joins, who invited them)", logCh), field("Message", wMsg),
           h("p", { class: "muted small", text: "Use " + st.fields.join(" ") + ". Leave empty for the default message." }),
-          h("div", { class: "row" }, save("Save welcome", () => post("/api/community/welcome", { channel_id: wCh.value, log_channel_id: logCh.value, message: wMsg.value })),
-            (() => {
-              const shot = h("img", { class: "welcome-prev", alt: "Preview of the welcome picture card", hidden: true });
-              const b = h("button", { type: "button", class: "btn gray", text: "Preview the picture card" });
-              b.addEventListener("click", () => busy(b, async () => { const r = await post("/api/community/welcome/preview", {}); shot.src = r.image; shot.hidden = false; }));
-              return h("span", { class: "welcome-prev-wrap" }, b, shot);
-            })()),
+          (() => {
+            const shot = h("img", { class: "welcome-prev", alt: "Preview of the welcome picture card", hidden: true });
+            const b = h("button", { type: "button", class: "btn gray", text: "Preview the picture card" });
+            b.addEventListener("click", () => busy(b, async () => { const r = await post("/api/community/welcome/preview", {}); shot.src = r.image; shot.hidden = false; }));
+            return h("div", {}, h("div", { class: "row" }, save("Save welcome", () => post("/api/community/welcome", { channel_id: wCh.value, log_channel_id: logCh.value, message: wMsg.value })), b), shot);
+          })(),
           field("Role every new member gets", auto), h("div", { class: "row" }, save("Save role", () => post("/api/community/autorole", { role_id: auto.value }))));
         const vRole = roSel(st.verified_role_id, "No Steam Verified role");
         const verify = h("div", { class: "panel" }, h("h3", { text: "Steam verification" }),

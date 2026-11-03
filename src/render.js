@@ -596,6 +596,21 @@ export function releaseEmbed({ title, releaseAt, best, currency, url }) {
     return { color: COLOR, title: `🎉 Now out: ${title}`, description: lines.join("\n"), url: url || undefined };
 }
 
+/** A wishlist game got a release date, or its date moved. `was` is the old date in ms, or null when there was none. */
+export function releaseDateEmbed({ title, releaseAt, was = null, url = null, appid = null }) {
+    const day = ms => `<t:${Math.floor(ms / 1000)}:D>`;
+    const moved = was ? (releaseAt > was ? "later" : "earlier") : null;
+    const lines = was
+        ? [`The release date moved ${moved}: it was ${day(was)} and is now **${day(releaseAt)}** (${stamp(releaseAt)}).`]
+        : [`It's now set to come out **${day(releaseAt)}** (${stamp(releaseAt)}).`];
+    lines.push("Your sale alerts for it start working the day it's out.");
+    return {
+        color: moved === "later" ? 0xfaa61a : GREEN, title: was ? `${moved === "later" ? "⏳ Delayed" : "📅 Moved up"}: ${title}` : `📅 Release date set: ${title}`,
+        description: lines.join("\n"), url: safeUrl(url) ?? undefined, thumbnail: Number.isInteger(appid) ? { url: steamArt(appid) } : undefined,
+        footer: { text: "Release alerts can be turned off with /alerts mute  •  Data by IsThereAnyDeal" }
+    };
+}
+
 
 const sign = (n, f) => (n === null || n === undefined ? null : `${n > 0 ? "+" : n < 0 ? "-" : ""}${f(Math.abs(n))}`);
 /** "Library trend" card from trendSummary(). */

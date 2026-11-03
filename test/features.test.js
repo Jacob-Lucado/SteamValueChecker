@@ -415,6 +415,19 @@ test("the free games setting is validated like the others", () => {
     assert.deepEqual(prefsPatch({ free: false }, {}), { free: 0 });
 });
 
+test("the all-time completions board ranks opted-in members by games finished, whenever they were finished", async () => {
+    const { extraBoard, EXTRA_BOARDS } = await import("../src/library.js");
+    assert.ok(EXTRA_BOARDS.completed);
+    let t = Date.parse("2026-03-01T00:00:00Z");
+    const db = openDb(":memory:", { now: () => t });
+    for (const id of ["a", "b", "c"]) db.ensureUser(id, "g1");
+    db.updateUser("a", { share: 1 }); db.updateUser("b", { share: 1 }); // c has not opted in
+    const add = (u, id, status) => { db.upsertLibrary(u, [{ itad_id: id, title: id }]); db.setLibraryStatus(u, id, status); };
+    add("a", "x", "finished"); t = Date.parse("2026-10-01T00:00:00Z"); add("a", "y", "finished"); add("b", "z", "finished"); add("b", "w", "playing"); add("c", "q", "finished");
+    const board = extraBoard(db, "g1", "completed");
+    assert.deepEqual(board.map(e => [e.discord_id, e.score, e.label]), [["a", 2, "2 finished"], ["b", 1, "1 finished"]]);
+});
+
 test("every slash command has a dashboard counterpart", async () => {
     const { readFileSync } = await import("node:fs");
     const server = readFileSync(new URL("../src/dashboard/server.js", import.meta.url), "utf8");

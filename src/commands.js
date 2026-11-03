@@ -172,7 +172,7 @@ const leaderboard = new SlashCommandBuilder()
     .setName("leaderboard")
     .setDescription("Server boards for members who opted in with /alerts share")
     .addStringOption(o => o.setName("board").setDescription("Which board (default: savings)")
-        .addChoices({ name: "Most saved vs MSRP", value: "savings" }, { name: "Backlog league: most finished this month", value: "finished" }, { name: "Most hours played this year", value: "hours" }, { name: "Biggest library", value: "games" }));
+        .addChoices({ name: "Most saved vs MSRP", value: "savings" }, { name: "Backlog league: most finished this month", value: "finished" }, { name: "Most hours played this year", value: "hours" }, { name: "Biggest library", value: "games" }, { name: "Most games finished, all time", value: "completed" }));
 
 const giveawayOption = o => o.setName("giveaway").setDescription("Which giveaway").setRequired(true).setAutocomplete(true);
 const giveaway = new SlashCommandBuilder()

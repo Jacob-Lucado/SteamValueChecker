@@ -1,5 +1,14 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.07", date: "2026-11-07", title: "Sample alerts and price charts", items: [
+        "**Price chart on game checks:** `/me wishlist check` now comes with a picture of the game's price over the last year, with its lowest price and today's price marked.",
+        "**Release dates:** you hear when a wishlist game gets a release date, and when a date is pushed back or brought forward by two days or more. Same switch as release-day alerts.",
+        "**Mute a game:** on the Wishlist page, each game now has an alerts menu: snooze for 7 or 30 days, or mute it until you switch it back on.",
+        "**See how alerts look:** Alert settings has buttons that send you a sample of any alert kind in a DM, marked as a sample.",
+        "**Find an alert:** the Notifications page can now be filtered by kind and searched.",
+        "**For server managers:** the Community page shows who joined and left over the last 30 days (people only), and can preview the welcome picture card before it goes out.",
+        "**New board:** `/server leaderboard` has \"Most games finished, all time\".",
+    ] },
     { version: "2026.11.06", date: "2026-11-06", title: "People-only counts", items: [
         "**Member counts leave out bots:** the member numbers the bot shows (about, status, welcome messages, member numbers, the dashboard) now count people only. Turn on the Server Members intent so every bot can be spotted; without it only the bot itself is left out.",
         "**Admin system health:** now shows when the running bot started and which release, machine and region it is on.",
