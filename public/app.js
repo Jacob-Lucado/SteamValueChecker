@@ -137,7 +137,8 @@
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["streams", "Streams"], ["streamers", "Streamers"], ["music", "Music"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
+    { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["streams", "Go live"], ["streamers", "Who is live"]] },
     { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
@@ -5200,16 +5201,16 @@
     return () => (p ??= Promise.all([window.SvcOverlayPanel ? 0 : load("script", { src: "/overlayui.js" }), document.querySelector('link[href="/overlayui.css"]') ? 0 : load("link", { rel: "stylesheet", href: "/overlayui.css" })]).catch(e => { p = null; throw e; }));
   })();
 
-  async function streamsView() {
+  async function streamsView(opts = {}) {
     const servers = state.me.servers.filter(g => g.bot !== false);
-    const holder = h("div");
-    app.replaceChildren(pageHead("Streams", "Link your channel and the bot posts when you go live, by itself. Choose whether you get pinged when others do, and set up your OBS overlay. In Discord: /server stream."), holder);
+    const holder = opts.into ?? h("div");
+    if (!opts.into) app.replaceChildren(pageHead("Streams", "Link your channel and the bot posts when you go live, by itself. Choose whether you get pinged when others do, and set up your OBS overlay. In Discord: /server stream."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
-    const guild = serverPicker(servers, currentParam());
+    const guild = opts.guild ?? serverPicker(servers, currentParam());
     guild.addEventListener("change", () => { musicData = null; if (ov) ov.reload(); load(); });
     // the OBS overlay panel, fed by what is actually playing (same panel as the music page and the studio)
     let ov = null, ovBox = null, musicData = null, ovViz = null, ovVizGuild = "";
-    const alive = () => currentView() === "streams" && holder.isConnected;
+    const alive = () => currentView() === (opts.into ? "streamer" : "streams") && holder.isConnected;
     async function pollMusic() {
       if (!alive()) { if (ovViz) { ovViz.close(); ovViz = null; } return; }
       try { musicData = await api("/api/music?guild=" + encodeURIComponent(guild.value)); } catch { musicData = null; }
@@ -5227,10 +5228,10 @@
     async function load() {
       holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
       let d;
-      try { d = await api("/api/streams?guild=" + encodeURIComponent(guild.value)); } catch (e) { return holder.replaceChildren(servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null, h("div", { class: "notice warn", text: e.message })); }
+      try { d = await api("/api/streams?guild=" + encodeURIComponent(guild.value)); } catch (e) { return holder.replaceChildren(servers.length > 1 && !opts.guild ? h("div", { class: "panel" }, field("Server", guild)) : null, h("div", { class: "notice warn", text: e.message })); }
       const gid = guild.value, post = (path, body) => api(path, { guild_id: gid, ...body });
       const run = (btn, fn, msg) => busy(btn, async () => { await fn(); if (msg) toast(msg, "ok"); load(); });
-      const picker = servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null;
+      const picker = servers.length > 1 && !opts.guild ? h("div", { class: "panel" }, field("Server", guild)) : null;
       const unset = !d.settings.live_channel;
 
       const liveList = h("div", { class: "panel" }, h("h3", { text: "Live now" }),
@@ -5287,16 +5288,75 @@
     load();
   }
 
-  // ---------- streamers: everyone who linked a channel in a server, and who is live ----------
-  async function streamersView() {
+  // ---------- streamer hub: everything for streamers on one page ----------
+  /** The deals overlay panel: a private link for OBS that rotates the best wishlist deal, a free game and a "gift me" card. */
+  function streamCardPanel() {
+    const panel = h("div", { class: "panel", id: "sh-cards" });
+    const KINDS = [["deal", "Best deal on my wishlist"], ["free", "A free game that is live now"], ["gift", "“Gift me” with my public wishlist page"]];
+    const copy = async text => { try { await navigator.clipboard.writeText(text); toast("Copied.", "ok"); } catch { toast("Select the link and copy it by hand.", "warn"); } };
+    async function draw() {
+      let d;
+      try { d = await api("/api/streamcard"); } catch (e) { panel.replaceChildren(h("h3", { text: "Deals overlay for OBS" }), h("div", { class: "notice warn", text: e.message })); return; }
+      const head = h("h3", { text: "Deals overlay for OBS" });
+      const blurb = h("p", { class: "muted", text: "A small card for your stream that rotates through the best deal on your wishlist, a game that is free right now, and a reminder that you have a public wishlist. It shows only public things. Add it in OBS as a Browser source." });
+      if (!d.on) {
+        const make = h("button", { class: "btn blue", type: "button", text: "Make my overlay link" });
+        make.addEventListener("click", () => busy(make, async () => { await api("/api/streamcard", { action: "create" }); toast("Your overlay link is ready.", "ok"); draw(); }));
+        panel.replaceChildren(head, blurb, h("div", { class: "row" }, make, h("a", { class: "btn gray", href: d.base + "?demo=1", target: "_blank", rel: "noopener noreferrer", text: "See a sample" })));
+        return;
+      }
+      const boxes = KINDS.map(([k, label]) => { const c = h("input", { type: "checkbox", checked: d.kinds.includes(k) }); return [k, c, h("label", { class: "check" }, c, label)]; });
+      const anchor = select([["bl", "Bottom left"], ["bc", "Bottom center"], ["br", "Bottom right"], ["tl", "Top left"], ["tc", "Top center"], ["tr", "Top right"], ["ml", "Middle left"], ["mr", "Middle right"]], "bl");
+      const theme = select([["dark", "Dark"], ["light", "Light"], ["glass", "Glass"]], "dark");
+      const hold = h("input", { type: "number", min: "4", max: "120", value: "12", "aria-label": "Seconds per card" });
+      const scale = h("input", { type: "number", min: "0.5", max: "3", step: "0.1", value: "1", "aria-label": "Size" });
+      const link = h("input", { type: "text", readonly: true, "aria-label": "Overlay link" });
+      const build = () => { const u = new URL(d.base); u.searchParams.set("token", d.token); u.searchParams.set("anchor", anchor.value); if (theme.value !== "dark") u.searchParams.set("theme", theme.value); if (hold.value && hold.value !== "12") u.searchParams.set("hold", hold.value); if (scale.value && scale.value !== "1") u.searchParams.set("scale", scale.value); link.value = u.toString(); };
+      [anchor, theme, hold, scale].forEach(e => e.addEventListener("input", build)); build();
+      const save = h("button", { class: "btn blue small", type: "button", text: "Save cards" });
+      save.addEventListener("click", () => busy(save, async () => { await api("/api/streamcard", { action: "save", kinds: boxes.filter(([, c]) => c.checked).map(([k]) => k) }); toast("Saved. The overlay updates within a couple of minutes.", "ok"); draw(); }));
+      const reset = h("button", { class: "btn gray small", type: "button", text: "Make a new link" });
+      reset.addEventListener("click", () => { if (confirm("Your old link stops working at once. Continue?")) busy(reset, async () => { await api("/api/streamcard", { action: "reset" }); toast("New link made. Paste it into OBS again.", "ok"); draw(); }); });
+      const off = h("button", { class: "btn red small", type: "button", text: "Turn it off" });
+      off.addEventListener("click", () => busy(off, async () => { await api("/api/streamcard", { action: "remove" }); toast("Overlay link removed.", "ok"); draw(); }));
+      const giftNote = d.kinds.includes("gift") && !d.public ? h("div", { class: "notice warn", text: "The gift card stays hidden until your public wishlist page is on. Turn it on in the next section." }) : null;
+      const copyBtn = h("button", { class: "btn gray small", type: "button", text: "Copy link" }); copyBtn.addEventListener("click", () => copy(link.value));
+      panel.replaceChildren(head, blurb, h("div", { class: "grid two" }, boxes.map(b => b[2])), giftNote,
+        h("div", { class: "row" }, save),
+        h("h4", { text: "Look" }), h("div", { class: "grid two" }, field("Where", anchor), field("Colors", theme), field("Seconds per card", hold), field("Size (1 is normal)", scale)),
+        field("Your private link (keep it to yourself)", link),
+        h("div", { class: "row" }, copyBtn, h("a", { class: "btn gray small", href: link.value, target: "_blank", rel: "noopener noreferrer", text: "Open it" }), reset, off),
+        h("p", { class: "muted small", text: "In OBS: add a Browser source, paste the link, set width 600 and height 200. Anyone with the link can see these cards, so make a new one if it leaks." }));
+    }
+    draw();
+    return panel;
+  }
+
+  async function streamerHubView() {
     const servers = state.me.servers.filter(g => g.bot !== false);
-    const holder = h("div");
-    app.replaceChildren(pageHead("Streamers", "Everyone in your server who linked a Twitch, Kick or YouTube channel, and who is live right now."), holder);
+    const guild = servers.length ? serverPicker(servers, currentParam()) : null;
+    const goBox = h("div", { id: "sh-live" }), rosterBox = h("div", { id: "sh-roster" });
+    const jump = (id, label) => h("a", { class: "chip-btn", href: "#/streamer", text: label, onclick: e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); } });
+    app.replaceChildren(pageHead("Streamer hub", "Everything for streamers in one place: announce when you go live, the overlays for OBS, your gift-me wishlist, and who else is streaming. In Discord: /server stream."),
+      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null,
+        h("div", { class: "chips" }, jump("sh-live", "Go live and pings"), jump("sh-cards", "Deals overlay"), jump("sh-gift", "Gift me page"), jump("sh-roster", "Who is live"))),
+      goBox, streamCardPanel(), h("div", { id: "sh-gift" }, publicPagePanel()),
+      h("div", { class: "panel" }, h("h3", { text: "Discord commands" }), h("p", { class: "muted small", text: "/server stream link links your Twitch, Kick or YouTube channel. /server stream live, title and game post or update a go-live message. /server stream end closes it. /server stream ping turns the go-live pings on or off for you. /alerts share and /server nowplaying let friends see you in a game." })),
+      rosterBox);
+    if (!servers.length) { goBox.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet, so go-live posts are off. The overlay and gift page below still work. Add the bot from the Servers page." })); rosterBox.remove(); return; }
+    await Promise.all([streamsView({ into: goBox, guild }), streamersView({ into: rosterBox, guild })]);
+  }
+
+  // ---------- streamers: everyone who linked a channel in a server, and who is live ----------
+  async function streamersView(opts = {}) {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    const holder = opts.into ?? h("div");
+    if (!opts.into) app.replaceChildren(pageHead("Streamers", "Everyone in your server who linked a Twitch, Kick or YouTube channel, and who is live right now."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
-    const guild = serverPicker(servers, currentParam());
+    const guild = opts.guild ?? serverPicker(servers, currentParam());
     const st = { show: "all", site: "all" }, SITE = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
     let data = null, timer = 0;
-    const alive = () => currentView() === "streamers" && holder.isConnected;
+    const alive = () => currentView() === (opts.into ? "streamer" : "streamers") && holder.isConnected;
     const ago = ms => { const m = Math.max(1, Math.round(ms / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
     const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label, "aria-pressed": String(on) }); b.addEventListener("click", fn); return b; };
     guild.addEventListener("change", () => { data = null; load(); });
@@ -5318,12 +5378,12 @@
           live ? h("a", { class: "btn green small sr-watch", href: live.url, target: "_blank", rel: "noopener noreferrer", text: "Watch the stream" }) : null);
       };
       holder.replaceChildren(
-        servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null,
+        servers.length > 1 && !opts.guild ? h("div", { class: "panel" }, field("Server", guild)) : null,
         h("div", { class: "sr-stats" },
           h("div", { class: "sr-stat" }, h("b", { text: String(all.length) }), h("span", { text: "linked" })),
           h("div", { class: "sr-stat" + (liveN ? " hot" : "") }, h("b", { text: String(liveN) }), h("span", { text: "live now" })),
           h("div", { class: "sr-stat" }, h("b", { text: String(all.length - liveN) }), h("span", { text: "offline" })),
-          h("a", { class: "btn blue sr-link", href: "#/streams?guild=" + encodeURIComponent(guild.value), text: "Link your channel" })),
+          h("a", { class: "btn blue sr-link", href: "#/" + (opts.into ? "streamer" : "streams") + "?guild=" + encodeURIComponent(guild.value), text: "Link your channel" })),
         all.length ? h("div", { class: "panel fy-filters" },
           h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Show" }), chip("Everyone", st.show === "all", () => { st.show = "all"; draw(); }), chip("Live now", st.show === "live", () => { st.show = "live"; draw(); }), chip("Offline", st.show === "off", () => { st.show = "off"; draw(); })),
           sites.length > 1 ? h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Site" }), chip("All", st.site === "all", () => { st.site = "all"; draw(); }), ...sites.map(x => chip(SITE[x], st.site === x, () => { st.site = x; draw(); }))) : null) : null,
@@ -5485,7 +5545,7 @@
     load();
   }
 
-  const VIEWS = { streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

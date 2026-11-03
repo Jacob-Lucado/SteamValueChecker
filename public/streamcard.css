@@ -1,0 +1,18 @@
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; font-family: system-ui, "Segoe UI", Roboto, sans-serif; }
+.sc { position: fixed; display: flex; --accent: #4da3ff; --bg: rgba(18, 20, 28, .92); --fg: #fff; --sub: #b8bfd0; }
+.sc[data-theme="light"] { --bg: rgba(255, 255, 255, .95); --fg: #14161c; --sub: #4a5163; }
+.sc[data-theme="glass"] { --bg: rgba(20, 22, 30, .55); }
+.sc[data-anchor~="t"] { top: 16px; } .sc[data-anchor~="b"] { bottom: 16px; } .sc[data-anchor~="m"] { top: 50%; transform: translateY(-50%); }
+.sc[data-anchor~="l"] { left: 16px; } .sc[data-anchor~="r"] { right: 16px; } .sc[data-anchor~="c"] { left: 50%; transform: translateX(-50%); }
+.sc[data-anchor~="m"][data-anchor~="c"] { transform: translate(-50%, -50%); }
+.card { display: flex; align-items: center; gap: 14px; min-width: 300px; max-width: 520px; padding: 12px 18px 12px 12px; border-radius: 14px; background: var(--bg); color: var(--fg);
+  border-left: 5px solid var(--accent); box-shadow: 0 6px 24px rgba(0, 0, 0, .35); opacity: 0; transform: translateY(8px); transition: opacity .45s ease, transform .45s ease; }
+.card.in { opacity: 1; transform: none; }
+.card img { width: 120px; aspect-ratio: 460 / 215; object-fit: cover; border-radius: 8px; background: #222; flex: none; }
+.card .gift { width: 44px; height: 44px; display: grid; place-items: center; font-size: 28px; flex: none; }
+.card .tag { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.card .name { font-size: 18px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.card .line { font-size: 14px; color: var(--sub); margin-top: 2px; }
+.card .price { font-size: 22px; font-weight: 800; }
+.card .off { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 800; }
+.card s { color: var(--sub); font-size: 14px; margin-left: 6px; }

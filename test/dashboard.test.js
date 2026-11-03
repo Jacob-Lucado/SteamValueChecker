@@ -1975,3 +1975,36 @@ test("playtests page data needs sign-in and lists what the sources found", async
     assert.equal(r.data.sources.abg, true);
     await t.close();
 });
+
+test("stream cards overlay: a private link per person that shows the best deal, a free game and the gift page, and a new link kills the old one", async () => {
+    const o = await signedIn({ extra: { botGuilds: () => true } });
+    try {
+        assert.equal((await o.request("/api/streamcard")).data.on, false);
+        assert.equal((await o.request("/api/streamcard", { method: "POST", body: { action: "create" }, headers: { Origin: "https://evil.example" } })).status, 403);
+        assert.equal((await o.request("/api/streamcard/data?token=svcd_" + "x".repeat(32))).status, 404, "an unknown link shows nothing");
+        o.advance(5_000);
+        await o.request("/api/wishlist/add", { method: "POST", body: { title: "Hades" } });
+        const made = (await o.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
+        assert.match(made.token, /^svcd_[A-Za-z0-9_-]{32}$/); assert.deepEqual(made.kinds, ["deal", "free", "gift"]);
+        // the overlay page asks with no cookie at all
+        const ask = async token => { const r = await fetch(o.base + "/api/streamcard/data?token=" + token); return { status: r.status, data: await r.json().catch(() => null) }; };
+        let got = await ask(made.token);
+        assert.equal(got.status, 200);
+        const kinds = got.data.cards.map(c => c.kind);
+        assert.deepEqual(kinds, ["deal", "free"], "no gift card until a public page exists");
+        assert.equal(got.data.cards[0].title, "Hades"); assert.equal(got.data.cards[0].discount, 50); assert.equal(got.data.cards[0].price, 10);
+        assert.equal(got.data.cards[1].title, "Alpha");
+        assert.ok(!JSON.stringify(got.data).includes("u1"), "no Discord id leaves the bot");
+        await o.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
+        await o.request("/api/streamcard", { method: "POST", body: { action: "save", kinds: ["gift"] } });
+        got = await ask(made.token);
+        assert.deepEqual(got.data.cards.map(c => c.kind), ["gift"]); assert.match(got.data.cards[0].url, /#\/u\/jacob$/);
+        const fresh = (await o.request("/api/streamcard", { method: "POST", body: { action: "reset" } })).data;
+        assert.notEqual(fresh.token, made.token); assert.deepEqual(fresh.kinds, ["gift"], "a new link keeps the chosen cards");
+        assert.equal((await ask(made.token)).status, 404); assert.equal((await ask(fresh.token)).status, 200);
+        assert.equal((await o.request("/api/streamcard", { method: "POST", body: { action: "remove" } })).data.on, false);
+        assert.equal((await ask(fresh.token)).status, 404);
+        const page = await fetch(o.base + "/streamcard");
+        assert.equal(page.status, 200); assert.match(await page.text(), /streamcard\.js/);
+    } finally { await o.close(); }
+});

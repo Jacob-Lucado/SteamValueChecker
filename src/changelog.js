@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.12", date: "2026-11-12", title: "Streamer hub, Now playing and squad-ups", items: [
+        "**Streamer hub:** one page (Streamers in the menu) with go-live posts and pings, your channel link, the music overlay, the new deals overlay, your public gift-me wishlist and who is live.",
+        "**Deals overlay for OBS:** a private link that rotates the best deal on your wishlist, a free game right now and a gift-me card. Pick the cards, corner, colours and speed.",
+        "**Now playing:** `/server nowplaying` and a dashboard page show who in your server is in a game. Members opt in with `join:true`. Setup adds a #now-playing channel and Squad pings role for squad-up posts when two or more play the same game.",
+    ] },
     { version: "2026.11.11", date: "2026-11-11", title: "Playtests page and a guided first run", items: [
         "**More playtest sources, no duplicates:** playtests, betas and demos are now also read from GamerPower (free beta and playtest key listings), itch.io's playtest tag and Steam's list of new demos, next to Alpha Beta Gamer and Steam announcements. Steam's demo list is long, so it only counts for games on someone's wishlist. A game announced by one source is not announced again by another, in your DMs, in server channels or on the Playtests page, and each new source starts quiet so nothing is dumped on you when it is added.",
         "**Refresh the playtest channel:** server managers can run `/manage community playtests` (or press **Post current playtests now** in the dashboard's Ping roles panel) to post what is listed right now, not only what is new. It posts the newest 8 (up to 15), oldest first, without pinging the role, and the regular check won't repeat them. Once a minute at most.",

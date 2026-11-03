@@ -47,6 +47,7 @@ import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
 import { playtestBoard } from "../playboard.js";
 import { whoIsPlaying } from "../nowplaying.js";
+import { streamCardData, STREAMCARD_KINDS } from "../streamcard.js";
 import { createPlaytestSources } from "../playsources.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -105,6 +106,9 @@ const FILES = {
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
     "/overlay": ["overlay.html", "text/html; charset=utf-8"],
+    "/streamcard": ["streamcard.html", "text/html; charset=utf-8"],
+    "/streamcard.css": ["streamcard.css", "text/css; charset=utf-8"],
+    "/streamcard.js": ["streamcard.js", "text/javascript; charset=utf-8"],
     "/overlay.css": ["overlay.css", "text/css; charset=utf-8"],
     "/overlay.js": ["overlay.js", "text/javascript; charset=utf-8"],
     "/music": ["music.html", "text/html; charset=utf-8"],
@@ -298,7 +302,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             "Cross-Origin-Opener-Policy": "same-origin",
             ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
             // The data and sign-in endpoints never belong in a search result, even if something links to them.
-            ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music|overlay)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
+            ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music|overlay|streamcard)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
             "Content-Security-Policy": /^\/overlay(\?|$)/.test(path) ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
             ...(/^\/overlay(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
             // The terms and privacy PDFs are shown in a frame on our own pages, so they may be framed by us and by no one else.
@@ -1807,6 +1811,33 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
             const ids = db.sharingMembers(g.id).slice(0, 60);
             return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
+        },
+        // The streamer's deals overlay for OBS: their own private link, no server needed.
+        "GET /api/streamcard": async (req) => {
+            const s = session(req), o = db.getStreamCard(s.userId), u = userRow(s);
+            return { on: Boolean(o), token: o?.token ?? null, kinds: o?.kinds ?? STREAMCARD_KINDS, base: origin + "/streamcard", slug: u.profile_slug ?? null, public: Boolean(u.profile_public) };
+        },
+        "POST /api/streamcard": async (req, body) => {
+            const s = session(req); userRow(s);
+            if (body.action === "remove") { db.removeStreamCard(s.userId); return { on: false, token: null }; }
+            if (body.action === "save") { if (!db.getStreamCard(s.userId)) throw new HttpError(404, "Make your link first."); db.setStreamCardKinds(s.userId, Array.isArray(body.kinds) ? body.kinds : []); return { on: true, kinds: db.getStreamCard(s.userId).kinds }; }
+            if (body.action !== "create" && body.action !== "reset") throw new HttpError(400, "Unknown action.");
+            const had = db.getStreamCard(s.userId), token = db.resetStreamCard(s.userId);
+            if (had && body.action === "reset") db.setStreamCardKinds(s.userId, had.kinds);
+            return { on: true, token, kinds: db.getStreamCard(s.userId).kinds };
+        },
+        // What the overlay page asks for. No sign-in: the long random link is the key. Answers are kept five minutes so OBS can ask often.
+        "GET /api/streamcard/data": async (req, _b, url) => {
+            if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const o = db.streamCardByToken(String(url.searchParams.get("token") ?? ""));
+            if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
+            const u = db.getUser(o.user_id);
+            return await remember("scard:" + o.token + ":" + o.kinds.join(), 5 * 60_000, () => streamCardData({
+                kinds: o.kinds, user: null,
+                deals: async () => (await viewRows(db, itad, u)).rows,
+                free: async () => (await enrichFree(await itad.getGiveawayList())).filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => ({ title: g.title, shop: g.shop, expiry: g.expiry, art: freeArt(g) ?? null })),
+                giftUrl: u?.profile_slug && u.profile_public ? `${origin}/#/u/${u.profile_slug}` : null
+            }));
         },
         "GET /api/nowplaying": async (req, _b, url) => {
             // Same rules as /server nowplaying: members who turned it on (/alerts nowplaying) and share their library.
