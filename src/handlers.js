@@ -5,7 +5,7 @@ import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
-import { CONTEXT_COMPARE, CONTEXT_WISHLIST } from "./commands.js";
+import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_PRICE, CONTEXT_ADD } from "./commands.js";
 import { salesEmbed, upcomingSales, salesBefore } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
@@ -17,7 +17,7 @@ import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
-import { contextWishlistEmbed } from "./render.js";
+import { contextWishlistEmbed, giftIdeasEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
 import { steamReviews } from "./reviews.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
@@ -83,6 +83,13 @@ const withCard = (spec, name, alt, embed) => {
     try { return { files: [{ attachment: Buffer.from(toPng(panelSvg(spec))), name, description: alt }] }; }
     catch { return { embeds: [embed] }; }
 };
+
+/** A game title out of a chat message: first line, links and mentions removed, kept short. Null when nothing is left. */
+export function gameTitleFromText(text) {
+    const line = String(text ?? "").split("\n").map(l => l.trim()).find(Boolean) ?? "";
+    const t = line.replace(/https?:\/\/\S+/g, " ").replace(/<[@#:][^>]*>/g, " ").replace(/[*_`~>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
+    return t.length >= 2 ? t : null;
+}
 
 export function createHandlers({ db, itad, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
     // ---------- /me wishlist ----------
@@ -872,7 +879,7 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         try {
             const target = i.targetUser;
             if (i.commandName === CONTEXT_COMPARE) return await compareWith(i, target, false);
-            if (i.commandName !== CONTEXT_WISHLIST) return;
+            if (i.commandName !== CONTEXT_WISHLIST && i.commandName !== CONTEXT_GIFTS) return;
             if (target.bot) return eph(i, "Bots don't have a wishlist.");
             const them = db.getUser(target.id);
             const name = target.displayName ?? target.username;
@@ -880,9 +887,33 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const page = await publicWishlist(db, itad, them.profile_slug);
             if (!page) return void await i.editReply(`${name} hasn't shared a wishlist page.`);
-            await i.editReply({ embeds: [contextWishlistEmbed(name, page, publicUrl ? `${publicUrl}/#/u/${page.slug}` : null)] });
+            const link = publicUrl ? `${publicUrl}/#/u/${page.slug}` : null;
+            await i.editReply({ embeds: [i.commandName === CONTEXT_GIFTS ? giftIdeasEmbed(name, page, link) : contextWishlistEmbed(name, page, link)] });
         } catch (err) { await failed(i, "context menu", err); }
     }
 
-    return { handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    /** Right-click a message: its text is read as a game title, to price it or to add it to the caller's wishlist. */
+    async function handleMessageContext(i) {
+        try {
+            const title = gameTitleFromText(i.targetMessage?.content);
+            if (!title) return await eph(i, "That message has no game title I can read. Try one that is just the name of a game.");
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            db.ensureUser(i.user.id, i.guildId ?? null);
+            if (i.commandName === CONTEXT_ADD) {
+                const out = await addGameByTitle(db, itad, i.user.id, title, null, null);
+                return void await i.editReply(`Added **${out.name}**${out.approx ? " (closest match)" : ""}. Alert: ${out.trigger}.`);
+            }
+            const user = db.getUser(i.user.id);
+            const [hit] = await itad.lookupTitles([title]);
+            if (!hit?.id) throw new UserError(`I could not find a game called ${title}.`);
+            const name = hit.approx ? hit.matched : title;
+            const prices = await itad.getPrices([hit.id], user.region);
+            const s = summarize(prices.get(hit.id), { majorOnly: user.stores === "major" });
+            const now = { ...current(s), currency: s.currency };
+            if (now.price === null) throw new UserError("No current price found for that game.");
+            await i.editReply({ embeds: [checkEmbed(name, now, dealVerdict(now), null, [], null)] });
+        } catch (err) { await failed(i, "message menu", err); }
+    }
+
+    return { handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

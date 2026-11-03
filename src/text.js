@@ -50,7 +50,7 @@ export const HELP_PAGES = [
     { key: "server", label: "Your server", emoji: "🏠", title: "/server",
         description: "Things for everyone in a server. `/server serverlist`, `leaderboard`, `serverstats` and `calendar` use the server you last used the bot in when you ask in a DM.",
         fields: [
-            { name: "Play together", value: "`/server gamenight` (in voice) shows what everyone owns. `/server lfg` `post` / `list` / `close` finds players. `/server compare` (or right-click a member, Apps, **Compare libraries**) lines your library up against a friend's." },
+            { name: "Play together", value: "`/server gamenight` (in voice) shows what everyone owns. `/server lfg` `post` / `list` / `close` finds players. `/server compare` (or right-click a member, Apps, **Compare libraries**; right-click a message with a game title to price it or add it) lines your library up against a friend's." },
             { name: "Shared lists and boards", value: "`/server serverlist` `add` / `view` / `vote` / `remove`: a wishlist your server shares. `/server leaderboard` and `/server serverstats` show boards for members who opted in." },
             { name: "Levels and invites", value: "`/server rank` your level and place. `/server levels` the top members. `/server invites` `me` / `top` / `link`." },
             { name: "Streams", value: "`/server stream` `link` connects your Twitch, Kick or YouTube channel so I post when you go live and close the post when you finish, with no commands needed (`unlink` stops it). `live` posts by hand for other sites, `end` marks it finished, `ping` turns the go-live ping on or off for you, `list` shows who is live, `setup` (managers) picks the streamer role, channel and ping role." },

@@ -397,6 +397,15 @@ export function contextWishlistEmbed(name, page, link = null) {
     };
 }
 
+/** Right-click "Gift ideas": the games on their shared wishlist that are on sale and that nobody has claimed yet. */
+export function giftIdeasEmbed(name, page, link = null) {
+    const picks = (page.games ?? []).filter(g => g.discount > 0 && !g.claim).slice(0, 8);
+    const url = safeUrl(link) ?? undefined;
+    if (!picks.length) return { color: COLOR, title: `Gift ideas for ${name}`, url, description: "Nothing on their wishlist is on sale and unclaimed right now. Their full list is under **See their wishlist**.", footer: { text: "Prices by IsThereAnyDeal" } };
+    const line = g => `• **${g.title}**: ${money(g.price, g.currency)}${g.shop ? ` at ${g.shop}` : ""} (${g.discount}% off)`;
+    return { color: COLOR, title: `Gift ideas for ${name}`, url, description: `On sale right now, and not claimed by anyone yet:\n${picks.map(line).join("\n")}`, footer: { text: "Shared by them with /me publicpage  •  Prices by IsThereAnyDeal" } };
+}
+
 /** The server's shared list with votes and prices. */
 export function serverListEmbed(rows, currency, limit = 15) {
     if (!rows.length) return { color: COLOR, title: "Server wishlist", description: "Nothing here yet. Add a game with `/server serverlist add`." };

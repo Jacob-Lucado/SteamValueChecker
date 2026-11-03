@@ -4,7 +4,7 @@ export const CHANGELOG = [
         "**Year in games:** `/alerts yearinreview` (off by default) sends your recap card (hours, months, top games) by DM from December 26. It needs Steam linked.",
         "**Refund reminders:** `/alerts refund` (off by default) warns you about two days before the 14-day Steam refund window closes on a game you have played under two hours. It needs Steam linked, and only counts games that show up after you link.",
         "**Playtime milestones:** `/alerts milestones` (off by default) sends a card when a game passes 100, 250, 500, 1000 or 2000 hours. The first check is quiet.",
-        "**Right-click shortcuts:** right-click (or long-press) a member, then Apps: **Compare libraries** or **See their wishlist**.",
+        "**Right-click shortcuts:** right-click (or long-press) a member, then Apps: **Compare libraries**, **See their wishlist** or **Gift ideas** (their shared wishlist games that are on sale and not yet claimed). Right-click a message that is just a game title for **Check this game's price** or **Add to my wishlist**.",
     ] },
     { version: "2026.11.09", date: "2026-11-09", title: "DLC sales and an installable dashboard", items: [
         "**DLC sale alerts:** turn on `/alerts dlc` (or the checkbox in Alert settings) and the bot tells you when DLC or add-ons for a game you play go 40% off or more. It looks at the Steam games you have played for two hours or more, and your own minimum discount still applies. Your first check is quiet.",

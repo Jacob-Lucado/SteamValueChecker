@@ -735,8 +735,14 @@ export const hubCommands = [
 // Right-click a member, then Apps. These sit beside the slash commands and don't count toward their limits.
 export const CONTEXT_COMPARE = "Compare libraries";
 export const CONTEXT_WISHLIST = "See their wishlist";
-export const contextCommands = [CONTEXT_COMPARE, CONTEXT_WISHLIST].map(name =>
-    new ContextMenuCommandBuilder().setName(name).setType(ApplicationCommandType.User).setContexts(InteractionContextType.Guild).toJSON());
+export const CONTEXT_GIFTS = "Gift ideas";
+// Right-click a message, then Apps: the message text is read as a game title.
+export const CONTEXT_PRICE = "Check this game's price";
+export const CONTEXT_ADD = "Add to my wishlist";
+export const contextCommands = [
+    ...[CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS].map(name => new ContextMenuCommandBuilder().setName(name).setType(ApplicationCommandType.User).setContexts(InteractionContextType.Guild).toJSON()),
+    ...[CONTEXT_PRICE, CONTEXT_ADD].map(name => new ContextMenuCommandBuilder().setName(name).setType(ApplicationCommandType.Message).setContexts(InteractionContextType.Guild, InteractionContextType.BotDM).toJSON())
+];
 export const HUB_NAMES = new Set(HUBS.map(h => h.name));
 // Old command names that only worked inside a server (their hub also serves DMs, so the dispatcher checks).
 export const SERVER_ONLY_LEGACY = new Set(commands.filter(c => !(c.contexts ?? []).includes(1)).map(c => c.name));

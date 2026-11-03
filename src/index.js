@@ -620,6 +620,7 @@ client.on(Events.InteractionCreate, async i => {
         catch (err) { console.error(`[claim] ${err.name}: ${err.message}`); }
         return;
     }
+    if (i.isMessageContextMenuCommand()) return void handlers.handleMessageContext(i).catch(err => console.error(`[context] ${err.stack ?? err.message}`));
     if (i.isUserContextMenuCommand()) return void handlers.handleContextMenu(i).catch(err => console.error(`[context] ${err.stack ?? err.message}`));
     if (!i.isChatInputCommand()) return;
     console.log(`[command] /${i.hubName ? i.hubName + " " : ""}${i.commandName}${i.options?.getSubcommand?.(false) ? " " + i.options.getSubcommand(false) : ""}`);
