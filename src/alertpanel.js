@@ -7,10 +7,15 @@ import { REGIONS } from "./constants.js";
 import { LANGS } from "./i18n.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
 import { WEEKDAYS } from "./timeutil.js";
+import { GAME_FAMILIES, expandGames } from "./codesource.js";
+import { alertHistoryEmbed } from "./render.js";
 
 const ID = "alerts";
 const COLOR = 0xff9800;
-const PAGES = [["types", "What you get"], ["delivery", "Where"], ["timing", "When"]];
+const PAGES = [["types", "What you get"], ["delivery", "Where"], ["timing", "When"], ["more", "More"]];
+const MUTES = [["alert", "Sale alerts"], ["bundle", "Bundle and giveaway alerts"], ["free", "Free game alerts"], ["news", "News and patch notes"], ["dlc", "DLC sale alerts"], ["refund", "Refund reminders"], ["milestones", "Playtime milestones"], ["yearly", "Year in games card"], ["nudge", "Monthly backlog pick"], ["achv", "Almost-complete achievements"], ["playtest", "Playtests and demos"], ["digest", "Weekly digest"], ["release", "Release-day alerts"], ["friend", "Friend birthday reminders"], ["codes", "Game code alerts"], ["promo", "Promo news alerts"]];
+const mutedSet = u => new Set(String(u.muted ?? "").split(",").filter(Boolean));
+const pickedFamilies = s => GAME_FAMILIES.filter(f => !s.games?.length || f.games.every(g => s.games.includes(g)));
 
 // [key, label, hint, read(user, subs), write(db, user, on)]
 const col = (c, dflt = 0) => ({ read: u => (u[c] ?? dflt) !== 0 && !!(u[c] ?? dflt), write: (db, u, on) => db.updateUser(u.discord_id, { [c]: on ? 1 : 0 }) });
@@ -49,6 +54,12 @@ export function alertPanel({ db }) {
                 `🌍 **Region:** ${REGIONS.find(r => r.value === u.region)?.name ?? u.region}`, `🏬 **Stores:** ${u.stores === "major" ? "Major stores" : "All tracked stores"}`,
                 `🗣️ **Language:** ${LANGS[u.lang] ?? "English"}`, `📣 **Server alert channel:** ${guild ? `<#${guild.channel_id}>` : "not set (DMs only)"}`].filter(x => x !== null).join("\n") };
         }
+        if (page === "more") {
+            const m = mutedSet(u), fam = pickedFamilies(s);
+            return { ...base, title: "Your alerts · More", description: [head, "", `🔕 **Muted:** ${m.size ? MUTES.filter(([k]) => m.has(k)).map(([, l]) => l).join(", ") : "nothing"}`,
+                "Muted alerts are not sent as DMs, but you can still read them on the dashboard's Notifications page.", "",
+                `🎟️ **Game codes for:** ${fam.length === GAME_FAMILIES.length ? "every game" : fam.length ? fam.map(f => f.title).join(", ") : "none picked"}`].join("\n") };
+        }
         return { ...base, title: "Your alerts · When", description: [head, "", `🌙 **Quiet hours:** ${describeQuiet(u)}`, `🗓️ **Weekly digest:** ${describeDigest(u)}`,
             `🏷️ **Minimum discount:** ${u.min_discount ? `${u.min_discount}% (starred games always come through)` : "any"}`, `🌐 **Time zone:** ${u.tz ?? "UTC"}`].filter(x => x !== null).join("\n") };
     }
@@ -70,6 +81,15 @@ export function alertPanel({ db }) {
                 rowOf(select(ID, "region", "", "Region for prices", REGIONS.map(r => ({ label: r.name, value: r.value, default: r.value === u.region })))),
                 rowOf(select(ID, "stores", "", "Which stores count", [{ label: "Major stores only", value: "major", default: u.stores === "major" }, { label: "All tracked stores", value: "all", default: u.stores !== "major" }])),
                 rowOf(select(ID, "lang", "", "Language", Object.entries(LANGS).map(([v, l]) => ({ label: l, value: v, default: (u.lang ?? "en") === v })))),
+                nav
+            ];
+        }
+        if (page === "more") {
+            const m = mutedSet(u), fam = new Set(pickedFamilies(s).map(f => f.key));
+            return [
+                rowOf(select(ID, "mute", "", "Mute kinds of alerts", MUTES.map(([k, l]) => ({ label: l, value: k, default: m.has(k) })), { min: 0, max: MUTES.length })),
+                rowOf(select(ID, "codegames", "", "Which games' codes to get", GAME_FAMILIES.map(f => ({ label: f.title, value: f.key, default: fam.has(f.key) })), { min: 1, max: GAME_FAMILIES.length })),
+                rowOf(button(ID, "Show recent alerts", "history", "more", { emoji: "📜" })),
                 nav
             ];
         }
@@ -95,7 +115,7 @@ export function alertPanel({ db }) {
             const u = ctx.db.getUser(ctx.user.discord_id);
             return { embeds: [embedFor(page, u, notice)], components: componentsFor(page, u) };
         },
-        handle(ctx, kind, arg, i, values) {
+        async handle(ctx, kind, arg, i, values) {
             const u = ctx.db.getUser(ctx.user.discord_id);
             const up = patch => ctx.db.updateUser(u.discord_id, patch);
             switch (kind) {
@@ -121,6 +141,13 @@ export function alertPanel({ db }) {
                     return { page: "timing", notice: values[0] === "off" ? "Digest off." : "Digest on." };
                 }
                 case "mindisc": up(prefsPatch({ min_discount: Number(values[0]) }, u)); return { page: "timing", notice: "Saved." };
+                case "mute": up({ muted: values.join(",") }); return { page: "more", notice: values.length ? "Muted." : "Nothing is muted now." };
+                case "codegames": {
+                    const games = expandGames(values), all = GAME_FAMILIES.flatMap(f => f.games);
+                    ctx.db.setAlertSubs(u.discord_id, { games: games.length === all.length ? [] : games });
+                    return { page: "more", notice: "Game codes updated." };
+                }
+                case "history": await i.reply({ embeds: [alertHistoryEmbed(ctx.db.listAlerts(u.discord_id, 15))], flags: 64 }); return { done: true };
                 case "quiet": return { modal: modal(u) };
                 case "quietoff": up({ quiet_start: null, quiet_end: null }); return { page: "timing", notice: "Quiet hours are off." };
                 case "quietm": {

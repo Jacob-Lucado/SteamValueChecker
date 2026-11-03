@@ -3508,11 +3508,13 @@
   function commandGuidePanel() {
     const body = h("div", { class: "cmd-guide" }, h("p", { class: "muted", text: "Loading the command list…" }));
     const panel = h("div", { class: "panel" }, h("h3", { text: "Commands and menus" }),
-      h("p", { class: "muted small", text: "In Discord, type the hub name and pick menu (for example /server menu). It opens a private panel where you choose an area and a command, and run the simple ones with a button. /alerts status opens your alert settings panel." }), body);
+      h("p", { class: "muted small", text: "In Discord, type the hub name and pick menu (for example /server menu). It opens a private panel with live status for each area. Choose a command, fill in its options with dropdowns, member and channel pickers or a small form, and press Run. No typing of options needed. /alerts status opens your alert settings panel." }), body);
     api("/api/commands").then(d => {
       body.replaceChildren(...d.hubs.map(hub => h("details", { class: "cmd-hub" },
         h("summary", {}, h("strong", { text: "/" + hub.name }), " ", h("span", { class: "muted", text: hub.description })),
-        hub.menu ? h("p", { class: "muted small" }, "Open the menu with ", h("code", { text: "/" + hub.name + " menu" }), ".") : null,
+        hub.menu ? h("p", { class: "muted small" }, "Open the panel with ", h("code", { text: "/" + hub.name + " menu" }), ". Every command here can be filled in and run from it.")
+          : hub.name === "alerts" ? h("p", { class: "muted small" }, "Open the settings panel with ", h("code", { text: "/alerts status" }), ".")
+          : hub.name === "music" ? h("p", { class: "muted small" }, "Open the panel with the All commands button on ", h("code", { text: "/player" }), ".") : null,
         ...hub.areas.map(a => h("div", { class: "cmd-area" },
           h("div", { class: "chips" }, h("h4", { text: a.label }), a.page ? h("a", { class: "btn gray small", href: "#/" + a.page, text: "Open in the dashboard" }) : null),
           h("ul", { class: "cmd-list" }, ...a.items.map(i => h("li", {}, h("code", { text: i.usage }), " ", i.desc))))))));

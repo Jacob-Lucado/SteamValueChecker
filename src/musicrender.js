@@ -38,7 +38,7 @@ export function controls(st, playerUrl = null, guildId = null) {
     const links = [...(listen ? [{ type: 2, style: 5, label: "🎧 Listen here", url: listen }] : []), ...(playerUrl ? [{ type: 2, style: 5, label: "🎛 Big player", url: playerUrl }] : [])];
     return [
         { type: 1, components: [btn("prev", "⏮"), btn(st.paused ? "resume" : "pause", st.paused ? "▶ Resume" : "⏸ Pause", st.paused ? 3 : 1), btn("skip", "⏭ Skip"), btn("stop", "⏹ Stop", 4), btn("loop", `🔁 ${LOOP_LABEL[st.loop]}`)] },
-        { type: 1, components: [btn("shuffle", "🔀 Shuffle"), btn("voldown", "🔉 -10"), btn("volup", "🔊 +10"), btn("queue", "📜 Queue")] },
+        { type: 1, components: [btn("shuffle", "🔀 Shuffle"), btn("voldown", "🔉 -10"), btn("volup", "🔊 +10"), btn("queue", "📜 Queue"), btn("cmds", "🎛 All commands")] },
         ...(links.length ? [{ type: 1, components: links }] : [])
     ];
 }

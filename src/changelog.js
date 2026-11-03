@@ -1,8 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.13", date: "2026-11-13", title: "Menus and settings panels", items: [
-        "**Menus for every command group:** `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu` and `/mod menu` open a private panel. Pick an area, pick a command, see exactly how to type it, and run the simple ones with a button. The dashboard Help page lists the same menus.",
-        "**`/alerts status` is now a settings panel:** one private message with dropdowns and buttons for every alert, where they go, quiet hours, digest and minimum discount. Every old `/alerts` command still works."
+        "**Panels for every command group:** `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu` and `/mod menu` open a private panel with live status for each area (your wishlist count, open giveaways, who is live and so on). Pick a command, fill in its options with dropdowns, member and channel pickers or a small form, and press Run. No typing of options. `/music` has the same from the All commands button on `/player`.",
+        "**`/alerts status` is now a settings panel:** dropdowns and buttons for every alert, where they go, quiet hours, digest, minimum discount, muting and which games send you codes. Every old `/alerts` command still works."
     ] },
     { version: "2026.11.12", date: "2026-11-12", title: "Streamer hub, Now playing and Game club", items: [
         "**Game club:** `/server club pick` sets the server's game of the month; the Game club page and `/server club status` show who is playing, finished or has not started, and a card is posted weekly in the club channel.",

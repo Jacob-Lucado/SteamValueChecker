@@ -21,7 +21,7 @@ export const HELP_PAGES = [
             { name: "🎮 /games", value: "Price games, check bundles, free games, sales, codes, sale prep." },
             { name: "👤 /me  ·  🔔 /alerts", value: "Your wishlist, library, Steam link, friends and data; how you get sale alerts." },
             { name: "🏠 /server", value: "Giveaways, game nights, levels, boards, events, invites, streams." },
-            { name: "🎵 /music  ·  /play  ·  /player", value: "SoundCloud and live radio in voice, with an Auto DJ. `/player` opens the big player." },
+            { name: "🎵 /music  ·  /play  ·  /player", value: "SoundCloud and live radio in voice, with an Auto DJ. `/player` opens the big player, and its All commands button opens a menu for every music command." },
             { name: "🛠 /manage  ·  🛡 /mod", value: "Setup and community tools for managers; moderation for mods." },
             { name: "🤖 /bot  ·  /dashboard", value: "Status, changelog, support and ideas. `/dashboard` opens the website." },
             { name: "🧭 Not sure what to type?", value: "Every hub has a menu: `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu`, `/mod menu`. Pick an area, pick a command, see how it works, and run the simple ones with a button. `/alerts status` opens your alert settings with dropdowns." }

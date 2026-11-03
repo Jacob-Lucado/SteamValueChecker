@@ -25,6 +25,7 @@ import { brandInteraction, brandRest } from "./brand.js";
 import { pagedPayload, handlePager, tokenOf, PAGE_PREFIX, JUMP_PREFIX } from "./pager.js";
 import { legacyRoute, SERVER_ONLY_LEGACY, hubCommands } from "./commands.js";
 import { hubPanel, replayAsCommand } from "./hubpanel.js";
+import { areaGlance } from "./panelglance.js";
 import { createStreams } from "./streamlive.js";
 import { createStreamHandlers } from "./streamhandlers.js";
 import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
@@ -138,13 +139,14 @@ const nowPlaying = createNowPlaying({ apiKey: cfg.steamApiKey });
 const panels = createPanels({ db });
 panels.register("alerts", alertPanel({ db }));
 // "Run it" in a hub menu replays the command as if it had been typed, minus options (only commands with none are offered).
-const runFromPanel = (i, hub, path) => replayAsCommand(i, hub, path, onInteraction);
-const HUB_MENUS = ["games", "me", "server", "manage", "bot", "mod"];
+const runFromPanel = (i, hub, path, vals) => replayAsCommand(i, hub, path, onInteraction, vals);
+const glanceFor = areaGlance(db);
+const HUB_MENUS = ["games", "me", "server", "manage", "bot", "mod", "music"];
 const GLANCE = {
     me: ctx => { const u = ctx.user; return ["", `Watching **${ctx.db.countItems(u.discord_id)}** games · prices in **${u.region}** · alerts ${u.paused ? "paused" : "on"}`]; }
 };
 for (const json of hubCommands.filter(c => HUB_MENUS.includes(c.name))) {
-    panels.register(`hub-${json.name}`, hubPanel({ json, glance: GLANCE[json.name], dashUrl: cfg.dashboard?.publicUrl ?? null, runner: runFromPanel }));
+    panels.register(`hub-${json.name}`, hubPanel({ json, glance: GLANCE[json.name], areaGlance: (ctx, area) => glanceFor(ctx, json.name, area), dashUrl: cfg.dashboard?.publicUrl ?? null, runner: runFromPanel }));
 }
 const handlers = createHandlers({ panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
@@ -619,6 +621,7 @@ async function onInteraction(i, again = false) {
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if ((i.isStringSelectMenu() && i.customId === "help_pick") || isHelpNav(i)) return handleHelpPick(i);
     if ((i.isButton() && i.customId.startsWith(PAGE_PREFIX)) || (i.isStringSelectMenu() && i.customId.startsWith(JUMP_PREFIX))) return handlePager(i, db);
+    if (i.isButton() && i.customId === "mu:cmds") return panels.open(i, "hub-music");
     if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);
     if (i.isStringSelectMenu() && i.customId.startsWith("mu_pick:")) return musicUi ? musicUi.handleSelect(i) : musicOff(i);
     if (i.isButton() && i.customId.startsWith("gn_poll:")) return handlers.handleGameNightPoll(i);
