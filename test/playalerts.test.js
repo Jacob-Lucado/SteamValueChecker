@@ -55,3 +55,15 @@ test("milestones: helpers and prefs", () => {
     assert.match(milestoneEmbed({ title: "G", appid: 1, hours: 100, minutes: 6100 }).description, /101 hours/);
     assert.deepEqual(prefsPatch({ refund: true, milestones: false }, {}), { refund: 1, milestones: 0 });
 });
+
+test("backlog pick: once a month, the biggest unplayed spend, nothing for an empty backlog", async () => {
+    const { runBacklogNudge } = await import("../src/nudge.js");
+    const w = world(); w.db.updateUser("u1", { nudge: 1 });
+    w.db.upsertLibrary("u1", [{ itad_id: "a", title: "Cheap", paid: 5 }, { itad_id: "b", title: "Pricey", paid: 60 }]);
+    const s = await runBacklogNudge({ db: w.db, notifier: w.notifier, now: w.now });
+    assert.equal(s.delivered, 1); assert.match(w.sent.at(-1).p.embeds[0].title, /Pricey/); assert.equal(w.sent.at(-1).kind, "nudge");
+    assert.equal((await runBacklogNudge({ db: w.db, notifier: w.notifier, now: w.now })).checked, 0);
+    w.at(T0 + 40 * DAY);
+    assert.equal((await runBacklogNudge({ db: w.db, notifier: w.notifier, now: w.now })).delivered, 1);
+    assert.deepEqual(prefsPatch({ nudge: true }, {}), { nudge: 1 });
+});

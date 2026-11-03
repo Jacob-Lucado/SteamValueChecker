@@ -1,6 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.10", date: "2026-11-10", title: "Refund reminders, milestones and right-click shortcuts", items: [
+        "**Backlog pick:** `/alerts nudge` (off by default) sends one game from your backlog to try on the 1st of each month, the biggest spend you haven't started.",
+        "**Who owns this:** right-click a message that is a game title, then Apps, **Who owns this?** to see which members who share their library own it and how long they have played.",
         "**Year in games:** `/alerts yearinreview` (off by default) sends your recap card (hours, months, top games) by DM from December 26. It needs Steam linked.",
         "**Refund reminders:** `/alerts refund` (off by default) warns you about two days before the 14-day Steam refund window closes on a game you have played under two hours. It needs Steam linked, and only counts games that show up after you link.",
         "**Playtime milestones:** `/alerts milestones` (off by default) sends a card when a game passes 100, 250, 500, 1000 or 2000 hours. The first check is quiet.",

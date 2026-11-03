@@ -5,7 +5,7 @@ import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
-import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_PRICE, CONTEXT_ADD } from "./commands.js";
+import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_PRICE, CONTEXT_ADD, CONTEXT_OWNERS } from "./commands.js";
 import { salesEmbed, upcomingSales, salesBefore } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
@@ -17,7 +17,7 @@ import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
-import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed } from "./render.js";
+import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed, ownersEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
 import { steamReviews } from "./reviews.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
@@ -400,6 +400,11 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
                 const on = i.options.getBoolean("enabled", true);
                 db.updateUser(user.discord_id, { refund: on ? 1 : 0 });
                 return eph(i, on ? "You will get a heads-up two days before the 14-day refund window closes on a Steam game you barely played (under two hours). It needs your Steam account linked, and only games that show up after you link count." : "Refund reminders are off.");
+            }
+            case "nudge": {
+                const on = i.options.getBoolean("enabled", true);
+                db.updateUser(user.discord_id, { nudge: on ? 1 : 0 });
+                return eph(i, on ? "On the 1st of each month you will get one game from your backlog to try, picked from what you haven't started. Mark games with `/me library status` and the pick gets better." : "The monthly backlog pick is off.");
             }
             case "yearinreview": {
                 const on = i.options.getBoolean("enabled", true);
@@ -908,6 +913,14 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
             if (!title) return await eph(i, "That message has no game title I can read. Try one that is just the name of a game.");
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             db.ensureUser(i.user.id, i.guildId ?? null);
+            if (i.commandName === CONTEXT_OWNERS) {
+                if (!i.guildId) return void await i.editReply("Use this in a server, so I know whose libraries to look at.");
+                const [hit] = await itad.lookupTitles([title]);
+                if (!hit?.id) throw new UserError(`I could not find a game called ${title}.`);
+                const name = hit.approx ? hit.matched : title;
+                const owners = db.ownersOf(i.guildId, hit.id);
+                return void await i.editReply({ embeds: [ownersEmbed(name, owners)], allowedMentions: { parse: [] } });
+            }
             if (i.commandName === CONTEXT_ADD) {
                 const out = await addGameByTitle(db, itad, i.user.id, title, null, null);
                 return void await i.editReply(`Added **${out.name}**${out.approx ? " (closest match)" : ""}. Alert: ${out.trigger}.`);

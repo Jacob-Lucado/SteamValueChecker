@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
 import { createHandlers, gameTitleFromText } from "../src/handlers.js";
-import { contextCommands, hubCommands, CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_PRICE, CONTEXT_ADD } from "../src/commands.js";
+import { contextCommands, hubCommands, CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_PRICE, CONTEXT_ADD, CONTEXT_OWNERS } from "../src/commands.js";
 
 const itad = { getPrices: async ids => new Map(ids.map(id => [id, { deals: [{ shop: { name: "GOG" }, price: { amount: 6, currency: "USD" }, regular: { amount: 20 }, cut: 70, url: "https://gog.test/x" }] }])) };
 const fake = (commandName, target, { user = "me", guildId = "g1" } = {}) => {
@@ -10,8 +10,8 @@ const fake = (commandName, target, { user = "me", guildId = "g1" } = {}) => {
     return { out, commandName, targetUser: target, user: { id: user }, guildId, deferReply: async () => {}, reply: async p => { out.push(p); }, editReply: async p => { out.push(p); } };
 };
 
-test("right-click commands: four user and two message commands, named for what they do, kept apart from the slash commands", () => {
-    assert.deepEqual(contextCommands.map(c => [c.name, c.type]), [[CONTEXT_COMPARE, 2], [CONTEXT_WISHLIST, 2], [CONTEXT_GIFTS, 2], [CONTEXT_TOGETHER, 2], [CONTEXT_PRICE, 3], [CONTEXT_ADD, 3]]);
+test("right-click commands: four user and three message commands, named for what they do, kept apart from the slash commands", () => {
+    assert.deepEqual(contextCommands.map(c => [c.name, c.type]), [[CONTEXT_COMPARE, 2], [CONTEXT_WISHLIST, 2], [CONTEXT_GIFTS, 2], [CONTEXT_TOGETHER, 2], [CONTEXT_PRICE, 3], [CONTEXT_ADD, 3], [CONTEXT_OWNERS, 3]]);
     assert.ok(contextCommands.every(c => c.description === undefined || c.description === ""));
     assert.ok(!hubCommands.some(c => c.type === 2), "they are registered separately");
 });
@@ -90,4 +90,18 @@ test("right-click play together: shared co-op or multiplayer games, counting unt
     assert.match(e.footer.text, /1 shared games not tagged/);
     const self = fake(CONTEXT_TOGETHER, { id: "me", username: "me" }); await h.handleContextMenu(self);
     assert.match(self.out[0].content, /That is you/);
+});
+
+test("right-click who owns this: only members who share, most played first", async () => {
+    const db = openDb(":memory:");
+    for (const id of ["me", "a", "b", "c"]) db.ensureUser(id, "g1");
+    for (const id of ["a", "b"]) db.updateUser(id, { share: 1 });
+    db.syncSteamGames("a", [{ itad_id: "g-Hades II", title: "Hades II", appid: 7, minutes: 60 }]); db.syncSteamGames("b", [{ itad_id: "g-Hades II", title: "Hades II", appid: 7, minutes: 600 }]); db.syncSteamGames("c", [{ itad_id: "g-Hades II", title: "Hades II", appid: 7, minutes: 9000 }]);
+    const it = { ...itad, lookupTitles: async ts => ts.map(t => ({ title: t, id: "g-" + t, approx: false })) };
+    const h = createHandlers({ db, itad: it });
+    const i = { ...fake(CONTEXT_OWNERS, null), targetMessage: { content: "Hades II" } }; await h.handleMessageContext(i);
+    const d = i.out.at(-1).embeds[0].description;
+    assert.match(d, /<@b>.*10h[\s\S]*<@a>/); assert.doesNotMatch(d, /<@c>/);
+    const dm = { ...fake(CONTEXT_OWNERS, null, { guildId: null }), targetMessage: { content: "Hades II" } }; await h.handleMessageContext(dm);
+    assert.match(String(dm.out.at(-1)), /in a server/);
 });

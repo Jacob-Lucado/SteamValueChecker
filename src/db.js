@@ -217,6 +217,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "refund", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "milestones", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "yearly", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("users", "nudge", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "free", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE INDEX IF NOT EXISTS users_guild ON users(guild_id, share)");
@@ -326,7 +327,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -563,6 +564,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
                           GROUP BY i.itad_id ORDER BY watchers DESC, title LIMIT 60`, guildId).map(clean);
     const setGroupMin = (guildId, min) => run("UPDATE guilds SET group_min = ? WHERE guild_id = ?", min, guildId).changes > 0;
     // Game night nudges in voice channels (a per-server switch; kept in the small key/value table).
+    /** Members of a server who share their library and own a game, most played first. */
+    const ownersOf = (guildId, itadId) => all("SELECT u.discord_id, l.minutes FROM users u JOIN library l ON l.discord_id = u.discord_id WHERE u.share = 1 AND u.guild_id = ? AND l.itad_id = ? ORDER BY l.minutes DESC, u.discord_id", guildId, itadId).map(clean);
     const sharingMembers = guildId => all("SELECT discord_id FROM users WHERE share = 1 AND guild_id = ?", guildId).map(r => r.discord_id);
     const setGameNight = (guildId, on) => (on ? run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = '1'", `gamenight:${guildId}`) : run("DELETE FROM status_meta WHERE key = ?", `gamenight:${guildId}`));
     const gameNightOn = guildId => getMeta(`gamenight:${guildId}`) === "1";
@@ -742,7 +745,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
-        purgeHiddenGuilds, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
+        purgeHiddenGuilds, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };

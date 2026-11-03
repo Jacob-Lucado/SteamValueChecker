@@ -397,6 +397,14 @@ export function contextWishlistEmbed(name, page, link = null) {
     };
 }
 
+/** Right-click a game title: which sharing members of the server own it. */
+export function ownersEmbed(name, owners) {
+    if (!owners.length) return { color: COLOR, title: `Who owns ${name}?`, description: "Nobody in this server who shares their library owns it. Members opt in with `/alerts share`." };
+    const hrs = m => (m >= 60 ? `${Math.round(m / 60)}h played` : "not played yet");
+    const lines = owners.slice(0, 15).map(o => `• <@${o.discord_id}> - ${hrs(o.minutes ?? 0)}`);
+    return { color: COLOR, title: `Who owns ${name}?`, description: `${owners.length} member${owners.length === 1 ? "" : "s"} in this server:\n${lines.join("\n")}${owners.length > 15 ? `\n…and ${owners.length - 15} more.` : ""}`, footer: { text: "Only members who share their library are counted" } };
+}
+
 /** Right-click "Play together": shared games that work for two. */
 export function playTogetherEmbed(name, r) {
     if (!r.shared) return { color: COLOR, title: `Play together with ${name}`, description: "You don't own any of the same games yet." };

@@ -53,6 +53,7 @@ export function prefsPatch(input, user) {
     if (has("free")) patch.free = input.free ? 1 : 0;
     if (has("free_dlc")) patch.free_dlc = input.free_dlc ? 1 : 0;
     if (has("dlc")) patch.dlc = input.dlc ? 1 : 0;
+    if (has("nudge")) patch.nudge = input.nudge ? 1 : 0;
     if (has("yearly")) patch.yearly = input.yearly ? 1 : 0;
     if (has("refund")) patch.refund = input.refund ? 1 : 0;
     if (has("milestones")) patch.milestones = input.milestones ? 1 : 0;
@@ -69,13 +70,13 @@ export function prefsPatch(input, user) {
     return patch;
 }
 
-export const MUTABLE = ["alert", "bundle", "free", "news", "dlc", "refund", "milestones", "yearly", "digest", "release", "friend", "codes", "promo"];
+export const MUTABLE = ["alert", "bundle", "free", "news", "dlc", "refund", "milestones", "yearly", "nudge", "digest", "release", "friend", "codes", "promo"];
 
 /** The new settings in a form that is safe to send to the browser. */
 export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? "UTC",
-        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, yearly: Boolean(u.yearly), refund: Boolean(u.refund), milestones: Boolean(u.milestones), dlc: Boolean(u.dlc),
+        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, nudge: Boolean(u.nudge), yearly: Boolean(u.yearly), refund: Boolean(u.refund), milestones: Boolean(u.milestones), dlc: Boolean(u.dlc),
         min_discount: u.min_discount ?? 0, muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
     };
 }
