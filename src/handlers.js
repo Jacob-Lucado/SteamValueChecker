@@ -5,7 +5,7 @@ import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
 } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
-import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_PRICE, CONTEXT_ADD } from "./commands.js";
+import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_PRICE, CONTEXT_ADD } from "./commands.js";
 import { salesEmbed, upcomingSales, salesBefore } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
@@ -17,7 +17,7 @@ import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
-import { contextWishlistEmbed, giftIdeasEmbed } from "./render.js";
+import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
 import { steamReviews } from "./reviews.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
@@ -25,7 +25,7 @@ import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
 import { current, dealVerdict } from "./alerts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
-import { compareLibraries } from "./compare.js";
+import { compareLibraries, playTogether } from "./compare.js";
 import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
 import { buyOrWait } from "./advice.js";
 import { daysUntilBirthday } from "./friendstore.js";
@@ -879,6 +879,15 @@ export function createHandlers({ db, itad, publicUrl = null, getStatus = () => n
         try {
             const target = i.targetUser;
             if (i.commandName === CONTEXT_COMPARE) return await compareWith(i, target, false);
+            if (i.commandName === CONTEXT_TOGETHER) {
+                const name = target.displayName ?? target.username;
+                if (!i.guildId) return await eph(i, "Use this in a server, so I know who you can play with.");
+                if (target.id === i.user.id) return await eph(i, "That is you. Pick someone else.");
+                if (target.bot) return await eph(i, "Bots don't have a library.");
+                if (!db.sharingMembers(i.guildId).includes(target.id)) return await eph(i, `${name} has not opted in. They can turn it on with \`/alerts share\`.`);
+                db.ensureUser(i.user.id, i.guildId);
+                return await i.reply({ embeds: [playTogetherEmbed(name, playTogether(db, i.user.id, target.id))], flags: MessageFlags.Ephemeral });
+            }
             if (i.commandName !== CONTEXT_WISHLIST && i.commandName !== CONTEXT_GIFTS) return;
             if (target.bot) return eph(i, "Bots don't have a wishlist.");
             const them = db.getUser(target.id);

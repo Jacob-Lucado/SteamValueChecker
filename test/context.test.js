@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
 import { createHandlers, gameTitleFromText } from "../src/handlers.js";
-import { contextCommands, hubCommands, CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_PRICE, CONTEXT_ADD } from "../src/commands.js";
+import { contextCommands, hubCommands, CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_PRICE, CONTEXT_ADD } from "../src/commands.js";
 
 const itad = { getPrices: async ids => new Map(ids.map(id => [id, { deals: [{ shop: { name: "GOG" }, price: { amount: 6, currency: "USD" }, regular: { amount: 20 }, cut: 70, url: "https://gog.test/x" }] }])) };
 const fake = (commandName, target, { user = "me", guildId = "g1" } = {}) => {
@@ -10,8 +10,8 @@ const fake = (commandName, target, { user = "me", guildId = "g1" } = {}) => {
     return { out, commandName, targetUser: target, user: { id: user }, guildId, deferReply: async () => {}, reply: async p => { out.push(p); }, editReply: async p => { out.push(p); } };
 };
 
-test("right-click commands: three user and two message commands, named for what they do, kept apart from the slash commands", () => {
-    assert.deepEqual(contextCommands.map(c => [c.name, c.type]), [[CONTEXT_COMPARE, 2], [CONTEXT_WISHLIST, 2], [CONTEXT_GIFTS, 2], [CONTEXT_PRICE, 3], [CONTEXT_ADD, 3]]);
+test("right-click commands: four user and two message commands, named for what they do, kept apart from the slash commands", () => {
+    assert.deepEqual(contextCommands.map(c => [c.name, c.type]), [[CONTEXT_COMPARE, 2], [CONTEXT_WISHLIST, 2], [CONTEXT_GIFTS, 2], [CONTEXT_TOGETHER, 2], [CONTEXT_PRICE, 3], [CONTEXT_ADD, 3]]);
     assert.ok(contextCommands.every(c => c.description === undefined || c.description === ""));
     assert.ok(!hubCommands.some(c => c.type === 2), "they are registered separately");
 });
@@ -75,4 +75,19 @@ test("right-click gift ideas: only sale games nobody claimed", async () => {
     const e = giftIdeasEmbed("Pal", page);
     assert.match(e.description, /\*\*A\*\*/); assert.doesNotMatch(e.description, /\*\*B\*\*|\*\*C\*\*/);
     assert.match(giftIdeasEmbed("Pal", { games: [] }).description, /Nothing/);
+});
+
+test("right-click play together: shared co-op or multiplayer games, counting untagged ones honestly", async () => {
+    const db = openDb(":memory:");
+    for (const id of ["me", "pal"]) { db.ensureUser(id, "g1"); db.updateUser(id, { share: 1 }); }
+    const g = [{ itad_id: "a", title: "Co Game", appid: 1, minutes: 30 }, { itad_id: "b", title: "Solo Game", appid: 2, minutes: 900 }, { itad_id: "c", title: "Mystery", appid: 3, minutes: 5 }];
+    db.syncSteamGames("me", g); db.syncSteamGames("pal", g);
+    db.saveAppTags(1, ["Action"], ["Co-op", "Single-player"]); db.saveAppTags(2, ["RPG"], ["Single-player"]);
+    const h = createHandlers({ db, itad });
+    const c = fake(CONTEXT_TOGETHER, { id: "pal", username: "Pal", displayName: "Pal" }); await h.handleContextMenu(c);
+    const e = c.out[0].embeds[0];
+    assert.match(e.description, /Co Game/); assert.doesNotMatch(e.description, /Solo Game/);
+    assert.match(e.footer.text, /1 shared games not tagged/);
+    const self = fake(CONTEXT_TOGETHER, { id: "me", username: "me" }); await h.handleContextMenu(self);
+    assert.match(self.out[0].content, /That is you/);
 });

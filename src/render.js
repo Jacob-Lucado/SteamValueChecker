@@ -397,6 +397,15 @@ export function contextWishlistEmbed(name, page, link = null) {
     };
 }
 
+/** Right-click "Play together": shared games that work for two. */
+export function playTogetherEmbed(name, r) {
+    if (!r.shared) return { color: COLOR, title: `Play together with ${name}`, description: "You don't own any of the same games yet." };
+    if (!r.picks.length) return { color: COLOR, title: `Play together with ${name}`, description: `You share ${r.shared} game${r.shared === 1 ? "" : "s"}, but none are tagged co-op or multiplayer${r.untagged ? ` (${r.untagged} haven't been tagged yet, so check back later)` : ""}.` };
+    const hrs = m => (m >= 60 ? `${Math.round(m / 60)}h played between you` : "not played yet");
+    const lines = r.picks.slice(0, 10).map(g => `• **${g.title}** ${g.coop ? "(co-op) " : ""}- ${hrs(g.minutes)}`);
+    return { color: COLOR, title: `Play together with ${name}`, description: `${r.picks.length} shared game${r.picks.length === 1 ? "" : "s"} you can play together. Ones you've barely touched come first:\n${lines.join("\n")}${r.picks.length > 10 ? `\n…and ${r.picks.length - 10} more.` : ""}`, footer: { text: `Tags come from Steam${r.untagged ? `  •  ${r.untagged} shared games not tagged yet` : ""}` } };
+}
+
 /** Right-click "Gift ideas": the games on their shared wishlist that are on sale and that nobody has claimed yet. */
 export function giftIdeasEmbed(name, page, link = null) {
     const picks = (page.games ?? []).filter(g => g.discount > 0 && !g.claim).slice(0, 8);

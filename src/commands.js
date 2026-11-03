@@ -736,11 +736,12 @@ export const hubCommands = [
 export const CONTEXT_COMPARE = "Compare libraries";
 export const CONTEXT_WISHLIST = "See their wishlist";
 export const CONTEXT_GIFTS = "Gift ideas";
+export const CONTEXT_TOGETHER = "Play together";
 // Right-click a message, then Apps: the message text is read as a game title.
 export const CONTEXT_PRICE = "Check this game's price";
 export const CONTEXT_ADD = "Add to my wishlist";
 export const contextCommands = [
-    ...[CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS].map(name => new ContextMenuCommandBuilder().setName(name).setType(ApplicationCommandType.User).setContexts(InteractionContextType.Guild).toJSON()),
+    ...[CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER].map(name => new ContextMenuCommandBuilder().setName(name).setType(ApplicationCommandType.User).setContexts(InteractionContextType.Guild).toJSON()),
     ...[CONTEXT_PRICE, CONTEXT_ADD].map(name => new ContextMenuCommandBuilder().setName(name).setType(ApplicationCommandType.Message).setContexts(InteractionContextType.Guild, InteractionContextType.BotDM).toJSON())
 ];
 export const HUB_NAMES = new Set(HUBS.map(h => h.name));
