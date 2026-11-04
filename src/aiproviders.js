@@ -108,3 +108,23 @@ export function chat({ provider = "anthropic", fetchFn = fetch, timeoutMs = 25_0
     if (!p) return Promise.resolve({ ok: false, status: 0, error: "Unknown AI service." });
     return ADAPTERS[p.kind]({ fetchFn, p, timeoutMs, ...rest });
 }
+
+const NOT_CHAT = /embed|whisper|tts|dall-?e|moderation|image|audio|realtime|transcribe|speech|rerank|guard/i;
+
+/** Asks the service which models this key can use. Returns { ok: true, models: [ids] } or { ok: false, status, error }. */
+export async function listModels({ provider = "anthropic", apiKey, fetchFn = fetch, timeoutMs = 15_000 }) {
+    const p = PROVIDERS[provider];
+    if (!p) return { ok: false, status: 0, error: "Unknown AI service." };
+    const get = (url, headers) => fetchFn(url, { method: "GET", headers, signal: AbortSignal.timeout(timeoutMs) });
+    let res;
+    if (p.kind === "anthropic") res = await get("https://api.anthropic.com/v1/models?limit=100", { "x-api-key": apiKey, "anthropic-version": "2023-06-01" });
+    else if (p.kind === "gemini") res = await get(`${p.url}/models?pageSize=200`, { "x-goog-api-key": apiKey });
+    else res = await get(p.url.replace(/\/chat\/completions$/, "/models"), { authorization: `Bearer ${apiKey}` });
+    if (!res.ok) return { ok: false, status: res.status, error: await errText(res) };
+    const d = await res.json();
+    let ids;
+    if (p.kind === "gemini") ids = (d?.models ?? []).filter(m => (m?.supportedGenerationMethods ?? []).includes("generateContent")).map(m => text(m?.name).replace(/^models\//, ""));
+    else ids = (d?.data ?? []).map(m => text(m?.id));
+    const models = [...new Set(ids.filter(id => MODEL_OK.test(id) && (p.kind === "gemini" || !NOT_CHAT.test(id))))].sort().slice(0, 300);
+    return { ok: true, models };
+}

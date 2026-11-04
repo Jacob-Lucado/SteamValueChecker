@@ -349,3 +349,19 @@ test("AI companion: a server's own OpenAI or Gemini key answers with that servic
     assert.match((await ck("openai", 404, "ghost")).error, /does not know a model called ghost/);
     assert.match((await ck("groq", 401, "m")).error, /Groq did not accept/);
 });
+
+test("AI services: asking a service which models a key can use", async () => {
+    const { listModels } = await import("../src/aiproviders.js");
+    const seen = [];
+    const fx = body => async (url, o) => { seen.push({ url, headers: o.headers, method: o.method }); return { ok: true, status: 200, json: async () => body }; };
+    const oa = await listModels({ provider: "groq", apiKey: "gsk_abcdefghijklmnop", fetchFn: fx({ data: [{ id: "llama-b" }, { id: "whisper-large" }, { id: "llama-a" }, { id: "text-embedding-3" }, { id: "llama-a" }] }) });
+    assert.deepEqual(oa.models, ["llama-a", "llama-b"], "sorted, no duplicates, speech and embedding models left out");
+    assert.equal(seen[0].url, "https://api.groq.com/openai/v1/models"); assert.equal(seen[0].headers.authorization, "Bearer gsk_abcdefghijklmnop");
+    const gm = await listModels({ provider: "gemini", apiKey: "AIza-1234567890123456", fetchFn: fx({ models: [{ name: "models/gem-chat", supportedGenerationMethods: ["generateContent"] }, { name: "models/gem-embed", supportedGenerationMethods: ["embedContent"] }] }) });
+    assert.deepEqual(gm.models, ["gem-chat"]); assert.equal(seen[1].headers["x-goog-api-key"], "AIza-1234567890123456");
+    const an = await listModels({ provider: "anthropic", apiKey: "sk-ant-" + "a".repeat(30), fetchFn: fx({ data: [{ id: "claude-x" }] }) });
+    assert.deepEqual(an.models, ["claude-x"]); assert.equal(seen[2].url, "https://api.anthropic.com/v1/models?limit=100");
+    const bad = await listModels({ provider: "openai", apiKey: "k".repeat(20), fetchFn: async () => ({ ok: false, status: 401, json: async () => ({ error: { message: "Incorrect API key" } }) }) });
+    assert.deepEqual([bad.ok, bad.status, bad.error], [false, 401, "Incorrect API key"]);
+    assert.equal((await listModels({ provider: "nope", apiKey: "x" })).ok, false);
+});

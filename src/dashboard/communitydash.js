@@ -5,7 +5,7 @@ import { UserError } from "../errors.js";
 import { backfillForum } from "../requestsync.js";
 import { postHoneypotNotice, HONEYPOT_TOPIC } from "../honeypot.js";
 import { aiLimits, aiUsedToday } from "../aichat.js";
-import { checkKeyShape, providerList, PROVIDERS } from "../aiproviders.js";
+import { checkKeyShape, providerList, PROVIDERS, listModels } from "../aiproviders.js";
 import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { createMemes, postMeme, MEME_HOURS } from "../memes.js";
@@ -180,6 +180,19 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         if (patch.requests_channel) backfillForum({ db, api: rest, guildId: gid, base: publicUrl }).catch(() => {}); // fill the forum with recent requests
         return row;
     }
+    /** The models a key can use, for the model picker. Uses the key typed in the box, or else the one this server already saved. */
+    async function aiModels(gid, b) {
+        const saved = db.getCommunity(gid);
+        const typed = String(b.ai_key ?? "").trim();
+        const provider = String(typed ? (b.ai_provider || "anthropic") : (saved.ai_provider || "anthropic"));
+        if (!PROVIDERS[provider]) fail(400, "Pick one of the AI services in the list.");
+        const apiKey = typed || (saved.ai_key && ai.vault ? ai.vault.decrypt(saved.ai_key) : null);
+        if (!apiKey) fail(400, "Paste your key first, then load the models.");
+        if (typed) { const bad = checkKeyShape(provider, typed, PROVIDERS[provider].defaultModel ?? "x"); if (bad) fail(400, bad); }
+        const r = await (ai.listModels ?? (o => listModels({ ...o, fetchFn: fetchImpl })))({ provider, apiKey }).catch(() => ({ ok: false, status: 0, error: "could not be reached" }));
+        if (!r.ok) fail(400, `${PROVIDERS[provider].label} answered ${r.status || "with an error"}${r.error ? ` (${r.error})` : ""}. Check the key.`);
+        return { provider, models: r.models };
+    }
     /** The #leaderboard board: where it lives, how often it refreshes, and an immediate refresh. */
     async function leaderboard(gid, b) {
         const patch = {};
@@ -312,5 +325,5 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
+    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
 }

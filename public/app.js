@@ -3142,7 +3142,15 @@
           custom.hidden = known;
           pick.addEventListener("change", () => { custom.hidden = pick.value !== "__custom"; });
           inputs.set(def.key, () => (pick.value === "__custom" ? custom.value.trim() : pick.value));
-          return h("div", {}, h("label", { text: def.label }), pick, custom, h("p", { class: "muted small", text: def.help }));
+          const dl = h("datalist", { id: "ai-bot-models" }); custom.setAttribute("list", "ai-bot-models"); custom.setAttribute("autocomplete", "off");
+          const loadBtn = h("button", { class: "btn gray small", type: "button", text: "Load models" });
+          loadBtn.addEventListener("click", () => busy(loadBtn, async () => {
+            const r = await api("/api/admin/ai/models", {});
+            dl.replaceChildren(...r.models.map(m => h("option", { value: m })));
+            if (pick.value !== "__custom") { custom.value = def.value; pick.value = "__custom"; custom.hidden = false; }
+            toast(`${r.models.length} models found. Click the model box to pick one.`, "ok");
+          }));
+          return h("div", {}, h("label", { text: def.label }), pick, custom, dl, h("div", { class: "row" }, loadBtn), h("p", { class: "muted small", text: def.help + " Load models asks the service what the bot's key can use." }));
         } else el = h("input", { type: "text", maxlength: String(def.maxLen), value: def.value });
         inputs.set(def.key, () => (def.type === "int" ? Number(el.value) : el.value));
         return h("div", {}, h("label", { text: def.label }), el, h("p", { class: "muted small", text: def.help + (def.type === "int" ? ` (${def.min} to ${def.max}, normally ${def.default})` : "") }));
@@ -5625,6 +5633,14 @@
         const provOf = () => provs.find(p => p.id === provSel.value) || provs[0];
         const keyIn = h("input", { type: "password", autocomplete: "off", spellcheck: "false", maxlength: "400", placeholder: ai.keySet ? "Paste a new key to replace it" : "Paste your API key" });
         const modelIn = h("input", { type: "text", maxlength: "100", spellcheck: "false", value: ai.keyModel || "", placeholder: "Model name" });
+        const modelList = h("datalist", { id: "ai-models-" + st.guild_id });
+        modelIn.setAttribute("list", "ai-models-" + st.guild_id); modelIn.setAttribute("autocomplete", "off");
+        const loadModels = () => { const b = h("button", { class: "btn gray small", type: "button", text: "Load models" });
+          b.addEventListener("click", () => busy(b, async () => {
+            const r = await post("/api/community/ai-models", { ai_key: keyIn.value, ai_provider: provSel.value });
+            modelList.replaceChildren(...r.models.map(m => h("option", { value: m })));
+            toast(r.models.length ? `${r.models.length} models found. Click the Model box to pick one.` : "That key can't see any chat models.", r.models.length ? "ok" : "warn");
+          })); return b; };
         const keyHelp = h("p", { class: "muted small" });
         const refresh = () => {
           const pv = provOf();
@@ -5638,10 +5654,11 @@
           ai.keySet ? h("p", { class: "ai-use", text: `Using your own ${provName} key, ending ${ai.keyLast4 || "••••"}${ai.keyModel ? `, model ${ai.keyModel}` : ""}. ${ai.botKey ? "Your server is not counted against the bot's daily limit." : ""}` }) : null,
           ai.canStoreKey ? field("AI service", provSel) : h("p", { class: "muted small", text: "This bot can't store keys for servers yet." }),
           ai.canStoreKey ? field("Your own API key (optional)", keyIn) : null,
-          ai.canStoreKey ? field("Model", modelIn) : null,
+          ai.canStoreKey ? field("Model (press Load models to see what your key can use)", h("div", {}, modelIn, modelList)) : null,
           ai.canStoreKey ? keyHelp : null,
           ai.canStoreKey ? h("div", { class: "row" },
             save(ai.keySet ? "Replace key" : "Save key", () => { if (!keyIn.value.trim()) throw new Error("Paste your key first."); return post("/api/community/places", { ai_key: keyIn.value, ai_provider: provSel.value, ai_model: modelIn.value }); }),
+            loadModels(),
             ai.keySet ? save("Save model", () => post("/api/community/places", { ai_provider: provNow, ai_model: modelIn.value })) : null,
             ai.keySet ? save("Remove key", () => post("/api/community/places", { ai_key_clear: true })) : null) : null);
         const aiP = h("div", { class: "panel" }, h("h3", {}, "AI companion", ai.available ? null : h("span", { class: "pill", text: "Coming soon" })),

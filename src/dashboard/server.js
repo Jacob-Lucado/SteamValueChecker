@@ -28,6 +28,7 @@ import { DiscordApiError } from "./discord.js";
 import { createCommunityDash, CommunityError } from "./communitydash.js";
 import { createModDash, ModDashError } from "./moddash.js";
 import { botInviteUrl } from "../community.js";
+import { listModels } from "../aiproviders.js";
 import { connectionPayload } from "../linkedroles.js";
 import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
@@ -560,7 +561,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         return g;
     }
 
-    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, rt, ai: { available: Boolean(config.aiAvailable), phrase: Boolean(config.aiPhrase), vault: config.aiKeyVault ?? null, lite: config.aiLite !== false, isMain: g => Boolean(config.mainGuild?.isMain(g)), checkKey: config.aiCheckKey ?? null }, botId: config.clientId, publicUrl: config.publicUrl, ...(emojigg ? { emojigg, fetchImpl: emojigg.fetchImpl ?? globalThis.fetch } : {}) }) : null;
+    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, rt, ai: { available: Boolean(config.aiAvailable), phrase: Boolean(config.aiPhrase), vault: config.aiKeyVault ?? null, lite: config.aiLite !== false, listModels: config.aiListModels ?? null, isMain: g => Boolean(config.mainGuild?.isMain(g)), checkKey: config.aiCheckKey ?? null }, botId: config.clientId, publicUrl: config.publicUrl, ...(emojigg ? { emojigg, fetchImpl: emojigg.fetchImpl ?? globalThis.fetch } : {}) }) : null;
     /** Community actions: the same Discord permissions as the commands. Errors from the helper become normal dashboard errors. */
     const comm = async fn => {
         if (!cd) throw new HttpError(503, "Community features are not available on this bot.");
@@ -2063,6 +2064,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             return { image: "data:image/png;base64," + Buffer.from(png).toString("base64") };
         },
         "POST /api/community/support": async (req, body) => comm(() => cd.support(managerGuild(session(req), String(body.guild_id)).id, body)),
+        "POST /api/community/ai-models": async (req, body) => comm(() => cd.aiModels(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/places": async (req, body) => comm(() => cd.places(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/rules": async (req, body) => comm(() => cd.rules(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/announce": async (req, body) => {
@@ -2274,6 +2276,14 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (body.turnOff) db.setCommunity(id, { ai_on: 0 });
             if (body.plus !== undefined) db.setCommunity(id, { ai_plus: body.plus ? 1 : 0 });
             return { ok: true };
+        },
+        "POST /api/admin/ai/models": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!rt || !config.aiKey) throw new HttpError(400, "The bot has no AI key yet.");
+            const provider = rt.get("ai_provider");
+            const r = await listModels({ provider, apiKey: config.aiKey }).catch(() => ({ ok: false, status: 0, error: "could not be reached" }));
+            if (!r.ok) throw new HttpError(400, `The service answered ${r.status || "with an error"}${r.error ? ` (${r.error})` : ""}.`);
+            return { provider, models: r.models };
         },
         "POST /api/admin/ai/test": async (req, body) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
