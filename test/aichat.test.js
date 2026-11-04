@@ -391,3 +391,10 @@ test("who made you gets the creator embed", async () => {
     assert.equal(e.thumbnail.url, "https://x/creator.png");
     assert.match(e.title, /Jacob Lucado/);
 });
+
+test("default time zone is Eastern and old UTC users move over once", async () => {
+    const { DEFAULT_TZ, localParts } = await import("../src/timeutil.js");
+    assert.equal(DEFAULT_TZ, "America/New_York");
+    // 16:54 UTC on 2026-11-04 is 11:54 in New York (EST)
+    assert.equal(localParts(Date.UTC(2026, 10, 4, 16, 54)).minutes, 11 * 60 + 54);
+});

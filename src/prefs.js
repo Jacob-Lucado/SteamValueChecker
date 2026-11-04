@@ -2,7 +2,7 @@
 // Used by both the Discord commands and the dashboard, so the rules are the same in both.
 import { UserError } from "./errors.js";
 import { LANGS } from "./i18n.js";
-import { parseClock, formatClock, validTimezone, WEEKDAYS } from "./timeutil.js";
+import { parseClock, formatClock, validTimezone, WEEKDAYS, DEFAULT_TZ } from "./timeutil.js";
 
 /**
  * Turns input into a database patch. Input keys (all optional):
@@ -78,7 +78,7 @@ export const MUTABLE = ["alert", "bundle", "free", "news", "dlc", "refund", "mil
 /** The new settings in a form that is safe to send to the browser. */
 export function prefsView(u) {
     return {
-        quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? "UTC",
+        quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? DEFAULT_TZ,
         digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, playtest: u.playtest ?? 0, achv: Boolean(u.achv), nowplaying: Boolean(u.nowplaying), nudge: Boolean(u.nudge), yearly: Boolean(u.yearly), refund: Boolean(u.refund), milestones: Boolean(u.milestones), dlc: Boolean(u.dlc),
         min_discount: u.min_discount ?? 0, muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
     };

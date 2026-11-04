@@ -6,7 +6,7 @@ import { UserError } from "./errors.js";
 import { REGIONS } from "./constants.js";
 import { LANGS } from "./i18n.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
-import { WEEKDAYS } from "./timeutil.js";
+import { WEEKDAYS, DEFAULT_TZ } from "./timeutil.js";
 import { GAME_FAMILIES, expandGames } from "./codesource.js";
 import { alertHistoryEmbed } from "./render.js";
 
@@ -61,7 +61,7 @@ export function alertPanel({ db }) {
                 `🎟️ **Game codes for:** ${fam.length === GAME_FAMILIES.length ? "every game" : fam.length ? fam.map(f => f.title).join(", ") : "none picked"}`].join("\n") };
         }
         return { ...base, title: "Your alerts · When", description: [head, "", `🌙 **Quiet hours:** ${describeQuiet(u)}`, `🗓️ **Weekly digest:** ${describeDigest(u)}`,
-            `🏷️ **Minimum discount:** ${u.min_discount ? `${u.min_discount}% (starred games always come through)` : "any"}`, `🌐 **Time zone:** ${u.tz ?? "UTC"}`].filter(x => x !== null).join("\n") };
+            `🏷️ **Minimum discount:** ${u.min_discount ? `${u.min_discount}% (starred games always come through)` : "any"}`, `🌐 **Time zone:** ${u.tz ?? DEFAULT_TZ}`].filter(x => x !== null).join("\n") };
     }
 
     function componentsFor(page, u) {

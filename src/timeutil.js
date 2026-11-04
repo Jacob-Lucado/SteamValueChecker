@@ -5,9 +5,12 @@ export function validTimezone(tz) {
     catch { return false; }
 }
 
+// Where "10pm" and "Saturday 8pm" are read when someone hasn't picked a time zone. Eastern, since that's where the bot's owner is. DEFAULT_TZ overrides it.
+export const DEFAULT_TZ = validTimezone(process.env.DEFAULT_TZ) ? process.env.DEFAULT_TZ : "America/New_York";
+
 /** { minutes (since local midnight), weekday (0=Sunday), ymd } for a moment in a time zone. */
-export function localParts(ms, tz = "UTC") {
-    const zone = validTimezone(tz) ? tz : "UTC";
+export function localParts(ms, tz = DEFAULT_TZ) {
+    const zone = validTimezone(tz) ? tz : DEFAULT_TZ;
     const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
         timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit",
         hour: "2-digit", minute: "2-digit", weekday: "short"

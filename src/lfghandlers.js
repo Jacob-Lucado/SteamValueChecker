@@ -2,7 +2,7 @@
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { parseWhen } from "./lfg.js";
 import { LFG_JOIN, LFG_LEAVE, LFG_CLOSE } from "./lfgrender.js";
-import { validTimezone } from "./timeutil.js";
+import { validTimezone, DEFAULT_TZ } from "./timeutil.js";
 import { UserError } from "./errors.js";
 
 export function createLfgHandlers({ db, lfg }) {
@@ -30,14 +30,14 @@ export function createLfgHandlers({ db, lfg }) {
                 return eph(i, `Closed **${p.game}**.`);
             }
             const user = db.ensureUser(i.user.id, i.guildId);
-            const tz = validTimezone(user.tz) ? user.tz : "UTC";
+            const tz = validTimezone(user.tz) ? user.tz : DEFAULT_TZ;
             const startsAt = parseWhen(i.options.getString("when", true), { tz });
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const { post, eventError } = await lfg.create({
                 guildId: i.guildId, channelId: i.channelId, creatorId: i.user.id, game: i.options.getString("game", true),
                 startsAt: startsAt ?? NaN, slots: i.options.getInteger("slots") ?? 4, note: i.options.getString("note"), event: Boolean(i.options.getBoolean("event"))
             });
-            return void await i.editReply(`Posted **${post.game}** in this channel.${eventError ? ` ${eventError}` : ""}${user.tz === "UTC" && !i.options.getString("when").match(/^in |^now$/i) ? "\nTimes use your time zone. Set it with `/alerts quiethours timezone:`, or it is read as UTC." : ""}`);
+            return void await i.editReply(`Posted **${post.game}** in this channel.${eventError ? ` ${eventError}` : ""}`);
         } catch (err) { await failed(i, err); }
     }
 

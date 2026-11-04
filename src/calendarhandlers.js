@@ -2,7 +2,7 @@
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { calendarEntries, KINDS } from "./calendar.js";
 import { parseWhen } from "./lfg.js";
-import { validTimezone } from "./timeutil.js";
+import { validTimezone, DEFAULT_TZ } from "./timeutil.js";
 import { UserError } from "./errors.js";
 
 const ICON = { release: "🎮", sale: "🏷️", event: "📅", lfg: "👥" };
@@ -38,7 +38,7 @@ export function createCalendarHandlers({ db, calendar, publicUrl }) {
             if (sub === "add") {
                 if (!i.guildId) return void await eph(i, "Use this in a server.");
                 if (!canManage(i)) return void await eph(i, "You need the Manage Server permission to add events.");
-                const tz = validTimezone(user.tz) ? user.tz : "UTC";
+                const tz = validTimezone(user.tz) ? user.tz : DEFAULT_TZ;
                 const startsAt = parseWhen(i.options.getString("when", true), { tz });
                 if (startsAt === null) throw new UserError("I could not read that time. Try `tomorrow 19:30`, `friday 9pm` or `2026-11-07 20:00` (in your time zone, set with `/alerts quiethours`).");
                 const announce = i.options.getBoolean("announce") !== false;

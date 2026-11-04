@@ -2,7 +2,7 @@
 // (post, edit, createEvent), so the rules here are testable on their own.
 import { UserError } from "./errors.js";
 import { localParts } from "./timeutil.js";
-import { parseClock } from "./timeutil.js";
+import { parseClock, DEFAULT_TZ } from "./timeutil.js";
 import { lfgPayload } from "./lfgrender.js";
 
 const MAX_OPEN_PER_PERSON = 3, GRACE_MS = 3 * 3600_000, MAX_AHEAD_MS = 30 * 86400_000;
@@ -26,7 +26,7 @@ const addDays = (ymd, n) => { const [y, m, d] = ymd.split("-").map(Number); retu
  * "now", "in 90 minutes", "in 2 hours", "8pm", "tonight 8pm", "tomorrow 19:30", "friday 9pm" or "2026-11-07 20:00",
  * read in the person's time zone. Returns UTC milliseconds, or null when it can't be understood.
  */
-export function parseWhen(text, { tz = "UTC", now = Date.now() } = {}) {
+export function parseWhen(text, { tz = DEFAULT_TZ, now = Date.now() } = {}) {
     const s = String(text ?? "").trim().toLowerCase().replace(/\s+/g, " ");
     if (!s) return null;
     if (s === "now") return now;

@@ -4,6 +4,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { DEFAULT_TZ } from "./timeutil.js";
 import { giveawaySchema, giveawayStore } from "./gwstore.js";
 import { ticketSchema, ticketStore } from "./ticketstore.js";
 import { requestSchema, requestStore } from "./requeststore.js";
@@ -213,6 +214,11 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "quiet_start", "INTEGER");
     addColumn("users", "quiet_end", "INTEGER");
     addColumn("users", "tz", "TEXT NOT NULL DEFAULT 'UTC'");
+    // Everyone still on the old UTC default moves to the new default once. Anyone who picks UTC afterwards keeps it.
+    if (!db.prepare("SELECT 1 FROM status_meta WHERE key = 'tz:default:v1'").get()) {
+        db.prepare("UPDATE users SET tz = ? WHERE tz = 'UTC'").run(DEFAULT_TZ);
+        db.prepare("INSERT OR REPLACE INTO status_meta (key, value) VALUES ('tz:default:v1', '1')").run();
+    }
     addColumn("users", "digest", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "digest_day", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "last_digest_at", "INTEGER");
@@ -344,7 +350,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const steam = steamStore({ db, run, get, all, clean, now, maxLibrary: MAX_LIBRARY_PER_USER });
 
     function ensureUser(discordId, guildId = null) {
-        run("INSERT OR IGNORE INTO users (discord_id, guild_id, created_at) VALUES (?, ?, ?)", discordId, guildId, now());
+        run("INSERT OR IGNORE INTO users (discord_id, guild_id, created_at, tz) VALUES (?, ?, ?, ?)", discordId, guildId, now(), DEFAULT_TZ);
         if (guildId) run("UPDATE users SET guild_id = ? WHERE discord_id = ?", guildId, discordId);
         return getUser(discordId);
     }
