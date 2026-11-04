@@ -24,6 +24,23 @@ export function setProfile(db, userId, { enabled, slug }) {
     return { slug: name, public: Boolean(enabled) };
 }
 
+/**
+ * Games added by name often have no Steam id stored, and the ITAD banner fallback does not exist for every game. Look the ids up
+ * (cached, never throws), remember them on wishlist rows, and fill them into `rows` so the Steam picture can be used.
+ */
+export async function fillAppIds(db, itad, userId, rows) {
+    try {
+        const need = [...new Set(rows.filter(r => r?.itad_id && !Number.isInteger(r.appid)).map(r => r.itad_id))];
+        if (!need.length || typeof itad?.steamAppIds !== "function") return rows;
+        const ids = await itad.steamAppIds(need);
+        for (const r of rows) {
+            const app = r?.itad_id ? ids.get(r.itad_id) : null;
+            if (Number.isInteger(app)) { r.appid = app; try { db.setAppId(userId, r.itad_id, app); } catch { /* not a wishlist row */ } }
+        }
+    } catch { /* art is a bonus */ }
+    return rows;
+}
+
 export async function publicWishlist(db, itad, slug, token = null) {
     const user = db.getProfileBySlug(String(slug ?? "").toLowerCase());
     if (!user || !user.profile_public) return null;
@@ -32,6 +49,7 @@ export async function publicWishlist(db, itad, slug, token = null) {
     const claims = db.giftClaimMap(user.discord_id, token);
     const soon = user.guild_id ? db.soonIds(user.guild_id) : new Set();
     const items = db.listItems(user.discord_id).filter(i => i.source !== "watch" && !owned.has(i.itad_id)).slice(0, 100);
+    await fillAppIds(db, itad, user.discord_id, items);
     const prices = items.length ? await itad.getPrices(items.map(i => i.itad_id), user.region).catch(() => new Map()) : new Map();
     const games = items.map(it => {
         const s = summarize(prices.get(it.itad_id), { majorOnly: user.stores === "major" });

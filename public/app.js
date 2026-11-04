@@ -964,8 +964,19 @@
     return box;
   }
 
+  /** A game picture that turns into the plain placeholder if the address does not load (unreleased games often have none yet). */
+  function pfArt(src) {
+    if (!src) return h("div", { class: "free-noart", text: "" });
+    const img = h("img", { src, alt: "", loading: "lazy" });
+    img.addEventListener("error", () => img.replaceWith(h("div", { class: "free-noart", text: "" })));
+    return img;
+  }
+
   function pfTile(g) {
-    const t = h("div", { class: "pf-tile" }, g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "pf-noart", text: g.title.slice(0, 1) }), h("span", { text: g.title }));
+    const fallback = () => h("div", { class: "pf-noart", text: g.title.slice(0, 1).toUpperCase() });
+    const img = g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : null;
+    if (img) img.addEventListener("error", () => img.replaceWith(fallback()));
+    const t = h("div", { class: "pf-tile" }, img || fallback(), h("span", { text: g.title }));
     return t;
   }
 
@@ -1028,7 +1039,7 @@
           s.live ? h("p", { class: "muted small", text: s.live.title + (s.live.game ? " · " + s.live.game : "") }) : null);
       } else if (s.key === "wishlist") {
         inner = s.games.length ? h("div", { class: "free-grid" }, s.games.map(g => h("div", { class: "free-card" },
-          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
+          pfArt(g.art),
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money(g.price, g.currency) }),

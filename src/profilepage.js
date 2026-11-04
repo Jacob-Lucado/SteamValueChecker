@@ -4,7 +4,7 @@
 import { UserError } from "./errors.js";
 import { THEMES } from "./cardprefs.js";
 import { artUrl, steamArt } from "./render.js";
-import { publicWishlist } from "./profile.js";
+import { publicWishlist, fillAppIds } from "./profile.js";
 import { trophyCase } from "./badges.js";
 import { channelUrl } from "./streamwatch.js";
 
@@ -168,7 +168,9 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
     const items = db.listItems(owner.discord_id);
     const known = new Map([...lib, ...items].map(x => [x.itad_id, x]));
     const byTitle = t => [...known.values()].find(x => x.title.toLowerCase() === String(t).toLowerCase());
-    const favs = cfg.favorites.map(t => byTitle(t) ?? { title: t }).map(x => ({ title: x.title, art: x.itad_id ? artUrl(x) ?? null : null }));
+    const favRows = cfg.favorites.map(t => ({ ...(byTitle(t) ?? { title: t }) }));
+    await fillAppIds(db, itad, owner.discord_id, favRows);
+    const favs = favRows.map(x => ({ title: x.title, art: x.itad_id ? artUrl(x) ?? null : null }));
     const steam = db.getSteamLink(owner.discord_id);
     const sections = [];
     for (const s of cfg.sections) {
@@ -180,7 +182,8 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
                 const w = await publicWishlist(db, itad, owner.profile_slug, token);
                 sections.push({ key: "wishlist", vis: s.vis, games: w?.games ?? [] });
             } else if (s.key === "recent") {
-                const rows = lib.filter(x => x.status === "finished").sort((a, b) => (b.status_at ?? 0) - (a.status_at ?? 0)).slice(0, 8);
+                const rows = lib.filter(x => x.status === "finished").sort((a, b) => (b.status_at ?? 0) - (a.status_at ?? 0)).slice(0, 8).map(x => ({ ...x }));
+                await fillAppIds(db, itad, owner.discord_id, rows);
                 sections.push({ key: "recent", vis: s.vis, games: rows.map(x => ({ title: x.title, art: artUrl(x) ?? null, at: x.status_at ?? null })) });
             } else if (s.key === "nowplaying") {
                 let now = null;

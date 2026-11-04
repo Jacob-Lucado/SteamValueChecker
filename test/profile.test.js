@@ -106,3 +106,14 @@ test("/me profile: small changes save, mistakes are explained, nothing is lost",
     assert.match((await run("song", { remove: true })).content, /removed/); assert.equal(db.getProfileData("u1").data.song, null);
     const v = await run("view"); assert.match(v.embeds[0].description, /hello/); assert.match(v.embeds[0].description, /Steam stats \(members of your server\)/);
 });
+
+test("profile art: games without a stored Steam id get one looked up, so the Steam picture is used", async () => {
+    const db = openDb(":memory:");
+    db.ensureUser("o", "Owner"); db.setProfile("o", { slug: "owner", enabled: true });
+    db.addItems("o", [{ itad_id: "g-new", title: "A New Game" }], "manual", "any", null);
+    db.setProfileData("o", cleanProfile({ favorites: ["A New Game"], sections: [{ key: "favorites", vis: "public" }] }));
+    const itad = { steamAppIds: async ids => new Map(ids.map(i => [i, 1234567])), getPrices: async () => new Map() };
+    const p = await buildProfile({ db, itad }, db.getUser("o"), { owner: true, sameServer: true });
+    assert.equal(p.sections.find(s => s.key === "favorites").games[0].art, "https://cdn.akamai.steamstatic.com/steam/apps/1234567/header.jpg");
+    assert.equal(db.listItems("o")[0].appid, 1234567);
+});
