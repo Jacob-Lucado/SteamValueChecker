@@ -108,14 +108,13 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             if (ch) patch.ai_channel = ch.id;
             else if (anywhere) patch.ai_channel = null;
             if (on !== null) {
-                if (on && !aiAvailable() && !db.getCommunity(gid).ai_key) return eph(i, "The AI companion isn't available on this bot yet. Add your own Anthropic key in the dashboard under Community, or ask the bot owner to add one.");
                 patch.ai_on = on ? 1 : 0;
-            } else if (ch && !aiAvailable() && !db.getCommunity(gid).ai_key) return eph(i, "The AI companion isn't available on this bot yet. Add your own Anthropic key in the dashboard under Community, or ask the bot owner to add one.");
+            }
             if (Object.keys(patch).length) db.setCommunity(gid, patch);
             const c = db.getCommunity(gid);
             const where = c.ai_channel ? `only in <#${c.ai_channel}>` : "in every channel";
             const how = aiPhrase() ? "Members write **Hey AI** followed by a question, or mention me." : "This bot can't read \"Hey AI\" yet, so members mention me instead.";
-            return eph(i, `AI companion is **${c.ai_on ? "on" : "off"}**${c.ai_on ? `, answering ${where}. ${how} Answers are short, nobody is pinged, and there is a daily limit for the server.` : ". Turn it on with `on:true`."}`);
+            return eph(i, `AI companion is **${c.ai_on ? "on" : "off"}**${c.ai_on ? `, answering ${where}. ${how} Answers are short, nobody is pinged, and there is a daily limit for the server.${aiAvailable() || c.ai_key ? "" : "\n**Coming soon:** the full AI is not switched on yet. For now I answer prices, free games, your wishlist and your library myself."}` : ". Turn it on with `on:true`."}`);
         }
         if (sub === "autorole") {
             const role = i.options.getRole("role");

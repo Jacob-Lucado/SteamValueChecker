@@ -71,7 +71,7 @@ export function aiStats(db, days = 14, now = Date.now()) {
         const day = today(now - n * 86_400_000);
         let v = {};
         try { v = JSON.parse(db.getMeta(`aistat:${day}`) ?? "{}"); } catch { /* an empty day */ }
-        out.push({ day, answers: v.answers ?? 0, errors: v.errors ?? 0, inTok: v.inTok ?? 0, outTok: v.outTok ?? 0, toolAnswers: v.toolAnswers ?? 0, toolCalls: v.toolCalls ?? 0, ms: v.answers ? Math.round((v.ms ?? 0) / v.answers) : 0 });
+        out.push({ day, answers: v.answers ?? 0, errors: v.errors ?? 0, inTok: v.inTok ?? 0, outTok: v.outTok ?? 0, liteAnswers: v.liteAnswers ?? 0, toolAnswers: v.toolAnswers ?? 0, toolCalls: v.toolCalls ?? 0, ms: v.answers ? Math.round((v.ms ?? 0) / v.answers) : 0 });
     }
     return out;
 }
@@ -87,7 +87,7 @@ function addStat(db, now, add) {
  * `rt` is the runtime settings (src/runtimecfg.js), read on every question so a change in the admin panel applies at once.
  * `defaults` are only used when no settings object is given (tests).
  */
-export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, isMain = () => false, isPlus = () => false, fetchFn = fetch, now = Date.now, log = () => {} }) {
+export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, lite = null, isMain = () => false, isPlus = () => false, fetchFn = fetch, now = Date.now, log = () => {} }) {
     const lastAt = new Map(); // user -> when they last asked
     const available = Boolean(key);
 
@@ -136,11 +136,16 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, i
     /** { ok: true, text } or { ok: false, reason: "off" | "paused" | "blocked" | "cooldown" | "cap" | "busy" | "error" }. */
     async function answer({ guildId, userId, name = "", question, history = [] }) {
         const own = keyFor(guildId);
-        if (!available && !own) return { ok: false, reason: "off" };
+        if (!available && !own && !lite) return { ok: false, reason: "off" };
         if (!rt.get("ai_enabled")) return { ok: false, reason: "paused" };
         if (rt.isServerBlocked(guildId) || rt.isUserBlocked(userId)) return { ok: false, reason: "blocked" };
         const t = now(), cooldown = rt.get("ai_cooldown") * 1000;
         if (t - (lastAt.get(userId) ?? 0) < cooldown) return { ok: false, reason: "cooldown" };
+        if (!available && !own) { // no AI key yet: the bot answers the common questions itself
+            lastAt.set(userId, t);
+            try { const text = await lite({ question, userId, guildId }); addStat(db, now(), { liteAnswers: 1 }); return { ok: true, lite: true, text: String(text).replace(/@(everyone|here)/gi, "@\u200b$1").slice(0, MAX_REPLY) }; }
+            catch (e) { log(`lite answer failed: ${e?.message}`); return { ok: false, reason: "error" }; }
+        }
         if (!spend(guildId, Boolean(own))) return { ok: false, reason: "cap" };
         lastAt.set(userId, t);
         if (lastAt.size > 5000) for (const [u, at] of lastAt) if (t - at > cooldown) lastAt.delete(u);
@@ -164,6 +169,7 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, i
 
     /** For the admin page: asks one question with the current settings, ignoring limits. Says what went wrong. */
     async function test(question, ownerId = null) {
+        if (!available && lite) { const t0 = now(); try { return { ok: true, text: await lite({ question, userId: String(ownerId ?? "0"), guildId: null }), model: "no AI key: the bot's own answers", ms: now() - t0, inTok: 0, outTok: 0, tools: [] }; } catch (e) { return { ok: false, error: String(e?.message ?? e).slice(0, 200) }; } }
         if (!available) return { ok: false, error: "There is no Anthropic key on this bot." };
         try {
             const { res, data, model, ms, used, usage } = await call({ name: "the bot owner (a test)", question, history: [], ctx: { userId: String(ownerId ?? "0"), guildId: null } });
@@ -185,7 +191,7 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, i
         } catch { return { ok: false, error: "Could not reach Anthropic to check the key. Try again in a moment." }; }
     }
 
-    return { available, answer, test, checkKey };
+    return { available, lite: Boolean(lite), answer, test, checkKey };
 }
 
 /** What to say when an answer could not be given. Missing means say nothing. */

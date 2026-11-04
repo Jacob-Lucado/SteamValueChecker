@@ -37,7 +37,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
     async function overview(gid, userId, manager) {
         const me = community.rankOf(gid, userId), inv = community.inviteSummary(gid, userId);
         const out = {
-            membersIntent: membersIntent(), manager, ai: { available: ai.available || Boolean(db.getCommunity(gid).ai_key), phrase: ai.phrase, canStoreKey: Boolean(ai.vault), keySet: Boolean(db.getCommunity(gid).ai_key), keyLast4: db.getCommunity(gid).ai_key_last4 ?? null, keyBad: Boolean(db.getMeta(`aikeybad:${gid}`)), botKey: ai.available, main: Boolean(ai.isMain?.(gid)), plus: Boolean(db.getCommunity(gid).ai_plus), plusInterest: Boolean(db.getCommunity(gid).ai_plus_interest), plusVisible: rt ? rt.get("ai_plus_visible") : true, plusCap: rt ? rt.get("ai_plus_cap") : 2000, ...(rt ? aiLimits(rt, gid, { main: Boolean(ai.isMain?.(gid)), plus: Boolean(db.getCommunity(gid).ai_plus), ownKey: Boolean(db.getCommunity(gid).ai_key) }) : { enabled: true, dailyCap: 300, cooldownSec: 15, maxQuestion: 700, maxReply: 1900, history: 6 }), usedToday: aiUsedToday(db, gid) },
+            membersIntent: membersIntent(), manager, ai: { available: ai.available || Boolean(db.getCommunity(gid).ai_key), lite: ai.lite !== false, phrase: ai.phrase, canStoreKey: Boolean(ai.vault), keySet: Boolean(db.getCommunity(gid).ai_key), keyLast4: db.getCommunity(gid).ai_key_last4 ?? null, keyBad: Boolean(db.getMeta(`aikeybad:${gid}`)), botKey: ai.available, main: Boolean(ai.isMain?.(gid)), plus: Boolean(db.getCommunity(gid).ai_plus), plusInterest: Boolean(db.getCommunity(gid).ai_plus_interest), plusVisible: rt ? rt.get("ai_plus_visible") : true, plusCap: rt ? rt.get("ai_plus_cap") : 2000, ...(rt ? aiLimits(rt, gid, { main: Boolean(ai.isMain?.(gid)), plus: Boolean(db.getCommunity(gid).ai_plus), ownKey: Boolean(db.getCommunity(gid).ai_key) }) : { enabled: true, dailyCap: 300, cooldownSec: 15, maxQuestion: 700, maxReply: 1900, history: 6 }), usedToday: aiUsedToday(db, gid) },
             me: { ...me, invites: inv },
             xpTop: await named(gid, db.xpTop(gid, 10)), inviteTop: await named(gid, db.inviteTop(gid, 10)),
             rewards: db.listRewards(gid), levelRoles: db.listLevelRoles(gid),
@@ -152,7 +152,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         }
         if (b.ai_on !== undefined) {
             const hasKey = patch.ai_key !== undefined ? Boolean(patch.ai_key) : Boolean(db.getCommunity(gid).ai_key);
-            if (b.ai_on && !ai.available && !hasKey) fail(400, "The AI companion isn't available on this bot yet. Add your own Anthropic key here, or ask the bot owner to add one.");
+            if (b.ai_on && !ai.available && !hasKey && ai.lite === false) fail(400, "The AI companion isn't available on this bot yet. Add your own Anthropic key here, or ask the bot owner to add one.");
             patch.ai_on = b.ai_on ? 1 : 0;
         };
         if (b.ai_channel !== undefined) patch.ai_channel = await channelOk(gid, b.ai_channel || null);

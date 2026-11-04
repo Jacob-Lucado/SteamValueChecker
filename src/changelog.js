@@ -1,6 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
-    { version: "2026.11.16", date: "2026-11-16", title: "AI companion", items: [
+    { version: "2026.11.16", date: "2026-11-16", title: "AI companion (coming soon)", items: [
+        "**Coming soon, with a preview already working:** the full AI turns on when the bot owner adds an AI key. Until then, when a server turns the companion on, the bot answers the common questions itself: game prices, the free games right now, your wishlist, your library and what to play next. Anything else gets a polite “coming soon” and a list of what works.",
         "**Ask the bot anything:** say `Hey AI` followed by a question, or mention the bot, and it answers in the channel. It is off until a server manager turns it on under Community in the dashboard (or `/manage community ai`), and managers can limit it to one channel.",
         "**It uses the bot's real data:** it can look up live game prices and the cheapest store, list the free games right now, check your wishlist for sales, summarise your library and suggest what to play next from your backlog, show the server's savings leaderboard, and add a game to your wishlist when you ask it to. It only ever sees your own lists.",
         "**Bring your own key:** a server manager can paste their own Anthropic API key under Community. It is checked when saved, stored encrypted and never shown again. That server then pays Anthropic for its own answers and is not held to the bot's daily limit, and the AI companion can run even on a bot with no key of its own.",

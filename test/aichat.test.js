@@ -93,8 +93,9 @@ test("/manage community ai: needs a key to switch on, saves the channel, and the
         await h.handleCommand(i);
         return out.reply?.content ?? "";
     };
-    assert.match(await run(false, { on: true }), /isn't available/);
-    assert.equal(db.getCommunity("G").ai_on ?? 0, 0);
+    assert.match(await run(false, { on: true }), /Coming soon.*prices, free games/s, "no key: it switches on in lite mode and says so");
+    assert.equal(db.getCommunity("G").ai_on, 1);
+    assert.doesNotMatch(await run(true, { on: true }), /Coming soon/);
     assert.match(await run(true, { on: true }), /on.*every channel/s);
     assert.equal(db.getCommunity("G").ai_on, 1);
     assert.match(await run(true, { channel: { id: "c9" } }), /only in <#c9>/);
@@ -241,4 +242,43 @@ test("main server: remembered once, detected only when the bot is in exactly one
     assert.equal(createMainGuild({ db, client, configuredInvite: "https://discord.gg/abc123" }).inviteUrl(), "https://discord.gg/abc123");
     assert.equal(createMainGuild({ db, client, configuredInvite: "https://evil.example/x" }).inviteUrl(), null, "only Discord invite links");
     db.setMeta("support:invite", "https://discord.gg/xyz"); assert.equal(m.inviteUrl(), "https://discord.gg/xyz");
+});
+
+test("lite mode: reads the common questions, and answers them from the bot's own data", async () => {
+    const { intentOf, titleFrom, liteAnswer, LITE_HELP } = await import("../src/ailite.js");
+    assert.equal(titleFrom("is Hades on sale?"), "Hades");
+    assert.equal(titleFrom("how much is Celeste right now"), "Celeste");
+    assert.equal(titleFrom("what's the price of Hollow Knight"), "Hollow Knight");
+    assert.equal(titleFrom('is "Inside" cheap'), "Inside");
+    assert.equal(titleFrom("tell me a joke"), null);
+    for (const [q, k] of [["", "help"], ["hi", "help"], ["what's free right now?", "free"], ["any free games today", "free"], ["what's on my wishlist", "wishlist"], ["what should I play next", "library"], ["leaderboard please", "board"], ["is Hades on sale", "price"], ["write me a poem about owls", "unknown"]]) assert.equal(intentOf(q).kind, k, q);
+
+    const db = openDb(":memory:"); db.ensureUser("u1");
+    const itad = {
+        lookupTitles: async ts => ts.map(t => (t === "Nope" ? { title: t, id: null } : { title: t, id: "id-" + t, matched: t })),
+        getPrices: async ids => new Map(ids.map(id => [id, { deals: [{ shop: { name: "Steam" }, price: { amount: 5, currency: "USD" }, regular: { amount: 20 }, cut: 75 }], historyLow: { all: { amount: 4, currency: "USD" } } }])),
+        getGiveawayList: async () => [{ title: "Hades", shop: "Epic", expiry: Date.parse("2030-01-02"), type: "game" }]
+    };
+    const tools = createAiTools({ db, itad });
+    const ask = question => liteAnswer({ question, userId: "u1", guildId: null, tools });
+    assert.match(await ask("is Celeste on sale?"), /Celeste[\s\S]*Full price: \$20\.00[\s\S]*Steam now: \$5\.00 \(-75%\)[\s\S]*All-time low: \$4\.00/);
+    assert.match(await ask("is Nope on sale?"), /couldn't find a game called \*\*Nope\*\*/);
+    assert.match(await ask("what's free?"), /Hades.*Epic/);
+    assert.match(await ask("my wishlist?"), /wishlist is empty/);
+    assert.equal(await ask("tell me a joke"), LITE_HELP);
+    assert.match(LITE_HELP, /coming soon/);
+});
+
+test("lite mode: with no key the bot still answers (cooldown, switch and blocks apply), without calling any API", async () => {
+    const db = openDb(":memory:"), rt = createRuntimeCfg(db);
+    let t = Date.parse("2026-11-04T12:00:00Z"), calls = 0;
+    const ai = createAiChat({ db, rt, key: null, lite: async ({ question }) => `lite: ${question}`, fetchFn: async () => { calls++; throw new Error("no network in lite mode"); }, now: () => t });
+    const r = await ai.answer({ guildId: "11111", userId: "a", question: "free?" });
+    assert.deepEqual([r.ok, r.lite, r.text], [true, true, "lite: free?"]);
+    assert.equal((await ai.answer({ guildId: "11111", userId: "a", question: "again" })).reason, "cooldown");
+    rt.blockUser("22222"); assert.equal((await ai.answer({ guildId: "11111", userId: "22222", question: "x" })).reason, "blocked");
+    rt.set({ ai_enabled: false }); t += 60000; assert.equal((await ai.answer({ guildId: "11111", userId: "b", question: "x" })).reason, "paused");
+    assert.equal(calls, 0); assert.equal(aiStats(db, 1, t)[0].liteAnswers, 1);
+    assert.equal((await ai.test("what's free?")).model, "no AI key: the bot's own answers");
+    assert.equal((await createAiChat({ db, rt, key: null }).answer({ guildId: "1", userId: "z", question: "x" })).reason, "off", "no key and no lite: off");
 });

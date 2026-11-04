@@ -3164,7 +3164,7 @@
         const t = r.stats[0] || {};
         const week = r.stats.slice(0, 7).reduce((a, d) => ({ answers: a.answers + d.answers, errors: a.errors + d.errors, inTok: a.inTok + d.inTok, outTok: a.outTok + d.outTok }), { answers: 0, errors: 0, inTok: 0, outTok: 0 });
         const status = h("div", { class: "grid" },
-          tile("API key", r.available ? "Set" : "Missing", r.available ? "The bot can reach the AI provider." : "Add ANTHROPIC_API_KEY to the bot's secrets."),
+          tile("API key", r.available ? "Set" : "Coming soon", r.available ? "The bot can reach the AI provider." : "No key yet, so servers get the bot's own answers for prices, free games, wishlist and library. Add ANTHROPIC_API_KEY to switch the full AI on."),
           tile("“Hey AI” text", r.phrase ? "Works" : "Mentions only", r.phrase ? "Message Content intent is on." : "Turn on Message Content intent in the Developer Portal."),
           tile("Answers today", n0(t.answers), `${n0(t.errors)} failed · ${t.ms ? t.ms + " ms average" : "no timing yet"}`),
           tile("Last 7 days", n0(week.answers), `${n0(week.inTok + week.outTok)} tokens`),
@@ -5614,7 +5614,7 @@
           h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value, requests_channel: reqCh.value, honeypot_channel: trapCh.value }))));
         // AI companion: members write "Hey AI ..." and get a short answer
         const ai = d.ai || {};
-        const aiOn = h("input", { type: "checkbox", checked: Boolean(st.ai_on), disabled: !ai.available });
+        const aiOn = h("input", { type: "checkbox", checked: Boolean(st.ai_on), disabled: !ai.available && !ai.lite });
         const aiCh = chSel(st.ai_channel);
         const keyIn = h("input", { type: "password", autocomplete: "off", spellcheck: "false", maxlength: "320", placeholder: ai.keySet ? "Paste a new key to replace it" : "sk-ant-…" });
         const keyBox = h("div", {},
@@ -5625,12 +5625,12 @@
           ai.canStoreKey ? h("div", { class: "row" },
             save(ai.keySet ? "Replace key" : "Save key", () => { if (!keyIn.value.trim()) throw new Error("Paste your key first."); return post("/api/community/places", { ai_key: keyIn.value }); }),
             ai.keySet ? save("Remove key", () => post("/api/community/places", { ai_key_clear: true })) : null) : null);
-        const aiP = h("div", { class: "panel" }, h("h3", { text: "AI companion" }),
-          ai.available ? null : h("div", { class: "notice warn", text: "This bot has no AI key of its own. Add your own Anthropic key below to switch the AI companion on for this server." }),
+        const aiP = h("div", { class: "panel" }, h("h3", {}, "AI companion", ai.available ? null : h("span", { class: "pill", text: "Coming soon" })),
+          ai.available ? null : h("div", { class: "notice", text: "The full AI is coming soon. Until then, when you switch this on, the bot answers the common questions itself: game prices, the free games right now, and a member's own wishlist and library (try “Hey AI is Hades on sale?”). Anything else gets a polite “coming soon”. Want the full AI today? Add your own Anthropic key below." }),
           h("label", { class: "check" }, aiOn, " Answer when members say “Hey AI” followed by a question"),
           field("Only answer in this channel (leave empty for every channel)", aiCh),
           h("p", { class: "muted small", text: ai.phrase ? "Members write “Hey AI, …” or mention the bot." : "Members mention the bot, because this bot can't read “Hey AI” yet (it needs the Message Content intent)." }),
-          ai.available ? h("p", { class: "ai-use", text: ai.main ? `Answers today: ${ai.usedToday}. This is the bot owner's own server, so it has no daily limit.` : ai.keySet && ai.unlimited ? `Answers today: ${ai.usedToday}. No daily limit while your own key is used.` : `Used today: ${ai.usedToday} of ${ai.dailyCap} answers (resets at midnight UTC).${ai.plus ? " AI Plus is on for this server." : ""}` }) : null,
+          (ai.available || ai.lite) ? h("p", { class: "ai-use", text: ai.main ? `Answers today: ${ai.usedToday}. This is the bot owner's own server, so it has no daily limit.` : ai.keySet && ai.unlimited ? `Answers today: ${ai.usedToday}. No daily limit while your own key is used.` : `Used today: ${ai.usedToday} of ${ai.dailyCap} answers (resets at midnight UTC).${ai.plus ? " AI Plus is on for this server." : ""}` }) : null,
           h("div", { class: "row" }, save("Save AI settings", () => post("/api/community/places", { ai_on: aiOn.checked, ai_channel: aiCh.value }))),
           h("h4", { text: "Your own API key" }), keyBox,
           h("h4", { text: "How it works and its limits" }),
@@ -5639,8 +5639,8 @@
             h("li", { text: `Each person can ask once every ${ai.cooldownSec || 15} seconds. Faster than that, the bot just reacts with ⏳.` }),
             h("li", { text: `Questions are cut at ${ai.maxQuestion || 700} characters. Answers are short, never longer than ${ai.maxReply || 1900} characters, and ping nobody.` }),
             h("li", { text: `Replying to one of its answers continues the conversation (it remembers the last ${ai.history || 6} messages of that thread). It remembers nothing else.` }),
-            h("li", { text: "It can look up live game prices, the free games right now, and the asker's own wishlist and library, and add a game to the asker's wishlist when asked. It never sees anyone else's lists or other channels." }),
-            h("li", { text: "Only messages that say “Hey AI” or mention the bot are read. The question, the thread it replies to, the person's display name and the results of those lookups are sent to the AI provider (Anthropic) to write the answer. Nothing else from your server is sent." }),
+            h("li", { text: (ai.available ? "" : "Right now it works from fixed questions, not free chat. ") + "It can look up live game prices, the free games right now, and the asker's own wishlist and library, and add a game to the asker's wishlist when asked. It never sees anyone else's lists or other channels." }),
+            h("li", { text: ai.available ? "Only messages that say “Hey AI” or mention the bot are read. The question, the thread it replies to, the person's display name and the results of those lookups are sent to the AI provider (Anthropic) to write the answer. Nothing else from your server is sent." : "Only messages that say “Hey AI” or mention the bot are read. While the full AI is coming soon, the bot answers them itself and nothing is sent to any AI provider." }),
             h("li", { text: "Servers that turn it on are responsible for who can use it: pick one channel above if you only want it in one place." })));
         const plusBtn = save(ai.plusInterest ? "Never mind" : "Tell me when it's ready", () => post("/api/community/places", { ai_plus_interest: !ai.plusInterest }));
         const plusP = ai.plusVisible && !ai.main ? h("div", { class: "panel" }, h("h3", {}, "AI Plus ", h("span", { class: "pill", text: "Work in progress" })),
