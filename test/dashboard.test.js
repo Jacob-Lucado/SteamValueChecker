@@ -2155,3 +2155,24 @@ test("admin: the owner can get a one-use invite for a server, others cannot", as
     assert.deepEqual(calls, ["12345", "99999"]);
     await o.close();
 });
+
+test("secret santa: managers start and finish it, members join and leave, non-managers cannot draw", async () => {
+    const o = await signedIn({ extra: { botGuilds: () => true, dm: async () => {} } });
+    try {
+        const g = "g-admin", post = (body, guild = g) => o.request("/api/santa", { method: "POST", body: { guild_id: guild, ...body } });
+        let r = (await o.request("/api/santa?guild=" + g)).data;
+        assert.equal(r.event, null); assert.equal(r.canManage, true);
+        assert.equal((await post({ action: "create", budget: 0 })).status, 400);
+        assert.equal((await post({ action: "create", title: "Winter", budget: 25, channel_id: "nope" })).status, 400);
+        assert.equal((await post({ action: "create", title: "Winter", budget: 25, channel_id: "c1" })).status, 200);
+        assert.equal((await post({ action: "create", budget: 25 })).status, 400, "one at a time");
+        assert.equal((await post({ action: "join" })).status, 200);
+        r = (await o.request("/api/santa?guild=" + g)).data;
+        assert.equal(r.event.title, "Winter"); assert.equal(r.event.budget, 25); assert.equal(r.joined, true); assert.equal(r.people.length, 1);
+        assert.equal((await post({ action: "draw" })).status, 400, "needs three people");
+        assert.equal((await post({ action: "leave" })).status, 200);
+        assert.equal((await post({ action: "draw" }, "g-member")).status, 403, "not a manager there");
+        assert.equal((await post({ action: "reveal" })).status, 200);
+        assert.equal((await o.request("/api/santa?guild=" + g)).data.event.status, "ended");
+    } finally { await o.close(); }
+});

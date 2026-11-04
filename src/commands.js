@@ -414,6 +414,19 @@ const clubCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("channel").setDescription("Managers: where the weekly club card is posted").addChannelOption(o => o.setName("channel").setDescription("Text channel").setRequired(true).addChannelTypes(ChannelType.GuildText)))
     .addSubcommand(s => s.setName("off").setDescription("Managers: turn the game club off"));
 
+const santaCmd = new SlashCommandBuilder()
+    .setName("santa")
+    .setDescription("Secret Santa for the server: draw names and get gift ideas from their wishlist")
+    .addSubcommand(s => s.setName("create").setDescription("Managers: start a Secret Santa")
+        .addNumberOption(o => o.setName("budget").setDescription("Spend limit per gift, in your store's currency").setRequired(true).setMinValue(1).setMaxValue(1000))
+        .addStringOption(o => o.setName("title").setDescription("A name for it (default: Secret Santa)").setMaxLength(80)))
+    .addSubcommand(s => s.setName("join").setDescription("Join the Secret Santa. This shares your wishlist with whoever draws you"))
+    .addSubcommand(s => s.setName("leave").setDescription("Leave the Secret Santa before names are drawn"))
+    .addSubcommand(s => s.setName("status").setDescription("The budget and who is in"))
+    .addSubcommand(s => s.setName("ideas").setDescription("Who you are buying for and what's on their wishlist inside the budget"))
+    .addSubcommand(s => s.setName("draw").setDescription("Managers: draw names and message everyone privately"))
+    .addSubcommand(s => s.setName("reveal").setDescription("Managers: show who had who and wrap it up"));
+
 const nowplayingCmd = new SlashCommandBuilder()
     .setName("nowplaying")
     .setDescription("Who in this server is in a game right now (members who turned it on)")
@@ -776,7 +789,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -787,7 +800,7 @@ export const commands = [
 const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
-    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
+    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];

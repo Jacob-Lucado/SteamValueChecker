@@ -51,6 +51,7 @@ import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createNowPlaying, runSquadUps } from "./nowplaying.js";
 import { createClubHandlers, runGameClubs } from "./gameclub.js";
+import { createSantaHandlers } from "./santa.js";
 import { createStreamGiveaways } from "./streamgiveaway.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
@@ -297,6 +298,7 @@ const lfg = createLfgService({ db, discord: gwDiscord, log: m => console.log(`[l
 const lfgUi = createLfgHandlers({ db, lfg });
 const calendar = createCalendarService({ db, discord: gwDiscord, log: m => console.log(`[calendar] ${m}`) });
 const clubUi = createClubHandlers({ db });
+const santaUi = createSantaHandlers({ db, itad, sendDm: (id, p) => discord.sendDm(id, p), nameOf: async id => { const u = await client.users.fetch(id).catch(() => null); return u ? (u.globalName || u.username) : `<@${id}>`; } });
 const calendarUi = createCalendarHandlers({ db, calendar, publicUrl: publicBase });
 
 // Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
@@ -819,6 +821,7 @@ async function onInteraction(i, again = false) {
             case "serverstats": return await handlers.handleServerStats(i);
             case "nowplaying": return await handlers.handleNowPlaying(i);
             case "club": return await clubUi.handle(i);
+            case "santa": return await santaUi.handle(i);
             case "publicpage": return await handlers.handlePublicPage(i);
             case "friend": return await handlers.handleFriend(i);
             case "mydata": return await handlers.handleMyData(i);

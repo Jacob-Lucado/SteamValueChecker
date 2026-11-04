@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.18", date: "2026-11-18", title: "Secret Santa", items: [
+        "**Secret Santa for your server:** a manager starts one with `/server santa create` (or on the Secret Santa page in the dashboard) and sets a budget. Members join, then a manager draws the names.",
+        "**Private and useful:** everyone gets a message saying who they're buying for, plus what's on that person's wishlist inside the budget at today's cheapest price, with links. Joining is what shares your wishlist, and only with whoever draws you.",
+        "**No mix-ups:** nobody draws themselves, DMs that fail are reported to the manager, and `/server santa ideas` shows your giftee again if you lose the message. `/server santa reveal` shows who had who when it's over."
+    ] },
     { version: "2026.11.17", date: "2026-11-17", title: "Smarter alerts", items: [
         "**Match score:** each sale alert now shows how well the game fits what you actually play, worked out from your Steam library hours and the game's genres. It only shows once you have a linked library to compare against.",
         "**Next likely sale:** the price history note adds a rough guess of when the next sale might start, based on how often that game has dropped before. It says plainly that it is a guess.",

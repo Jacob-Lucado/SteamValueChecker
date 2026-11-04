@@ -48,6 +48,7 @@ import { profileCardData, renderProfileCard, renderSteamValue, renderRecap, rend
 import { PLATFORMS, THEMES, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
+import { createEvent, joinEvent, leaveEvent, drawEvent, endEvent, myAssignment, eventEmbed, revealEmbed } from "../santa.js";
 import { noticePreset } from "../noticepresets.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
@@ -1921,6 +1922,51 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (body.action === "off") { db.removeClub(g.id); return { ok: true }; }
             if (body.action === "channel") { const id = String(body.channel_id ?? ""); if (id && !(await rest.listChannels(g.id).catch(() => [])).some(c => c.id === id)) throw new HttpError(400, "That channel is not in this server."); db.setClub(g.id, { channel_id: id || null }); return { ok: true }; }
             if (body.action === "pick") { try { setPick(db, g.id, body.title, s.userId, now()); } catch (e) { throw new HttpError(400, e.message); } return { ok: true }; }
+            throw new HttpError(400, "Unknown action.");
+        },
+        "GET /api/santa": async (req, _b, url) => {
+            const s = session(req), g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const ev = db.getSanta(g.id), canManage = isManager(g) || isOwner(s);
+            const channels = canManage ? (await rest.listChannels(g.id).catch(() => [])).filter(c => c.type === undefined || c.type === 0 || c.type === 5).map(c => ({ id: c.id, name: c.name })) : [];
+            if (!ev) return { event: null, canManage, channels };
+            const entries = db.santaEntries(ev.id);
+            const people = await Promise.all(entries.map(async e => ({ userId: e.user_id, name: (await rest.memberName(g.id, e.user_id).catch(() => null)) || "Member " + String(e.user_id).slice(-4) })));
+            const mine = db.santaEntry(ev.id, s.userId);
+            return { event: { id: ev.id, title: ev.title, budget: ev.budget, currency: ev.currency, status: ev.status, channel: ev.channel_id }, people, joined: Boolean(mine), drawn: Boolean(mine?.giftee_id), canManage, channels };
+        },
+        "POST /api/santa": async (req, body) => {
+            const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));
+            const manager = isManager(g) || isOwner(s);
+            const nameOf = async id => (await rest.memberName(g.id, id).catch(() => null)) || `<@${id}>`;
+            const fail = e => { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; };
+            try {
+                switch (body.action) {
+                    case "join": return { ok: true, joined: joinEvent(db, g.id, s.userId).joined };
+                    case "leave": return { ok: true, left: leaveEvent(db, g.id, s.userId).left };
+                    case "ideas": {
+                        const dm_ = await myAssignment({ db, itad, guildId: g.id, userId: s.userId, nameOf, guildName: g.name });
+                        return { ok: true, text: dm_.embeds[0].description, title: dm_.embeds[0].title };
+                    }
+                }
+                if (!manager) throw new HttpError(403, "You need the Manage Server permission for that.");
+                if (body.action === "create") {
+                    const channelId = String(body.channel_id ?? "");
+                    if (channelId && !(await rest.listChannels(g.id).catch(() => [])).some(c => c.id === channelId)) throw new HttpError(400, "That channel isn't in this server.");
+                    const ev = createEvent(db, { guildId: g.id, channelId: channelId || null, title: body.title, budget: body.budget, region: userRow(s).region || "US", by: s.userId });
+                    if (channelId) await rest.sendMessage(channelId, { embeds: [eventEmbed(ev, [], { guildName: g.name })], allowed_mentions: { parse: [] } }).catch(() => {});
+                    return { ok: true };
+                }
+                if (body.action === "draw") {
+                    if (!dm) throw new HttpError(400, "Sending messages isn't available here.");
+                    const r = await drawEvent({ db, itad, sendDm: (id, p) => dm(id, p), nameOf, guildName: g.name, guildId: g.id });
+                    return { ok: true, count: r.count, failed: r.failed.length };
+                }
+                if (body.action === "reveal") {
+                    const { event, entries } = endEvent(db, g.id);
+                    if (event.channel_id) await rest.sendMessage(event.channel_id, { embeds: [revealEmbed(event, entries)], allowed_mentions: { parse: [] } }).catch(() => {});
+                    return { ok: true };
+                }
+            } catch (e) { fail(e); }
             throw new HttpError(400, "Unknown action.");
         },
         "GET /api/nowplaying": async (req, _b, url) => {

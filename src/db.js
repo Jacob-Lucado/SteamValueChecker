@@ -18,6 +18,7 @@ import { adminLoginSchema, adminLoginStore } from "./adminlogin.js";
 import { overlaySchema, overlayStore } from "./overlaystore.js";
 import { streamCardSchema, streamCardStore } from "./streamcard.js";
 import { clubSchema, clubStore } from "./gameclub.js";
+import { santaSchema, santaStore } from "./santa.js";
 import { profileSchema, profileStore } from "./profilestore.js";
 import { streamSchema, streamStore } from "./streamstore.js";
 import { memeSchema, memeStore } from "./memestore.js";
@@ -181,6 +182,7 @@ ${adminLoginSchema}
 ${overlaySchema}
 ${streamCardSchema}
 ${clubSchema}
+${santaSchema}
 ${profileSchema}
 ${streamSchema}
 ${memeSchema}
@@ -341,6 +343,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const overlay = overlayStore({ run, get, all, now });
     const streamCard = streamCardStore({ run, get, now });
     const club = clubStore({ run, get, all });
+    const santa = santaStore({ run, get, all, now });
     const prof = profileStore({ run, get, all });
     const streamLive = streamStore({ run, get, all, clean });
     const memes = memeStore({ run, all });
@@ -794,6 +797,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }
