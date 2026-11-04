@@ -51,7 +51,7 @@ export const PLATFORMS = [
     { id: "gog", label: "GOG", icon: "🟣", needsKey: false,
       why: "GOG doesn't give out a way to read a library without your login. Use the file import on My library: a GOG Galaxy export or a list of titles works." },
     { id: "epic", label: "Epic Games Store", icon: "⚫", needsKey: false,
-      why: "Epic has no public library feed. Use the file import on My library with a list of titles (tools like Legendary can export one)." },
+      why: "Epic has no official way to read a library. Export yours with the free Legendary tool (`legendary list --csv`), then upload that file on My library. It reads Legendary's export directly, skips DLC, and your Epic login never touches us." },
     { id: "playstation", label: "PlayStation", icon: "🔵", needsKey: false,
       why: "Sony has no official library feed, and the unofficial ways need a token that gives away your whole account, so we won't ask for it. Paste titles on My library instead." },
     { id: "nintendo", label: "Nintendo", icon: "🔴", needsKey: false,
