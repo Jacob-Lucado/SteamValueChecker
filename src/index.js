@@ -138,8 +138,9 @@ const APP_FLAGS = await (async () => {
 })();
 const MEMBERS_INTENT = Boolean(APP_FLAGS & ((1 << 14) | (1 << 15))); // GATEWAY_GUILD_MEMBERS or the limited version
 // "Hey AI ..." needs the Message Content intent (another Developer Portal switch). Mentioning the bot works without it.
-const CONTENT_INTENT = Boolean(cfg.anthropicKey) && Boolean(APP_FLAGS & ((1 << 18) | (1 << 19)));
-console.log(cfg.anthropicKey ? (CONTENT_INTENT ? "[ai] AI companion is available: \"Hey AI\" and mentions work." : "[ai] AI companion is available for mentions. Turn on Message Content intent in the Developer Portal so \"Hey AI\" works too.") : "[ai] AI companion is off (no ANTHROPIC_API_KEY).");
+const CONTENT_INTENT = Boolean(APP_FLAGS & ((1 << 18) | (1 << 19)));
+console.log(CONTENT_INTENT ? "[ai] Message Content intent is on: \"Hey AI\" and mentions work." : "[ai] Message Content intent is off: only mentions of the bot work. Turn it on in the Developer Portal (Bot > Privileged Gateway Intents) so \"Hey AI\" works too.");
+console.log(cfg.anthropicKey ? "[ai] The bot has its own AI key." : "[ai] No bot AI key: the bot answers common questions itself, and servers can bring their own key.");
 console.log(MEMBERS_INTENT ? "[community] Server Members intent is on: welcome messages and invite tracking are active." : "[community] Server Members intent is off: turn it on in the Developer Portal (Bot > Privileged Gateway Intents) for welcome messages and invite tracking.");
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : []), ...(CONTENT_INTENT ? [GatewayIntentBits.MessageContent] : [])] });
 const lastRun = new Map();
