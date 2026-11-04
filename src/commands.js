@@ -121,11 +121,6 @@ const bundle = new SlashCommandBuilder()
     .setDescription("Is a bundle worth it? Tier prices against what the games cost today, skipping ones you own")
     .addStringOption(o => o.setName("game").setDescription("A game to look for (default: bundles with anything on your wishlist)").setMaxLength(100));
 
-const consoles = new SlashCommandBuilder()
-    .setName("consoles")
-    .setDescription("One game's price on Xbox and the Nintendo eShop, next to the cheapest on PC")
-    .addStringOption(o => o.setName("game").setDescription("The game's title").setRequired(true).setMaxLength(100));
-
 const saleprep = new SlashCommandBuilder()
     .setName("saleprep")
     .setDescription("Get your wishlist ready for a Steam sale, or see what your alerts caught")
@@ -780,7 +775,7 @@ const playerCmd = new SlashCommandBuilder()
     .setDescription("Open the big music player for this server");
 
 export const commands = [
-    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, consoles, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
+    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
     ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
@@ -790,7 +785,7 @@ export const commands = [
 // noisy list that way, so they are folded into a few grouped commands. The handlers still think in the old names:
 // legacyRoute() turns "/me wishlist add" back into ("wishlist", "add") before anything else runs.
 const HUBS = [
-    { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "consoles", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
+    { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
     { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },

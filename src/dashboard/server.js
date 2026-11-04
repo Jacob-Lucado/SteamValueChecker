@@ -48,7 +48,6 @@ import { profileCardData, renderProfileCard, renderSteamValue, renderRecap, rend
 import { PLATFORMS, THEMES, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
-import { consolePrices } from "../consoleprices.js";
 import { noticePreset } from "../noticepresets.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
@@ -2387,16 +2386,6 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (!hit?.id) throw new HttpError(400, `I could not find a game called ${title}.`);
             const rows = await regionPrices({ itad, fx, itadId: hit.id, home: u.region, majorOnly: u.stores === "major" }).catch(e => { throw new HttpError(502, e.message); });
             return { game: hit.matched || title, rows };
-        },
-
-        "GET /api/consoles": async (req, _b, url) => {
-            const s = session(req);
-            cooldown(s.userId, "consoles");
-            const u = userRow(s);
-            const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
-            if (!title) throw new HttpError(400, "Type a game title.");
-            const data = await consolePrices({ title, country: u.region || "US", fetchFn: config.consoleFetch ?? globalThis.fetch });
-            return { game: data.xbox?.title ?? data.nintendo?.title ?? title, region: u.region || "US", ...data };
         },
 
         "GET /api/calendar": async (req, _b, url) => {

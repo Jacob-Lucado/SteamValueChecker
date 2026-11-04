@@ -2155,36 +2155,3 @@ test("admin: the owner can get a one-use invite for a server, others cannot", as
     assert.deepEqual(calls, ["12345", "99999"]);
     await o.close();
 });
-
-test("console prices: Xbox and Nintendo are read from their stores, one being down does not hide the other", async () => {
-    const { xboxPrice, switchPrice, consolePrices } = await import("../src/consoleprices.js");
-    const { consolesEmbed } = await import("../src/consolerender.js");
-    const store = url => {
-        if (url.includes("autosuggest")) return { ResultSets: [{ Suggests: [{ Source: "Game", Title: "Hades", Metas: [{ Key: "BigCatalogId", Value: "9P8DL6W0JBB8" }] }] }] };
-        if (url.includes("displaycatalog")) return { Products: [{ LocalizedProperties: [{ ProductTitle: "Hades" }], DisplaySkuAvailabilities: [{ Availabilities: [
-            { Actions: ["Purchase"], OrderManagementData: { Price: { ListPrice: 12.49, MSRP: 24.99, CurrencyCode: "USD" } }, Conditions: { EndDate: "2026-12-01T00:00:00Z" } },
-            { Actions: ["Details"], OrderManagementData: { Price: { ListPrice: 0, MSRP: 0, CurrencyCode: "USD" } }, Conditions: {} }] }] }] };
-        if (url.includes("searching.nintendo")) return { response: { docs: [{ title: "Hades", nsuid_txt: ["70010000033132"], url: "/en-gb/Games/Hades-1.html" }] } };
-        if (url.includes("api.ec.nintendo")) return { prices: [{ sales_status: "onsale", regular_price: { raw_value: "24.99", currency: "USD" }, discount_price: { raw_value: "17.49", end_datetime: "2026-12-02T00:00:00Z" } }] };
-        throw new Error("unexpected " + url);
-    };
-    const ok = async url => ({ ok: true, json: async () => store(url) });
-    const x = await xboxPrice("hades", "US", ok);
-    assert.equal(x.price, 12.49); assert.equal(x.regular, 24.99); assert.match(x.url, /9P8DL6W0JBB8/);
-    const n = await switchPrice("hades", "US", ok);
-    assert.equal(n.price, 17.49); assert.equal(n.regular, 24.99);
-    const half = async url => (url.includes("nintendo") ? { ok: false, status: 503 } : ok(url));
-    const both = await consolePrices({ title: "hades", country: "US", fetchFn: half });
-    assert.equal(both.xbox.price, 12.49); assert.equal(both.nintendo, null); assert.equal(both.nintendoError, true);
-    const e = consolesEmbed({ title: "hades", data: both, pc: { price: 9.99, currency: "USD", shop: "Steam", discount: 0.6 } });
-    assert.match(e.fields[0].value, /50% off/); assert.match(e.fields[1].value, /Couldn't reach/); assert.match(e.description, /PC is the cheapest/);
-    assert.equal(await xboxPrice("zzzz", "US", async () => ({ ok: true, json: async () => ({ ResultSets: [] }) })), null);
-});
-
-test("console prices: the dashboard endpoint returns both stores for the member's region", async () => {
-    const t = await signedIn({ config: { consoleFetch: async url => ({ ok: true, json: async () => (url.includes("autosuggest") ? { ResultSets: [] } : { response: { docs: [] } }) }) } });
-    const r = await t.request("/api/consoles?game=hades");
-    assert.equal(r.status, 200); assert.equal(r.data.xbox, null); assert.equal(r.data.nintendo, null); assert.match(r.data.playstation, /store\.playstation\.com\/search\/hades/);
-    assert.equal((await t.request("/api/consoles?game=")).status, 400);
-    await t.close();
-});

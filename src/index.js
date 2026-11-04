@@ -781,7 +781,6 @@ async function onInteraction(i, again = false) {
             case "profile": return await profileUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
             case "regions": return await dealUi.handleRegions(i);
-            case "consoles": return await dealUi.handleConsoles(i);
             case "saleprep": return await dealUi.handleSalePrep(i);
             case "serverlist": return await handlers.handleServerList(i);
             case "leaderboard": return await handlers.handleLeaderboard(i);
