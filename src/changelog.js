@@ -2,6 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.13", date: "2026-11-13", title: "Menus and settings panels", items: [
         "**Panels for every command group:** `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu` and `/mod menu` open a private panel with live status for each area (your wishlist count, open giveaways, who is live and so on). Pick a command, fill in its options with dropdowns, member and channel pickers or a small form, and press Run. No typing of options. `/music` has the same from the All commands button on `/player`.",
+        "**Wishlist, library and streaming panels:** open them from the wishlist, library and stream areas in `/me menu` and `/server menu`. Browse and page your wishlist, star, remove or set an alert on a game, change a library game's status, or go live and give a key away, all with buttons. Menus reopen where you left off and refresh themselves while open.",
         "**`/alerts status` is now a settings panel:** dropdowns and buttons for every alert, where they go, quiet hours, digest, minimum discount, muting and which games send you codes. Every old `/alerts` command still works."
     ] },
     { version: "2026.11.12", date: "2026-11-12", title: "Streamer hub, Now playing and Game club", items: [

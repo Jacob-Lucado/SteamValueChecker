@@ -86,7 +86,7 @@ function fakeApi() {
         editMessage: async (channel, id, payload) => { edits.push({ channel, id, payload }); return {}; }
     } };
 }
-const codeAt = (n, over = {}) => cleanEntry(raw({ code: `AAAA${n}-BBBBB-CCCCC-DDDDD-EEEEE`, ...over }), NOW);
+const codeAt = (n, over = {}) => cleanEntry(raw({ code: `AAAA${n}-BBBBB-CCCCC-DDDDD-EEEEE`, expires: "Dec 31, 2099", ...over }), NOW);
 
 test("codes: a code is posted once per server, however many polls run", async () => {
     const db = openDb(":memory:");

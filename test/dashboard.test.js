@@ -2089,3 +2089,13 @@ test("command guide: the Help page lists every menu from the real command defini
         assert.ok(!JSON.stringify(r.data).includes('"menu","desc'), "the menu command itself is not listed as a task");
     } finally { await o.close(); }
 });
+
+test("admin panels tab: owner sees how often panel commands are run", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    try {
+        o.db.bumpMeta("pnuse:me wishlist add"); o.db.bumpMeta("pnuse:me wishlist add"); o.db.bumpMeta("pnuse:server stream live");
+        const r = (await o.request("/api/admin/panels")).data;
+        assert.equal(r.total, 3);
+        assert.deepEqual(r.rows[0], { command: "/me wishlist add", runs: 2 });
+    } finally { await o.close(); }
+});

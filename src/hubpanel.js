@@ -60,7 +60,10 @@ export function readTyped(o, raw) {
     return n;
 }
 
-export function hubPanel({ json, glance = () => [], areaGlance = () => [], dashUrl = null, runner = null }) {
+/** The panel's own area index, so a purpose-built panel can send people back to it. */
+export const areaIndex = (json, key) => catalog(json).findIndex(a => a.key === key);
+
+export function hubPanel({ json, glance = () => [], areaGlance = () => [], dashUrl = null, runner = null, bespoke = {} }) {
     const hub = json.name;
     const id = `hub-${hub}`;
     const areas = catalog(json);
@@ -131,7 +134,8 @@ export function hubPanel({ json, glance = () => [], areaGlance = () => [], dashU
         if (area) rows.push(rowOf(select(id, "cmd", String(a), "Choose a command (✏️ ones ask for details)", area.items.map((i, n) => ({ label: `${needsInput(i) ? "✏️ " : ""}${i.path.join(" ")}`, value: n, description: i.desc, default: n === c })))));
         const btns = [];
         if (item && runner) btns.push(button(id, "Run", "run", page, { style: ButtonStyle.Success, emoji: "▶️" }));
-        else if (area && runner) for (const [x, n] of quick(area)) btns.push(button(id, x.path[x.path.length - 1], "run", `a${a}.c${n}`, { style: ButtonStyle.Secondary }));
+        else if (area && runner) for (const [x, n] of quick(area).slice(0, bespoke[area.key] ? 3 : 4)) btns.push(button(id, x.path[x.path.length - 1], "run", `a${a}.c${n}`, { style: ButtonStyle.Secondary }));
+        if (!item && area && bespoke[area.key]) btns.unshift(button(bespoke[area.key][0], bespoke[area.key][1], "go", "", { style: ButtonStyle.Primary, emoji: "🧩" }));
         if (item) btns.push(button(id, "Back", "go", `a${a}`));
         if (dashUrl && (!area || area.page)) btns.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Open dashboard").setURL(dashUrl));
         if (btns.length) rows.push(rowOf(...btns.slice(0, 5)));
@@ -146,6 +150,7 @@ export function hubPanel({ json, glance = () => [], areaGlance = () => [], dashU
     }
 
     return {
+        live: true, remember: true,
         pages: [["", "Overview"]],
         pageOf: arg => (/^a\d+(\.c\d+)?/.exec(arg ?? "")?.[0] ?? ""),
         render,

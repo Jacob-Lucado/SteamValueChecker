@@ -27,15 +27,26 @@ export function navRow(panel, pages, current, extra = []) {
     return rowOf(...pages.map(([key, label]) => button(panel, label, "go", key, { style: key === current ? ButtonStyle.Primary : ButtonStyle.Secondary })), ...extra);
 }
 
-export function createPanels({ db }) {
+const LIVE_FOR = 10 * 60_000;
+export function createPanels({ db, tickMs = 30_000 }) {
     const reg = new Map();
+    const live = new Map(); // userId -> { i, mid, id, page, until }: the one panel on screen that keeps itself fresh
     const mkCtx = i => ({ db, i, user: db.ensureUser(i.user.id, i.guildId) });
+    const metaKey = (uid, id) => `pnlast:${uid}:${id}`;
 
     async function open(i, id, page, notice) {
         const p = reg.get(id);
         const ctx = mkCtx(i);
-        const view = await p.render(ctx, page ?? p.pages[0][0], notice);
-        return i.reply({ ...view, flags: MessageFlags.Ephemeral });
+        let at = page;
+        if (at === undefined && p.remember) { try { at = db.getMeta?.(metaKey(i.user.id, id)) ?? undefined; } catch { /* a missing note is fine */ } }
+        at = at ?? p.pages[0][0];
+        const view = await p.render(ctx, at, notice);
+        await i.reply({ ...view, flags: MessageFlags.Ephemeral });
+        if (p.live) {
+            const entry = { i, mid: null, id, page: at, until: Date.now() + LIVE_FOR };
+            live.set(i.user.id, entry);
+            Promise.resolve(i.fetchReply?.()).then(m => { entry.mid = m?.id ?? null; }).catch(() => {});
+        }
     }
 
     async function handle(i) {
@@ -53,9 +64,27 @@ export function createPanels({ db }) {
         }
         if (out.done) return;
         if (out.modal) return i.showModal(out.modal);
-        const view = await p.render(mkCtx(i), out.page, out.notice);
+        const target = out.menuBack && p.back ? reg.get(p.back.id) : p;
+        const tid = out.menuBack && p.back ? p.back.id : id;
+        const at = out.menuBack && p.back ? p.back.page : out.page;
+        const view = await target.render(mkCtx(i), at, out.notice);
+        if (target.remember && typeof at === "string") { try { db.setMeta?.(metaKey(i.user.id, tid), at.replace(/\.c.*$/, "")); } catch { /* best effort */ } }
+        const e = live.get(i.user.id);
+        if (e && e.mid && i.message?.id === e.mid) { e.id = tid; e.page = at; e.until = Date.now() + LIVE_FOR; }
         return i.update(view);
     }
 
-    return { register: (id, panel) => reg.set(id, panel), open, handle, has: id => reg.has(id) };
+    /** Re-draws panels people have left open (live counts, who is streaming). Skips forms so nothing is overwritten mid-typing. */
+    async function tick(now = Date.now()) {
+        for (const [uid, e] of [...live]) {
+            const p = reg.get(e.id);
+            if (now > e.until || !p?.live) { live.delete(uid); continue; }
+            if (/\.c\d/.test(String(e.page)) || !e.mid) continue;
+            try { await e.i.editReply(await p.render(mkCtx(e.i), e.page)); } catch { live.delete(uid); }
+        }
+    }
+    const timer = setInterval(() => { tick().catch(() => {}); }, tickMs);
+    timer.unref?.();
+
+    return { register: (id, panel) => reg.set(id, panel), open, handle, has: id => reg.has(id), tick, stop: () => clearInterval(timer), liveCount: () => live.size };
 }

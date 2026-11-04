@@ -756,6 +756,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     };
     const statusEvents = (limit = 20) => all("SELECT at, component, state, note FROM status_events ORDER BY id DESC LIMIT ?", limit).map(clean);
     const getMeta = key => get("SELECT value FROM status_meta WHERE key = ?", key)?.value ?? null;
+    const bumpMeta = key => run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", key);
+    const listMetaPrefix = prefix => all("SELECT key, value FROM status_meta WHERE key LIKE ? ESCAPE '\\'", prefix.replace(/[%_\\]/g, c => "\\" + c) + "%");
     const setMeta = (key, value) => run("INSERT INTO status_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, String(value));
 
     // One time: an earlier version marked every Steam game with an hour or more as "playing". Only games touched in the last
@@ -766,7 +768,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
 
     return {
-        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, setMeta,
+        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,

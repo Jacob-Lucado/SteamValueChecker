@@ -183,3 +183,73 @@ test("area status shows real rows, not only counts", async () => {
     assert.match(g(ctx, "server", "stream").join("\n"), /<@u1> playing Hades/);
     assert.match(w, /\*\*2\*\* games/); assert.match(w, /• Celeste/); assert.match(w, /• Hades/);
 });
+
+test("wishlist, library and streaming panels work end to end", async () => {
+    const { wishlistPanel, libraryPanel, streamPanel } = await import("../src/bespoke.js");
+    const { p, db } = setup();
+    const calls = [];
+    const replay = async (i, hub, path, vals) => { calls.push({ hub, path: path.join(" "), vals }); };
+    p.register("hub-me", { pages: [["", "x"]], render: () => ({ embeds: [{ title: "hub" }], components: [] }), handle: async () => ({ page: "" }) });
+    p.register("wl", { ...wishlistPanel({ db, replay }), back: { id: "hub-me", page: "a1" } });
+    p.register("lib", { ...libraryPanel({ db }), back: { id: "hub-me", page: "a2" } });
+    p.register("strm", { ...streamPanel({ db, replay }), back: { id: "hub-me", page: "a3" } });
+    db.addItems("u1", Array.from({ length: 9 }, (_, n) => ({ itad_id: `i${n}`, title: `Game ${n}` })));
+    const ok = v => { for (const r of v.components) r.toJSON(); return v; };
+
+    const go = fake(db, "pn:wl:go:"); await p.handle(go); ok(go.out.update);
+    assert.match(go.out.update.embeds[0].description, /9 games/);
+    const nx = fake(db, "pn:wl:go:l1"); await p.handle(nx); assert.match(nx.out.update.embeds[0].description, /Game 8|Game 7/);
+    const id = db.listItems("u1")[0].id;
+    const pick = fake(db, "pn:wl:pick", { values: [String(id)] }); await p.handle(pick); ok(pick.out.update);
+    await p.handle(fake(db, `pn:wl:star:${id}`)); assert.equal(db.listItems("u1")[0].priority, 1);
+    await p.handle(fake(db, `pn:wl:check:${id}`));
+    assert.deepEqual(calls.at(-1), { hub: "me", path: "wishlist check", vals: { game: { v: db.listItems("u1")[0].title } } });
+    const r1 = fake(db, `pn:wl:rule:${id}`, { values: ["percent"] }); await p.handle(r1); r1.out.modal.toJSON();
+    await p.handle(fake(db, `pn:wl:rulem:${id}:percent`, { fields: { getTextInputValue: () => "60" } }));
+    assert.equal(calls.at(-1).vals.value.v, 60);
+    await p.handle(fake(db, `pn:wl:rule:${id}`, { values: ["atl"] })); assert.equal(calls.at(-1).vals.type.v, "atl");
+    const bad = fake(db, `pn:wl:rulem:${id}:price`, { fields: { getTextInputValue: () => "abc" } }); await p.handle(bad);
+    assert.match(bad.out.update.embeds[0].description, /number/);
+    await p.handle(fake(db, "pn:wl:addm", { fields: { getTextInputValue: () => "Hades II" } })); assert.equal(calls.at(-1).vals.title.v, "Hades II");
+    await p.handle(fake(db, `pn:wl:rm:${id}`)); assert.equal(db.countItems("u1"), 8);
+    const menu = fake(db, "pn:wl:menu"); await p.handle(menu); assert.equal(menu.out.update.embeds[0].title, "hub");
+
+    db.upsertLibrary("u1", [{ itad_id: "x", title: "Celeste" }, { itad_id: "y", title: "Hades" }]);
+    const lib = fake(db, "pn:lib:go:"); await p.handle(lib); ok(lib.out.update);
+    const row = db.listLibrary("u1")[0];
+    const lp = fake(db, "pn:lib:pick:all.0", { values: [String(row.id)] }); await p.handle(lp); assert.equal(lp.out.update.components.length, 4); ok(lp.out.update);
+    await p.handle(fake(db, `pn:lib:status:all.0.${row.id}`, { values: ["finished"] })); assert.equal(db.listLibrary("u1")[0].status, "finished");
+    const lf = fake(db, "pn:lib:filter", { values: ["finished"] }); await p.handle(lf); assert.match(lf.out.update.embeds[0].description, /Finished \*\*1\*\*/);
+
+    const st = fake(db, "pn:strm:go:", { guildId: "g1" }); await p.handle(st); ok(st.out.update);
+    const lm = fake(db, "pn:strm:livem", { fields: { getTextInputValue: k => ({ link: "https://twitch.tv/x", title: "", game: "Hades" })[k] ?? "" } }); await p.handle(lm);
+    assert.deepEqual(calls.at(-1), { hub: "server", path: "stream live", vals: { link: { v: "https://twitch.tv/x" }, game: { v: "Hades" } } });
+    const pm = fake(db, "pn:strm:pingm", { fields: { getTextInputValue: () => "maybe" } }); await p.handle(pm); assert.match(pm.out.update.embeds[0].description, /yes or no/);
+    await p.handle(fake(db, "pn:strm:pingm", { fields: { getTextInputValue: () => "yes" } })); assert.equal(calls.at(-1).vals.enabled.v, true);
+});
+
+test("hub panels reopen where you left off and refresh themselves while open", async () => {
+    const { hubCommands } = await import("../src/commands.js");
+    const { hubPanel, catalog } = await import("../src/hubpanel.js");
+    const db = openDb(":memory:"); db.ensureUser("u1", null);
+    const p = createPanels({ db, tickMs: 3_600_000 });
+    const json = hubCommands.find(c => c.name === "server");
+    let n = 0;
+    p.register("hub-server", hubPanel({ json, areaGlance: () => [`count ${++n}`] }));
+    const areas = catalog(json); const idx = areas.findIndex(a => a.key === "stream");
+    const o = fake(db, "x", { fetchReply: async () => ({ id: "m1" }), editReply: async v => { o.out.edited = v; } });
+    await p.open(o, "hub-server");
+    const nav = fake(db, "pn:hub-server:area", { values: [String(idx)], message: { id: "m1" } }); await p.handle(nav);
+    const cmd = fake(db, "pn:hub-server:cmd:" + idx, { values: ["0"], message: { id: "m1" } }); await p.handle(cmd);
+    const again = fake(db, "x", { fetchReply: async () => ({ id: "m2" }), editReply: async v => { again.out.edited = v; } }); await p.open(again, "hub-server");
+    assert.match(again.out.reply.embeds[0].title, /stream/, "back in the stream area, not on a half-filled form");
+    assert.doesNotMatch(again.out.reply.embeds[0].title, /live|link/);
+    await new Promise(r => setImmediate(r));
+    await p.handle(fake(db, "pn:hub-server:go:", { message: { id: "m2" } }));
+    await p.handle(fake(db, "pn:hub-server:area", { values: [String(idx)], message: { id: "m2" } }));
+    await p.tick(Date.now() + 1000);
+    assert.match(again.out.edited.embeds[0].description, /count \d+/);
+    await p.tick(Date.now() + 11 * 60_000);
+    assert.equal(p.liveCount(), 0, "stops after ten minutes");
+    p.stop();
+});

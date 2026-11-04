@@ -2543,6 +2543,14 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             return { stats: db.stats(), health: ops ? ops.snapshot() : null };
         },
 
+        // How often each command is run from a panel's Run button (counts only), so you can see which panels people use.
+        "GET /api/admin/panels": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const rows = db.listMetaPrefix("pnuse:").map(r => ({ command: "/" + r.key.slice(6), runs: Number(r.value) })).sort((a, b) => b.runs - a.runs).slice(0, 100);
+            return { rows, total: rows.reduce((t, r) => t + r.runs, 0) };
+        },
+
         "GET /api/admin/insights": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");

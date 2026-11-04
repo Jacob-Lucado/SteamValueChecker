@@ -24,7 +24,8 @@ import { helpPayload, handleHelpPick, configureHelp, isHelpNav } from "./helpui.
 import { brandInteraction, brandRest } from "./brand.js";
 import { pagedPayload, handlePager, tokenOf, PAGE_PREFIX, JUMP_PREFIX } from "./pager.js";
 import { legacyRoute, SERVER_ONLY_LEGACY, hubCommands } from "./commands.js";
-import { hubPanel, replayAsCommand } from "./hubpanel.js";
+import { hubPanel, replayAsCommand, areaIndex } from "./hubpanel.js";
+import { wishlistPanel, libraryPanel, streamPanel } from "./bespoke.js";
 import { areaGlance } from "./panelglance.js";
 import { createStreams } from "./streamlive.js";
 import { createStreamHandlers } from "./streamhandlers.js";
@@ -139,14 +140,22 @@ const nowPlaying = createNowPlaying({ apiKey: cfg.steamApiKey });
 const panels = createPanels({ db });
 panels.register("alerts", alertPanel({ db }));
 // "Run it" in a hub menu replays the command as if it had been typed, minus options (only commands with none are offered).
-const runFromPanel = (i, hub, path, vals) => replayAsCommand(i, hub, path, onInteraction, vals);
+const runFromPanel = (i, hub, path, vals) => { try { db.bumpMeta(`pnuse:${hub} ${path.join(" ")}`); } catch { /* counting is best effort */ } return replayAsCommand(i, hub, path, onInteraction, vals); };
 const glanceFor = areaGlance(db);
 const HUB_MENUS = ["games", "me", "server", "manage", "bot", "mod", "music"];
 const GLANCE = {
     me: ctx => { const u = ctx.user; return ["", `Watching **${ctx.db.countItems(u.discord_id)}** games · prices in **${u.region}** · alerts ${u.paused ? "paused" : "on"}`]; }
 };
+const BESPOKE = { me: { wishlist: ["wl", "Wishlist panel"], library: ["lib", "Library panel"] }, server: { stream: ["strm", "Streaming panel"] } };
 for (const json of hubCommands.filter(c => HUB_MENUS.includes(c.name))) {
-    panels.register(`hub-${json.name}`, hubPanel({ json, glance: GLANCE[json.name], areaGlance: (ctx, area) => glanceFor(ctx, json.name, area), dashUrl: cfg.dashboard?.publicUrl ?? null, runner: runFromPanel }));
+    panels.register(`hub-${json.name}`, hubPanel({ json, bespoke: BESPOKE[json.name], glance: GLANCE[json.name], areaGlance: (ctx, area) => glanceFor(ctx, json.name, area), dashUrl: cfg.dashboard?.publicUrl ?? null, runner: runFromPanel }));
+}
+{
+    const meJson = hubCommands.find(c => c.name === "me"), srvJson = hubCommands.find(c => c.name === "server");
+    const back = (hub, json, key) => ({ id: `hub-${hub}`, page: `a${areaIndex(json, key)}` });
+    panels.register("wl", { ...wishlistPanel({ db, replay: runFromPanel }), back: back("me", meJson, "wishlist") });
+    panels.register("lib", { ...libraryPanel({ db }), back: back("me", meJson, "library") });
+    panels.register("strm", { ...streamPanel({ db, replay: runFromPanel }), back: back("server", srvJson, "stream") });
 }
 const handlers = createHandlers({ panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });

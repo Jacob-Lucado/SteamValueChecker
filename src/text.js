@@ -16,7 +16,7 @@ export function quickStart(dashboardUrl = null) {
 // /help is a paged embed: a menu of topics, one tidy page each. Every command lives under one of a handful of names.
 export const HELP_PAGES = [
     { key: "start", label: "Start here", emoji: "🧭", title: "Everything in a few commands",
-        description: "Pick a topic from the menu below (`/help` brings this back any time). Replies are private unless a command says otherwise, and most work in a DM too. Never post keys.",
+        description: "Start with a menu: `/games menu`, `/me menu`, `/server menu`. Pick a topic below for the details (`/help` brings this back any time). Replies are private unless a command says otherwise, and most work in a DM too. Never post keys.",
         fields: [
             { name: "🎮 /games", value: "Price games, check bundles, free games, sales, codes, sale prep." },
             { name: "👤 /me  ·  🔔 /alerts", value: "Your wishlist, library, Steam link, friends and data; how you get sale alerts." },

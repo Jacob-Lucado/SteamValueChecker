@@ -2828,7 +2828,17 @@
       load();
       return [box];
     };
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["music", "Music", musicTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    const panelsTab = () => {
+      const box = h("div", { class: "muted", text: "Loading…" });
+      api("/api/admin/panels").then(r => {
+        box.className = "";
+        box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: `Run from panels (${n0(r.total)})` }),
+          h("p", { class: "muted small", text: "How often each command was run with the Run button in a menu or panel. Typed commands are not counted here." }),
+          r.rows.length ? table(["Command", "Runs"], r.rows.map(x => [x.command, n0(x.runs)])) : h("p", { class: "muted", text: "Nothing yet." })));
+      }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
+      return [box];
+    };
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     if (opts.shell) return { TABS, tile, table, when, n0, st, hl, bot, ins, bugData, sum, daily };
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
