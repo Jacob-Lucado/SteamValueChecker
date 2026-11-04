@@ -16,20 +16,28 @@
     Element.prototype[name] = function (...nodes) { return native.apply(this, nodes.flat(Infinity).filter(n => n !== null && n !== undefined && n !== false)); };
   }
 
+  // ---------- language ----------
+  // Text is looked up by its English wording in public/i18n.js as the page is built; anything without a translation stays English.
+  const I18N = window.SVC_I18N || { LANGS: { en: "English" }, valid: c => c === "en", pick: () => "en", hasChoice: () => false, remember() {}, tx: (l, t) => t };
+  let LANG = I18N.pick();
+  document.documentElement.lang = LANG;
+  const tx = s => I18N.tx(LANG, s);
+  const TX_ATTRS = new Set(["title", "placeholder", "aria-label", "alt"]);
+
   // ---------- helpers ----------
   function h(tag, props, ...kids) {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(props || {})) {
       if (v === undefined || v === null || v === false) continue;
       if (k === "class") el.className = v;
-      else if (k === "text") el.textContent = v;
+      else if (k === "text") el.textContent = tx(v);
       else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
       else if (k === "value" || k === "checked" || k === "disabled" || k === "selected") el[k] = v;
-      else el.setAttribute(k, v === true ? "" : v);
+      else el.setAttribute(k, v === true ? "" : TX_ATTRS.has(k) ? tx(v) : v);
     }
     for (const kid of kids.flat()) {
       if (kid === null || kid === undefined || kid === false) continue;
-      el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+      el.append(kid.nodeType ? kid : document.createTextNode(String(tx(kid))));
     }
     return el;
   }
@@ -177,11 +185,7 @@
   const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[0];
   const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
 
-  const NAV_I18N = {
-    es: { deals: "Ofertas", free: "Gratis y códigos", social: "Amigos", account: "Cuenta", setup: "Configuración", wishlist: "Lista de deseos", library: "Biblioteca", alerts: "Alertas", support: "Soporte", notifications: "Avisos", servers: "Servidores", help: "Ayuda", mydata: "Mis datos" },
-    fr: { deals: "Offres", free: "Gratuit et codes", social: "Amis", account: "Compte", setup: "Configuration", wishlist: "Liste de souhaits", library: "Bibliothèque", alerts: "Alertes", support: "Assistance", notifications: "Notifications", servers: "Serveurs", help: "Aide", mydata: "Mes données" }
-  };
-  const navText = (id, text) => (state.me && NAV_I18N[state.me.settings.lang] && NAV_I18N[state.me.settings.lang][id]) || text;
+  const navText = (id, text) => text; // h() translates it
 
   // Prices come from one saved setting, the region (it decides the currency). It is kept on the account, so the Discord bot uses it too.
   function currencyPicker() {
@@ -201,6 +205,31 @@
             toast("Prices are now in " + r.name + ".", "ok");
             route();
           } catch (e) { toast(e.message, "error"); }
+        });
+        return item;
+      }));
+    const wrap = h("div", { class: "nav-group" }, btn, menu);
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const wasOpen = openMenu && openMenu.btn === btn;
+      closeMenu();
+      if (!wasOpen) { menu.hidden = false; btn.setAttribute("aria-expanded", "true"); openMenu = { wrap, btn, menu }; }
+    });
+    return wrap;
+  }
+
+  // The language is one setting for the dashboard and the Discord bot: signed in, it is saved on the account too.
+  function languagePicker() {
+    const btn = h("button", { type: "button", class: "nav-btn cur-btn", "aria-haspopup": "true", "aria-expanded": "false", title: "Language", "aria-label": "Language: " + I18N.LANGS[LANG] }, "🌐 " + LANG.toUpperCase());
+    const menu = h("div", { class: "menu right scroll", role: "menu", hidden: true },
+      ...Object.entries(I18N.LANGS).map(([code, name]) => {
+        const item = h("button", { type: "button", role: "menuitem", lang: code, class: code === LANG ? "active" : "", text: name });
+        item.addEventListener("click", async () => {
+          closeMenu();
+          if (code === LANG) return;
+          LANG = code; I18N.remember(code); document.documentElement.lang = code;
+          if (state.me) { try { const res = await api("/api/settings", { lang: code }); state.me.settings = res.settings; } catch { /* the page still switches */ } }
+          renderChrome(); route();
         });
         return item;
       }));
@@ -242,14 +271,14 @@
     if (state.me) {
       acct.replaceChildren(...[...links,
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
-        currencyPicker(), displayMenu(),
+        currencyPicker(), languagePicker(), displayMenu(),
         // The signed-in name and Log out always sit together, set slightly apart from the tools.
         h("div", { class: "user-chip" },
           state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
           h("span", { class: "who", text: state.me.user.username }),
           h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } }))].filter(Boolean));
     } else {
-      acct.replaceChildren(...[...links, themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
+      acct.replaceChildren(...[...links, languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
@@ -5913,6 +5942,9 @@
       if (!state.cfg) state.cfg = await api("/api/config");
       try { const x = await api("/api/about"); state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null; } catch { state.about = null; state.creator = null; }
       try { state.me = await api("/api/me"); if (state.me?.adminOnly) state.me = null; } catch { state.me = null; } // a password sign-in opens the admin panel only
+      // No choice made in this browser yet: follow the language already set for the bot on this account.
+      const mine = state.me?.settings?.lang;
+      if (!I18N.hasChoice() && mine && mine !== "en" && I18N.valid(mine)) { LANG = mine; I18N.remember(mine); document.documentElement.lang = mine; }
     } catch (e) {
       app.replaceChildren(h("div", { class: "notice warn", text: e.message }));
       return;

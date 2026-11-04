@@ -3,6 +3,8 @@ import { ApplicationCommandType, ApplicationIntegrationType, ChannelType, Contex
 import { REGIONS, ALERT_TYPES } from "./constants.js";
 import { CATEGORIES } from "./stations.js";
 import { MENU } from "./hubpanel.js";
+import { LANGS } from "./i18n.js";
+const LANG_CHOICES = Object.entries(LANGS).map(([value, name]) => ({ name, value }));
 export { REGIONS };
 
 // Commands that work anywhere: installed on a server, or on a person's own account (DMs, group chats, any server).
@@ -375,7 +377,7 @@ alerts
             { name: "Sale alerts", value: "alert" }, { name: "Bundle and giveaway alerts", value: "bundle" }, { name: "Free game alerts", value: "free" }, { name: "News and patch notes", value: "news" }, { name: "DLC sale alerts", value: "dlc" }, { name: "Refund reminders", value: "refund" }, { name: "Playtime milestones", value: "milestones" }, { name: "Year in games card", value: "yearly" }, { name: "Monthly backlog pick", value: "nudge" }, { name: "Almost-complete achievements", value: "achv" }, { name: "Playtests and demos", value: "playtest" }, { name: "Weekly digest", value: "digest" }, { name: "Release-day alerts", value: "release" }, { name: "Friend birthday reminders", value: "friend" }, { name: "Game code alerts", value: "codes" }, { name: "Promo news alerts", value: "promo" }))
         .addBooleanOption(o => o.setName("muted").setDescription("True to mute, false to get them again").setRequired(true)))
     .addSubcommand(s => s.setName("language").setDescription("Language for the bot's buttons and messages")
-        .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices({ name: "English", value: "en" }, { name: "Español", value: "es" }, { name: "Français", value: "fr" })))
+        .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices(...LANG_CHOICES)))
     .addSubcommand(s => s.setName("share").setDescription("Count you in server group alerts and the leaderboard (off by default)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("history").setDescription("Your recent alerts"));
@@ -759,12 +761,17 @@ const playCmd = new SlashCommandBuilder()
     .addBooleanOption(o => o.setName("next").setDescription("Put it at the front of the queue"))
     .addBooleanOption(o => o.setName("shuffle").setDescription("Shuffle a playlist as it's added"));
 
+const languageCmd = new SlashCommandBuilder()
+    .setName("language")
+    .setDescription("Language for the bot's buttons and messages")
+    .addStringOption(o => o.setName("language").setDescription("Language").setRequired(true).addChoices(...LANG_CHOICES));
+
 const playerCmd = new SlashCommandBuilder()
     .setName("player")
     .setDescription("Open the big music player for this server");
 
 export const commands = [
-    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
+    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
     ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
@@ -780,7 +787,7 @@ const HUBS = [
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];
-const KEEP = ["help", "dashboard", "alerts", "mod", "music", "play", "player"];
+const KEEP = ["help", "dashboard", "alerts", "language", "mod", "music", "play", "player"];
 const KINDS = { everywhere, serverOnly, serverOrDm };
 const byName = new Map(commands.map(c => [c.name, c]));
 

@@ -699,6 +699,7 @@ async function onInteraction(i, again = false) {
             case "value": return await handleValue(i);
             case "wishlist": return await handlers.handleWishlist(i);
             case "alerts": return await handlers.handleAlerts(i);
+            case "language": return await handlers.handleLanguage(i);
             case "alertchannel": return await handlers.handleAlertChannel(i);
             case "giveaway": return await gw.handleCommand(i);
             case "library": return await handlers.handleLibrary(i);

@@ -13,6 +13,7 @@ import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { gameNight, gameNightEmbed, gameNightButtons, pickGame, pollOptions, pollState, castVote, pollEmbed, pollButtons } from "./gamenight.js";
 import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
+import { LANGS, languageDone } from "./i18n.js";
 import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
@@ -334,6 +335,15 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
     }
 
     // ---------- /alerts ----------
+    /** /language, and /alerts language. Saves the choice and answers in the language that was picked. */
+    async function handleLanguage(i) {
+        const user = db.ensureUser(i.user.id, i.guildId);
+        const lang = i.options.getString("language", true);
+        if (!LANGS[lang]) return eph(i, "Pick a language from the list.");
+        db.updateUser(user.discord_id, { lang });
+        return eph(i, languageDone(lang));
+    }
+
     async function handleAlerts(i) {
         const user = db.ensureUser(i.user.id, i.guildId);
         const sub = i.options.getSubcommand();
@@ -497,9 +507,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
                 return eph(i, on ? "Muted. Those alerts will not be sent to you, but you can still read them on the dashboard's Notifications page." : "Unmuted. You will get those alerts again.");
             }
             case "language": {
-                const lang = i.options.getString("language", true);
-                db.updateUser(user.discord_id, { lang });
-                return eph(i, lang === "es" ? "Listo. Los botones y mensajes clave ahora están en español." : lang === "fr" ? "C'est fait. Les boutons et messages clés sont maintenant en français." : "Done. Buttons and messages are in English.");
+                return await handleLanguage(i);
             }
             case "mindiscount": {
                 const pct = i.options.getInteger("percent", true);
@@ -1019,5 +1027,5 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
         } catch (err) { await failed(i, "message menu", err); }
     }
 
-    return { handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

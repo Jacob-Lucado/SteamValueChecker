@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.15", date: "2026-11-15", title: "12 languages", items: [
+        "**Dashboard languages:** a language picker (🌐) in the top bar switches the dashboard between English, Spanish, French, German, Portuguese, Italian, Russian, Polish, Turkish, Japanese, Korean and Chinese. It starts in your browser's language. The menus, tabs, buttons, wishlist and profile editor are translated; anything not translated yet stays in English.",
+        "**`/language`:** pick the language for the bot's buttons and alert messages. It is the same setting as the dashboard picker, so changing one changes the other.",
+        "**Command descriptions in your Discord language:** the main commands now show their descriptions in the language your Discord app is set to. Discord decides that from your own app setting, so the bot cannot switch it per person. Command names stay the same everywhere.",
+    ] },
     { version: "2026.11.14", date: "2026-11-14", title: "Public profiles", items: [
         "**Your own profile page:** build it under Account, My profile, with a live preview. Pick a theme and accent colour, background, layout and banner, write a bio, add up to six links (Twitch, Kick, YouTube, X, Bluesky, Steam, GitHub or a website) and pin up to five favorite games. Share it at `/u/yourname`; it shows a proper preview card when pasted into Discord.",
         "**Profile song:** set a YouTube, SoundCloud or Spotify link, or the address of a live radio stream, and visitors get a play button on your page. Turn on the optional **Click to enter** screen and the song starts the moment they click it.",

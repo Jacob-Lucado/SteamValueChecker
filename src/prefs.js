@@ -67,7 +67,7 @@ export function prefsPatch(input, user) {
         patch.muted = [...new Set(list)].join(",");
     }
     if (has("lang")) {
-        if (!LANGS[input.lang]) throw new UserError("Pick English, Spanish (es) or French (fr).");
+        if (!LANGS[input.lang]) throw new UserError("Pick one of the languages in the list.");
         patch.lang = input.lang;
     }
     return patch;
