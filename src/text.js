@@ -41,6 +41,7 @@ export const HELP_PAGES = [
             { name: "Library", value: "`/me library` `add`, `import`, `remove`, `view`, `status`, `backlog`, `spend`, `trend`, `challenge`, `badges`, `bundles`, `grabber`." },
             { name: "Steam", value: "`/me steam` `link`, `sync`, `view`, `next`, `foryou`, `verify`, `value`, `taste`, `recap`, `goal`, `unlink`." },
             { name: "Sharing", value: "`/me profilecard` makes a profile picture. `/me publicpage` makes a shareable wishlist page (`share:true` posts the link in the channel). `/me currency` picks your currency.\n`/me friend` `add` / `list` / `deals` / `remove`: friends' birthdays and wishlist sales." },
+            { name: "Profile page", value: "`/me profile` builds your public page: `view`, `bio`, `name`, `look` (theme, background, layout, banner), `song` (YouTube, SoundCloud or Spotify), `link`, `unlink`, `favorite`, `unfavorite`, `show` (who sees each section). The dashboard has a live editor." },
             { name: "Data", value: "`/me mydata` `export` / `delete` your data." }
         ] },
     { key: "alerts", label: "Sale alerts", emoji: "🔔", title: "/alerts",

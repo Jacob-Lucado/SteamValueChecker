@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.14", date: "2026-11-14", title: "Public profiles", items: [
+        "**Your own profile page:** build it under Account, My profile, with a live preview. Pick a theme and accent colour, background, layout and banner, write a bio, add up to six links (Twitch, Kick, YouTube, X, Bluesky, Steam, GitHub or a website) and pin up to five favorite games. Share it at `/u/yourname`; it shows a proper preview card when pasted into Discord.",
+        "**Profile song:** set a YouTube, SoundCloud or Spotify link and visitors get a play button on your page. Browsers do not allow sound to start on its own, so it plays when they press it.",
+        "**You choose who sees each part:** about, favorites, wishlist, recently finished, trophies, Steam stats, streaming and playing now are each public, server only or hidden, and can be reordered. Hidden parts are never sent to visitors.",
+        "**`/me profile`:** view, bio, name, look, song, link, unlink, favorite, unfavorite and show, all from Discord. Visitors can report a page, and moderators can hide one from the Admin area.",
+    ] },
     { version: "2026.11.13", date: "2026-11-13", title: "Menus and settings panels", items: [
         "**Panels for every command group:** `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu` and `/mod menu` open a private panel with live status for each area (your wishlist count, open giveaways, who is live and so on). Pick a command, fill in its options with dropdowns, member and channel pickers or a small form, and press Run. No typing of options. `/music` has the same from the All commands button on `/player`.",
         "**Wishlist, library and streaming panels:** open them from the wishlist, library and stream areas in `/me menu` and `/server menu`. Browse and page your wishlist, star, remove or set an alert on a game, change a library game's status, or go live and give a key away, all with buttons. Menus reopen where you left off and refresh themselves while open.",

@@ -1998,7 +1998,7 @@ test("stream cards overlay: a private link per person that shows the best deal, 
         await o.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
         await o.request("/api/streamcard", { method: "POST", body: { action: "save", kinds: ["gift"] } });
         got = await ask(made.token);
-        assert.deepEqual(got.data.cards.map(c => c.kind), ["gift"]); assert.match(got.data.cards[0].url, /#\/u\/jacob$/);
+        assert.deepEqual(got.data.cards.map(c => c.kind), ["gift"]); assert.match(got.data.cards[0].url, /\/u\/jacob$/);
         const fresh = (await o.request("/api/streamcard", { method: "POST", body: { action: "reset" } })).data;
         assert.notEqual(fresh.token, made.token); assert.deepEqual(fresh.kinds, ["gift"], "a new link keeps the chosen cards");
         assert.equal((await ask(made.token)).status, 404); assert.equal((await ask(fresh.token)).status, 200);
@@ -2013,7 +2013,7 @@ test("stream cards overlay: a private link per person that shows the best deal, 
         assert.equal((await txt("game")).body, "Not in a game right now.");
         let t = await txt("deal"); assert.equal(t.status, 200); assert.match(t.type, /text\/plain/); assert.equal(t.body, "Hades is 50% off: $10.00 (was $20.00) at GOG");
         t = await txt("free"); assert.equal(t.body, "Free right now: Alpha on Epic");
-        t = await txt("gift"); assert.match(t.body, /^Gift me a game: .*#\/u\/jacob$/);
+        t = await txt("gift"); assert.match(t.body, /^Gift me a game: .*\/u\/jacob$/);
         assert.equal((await txt("nope")).status, 404); assert.equal((await txt("deal", "svcd_" + "x".repeat(32))).status, 404);
         await o.request("/api/streamcard", { method: "POST", body: { action: "remove" } });
         assert.equal((await txt("deal")).status, 404);
@@ -2097,5 +2097,45 @@ test("admin panels tab: owner sees how often panel commands are run", async () =
         const r = (await o.request("/api/admin/panels")).data;
         assert.equal(r.total, 3);
         assert.deepEqual(r.rows[0], { command: "/me wishlist add", runs: 2 });
+    } finally { await o.close(); }
+});
+
+test("profiles: editor saves and validates, visitors only get what is switched on, share link has a preview, reports and hiding work", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    try {
+        const slug = "jacobm";
+        assert.equal((await o.request("/api/profile", { method: "POST", body: { enabled: true, slug } })).status, 200);
+        const bad = await o.request("/api/profile/page", { method: "POST", body: { links: [{ kind: "twitch", url: "https://evil.example" }] } });
+        assert.equal(bad.status, 400);
+        assert.equal((await o.request("/api/profile/page", { method: "POST", body: { song: "https://evil.example/x.mp3" } })).status, 400);
+        const ok = await o.request("/api/profile/page", { method: "POST", body: { name: "Jacob", bio: "I play too much.", theme: "ocean", favorites: ["Hades"], song: { url: "https://youtu.be/dQw4w9WgXcQ", title: "Theme" },
+            links: [{ kind: "x", url: "https://x.com/jacob" }], sections: [{ key: "about", vis: "public" }, { key: "favorites", vis: "public" }, { key: "steam", vis: "hidden" }, { key: "wishlist", vis: "hidden" }] } });
+        assert.equal(ok.status, 200); assert.equal(ok.data.config.theme, "ocean"); assert.ok(ok.data.choices.themes.length >= 8);
+        const pv = await o.request("/api/profile/preview", { method: "POST", body: { bio: "draft only", theme: "light" } });
+        assert.equal(pv.data.profile.bio, "draft only");
+        assert.equal((await o.request("/api/profile/page")).data.config.bio, "I play too much.", "a preview does not save");
+
+        const pub = await fetch(o.base + "/api/public/profile?slug=" + slug);
+        assert.equal(pub.status, 200);
+        const body = await pub.json();
+        assert.equal(body.profile.name, "Jacob"); assert.equal(body.profile.song.provider, "youtube");
+        assert.deepEqual(body.profile.sections.map(s => s.key), ["about", "favorites"]);
+        assert.equal((await fetch(o.base + "/api/public/profile?slug=nobody")).status, 404);
+
+        const shell = await fetch(o.base + "/u/" + slug);
+        const html = await shell.text();
+        assert.equal(shell.status, 200); assert.match(html, /og:title" content="Jacob on Steam Value Checker"/); assert.match(html, /og:description" content="I play too much\."/);
+        assert.match(shell.headers.get("content-security-policy"), /frame-src[^;]*youtube-nocookie\.com[^;]*soundcloud\.com[^;]*spotify\.com/);
+
+        const post = (path, b) => fetch(o.base + path, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "dashboard" }, body: JSON.stringify(b) });
+        assert.equal((await post("/api/public/profile/report", { slug, reason: "x" })).status, 400);
+        assert.equal((await post("/api/public/profile/report", { slug, reason: "Pretending to be someone" })).status, 200);
+        const rep = (await o.request("/api/admin/profiles")).data.reports;
+        assert.equal(rep.length, 1); assert.equal(rep[0].slug, slug);
+        assert.equal((await o.request("/api/admin/profiles", { method: "POST", body: { slug, action: "hide" } })).status, 200);
+        assert.equal((await fetch(o.base + "/api/public/profile?slug=" + slug)).status, 404, "a hidden profile is gone for visitors");
+        assert.doesNotMatch(await (await fetch(o.base + "/u/" + slug)).text(), /Jacob on Steam/, "and its preview stops showing the bio");
+        await o.request("/api/admin/profiles", { method: "POST", body: { slug, action: "show" } });
+        assert.equal((await fetch(o.base + "/api/public/profile?slug=" + slug)).status, 200);
     } finally { await o.close(); }
 });

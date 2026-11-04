@@ -44,7 +44,7 @@ test("right-click wishlist: shows a shared wishlist, says so when there isn't on
     db.setProfile("pal", { slug: "pal", isPublic: true });
     const shown = fake(CONTEXT_WISHLIST, { id: "pal", username: "Pal", displayName: "Pal" }); await h.handleContextMenu(shown);
     const e = shown.out.at(-1).embeds[0];
-    assert.match(e.title, /Pal's wishlist/); assert.match(e.description, /Hades II/); assert.match(e.description, /70% off/); assert.equal(e.url, "https://svc.test/#/u/pal");
+    assert.match(e.title, /Pal's wishlist/); assert.match(e.description, /Hades II/); assert.match(e.description, /70% off/); assert.equal(e.url, "https://svc.test/u/pal");
     db.setProfile("pal", { slug: "pal", isPublic: false });
     const priv = fake(CONTEXT_WISHLIST, { id: "pal", username: "Pal", displayName: "Pal" }); await h.handleContextMenu(priv);
     assert.match(priv.out[0].content, /hasn't shared a wishlist/);

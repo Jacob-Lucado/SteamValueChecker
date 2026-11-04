@@ -31,6 +31,7 @@ import { connectionPayload } from "../linkedroles.js";
 import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
+import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
 import { forYou } from "../foryou.js";
@@ -233,7 +234,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             kinds, user: null,
             deals: async () => (await viewRows(db, itad, u)).rows,
             free: async () => (await enrichFree(await itad.getGiveawayList())).filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => ({ title: g.title, shop: g.shop, expiry: g.expiry, art: freeArt(g) ?? null })),
-            giftUrl: u?.profile_slug && u.profile_public ? `${origin}/#/u/${u.profile_slug}` : null
+            giftUrl: u?.profile_slug && u.profile_public ? `${origin}/u/${u.profile_slug}` : null
         });
     });
     // One line of text for a chat bot command (!deals, !free, !wishlist). Same private link as the overlay.
@@ -325,7 +326,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
     const squeeze = (buf, enc, quality) => (enc === "br" ? brotliCompressSync(buf, { params: { [zc.BROTLI_PARAM_QUALITY]: quality } }) : gzipSync(buf, { level: Math.min(9, quality) }));
     const CSP =
 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
-        "connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self'; object-src 'self'; frame-ancestors 'none'";
+        "connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self' https://www.youtube-nocookie.com https://w.soundcloud.com https://open.spotify.com; object-src 'self'; frame-ancestors 'none'";
     const send = (res, status, body, headers = {}) => {
         const type = String(headers["Content-Type"] ?? "");
         if (COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && body && Buffer.byteLength(body) > 1024) {
@@ -464,6 +465,17 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
     }
     // The Music page refreshes every few seconds, so anything it asks Discord for is remembered for a while.
     const memo = new Map();
+    // What the profile editor needs in one go.
+    async function profileEditorPayload(u) {
+        const { data, blocked } = db.getProfileData(u.discord_id);
+        const titles = [...new Set([...db.listLibrary(u.discord_id), ...db.listItems(u.discord_id)].map(x => x.title))].sort((a, b) => a.localeCompare(b)).slice(0, 500);
+        return {
+            slug: u.profile_slug ?? null, public: Boolean(u.profile_public), blocked, config: withDefaults(data),
+            steamLinked: Boolean(db.getSteamLink(u.discord_id)),
+            choices: { themes: Object.entries(PROFILE_THEMES).map(([k, v]) => ({ key: k, bg: v.bg, accent: v.accent })), bgstyles: BG_STYLES, layouts: LAYOUTS, sections: Object.entries(SECTIONS), links: LINK_KIND_NAMES, titles },
+            profile: u.profile_slug ? await buildProfile({ db, itad, nowPlaying }, u, { owner: true, sameServer: true }) : null
+        };
+    }
     const remember = async (key, ttl, fn) => {
         const hit = memo.get(key);
         if (hit && hit.until > Date.now()) return hit.value;
@@ -2169,6 +2181,63 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             return { ...r, cleared, claims: db.countGiftClaims(s.userId) };
         },
         // Public on purpose (anyone with the link), but only for members who switched their page on.
+        // ---------- full profiles ----------
+        // The owner's editor: saved settings, the choices the editor offers, and a preview exactly as visitors would see it.
+        "GET /api/profile/page": async (req) => {
+            const s = session(req); const u = userRow(s);
+            return await profileEditorPayload(u);
+        },
+        "POST /api/profile/page": async (req, body) => {
+            const s = session(req); const u = userRow(s);
+            const { data } = db.getProfileData(s.userId);
+            db.setProfileData(s.userId, cleanProfile(body ?? {}, data));
+            return await profileEditorPayload(db.getUser(s.userId));
+        },
+        // Preview unsaved changes. Nothing is stored.
+        "POST /api/profile/preview": async (req, body) => {
+            const s = session(req); const u = userRow(s);
+            if (!u.profile_slug) throw new HttpError(400, "Choose a page name first.");
+            const draft = withDefaults(cleanProfile(body ?? {}, {}));
+            return { profile: await buildProfile({ db, itad, nowPlaying }, u, { owner: true, sameServer: true }, { draft }) };
+        },
+        // Public on purpose: anyone with the link sees what the owner chose to show, and only that.
+        "GET /api/public/profile": async (req, _b, url) => {
+            const owner = db.getProfileBySlug(String(url.searchParams.get("slug") ?? "").toLowerCase());
+            if (!owner || !owner.profile_public || db.getProfileData(owner.discord_id).blocked) throw new HttpError(404, "That page does not exist or is private.");
+            const sess = softSession(req);
+            const mine = Boolean(sess && sess.userId === owner.discord_id);
+            const sameServer = Boolean(mine || (sess && owner.guild_id && !isHidden(owner.guild_id) && sess.guilds.some(g => g.id === owner.guild_id)));
+            const t = url.searchParams.get("t");
+            const profile = await buildProfile({ db, itad, nowPlaying }, owner, { owner: mine, sameServer }, { token: GIFT_TOKEN.test(t ?? "") ? t : null });
+            const wl = profile.sections.find(x => x.key === "wishlist");
+            const canMark = Boolean(sess && owner.guild_id && !isHidden(owner.guild_id) && isStaff(sess.guilds.find(x => x.id === owner.guild_id)));
+            return { profile, canMark, signedIn: Boolean(sess), hasWishlist: Boolean(wl) };
+        },
+        "POST /api/public/profile/report": async (req, body) => {
+            if (!giftLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const owner = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
+            if (!owner || !owner.profile_public) throw new HttpError(404, "That page does not exist or is private.");
+            const reason = String(body.reason ?? "").trim().slice(0, 300);
+            if (reason.length < 3) throw new HttpError(400, "Say briefly what is wrong with it.");
+            db.addProfileReport(owner.profile_slug, reason);
+            if (config.ownerId) { try { db.addNotification(config.ownerId, { type: "report", title: "A profile was reported", body: `/u/${owner.profile_slug}: ${reason}` }); } catch { /* the list below still has it */ } }
+            return { ok: true };
+        },
+        "GET /api/admin/profiles": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            return { reports: db.listProfileReports().map(r => ({ ...r, hidden: Boolean(db.getProfileBySlug(r.slug) && db.getProfileData(db.getProfileBySlug(r.slug).discord_id).blocked) })) };
+        },
+        "POST /api/admin/profiles": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const owner = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
+            if (!owner) throw new HttpError(404, "No profile with that name.");
+            if (body.action === "dismiss") db.clearProfileReports(owner.profile_slug);
+            else db.blockProfile(owner.discord_id, body.action === "hide");
+            return { ok: true };
+        },
+
         "GET /api/public/wishlist": async (req, _b, url) => {
             const t = url.searchParams.get("t");
             const page = await publicWishlist(db, itad, url.searchParams.get("slug"), GIFT_TOKEN.test(t ?? "") ? t : null);
@@ -3006,16 +3075,41 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
 
     // ---------- static ----------
     const zcache = new Map(); // `${file}:${encoding}` -> the compressed page code, made once
-    async function serveFile(res, path, extra = {}) {
-        const [file, type] = FILES[path];
+    async function loadFile(file) {
         let body = cache.get(file);
         if (!body) {
-            try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return send(res, 404, "Not found", { "Content-Type": "text/plain" }); }
+            try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
             if (file === "index.html" || file === "grabber.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
             cache.set(file, body);
             cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`);
         }
+        return body;
+    }
+    const escHtml = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    // /u/name serves the same app with that person's name and bio in the share preview, then the app opens #/u/name.
+    async function serveProfileShell(res, slug) {
+        const body = await loadFile("index.html");
+        if (!body) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+        const owner = db.getProfileBySlug(slug);
+        const ok = owner && owner.profile_public && !db.getProfileData(owner.discord_id).blocked;
+        let html = body.toString("utf8");
+        if (ok) {
+            const cfg = withDefaults(db.getProfileData(owner.discord_id).data);
+            const name = cfg.name || owner.profile_slug;
+            const desc = (cfg.bio || "A game profile: favorites, wishlist and more.").replace(/\s+/g, " ").slice(0, 160);
+            html = html.replace(/(<meta property="og:title" content=")[^"]*"/, `$1${escHtml(name)} on Steam Value Checker"`)
+                .replace(/(<meta property="og:description" content=")[^"]*"/, `$1${escHtml(desc)}"`)
+                .replace(/(<meta property="og:url" content=")[^"]*"/, `$1${origin}/u/${owner.profile_slug}"`)
+                .replace(/(<link rel="canonical" href=")[^"]*"/, `$1${origin}/u/${owner.profile_slug}"`)
+                .replace(/<title>[^<]*<\/title>/, `<title>${escHtml(name)} on Steam Value Checker</title>`);
+        }
+        return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+    }
+    async function serveFile(res, path, extra = {}) {
+        const [file, type] = FILES[path];
+        const body = await loadFile(file);
+        if (!body) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
         const etag = cache.get(file + ":etag");
         const text = /\.(js|css|html)$/.test(file);
         const headers = { "Content-Type": type, "Cache-Control": text ? "no-cache" : "public, max-age=3600", ETag: etag, ...extra };
@@ -3091,6 +3185,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (req.method === "GET" && (url.pathname === "/admin" || (url.pathname === "/" && onAdminHost(req)))) return await serveFile(res, "/admin", { "Cache-Control": "no-store" });
             if (req.method === "GET" && url.pathname === "/overlay") return await serveFile(res, "/overlay", { "Cache-Control": "no-store" });
             if (req.method === "GET" && (url.pathname === "/music" || (url.pathname === "/" && onMusicHost(req)))) return await serveFile(res, "/music", { "Cache-Control": "no-store" });
+            if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
                 return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });

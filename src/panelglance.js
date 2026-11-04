@@ -8,6 +8,7 @@ export function areaGlance(db) {
         "me/wishlist": u => { const r = db.listItems(u.discord_id); return [`You are watching ${n(r.length, "game", "games")}.`, ...more(r, x => x.title, 4)]; },
         "me/library": u => [`${n(db.countLibrary(u.discord_id), "game", "games")} in your library · ${n(db.countBundles(u.discord_id), "bundle", "bundles")} logged.`],
         "me/steam": u => { const l = db.getSteamLink(u.discord_id); return [l ? "Steam is **linked**." : "Steam is **not linked** yet. Use `link` first."]; },
+        "me/profile": u => [u.profile_slug && u.profile_public ? "Your page is **on**. Fine-tune it on the dashboard with a live preview." : "Your page is **off**. Turn it on with `/me publicpage`."],
         "me/friend": u => [`${n(db.countFriends(u.discord_id), "friend", "friends")} saved.`],
         "me/mydata": () => ["Export or delete everything the bot holds about you."],
         "games/saleprep": u => [`${n(db.countItems(u.discord_id), "game", "games")} on your wishlist to plan with.`],

@@ -847,7 +847,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
     function sharePayload(u, who) {
         const games = db.listItems(u.discord_id).filter(x => x.source !== "watch"), owned = new Set(db.listLibrary(u.discord_id).map(x => x.itad_id));
         const wanted = games.filter(x => !owned.has(x.itad_id)).sort((a, b) => Number(b.priority) - Number(a.priority));
-        const url = publicUrl ? `${publicUrl}/#/u/${u.profile_slug}` : null;
+        const url = publicUrl ? `${publicUrl}/u/${u.profile_slug}` : null;
         const embed = { color: 0x4da3ff, title: `🎁 ${who}'s wishlist`, ...(url ? { url } : {}),
             description: wanted.length ? `${wanted.length} game${wanted.length === 1 ? "" : "s"} on the list, with today's best prices. Open it to see them, and mark one as "I'm gifting this" so nobody doubles up.\n\n` + wanted.slice(0, 6).map(x => `• ${x.title}`).join("\n") + (wanted.length > 6 ? `\n…and ${wanted.length - 6} more` : "") : "Open it to see what is on the list, and mark a game as \"I'm gifting this\" so nobody doubles up.",
             footer: { text: "Only game names, art and prices are shown  •  /me publicpage to get your own" } };
@@ -858,7 +858,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
         try {
             db.ensureUser(i.user.id, i.guildId);
             const wantOn = i.options.getBoolean("enabled"), share = i.options.getBoolean("share") === true, name = i.options.getString("name"), reset = i.options.getBoolean("reset_claims") === true;
-            const link = slug => (publicUrl && slug ? `${publicUrl}/#/u/${slug}` : null);
+            const link = slug => (publicUrl && slug ? `${publicUrl}/u/${slug}` : null);
             if (wantOn === null && !name && !reset) {
                 // Nothing to change: show (or post) the link.
                 const u = db.getUser(i.user.id);
@@ -983,7 +983,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const page = await publicWishlist(db, itad, them.profile_slug);
             if (!page) return void await i.editReply(`${name} hasn't shared a wishlist page.`);
-            const link = publicUrl ? `${publicUrl}/#/u/${page.slug}` : null;
+            const link = publicUrl ? `${publicUrl}/u/${page.slug}` : null;
             await i.editReply({ embeds: [i.commandName === CONTEXT_GIFTS ? giftIdeasEmbed(name, page, link) : contextWishlistEmbed(name, page, link)] });
         } catch (err) { await failed(i, "context menu", err); }
     }

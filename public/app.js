@@ -2,6 +2,9 @@
 (() => {
   "use strict";
 
+  // A shared link is /u/name (so chat apps can show a preview). The app itself keeps profiles at #/u/name.
+  { const m = /^\/u\/([a-z0-9_-]{3,24})\/?$/i.exec(location.pathname); if (m) history.replaceState(null, "", "/#/u/" + m[1].toLowerCase()); }
+
   const state = { cfg: null, me: null };
   const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
   const app = document.getElementById("app");
@@ -139,7 +142,7 @@
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
     { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["streams", "Go live"], ["streamers", "Who is live"]] },
-    { id: "account", label: "Account", pages: [["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
+    { id: "account", label: "Account", pages: [["profile", "My profile"], ["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
   ];
@@ -910,7 +913,7 @@
       const on = h("input", { type: "checkbox", checked: p.public });
       const slug = h("input", { type: "text", value: p.slug || "", placeholder: "your-name", maxlength: "24" });
       const link = h("div", { class: "muted small" });
-      const showLink = s => { link.replaceChildren(...(s && on.checked ? [h("a", { href: "#/u/" + s, text: location.origin + "/#/u/" + s })] : [])); };
+      const showLink = s => { link.replaceChildren(...(s && on.checked ? [h("a", { href: "#/u/" + s, text: location.origin + "/u/" + s })] : [])); };
       const save = h("button", { class: "btn blue", text: "Save", onclick: () => busy(save, async () => {
         const r = await api("/api/profile", { enabled: on.checked, slug: slug.value });
         slug.value = r.slug || ""; showLink(r.slug); toast(r.public ? "Your page is on." : "Your page is off.", "ok");
@@ -920,10 +923,229 @@
         h("p", { class: "muted", text: "Share a link to your wishlist and its best prices, handy for gifts. It shows only game names, art and prices. Never your Discord account or anything else." }),
         h("label", { class: "check" }, on, "Turn my page on"), field("Page name", slug), link,
         h("p", { class: "muted small", text: "Visitors can mark a game as “I’m gifting this” so nobody doubles up. You are never told who or which games, so the surprise stays." + (p.claims ? ` ${p.claims} ${p.claims === 1 ? "is" : "are"} claimed right now.` : "") }),
-        h("button", { class: "btn gray small", text: "Copy my page link", onclick: async () => { if (!slug.value || !on.checked) return toast("Turn your page on and save it first.", "warn"); try { await navigator.clipboard.writeText(location.origin + "/#/u/" + slug.value); toast("Copied. In Discord, `/me publicpage share:true` posts it for everyone.", "ok"); } catch { toast("Select the link above and copy it by hand.", "warn"); } } }),
+        h("button", { class: "btn gray small", text: "Copy my page link", onclick: async () => { if (!slug.value || !on.checked) return toast("Turn your page on and save it first.", "warn"); try { await navigator.clipboard.writeText(location.origin + "/u/" + slug.value); toast("Copied. In Discord, `/me publicpage share:true` posts it for everyone.", "ok"); } catch { toast("Select the link above and copy it by hand.", "warn"); } } }),
         p.claims ? h("button", { class: "btn gray small", text: "Clear gift marks", onclick: ev => busy(ev.currentTarget, async () => { const r = await api("/api/profile", { enabled: on.checked, slug: slug.value, resetClaims: true }); toast(`Cleared ${r.cleared}.`, "ok"); }) }) : "", h("p"), save);
     }).catch(e => panel.replaceChildren(h("h3", { text: "Public wishlist page" }), h("div", { class: "notice warn", text: e.message })));
     return panel;
+  }
+
+  // ---------- full profiles ----------
+  const PF_VIS = { public: "Public", server: "Server only", hidden: "Hidden" };
+  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", trophies: "Trophies", steam: "Steam stats", streams: "Streaming" };
+  const httpsOnly = u => (/^https:\/\//i.test(u || "") ? u : "");
+
+  /** The profile song: a play button that loads the official player when pressed (browsers block sound that starts alone). */
+  function pfSong(song) {
+    const box = h("div", { class: "pf-song" });
+    const name = song.title || ({ youtube: "YouTube", soundcloud: "SoundCloud", spotify: "Spotify" })[song.provider] || "Song";
+    const draw = playing => {
+      if (!playing) {
+        const b = h("button", { type: "button", class: "pf-play", "aria-label": "Play profile song", text: "▶" });
+        b.addEventListener("click", () => draw(true));
+        box.replaceChildren(b, h("div", { class: "pf-song-info" }, h("strong", { text: name }), h("span", { class: "muted small", text: "Profile song. Press play." })),
+          song.link ? ext(song.link, "Open", "pf-open") : null);
+        return;
+      }
+      const f = h("iframe", { src: song.embed, title: "Profile song: " + name, allow: "autoplay; encrypted-media", referrerpolicy: "strict-origin-when-cross-origin", class: "pf-frame " + song.provider });
+      const stop = h("button", { type: "button", class: "pf-play stop", "aria-label": "Stop the song", text: "■" });
+      stop.addEventListener("click", () => draw(false));
+      box.replaceChildren(stop, f);
+    };
+    draw(false);
+    return box;
+  }
+
+  function pfTile(g) {
+    const t = h("div", { class: "pf-tile" }, g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "pf-noart", text: g.title.slice(0, 1) }), h("span", { text: g.title }));
+    return t;
+  }
+
+  function pfReport(slug) {
+    const wrap = h("span", { class: "pf-report" });
+    const open = h("button", { type: "button", class: "pf-link", text: "Report" });
+    open.addEventListener("click", () => {
+      const reason = h("input", { type: "text", maxlength: "300", placeholder: "What is wrong with this profile?", "aria-label": "Reason" });
+      const send = h("button", { type: "button", class: "btn gray small", text: "Send" });
+      send.addEventListener("click", () => busy(send, async () => { await api("/api/public/profile/report", { slug, reason: reason.value }); wrap.replaceChildren(h("span", { class: "muted small", text: "Thanks. It will be looked at." })); }));
+      wrap.replaceChildren(reason, send);
+      reason.focus();
+    });
+    wrap.append(open);
+    return wrap;
+  }
+
+  /** Draws one profile. Used for the public page and for the live preview in the editor. */
+  function renderProfile(p, { canMark = false, preview = false } = {}) {
+    const root = h("div", { class: "pf", "data-bg": p.theme.bgstyle, "data-layout": p.theme.layout, "data-light": p.theme.light ? "1" : "0" });
+    root.style.setProperty("--pf-bg", p.theme.bg);
+    root.style.setProperty("--pf-accent", p.theme.accent);
+    root.style.setProperty("--pf-fg", p.theme.light ? "#1b1f2a" : "#eef1f8");
+    const banner = h("div", { class: "pf-banner" + (p.banner.kind === "none" ? " none" : "") });
+    if (p.banner.kind === "game" && httpsOnly(p.banner.art)) { banner.classList.add("art"); banner.style.backgroundImage = `url("${p.banner.art}")`; }
+    const avatar = httpsOnly(p.avatar) ? h("img", { class: "pf-avatar", src: p.avatar, alt: "" }) : h("div", { class: "pf-avatar init", text: (p.name || "?").slice(0, 1).toUpperCase() });
+    const head = h("div", { class: "pf-head" }, avatar,
+      h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug })),
+      h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
+    root.append(banner, head);
+    if (p.song) root.append(pfSong(p.song));
+    const body = h("div", { class: "pf-body" });
+    for (const s of p.sections) {
+      const title = h("h3", {}, PF_TITLE[s.key] || s.key, p.owner && s.vis !== "public" ? h("span", { class: "chip dim", text: PF_VIS[s.vis] }) : null);
+      let inner = null;
+      if (s.key === "about") {
+        if (!p.bio && !p.links.length) { if (!p.owner) continue; inner = h("p", { class: "muted", text: "Add a bio and some links in the editor." }); }
+        else inner = h("div", {}, p.bio ? h("p", { class: "pf-bio", text: p.bio }) : null,
+          p.links.length ? h("div", { class: "pf-links" }, p.links.map(l => ext(l.url, l.label, "pf-chip"))) : null);
+      } else if (s.key === "favorites") {
+        inner = s.games.length ? h("div", { class: "pf-tiles" }, s.games.map(pfTile)) : h("p", { class: "muted", text: "Pick up to five favorites in the editor." });
+      } else if (s.key === "nowplaying") {
+        inner = s.now ? h("div", { class: "pf-tiles" }, pfTile(s.now), h("span", { class: "chip ok", text: "Playing right now" })) : h("p", { class: "muted", text: "Not in a game right now." });
+      } else if (s.key === "recent") {
+        inner = s.games.length ? h("div", { class: "pf-tiles" }, s.games.map(pfTile)) : h("p", { class: "muted", text: "Nothing marked finished yet." });
+      } else if (s.key === "trophies") {
+        inner = s.badges.length ? h("div", { class: "pf-links" }, s.badges.map(b => h("span", { class: "pf-chip", text: `${b.icon} ${b.name} · ${b.tier}` })), h("span", { class: "muted small", text: `${s.earned} of ${s.total} earned` })) : h("p", { class: "muted", text: "No trophies yet." });
+      } else if (s.key === "steam") {
+        const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: Number(n).toLocaleString() }), h("span", { text: l }));
+        inner = h("div", { class: "pf-stats" }, stat(s.games, "Steam games"), stat(s.hours, "Hours played"), stat(s.library, "In the library"), stat(s.finished, "Finished"));
+      } else if (s.key === "streams") {
+        inner = h("div", {}, h("div", { class: "pf-links" }, ext(s.url, (s.platform === "twitch" ? "Twitch" : s.platform === "kick" ? "Kick" : "YouTube") + ": " + s.handle, "pf-chip"), s.live ? h("span", { class: "chip warn", text: "LIVE NOW" }) : null),
+          s.live ? h("p", { class: "muted small", text: s.live.title + (s.live.game ? " · " + s.live.game : "") }) : null);
+      } else if (s.key === "wishlist") {
+        inner = s.games.length ? h("div", { class: "free-grid" }, s.games.map(g => h("div", { class: "free-card" },
+          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
+          h("div", { class: "free-info" }, h("strong", { text: g.title }),
+            h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
+            h("b", { text: money(g.price, g.currency) }),
+            g.url && ext(g.url, "View deal", "btn green small"), preview ? null : soonControl(g, p.slug, canMark), preview || p.owner ? null : giftButton(g, p.slug))))) : h("p", { class: "muted", text: "Nothing on this list yet." });
+      }
+      if (inner) body.append(h("section", { class: "pf-card pf-" + s.key }, title, inner));
+    }
+    if (!p.sections.length) body.append(h("p", { class: "muted", text: "This profile has nothing to show right now." }));
+    root.append(body);
+    return root;
+  }
+
+  async function publicProfileView(slug) {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(holder);
+    try {
+      const d = await api("/api/public/profile?slug=" + encodeURIComponent(slug) + "&t=" + encodeURIComponent(giftCode()));
+      document.title = d.profile.name + " on Steam Value Checker";
+      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark }));
+    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  /** The editor: every choice on the left, the real page on the right, updated as you go. */
+  async function profileEditorView() {
+    const holder = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("My profile", "Build the page people see when you share your link."), holder);
+    let d;
+    try { d = await api("/api/profile/page"); } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
+    holder.className = "";
+    if (!d.slug || !d.public) {
+      holder.replaceChildren(h("div", { class: "notice" }, "Choose a page name and turn your page on first. Then come back here to design it."), publicPagePanel(),
+        (() => { const b = h("button", { class: "btn blue", type: "button", text: "I did that, continue" }); b.addEventListener("click", () => route()); return b; })());
+      return;
+    }
+    const cfg = JSON.parse(JSON.stringify(d.config));
+    // The saved song is stored as provider and id. The editor works with the pasted link, so turn it back into one.
+    if (cfg.song) cfg.song = { url: cfg.song.provider === "youtube" ? "https://youtu.be/" + cfg.song.id : cfg.song.provider === "soundcloud" ? "https://soundcloud.com/" + cfg.song.id : "https://open.spotify.com/" + cfg.song.kind + "/" + cfg.song.id, title: cfg.song.title || "" };
+    const pv = h("div", { class: "pf-preview" });
+    let dirty = false, timer = null;
+    const payload = () => ({ ...cfg, links: cfg.links.filter(l => l.url.trim()), favorites: cfg.favorites, song: cfg.song && cfg.song.url ? cfg.song : null });
+    const draw = profile => { pv.replaceChildren(profile ? renderProfile(profile, { preview: true }) : h("p", { class: "muted", text: "Nothing to preview yet." })); };
+    const refresh = () => { clearTimeout(timer); timer = setTimeout(async () => { try { draw((await api("/api/profile/preview", payload())).profile); } catch (e) { pv.prepend(h("div", { class: "notice warn", text: e.message })); } }, 450); };
+    const changed = () => { dirty = true; saveBtn.disabled = false; refresh(); };
+
+    // look
+    const themeBox = h("div", { class: "pf-swatches" });
+    const drawThemes = () => themeBox.replaceChildren(...d.choices.themes.map(t => {
+      const b = h("button", { type: "button", class: "pf-swatch" + (cfg.theme === t.key ? " on" : ""), title: t.key, "aria-label": t.key + " theme", "aria-pressed": String(cfg.theme === t.key) });
+      b.style.background = t.bg; b.style.borderColor = t.accent; b.style.setProperty("--dot", t.accent);
+      b.addEventListener("click", () => { cfg.theme = t.key; drawThemes(); changed(); });
+      return b;
+    }));
+    drawThemes();
+    const accent = h("input", { type: "color", value: cfg.accent || (d.choices.themes.find(t => t.key === cfg.theme) || {}).accent || "#66c0f4", "aria-label": "Accent colour" });
+    accent.addEventListener("input", () => { cfg.accent = accent.value; changed(); });
+    const accentReset = h("button", { type: "button", class: "btn gray small", text: "Use the theme colour" });
+    accentReset.addEventListener("click", () => { cfg.accent = null; accent.value = (d.choices.themes.find(t => t.key === cfg.theme) || {}).accent; changed(); });
+    const pick = (label, key, options) => { const s = select(options, cfg[key]); s.addEventListener("change", () => { cfg[key] = s.value; changed(); }); return field(label, s); };
+    const nice = x => x[0].toUpperCase() + x.slice(1);
+    const av = h("input", { type: "checkbox", checked: cfg.avatar, disabled: !d.steamLinked });
+    av.addEventListener("change", () => { cfg.avatar = av.checked; changed(); });
+    const look = h("div", { class: "panel" }, h("h3", { text: "Look" }), field("Theme", themeBox), h("div", { class: "row" }, field("Accent colour", accent), h("div", {}, h("label", { text: "\u00a0" }), accentReset)),
+      h("div", { class: "row" }, pick("Background", "bgstyle", d.choices.bgstyles.map(x => [x, nice(x)])), pick("Layout", "layout", d.choices.layouts.map(x => [x, nice(x)])), pick("Banner", "banner", [["gradient", "Colour"], ["game", "First favorite game's art"], ["none", "None"]])),
+      h("label", { class: "check" }, av, " Show my Steam picture", d.steamLinked ? null : h("span", { class: "muted small", text: " (link Steam first)" })));
+
+    // about
+    const name = h("input", { type: "text", maxlength: "32", value: cfg.name, placeholder: d.slug });
+    name.addEventListener("input", () => { cfg.name = name.value; changed(); });
+    const bio = h("textarea", { maxlength: "300", rows: "4", placeholder: "A line or two about you and what you play." }); bio.value = cfg.bio;
+    const count = h("span", { class: "muted small", text: `${cfg.bio.length}/300` });
+    bio.addEventListener("input", () => { cfg.bio = bio.value; count.textContent = `${bio.value.length}/300`; changed(); });
+    const about = h("div", { class: "panel" }, h("h3", { text: "About you" }), field("Display name", name), field("Bio", bio), count);
+
+    // links
+    const linkBox = h("div", { class: "pf-rows" });
+    const drawLinks = () => {
+      linkBox.replaceChildren(...cfg.links.map((l, n) => {
+        const k = select(d.choices.links, l.kind); k.addEventListener("change", () => { l.kind = k.value; changed(); });
+        const u = h("input", { type: "url", value: l.url, placeholder: "https://", "aria-label": "Link address" }); u.addEventListener("input", () => { l.url = u.value; changed(); });
+        const rm = h("button", { type: "button", class: "btn gray small", text: "Remove" }); rm.addEventListener("click", () => { cfg.links.splice(n, 1); drawLinks(); changed(); });
+        return h("div", { class: "row pf-row" }, k, u, rm);
+      }));
+    };
+    drawLinks();
+    const addLink = h("button", { type: "button", class: "btn gray small", text: "Add a link" });
+    addLink.addEventListener("click", () => { if (cfg.links.length >= 6) return toast("Up to 6 links.", "warn"); cfg.links.push({ kind: "website", url: "" }); drawLinks(); });
+    const links = h("div", { class: "panel" }, h("h3", { text: "Links" }), linkBox, addLink);
+
+    // favorites
+    const favBox = h("div", { class: "chips" });
+    const drawFavs = () => favBox.replaceChildren(...cfg.favorites.map((t, n) => { const x = h("button", { type: "button", class: "chip", text: t + " ✕", "aria-label": "Remove " + t }); x.addEventListener("click", () => { cfg.favorites.splice(n, 1); drawFavs(); changed(); }); return x; }));
+    drawFavs();
+    const favIn = h("input", { type: "text", list: "pf-titles", maxlength: "80", placeholder: "Start typing a game from your library or wishlist" });
+    const addFav = () => { const t = favIn.value.trim(); if (!t) return; if (cfg.favorites.length >= 5) return toast("Up to five favorites.", "warn"); if (!cfg.favorites.includes(t)) cfg.favorites.push(t); favIn.value = ""; drawFavs(); changed(); };
+    favIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addFav(); } });
+    const favBtn = h("button", { type: "button", class: "btn gray small", text: "Add", onclick: addFav });
+    const favs = h("div", { class: "panel" }, h("h3", { text: "Favorite games" }), h("datalist", { id: "pf-titles" }, d.choices.titles.map(t => h("option", { value: t }))), h("div", { class: "row" }, favIn, favBtn), favBox,
+      h("p", { class: "muted small", text: "Games with art show up as tiles. The first one can also be your banner." }));
+
+    // song
+    cfg.song = cfg.song || null;
+    const songUrl = h("input", { type: "url", placeholder: "A YouTube, SoundCloud or Spotify link", value: cfg.song ? cfg.song.url : "" });
+    const songTitle = h("input", { type: "text", maxlength: "60", placeholder: "Song name (optional)", value: cfg.song ? cfg.song.title : "" });
+    const songSync = () => { cfg.song = songUrl.value.trim() ? { url: songUrl.value.trim(), title: songTitle.value } : null; changed(); };
+    songUrl.addEventListener("input", songSync); songTitle.addEventListener("input", songSync);
+    const song = h("div", { class: "panel" }, h("h3", { text: "Profile song" }), h("div", { class: "row" }, field("Link", songUrl), field("Name", songTitle)),
+      h("p", { class: "muted small", text: "Visitors press play to hear it. Browsers do not allow sound to start on its own, so it waits for a click." }));
+
+    // sections
+    const secBox = h("div", { class: "pf-rows" });
+    const drawSecs = () => secBox.replaceChildren(...cfg.sections.map((s, n) => {
+      const vis = select(Object.entries(PF_VIS), s.vis); vis.addEventListener("change", () => { s.vis = vis.value; changed(); });
+      const up = h("button", { type: "button", class: "btn gray small", text: "↑", "aria-label": "Move up", disabled: n === 0 }), dn = h("button", { type: "button", class: "btn gray small", text: "↓", "aria-label": "Move down", disabled: n === cfg.sections.length - 1 });
+      up.addEventListener("click", () => { [cfg.sections[n - 1], cfg.sections[n]] = [cfg.sections[n], cfg.sections[n - 1]]; drawSecs(); changed(); });
+      dn.addEventListener("click", () => { [cfg.sections[n + 1], cfg.sections[n]] = [cfg.sections[n], cfg.sections[n + 1]]; drawSecs(); changed(); });
+      return h("div", { class: "row pf-row" }, h("strong", { class: "pf-sec", text: PF_TITLE[s.key] || s.key }), vis, up, dn);
+    }));
+    drawSecs();
+    const secs = h("div", { class: "panel" }, h("h3", { text: "Sections" }), h("p", { class: "muted small", text: "Choose what shows, who sees it, and the order. \"Server only\" means signed-in members of your server. Hidden sections are never sent to visitors." }), secBox);
+
+    const saveBtn = h("button", { type: "button", class: "btn green", text: "Save profile", disabled: true });
+    saveBtn.addEventListener("click", () => busy(saveBtn, async () => {
+      const r = await api("/api/profile/page", payload());
+      dirty = false; Object.assign(cfg, r.config); draw(r.profile); toast("Saved.", "ok");
+    }));
+    const open = h("a", { class: "btn gray", href: "#/u/" + d.slug, text: "Open my page" });
+    const copy = h("button", { type: "button", class: "btn gray", text: "Copy link" });
+    copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(location.origin + "/u/" + d.slug); toast("Link copied.", "ok"); } catch { toast(location.origin + "/u/" + d.slug); } });
+    holder.replaceChildren(h("div", { class: "pf-editor" },
+      h("div", { class: "pf-form" }, look, about, links, favs, song, secs, h("div", { class: "row pf-save" }, saveBtn, open, copy)),
+      h("div", { class: "pf-side" }, h("div", { class: "pf-sticky" }, h("h3", { text: "Preview" }), pv))));
+    draw(d.profile);
+    window.addEventListener("hashchange", () => { clearTimeout(timer); }, { once: true });
   }
 
   // A random code that stands in for "me" on public wishlist pages, so I can undo a gift mark. Never tied to an account.
@@ -5634,7 +5856,7 @@
     load();
   }
 
-  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, admin: adminView };
+  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
@@ -5642,7 +5864,7 @@
     renderChrome();
     const view = currentView();
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u") return landing();
-    if (view === "u" && currentParam()) { publicWishlistView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
+    if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     (VIEWS[view] || (state.me ? valueView : landing))();

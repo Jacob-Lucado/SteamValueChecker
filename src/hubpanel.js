@@ -237,7 +237,7 @@ export function replayAsCommand(i, hub, path, dispatch, vals = {}) {
 // Dashboard page that does the same job as each command area, so the Help page can link straight to it.
 const DASH_PAGE = {
     "games/main": "deals", "games/saleprep": "warroom", "games/codes": "codes",
-    "me/main": "mypage", "me/wishlist": "wishlist", "me/library": "library", "me/steam": "steam", "me/friend": "friends", "me/mydata": "mydata",
+    "me/main": "mypage", "me/wishlist": "wishlist", "me/library": "library", "me/steam": "steam", "me/friend": "friends", "me/profile": "profile", "me/mydata": "mydata",
     "server/main": "servers", "server/giveaway": "giveaways", "server/promos": "codes", "server/serverlist": "servers", "server/lfg": "lfg", "server/calendar": "calendar", "server/invites": "community", "server/stream": "streamer",
     "manage/main": "setup", "manage/community": "community", "manage/alertchannel": "servers", "manage/emoji": "community", "manage/memes": "community",
     "bot/main": "help", "bot/support": "support", "bot/feature": "requests",

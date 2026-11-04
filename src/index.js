@@ -27,6 +27,7 @@ import { legacyRoute, SERVER_ONLY_LEGACY, hubCommands } from "./commands.js";
 import { hubPanel, replayAsCommand, areaIndex } from "./hubpanel.js";
 import { wishlistPanel, libraryPanel, streamPanel } from "./bespoke.js";
 import { areaGlance } from "./panelglance.js";
+import { createProfileHandlers } from "./profilehandlers.js";
 import { createStreams } from "./streamlive.js";
 import { createStreamHandlers } from "./streamhandlers.js";
 import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
@@ -160,6 +161,7 @@ for (const json of hubCommands.filter(c => HUB_MENUS.includes(c.name))) {
 const handlers = createHandlers({ panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
+const profileUi = createProfileHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const cardUi = createCardHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const fx = createFx();
 const dealUi = createDealHandlers({ db, itad, fx });
@@ -702,6 +704,7 @@ async function onInteraction(i, again = false) {
             case "compare": return await handlers.handleCompare(i);
             case "steam": return i.options.getSubcommand() === "verify" ? await communityUi.verify(i) : await steamUi.handle(i);
             case "profilecard": return await cardUi.handle(i);
+            case "profile": return await profileUi.handle(i);
             case "bundle": return await dealUi.handleBundle(i);
             case "regions": return await dealUi.handleRegions(i);
             case "saleprep": return await dealUi.handleSalePrep(i);

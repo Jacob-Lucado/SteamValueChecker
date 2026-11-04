@@ -417,6 +417,40 @@ const nowplayingCmd = new SlashCommandBuilder()
     .setDescription("Who in this server is in a game right now (members who turned it on)")
     .addBooleanOption(o => o.setName("join").setDescription("Turn yourself on or off the board and squad-up posts (off by default)"));
 
+const THEME_CHOICES = ["steam", "night", "forest", "sunset", "light", "mono", "rose", "ocean"].map(v => ({ name: v[0].toUpperCase() + v.slice(1), value: v }));
+const PROFILE_SECTIONS = [["about", "About me (bio and links)"], ["favorites", "Favorite games"], ["nowplaying", "Playing now"], ["wishlist", "Wishlist"], ["recent", "Recently finished"], ["trophies", "Trophies"], ["steam", "Steam stats"], ["streams", "Streaming"]].map(([value, name]) => ({ name, value }));
+const LINK_KIND_CHOICES = ["twitch", "kick", "youtube", "x", "bluesky", "steam", "github", "website"].map(v => ({ name: v === "x" ? "X" : v[0].toUpperCase() + v.slice(1), value: v }));
+const profileCmd = new SlashCommandBuilder()
+    .setName("profile")
+    .setDescription("Your public profile page: bio, look, links, favorites and a profile song")
+    .addSubcommand(s => s.setName("view").setDescription("See your profile settings and what each section shows"))
+    .addSubcommand(s => s.setName("bio").setDescription("Write the short bio on your profile")
+        .addStringOption(o => o.setName("text").setDescription("Up to 300 characters").setRequired(true).setMaxLength(300)))
+    .addSubcommand(s => s.setName("name").setDescription("The name shown at the top of your profile")
+        .addStringOption(o => o.setName("text").setDescription("Up to 32 characters").setRequired(true).setMaxLength(32)))
+    .addSubcommand(s => s.setName("look").setDescription("Colours, background, layout and banner")
+        .addStringOption(o => o.setName("theme").setDescription("Colour theme").addChoices(...THEME_CHOICES))
+        .addStringOption(o => o.setName("accent").setDescription("A custom colour like #66c0f4, or reset").setMaxLength(7))
+        .addStringOption(o => o.setName("background").setDescription("Page background").addChoices({ name: "Plain", value: "plain" }, { name: "Glow", value: "gradient" }, { name: "Dots", value: "dots" }, { name: "Grid", value: "grid" }))
+        .addStringOption(o => o.setName("layout").setDescription("How sections are laid out").addChoices({ name: "Classic", value: "classic" }, { name: "Wide", value: "wide" }, { name: "Compact", value: "compact" }))
+        .addStringOption(o => o.setName("banner").setDescription("The banner across the top").addChoices({ name: "Colour", value: "gradient" }, { name: "Art of your first favorite game", value: "game" }, { name: "None", value: "none" })))
+    .addSubcommand(s => s.setName("song").setDescription("Set a profile song: visitors press play to hear it")
+        .addStringOption(o => o.setName("url").setDescription("A YouTube, SoundCloud or Spotify link").setMaxLength(200))
+        .addStringOption(o => o.setName("title").setDescription("Name shown next to the play button").setMaxLength(60))
+        .addBooleanOption(o => o.setName("remove").setDescription("Remove your profile song")))
+    .addSubcommand(s => s.setName("link").setDescription("Add a link: Twitch, YouTube, X, Steam and more (one per kind)")
+        .addStringOption(o => o.setName("kind").setDescription("Where it goes").setRequired(true).addChoices(...LINK_KIND_CHOICES))
+        .addStringOption(o => o.setName("url").setDescription("The address").setRequired(true).setMaxLength(200)))
+    .addSubcommand(s => s.setName("unlink").setDescription("Remove one of your profile links")
+        .addStringOption(o => o.setName("kind").setDescription("Which one").setRequired(true).addChoices(...LINK_KIND_CHOICES)))
+    .addSubcommand(s => s.setName("favorite").setDescription("Add a favorite game (up to five)")
+        .addStringOption(o => o.setName("game").setDescription("Game title").setRequired(true).setMaxLength(80)))
+    .addSubcommand(s => s.setName("unfavorite").setDescription("Remove a favorite game")
+        .addStringOption(o => o.setName("game").setDescription("Game title").setRequired(true).setMaxLength(80)))
+    .addSubcommand(s => s.setName("show").setDescription("Choose who sees a section of your profile")
+        .addStringOption(o => o.setName("section").setDescription("Which section").setRequired(true).addChoices(...PROFILE_SECTIONS))
+        .addStringOption(o => o.setName("who").setDescription("Who can see it").setRequired(true).addChoices({ name: "Everyone", value: "public" }, { name: "Members of my server", value: "server" }, { name: "Nobody (hidden)", value: "hidden" })));
+
 const profilecard = new SlashCommandBuilder()
     .setName("profilecard")
     .setDescription("Your shareable game profile card as a picture: library, hours, trophies and your gaming names")
@@ -729,7 +763,7 @@ const playerCmd = new SlashCommandBuilder()
     .setDescription("Open the big music player for this server");
 
 export const commands = [
-    ...[value, wishlist, friendCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
+    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash")].map(everywhere),
     ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
@@ -740,7 +774,7 @@ export const commands = [
 // legacyRoute() turns "/me wishlist add" back into ("wishlist", "add") before anything else runs.
 const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
-    { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "mydata"] },
+    { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
     { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
