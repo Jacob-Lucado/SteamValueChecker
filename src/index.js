@@ -98,6 +98,9 @@ import { tickLeaderboards } from "./leaderboard.js";
 import { createMemes, createMemeHandlers, tickMemes } from "./memes.js";
 import { createBroadcaster } from "./broadcast.js";
 import { honeypotHit, refreshHoneypotNotice } from "./honeypot.js";
+import { createAiChat, parseTrigger, AI_FAILURES } from "./aichat.js";
+import { createRuntimeCfg } from "./runtimecfg.js";
+import { createAiTools } from "./aitools.js";
 import { guildBannerSvg, toPng, artFor } from "./communitycards.js";
 let logoUri;
 const brandLogo = () => { try { return (logoUri ??= "data:image/png;base64," + readFileSync(new URL("../public/logo.png", import.meta.url)).toString("base64")); } catch { return null; } };
@@ -123,16 +126,19 @@ const abg = createPlaytestSources({ abg: createAbgFeed(), log: m => console.warn
 const itad = withLuna(createItad({ apiKey: cfg.itadKey }), luna);
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
-const MEMBERS_INTENT = await (async () => {
+const APP_FLAGS = await (async () => {
     try {
         const r = await fetch("https://discord.com/api/v10/applications/@me", { headers: { Authorization: `Bot ${cfg.token}` }, signal: AbortSignal.timeout(10_000) });
-        if (!r.ok) return false;
-        const { flags = 0 } = await r.json();
-        return Boolean(flags & ((1 << 14) | (1 << 15))); // GATEWAY_GUILD_MEMBERS or the limited version
-    } catch { return false; }
+        if (!r.ok) return 0;
+        return (await r.json()).flags ?? 0;
+    } catch { return 0; }
 })();
+const MEMBERS_INTENT = Boolean(APP_FLAGS & ((1 << 14) | (1 << 15))); // GATEWAY_GUILD_MEMBERS or the limited version
+// "Hey AI ..." needs the Message Content intent (another Developer Portal switch). Mentioning the bot works without it.
+const CONTENT_INTENT = Boolean(cfg.anthropicKey) && Boolean(APP_FLAGS & ((1 << 18) | (1 << 19)));
+console.log(cfg.anthropicKey ? (CONTENT_INTENT ? "[ai] AI companion is available: \"Hey AI\" and mentions work." : "[ai] AI companion is available for mentions. Turn on Message Content intent in the Developer Portal so \"Hey AI\" works too.") : "[ai] AI companion is off (no ANTHROPIC_API_KEY).");
 console.log(MEMBERS_INTENT ? "[community] Server Members intent is on: welcome messages and invite tracking are active." : "[community] Server Members intent is off: turn it on in the Developer Portal (Bot > Privileged Gateway Intents) for welcome messages and invite tracking.");
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : [])] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : []), ...(CONTENT_INTENT ? [GatewayIntentBits.MessageContent] : [])] });
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
@@ -194,7 +200,7 @@ const streamWatch = createStreamWatch({ db, streams, api: botRest, log: m => con
     access: async l => { if (l.via !== "role") return true; const c = db.getCommunity(l.guild_id); const m = await botRest.getMember(l.guild_id, l.user_id).catch(() => null); if (!m) return true; return Boolean((c.streamer_role_id && m.roles?.includes(c.streamer_role_id)) || (c.mod_role_id && m.roles?.includes(c.mod_role_id))); } });
 const streamUi = createStreamHandlers({ db, streams, streamGw, ownerId: cfg.ownerId, publicUrl: cfg.dashboard?.publicUrl ?? null, canWatch: p => Boolean(streamSites[p]) });
 const playtestRefresh = { refresh: (guildId, { limit } = {}) => refreshPlaytestChannel({ db, news, abg, notifier, guildId, limit, log: m => console.warn(`[playtests] ${m}`) }) };
-const communityUi = createCommunityHandlers({ db, api: botRest, service: community, playtests: playtestRefresh, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT });
+const communityUi = createCommunityHandlers({ db, api: botRest, service: community, playtests: playtestRefresh, publicUrl: cfg.dashboard?.publicUrl ?? null, membersIntent: () => MEMBERS_INTENT, aiAvailable: () => ai.available, aiPhrase: () => CONTENT_INTENT });
 // Who is in which voice channel right now, for game night nudges (needs the GuildVoiceStates intent).
 const voiceMap = guildId => {
     const g = client.guilds.cache.get(guildId);
@@ -403,6 +409,33 @@ client.on(Events.VoiceStateUpdate, (oldS, newS) => {
 client.once(Events.ClientReady, () => { setTimeout(() => music?.autoBoot().catch(err => console.error(`[music] ${err.message}`)), 8000).unref?.(); }); // rejoin Auto DJ channels that have people in them after a restart
 client.on(Events.GuildDelete, guild => { music?.onBotDisconnected(guild.id); if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
 
+// The AI companion. Only answers in servers where a manager turned it on, in the channel they picked (or any channel).
+const rt = createRuntimeCfg(db, { ai_model: cfg.aiModel, ai_daily_cap: cfg.aiDailyCap });
+const keyVault = cfg.keySecret ? createVault(cfg.keySecret) : null;
+/** A server's own API key, decrypted, or null. */
+const serverKey = gid => { const c = gid ? db.getCommunity(gid) : null; return c?.ai_key && keyVault ? keyVault.decrypt(c.ai_key) : null; };
+const aiTools = createAiTools({ db, itad, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
+const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, log: t => console.error(`[ai] ${t}`) });
+async function aiReply(m, t) {
+    // The conversation so far: walk up the chain of replies, so "and what about the second one?" has something to refer to.
+    const history = [];
+    try {
+        let ref = m.reference?.messageId ? await m.channel.messages.fetch(m.reference.messageId) : null;
+        for (let n = 0; ref && n < rt.get("ai_history"); n++) {
+            const mine = ref.author.id === client.user.id;
+            history.unshift({ role: mine ? "assistant" : "user", content: mine ? ref.content : parseTrigger(ref.content, client.user.id, { phrase: true })?.question ?? ref.content });
+            ref = ref.reference?.messageId ? await m.channel.messages.fetch(ref.reference.messageId).catch(() => null) : null;
+        }
+    } catch { /* no history: answer on its own */ }
+    await m.channel.sendTyping?.().catch(() => {});
+    const r = await ai.answer({ guildId: m.guildId, userId: m.author.id, name: m.member?.displayName ?? m.author.globalName ?? m.author.username, question: t.question, history });
+    const mentions = { parse: [], repliedUser: rt.get("ai_ping_reply") };
+    if (r.ok) return void await m.reply({ content: r.text, allowedMentions: mentions }).catch(() => {});
+    if (r.reason === "cooldown") return void (rt.get("ai_react") && await m.react("⏳").catch(() => {}));
+    if (r.reason === "cap" && !rt.get("ai_limit_notice")) return;
+    if (AI_FAILURES[r.reason]) await m.reply({ content: AI_FAILURES[r.reason], allowedMentions: mentions }).catch(() => {});
+}
+
 // The trap channel's notice shows how many accounts it has banned. A raid can ban many at once, so edits are bundled to one every few seconds.
 const trapTimers = new Map();
 function queueTrapCount(guildId) {
@@ -422,9 +455,16 @@ client.on(Events.MessageCreate, async m => {
             const p = m.member?.permissions;
             const staff = m.guild?.ownerId === m.author.id || Boolean(p?.has?.(["Administrator"]) || p?.has?.(["BanMembers"]) || p?.has?.(["ManageMessages"]) || p?.has?.(["ModerateMembers"]));
             const res = await honeypotHit({ db, moderation, guildId: m.guildId, channelId: m.channelId, userId: m.author.id, botId: client.user.id, staff,
-                deleteMessage: () => m.delete(), log: t => console.error(`[honeypot] ${t}`), onBan: () => queueTrapCount(m.guildId) });
+                deleteMessage: () => m.delete(), log: t => console.error(`[honeypot] ${t}`), onBan: () => queueTrapCount(m.guildId), settings: { enabled: rt.get("trap_enabled"), deleteDays: rt.get("trap_delete_days") } });
             if (res === "banned") await m.delete().catch(() => {});
             return;
+        }
+        {
+            const c = db.getCommunity(m.guildId);
+            if (c.ai_on && rt.get("ai_enabled") && (!c.ai_channel || c.ai_channel === m.channelId)) {
+                const t = parseTrigger(m.content, client.user.id, { phrase: CONTENT_INTENT, max: rt.get("ai_max_question") });
+                if (t) aiReply(m, t).catch(err => console.error(`[ai] ${err.message}`));
+            }
         }
         const r = await community.onMessage({ guildId: m.guildId, userId: m.author.id });
         if (!r?.leveled) return;
@@ -791,7 +831,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKeyVault: keyVault, aiCheckKey: k => ai.checkKey(k), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

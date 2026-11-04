@@ -1,6 +1,7 @@
 // Web dashboard: everything the slash commands do, in a browser. Uses Node's http module only.
 // Login is Discord OAuth2 (identify + guilds). Sessions live in memory, so a restart logs everyone out.
 
+import { aiStats, aiUsedToday } from "../aichat.js";
 import { sampleAlert, SAMPLE_KINDS } from "../samples.js";
 import http from "node:http";
 import { gameNight } from "../gamenight.js";
@@ -177,7 +178,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -559,7 +560,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         return g;
     }
 
-    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, botId: config.clientId, publicUrl: config.publicUrl, ...(emojigg ? { emojigg, fetchImpl: emojigg.fetchImpl ?? globalThis.fetch } : {}) }) : null;
+    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, rt, ai: { available: Boolean(config.aiAvailable), phrase: Boolean(config.aiPhrase), vault: config.aiKeyVault ?? null, checkKey: config.aiCheckKey ?? null }, botId: config.clientId, publicUrl: config.publicUrl, ...(emojigg ? { emojigg, fetchImpl: emojigg.fetchImpl ?? globalThis.fetch } : {}) }) : null;
     /** Community actions: the same Discord permissions as the commands. Errors from the helper become normal dashboard errors. */
     const comm = async fn => {
         if (!cd) throw new HttpError(503, "Community features are not available on this bot.");
@@ -622,6 +623,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         // The extension asks this (no sign-in, nothing sent about the person) to remind its users to update.
         "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
         "GET /api/config": async () => ({
+            notice: rt && rt.get("notice_text") ? { text: rt.get("notice_text"), level: rt.get("notice_level") } : null,
             regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
             siteUrl: origin, musicUrl: musicOrigin ? musicOrigin + "/" : origin + "/music",
             help: HELP, about: ABOUT, extension: { latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST },
@@ -2205,11 +2207,13 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         "GET /api/public/profile": async (req, _b, url) => {
             const owner = db.getProfileBySlug(String(url.searchParams.get("slug") ?? "").toLowerCase());
             if (!owner || !owner.profile_public || db.getProfileData(owner.discord_id).blocked) throw new HttpError(404, "That page does not exist or is private.");
+            if (rt && !rt.get("profiles_enabled") && !(softSession(req)?.userId === owner.discord_id)) throw new HttpError(404, "Profile pages are switched off for now. Check back later.");
             const sess = softSession(req);
             const mine = Boolean(sess && sess.userId === owner.discord_id);
             const sameServer = Boolean(mine || (sess && owner.guild_id && !isHidden(owner.guild_id) && sess.guilds.some(g => g.id === owner.guild_id)));
             const t = url.searchParams.get("t");
             const profile = await buildProfile({ db, itad, nowPlaying }, owner, { owner: mine, sameServer }, { token: GIFT_TOKEN.test(t ?? "") ? t : null });
+            if (rt && !rt.get("profile_songs")) { profile.song = null; profile.enter = false; }
             const wl = profile.sections.find(x => x.key === "wishlist");
             const canMark = Boolean(sess && owner.guild_id && !isHidden(owner.guild_id) && isStaff(sess.guilds.find(x => x.id === owner.guild_id)));
             return { profile, canMark, signedIn: Boolean(sess), hasWishlist: Boolean(wl) };
@@ -2224,6 +2228,58 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (config.ownerId) { try { db.addNotification(config.ownerId, { type: "report", title: "A profile was reported", body: `/u/${owner.profile_slug}: ${reason}` }); } catch { /* the list below still has it */ } }
             return { ok: true };
         },
+        // ---- the bot owner's live settings and the AI companion ----
+        "GET /api/admin/settings": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            if (!rt) throw new HttpError(503, "Live settings are not available here.");
+            return rt.view();
+        },
+        "POST /api/admin/settings": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!rt) throw new HttpError(503, "Live settings are not available here.");
+            const changed = rt.set(body.patch);
+            if (changed.length) db.logAudit({ actor: session(req).userId, action: "settings", target: null, detail: `changed ${changed.join(", ")}`.slice(0, 200) });
+            return { ...rt.view(), changed };
+        },
+        "GET /api/admin/ai": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            if (!rt) throw new HttpError(503, "Live settings are not available here.");
+            const names = new Map((guildList?.() ?? []).map(g => [g.id, g.name]));
+            const view = rt.view();
+            const rows = new Map();
+            const row = id => { if (!rows.has(id)) rows.set(id, { id, name: names.get(id) ?? null }); return rows.get(id); };
+            for (const c of db.allCommunity()) if (c.ai_on) Object.assign(row(c.guild_id), { on: true, channel: c.ai_channel ?? null });
+            for (const c of db.allCommunity()) if (c.ai_key) row(c.guild_id).ownKey = true;
+            for (const id of Object.keys(view.serverCaps)) row(id);
+            for (const id of view.blockedServers) row(id);
+            for (const m of db.listMetaPrefix("aiday:")) row(m.key.slice(6));
+            const servers = [...rows.values()].map(r => ({ ...r, on: Boolean(r.on), ownKey: Boolean(r.ownKey), used: aiUsedToday(db, r.id), cap: rt.serverCap(r.id), blocked: rt.isServerBlocked(r.id) })).sort((a, b) => b.used - a.used || String(a.name).localeCompare(String(b.name)));
+            return { ...view, available: Boolean(config.aiAvailable), phrase: Boolean(config.aiPhrase), stats: aiStats(db, 14), servers, lastError: db.getMeta("ai:lasterr") ?? null };
+        },
+        "POST /api/admin/ai/block": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!rt) throw new HttpError(503, "Live settings are not available here.");
+            const on = body.on !== false;
+            if (body.kind === "user") rt.blockUser(body.id, on); else if (body.kind === "server") rt.blockServer(body.id, on); else throw new HttpError(400, "Block a user or a server.");
+            return { ok: true };
+        },
+        "POST /api/admin/ai/server": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!rt) throw new HttpError(503, "Live settings are not available here.");
+            const id = String(body.id ?? "");
+            if (body.cap !== undefined) rt.setServerCap(id, body.cap);
+            if (body.resetToday) db.setMeta(`aiday:${id}`, "");
+            if (body.turnOff) db.setCommunity(id, { ai_on: 0 });
+            return { ok: true };
+        },
+        "POST /api/admin/ai/test": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!ai) throw new HttpError(503, "The AI companion is not available here.");
+            const q = String(body.question ?? "").trim().slice(0, 500);
+            if (!q) throw new HttpError(400, "Type a question to try.");
+            return await ai.test(q, session(req).userId);
+        },
+
         "GET /api/admin/profiles": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -3093,7 +3149,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         const body = await loadFile("index.html");
         if (!body) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
         const owner = db.getProfileBySlug(slug);
-        const ok = owner && owner.profile_public && !db.getProfileData(owner.discord_id).blocked;
+        const ok = owner && owner.profile_public && !db.getProfileData(owner.discord_id).blocked && (!rt || rt.get("profiles_enabled"));
         let html = body.toString("utf8");
         if (ok) {
             const cfg = withDefaults(db.getProfileData(owner.discord_id).data);

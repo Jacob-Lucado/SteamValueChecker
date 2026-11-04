@@ -49,6 +49,11 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
             host: env.DASHBOARD_HOST || "127.0.0.1"
         } : null,
         ownerId: env.OWNER_DISCORD_ID || null,
+        // Optional. The AI companion ("Hey AI ...") answers through the Anthropic API. Without a key the feature stays off.
+        anthropicKey: env.ANTHROPIC_API_KEY || null,
+        aiModel: env.AI_MODEL || "claude-haiku-5-5",
+        // How many answers one server can get per day, to keep the bill predictable.
+        aiDailyCap: Math.max(10, Number(env.AI_DAILY_CAP) || 300),
         // Shown on /bot about and the dashboard. Set CREATOR_NAME / CREATOR_X_URL to change them.
         creator: { name: env.CREATOR_NAME || "Jacob Lucado", url: env.CREATOR_X_URL || "https://x.com/twit_user69" },
         // Giveaways store prize keys, so they stay off until there is a secret to encrypt them with.

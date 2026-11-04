@@ -16,7 +16,7 @@ const can = (i, bit) => Boolean(i.inGuild?.() && i.memberPermissions?.has(bit));
 const mention = id => `<@${id}>`;
 const LINKED_NOTE = "Optional: Discord can also require it for a role (Server Settings, Roles, the role, Links, then Steam Verified). That one step has to be done in Discord.";
 
-export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, playtests = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
+export function createCommunityHandlers({ db, api, service, publicUrl = null, membersIntent = () => true, aiAvailable = () => false, aiPhrase = () => true, playtests = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
     const eph = (i, content) => i.reply({ content, flags: EPHEMERAL, allowedMentions: { parse: [] } });
     const needManager = i => { if (!can(i, BIT.manageGuild)) { eph(i, "Run this in your server with the Manage Server permission."); return false; } return true; };
 
@@ -101,6 +101,21 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             if (!role) return eph(i, db.getCommunity(gid).verified_role_id ? `Members who prove their Steam account get <@&${db.getCommunity(gid).verified_role_id}>.` : "No Steam Verified role is set. Pick one with the role option, or run `/manage community setup`.");
             db.setCommunity(gid, { verified_role_id: role.id });
             return eph(i, `Members who prove their Steam account will get **${role.name}** (they press the button in #verify or use /me steam verify). My role must be above it.\n${LINKED_NOTE}`);
+        }
+        if (sub === "ai") {
+            const on = i.options.getBoolean("on"), ch = i.options.getChannel("channel"), anywhere = i.options.getBoolean("anywhere");
+            const patch = {};
+            if (ch) patch.ai_channel = ch.id;
+            else if (anywhere) patch.ai_channel = null;
+            if (on !== null) {
+                if (on && !aiAvailable() && !db.getCommunity(gid).ai_key) return eph(i, "The AI companion isn't available on this bot yet. Add your own Anthropic key in the dashboard under Community, or ask the bot owner to add one.");
+                patch.ai_on = on ? 1 : 0;
+            } else if (ch && !aiAvailable() && !db.getCommunity(gid).ai_key) return eph(i, "The AI companion isn't available on this bot yet. Add your own Anthropic key in the dashboard under Community, or ask the bot owner to add one.");
+            if (Object.keys(patch).length) db.setCommunity(gid, patch);
+            const c = db.getCommunity(gid);
+            const where = c.ai_channel ? `only in <#${c.ai_channel}>` : "in every channel";
+            const how = aiPhrase() ? "Members write **Hey AI** followed by a question, or mention me." : "This bot can't read \"Hey AI\" yet, so members mention me instead.";
+            return eph(i, `AI companion is **${c.ai_on ? "on" : "off"}**${c.ai_on ? `, answering ${where}. ${how} Answers are short, nobody is pinged, and there is a daily limit for the server.` : ". Turn it on with `on:true`."}`);
         }
         if (sub === "autorole") {
             const role = i.options.getRole("role");
@@ -346,6 +361,7 @@ export function statusEmbed(db, guildId, publicUrl, membersIntent) {
     return { color: 0x5865f2, title: "Community settings",
         description: [`**Welcome:** ${c.welcome_on ? "on" : "off"} in ${ch(c.welcome_channel)} · private welcome ${c.welcome_dm ? "on" : "off"} · leave notes ${c.leave_on ? "on" : "off"}`,
             `**Auto role:** ${role(c.autorole_id)}`, `**Log channel:** ${ch(c.log_channel)}`,
+            `**AI companion:** ${c.ai_on ? `on, ${c.ai_channel ? `in ${ch(c.ai_channel)}` : "in every channel"}` : "off"}`,
             `**XP:** ${c.xp_on ? "on" : "off"} ×${c.xp_mult} · level-ups ${c.levelup_mode === "off" ? "off" : c.levelup_mode === "channel" ? `in ${ch(c.levelup_channel)}` : "where members chat"}`,
             `**Level roles:** ${lr.length ? lr.map(r => `${r.level} → ${role(r.role_id)}`).join(", ") : "none"}`,
             `**Referrals:** ${c.referral_xp} XP each${rw.length ? ` · ${rw.map(r => `${r.count} → ${role(r.role_id)}`).join(", ")}` : ""}`,

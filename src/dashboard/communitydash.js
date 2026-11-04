@@ -4,6 +4,7 @@ import { buildAnnouncement } from "../announce.js";
 import { UserError } from "../errors.js";
 import { backfillForum } from "../requestsync.js";
 import { postHoneypotNotice, HONEYPOT_TOPIC } from "../honeypot.js";
+import { aiLimits, aiUsedToday } from "../aichat.js";
 import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { createMemes, postMeme, MEME_HOURS } from "../memes.js";
@@ -12,7 +13,7 @@ import { createEmojiGg, PACK_KEY_RE } from "../emojisource.js";
 
 export class CommunityError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
-export function createCommunityDash({ db, rest, community, membersIntent = () => true, botId, publicUrl = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
+export function createCommunityDash({ db, rest, community, membersIntent = () => true, ai = { available: false, phrase: false }, rt = null, botId, publicUrl = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
     const memeSource = createMemes({ fetchImpl });
     const fail = (status, m) => { throw new CommunityError(status, m); };
     const nameOf = async (gid, id) => (await rest.memberName(gid, id).catch(() => null)) ?? "Member";
@@ -36,7 +37,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
     async function overview(gid, userId, manager) {
         const me = community.rankOf(gid, userId), inv = community.inviteSummary(gid, userId);
         const out = {
-            membersIntent: membersIntent(), manager,
+            membersIntent: membersIntent(), manager, ai: { available: ai.available || Boolean(db.getCommunity(gid).ai_key), phrase: ai.phrase, canStoreKey: Boolean(ai.vault), keySet: Boolean(db.getCommunity(gid).ai_key), keyLast4: db.getCommunity(gid).ai_key_last4 ?? null, keyBad: Boolean(db.getMeta(`aikeybad:${gid}`)), botKey: ai.available, ...(rt ? aiLimits(rt, gid) : { enabled: true, dailyCap: 300, cooldownSec: 15, maxQuestion: 700, maxReply: 1900, history: 6 }), usedToday: aiUsedToday(db, gid) },
             me: { ...me, invites: inv },
             xpTop: await named(gid, db.xpTop(gid, 10)), inviteTop: await named(gid, db.inviteTop(gid, 10)),
             rewards: db.listRewards(gid), levelRoles: db.listLevelRoles(gid),
@@ -44,7 +45,8 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         };
         if (manager) {
             const c = db.getCommunity(gid);
-            out.settings = { ...c, welcome_msg: c.welcome_msg ?? "", defaultWelcome: DEFAULT_WELCOME, fields: WELCOME_FIELDS };
+            const { ai_key, ...safe } = c; // the encrypted key never leaves the server
+            out.settings = { ...safe, welcome_msg: c.welcome_msg ?? "", defaultWelcome: DEFAULT_WELCOME, fields: WELCOME_FIELDS };
             out.selfRoles = db.listSelfRoles(gid);
             out.built = Boolean(c.setup_at);
             const tk = db.getTicketSettings(gid);
@@ -137,12 +139,28 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             if (id !== db.getCommunity(gid).requests_channel) db.dropForumPosts(gid); // a new forum starts clean
             patch.requests_channel = id;
         }
+        if (b.ai_key_clear) { patch.ai_key = null; patch.ai_key_last4 = null; db.setMeta(`aikeybad:${gid}`, ""); }
+        if (typeof b.ai_key === "string" && b.ai_key.trim()) {
+            const k = b.ai_key.trim();
+            if (!ai.vault) fail(400, "This bot can't store keys yet. The bot owner needs to set KEY_ENCRYPTION_SECRET first.");
+            if (!/^sk-ant-[\w-]{20,300}$/.test(k)) fail(400, "That does not look like an Anthropic API key. They start with sk-ant-.");
+            const check = ai.checkKey ? await ai.checkKey(k) : { ok: true };
+            if (!check.ok) fail(400, check.error);
+            patch.ai_key = ai.vault.encrypt(k); patch.ai_key_last4 = k.slice(-4);
+            db.setMeta(`aikeybad:${gid}`, "");
+        }
+        if (b.ai_on !== undefined) {
+            const hasKey = patch.ai_key !== undefined ? Boolean(patch.ai_key) : Boolean(db.getCommunity(gid).ai_key);
+            if (b.ai_on && !ai.available && !hasKey) fail(400, "The AI companion isn't available on this bot yet. Add your own Anthropic key here, or ask the bot owner to add one.");
+            patch.ai_on = b.ai_on ? 1 : 0;
+        };
+        if (b.ai_channel !== undefined) patch.ai_channel = await channelOk(gid, b.ai_channel || null);
         let trap = null;
         if (b.honeypot_channel !== undefined) {
             patch.honeypot_channel = await channelOk(gid, b.honeypot_channel || null);
             if (patch.honeypot_channel && patch.honeypot_channel !== db.getCommunity(gid).honeypot_channel) trap = patch.honeypot_channel;
         }
-        const row = db.setCommunity(gid, patch);
+        const { ai_key: _k, ...row } = db.setCommunity(gid, patch);
         if (trap) { // a newly chosen trap channel gets the warning notice and description straight away
             await Promise.resolve(rest.editChannel?.(trap, { topic: HONEYPOT_TOPIC })).catch(() => {});
             await postHoneypotNotice({ db, api: rest, guildId: gid, channelId: trap });

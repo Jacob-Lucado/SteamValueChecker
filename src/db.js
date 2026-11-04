@@ -286,6 +286,10 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "requests_channel", "TEXT");
     addColumn("community", "setup_keys", "TEXT");
     addColumn("community", "honeypot_channel", "TEXT");
+    addColumn("community", "ai_on", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("community", "ai_channel", "TEXT");
+    addColumn("community", "ai_key", "TEXT");        // the server's own API key, encrypted
+    addColumn("community", "ai_key_last4", "TEXT");
     addColumn("community", "lb_message_id", "TEXT");
     addColumn("community", "lb_hours", "INTEGER NOT NULL DEFAULT 5");
     addColumn("community", "lb_at", "INTEGER");

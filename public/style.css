@@ -1146,3 +1146,5 @@ body.wiz-open { overflow: hidden; }
 @keyframes pf-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .pf-enter-hint { animation: none; } }
 .pf-audio { width: 100%; max-width: 360px; height: 36px; }
+.ai-limits { margin: .3rem 0 .6rem; padding-left: 1.2rem; display: grid; gap: .35rem; font-size: .92rem; }
+.ai-use { font-weight: 600; margin: .4rem 0 .2rem; }

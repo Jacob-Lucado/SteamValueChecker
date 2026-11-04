@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.16", date: "2026-11-16", title: "AI companion", items: [
+        "**Ask the bot anything:** say `Hey AI` followed by a question, or mention the bot, and it answers in the channel. It is off until a server manager turns it on under Community in the dashboard (or `/manage community ai`), and managers can limit it to one channel.",
+        "**It uses the bot's real data:** it can look up live game prices and the cheapest store, list the free games right now, check your wishlist for sales, summarise your library and suggest what to play next from your backlog, show the server's savings leaderboard, and add a game to your wishlist when you ask it to. It only ever sees your own lists.",
+        "**Bring your own key:** a server manager can paste their own Anthropic API key under Community. It is checked when saved, stored encrypted and never shown again. That server then pays Anthropic for its own answers and is not held to the bot's daily limit, and the AI companion can run even on a bot with no key of its own.",
+        "**Limits, spelled out in the dashboard:** a daily answer limit per server, a short wait between one person's questions, a cap on question and answer length, and a note on what is sent to the AI provider (only the question and recent replies in the thread).",
+        "**Bot owner controls:** the Admin area has an AI companion page (master switch, model, tone, extra instructions, limits, per-server limits, blocking people or servers, usage by day, and a box to try it) and a Bot settings page (profile pages, profile songs, trap channel bans, and a notice banner shown across the dashboard).",
+    ] },
     { version: "2026.11.15", date: "2026-11-15", title: "12 languages", items: [
         "**Dashboard languages:** a language picker (🌐) in the top bar switches the dashboard between English, Spanish, French, German, Portuguese, Italian, Russian, Polish, Turkish, Japanese, Korean and Chinese. It starts in your browser's language. The menus, tabs, buttons, wishlist and profile editor are translated; anything not translated yet stays in English.",
         "**`/language`:** pick the language for the bot's buttons and alert messages. It is the same setting as the dashboard picker, so changing one changes the other.",

@@ -3122,7 +3122,113 @@
       }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
       return [box];
     };
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    // ---- live settings: every adjustable value, saved with one button and applied at once ----
+    const settingsPanels = (view, groupKeys, after) => {
+      const inputs = new Map();
+      const control = def => {
+        let el;
+        if (def.type === "bool") { el = h("input", { type: "checkbox", checked: Boolean(def.value) }); inputs.set(def.key, () => el.checked); return h("label", { class: "check" }, el, " " + def.label); }
+        if (def.type === "int") el = h("input", { type: "number", min: def.min, max: def.max, step: "1", value: String(def.value) });
+        else if (def.type === "enum") el = select(def.options, def.value);
+        else if (def.type === "text") { el = h("textarea", { rows: "4", maxlength: String(def.maxLen) }); el.value = def.value; }
+        else if (def.key === "ai_model") {
+          const known = view.models.some(([v]) => v === def.value);
+          const pick = select([...view.models, ["__custom", "Another model…"]], known ? def.value : "__custom");
+          const custom = h("input", { type: "text", maxlength: "80", placeholder: "model name", value: known ? "" : def.value });
+          custom.hidden = known;
+          pick.addEventListener("change", () => { custom.hidden = pick.value !== "__custom"; });
+          inputs.set(def.key, () => (pick.value === "__custom" ? custom.value.trim() : pick.value));
+          return h("div", {}, h("label", { text: def.label }), pick, custom, h("p", { class: "muted small", text: def.help }));
+        } else el = h("input", { type: "text", maxlength: String(def.maxLen), value: def.value });
+        inputs.set(def.key, () => (def.type === "int" ? Number(el.value) : el.value));
+        return h("div", {}, h("label", { text: def.label }), el, h("p", { class: "muted small", text: def.help + (def.type === "int" ? ` (${def.min} to ${def.max}, normally ${def.default})` : "") }));
+      };
+      const save = h("button", { class: "btn", type: "button", text: "Save settings" });
+      const panels = groupKeys.map(g => h("div", { class: "panel" }, h("h3", { text: view.groups[g] }), ...view.settings.filter(x => x.group === g).map(x => (x.type === "bool" ? h("div", {}, control(x), h("p", { class: "muted small", text: x.help })) : control(x)))));
+      save.addEventListener("click", () => busy(save, async () => {
+        const patch = {};
+        for (const [k, get] of inputs) patch[k] = get();
+        const r = await api("/api/admin/settings", { patch });
+        toast(r.changed.length ? `Saved. ${r.changed.length} changed, live now.` : "Nothing changed.", "ok");
+        if (after) after(r);
+      }));
+      return [...panels, h("div", { class: "row" }, save)];
+    };
+
+    const aiTab = () => {
+      const box = h("div", { class: "muted", text: "Loading…" });
+      const load = () => api("/api/admin/ai").then(r => {
+        box.className = "";
+        const t = r.stats[0] || {};
+        const week = r.stats.slice(0, 7).reduce((a, d) => ({ answers: a.answers + d.answers, errors: a.errors + d.errors, inTok: a.inTok + d.inTok, outTok: a.outTok + d.outTok }), { answers: 0, errors: 0, inTok: 0, outTok: 0 });
+        const status = h("div", { class: "grid" },
+          tile("API key", r.available ? "Set" : "Missing", r.available ? "The bot can reach the AI provider." : "Add ANTHROPIC_API_KEY to the bot's secrets."),
+          tile("“Hey AI” text", r.phrase ? "Works" : "Mentions only", r.phrase ? "Message Content intent is on." : "Turn on Message Content intent in the Developer Portal."),
+          tile("Answers today", n0(t.answers), `${n0(t.errors)} failed · ${t.ms ? t.ms + " ms average" : "no timing yet"}`),
+          tile("Last 7 days", n0(week.answers), `${n0(week.inTok + week.outTok)} tokens`),
+          tile("Servers using it", n0(r.servers.filter(x => x.on).length), `${n0(r.blockedServers.length)} blocked · ${n0(r.blockedUsers.length)} people blocked`));
+        const lastErr = r.lastError ? h("p", { class: "muted small", text: "Last problem: " + r.lastError }) : null;
+
+        // try it
+        const q = h("input", { type: "text", maxlength: "500", placeholder: "Ask it something, like a member would", value: "What should I play after Hades?" });
+        const out = h("div", { class: "ai-test-out muted small", text: "" });
+        const go = h("button", { class: "btn gray", type: "button", text: "Try it" });
+        go.addEventListener("click", () => busy(go, async () => {
+          out.className = "ai-test-out muted small"; out.textContent = "Thinking…";
+          const a = await api("/api/admin/ai/test", { question: q.value });
+          if (!a.ok) { out.className = "notice warn"; out.textContent = a.error || "No answer."; return; }
+          out.className = "ai-test-out"; out.textContent = a.text;
+          out.append(h("div", { class: "muted small", text: `${a.model} · ${a.ms} ms · ${a.inTok} in, ${a.outTok} out tokens. Uses the settings above, ignores the limits.` }));
+        }));
+        const tryIt = h("div", { class: "panel" }, h("h3", { text: "Try it" }), h("div", { class: "row" }, q, go), out);
+
+        // usage by day
+        const usage = h("div", { class: "panel" }, h("h3", { text: "Last 14 days" }),
+          table(["Day", "Answers", "Failed", "Avg ms", "Tokens in", "Tokens out"], r.stats.map(d => [d.day, n0(d.answers), n0(d.errors), d.ms ? n0(d.ms) : "–", n0(d.inTok), n0(d.outTok)])),
+          h("p", { class: "muted small", text: "Days are UTC. Tokens are what the provider counted, so you can work out the cost from its price list." }));
+
+        // servers
+        const rows = r.servers.map(x => {
+          const cap = h("input", { type: "number", min: "0", max: "50000", placeholder: "normal", value: x.cap === null ? "" : String(x.cap), "aria-label": "Daily limit for " + (x.name || x.id) });
+          const doIt = (label, body, cls = "btn gray small") => { const b = h("button", { class: cls, type: "button", text: label }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/ai/server", { id: x.id, ...body }); toast("Done.", "ok"); await load(); })); return b; };
+          const block = h("button", { class: "btn " + (x.blocked ? "gray" : "red") + " small", type: "button", text: x.blocked ? "Unblock" : "Block" });
+          block.addEventListener("click", () => busy(block, async () => { await api("/api/admin/ai/block", { kind: "server", id: x.id, on: !x.blocked }); await load(); }));
+          return h("tr", {}, h("td", {}, h("b", { text: x.name || "Unknown server" }), h("div", { class: "muted small", text: x.id })),
+            h("td", { text: (x.blocked ? "Blocked" : x.on ? "On" : "Off") + (x.ownKey ? " · own key" : "") }), h("td", { class: "num", text: `${n0(x.used)} / ${x.cap === null ? n0(r.settings.find(s => s.key === "ai_daily_cap").value) : n0(x.cap)}` }),
+            h("td", {}, h("div", { class: "row" }, cap, doIt("Set limit", { cap: cap.value === "" ? null : Number(cap.value) }))),
+            h("td", {}, h("div", { class: "row" }, doIt("Reset today", { resetToday: true }), x.on ? doIt("Turn off", { turnOff: true }) : null, block)));
+        });
+        const servers = h("div", { class: "panel" }, h("h3", { text: "Servers" }),
+          h("p", { class: "muted small", text: "Servers that turned it on, used it today, have their own limit, or are blocked. A server's own limit replaces the general one (0 stops it). Servers with their own API key skip the general limit, since they pay for their answers. Blocking a server silences it even if its managers switch it on." }),
+          rows.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Status", "Today / limit", "Daily limit", ""].map(c => h("th", { text: c })))), h("tbody", {}, rows))) : h("p", { class: "muted", text: "No server has used it yet." }));
+
+        // blocked people and servers by ID
+        const listPanel = (title, kind, ids, help) => {
+          const id = h("input", { type: "text", inputmode: "numeric", maxlength: "25", placeholder: "Discord ID" });
+          const add = h("button", { class: "btn gray small", type: "button", text: "Block" });
+          add.addEventListener("click", () => busy(add, async () => { await api("/api/admin/ai/block", { kind, id: id.value.trim(), on: true }); toast("Blocked.", "ok"); await load(); }));
+          return h("div", { class: "panel" }, h("h3", { text: title }), h("p", { class: "muted small", text: help }),
+            ids.length ? h("div", { class: "chips" }, ids.map(v => { const b = h("button", { type: "button", class: "chip", text: v + " ✕", "aria-label": "Unblock " + v }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/ai/block", { kind, id: v, on: false }); await load(); })); return b; })) : h("p", { class: "muted", text: "Nobody." }),
+            h("div", { class: "row" }, id, add));
+        };
+        const blocked = [listPanel("Blocked people", "user", r.blockedUsers, "These people get no answers anywhere. Right-click a member in Discord with Developer Mode on to copy their ID."),
+          listPanel("Blocked servers", "server", r.blockedServers, "These servers get no answers, whatever their managers choose.")];
+
+        box.replaceChildren(status, lastErr, ...settingsPanels(r, ["ai"], load), tryIt, usage, servers, ...blocked);
+      }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
+      load();
+      return [box];
+    };
+
+    const settingsTab = () => {
+      const box = h("div", { class: "muted", text: "Loading…" });
+      api("/api/admin/settings").then(r => {
+        box.className = "";
+        box.replaceChildren(h("p", { class: "muted small", text: "Changes apply straight away, no restart. Anything you leave alone keeps its normal value. The AI companion has its own page." }), ...settingsPanels(r, Object.keys(r.groups).filter(g => g !== "ai")));
+      }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
+      return [box];
+    };
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["ai", "AI companion", aiTab], ["settings", "Bot settings", settingsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     if (opts.shell) return { TABS, tile, table, when, n0, st, hl, bot, ins, bugData, sum, daily };
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
@@ -3144,7 +3250,7 @@
     ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
-    ["Operations", [["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
+    ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
   const ADMIN_PAGES = Object.fromEntries(ADMIN_NAV.flatMap(([, items]) => items.map(([id, title, icon, sub]) => [id, { title, icon, sub }])));
   let adminCtx = null, adminCtxAt = 0, adminTimer = 0;
@@ -5502,6 +5608,36 @@
           field("Trap channel for spam bots: anyone who types there is banned (staff are exempt)", trapCh),
           h("p", { class: "muted small", text: "Pick a channel that members can see and write in, and let me post the warning there. Make sure my role has Ban Members and sits above the members. The warning notice and channel description are added when you save a new channel." }),
           h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value, requests_channel: reqCh.value, honeypot_channel: trapCh.value }))));
+        // AI companion: members write "Hey AI ..." and get a short answer
+        const ai = d.ai || {};
+        const aiOn = h("input", { type: "checkbox", checked: Boolean(st.ai_on), disabled: !ai.available });
+        const aiCh = chSel(st.ai_channel);
+        const keyIn = h("input", { type: "password", autocomplete: "off", spellcheck: "false", maxlength: "320", placeholder: ai.keySet ? "Paste a new key to replace it" : "sk-ant-…" });
+        const keyBox = h("div", {},
+          ai.keyBad ? h("div", { class: "notice warn", text: "Anthropic rejected this server's key the last time it was used, so the AI companion is silent here. Paste a working key to fix it." }) : null,
+          ai.keySet ? h("p", { class: "ai-use", text: `Using your own key, ending ${ai.keyLast4 || "••••"}. ${ai.botKey ? "Your server is not counted against the bot's daily limit." : ""}` }) : null,
+          ai.canStoreKey ? field("Your own Anthropic API key (optional)", keyIn) : h("p", { class: "muted small", text: "This bot can't store keys for servers yet." }),
+          ai.canStoreKey ? h("p", { class: "muted small", text: "Get one at console.anthropic.com. It is checked when you save, stored encrypted, never shown again and never sent anywhere except Anthropic. With your own key your server pays Anthropic for its answers (they are small, usually a fraction of a cent each) and the bot's daily limit does not apply. You can remove it any time." }) : null,
+          ai.canStoreKey ? h("div", { class: "row" },
+            save(ai.keySet ? "Replace key" : "Save key", () => { if (!keyIn.value.trim()) throw new Error("Paste your key first."); return post("/api/community/places", { ai_key: keyIn.value }); }),
+            ai.keySet ? save("Remove key", () => post("/api/community/places", { ai_key_clear: true })) : null) : null);
+        const aiP = h("div", { class: "panel" }, h("h3", { text: "AI companion" }),
+          ai.available ? null : h("div", { class: "notice warn", text: "This bot has no AI key of its own. Add your own Anthropic key below to switch the AI companion on for this server." }),
+          h("label", { class: "check" }, aiOn, " Answer when members say “Hey AI” followed by a question"),
+          field("Only answer in this channel (leave empty for every channel)", aiCh),
+          h("p", { class: "muted small", text: ai.phrase ? "Members write “Hey AI, …” or mention the bot." : "Members mention the bot, because this bot can't read “Hey AI” yet (it needs the Message Content intent)." }),
+          ai.available ? h("p", { class: "ai-use", text: ai.keySet ? `Answers today: ${ai.usedToday}. No daily limit while your own key is used.` : `Used today: ${ai.usedToday} of ${ai.dailyCap} answers (resets at midnight UTC).` }) : null,
+          h("div", { class: "row" }, save("Save AI settings", () => post("/api/community/places", { ai_on: aiOn.checked, ai_channel: aiCh.value }))),
+          h("h4", { text: "Your own API key" }), keyBox,
+          h("h4", { text: "How it works and its limits" }),
+          h("ul", { class: "ai-limits" },
+            h("li", { text: ai.keySet ? "Your server uses its own key, so there is no daily answer limit. The bot owner can still switch the AI off or set a limit for your server." : `Each server gets up to ${ai.dailyCap || 300} answers a day. After that the bot says it has reached the limit and starts again the next day. A server with its own key has no daily limit.` }),
+            h("li", { text: `Each person can ask once every ${ai.cooldownSec || 15} seconds. Faster than that, the bot just reacts with ⏳.` }),
+            h("li", { text: `Questions are cut at ${ai.maxQuestion || 700} characters. Answers are short, never longer than ${ai.maxReply || 1900} characters, and ping nobody.` }),
+            h("li", { text: `Replying to one of its answers continues the conversation (it remembers the last ${ai.history || 6} messages of that thread). It remembers nothing else.` }),
+            h("li", { text: "It can look up live game prices, the free games right now, and the asker's own wishlist and library, and add a game to the asker's wishlist when asked. It never sees anyone else's lists or other channels." }),
+            h("li", { text: "Only messages that say “Hey AI” or mention the bot are read. The question, the thread it replies to, the person's display name and the results of those lookups are sent to the AI provider (Anthropic) to write the answer. Nothing else from your server is sent." }),
+            h("li", { text: "Servers that turn it on are responsible for who can use it: pick one channel above if you only want it in one place." })));
         const rText = h("textarea", { rows: "9", maxlength: "3000", placeholder: d.defaultRules }); rText.value = st.rules_text || "";
         const rulesP = h("div", { class: "panel" }, h("h3", { text: "Rules" }),
           h("p", { class: "muted", text: "Edit the rules shown in the rules channel. Leave it empty to use the standard community rules. The post comes with the bot logo and banner." }), field("Rules (Discord formatting works)", rText),
@@ -5528,7 +5664,7 @@
           h("p", { class: "muted small", text: st.meme_at ? "Last meme " + new Date(st.meme_at).toLocaleString() + "." : "None posted yet." }),
           h("div", { class: "row" }, save("Save", () => post("/api/community/memes", mBody())), save("Save and post one now", () => post("/api/community/memes", { ...mBody(), now: true }), "btn green small")));
         // group everything a manager can customise into tabs
-        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Memes", [memeP]], ["Emoji", [emoji]]];
+        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["AI companion", [aiP]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Memes", [memeP]], ["Emoji", [emoji]]];
         const tabBar = h("div", { class: "tabs" }), body = h("div");
         const show = n => { mgrTab = n; [...tabBar.children].forEach((b, k) => b.classList.toggle("active", k === n)); body.replaceChildren(...groups[n][1]); };
         groups.forEach(([label], n) => tabBar.append(h("button", { class: "tab small", type: "button", text: label, onclick: () => show(n) })));
@@ -5932,6 +6068,8 @@
     (VIEWS[view] || (state.me ? valueView : landing))();
     const nb = newsBanner();
     if (nb && view !== "home") app.prepend(nb);
+    const sn = state.cfg && state.cfg.notice && state.cfg.notice.text ? h("div", { class: "notice site-notice" + (state.cfg.notice.level === "warn" ? " warn" : ""), role: "status", text: state.cfg.notice.text }) : null;
+    if (sn) app.prepend(sn);
     const db = discordBanner();
     if (db && view !== "home") app.prepend(db);
     window.scrollTo({ top: 0, behavior: "instant" });

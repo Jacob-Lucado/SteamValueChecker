@@ -37,14 +37,15 @@ export async function refreshHoneypotNotice({ db, api, guildId }) {
 
 /**
  * Handles a message in the trap channel. `staff` is true for the server owner and anyone who can moderate.
- * Returns "banned", "ignored" (staff, a bot, or not the trap channel) or "failed" (the ban was refused; the message is still removed).
+ * Returns "banned", "ignored" (staff, a bot, or not the trap channel), "paused" (switched off by the bot owner; the message is removed) or "failed" (the ban was refused; the message is still removed).
  */
-export async function honeypotHit({ db, moderation, guildId, channelId, userId, botId, isBot = false, staff = false, deleteMessage = async () => {}, log = () => {}, onBan = () => {} }) {
+export async function honeypotHit({ db, moderation, guildId, channelId, userId, botId, isBot = false, staff = false, deleteMessage = async () => {}, log = () => {}, onBan = () => {}, settings = {} }) {
     const c = db.getCommunity(guildId);
     if (!c.honeypot_channel || c.honeypot_channel !== channelId) return "ignored";
     if (isBot || staff || userId === botId) return "ignored";
+    if (settings.enabled === false) { await deleteMessage().catch(() => {}); return "paused"; }
     try {
-        await moderation.ban({ guildId, actorId: botId, userId, reason: "Posted in the trap channel (spam or scam bot)", deleteDays: 1 });
+        await moderation.ban({ guildId, actorId: botId, userId, reason: "Posted in the trap channel (spam or scam bot)", deleteDays: settings.deleteDays ?? 1 });
         db.bumpUsage?.("honeypot_bans");
         db.bumpMeta?.(`hpbans:${guildId}`);
         try { onBan(); } catch { /* the counter in the channel is a bonus */ }
