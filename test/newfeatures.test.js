@@ -384,12 +384,3 @@ test("FanaticalGrabber advertisement: features and images, a gallery of embeds, 
     assert.equal(db.listBroadcasts(1)[0].title, "FanaticalGrabber advertisement");
     assert.throws(() => createBroadcaster({ db, ownerId: "a", sendDm: async () => {}, sendChannel: async () => {} }).start({ audience: "me", promo: true }), /not available/);
 });
-
-test("Epic library exports from Legendary are read: the csv skips DLC, and the plain list works too", async () => {
-    const { parseUpload } = await import("../src/parse.js");
-    const csv = "App name,App title,Version,Is DLC\nSugar,Hades,1.0,False\nFoo,Hades Soundtrack,1,True\nBar,\"Alan Wake 2, Deluxe\",1,False\n";
-    assert.deepEqual(parseUpload(csv, "epic.csv").map(e => e.title), ["Hades", "Alan Wake 2, Deluxe"]);
-    const list = "Available games:\n * Hades (App name: Sugar | Version: 1.0)\n * Celeste (App name: Salt | Version: 1)\n";
-    assert.deepEqual(parseUpload(list, "list.txt").map(e => e.title), ["Hades", "Celeste"]);
-    assert.deepEqual(parseUpload("Hades\nCeleste\n", "x.txt").map(e => e.title), ["Hades", "Celeste"]);
-});

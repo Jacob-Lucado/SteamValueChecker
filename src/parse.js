@@ -118,18 +118,6 @@ export function parseUpload(text, filename = "") {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     if (!lines.length) return [];
 
-    // Epic library exported with the Legendary tool: `legendary list --csv`, or the plain list with "(App name: ...)" on every line.
-    if (/^["']?app name["']?\s*,\s*["']?app title/i.test(lines[0])) {
-        const head = splitCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-        const t = head.indexOf("app title"), dlc = head.indexOf("is dlc");
-        const out = lines.slice(1).map(splitCsvLine).filter(r => r[t] && !(dlc >= 0 && /^true$/i.test(String(r[dlc]).trim()))).map(r => ({ title: r[t].trim(), paid: null }));
-        if (out.length) return out;
-    }
-    if (lines.filter(l => /\(App name:\s*[^|)]+(\||\))/.test(l)).length >= 1) {
-        const out = lines.map(l => l.match(/^\*?\s*(.+?)\s*\(App name:/)).filter(Boolean).map(m => ({ title: m[1].trim(), paid: null }));
-        if (out.length) return out;
-    }
-
     if (lines.filter(l => l.startsWith("|")).length >= 2) {
         const md = fromMarkdown(lines);
         if (md) return md;
