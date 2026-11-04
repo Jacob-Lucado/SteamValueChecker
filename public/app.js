@@ -2811,9 +2811,18 @@
         h("p", { text: `${n0(ins.idle.dmFailing)} member${ins.idle.dmFailing === 1 ? " has" : "s have"} DMs that keep failing.` }))];
 
     const servers = () => [h("div", { class: "panel" }, h("h3", { text: `Servers (${ins.servers.length})` }),
-      ins.servers.length ? h("div", { class: "scroll-y tall" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Members", "Using the bot", "Alert channel", "Free feed", "Group alerts", "Digest"].map((c, i) => h("th", { class: i === 1 || i === 2 ? "num" : "", text: c })))),
+      ins.servers.length ? h("div", { class: "scroll-y tall" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Members", "Using the bot", "Alert channel", "Free feed", "Group alerts", "Digest", ""].map((c, i) => h("th", { class: i === 1 || i === 2 ? "num" : "", text: c })))),
         h("tbody", {}, ins.servers.map(g => h("tr", {}, h("td", {}, g.name || "Unknown server", h("div", { class: "muted small", text: g.id + (g.inServer === false ? " · bot has left" : "") })), h("td", { class: "num", text: n0(g.members) }), h("td", { class: "num", text: String(g.tracked) }),
-          h("td", { text: g.channel ? "Yes" : "No" }), h("td", { text: g.freeFeed ? "On" : "Off" }), h("td", { text: g.groupMin ? "At " + g.groupMin : "Off" }), h("td", { text: g.digest ? "On" : "Off" })))))) : h("p", { class: "muted", text: "No servers yet." }))];
+          h("td", { text: g.channel ? "Yes" : "No" }), h("td", { text: g.freeFeed ? "On" : "Off" }), h("td", { text: g.groupMin ? "At " + g.groupMin : "Off" }), h("td", { text: g.digest ? "On" : "Off" }), h("td", {}, g.inServer === false ? null : (() => {
+          const b = h("button", { class: "btn gray small", type: "button", text: "Get invite" });
+          const out = h("div", { class: "muted small" });
+          b.addEventListener("click", () => busy(b, async () => {
+            const r = await api("/api/admin/server/invite", { id: g.id });
+            const a = h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer", text: r.url });
+            out.replaceChildren("One use, expires in an hour: ", a);
+          }));
+          return h("div", {}, b, out);
+        })())))))) : h("p", { class: "muted", text: "No servers yet." }))];
 
     const members = () => {
       const ago = ms => { if (!ms) return "never"; const m = Math.floor((Date.now() - ms) / 60000); if (m < 2) return "just now"; if (m < 120) return m + " min ago"; const hr = Math.floor(m / 60); if (hr < 48) return hr + " hours ago"; return Math.floor(hr / 24) + " days ago"; };

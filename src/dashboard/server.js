@@ -183,7 +183,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -2792,6 +2792,16 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
                 log(`Bot owner started broadcast #${r.id} to ${audience} (${r.total} recipient${r.total === 1 ? "" : "s"})`);
                 return { ...r, current: broadcaster().current() };
             } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+        },
+
+        "POST /api/admin/server/invite": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!guildInvite) throw new HttpError(400, "Invites aren't available here.");
+            const id = String(body.id ?? "");
+            if (!/^\d{5,25}$/.test(id)) throw new HttpError(400, "Pick a server first.");
+            try { const url = await guildInvite(id); log(`Bot owner made a one-use invite for server ${id}`); return { url }; }
+            catch (e) { throw new HttpError(400, e.message || "Could not make an invite."); }
         },
 
         "GET /api/admin/bugs": async (req) => {

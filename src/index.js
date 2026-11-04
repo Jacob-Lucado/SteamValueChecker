@@ -5,7 +5,7 @@ import { missingAiPerms, permsNotice, shouldTell } from "./aiperms.js";
 import v8 from "node:v8";
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType,
-    Events, GatewayIntentBits, MessageFlags, Routes,
+    Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, Routes,
     version as DJS_VERSION
 } from "discord.js";
 import { loadConfig } from "./config.js";
@@ -855,7 +855,16 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKey: cfg.anthropicKey, aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: (k, o) => ai.checkKey(k, o), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+        const g = client.guilds.cache.get(id);
+        if (!g) throw new Error("The bot isn't in that server.");
+        const me = g.members.me;
+        const ch = g.channels.cache.find(c => c.isTextBased?.() && !c.isThread?.() && c.permissionsFor(me)?.has(PermissionFlagsBits.CreateInstantInvite) && c.permissionsFor(me)?.has(PermissionFlagsBits.ViewChannel));
+        if (!ch) throw new Error("The bot doesn't have the Create Invite permission in any channel there. Ask the server's owner for an invite.");
+        const inv = await ch.createInvite({ maxAge: 3600, maxUses: 1, unique: true, reason: "Bot owner asked for an invite from the dashboard" });
+        return inv.url;
+    },
+    guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKey: cfg.anthropicKey, aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: (k, o) => ai.checkKey(k, o), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

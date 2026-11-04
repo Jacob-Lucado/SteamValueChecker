@@ -2139,3 +2139,19 @@ test("profiles: editor saves and validates, visitors only get what is switched o
         assert.equal((await fetch(o.base + "/api/public/profile?slug=" + slug)).status, 200);
     } finally { await o.close(); }
 });
+
+test("admin: the owner can get a one-use invite for a server, others cannot", async () => {
+    const calls = [];
+    const guildInvite = async id => { calls.push(id); if (id === "99999") throw new Error("No Create Invite permission there."); return "https://discord.gg/abc"; };
+    const guest = await signedIn({ extra: () => ({ guildInvite }) });
+    assert.equal((await guest.request("/api/admin/server/invite", { method: "POST", body: { id: "12345" } })).status, 403);
+    await guest.close();
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ guildInvite }) });
+    const ok = await o.request("/api/admin/server/invite", { method: "POST", body: { id: "12345" } });
+    assert.equal(ok.status, 200); assert.equal(ok.data.url, "https://discord.gg/abc");
+    assert.equal((await o.request("/api/admin/server/invite", { method: "POST", body: { id: "abc" } })).status, 400);
+    const no = await o.request("/api/admin/server/invite", { method: "POST", body: { id: "99999" } });
+    assert.equal(no.status, 400); assert.match(no.data.error ?? JSON.stringify(no.data), /Create Invite/);
+    assert.deepEqual(calls, ["12345", "99999"]);
+    await o.close();
+});
