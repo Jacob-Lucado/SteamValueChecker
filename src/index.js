@@ -52,6 +52,7 @@ import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createNowPlaying, runSquadUps } from "./nowplaying.js";
 import { createClubHandlers, runGameClubs } from "./gameclub.js";
 import { createSantaHandlers } from "./santa.js";
+import { createTrivia, createTriviaHandlers } from "./trivia.js";
 import { createStreamGiveaways } from "./streamgiveaway.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
@@ -299,6 +300,8 @@ const lfgUi = createLfgHandlers({ db, lfg });
 const calendar = createCalendarService({ db, discord: gwDiscord, log: m => console.log(`[calendar] ${m}`) });
 const clubUi = createClubHandlers({ db });
 const santaUi = createSantaHandlers({ db, itad, sendDm: (id, p) => discord.sendDm(id, p), nameOf: async id => { const u = await client.users.fetch(id).catch(() => null); return u ? (u.globalName || u.username) : `<@${id}>`; } });
+const trivia = createTrivia({ db, sendMessage: (c, p) => botRest.sendMessage(c, p), editMessage: (c, m, p) => botRest.editMessage(c, m, p), log: m => console.log(`[trivia] ${m}`) });
+const triviaUi = createTriviaHandlers({ trivia });
 const calendarUi = createCalendarHandlers({ db, calendar, publicUrl: publicBase });
 
 // Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
@@ -725,6 +728,7 @@ async function onInteraction(i, again = false) {
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
     if (i.isModalSubmit() && i.customId === FR.modal) return requestUi.handleModal(i);
+    if (i.isButton() && i.customId.startsWith("trivia:")) return triviaUi.handleButton(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("gw_")) return gw.handleModal(i);
     if (i.isButton() && i.customId.startsWith(`${STOP_ID}:`)) {
@@ -822,6 +826,7 @@ async function onInteraction(i, again = false) {
             case "nowplaying": return await handlers.handleNowPlaying(i);
             case "club": return await clubUi.handle(i);
             case "santa": return await santaUi.handle(i);
+            case "trivia": return await triviaUi.handle(i);
             case "publicpage": return await handlers.handlePublicPage(i);
             case "friend": return await handlers.handleFriend(i);
             case "mydata": return await handlers.handleMyData(i);
@@ -858,7 +863,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

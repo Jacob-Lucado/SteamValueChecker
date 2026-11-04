@@ -2176,3 +2176,19 @@ test("secret santa: managers start and finish it, members join and leave, non-ma
         assert.equal((await o.request("/api/santa?guild=" + g)).data.event.status, "ended");
     } finally { await o.close(); }
 });
+
+test("trivia: managers start and stop it, everyone sees the board", async () => {
+    const calls = [];
+    const trivia = { start: async a => { calls.push(["start", a]); return { rounds: a.rounds }; }, stop: id => calls.push(["stop", id]), active: () => null, top: () => [{ user_id: "u1", points: 7, correct: 3, wins: 1 }] };
+    const o = await signedIn({ extra: { trivia, botGuilds: () => true } });
+    try {
+        const post = (body, guild = "g-admin") => o.request("/api/trivia", { method: "POST", body: { guild_id: guild, ...body } });
+        const r = (await o.request("/api/trivia?guild=g-admin")).data;
+        assert.equal(r.enabled, true); assert.equal(r.canManage, true); assert.equal(r.top[0].points, 7);
+        assert.equal((await post({ action: "start", channel_id: "nope", rounds: 5 })).status, 400);
+        assert.equal((await post({ action: "start", channel_id: "c1", rounds: 5 })).status, 200);
+        assert.equal(calls[0][1].channelId, "c1");
+        assert.equal((await post({ action: "stop" })).status, 200);
+        assert.equal((await post({ action: "start", channel_id: "c1" }, "g-member")).status, 403);
+    } finally { await o.close(); }
+});

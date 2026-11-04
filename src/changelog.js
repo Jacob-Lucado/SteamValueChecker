@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.19", date: "2026-11-19", title: "Game trivia", items: [
+        "**Guess the game:** a manager starts trivia with `/server trivia start` (or on the Trivia page in the dashboard). Each round shows the genre and release year, then the developer, then a description with the name blanked out and a screenshot.",
+        "**Tap to answer:** four titles to pick from, one guess each. Right answers score 3, 2 or 1 points depending on how many clues you needed, and the round's answer is revealed when time is up.",
+        "**Leaderboard:** points add up per server. `/server trivia top` shows the all-time board, and `/server trivia stop` ends a game early without losing the scores so far."
+    ] },
     { version: "2026.11.18", date: "2026-11-18", title: "Secret Santa", items: [
         "**Secret Santa for your server:** a manager starts one with `/server santa create` (or on the Secret Santa page in the dashboard) and sets a budget. Members join, then a manager draws the names.",
         "**Private and useful:** everyone gets a message saying who they're buying for, plus what's on that person's wishlist inside the budget at today's cheapest price, with links. Joining is what shares your wishlist, and only with whoever draws you.",

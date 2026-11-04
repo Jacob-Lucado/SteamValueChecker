@@ -184,7 +184,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -1967,6 +1967,29 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
                     return { ok: true };
                 }
             } catch (e) { fail(e); }
+            throw new HttpError(400, "Unknown action.");
+        },
+        "GET /api/trivia": async (req, _b, url) => {
+            const s = session(req), g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const canManage = isManager(g) || isOwner(s);
+            const channels = canManage ? (await rest.listChannels(g.id).catch(() => [])).filter(c => c.type === undefined || c.type === 0 || c.type === 5).map(c => ({ id: c.id, name: c.name })) : [];
+            if (!trivia) return { enabled: false, canManage, channels, active: null, top: [] };
+            const top = await Promise.all(trivia.top(g.id, 10).map(async r => ({ userId: r.user_id, name: (await rest.memberName(g.id, r.user_id).catch(() => null)) || "Member " + String(r.user_id).slice(-4), points: r.points, correct: r.correct, wins: r.wins })));
+            return { enabled: true, canManage, channels, active: trivia.active(g.id), top, mine: db.triviaRank(g.id, s.userId) };
+        },
+        "POST /api/trivia": async (req, body) => {
+            const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));
+            if (!(isManager(g) || isOwner(s))) throw new HttpError(403, "You need the Manage Server permission to run trivia.");
+            if (!trivia) throw new HttpError(400, "Trivia isn't available right now.");
+            try {
+                if (body.action === "start") {
+                    const channelId = String(body.channel_id ?? "");
+                    if (!(await rest.listChannels(g.id).catch(() => [])).some(c => c.id === channelId)) throw new HttpError(400, "Pick a channel in this server.");
+                    const r = await trivia.start({ guildId: g.id, channelId, rounds: body.rounds, by: s.userId });
+                    return { ok: true, rounds: r.rounds };
+                }
+                if (body.action === "stop") { trivia.stop(g.id); return { ok: true }; }
+            } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
             throw new HttpError(400, "Unknown action.");
         },
         "GET /api/nowplaying": async (req, _b, url) => {

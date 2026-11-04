@@ -427,6 +427,15 @@ const santaCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("draw").setDescription("Managers: draw names and message everyone privately"))
     .addSubcommand(s => s.setName("reveal").setDescription("Managers: show who had who and wrap it up"));
 
+const triviaCmd = new SlashCommandBuilder()
+    .setName("trivia")
+    .setDescription("Game trivia for the server: guess the game from clues that get easier")
+    .addSubcommand(s => s.setName("start").setDescription("Managers: start a round of trivia in a channel")
+        .addIntegerOption(o => o.setName("rounds").setDescription("How many questions (default 5)").setMinValue(3).setMaxValue(10))
+        .addChannelOption(o => o.setName("channel").setDescription("Where to play (default: here)").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
+    .addSubcommand(s => s.setName("stop").setDescription("Managers: end the game that is going and keep the scores so far"))
+    .addSubcommand(s => s.setName("top").setDescription("The server's all-time trivia leaderboard"));
+
 const nowplayingCmd = new SlashCommandBuilder()
     .setName("nowplaying")
     .setDescription("Who in this server is in a game right now (members who turned it on)")
@@ -789,7 +798,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -800,7 +809,7 @@ export const commands = [
 const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
-    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
+    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];
