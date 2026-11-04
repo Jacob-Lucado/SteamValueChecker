@@ -3,12 +3,15 @@ import { MessageFlags } from "discord.js";
 import { bundleCheck } from "./bundle.js";
 import { salePrep, saleRecap } from "./saleprep.js";
 import { bundleEmbeds, salePrepEmbed, recapEmbed } from "./dealrender.js";
+import { consolePrices } from "./consoleprices.js";
+import { consolesEmbed, consolesButtons } from "./consolerender.js";
+import { summarize } from "./report.js";
 import { regionPrices } from "./regions.js";
 import { regionsEmbed } from "./render.js";
 import { UserError } from "./errors.js";
 import { ItadError } from "./itad.js";
 
-export function createDealHandlers({ db, itad, fx = null }) {
+export function createDealHandlers({ db, itad, fx = null, fetchFn = globalThis.fetch }) {
     const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
     async function failed(i, err) {
         const known = err instanceof UserError || err instanceof ItadError;
@@ -57,5 +60,26 @@ export function createDealHandlers({ db, itad, fx = null }) {
             return void await i.editReply({ embeds: [salePrepEmbed(r)] });
         } catch (err) { await failed(i, err); }
     }
-    return { handleRegions, handleBundle, handleSalePrep };
+    async function handleConsoles(i) {
+        const user = db.ensureUser(i.user.id, i.guildId);
+        try {
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            const title = i.options.getString("game", true).trim();
+            const [data, pc] = await Promise.all([
+                consolePrices({ title, country: user.region || "US", fetchFn }),
+                (async () => {
+                    try {
+                        const [hit] = await itad.lookupTitles([title]);
+                        if (!hit?.id) return null;
+                        const entry = (await itad.getPrices([hit.id], user.region || "US")).get(hit.id);
+                        const s = entry ? summarize(entry, { majorOnly: user.stores === "major" }) : null;
+                        return s?.best ? { price: s.best.price, currency: s.best.currency ?? null, shop: s.best.shop, discount: s.msrp ? Math.max(0, 1 - s.best.price / s.msrp) : 0 } : null;
+                    } catch { return null; }
+                })()
+            ]);
+            if (!data.xbox && !data.nintendo && !data.xboxError && !data.nintendoError) throw new UserError(`I couldn't find ${title} on Xbox or the Nintendo eShop. It might be PC-only, or try the exact title.`);
+            return void await i.editReply({ embeds: [consolesEmbed({ title, data, pc, region: user.region || "US" })], components: consolesButtons(data) });
+        } catch (err) { await failed(i, err); }
+    }
+    return { handleRegions, handleBundle, handleSalePrep, handleConsoles };
 }

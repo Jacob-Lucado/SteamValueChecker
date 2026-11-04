@@ -29,7 +29,7 @@ export const HELP_PAGES = [
     { key: "games", label: "Games and prices", emoji: "🎮", title: "/games",
         description: "Prices come from IsThereAnyDeal. Nothing here needs a login.",
         fields: [
-            { name: "Prices", value: "`/games value` prices a list of games (typed, or a FanaticalGrabber export in `file`): MSRP, Steam price, cheapest now, and savings if you give `paid`.\n`/games regions` ranks one game across regions. `/games bundle` says if a bundle is worth it." },
+            { name: "Prices", value: "`/games value` prices a list of games (typed, or a FanaticalGrabber export in `file`): MSRP, Steam price, cheapest now, and savings if you give `paid`.\n`/games regions` ranks one game across regions.\n`/games consoles` shows one game's price on Xbox and the Nintendo eShop next to the cheapest on PC. `/games bundle` says if a bundle is worth it." },
             { name: "Watching", value: "`/games watch` watches one game for a price drop without wishlisting it.\n`/games saleprep` `plan` / `recap` readies your wishlist for a sale or shows what your alerts caught." },
             { name: "Free and limited", value: "`/games freegames` lists what is free to claim now. `/games sales` shows upcoming Steam sales.\n`/games codes` `latest` lists game codes (managers: `channel` / `games` / `ping`)." },
             { name: "Keys", value: "`/games redeem` queues Steam keys; press Run on the dashboard's Batch redeem page." }

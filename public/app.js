@@ -1902,8 +1902,24 @@
           h("tbody", {}, r.rows.map(x => h("tr", {}, h("td", { text: x.name + (x.home ? " (yours)" : "") }), h("td", { text: money(x.price, x.currency) }), h("td", { class: "muted", text: x.usd !== null && x.currency !== "USD" ? "about " + money(x.usd, "USD") : "" }), h("td", { text: x.shop })))))),
         h("p", { class: "muted small", text: "Keys and accounts are usually locked to the region they were sold in, so use this for information." })));
     }) });
+    const consoleGame = h("input", { type: "text", placeholder: "A game, e.g. Hades", maxlength: "100" });
+    const consoleOut = h("div");
+    const consoleBtn = h("button", { class: "btn blue", text: "Check consoles", onclick: () => busy(consoleBtn, async () => {
+      const r = await api("/api/consoles?game=" + encodeURIComponent(consoleGame.value.trim()));
+      const row = (label, x, err, url) => {
+        const off = x && x.price != null && x.regular > x.price ? Math.round((1 - x.price / x.regular) * 100) : 0;
+        return h("tr", {}, h("td", { text: label }), h("td", { text: err ? "Couldn't reach the store" : !x ? "Not found" : x.price == null ? "No price in your country" : money(x.price, x.currency) }),
+          h("td", { class: "muted", text: off ? off + "% off" + (x.endsAt ? ", ends " + new Date(x.endsAt).toLocaleDateString() : "") : x && x.price != null ? "Full price" : "" }),
+          h("td", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", text: "Open" }) : null));
+      };
+      consoleOut.replaceChildren(h("div", { class: "panel" }, h("h3", { text: r.game + ": console prices (" + r.region + ")" }),
+        h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Price", "", ""].map(c => h("th", { text: c })))),
+          h("tbody", {}, row("Xbox", r.xbox, r.xboxError, r.xbox && r.xbox.url), row("Nintendo eShop", r.nintendo, r.nintendoError, r.nintendo && r.nintendo.url), h("tr", {}, h("td", { text: "PlayStation Store" }), h("td", { class: "muted", text: "No open price feed" }), h("td"), h("td", {}, h("a", { href: r.playstation, target: "_blank", rel: "noopener noreferrer", text: "Search" })))))),
+        h("p", { class: "muted small", text: "Read live from each store, in your region." })));
+    }) });
     app.replaceChildren(pageHead("Check a deal", "Where a game is cheapest in the world, and whether a bundle is worth it. Planning a cart for a Steam sale is on the Sale planner page."),
       h("h2", { text: "Price by region" }), h("div", { class: "panel" }, field("Game", regionGame), h("p"), regionBtn), regionOut,
+      h("h2", { text: "Console prices" }), h("div", { class: "panel" }, field("Game", consoleGame), h("p"), consoleBtn), consoleOut,
       h("h2", { text: "Bundle check" }), h("div", { class: "panel" }, field("Game", game), h("p"), checkBtn), bundlesOut,
       h("p", { class: "muted small" }, "Want a plan for the next sale? ", h("a", { href: "#/warroom", text: "Open the Sale planner" }), "."));
     loadBundles();
