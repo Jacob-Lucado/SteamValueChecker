@@ -870,7 +870,16 @@ process.on("exit", code => { try { if (code !== 0) console.error(`[exit] bot exi
 setInterval(() => { const m = process.memoryUsage(); if (m.rss > 380 * 1048576) console.error(`[memory] high usage: ${memNote()}`); }, 60_000).unref();
 
 process.on("unhandledRejection", err => console.error(`[unhandledRejection] ${err?.stack ?? err}`));
+// Discord's gateway sits behind Cloudflare, and when that has a bad minute the connection attempt fails with a 5xx. That's their outage, not a bug:
+// keep running and let the library reconnect. If we still aren't connected a couple of minutes later, restart so we never sit there dead.
+let gatewayWatch = null;
+const gatewayBlip = err => /Unexpected server response: 5\d\d/.test(String(err?.message ?? err));
 process.on("uncaughtException", err => {
+    if (gatewayBlip(err)) {
+        console.error(`[gateway] Discord's gateway is having trouble (${err.message}). Waiting for it to come back.`);
+        if (!gatewayWatch) gatewayWatch = setTimeout(() => { gatewayWatch = null; if (client.ws.status !== 0) { console.error("[crash] gateway did not recover, restarting"); process.exit(1); } }, 120_000).unref();
+        return;
+    }
     console.error(`[crash] ${err?.stack ?? err}`);
     setTimeout(() => process.exit(1), 200); // Fly restarts the bot; the crash is saved for the Admin page
 });
