@@ -1148,3 +1148,6 @@ body.wiz-open { overflow: hidden; }
 .pf-audio { width: 100%; max-width: 360px; height: 36px; }
 .ai-limits { margin: .3rem 0 .6rem; padding-left: 1.2rem; display: grid; gap: .35rem; font-size: .92rem; }
 .ai-use { font-weight: 600; margin: .4rem 0 .2rem; }
+.pill{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:99px;font-size:.62em;font-weight:700;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle;background:rgba(255,152,0,.16);color:#b86e00}
+:root[data-theme="dark"] .pill{color:#ffb74d}
+.support-btn{white-space:nowrap}

@@ -37,7 +37,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
     async function overview(gid, userId, manager) {
         const me = community.rankOf(gid, userId), inv = community.inviteSummary(gid, userId);
         const out = {
-            membersIntent: membersIntent(), manager, ai: { available: ai.available || Boolean(db.getCommunity(gid).ai_key), phrase: ai.phrase, canStoreKey: Boolean(ai.vault), keySet: Boolean(db.getCommunity(gid).ai_key), keyLast4: db.getCommunity(gid).ai_key_last4 ?? null, keyBad: Boolean(db.getMeta(`aikeybad:${gid}`)), botKey: ai.available, ...(rt ? aiLimits(rt, gid) : { enabled: true, dailyCap: 300, cooldownSec: 15, maxQuestion: 700, maxReply: 1900, history: 6 }), usedToday: aiUsedToday(db, gid) },
+            membersIntent: membersIntent(), manager, ai: { available: ai.available || Boolean(db.getCommunity(gid).ai_key), phrase: ai.phrase, canStoreKey: Boolean(ai.vault), keySet: Boolean(db.getCommunity(gid).ai_key), keyLast4: db.getCommunity(gid).ai_key_last4 ?? null, keyBad: Boolean(db.getMeta(`aikeybad:${gid}`)), botKey: ai.available, main: Boolean(ai.isMain?.(gid)), plus: Boolean(db.getCommunity(gid).ai_plus), plusInterest: Boolean(db.getCommunity(gid).ai_plus_interest), plusVisible: rt ? rt.get("ai_plus_visible") : true, plusCap: rt ? rt.get("ai_plus_cap") : 2000, ...(rt ? aiLimits(rt, gid, { main: Boolean(ai.isMain?.(gid)), plus: Boolean(db.getCommunity(gid).ai_plus), ownKey: Boolean(db.getCommunity(gid).ai_key) }) : { enabled: true, dailyCap: 300, cooldownSec: 15, maxQuestion: 700, maxReply: 1900, history: 6 }), usedToday: aiUsedToday(db, gid) },
             me: { ...me, invites: inv },
             xpTop: await named(gid, db.xpTop(gid, 10)), inviteTop: await named(gid, db.inviteTop(gid, 10)),
             rewards: db.listRewards(gid), levelRoles: db.listLevelRoles(gid),
@@ -139,6 +139,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             if (id !== db.getCommunity(gid).requests_channel) db.dropForumPosts(gid); // a new forum starts clean
             patch.requests_channel = id;
         }
+        if (b.ai_plus_interest !== undefined) patch.ai_plus_interest = b.ai_plus_interest ? 1 : 0;
         if (b.ai_key_clear) { patch.ai_key = null; patch.ai_key_last4 = null; db.setMeta(`aikeybad:${gid}`, ""); }
         if (typeof b.ai_key === "string" && b.ai_key.trim()) {
             const k = b.ai_key.trim();

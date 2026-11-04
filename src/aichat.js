@@ -8,8 +8,9 @@ const MAX_QUESTION = 700;
 const MAX_REPLY = 1900;
 
 /** The limits that apply to one server right now, as the dashboard explains them to its managers. */
-export function aiLimits(rt, guildId) {
-    return { enabled: rt.get("ai_enabled") && !rt.isServerBlocked(guildId), blocked: rt.isServerBlocked(guildId), dailyCap: rt.serverCap(guildId) ?? rt.get("ai_daily_cap"), cooldownSec: rt.get("ai_cooldown"), maxQuestion: rt.get("ai_max_question"), maxReply: MAX_REPLY, history: rt.get("ai_history") };
+export function aiLimits(rt, guildId, { main = false, plus = false, ownKey = false } = {}) {
+    const cap = main ? null : rt.serverCap(guildId) ?? (ownKey ? null : plus ? rt.get("ai_plus_cap") : rt.get("ai_daily_cap"));
+    return { unlimited: main || cap === null, plus, enabled: rt.get("ai_enabled") && !rt.isServerBlocked(guildId), blocked: rt.isServerBlocked(guildId), dailyCap: cap, cooldownSec: rt.get("ai_cooldown"), maxQuestion: rt.get("ai_max_question"), maxReply: MAX_REPLY, history: rt.get("ai_history") };
 }
 
 /**
@@ -86,14 +87,15 @@ function addStat(db, now, add) {
  * `rt` is the runtime settings (src/runtimecfg.js), read on every question so a change in the admin panel applies at once.
  * `defaults` are only used when no settings object is given (tests).
  */
-export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, fetchFn = fetch, now = Date.now, log = () => {} }) {
+export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, isMain = () => false, isPlus = () => false, fetchFn = fetch, now = Date.now, log = () => {} }) {
     const lastAt = new Map(); // user -> when they last asked
     const available = Boolean(key);
 
     /** Counts one answer against the server's day. False when the day's limit is used up. */
     function spend(guildId, ownKey) {
         // A server that brought its own key pays for its own answers, so only a limit the owner set for it applies.
-        const cap = rt.serverCap(guildId) ?? (ownKey ? Infinity : rt.get("ai_daily_cap"));
+        if (isMain(guildId)) return true; // the bot owner's own server is never limited
+        const cap = rt.serverCap(guildId) ?? (ownKey ? Infinity : isPlus(guildId) ? rt.get("ai_plus_cap") : rt.get("ai_daily_cap"));
         const k = `aiday:${guildId}`, day = today(now());
         const [d, n] = String(db.getMeta(k) ?? "").split(":");
         const used = d === day ? Number(n) || 0 : 0;
@@ -188,7 +190,7 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, f
 
 /** What to say when an answer could not be given. Missing means say nothing. */
 export const AI_FAILURES = {
-    cap: "I've reached today's limit for this server. Try again tomorrow.",
+    cap: "I've reached today's limit for this server. It starts again tomorrow (midnight UTC). A server manager can add their own AI key in the dashboard under Community to lift it.",
     busy: "I'm a bit swamped right now. Try again in a minute.",
     error: "I couldn't come up with an answer just now. Try again in a moment.",
     badkey: "This server's AI key was rejected, so I can't answer. A server manager can update it in the dashboard under Community."

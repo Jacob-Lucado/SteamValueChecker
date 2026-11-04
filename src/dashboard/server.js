@@ -560,7 +560,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
         return g;
     }
 
-    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, rt, ai: { available: Boolean(config.aiAvailable), phrase: Boolean(config.aiPhrase), vault: config.aiKeyVault ?? null, checkKey: config.aiCheckKey ?? null }, botId: config.clientId, publicUrl: config.publicUrl, ...(emojigg ? { emojigg, fetchImpl: emojigg.fetchImpl ?? globalThis.fetch } : {}) }) : null;
+    const cd = community ? createCommunityDash({ db, rest, community, membersIntent, rt, ai: { available: Boolean(config.aiAvailable), phrase: Boolean(config.aiPhrase), vault: config.aiKeyVault ?? null, isMain: g => Boolean(config.mainGuild?.isMain(g)), checkKey: config.aiCheckKey ?? null }, botId: config.clientId, publicUrl: config.publicUrl, ...(emojigg ? { emojigg, fetchImpl: emojigg.fetchImpl ?? globalThis.fetch } : {}) }) : null;
     /** Community actions: the same Discord permissions as the commands. Errors from the helper become normal dashboard errors. */
     const comm = async fn => {
         if (!cd) throw new HttpError(503, "Community features are not available on this bot.");
@@ -634,7 +634,8 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
                 : null,
             inviteUrl: config.clientId
                 ? botInviteUrl(config.clientId)
-                : null
+                : null,
+            supportUrl: config.mainGuild?.inviteUrl() ?? null
         }),
 
         "GET /api/me": async (req) => {
@@ -2249,11 +2250,12 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             const rows = new Map();
             const row = id => { if (!rows.has(id)) rows.set(id, { id, name: names.get(id) ?? null }); return rows.get(id); };
             for (const c of db.allCommunity()) if (c.ai_on) Object.assign(row(c.guild_id), { on: true, channel: c.ai_channel ?? null });
-            for (const c of db.allCommunity()) if (c.ai_key) row(c.guild_id).ownKey = true;
+            for (const c of db.allCommunity()) { if (c.ai_key) row(c.guild_id).ownKey = true; if (c.ai_plus) row(c.guild_id).plus = true; if (c.ai_plus_interest) row(c.guild_id).interested = true; }
+            if (config.mainGuild?.id()) row(config.mainGuild.id()).main = true;
             for (const id of Object.keys(view.serverCaps)) row(id);
             for (const id of view.blockedServers) row(id);
             for (const m of db.listMetaPrefix("aiday:")) row(m.key.slice(6));
-            const servers = [...rows.values()].map(r => ({ ...r, on: Boolean(r.on), ownKey: Boolean(r.ownKey), used: aiUsedToday(db, r.id), cap: rt.serverCap(r.id), blocked: rt.isServerBlocked(r.id) })).sort((a, b) => b.used - a.used || String(a.name).localeCompare(String(b.name)));
+            const servers = [...rows.values()].map(r => ({ ...r, on: Boolean(r.on), ownKey: Boolean(r.ownKey), plus: Boolean(r.plus), interested: Boolean(r.interested), main: Boolean(r.main), used: aiUsedToday(db, r.id), cap: rt.serverCap(r.id), blocked: rt.isServerBlocked(r.id) })).sort((a, b) => b.used - a.used || String(a.name).localeCompare(String(b.name)));
             return { ...view, available: Boolean(config.aiAvailable), phrase: Boolean(config.aiPhrase), stats: aiStats(db, 14), servers, lastError: db.getMeta("ai:lasterr") ?? null };
         },
         "POST /api/admin/ai/block": async (req, body) => {
@@ -2270,6 +2272,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (body.cap !== undefined) rt.setServerCap(id, body.cap);
             if (body.resetToday) db.setMeta(`aiday:${id}`, "");
             if (body.turnOff) db.setCommunity(id, { ai_on: 0 });
+            if (body.plus !== undefined) db.setCommunity(id, { ai_plus: body.plus ? 1 : 0 });
             return { ok: true };
         },
         "POST /api/admin/ai/test": async (req, body) => {

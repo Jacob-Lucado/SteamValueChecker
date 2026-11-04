@@ -267,9 +267,10 @@
       here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null].filter(Boolean)));
 
     const acct = document.getElementById("account");
+    const support = state.cfg && state.cfg.supportUrl ? ext(state.cfg.supportUrl, "Support server", "btn gray small support-btn") : null;
     const links = state.me ? [] : [state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
     if (state.me) {
-      acct.replaceChildren(...[...links,
+      acct.replaceChildren(...[...links, support,
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
         currencyPicker(), languagePicker(), displayMenu(),
         // The signed-in name and Log out always sit together, set slightly apart from the tools.
@@ -278,7 +279,7 @@
           h("span", { class: "who", text: state.me.user.username }),
           h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } }))].filter(Boolean));
     } else {
-      acct.replaceChildren(...[...links, languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
+      acct.replaceChildren(...[...links, support, languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
@@ -294,6 +295,7 @@
     const invite = state.cfg && state.cfg.inviteUrl;
     const cta = (extra = "") => h("div", { class: "lp-cta " + extra },
       invite && ext(invite, "Add to a server", "btn green big"),
+      state.cfg && state.cfg.supportUrl && ext(state.cfg.supportUrl, "Join the support server", "btn gray big"),
       state.cfg && state.cfg.userInstallUrl && ext(state.cfg.userInstallUrl, "Add to your account", "btn blue big"),
       state.me ? h("a", { class: "btn blue big", href: "#/value", text: "Open the dashboard" }) : [steamLoginBtn("Sign in through Steam", "btn steam big"), h("a", { class: "btn blue big", href: "/auth/login", text: "Sign in with Discord" })]);
 
@@ -3143,7 +3145,7 @@
         inputs.set(def.key, () => (def.type === "int" ? Number(el.value) : el.value));
         return h("div", {}, h("label", { text: def.label }), el, h("p", { class: "muted small", text: def.help + (def.type === "int" ? ` (${def.min} to ${def.max}, normally ${def.default})` : "") }));
       };
-      const save = h("button", { class: "btn", type: "button", text: "Save settings" });
+      const save = h("button", { class: "btn green", type: "button", text: "Save settings" });
       const panels = groupKeys.map(g => h("div", { class: "panel" }, h("h3", { text: view.groups[g] }), ...view.settings.filter(x => x.group === g).map(x => (x.type === "bool" ? h("div", {}, control(x), h("p", { class: "muted small", text: x.help })) : control(x)))));
       save.addEventListener("click", () => busy(save, async () => {
         const patch = {};
@@ -3191,15 +3193,17 @@
         const rows = r.servers.map(x => {
           const cap = h("input", { type: "number", min: "0", max: "50000", placeholder: "normal", value: x.cap === null ? "" : String(x.cap), "aria-label": "Daily limit for " + (x.name || x.id) });
           const doIt = (label, body, cls = "btn gray small") => { const b = h("button", { class: cls, type: "button", text: label }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/ai/server", { id: x.id, ...body }); toast("Done.", "ok"); await load(); })); return b; };
+          const plus = h("button", { class: "btn gray small", type: "button", text: x.plus ? "Remove Plus" : "Give Plus" });
+          plus.addEventListener("click", () => busy(plus, async () => { await api("/api/admin/ai/server", { id: x.id, plus: !x.plus }); await load(); }));
           const block = h("button", { class: "btn " + (x.blocked ? "gray" : "red") + " small", type: "button", text: x.blocked ? "Unblock" : "Block" });
           block.addEventListener("click", () => busy(block, async () => { await api("/api/admin/ai/block", { kind: "server", id: x.id, on: !x.blocked }); await load(); }));
           return h("tr", {}, h("td", {}, h("b", { text: x.name || "Unknown server" }), h("div", { class: "muted small", text: x.id })),
-            h("td", { text: (x.blocked ? "Blocked" : x.on ? "On" : "Off") + (x.ownKey ? " · own key" : "") }), h("td", { class: "num", text: `${n0(x.used)} / ${x.cap === null ? n0(r.settings.find(s => s.key === "ai_daily_cap").value) : n0(x.cap)}` }),
+            h("td", { text: (x.main ? "Main server · " : "") + (x.blocked ? "Blocked" : x.on ? "On" : "Off") + (x.ownKey ? " · own key" : "") + (x.plus ? " · Plus" : "") + (x.interested && !x.plus ? " · wants Plus" : "") }), h("td", { class: "num", text: x.main ? `${n0(x.used)} / no limit` : `${n0(x.used)} / ${x.cap === null ? n0(r.settings.find(s => s.key === (x.plus ? "ai_plus_cap" : "ai_daily_cap")).value) : n0(x.cap)}` }),
             h("td", {}, h("div", { class: "row" }, cap, doIt("Set limit", { cap: cap.value === "" ? null : Number(cap.value) }))),
-            h("td", {}, h("div", { class: "row" }, doIt("Reset today", { resetToday: true }), x.on ? doIt("Turn off", { turnOff: true }) : null, block)));
+            h("td", {}, h("div", { class: "row" }, doIt("Reset today", { resetToday: true }), x.on ? doIt("Turn off", { turnOff: true }) : null, x.main ? null : plus, x.main ? null : block)));
         });
         const servers = h("div", { class: "panel" }, h("h3", { text: "Servers" }),
-          h("p", { class: "muted small", text: "Servers that turned it on, used it today, have their own limit, or are blocked. A server's own limit replaces the general one (0 stops it). Servers with their own API key skip the general limit, since they pay for their answers. Blocking a server silences it even if its managers switch it on." }),
+          h("p", { class: "muted small", text: "Servers that turned it on, used it today, have their own limit, or are blocked. A server's own limit replaces the general one (0 stops it). Servers with their own API key skip the general limit, since they pay for their answers. Your own server is never limited. Give Plus is the manual switch for the subscription that is still being built. Blocking a server silences it even if its managers switch it on." }),
           rows.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Status", "Today / limit", "Daily limit", ""].map(c => h("th", { text: c })))), h("tbody", {}, rows))) : h("p", { class: "muted", text: "No server has used it yet." }));
 
         // blocked people and servers by ID
@@ -5626,18 +5630,25 @@
           h("label", { class: "check" }, aiOn, " Answer when members say “Hey AI” followed by a question"),
           field("Only answer in this channel (leave empty for every channel)", aiCh),
           h("p", { class: "muted small", text: ai.phrase ? "Members write “Hey AI, …” or mention the bot." : "Members mention the bot, because this bot can't read “Hey AI” yet (it needs the Message Content intent)." }),
-          ai.available ? h("p", { class: "ai-use", text: ai.keySet ? `Answers today: ${ai.usedToday}. No daily limit while your own key is used.` : `Used today: ${ai.usedToday} of ${ai.dailyCap} answers (resets at midnight UTC).` }) : null,
+          ai.available ? h("p", { class: "ai-use", text: ai.main ? `Answers today: ${ai.usedToday}. This is the bot owner's own server, so it has no daily limit.` : ai.keySet && ai.unlimited ? `Answers today: ${ai.usedToday}. No daily limit while your own key is used.` : `Used today: ${ai.usedToday} of ${ai.dailyCap} answers (resets at midnight UTC).${ai.plus ? " AI Plus is on for this server." : ""}` }) : null,
           h("div", { class: "row" }, save("Save AI settings", () => post("/api/community/places", { ai_on: aiOn.checked, ai_channel: aiCh.value }))),
           h("h4", { text: "Your own API key" }), keyBox,
           h("h4", { text: "How it works and its limits" }),
           h("ul", { class: "ai-limits" },
-            h("li", { text: ai.keySet ? "Your server uses its own key, so there is no daily answer limit. The bot owner can still switch the AI off or set a limit for your server." : `Each server gets up to ${ai.dailyCap || 300} answers a day. After that the bot says it has reached the limit and starts again the next day. A server with its own key has no daily limit.` }),
+            h("li", { text: ai.main ? "This server is the bot owner's own, so it has no daily answer limit." : ai.keySet ? "Your server uses its own key, so there is no daily answer limit. The bot owner can still switch the AI off or set a limit for your server." : `Each server gets up to ${ai.dailyCap || 300} answers a day. After that the bot says it has reached the limit and starts again the next day. A server with its own key has no daily limit.` }),
             h("li", { text: `Each person can ask once every ${ai.cooldownSec || 15} seconds. Faster than that, the bot just reacts with ⏳.` }),
             h("li", { text: `Questions are cut at ${ai.maxQuestion || 700} characters. Answers are short, never longer than ${ai.maxReply || 1900} characters, and ping nobody.` }),
             h("li", { text: `Replying to one of its answers continues the conversation (it remembers the last ${ai.history || 6} messages of that thread). It remembers nothing else.` }),
             h("li", { text: "It can look up live game prices, the free games right now, and the asker's own wishlist and library, and add a game to the asker's wishlist when asked. It never sees anyone else's lists or other channels." }),
             h("li", { text: "Only messages that say “Hey AI” or mention the bot are read. The question, the thread it replies to, the person's display name and the results of those lookups are sent to the AI provider (Anthropic) to write the answer. Nothing else from your server is sent." }),
             h("li", { text: "Servers that turn it on are responsible for who can use it: pick one channel above if you only want it in one place." })));
+        const plusBtn = save(ai.plusInterest ? "Never mind" : "Tell me when it's ready", () => post("/api/community/places", { ai_plus_interest: !ai.plusInterest }));
+        const plusP = ai.plusVisible && !ai.main ? h("div", { class: "panel" }, h("h3", {}, "AI Plus ", h("span", { class: "pill", text: "Work in progress" })),
+          h("p", { text: `When your server reaches its daily limit, AI Plus would keep the answers coming using the bot's own AI, with a bigger limit (${(ai.plusCap || 2000).toLocaleString()} answers a day), and nothing for you to set up.` }),
+          h("p", { class: "muted small", text: "Payments are not switched on yet, so there is nothing to buy today. Until then you can lift the limit for free with your own Anthropic key above. Press the button and the bot owner will know your server wants this." }),
+          ai.plus ? h("div", { class: "notice", text: "AI Plus is on for this server right now, so the bigger limit applies." }) : null,
+          ai.plusInterest ? h("p", { class: "ai-use", text: "Noted. Your server is on the list." }) : null,
+          h("div", { class: "row" }, plusBtn)) : null;
         const rText = h("textarea", { rows: "9", maxlength: "3000", placeholder: d.defaultRules }); rText.value = st.rules_text || "";
         const rulesP = h("div", { class: "panel" }, h("h3", { text: "Rules" }),
           h("p", { class: "muted", text: "Edit the rules shown in the rules channel. Leave it empty to use the standard community rules. The post comes with the bot logo and banner." }), field("Rules (Discord formatting works)", rText),
@@ -5664,7 +5675,7 @@
           h("p", { class: "muted small", text: st.meme_at ? "Last meme " + new Date(st.meme_at).toLocaleString() + "." : "None posted yet." }),
           h("div", { class: "row" }, save("Save", () => post("/api/community/memes", mBody())), save("Save and post one now", () => post("/api/community/memes", { ...mBody(), now: true }), "btn green small")));
         // group everything a manager can customise into tabs
-        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["AI companion", [aiP]], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Memes", [memeP]], ["Emoji", [emoji]]];
+        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["AI companion", [aiP, plusP].filter(Boolean)], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Memes", [memeP]], ["Emoji", [emoji]]];
         const tabBar = h("div", { class: "tabs" }), body = h("div");
         const show = n => { mgrTab = n; [...tabBar.children].forEach((b, k) => b.classList.toggle("active", k === n)); body.replaceChildren(...groups[n][1]); };
         groups.forEach(([label], n) => tabBar.append(h("button", { class: "tab small", type: "button", text: label, onclick: () => show(n) })));

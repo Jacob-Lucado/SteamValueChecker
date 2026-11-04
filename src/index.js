@@ -101,6 +101,7 @@ import { honeypotHit, refreshHoneypotNotice } from "./honeypot.js";
 import { createAiChat, parseTrigger, AI_FAILURES } from "./aichat.js";
 import { createRuntimeCfg } from "./runtimecfg.js";
 import { createAiTools } from "./aitools.js";
+import { createMainGuild } from "./mainguild.js";
 import { guildBannerSvg, toPng, artFor } from "./communitycards.js";
 let logoUri;
 const brandLogo = () => { try { return (logoUri ??= "data:image/png;base64," + readFileSync(new URL("../public/logo.png", import.meta.url)).toString("base64")); } catch { return null; } };
@@ -415,7 +416,9 @@ const keyVault = cfg.keySecret ? createVault(cfg.keySecret) : null;
 /** A server's own API key, decrypted, or null. */
 const serverKey = gid => { const c = gid ? db.getCommunity(gid) : null; return c?.ai_key && keyVault ? keyVault.decrypt(c.ai_key) : null; };
 const aiTools = createAiTools({ db, itad, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
-const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, log: t => console.error(`[ai] ${t}`) });
+const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, configuredInvite: cfg.supportInvite, log: t => console.log(`[main server] ${t}`) });
+client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
+const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
 async function aiReply(m, t) {
     // The conversation so far: walk up the chain of replies, so "and what about the second one?" has something to refer to.
     const history = [];
@@ -831,7 +834,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKeyVault: keyVault, aiCheckKey: k => ai.checkKey(k), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKeyVault: keyVault, mainGuild, aiCheckKey: k => ai.checkKey(k), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

@@ -212,3 +212,33 @@ test("AI companion: checking a pasted key", async () => {
     assert.equal((await ask(529)).ok, true);
     assert.match((await createAiChat({ db, rt, key: null, fetchFn: async () => { throw new Error("x"); } }).checkKey("k")).error, /Could not reach/);
 });
+
+test("AI companion: the main server is never limited; AI Plus servers get the bigger limit; the limits view says so", async () => {
+    const db = openDb(":memory:"), rt = createRuntimeCfg(db);
+    rt.set({ ai_daily_cap: 1, ai_plus_cap: 3, ai_cooldown: 3 });
+    let t = Date.parse("2026-11-04T12:00:00Z");
+    const fetchFn = async () => ({ ok: true, status: 200, json: async () => ({ content: [{ type: "text", text: "ok" }] }) });
+    const ai = createAiChat({ db, rt, key: "k", fetchFn, now: () => t, isMain: g => g === "10001", isPlus: g => g === "30003" });
+    const run = async g => { const out = []; for (let n = 0; n < 5; n++) { t += 4000; out.push((await ai.answer({ guildId: g, userId: "u", question: "x" })).ok); } return out.filter(Boolean).length; };
+    assert.equal(await run("10001"), 5, "main server: no limit");
+    assert.equal(await run("20002"), 1, "ordinary server: the daily limit");
+    assert.equal(await run("30003"), 3, "AI Plus server: the Plus limit");
+    const { aiLimits } = await import("../src/aichat.js");
+    assert.deepEqual([aiLimits(rt, "10001", { main: true }).unlimited, aiLimits(rt, "20002").dailyCap, aiLimits(rt, "30003", { plus: true }).dailyCap], [true, 1, 3]);
+    rt.setServerCap("30003", 2); assert.equal(aiLimits(rt, "30003", { plus: true }).dailyCap, 2, "a limit set for one server beats Plus");
+});
+
+test("main server: remembered once, detected only when the bot is in exactly one server, invite is validated and cached", async () => {
+    const { createMainGuild } = await import("../src/mainguild.js");
+    const db = openDb(":memory:"), guilds = new Map([["111111", {}]]);
+    const client = { guilds: { cache: guilds } };
+    const m = createMainGuild({ db, client });
+    assert.equal(m.id(), null);
+    assert.equal(m.detect(), "111111"); assert.equal(m.isMain("111111"), true);
+    guilds.set("222222", {}); assert.equal(createMainGuild({ db, client }).id(), "111111", "joining more servers later changes nothing");
+    const two = openDb(":memory:"); assert.equal(createMainGuild({ db: two, client }).detect(), null, "two servers and nothing chosen: no guess");
+    assert.equal(createMainGuild({ db: two, client, configuredId: "222222" }).isMain("222222"), true);
+    assert.equal(createMainGuild({ db, client, configuredInvite: "https://discord.gg/abc123" }).inviteUrl(), "https://discord.gg/abc123");
+    assert.equal(createMainGuild({ db, client, configuredInvite: "https://evil.example/x" }).inviteUrl(), null, "only Discord invite links");
+    db.setMeta("support:invite", "https://discord.gg/xyz"); assert.equal(m.inviteUrl(), "https://discord.gg/xyz");
+});

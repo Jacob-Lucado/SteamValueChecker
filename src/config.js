@@ -30,6 +30,8 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
         token: env.DISCORD_TOKEN,
         clientId: env.CLIENT_ID,
         guildId: env.GUILD_ID || null,
+        mainGuildId: /^\d{5,25}$/.test(env.MAIN_GUILD_ID ?? "") ? env.MAIN_GUILD_ID : null,
+        supportInvite: env.SUPPORT_SERVER_URL || null,
         // 1 = register commands globally (needed for installs on a person's account) even if GUILD_ID is set
         globalCommands: env.GLOBAL_COMMANDS === "1" || Boolean(env.FLY_APP_NAME), // on Fly this is the live bot, so commands must be global (DMs, user installs)
         itadKey: env.ITAD_API_KEY,
