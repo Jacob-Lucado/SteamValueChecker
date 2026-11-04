@@ -365,3 +365,29 @@ test("AI services: asking a service which models a key can use", async () => {
     assert.deepEqual([bad.ok, bad.status, bad.error], [false, 401, "Incorrect API key"]);
     assert.equal((await listModels({ provider: "nope", apiKey: "x" })).ok, false);
 });
+
+test("permission notice names what the bot is missing", async () => {
+    const { missingAiPerms, permsNotice, shouldTell } = await import("../src/aiperms.js");
+    const { PermissionFlagsBits: P, PermissionsBitField } = await import("discord.js");
+    assert.deepEqual(missingAiPerms(null), []);
+    assert.equal(permsNotice(missingAiPerms(new PermissionsBitField([P.SendMessages, P.ReadMessageHistory])), "1"), null);
+    const hist = permsNotice(missingAiPerms(new PermissionsBitField([P.SendMessages])), "123");
+    assert.equal(hist.where, "channel");
+    assert.match(hist.text, /Read Message History/);
+    const send = permsNotice(missingAiPerms(new PermissionsBitField([P.ReadMessageHistory])), "123");
+    assert.equal(send.where, "dm");
+    assert.match(send.text, /<#123>/);
+    assert.equal(shouldTell("c1", 10_000_000), true);
+    assert.equal(shouldTell("c1", 10_002_000), false);
+    assert.equal(shouldTell("c1", 10_000_000 + 3600_001), true);
+});
+
+test("who made you gets the creator embed", async () => {
+    const { asksCreator, creatorEmbed } = await import("../src/aicreator.js");
+    for (const q of ["Who made you", "who created you?", "who built this bot", "who is your creator", "who's your developer?", "who owns you"]) assert.equal(asksCreator(q), true, q);
+    for (const q of ["who made the best game this year", "price of Hades", "who is the leaderboard leader"]) assert.equal(asksCreator(q), false, q);
+    const e = creatorEmbed({ creator: { name: "Jacob Lucado", url: "https://x.com/twit_user69" }, logo: "https://x/creator.png" });
+    assert.equal(e.url, "https://x.com/twit_user69");
+    assert.equal(e.thumbnail.url, "https://x/creator.png");
+    assert.match(e.title, /Jacob Lucado/);
+});

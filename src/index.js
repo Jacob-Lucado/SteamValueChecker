@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { asksCreator, creatorEmbed } from "./aicreator.js";
+import { missingAiPerms, permsNotice, shouldTell } from "./aiperms.js";
 import v8 from "node:v8";
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType,
@@ -427,6 +429,16 @@ const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, c
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
 async function aiReply(m, t) {
+    const need = permsNotice(missingAiPerms(m.guild?.members?.me ? m.channel.permissionsFor(m.guild.members.me) : null), m.channelId);
+    if (need) {
+        if (!shouldTell(m.channelId)) return;
+        if (need.where === "channel") return void await m.channel.send({ content: need.text, allowedMentions: { parse: [] } }).catch(() => {});
+        return void await m.author.send({ content: need.text }).catch(() => {});
+    }
+    if (asksCreator(t.question)) {
+        const embed = creatorEmbed({ creator: cfg.creator, logo: publicBase ? `${publicBase}/creator.png` : null });
+        return void await m.reply({ embeds: [embed], allowedMentions: { parse: [], repliedUser: rt.get("ai_ping_reply") } }).catch(() => {});
+    }
     // The conversation so far: walk up the chain of replies, so "and what about the second one?" has something to refer to.
     const history = [];
     try {
