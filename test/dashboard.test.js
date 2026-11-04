@@ -2107,7 +2107,7 @@ test("profiles: editor saves and validates, visitors only get what is switched o
         assert.equal((await o.request("/api/profile", { method: "POST", body: { enabled: true, slug } })).status, 200);
         const bad = await o.request("/api/profile/page", { method: "POST", body: { links: [{ kind: "twitch", url: "https://evil.example" }] } });
         assert.equal(bad.status, 400);
-        assert.equal((await o.request("/api/profile/page", { method: "POST", body: { song: "https://evil.example/x.mp3" } })).status, 400);
+        assert.equal((await o.request("/api/profile/page", { method: "POST", body: { song: "http://evil.example/x.mp3" } })).status, 400);
         const ok = await o.request("/api/profile/page", { method: "POST", body: { name: "Jacob", bio: "I play too much.", theme: "ocean", favorites: ["Hades"], song: { url: "https://youtu.be/dQw4w9WgXcQ", title: "Theme" },
             links: [{ kind: "x", url: "https://x.com/jacob" }], sections: [{ key: "about", vis: "public" }, { key: "favorites", vis: "public" }, { key: "steam", vis: "hidden" }, { key: "wishlist", vis: "hidden" }] } });
         assert.equal(ok.status, 200); assert.equal(ok.data.config.theme, "ocean"); assert.ok(ok.data.choices.themes.length >= 8);
