@@ -52,7 +52,7 @@ export class LibraryError extends UserError {}
  * Adds games with what was paid. `entries` are { title, paid } (paid may be null).
  * Titles are matched through ITAD; approximate matches use the matched name.
  */
-export async function importLibrary(db, itad, userId, entries) {
+export async function importLibrary(db, itad, userId, entries, { platform = null } = {}) {
     const clean = entries.filter(e => e && String(e.title ?? "").trim());
     if (!clean.length) throw new LibraryError("Nothing to add.");
     const resolved = await itad.lookupTitles(clean.map(e => String(e.title).trim().slice(0, 120)));
@@ -61,7 +61,7 @@ export async function importLibrary(db, itad, userId, entries) {
     resolved.forEach((r, i) => {
         if (!r.id) { notFound.push(r.title); return; }
         const paid = clean[i].paid;
-        games.push({ itad_id: r.id, title: r.approx ? r.matched : r.title, paid: Number.isFinite(paid) && paid >= 0 ? paid : null });
+        games.push({ itad_id: r.id, title: r.approx ? r.matched : r.title, paid: Number.isFinite(paid) && paid >= 0 ? paid : null, ...(platform ? { platform, keepPaid: true } : {}) });
     });
     const res = games.length ? db.upsertLibrary(userId, games) : { added: 0, updated: 0, skippedForLimit: 0 };
     return { ...res, notFound };
