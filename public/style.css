@@ -1104,6 +1104,7 @@ body.wiz-open { overflow: hidden; }
 .pf-frame { border: 0; border-radius: 10px; flex: 1; min-width: 200px; height: 80px; }
 .pf-frame.youtube { height: 140px; max-width: 250px; }
 .pf-frame.spotify { height: 152px; }
+.pf-frame.soundcloud { height: 166px; }
 .pf-body { display: grid; gap: 1rem; padding: 1.2rem 1.4rem 0; }
 .pf[data-layout="wide"] .pf-body { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .pf[data-layout="wide"] .pf-card.pf-wishlist, .pf[data-layout="wide"] .pf-card.pf-about { grid-column: 1 / -1; }
