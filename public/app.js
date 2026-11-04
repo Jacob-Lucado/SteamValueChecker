@@ -2934,6 +2934,25 @@
           h("div", { class: "grid three" }, ["hero", "cart", "paid"].map(n => h("img", { src: `/grabber-ad-${n}.png`, alt: "", loading: "lazy", width: "300", height: "158", class: "ad-thumb" }))),
           h("div", { class: "row" }, field("Send to", pWho), field("Type SEND to confirm", pConfirm)), h("div", { class: "row" }, pBtn));
       };
+      const quickPanel = () => {
+        const kinds = { restart: ["Restarting for an update", "Tells people the bot is restarting, that nothing is lost and that missed alerts catch up."], dev: ["Still in active development", "A heads-up that updates and random downtime are normal while the bot is being built, and where to report bugs."], thanks: ["Thank you", "A thank-you note from you for using the bot."] };
+        const pick = select(Object.entries(kinds).map(([k, v]) => [k, v[0]]), "restart");
+        const pWho = select([["me", "Only me (preview)"], ["dm", `DMs to members (${info.counts.dm})`], ["channels", `Every server's #announcements channel (${info.counts.channels})`], ["both", `Both (${info.counts.dm + info.counts.channels})`]], "me");
+        const pConfirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
+        const img = h("img", { src: "/notice-restart.png", alt: "", class: "preset-img", width: "1200", height: "630", loading: "lazy" });
+        const blurb = h("p", { class: "muted small", text: kinds.restart[1] });
+        pick.addEventListener("change", () => { img.src = `/notice-${pick.value}.png`; blurb.textContent = kinds[pick.value][1]; });
+        const pBtn = h("button", { class: "btn red", type: "button", text: "Send this announcement" });
+        pBtn.addEventListener("click", () => busy(pBtn, async () => {
+          const r = await api("/api/admin/broadcast", { kind: "preset", preset: pick.value, audience: pWho.value, confirm: pConfirm.value });
+          toast(pWho.value === "me" ? "Preview sent to your DMs." : `Sending to ${r.total} places. You can leave this page.`, "ok");
+          if (pWho.value !== "me") pConfirm.value = "";
+          await refresh();
+        }));
+        return h("div", { class: "panel" }, h("h3", { text: "Ready-made announcements" }),
+          h("p", { class: "muted small", text: "Pre-written, with a picture and buttons, marked as from the bot developer. Send yourself a preview first." }),
+          h("div", { class: "row" }, field("Announcement", pick), field("Send to", pWho), field("Type SEND to confirm", pConfirm)), blurb, img, h("div", { class: "row" }, pBtn));
+      };
       const paintPreview = () => {
         count.textContent = msg.value.length + " / 1500";
         preview.replaceChildren(h("div", { class: "muted small", text: "Official message from the Steam Value Checker developer" }), h("strong", { text: title.value.trim() || "Steam Value Checker notice" }), h("div", { text: msg.value.trim() || "Your message shows here." }), h("div", { class: "muted small", text: "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff." }));
@@ -2977,7 +2996,7 @@
             h("div", { class: "row" }, field("Send to", who), mentionRow, field("Type SEND to confirm", confirm)),
             h("p", { class: "muted small", text: "The ping only goes on the server-channel copy (never DMs). Each server needs to let the bot mention everyone, otherwise Discord just shows the text." }),
             h("div", { class: "row" }, test, send)),
-          promoPanel(), 
+          quickPanel(), promoPanel(),
           h("div", { class: "panel" }, h("h3", { text: "Progress" }), progress, h("h4", { text: "Recent announcements" }), history));
       }).catch(e => box.replaceChildren(h("div", { class: "notice warn", text: e.message })));
       return [box];

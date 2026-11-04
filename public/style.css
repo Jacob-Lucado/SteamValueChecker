@@ -1151,3 +1151,5 @@ body.wiz-open { overflow: hidden; }
 .pill{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:99px;font-size:.62em;font-weight:700;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle;background:rgba(255,152,0,.16);color:#b86e00}
 :root[data-theme="dark"] .pill{color:#ffb74d}
 .support-btn{white-space:nowrap}
+
+.preset-img{display:block;width:100%;max-width:440px;height:auto;border-radius:12px;margin:10px 0 14px;border:1px solid var(--line,#34363b)}

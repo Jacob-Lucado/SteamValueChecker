@@ -398,3 +398,15 @@ test("default time zone is Eastern and old UTC users move over once", async () =
     // 16:54 UTC on 2026-11-04 is 11:54 in New York (EST)
     assert.equal(localParts(Date.UTC(2026, 10, 4, 16, 54)).minutes, 11 * 60 + 54);
 });
+
+test("ready-made announcements build embeds with an image and buttons", async () => {
+    const { noticePreset, NOTICE_PRESET_IDS } = await import("../src/noticepresets.js");
+    assert.deepEqual(NOTICE_PRESET_IDS, ["restart", "dev", "thanks"]);
+    for (const id of NOTICE_PRESET_IDS) {
+        const p = noticePreset(id, { base: "https://x.test/", dashboardUrl: "https://x.test", creator: { name: "J", url: "https://x.com/j" } });
+        assert.equal(p.embeds[0].image.url, `https://x.test/notice-${id}.png`);
+        assert.equal(p.components[0].components.length, 2);
+        assert.deepEqual(p.allowed_mentions, { parse: [] });
+    }
+    assert.equal(noticePreset("nope"), null);
+});

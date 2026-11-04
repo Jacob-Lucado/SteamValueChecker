@@ -48,6 +48,7 @@ import { profileCardData, renderProfileCard, renderSteamValue, renderRecap, rend
 import { PLATFORMS, THEMES, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
+import { noticePreset } from "../noticepresets.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
 import { playtestBoard } from "../playboard.js";
@@ -111,6 +112,9 @@ const FILES = {
     "/grabber-ad-hero.png": ["grabber-ad-hero.png", "image/png"],
     "/grabber-ad-cart.png": ["grabber-ad-cart.png", "image/png"],
     "/grabber-ad-paid.png": ["grabber-ad-paid.png", "image/png"],
+    "/notice-restart.png": ["notice-restart.png", "image/png"],
+    "/notice-dev.png": ["notice-dev.png", "image/png"],
+    "/notice-thanks.png": ["notice-thanks.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
@@ -530,7 +534,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
     let broadcasterInstance = null;
     const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
         guildInfo: id => { const g = (guildList ? guildList() : []).find(x => x.id === id); return g ? { name: g.name, icon: g.icon ?? null } : null; },
-        sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p), promoPayload: () => grabberPromo({ base: config.publicUrl, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: config.publicUrl }) }));
+        sendDm: (id, p) => dm(id, p), sendChannel: (id, p) => rest.sendMessage(id, p), presetPayload: id => noticePreset(id, { base: config.publicUrl, dashboardUrl: config.publicUrl, creator: config.creator }), promoPayload: () => grabberPromo({ base: config.publicUrl, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: config.publicUrl }) }));
 
     function managerGuild(s, id) {
         const g = guildFor(s, id);
@@ -2784,7 +2788,7 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             if (audience !== "me" && body.confirm !== "SEND") throw new HttpError(400, "Type SEND to confirm.");
             const undo = audience !== "me" ? cooldown(s.userId, "broadcast") : () => {};
             try {
-                const r = broadcaster().start({ title: body.title, body: body.body, audience, promo: body.kind === "promo", mention: ["everyone", "here"].includes(body.mention) ? body.mention : "none" });
+                const r = broadcaster().start({ title: body.title, body: body.body, audience, promo: body.kind === "promo", preset: body.kind === "preset" ? String(body.preset ?? "") : null, mention: ["everyone", "here"].includes(body.mention) ? body.mention : "none" });
                 log(`Bot owner started broadcast #${r.id} to ${audience} (${r.total} recipient${r.total === 1 ? "" : "s"})`);
                 return { ...r, current: broadcaster().current() };
             } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }

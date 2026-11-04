@@ -44,7 +44,7 @@ export const noticeEmbed = (title, body, base = null, guild = null) => ({ color:
         : "Sent by the bot's owner/developer to every server using Steam Value Checker. It is not from this server's staff. Questions? Use the Support page on the dashboard." },
     ...(base ? { image: { url: `${base}/banner.png` }, thumbnail: { url: `${base}/creator.png` } } : {}) });
 
-export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, promoPayload = null, guildInfo = null, guildBanner = null, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
+export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, ownerId, promoPayload = null, presetPayload = null, guildInfo = null, guildBanner = null, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     let running = null;
 
     function counts() {
@@ -60,18 +60,20 @@ export function createBroadcaster({ publicUrl = null, db, sendDm, sendChannel, o
     }
 
     /** Starts sending and returns right away; progress is in status(). */
-    function start({ title, body, audience, promo = false, mention = "none" }) {
+    function start({ title, body, audience, promo = false, preset = null, mention = "none" }) {
         if (!AUDIENCES.includes(audience)) throw new UserError("Pick who gets it.");
         if (running) throw new UserError("A broadcast is still going out. Wait for it to finish.");
         if (promo && !promoPayload) throw new UserError("The advertisement is not available here.");
-        const { t, b } = promo ? { t: "FanaticalGrabber advertisement", b: "(advertisement)" } : clean(title, body);
+        const presetBody = preset ? presetPayload?.(preset) : null;
+        if (preset && !presetBody) throw new UserError("That announcement isn't available.");
+        const { t, b } = preset ? { t: presetBody.embeds[0].title, b: "(ready-made announcement)" } : promo ? { t: "FanaticalGrabber advertisement", b: "(advertisement)" } : clean(title, body);
         const base = publicUrl ? String(publicUrl).replace(/\/$/, "") : null;
         // @everyone / @here only ever go on the server-channel copy, never in DMs, and never on the advertisement.
-        const ping = !promo && (mention === "everyone" || mention === "here") ? mention : null;
+        const ping = !promo && !preset && (mention === "everyone" || mention === "here") ? mention : null;
         const pingBits = ping ? { content: `@${ping}`, allowed_mentions: { parse: ["everyone"] } } : { allowed_mentions: { parse: [] } };
-        const payload = promo ? promoPayload() : { embeds: [noticeEmbed(t, b, base)], allowed_mentions: { parse: [] } };
-        const chPayload = promo ? payload : { ...payload, ...pingBits };
-        const chGuild = !promo && guildInfo ? db.broadcastChannelGuilds() : new Map();
+        const payload = preset ? presetBody : promo ? promoPayload() : { embeds: [noticeEmbed(t, b, base)], allowed_mentions: { parse: [] } };
+        const chPayload = promo || preset ? payload : { ...payload, ...pingBits };
+        const chGuild = !promo && !preset && guildInfo ? db.broadcastChannelGuilds() : new Map();
         const payloadFor = async cid => {
             const info = chGuild.has(cid) ? guildInfo(chGuild.get(cid)) : null;
             if (!info?.name) return chPayload;
