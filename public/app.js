@@ -1001,7 +1001,10 @@
     root.style.setProperty("--pf-accent", p.theme.accent);
     root.style.setProperty("--pf-fg", p.theme.light ? "#1b1f2a" : "#eef1f8");
     const banner = h("div", { class: "pf-banner" + (p.banner.kind === "none" ? " none" : "") });
-    if (p.banner.kind === "game" && httpsOnly(p.banner.art)) { banner.classList.add("art"); banner.style.backgroundImage = `url("${p.banner.art}")`; }
+    if (p.banner.kind === "game" && httpsOnly(p.banner.art)) { banner.classList.add("art");
+      // Steam's header is only 460 wide and looks soft stretched across the page. The hero is much larger; where a game has none, the header underneath shows instead.
+      const hero = p.banner.art.replace(/\/header\.jpg$/, "/library_hero.jpg");
+      banner.style.backgroundImage = hero !== p.banner.art ? `url("${hero}"), url("${p.banner.art}")` : `url("${p.banner.art}")`; }
     const avatar = httpsOnly(p.avatar) ? h("img", { class: "pf-avatar", src: p.avatar, alt: "" }) : h("div", { class: "pf-avatar init", text: (p.name || "?").slice(0, 1).toUpperCase() });
     const head = h("div", { class: "pf-head" }, avatar,
       h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug })),
