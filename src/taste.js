@@ -67,4 +67,18 @@ export function recommend(db, userId, rows, profile, limit = 5) {
     return out.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
+/**
+ * How well one game fits what you actually play, as a percent, with the two genres that matter most.
+ * Needs a profile built from at least a few tagged library games, otherwise it says nothing rather than guess.
+ */
+export function matchScore(profile, tags) {
+    if (!profile?.genres?.length || profile.tagged < 3 || !tags?.genres?.length) return null;
+    const share = new Map(profile.genres.map(g => [g.name, g.share]));
+    const matched = tags.genres.filter(g => share.has(g)).sort((a, b) => share.get(b) - share.get(a));
+    const top = profile.genres.slice(0, 3).reduce((a, g) => a + g.share, 0);
+    const got = matched.reduce((a, g) => a + share.get(g), 0);
+    const pct = Math.max(matched.length ? 8 : 0, Math.min(100, Math.round(got / Math.max(0.05, Math.min(0.6, top)) * 100)));
+    return { pct, matched: matched.slice(0, 2) };
+}
+
 export const tasteWhy = r => `Fits your ${r.matched.join(" and ")} games${r.discount > 0 ? `, ${Math.round(r.discount * 100)}% off now` : ""}`;

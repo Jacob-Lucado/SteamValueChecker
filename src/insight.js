@@ -27,5 +27,25 @@ export function priceInsight(points, price, { now = Date.now(), currency = "USD"
     if (price <= low * 1.02) { text = `Matches its 12-month low (${money(low)}). Good time to buy.`; level = "great"; }
     else if (price <= median * 0.9) { text = `Cheaper than usual (typically ${money(median)}). Its 12-month low is ${money(low)}.`; level = "good"; }
     else { text = `Usually cheaper: it hit ${money(low)} in ${MONTH[new Date(lowAt.t).getUTCMonth()]}. You may want to wait.`; level = "wait"; }
-    return { spark, text, level, low, median };
+    const next = nextSale(points, now);
+    return { spark, text: next ? `${text}\n📅 ${next.text}` : text, level, low, median, next };
+}
+
+/**
+ * A guess at when the next sale starts, from how often this game has dropped in price before.
+ * Needs at least three drops in the history, and says plainly that it is a guess.
+ */
+export function nextSale(points, now = Date.now()) {
+    const pts = (points ?? []).filter(p => Number.isFinite(p.price) && Number.isFinite(p.t)).sort((a, b) => a.t - b.t);
+    const starts = [];
+    for (let i = 1; i < pts.length; i++) if (pts[i].price <= pts[i - 1].price * 0.9 && (!starts.length || pts[i].t - starts[starts.length - 1] > 5 * DAY)) starts.push(pts[i].t);
+    if (starts.length < 3) return null;
+    const gaps = starts.slice(1).map((t, i) => t - starts[i]).sort((a, b) => a - b);
+    const gap = gaps[Math.floor(gaps.length / 2)];
+    if (gap < 10 * DAY) return null;
+    const last = starts[starts.length - 1];
+    const at = last + gap > now ? last + gap : now + (gap - ((now - last) % gap));
+    const d = new Date(at), part = d.getUTCDate() <= 10 ? "early" : d.getUTCDate() <= 20 ? "mid" : "late";
+    const weeks = Math.round(gap / (7 * DAY));
+    return { at, text: `It has dropped about every ${weeks} week${weeks === 1 ? "" : "s"}. A guess for the next one: ${part} ${MONTH[d.getUTCMonth()]}.` };
 }

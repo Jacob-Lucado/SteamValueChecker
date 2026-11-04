@@ -840,6 +840,8 @@
     const qe = h("input", { type: "time", value: s.quiet_end || "" });
     const tz = h("input", { type: "text", value: s.tz && s.tz !== "UTC" ? s.tz : myTz, maxlength: "60" });
     const minDisc = h("input", { type: "number", min: "0", max: "90", step: "5", value: String(s.min_discount || 0), class: "short-num", "aria-label": "Minimum discount percent" });
+    const maxPrice = h("input", { type: "number", min: "0", max: "1000", step: "1", value: String(s.max_price || 0), class: "short-num", "aria-label": "Highest price worth an alert" });
+    const lowsOnly = h("input", { type: "checkbox", checked: Boolean(s.lows_only) });
     const digest = h("input", { type: "checkbox", checked: s.digest });
     const digestDay = select(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => [String(i), d]), String(s.digest_day));
     const bundles = h("input", { type: "checkbox", checked: s.bundles });
@@ -878,7 +880,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
+        max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -892,6 +894,8 @@
         h("label", { class: "check" }, ch, "Server alert channel only. You are mentioned there, and everyone who can see the channel sees the game name."),
         field("Server for the alert channel", server), h("p", { class: "muted small", text: "Alerts that cannot be sent by DM go to this server's alert channel." }),
         field("Only alert for sales of at least this percent off (0 = any; starred games always come through)", minDisc),
+        field("Only alert when the price is at or under this amount, in your store's currency (0 = no limit; starred games always come through)", maxPrice),
+        h("label", { class: "check" }, lowsOnly, "Only alert for record lows (the lowest price ever seen; starred games always come through)"),
         h("label", { class: "check" }, paused, "Pause all alerts (your wishlist is kept)")),
       h("div", { class: "panel" },
         h("h3", { text: "Prices" }),

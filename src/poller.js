@@ -2,6 +2,7 @@
 // One price lookup per game and region, no matter how many people watch it.
 
 import { summarize } from "./report.js";
+import { tasteProfile, matchScore } from "./taste.js";
 import { evaluate, describeTrigger, dealVerdict, meaningfulDrop } from "./alerts.js";
 import { protonTier } from "./proton.js";
 import { steamReviews } from "./reviews.js";
@@ -61,6 +62,9 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
         if (result.action !== "alert") continue;
         // A member can ask for sales of at least some percent. Starred games always come through, and nothing is marked as sent, so a deeper cut still alerts.
         if (it.min_discount > 0 && !it.priority && (result.now.discount ?? 0) * 100 < it.min_discount - 0.001) continue;
+        // Same idea for a price ceiling and for "record lows only".
+        if (it.max_price > 0 && !it.priority && (result.now.price ?? 0) > it.max_price + 0.005) continue;
+        if (it.lows_only && !it.priority && !(result.now.atl !== null && result.now.price <= result.now.atl + 0.005)) continue;
         const hit = { item: it, now: result.now, reason: result.reason };
         eligible.push(hit);
         if (!perUser.has(it.discord_id)) perUser.set(it.discord_id, []);
@@ -77,10 +81,12 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
         stats.deferred += list.length - sendable.length;
         if (!sendable.length) continue;
         for (const part of chunked(sendable, MAX_CARDS)) {
+            const profile = part.some(h => h.item.appid) ? (() => { try { return tasteProfile(db, userId); } catch { return null; } })() : null;
             // History is fetched only for alerts that are really being sent, and a failure just leaves the note off.
             await Promise.all(part.map(async h => {
                 try { h.insight = priceInsight(await itad.getHistory?.(h.item.itad_id, h.item.region ?? "US"), h.now.price, { now: now(), money: n => `${n.toFixed(2)} ${h.now.currency ?? "USD"}` }); }
                 catch { h.insight = null; }
+                try { h.match = h.item.appid ? matchScore(profile, db.getAppTags([h.item.appid]).get(h.item.appid)) : null; } catch { h.match = null; }
                 h.proton = await protonTier(h.item.appid).catch(() => null);
                 h.reviews = await steamReviews(h.item.appid).catch(() => null);
             }));

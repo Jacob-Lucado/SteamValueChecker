@@ -162,3 +162,42 @@ test("the weekly digest links each game and keeps the games for the dashboard to
     const row = db.listNotifications("5550001")[0];
     assert.equal(JSON.parse(row.extra).items.length, 2);
 });
+
+test("price ceiling and record-lows-only hold alerts back, and starred games always come through", async () => {
+    const t = setup({ prices: { a: { deals: [deal(30, 60)] }, b: { deals: [deal(8, 10)] } } });
+    on(t.db, "u1", ["a", "b"]);
+    t.db.updateUser("u1", { max_price: 10 });
+    const s1 = await runCycle(t);
+    assert.equal(s1.delivered, 1, "only the 8 dollar game is under the ceiling");
+    t.db.updateUser("u1", { max_price: 0, lows_only: 1 });
+    const s2 = await runCycle(t);
+    assert.equal(s2.delivered, 0, "neither price is a record low");
+    t.db.setPriority("u1", "a", 1);
+    const s3 = await runCycle(t);
+    assert.equal(s3.delivered, 1, "starred games ignore the filters");
+});
+
+test("match score: fits are shown only with enough library data, and rank by how much you play", async () => {
+    const { matchScore } = await import("../src/taste.js");
+    const profile = { tagged: 5, genres: [{ name: "RPG", share: 0.5 }, { name: "Action", share: 0.3 }, { name: "Indie", share: 0.2 }] };
+    assert.equal(matchScore({ ...profile, tagged: 1 }, { genres: ["RPG"] }), null);
+    assert.equal(matchScore(profile, null), null);
+    const rpg = matchScore(profile, { genres: ["RPG", "Action"] });
+    const racing = matchScore(profile, { genres: ["Racing"] });
+    assert.ok(rpg.pct > 80 && racing.pct === 0, JSON.stringify([rpg, racing]));
+    assert.deepEqual(rpg.matched, ["RPG", "Action"]);
+    const e = alertEmbed({ title: "G", id: 1 }, { price: 5, regular: 10, discount: 0.5, currency: "USD", shop: "Steam" }, { trigger: "any sale", match: rpg });
+    assert.ok(e.fields.some(f => f.name.includes("Match")));
+});
+
+test("next likely sale is a guess from past drops, and stays quiet without enough of them", async () => {
+    const { nextSale, priceInsight } = await import("../src/insight.js");
+    const DAY = 86400_000, now = Date.UTC(2026, 10, 4);
+    const at = d => now - d * DAY;
+    const pts = [{ t: at(330), price: 20 }, { t: at(300), price: 10 }, { t: at(290), price: 20 }, { t: at(210), price: 10 }, { t: at(200), price: 20 }, { t: at(120), price: 10 }, { t: at(110), price: 20 }];
+    const n = nextSale(pts, now);
+    assert.match(n.text, /about every 13 weeks/);
+    assert.ok(n.at > now);
+    assert.equal(nextSale(pts.slice(0, 4), now), null);
+    assert.match(priceInsight(pts, 20, { now }).text, /📅/);
+});

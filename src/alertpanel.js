@@ -35,6 +35,7 @@ export const TOGGLES = [
 const NEWS = ["Off", "Patch notes only", "Every announcement"];
 const PLAYTEST = ["Off", "Only games on my wishlist", "Every playtest and demo the bot finds"];
 const MINS = [0, 10, 25, 40, 50, 60, 75, 90];
+const CAPS = [0, 5, 10, 15, 20, 30, 40, 60];
 const onOff = v => (v ? "On" : "Off");
 
 export function alertPanel({ db }) {
@@ -61,7 +62,7 @@ export function alertPanel({ db }) {
                 `🎟️ **Game codes for:** ${fam.length === GAME_FAMILIES.length ? "every game" : fam.length ? fam.map(f => f.title).join(", ") : "none picked"}`].join("\n") };
         }
         return { ...base, title: "Your alerts · When", description: [head, "", `🌙 **Quiet hours:** ${describeQuiet(u)}`, `🗓️ **Weekly digest:** ${describeDigest(u)}`,
-            `🏷️ **Minimum discount:** ${u.min_discount ? `${u.min_discount}% (starred games always come through)` : "any"}`, `🌐 **Time zone:** ${u.tz ?? DEFAULT_TZ}`].filter(x => x !== null).join("\n") };
+            `🏷️ **Minimum discount:** ${u.min_discount ? `${u.min_discount}% (starred games always come through)` : "any"}`, `💲 **Price ceiling:** ${u.max_price ? `${u.max_price} or less (starred games always come through)` : "no limit"}`, `📉 **Record lows only:** ${u.lows_only ? "on" : "off"}`, `🌐 **Time zone:** ${u.tz ?? DEFAULT_TZ}`].filter(x => x !== null).join("\n") };
     }
 
     function componentsFor(page, u) {
@@ -96,7 +97,8 @@ export function alertPanel({ db }) {
         return [
             rowOf(select(ID, "digest", "", "Weekly digest", [{ label: "Digest off", value: "off", default: !u.digest }, ...WEEKDAYS.map((d, v) => ({ label: `Digest every ${d}`, value: v, default: !!u.digest && u.digest_day === v }))])),
             rowOf(select(ID, "mindisc", "", "Smallest sale worth an alert", MINS.map(v => ({ label: v ? `At least ${v}% off` : "Any discount", value: v, default: (u.min_discount ?? 0) === v })))),
-            rowOf(button(ID, "Set quiet hours", "quiet", "", { emoji: "🌙", style: ButtonStyle.Primary }), button(ID, "Quiet hours off", "quietoff", "", { disabled: u.quiet_start === null || u.quiet_start === undefined })),
+            rowOf(select(ID, "maxprice", "", "Highest price worth an alert", CAPS.map(v => ({ label: v ? `Up to ${v} (your store's currency)` : "No price limit", value: v, default: (u.max_price ?? 0) === v })))),
+            rowOf(button(ID, "Set quiet hours", "quiet", "", { emoji: "🌙", style: ButtonStyle.Primary }), button(ID, "Quiet hours off", "quietoff", "", { disabled: u.quiet_start === null || u.quiet_start === undefined }), button(ID, u.lows_only ? "Record lows only: on" : "Record lows only: off", "lowsonly", "", { emoji: "📉", style: u.lows_only ? ButtonStyle.Success : ButtonStyle.Secondary })),
             nav
         ];
     }
@@ -141,6 +143,7 @@ export function alertPanel({ db }) {
                     return { page: "timing", notice: values[0] === "off" ? "Digest off." : "Digest on." };
                 }
                 case "mindisc": up(prefsPatch({ min_discount: Number(values[0]) }, u)); return { page: "timing", notice: "Saved." };
+                case "maxprice": up(prefsPatch({ max_price: Number(values[0]) }, u)); return { page: "timing", notice: "Saved." };
                 case "mute": up({ muted: values.join(",") }); return { page: "more", notice: values.length ? "Muted." : "Nothing is muted now." };
                 case "codegames": {
                     const games = expandGames(values), all = GAME_FAMILIES.flatMap(f => f.games);
@@ -149,6 +152,7 @@ export function alertPanel({ db }) {
                 }
                 case "history": await i.reply({ embeds: [alertHistoryEmbed(ctx.db.listAlerts(u.discord_id, 15))], flags: 64 }); return { done: true };
                 case "quiet": return { modal: modal(u) };
+                case "lowsonly": up(prefsPatch({ lows_only: !u.lows_only }, u)); return { page: "timing", notice: u.lows_only ? "You'll get every sale that meets your alert again." : "Only record lows will alert you now (starred games still come through)." };
                 case "quietoff": up({ quiet_start: null, quiet_end: null }); return { page: "timing", notice: "Quiet hours are off." };
                 case "quietm": {
                     const f = k => { try { return i.fields.getTextInputValue(k).trim(); } catch { return ""; } };

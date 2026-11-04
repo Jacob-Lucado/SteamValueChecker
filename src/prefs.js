@@ -48,6 +48,12 @@ export function prefsPatch(input, user) {
         if (!Number.isInteger(d) || d < 0 || d > 90) throw new UserError("Pick a minimum discount from 0 to 90 percent (0 means any discount).");
         patch.min_discount = d;
     }
+    if (has("max_price")) {
+        const d = Number(input.max_price);
+        if (!Number.isFinite(d) || d < 0 || d > 1000) throw new UserError("Pick a price ceiling from 0 to 1000 (0 means no limit).");
+        patch.max_price = Math.round(d * 100) / 100;
+    }
+    if (has("lows_only")) patch.lows_only = input.lows_only ? 1 : 0;
     if (has("bundles")) patch.bundles = input.bundles ? 1 : 0;
     if (has("share")) patch.share = input.share ? 1 : 0;
     if (has("free")) patch.free = input.free ? 1 : 0;
@@ -80,7 +86,7 @@ export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? DEFAULT_TZ,
         digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, playtest: u.playtest ?? 0, achv: Boolean(u.achv), nowplaying: Boolean(u.nowplaying), nudge: Boolean(u.nudge), yearly: Boolean(u.yearly), refund: Boolean(u.refund), milestones: Boolean(u.milestones), dlc: Boolean(u.dlc),
-        min_discount: u.min_discount ?? 0, muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
+        min_discount: u.min_discount ?? 0, max_price: u.max_price ?? 0, lows_only: Boolean(u.lows_only), muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
     };
 }
 

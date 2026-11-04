@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.17", date: "2026-11-17", title: "Smarter alerts", items: [
+        "**Match score:** each sale alert now shows how well the game fits what you actually play, worked out from your Steam library hours and the game's genres. It only shows once you have a linked library to compare against.",
+        "**Next likely sale:** the price history note adds a rough guess of when the next sale might start, based on how often that game has dropped before. It says plainly that it is a guess.",
+        "**Price ceiling:** set the highest price you'd pay and alerts above it stay quiet. It is on the alert settings page, in `/alerts` and in the dashboard.",
+        "**Record lows only:** one switch to hear only about all-time lows. Starred games always come through, whatever you set.",
+        "**Ready-made announcements and a time zone default:** times now default to Eastern, and the bot owner can send restart, development and thank-you notices in one click."
+    ] },
     { version: "2026.11.16", date: "2026-11-16", title: "AI companion (coming soon)", items: [
         "**Coming soon, with a preview already working:** the full AI turns on when the bot owner adds an AI key. Until then, when a server turns the companion on, the bot answers the common questions itself: game prices, the free games right now, your wishlist, your library and what to play next. Anything else gets a polite “coming soon” and a list of what works.",
         "**Ask the bot anything:** say `Hey AI` followed by a question, or mention the bot, and it answers in the channel. It is off until a server manager turns it on under Community in the dashboard (or `/manage community ai`), and managers can limit it to one channel.",

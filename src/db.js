@@ -219,6 +219,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         db.prepare("UPDATE users SET tz = ? WHERE tz = 'UTC'").run(DEFAULT_TZ);
         db.prepare("INSERT OR REPLACE INTO status_meta (key, value) VALUES ('tz:default:v1', '1')").run();
     }
+    addColumn("users", "max_price", "REAL NOT NULL DEFAULT 0");
+    addColumn("users", "lows_only", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "digest", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "digest_day", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "last_digest_at", "INTEGER");
@@ -358,7 +360,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "nowplaying", "share", "free", "free_dlc", "min_discount", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -459,7 +461,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
            FROM items i JOIN users u ON u.discord_id = i.discord_id
           WHERE u.paused = 0 AND i.release_wait = 1 AND i.release_at IS NOT NULL AND i.release_at <= ? AND i.release_at > ? AND (i.snooze_until IS NULL OR i.snooze_until < ?)`, now(), now() - 7 * 86400_000, now()).map(clean);
     const activeItems = () => all(
-        `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.bundles, u.share, u.min_discount
+        `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.bundles, u.share, u.min_discount, u.max_price, u.lows_only
            FROM items i JOIN users u ON u.discord_id = i.discord_id
           WHERE u.paused = 0 AND (i.snooze_until IS NULL OR i.snooze_until < ?)
             AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = i.discord_id AND l.itad_id = i.itad_id)`,
