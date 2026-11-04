@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { noticePreset } from "./noticepresets.js";
 import { asksCreator, creatorEmbed } from "./aicreator.js";
 import { missingAiPerms, permsNotice, shouldTell } from "./aiperms.js";
 import v8 from "node:v8";
@@ -847,6 +848,7 @@ if (cfg.dashboard) {
     }), brandOpts);
     // One broadcaster for the dashboard's Admin page and /bot grabberad, so only one announcement or promotion goes out at a time.
 const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), sendChannel: (id, p) => discord.sendChannel(id, p),
+    presetPayload: id => noticePreset(id, { base: publicBase, dashboardUrl: publicBase, creator: cfg.creator }),
     guildInfo: id => { const g = client.guilds.cache.get(id); return g ? { name: g.name, icon: g.iconURL({ extension: "png", size: 256 }) } : null; },
     guildBanner: async info => {
         const art = await artFor([info.icon]);
