@@ -144,7 +144,7 @@
   // and the bar stays short.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["platforms", "Other platforms"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
+    { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
@@ -2037,32 +2037,6 @@
     }
     load();
     return box;
-  }
-
-  // ---------- other platforms ----------
-  // Libraries from places other than Steam. A key is used once to read the game list and is never stored.
-  async function platformsView() {
-    const out = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Other platforms", "Add the games you own on itch.io and Xbox to your library, next to Steam. Your key is used once to read the list and then thrown away."), out);
-    let d;
-    try { d = await api("/api/platforms"); } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
-    const card = p => {
-      const head = h("h3", { text: `${p.icon} ${p.label}` });
-      const count = h("span", { class: "pill", text: p.games ? `${p.games} game${p.games === 1 ? "" : "s"} in your library` : "Not synced yet" });
-      if (!p.canSync) return h("div", { class: "panel" }, head, h("p", { class: "muted", text: p.why }), h("p", {}, h("a", { href: "#/library", text: "Go to My library" }), " to paste titles or upload a file."));
-      const key = h("input", { type: "password", autocomplete: "off", spellcheck: "false", placeholder: p.keyLabel, maxlength: "200", "aria-label": p.keyLabel });
-      const result = h("div");
-      const btn = h("button", { class: "btn blue", text: p.games ? "Sync again" : "Sync " + p.label, onclick: () => busy(btn, async () => {
-        const r = await api("/api/platforms/sync", { platform: p.id, key: key.value });
-        key.value = "";
-        result.replaceChildren(h("div", { class: "notice ok", text: `Found ${r.found} games. Added ${r.added}, already there ${r.updated}.${r.skippedForLimit ? ` ${r.skippedForLimit} didn't fit under the library limit.` : ""}` }),
-          r.notFound.length ? h("p", { class: "muted small", text: `Couldn't match ${r.notFound.length}: ${r.notFound.slice(0, 8).join(", ")}${r.notFound.length > 8 ? "…" : ""}` }) : null);
-        toast("Library updated.", "ok");
-      }) });
-      return h("div", { class: "panel" }, head, count, h("p", { class: "muted", text: p.how }), field(p.keyLabel, key), h("p"), btn, result);
-    };
-    out.className = ""; out.replaceChildren(h("div", { class: "grid" }, d.platforms.map(card)),
-      h("p", { class: "muted small", text: `Steam stays on its own page (${d.steam} games synced there). Only the game titles are kept, never your key. Remove synced games any time from My library.` }));
   }
 
   async function steamView() {
@@ -6176,7 +6150,7 @@
     load();
   }
 
-  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, platforms: platformsView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
+  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

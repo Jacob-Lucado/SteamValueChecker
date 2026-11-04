@@ -2188,28 +2188,3 @@ test("console prices: the dashboard endpoint returns both stores for the member'
     assert.equal((await t.request("/api/consoles?game=")).status, 400);
     await t.close();
 });
-
-test("other platforms: itch.io and Xbox keys are used once, games land in the library tagged by platform, bad keys are explained", async () => {
-    const { itchGames, xboxGames, syncPlatform } = await import("../src/platforms.js");
-    const itchBody = { owned_keys: [{ game: { title: "Celeste Jam" } }, { game: { title: "Night In The Woods" } }, { game: { title: "celeste jam" } }] };
-    const f = async url => {
-        if (url.includes("itch.io/api/1/GOODKEY1234/")) return { ok: true, status: 200, json: async () => itchBody };
-        if (url.includes("itch.io")) return { ok: false, status: 403 };
-        if (url.includes("xbl.io")) return { ok: true, status: 200, json: async () => ({ titles: [{ name: "Halo Infinite", devices: ["Xbox", "PC"] }, { name: "Some Phone App", devices: ["Mobile"] }] }) };
-        throw new Error("unexpected");
-    };
-    assert.deepEqual(await itchGames("GOODKEY1234", f), [{ title: "Celeste Jam" }, { title: "Night In The Woods" }]);
-    assert.deepEqual(await xboxGames("XBOXKEY12345", f), [{ title: "Halo Infinite" }]);
-    await assert.rejects(itchGames("BADKEY123456", f), /refused/);
-
-    const t = await signedIn({ config: { platformFetch: f } });
-    const post = body => t.request("/api/platforms/sync", { method: "POST", body });
-    const ok = await post({ platform: "itch", key: "GOODKEY1234" });
-    assert.equal(ok.status, 200); assert.equal(ok.data.found, 2); assert.equal(ok.data.added, 2);
-    const list = (await t.request("/api/platforms")).data;
-    assert.equal(list.platforms.find(p => p.id === "itch").games, 2);
-    assert.equal(list.platforms.find(p => p.id === "gog").canSync, false);
-    assert.equal((await post({ platform: "itch", key: "short" })).status, 400);
-    assert.equal((await post({ platform: "ps", key: "GOODKEY1234" })).status, 400);
-    await t.close();
-});

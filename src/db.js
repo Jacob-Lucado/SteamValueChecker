@@ -219,7 +219,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         db.prepare("UPDATE users SET tz = ? WHERE tz = 'UTC'").run(DEFAULT_TZ);
         db.prepare("INSERT OR REPLACE INTO status_meta (key, value) VALUES ('tz:default:v1', '1')").run();
     }
-    addColumn("library", "platform", "TEXT");
     addColumn("users", "max_price", "REAL NOT NULL DEFAULT 0");
     addColumn("users", "lows_only", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "digest", "INTEGER NOT NULL DEFAULT 0");
@@ -517,7 +516,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const countLibrary = id => get("SELECT COUNT(*) AS n FROM library WHERE discord_id = ?", id).n;
     const listLibrary = id => all("SELECT * FROM library WHERE discord_id = ? ORDER BY title COLLATE NOCASE", id).map(clean);
     /** Adds or updates games. Returns { added, updated, skippedForLimit }. */
-    const libraryPlatforms = discordId => all("SELECT COALESCE(platform, 'other') AS platform, COUNT(*) AS n FROM library WHERE discord_id = ? GROUP BY COALESCE(platform, 'other')", discordId);
     function upsertLibrary(discordId, games) {
         let added = 0, updated = 0, skippedForLimit = 0;
         let n = countLibrary(discordId);
@@ -526,14 +524,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             for (const g of games) {
                 const have = get("SELECT id FROM library WHERE discord_id = ? AND itad_id = ?", discordId, g.itad_id);
                 if (have) {
-                    // A platform sync only says "you own this", so it must not wipe a price someone already filled in.
-                    if (g.keepPaid) run("UPDATE library SET platform = COALESCE(platform, ?) WHERE id = ?", g.platform ?? null, have.id);
-                    else run("UPDATE library SET paid = ?, title = ? WHERE id = ?", g.paid ?? null, g.title, have.id);
+                    run("UPDATE library SET paid = ?, title = ? WHERE id = ?", g.paid ?? null, g.title, have.id);
                     updated++;
                 } else if (n >= MAX_LIBRARY_PER_USER) {
                     skippedForLimit++;
                 } else {
-                    run("INSERT INTO library (discord_id, itad_id, title, paid, added_at, platform) VALUES (?,?,?,?,?,?)", discordId, g.itad_id, g.title, g.paid ?? null, now(), g.platform ?? null);
+                    run("INSERT INTO library (discord_id, itad_id, title, paid, added_at) VALUES (?,?,?,?,?)", discordId, g.itad_id, g.title, g.paid ?? null, now());
                     n++; added++;
                 }
             }
@@ -795,7 +791,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
-        countLibrary, listLibrary, libraryPlatforms, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
+        countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()

@@ -49,7 +49,6 @@ import { PLATFORMS, THEMES, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
 import { consolePrices } from "../consoleprices.js";
-import { PLATFORMS as LIBRARY_PLATFORMS, syncPlatform } from "../platforms.js";
 import { noticePreset } from "../noticepresets.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { createNews, newsForUser } from "../news.js";
@@ -1417,20 +1416,6 @@ export function createDashboard({ emojigg = null, news = null, abg = null, nowPl
             const clean = sanitize(entries, { max: 500 }).entries;
             if (!clean.length) throw new HttpError(400, "I need game titles, not keys.");
             return await importLibrary(db, itad, s.userId, clean);
-        },
-
-        "GET /api/platforms": async (req) => {
-            const s = session(req);
-            userRow(s);
-            const have = new Map(db.libraryPlatforms(s.userId).map(r => [r.platform, r.n]));
-            return { platforms: LIBRARY_PLATFORMS.map(p => ({ id: p.id, label: p.label, icon: p.icon, canSync: Boolean(p.load), keyLabel: p.keyLabel ?? null, how: p.how ?? null, why: p.why ?? null, games: have.get(p.id) ?? 0 })), steam: db.listLibrary(s.userId).filter(g => g.appid).length };
-        },
-        "POST /api/platforms/sync": async (req, body) => {
-            const s = session(req);
-            cooldown(s.userId, "platsync");
-            userRow(s);
-            try { return await syncPlatform({ db, itad, userId: s.userId, platform: String(body.platform ?? ""), key: body.key, fetchFn: config.platformFetch ?? globalThis.fetch }); }
-            catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
         },
 
         "GET /api/redeem": async (req) => {
