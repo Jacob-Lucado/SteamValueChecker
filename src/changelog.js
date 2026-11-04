@@ -2,7 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.14", date: "2026-11-14", title: "Public profiles", items: [
         "**Your own profile page:** build it under Account, My profile, with a live preview. Pick a theme and accent colour, background, layout and banner, write a bio, add up to six links (Twitch, Kick, YouTube, X, Bluesky, Steam, GitHub or a website) and pin up to five favorite games. Share it at `/u/yourname`; it shows a proper preview card when pasted into Discord.",
-        "**Profile song:** set a YouTube, SoundCloud or Spotify link and visitors get a play button on your page. Browsers do not allow sound to start on its own, so it plays when they press it.",
+        "**Profile song:** set a YouTube, SoundCloud or Spotify link, or the address of a live radio stream, and visitors get a play button on your page. Turn on the optional **Click to enter** screen and the song starts the moment they click it.",
         "**You choose who sees each part:** about, favorites, wishlist, recently finished, trophies, Steam stats, streaming and playing now are each public, server only or hidden, and can be reordered. Hidden parts are never sent to visitors.",
         "**`/me profile`:** view, bio, name, look, song, link, unlink, favorite, unfavorite and show, all from Discord. Visitors can report a page, and moderators can hide one from the Admin area.",
     ] },

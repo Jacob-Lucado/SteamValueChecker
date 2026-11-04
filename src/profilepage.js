@@ -57,8 +57,8 @@ export function cleanLink(kind, raw) {
 }
 
 // ---------------------------------------------------------------- the profile song
-// Only three places, and only addresses we can turn into their official embed. Playing starts when a visitor presses the button,
-// because browsers block sound that starts by itself.
+// YouTube, SoundCloud and Spotify (through their official embeds) or a live radio stream address. Playing starts when a visitor
+// presses the button.
 export function cleanSong(input) {
     if (input === null || input === undefined || input === "" || input.url === "" || input.url === null) return null;
     const raw = String(typeof input === "string" ? input : input.url ?? "").trim();
@@ -66,6 +66,7 @@ export function cleanSong(input) {
     let u; try { u = new URL(/^https?:\/\//i.test(raw) ? raw : "https://" + raw); } catch { throw new UserError("That doesn't look like a link."); }
     if (u.protocol !== "https:") throw new UserError("Song links must start with https://.");
     const host = u.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
+    if (!["youtu.be", "youtube.com", "music.youtube.com", "soundcloud.com", "open.spotify.com"].includes(host)) return radioStream(u, title);
     if (host === "youtu.be" || host === "youtube.com" || host === "music.youtube.com") {
         const id = host === "youtu.be" ? u.pathname.slice(1).split("/")[0] : u.searchParams.get("v") ?? (/^\/(shorts|embed)\/([\w-]{11})/.exec(u.pathname) ?? [])[2];
         if (!/^[\w-]{11}$/.test(id ?? "")) throw new UserError("Paste a YouTube video link, like https://youtu.be/dQw4w9WgXcQ.");
@@ -81,7 +82,18 @@ export function cleanSong(input) {
         if (!m) throw new UserError("Paste a Spotify track, album or playlist link.");
         return { provider: "spotify", id: m[2], kind: m[1], title };
     }
-    throw new UserError("Songs can come from YouTube, SoundCloud or Spotify.");
+    throw new UserError("Paste a YouTube, SoundCloud or Spotify link, or the address of a live radio stream.");
+}
+
+/** A live radio stream: the direct https address of an Icecast, Shoutcast or similar stream. The visitor's browser plays it in a plain audio tag. */
+function radioStream(u, title) {
+    const host = u.hostname.toLowerCase();
+    if (!host.includes(".") || /^[\d.]+$/.test(host) || host.includes(":") || host.startsWith("[") || /(^|\.)(localhost|local|internal|lan)$/.test(host)) throw new UserError("Use a stream address with a real domain name.");
+    if (u.username || u.password) throw new UserError("Leave the username and password out of the link.");
+    if (/\.(m3u8?|pls|asx|xspf)$/i.test(u.pathname)) throw new UserError("That is a playlist file. Open it, copy the stream address inside (it ends in something like /stream or .mp3), and paste that.");
+    const href = u.href;
+    if (href.length > 300) throw new UserError("That link is too long.");
+    return { provider: "radio", id: href, title };
 }
 
 /** The official embed address for a saved song. Built only from the validated pieces above. */
@@ -92,7 +104,7 @@ export function songEmbed(song) {
     if (song.provider === "spotify") return `https://open.spotify.com/embed/${song.kind}/${song.id}?utm_source=generator`;
     return null;
 }
-export const songLink = song => (!song ? null : song.provider === "youtube" ? `https://youtu.be/${song.id}` : song.provider === "soundcloud" ? `https://soundcloud.com/${song.id}` : `https://open.spotify.com/${song.kind}/${song.id}`);
+export const songLink = song => (!song ? null : song.provider === "radio" ? song.id : song.provider === "youtube" ? `https://youtu.be/${song.id}` : song.provider === "soundcloud" ? `https://soundcloud.com/${song.id}` : `https://open.spotify.com/${song.kind}/${song.id}`);
 
 // ---------------------------------------------------------------- the whole profile
 export function cleanProfile(input, prev = {}) {
@@ -117,6 +129,7 @@ export function cleanProfile(input, prev = {}) {
         out.favorites = [...new Set(input.favorites.map(x => clean(x, 80)).filter(Boolean))].slice(0, 5);
     }
     if (has("song")) out.song = cleanSong(input.song);
+    if (has("enter")) out.enter = Boolean(input.enter);
     if (has("sections")) {
         if (!Array.isArray(input.sections)) throw new UserError("Sections should be a list.");
         const seen = new Set(), list = [];
@@ -137,7 +150,7 @@ export function withDefaults(data = {}) {
         name: data.name ?? "", bio: data.bio ?? "", theme: PROFILE_THEMES[data.theme] ? data.theme : "night", accent: HEX.test(data.accent ?? "") ? data.accent : null,
         bgstyle: BG_STYLES.includes(data.bgstyle) ? data.bgstyle : "gradient", layout: LAYOUTS.includes(data.layout) ? data.layout : "classic",
         banner: ["gradient", "game", "none"].includes(data.banner) ? data.banner : "gradient", avatar: Boolean(data.avatar),
-        links: data.links ?? [], favorites: data.favorites ?? [], song: data.song ?? null,
+        enter: Boolean(data.enter), links: data.links ?? [], favorites: data.favorites ?? [], song: data.song ?? null,
         sections: Array.isArray(data.sections) && data.sections.length ? data.sections : DEFAULT_SECTIONS
     };
 }
@@ -189,8 +202,9 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
         } catch { /* one broken section should not take the page down */ }
     }
     const bannerGame = cfg.banner === "game" ? favs.find(f => f.art)?.art ?? null : null;
-    const song = cfg.song && canSee("public", viewer) ? { provider: cfg.song.provider, title: cfg.song.title || "", embed: songEmbed(cfg.song), link: songLink(cfg.song) } : null;
+    const song = cfg.song && canSee("public", viewer) ? { provider: cfg.song.provider, title: cfg.song.title || "", embed: songEmbed(cfg.song), stream: cfg.song.provider === "radio" ? cfg.song.id : null, link: cfg.song.provider === "radio" ? null : songLink(cfg.song) } : null;
     return {
+        enter: Boolean(song && cfg.enter),
         slug: owner.profile_slug, name: cfg.name || owner.profile_slug, bio: cfg.bio, avatar: cfg.avatar && steam?.avatar ? steam.avatar : null,
         theme: { key: cfg.theme, bg: theme.bg, accent: cfg.accent ?? theme.accent, light: theme.light, bgstyle: cfg.bgstyle, layout: cfg.layout },
         banner: { kind: cfg.banner, art: bannerGame },

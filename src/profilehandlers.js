@@ -44,10 +44,13 @@ export function createProfileHandlers({ db, publicUrl = null }) {
                 }
                 case "song": {
                     if (i.options.getBoolean("remove")) { save(u, { song: null }); return reply(i, "Profile song removed.", u); }
-                    const url = i.options.getString("url");
-                    if (!url) throw new UserError("Paste a YouTube, SoundCloud or Spotify link, or use remove:true.");
-                    save(u, { song: { url, title: i.options.getString("title") ?? "" } });
-                    return reply(i, "Profile song set. Visitors press play to hear it.", u);
+                    const url = i.options.getString("url"), enter = i.options.getBoolean("enter");
+                    if (!url && enter === null) throw new UserError("Paste a YouTube, SoundCloud or Spotify link or a live radio stream address, or use remove:true.");
+                    const patch = {};
+                    if (url) patch.song = { url, title: i.options.getString("title") ?? "" };
+                    if (enter !== null) patch.enter = enter;
+                    save(u, patch);
+                    return reply(i, url ? "Profile song set." : enter ? "The Click to enter screen is on." : "The Click to enter screen is off.", u);
                 }
                 case "link": {
                     const l = cleanLink(i.options.getString("kind", true), i.options.getString("url", true));

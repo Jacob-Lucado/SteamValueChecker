@@ -1137,3 +1137,11 @@ body.wiz-open { overflow: hidden; }
 .pf-sec { flex: 1; min-width: 120px; }
 .pf-save { gap: .6rem; margin-top: .6rem; }
 @media (max-width: 900px) { .pf-editor { grid-template-columns: minmax(0, 1fr); } .pf-sticky { position: static; max-height: none; } .pf-head { margin-top: -40px; } .pf-avatar { width: 80px; height: 80px; } }
+.pf-enter { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: .6rem; border: 0; cursor: pointer; color: var(--pf-fg); font: inherit; background: color-mix(in srgb, var(--pf-bg) 82%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.pf-enter-in { position: absolute; left: 0; right: 0; top: min(30vh, 240px); display: flex; flex-direction: column; align-items: center; gap: .6rem; }
+.pf-enter-name { font-size: 2rem; font-weight: 700; }
+.pf-enter-hint { font-size: 1rem; letter-spacing: .12em; text-transform: uppercase; color: var(--pf-accent); animation: pf-pulse 2.2s ease-in-out infinite; }
+.pf-enter:focus-visible { outline: 3px solid var(--pf-accent); outline-offset: -6px; }
+@keyframes pf-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pf-enter-hint { animation: none; } }
+.pf-audio { width: 100%; max-width: 360px; height: 36px; }

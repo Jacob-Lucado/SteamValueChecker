@@ -15,7 +15,7 @@ test("links: only the right site for each kind, https only, nothing sneaky", () 
     assert.equal(cleanLink("website", "https://example.com/a#frag").url, "https://example.com/a");
 });
 
-test("song: only YouTube, SoundCloud and Spotify, turned into official embeds", () => {
+test("song: YouTube, SoundCloud and Spotify embeds, or a live radio stream", () => {
     const yt = cleanSong("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5");
     assert.deepEqual([yt.provider, yt.id], ["youtube", "dQw4w9WgXcQ"]);
     assert.match(songEmbed(yt), /^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?autoplay=1/);
@@ -25,7 +25,11 @@ test("song: only YouTube, SoundCloud and Spotify, turned into official embeds", 
     assert.match(songEmbed(sc), /^https:\/\/w\.soundcloud\.com\/player\/\?url=https%3A%2F%2Fsoundcloud\.com%2Fartist%2Ftrack-name/);
     const sp = cleanSong("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC?si=abc");
     assert.match(songEmbed(sp), /^https:\/\/open\.spotify\.com\/embed\/track\/4uLU6hMCjMI75M1A2tKUQC/);
-    for (const bad of ["https://evil.example/x.mp3", "http://youtu.be/dQw4w9WgXcQ", "https://youtube.com/watch?v=short", "https://soundcloud.com/only-one", "https://open.spotify.com/user/x"]) assert.throws(() => cleanSong(bad), /link|YouTube|SoundCloud|Spotify|https/, bad);
+    for (const bad of ["http://youtu.be/dQw4w9WgXcQ", "https://youtube.com/watch?v=short", "https://soundcloud.com/only-one", "https://open.spotify.com/user/x"]) assert.throws(() => cleanSong(bad), /link|YouTube|SoundCloud|Spotify|https/, bad);
+    const radio = cleanSong({ url: "https://stream.example.fm/live.mp3", title: "Late night" });
+    assert.deepEqual([radio.provider, radio.id, radio.title], ["radio", "https://stream.example.fm/live.mp3", "Late night"]);
+    assert.equal(songEmbed(radio), null);
+    for (const bad of ["http://stream.example.fm/live", "https://127.0.0.1/live", "https://localhost/live", "https://10.0.0.5:8000/x", "https://user:pw@stream.example.fm/live", "https://example.fm/station.pls", "https://example.fm/list.m3u8", "https://intranet/live"]) assert.throws(() => cleanSong(bad), /link|https|domain|playlist|password/, bad);
     assert.equal(cleanSong(""), null); assert.equal(cleanSong({ url: "" }), null);
 });
 
@@ -98,6 +102,7 @@ test("/me profile: small changes save, mistakes are explained, nothing is lost",
     assert.match((await run("favorite", { game: "hades" })).content, /already/);
     assert.match((await run("link", { kind: "twitch", url: "https://evil.example" })).content, /not a Twitch link/);
     assert.match((await run("look")).content, /Pick at least one/);
+    assert.match((await run("song", { enter: true })).content, /enter screen is on/); assert.equal(db.getProfileData("u1").data.enter, true);
     assert.match((await run("song", { remove: true })).content, /removed/); assert.equal(db.getProfileData("u1").data.song, null);
     const v = await run("view"); assert.match(v.embeds[0].description, /hello/); assert.match(v.embeds[0].description, /Steam stats \(members of your server\)/);
 });

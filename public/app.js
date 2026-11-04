@@ -937,13 +937,21 @@
   /** The profile song: a play button that loads the official player when pressed (browsers block sound that starts alone). */
   function pfSong(song) {
     const box = h("div", { class: "pf-song" });
-    const name = song.title || ({ youtube: "YouTube", soundcloud: "SoundCloud", spotify: "Spotify" })[song.provider] || "Song";
+    const name = song.title || ({ youtube: "YouTube", soundcloud: "SoundCloud", spotify: "Spotify", radio: "Live radio" })[song.provider] || "Song";
     const draw = playing => {
       if (!playing) {
         const b = h("button", { type: "button", class: "pf-play", "aria-label": "Play profile song", text: "▶" });
         b.addEventListener("click", () => draw(true));
-        box.replaceChildren(b, h("div", { class: "pf-song-info" }, h("strong", { text: name }), h("span", { class: "muted small", text: "Profile song. Press play." })),
+        box.replaceChildren(b, h("div", { class: "pf-song-info" }, h("strong", { text: name }), h("span", { class: "muted small", text: song.provider === "radio" ? "Live radio" : "Profile song" })),
           song.link ? ext(song.link, "Open", "pf-open") : null);
+        return;
+      }
+      if (song.stream) {
+        const a = h("audio", { src: song.stream, autoplay: "", controls: "", preload: "none", referrerpolicy: "no-referrer", class: "pf-audio" });
+        const stop = h("button", { type: "button", class: "pf-play stop", "aria-label": "Stop the song", text: "■" });
+        stop.addEventListener("click", () => { a.pause(); a.removeAttribute("src"); a.load(); draw(false); });
+        a.addEventListener("error", () => { box.replaceChildren(h("div", { class: "pf-song-info" }, h("strong", { text: name }), h("span", { class: "muted small", text: "This stream is not available right now." }))); });
+        box.replaceChildren(stop, h("div", { class: "pf-song-info" }, h("strong", { text: name }), a));
         return;
       }
       const f = h("iframe", { src: song.embed, title: "Profile song: " + name, allow: "autoplay; encrypted-media", referrerpolicy: "strict-origin-when-cross-origin", class: "pf-frame " + song.provider });
@@ -952,6 +960,7 @@
       box.replaceChildren(stop, f);
     };
     draw(false);
+    box.start = () => draw(true);
     return box;
   }
 
@@ -987,7 +996,14 @@
       h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug })),
       h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
     root.append(banner, head);
-    if (p.song) root.append(pfSong(p.song));
+    let songBox = null;
+    if (p.song) { songBox = pfSong(p.song); root.append(songBox); }
+    if (p.song && p.enter && !preview) {
+      // The click on this screen is what lets the browser start the sound straight away.
+      const gate = h("button", { type: "button", class: "pf-enter", "aria-label": "Enter " + p.name }, h("span", { class: "pf-enter-in" }, h("span", { class: "pf-enter-name", text: p.name }), h("span", { class: "pf-enter-hint", text: "Click to enter" })));
+      gate.addEventListener("click", () => { gate.remove(); songBox.start(); });
+      root.append(gate);
+    }
     const body = h("div", { class: "pf-body" });
     for (const s of p.sections) {
       const title = h("h3", {}, PF_TITLE[s.key] || s.key, p.owner && s.vis !== "public" ? h("span", { class: "chip dim", text: PF_VIS[s.vis] }) : null);
@@ -1049,7 +1065,7 @@
     }
     const cfg = JSON.parse(JSON.stringify(d.config));
     // The saved song is stored as provider and id. The editor works with the pasted link, so turn it back into one.
-    if (cfg.song) cfg.song = { url: cfg.song.provider === "youtube" ? "https://youtu.be/" + cfg.song.id : cfg.song.provider === "soundcloud" ? "https://soundcloud.com/" + cfg.song.id : "https://open.spotify.com/" + cfg.song.kind + "/" + cfg.song.id, title: cfg.song.title || "" };
+    if (cfg.song) cfg.song = { url: cfg.song.provider === "radio" ? cfg.song.id : cfg.song.provider === "youtube" ? "https://youtu.be/" + cfg.song.id : cfg.song.provider === "soundcloud" ? "https://soundcloud.com/" + cfg.song.id : "https://open.spotify.com/" + cfg.song.kind + "/" + cfg.song.id, title: cfg.song.title || "" };
     const pv = h("div", { class: "pf-preview" });
     let dirty = false, timer = null;
     const payload = () => ({ ...cfg, links: cfg.links.filter(l => l.url.trim()), favorites: cfg.favorites, song: cfg.song && cfg.song.url ? cfg.song : null });
@@ -1074,6 +1090,8 @@
     const nice = x => x[0].toUpperCase() + x.slice(1);
     const av = h("input", { type: "checkbox", checked: cfg.avatar, disabled: !d.steamLinked });
     av.addEventListener("change", () => { cfg.avatar = av.checked; changed(); });
+    const gateBox = h("input", { type: "checkbox", checked: Boolean(cfg.enter) });
+    gateBox.addEventListener("change", () => { cfg.enter = gateBox.checked; changed(); });
     const look = h("div", { class: "panel" }, h("h3", { text: "Look" }), field("Theme", themeBox), h("div", { class: "row" }, field("Accent colour", accent), h("div", {}, h("label", { text: "\u00a0" }), accentReset)),
       h("div", { class: "row" }, pick("Background", "bgstyle", d.choices.bgstyles.map(x => [x, nice(x)])), pick("Layout", "layout", d.choices.layouts.map(x => [x, nice(x)])), pick("Banner", "banner", [["gradient", "Colour"], ["game", "First favorite game's art"], ["none", "None"]])),
       h("label", { class: "check" }, av, " Show my Steam picture", d.steamLinked ? null : h("span", { class: "muted small", text: " (link Steam first)" })));
@@ -1114,12 +1132,13 @@
 
     // song
     cfg.song = cfg.song || null;
-    const songUrl = h("input", { type: "url", placeholder: "A YouTube, SoundCloud or Spotify link", value: cfg.song ? cfg.song.url : "" });
+    const songUrl = h("input", { type: "url", placeholder: "YouTube, SoundCloud, Spotify or a live radio stream link", value: cfg.song ? cfg.song.url : "" });
     const songTitle = h("input", { type: "text", maxlength: "60", placeholder: "Song name (optional)", value: cfg.song ? cfg.song.title : "" });
     const songSync = () => { cfg.song = songUrl.value.trim() ? { url: songUrl.value.trim(), title: songTitle.value } : null; changed(); };
     songUrl.addEventListener("input", songSync); songTitle.addEventListener("input", songSync);
     const song = h("div", { class: "panel" }, h("h3", { text: "Profile song" }), h("div", { class: "row" }, field("Link", songUrl), field("Name", songTitle)),
-      h("p", { class: "muted small", text: "Visitors press play to hear it. Browsers do not allow sound to start on its own, so it waits for a click." }));
+      h("label", { class: "check" }, gateBox, " Start with a “Click to enter” screen, and play the song as soon as they click"),
+      h("p", { class: "muted small", text: "Shows as a play button on your page. For radio, paste the direct stream address (https, ends in something like /stream or .mp3)." }));
 
     // sections
     const secBox = h("div", { class: "pf-rows" });
