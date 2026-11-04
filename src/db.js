@@ -290,6 +290,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "ai_channel", "TEXT");
     addColumn("community", "ai_key", "TEXT");        // the server's own API key, encrypted
     addColumn("community", "ai_key_last4", "TEXT");
+    addColumn("community", "ai_provider", "TEXT");   // which AI service the server's own key is for (empty means Anthropic)
+    addColumn("community", "ai_model", "TEXT");
     addColumn("community", "ai_plus", "INTEGER NOT NULL DEFAULT 0");          // AI Plus: the bot's own AI with a bigger daily limit, given by the bot owner
     addColumn("community", "ai_plus_interest", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "lb_message_id", "TEXT");

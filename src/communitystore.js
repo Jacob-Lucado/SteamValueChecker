@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS self_roles (
 );
 `;
 
-const SETTABLE = new Set(["ai_on", "ai_channel", "ai_key", "ai_key_last4", "ai_plus", "ai_plus_interest", "welcome_card", "welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
+const SETTABLE = new Set(["ai_on", "ai_channel", "ai_key", "ai_key_last4", "ai_provider", "ai_model", "ai_plus", "ai_plus_interest", "welcome_card", "welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
     "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_promos", "ping_playtest", "ping_squad", "squad_channel", "playtest_all", "playtest_channel", "streamer_role_id", "live_channel", "ping_stream", "stream_auto", "meme_channel", "meme_on", "meme_hours", "meme_at", "announce_channel", "rules_channel", "rules_text", "lb_channel", "requests_channel", "honeypot_channel", "setup_keys", "lb_message_id", "lb_hours", "lb_at"]);
 
 /** XP needed to go from `level` to the next one. */

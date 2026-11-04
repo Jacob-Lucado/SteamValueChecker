@@ -3134,9 +3134,11 @@
         else if (def.type === "enum") el = select(def.options, def.value);
         else if (def.type === "text") { el = h("textarea", { rows: "4", maxlength: String(def.maxLen) }); el.value = def.value; }
         else if (def.key === "ai_model") {
-          const known = view.models.some(([v]) => v === def.value);
-          const pick = select([...view.models, ["__custom", "Another model…"]], known ? def.value : "__custom");
-          const custom = h("input", { type: "text", maxlength: "80", placeholder: "model name", value: known ? "" : def.value });
+          const anth = (view.settings.find(x => x.key === "ai_provider") || {}).value === "anthropic";
+          const known = anth && view.models.some(([v]) => v === def.value);
+          const pick = select(anth ? [...view.models, ["__custom", "Another model…"]] : [["__custom", "Model name…"]], known ? def.value : "__custom");
+          if (!anth) pick.hidden = true;
+          const custom = h("input", { type: "text", maxlength: "100", placeholder: "model name", value: known ? "" : def.value });
           custom.hidden = known;
           pick.addEventListener("change", () => { custom.hidden = pick.value !== "__custom"; });
           inputs.set(def.key, () => (pick.value === "__custom" ? custom.value.trim() : pick.value));
@@ -3164,7 +3166,7 @@
         const t = r.stats[0] || {};
         const week = r.stats.slice(0, 7).reduce((a, d) => ({ answers: a.answers + d.answers, errors: a.errors + d.errors, inTok: a.inTok + d.inTok, outTok: a.outTok + d.outTok }), { answers: 0, errors: 0, inTok: 0, outTok: 0 });
         const status = h("div", { class: "grid" },
-          tile("API key", r.available ? "Set" : "Coming soon", r.available ? "The bot can reach the AI provider." : "No key yet, so servers get the bot's own answers for prices, free games, wishlist and library. Add ANTHROPIC_API_KEY to switch the full AI on."),
+          tile("API key", r.available ? "Set" : "Coming soon", r.available ? "The bot can reach the AI provider." : "No key yet, so servers get the bot's own answers for prices, free games, wishlist and library. Add the AI_API_KEY secret to switch the full AI on."),
           tile("“Hey AI” text", r.phrase ? "Works" : "Mentions only", r.phrase ? "Message Content intent is on." : "Turn on Message Content intent in the Developer Portal."),
           tile("Answers today", n0(t.answers), `${n0(t.errors)} failed · ${t.ms ? t.ms + " ms average" : "no timing yet"}`),
           tile("Last 7 days", n0(week.answers), `${n0(week.inTok + week.outTok)} tokens`),
@@ -5616,17 +5618,34 @@
         const ai = d.ai || {};
         const aiOn = h("input", { type: "checkbox", checked: Boolean(st.ai_on), disabled: !ai.available && !ai.lite });
         const aiCh = chSel(st.ai_channel);
-        const keyIn = h("input", { type: "password", autocomplete: "off", spellcheck: "false", maxlength: "320", placeholder: ai.keySet ? "Paste a new key to replace it" : "sk-ant-…" });
+        const provs = ai.providers || [{ id: "anthropic", label: "Anthropic (Claude)", needsModel: false, keyHelp: "console.anthropic.com" }];
+        const provNow = ai.keySet ? ai.keyProvider : "anthropic";
+        const provSel = select(provs.map(p => [p.id, p.label]), provNow);
+        provSel.disabled = Boolean(ai.keySet); // switching service means pasting a key for the new one: remove it first
+        const provOf = () => provs.find(p => p.id === provSel.value) || provs[0];
+        const keyIn = h("input", { type: "password", autocomplete: "off", spellcheck: "false", maxlength: "400", placeholder: ai.keySet ? "Paste a new key to replace it" : "Paste your API key" });
+        const modelIn = h("input", { type: "text", maxlength: "100", spellcheck: "false", value: ai.keyModel || "", placeholder: "Model name" });
+        const keyHelp = h("p", { class: "muted small" });
+        const refresh = () => {
+          const pv = provOf();
+          modelIn.placeholder = pv.needsModel ? `Model name from ${pv.label}'s model list (required)` : "Leave empty for the default";
+          keyHelp.textContent = `Get a key at ${pv.keyHelp}. It is checked when you save, stored encrypted, never shown again and never sent anywhere except ${pv.label}. With your own key your server pays ${pv.label} for its answers (they are small, usually a fraction of a cent each) and the bot's daily limit does not apply. You can remove it any time.`;
+        };
+        provSel.addEventListener("change", refresh); refresh();
+        const provName = (provs.find(p => p.id === provNow) || provs[0]).label;
         const keyBox = h("div", {},
-          ai.keyBad ? h("div", { class: "notice warn", text: "Anthropic rejected this server's key the last time it was used, so the AI companion is silent here. Paste a working key to fix it." }) : null,
-          ai.keySet ? h("p", { class: "ai-use", text: `Using your own key, ending ${ai.keyLast4 || "••••"}. ${ai.botKey ? "Your server is not counted against the bot's daily limit." : ""}` }) : null,
-          ai.canStoreKey ? field("Your own Anthropic API key (optional)", keyIn) : h("p", { class: "muted small", text: "This bot can't store keys for servers yet." }),
-          ai.canStoreKey ? h("p", { class: "muted small", text: "Get one at console.anthropic.com. It is checked when you save, stored encrypted, never shown again and never sent anywhere except Anthropic. With your own key your server pays Anthropic for its answers (they are small, usually a fraction of a cent each) and the bot's daily limit does not apply. You can remove it any time." }) : null,
+          ai.keyBad ? h("div", { class: "notice warn", text: `${provName} rejected this server's key the last time it was used, so the AI companion is silent here. Paste a working key to fix it.` }) : null,
+          ai.keySet ? h("p", { class: "ai-use", text: `Using your own ${provName} key, ending ${ai.keyLast4 || "••••"}${ai.keyModel ? `, model ${ai.keyModel}` : ""}. ${ai.botKey ? "Your server is not counted against the bot's daily limit." : ""}` }) : null,
+          ai.canStoreKey ? field("AI service", provSel) : h("p", { class: "muted small", text: "This bot can't store keys for servers yet." }),
+          ai.canStoreKey ? field("Your own API key (optional)", keyIn) : null,
+          ai.canStoreKey ? field("Model", modelIn) : null,
+          ai.canStoreKey ? keyHelp : null,
           ai.canStoreKey ? h("div", { class: "row" },
-            save(ai.keySet ? "Replace key" : "Save key", () => { if (!keyIn.value.trim()) throw new Error("Paste your key first."); return post("/api/community/places", { ai_key: keyIn.value }); }),
+            save(ai.keySet ? "Replace key" : "Save key", () => { if (!keyIn.value.trim()) throw new Error("Paste your key first."); return post("/api/community/places", { ai_key: keyIn.value, ai_provider: provSel.value, ai_model: modelIn.value }); }),
+            ai.keySet ? save("Save model", () => post("/api/community/places", { ai_provider: provNow, ai_model: modelIn.value })) : null,
             ai.keySet ? save("Remove key", () => post("/api/community/places", { ai_key_clear: true })) : null) : null);
         const aiP = h("div", { class: "panel" }, h("h3", {}, "AI companion", ai.available ? null : h("span", { class: "pill", text: "Coming soon" })),
-          ai.available ? null : h("div", { class: "notice", text: "The full AI is coming soon. Until then, when you switch this on, the bot answers the common questions itself: game prices, the free games right now, and a member's own wishlist and library (try “Hey AI is Hades on sale?”). Anything else gets a polite “coming soon”. Want the full AI today? Add your own Anthropic key below." }),
+          ai.available ? null : h("div", { class: "notice", text: "The full AI is coming soon. Until then, when you switch this on, the bot answers the common questions itself: game prices, the free games right now, and a member's own wishlist and library (try “Hey AI is Hades on sale?”). Anything else gets a polite “coming soon”. Want the full AI today? Add your own AI key below (Anthropic, OpenAI, Gemini and more)." }),
           h("label", { class: "check" }, aiOn, " Answer when members say “Hey AI” followed by a question"),
           field("Only answer in this channel (leave empty for every channel)", aiCh),
           h("p", { class: "muted small", text: ai.phrase ? "Members write “Hey AI, …” or mention the bot." : "Members mention the bot, because this bot can't read “Hey AI” yet (it needs the Message Content intent)." }),
@@ -5640,12 +5659,12 @@
             h("li", { text: `Questions are cut at ${ai.maxQuestion || 700} characters. Answers are short, never longer than ${ai.maxReply || 1900} characters, and ping nobody.` }),
             h("li", { text: `Replying to one of its answers continues the conversation (it remembers the last ${ai.history || 6} messages of that thread). It remembers nothing else.` }),
             h("li", { text: (ai.available ? "" : "Right now it works from fixed questions, not free chat. ") + "It can look up live game prices, the free games right now, and the asker's own wishlist and library, and add a game to the asker's wishlist when asked. It never sees anyone else's lists or other channels." }),
-            h("li", { text: ai.available ? "Only messages that say “Hey AI” or mention the bot are read. The question, the thread it replies to, the person's display name and the results of those lookups are sent to the AI provider (Anthropic) to write the answer. Nothing else from your server is sent." : "Only messages that say “Hey AI” or mention the bot are read. While the full AI is coming soon, the bot answers them itself and nothing is sent to any AI provider." }),
+            h("li", { text: ai.available ? "Only messages that say “Hey AI” or mention the bot are read. The question, the thread it replies to, the person's display name and the results of those lookups are sent to the AI service you chose (Anthropic by default; your own key can use another) to write the answer. Nothing else from your server is sent." : "Only messages that say “Hey AI” or mention the bot are read. While the full AI is coming soon, the bot answers them itself and nothing is sent to any AI provider." }),
             h("li", { text: "Servers that turn it on are responsible for who can use it: pick one channel above if you only want it in one place." })));
         const plusBtn = save(ai.plusInterest ? "Never mind" : "Tell me when it's ready", () => post("/api/community/places", { ai_plus_interest: !ai.plusInterest }));
         const plusP = ai.plusVisible && !ai.main ? h("div", { class: "panel" }, h("h3", {}, "AI Plus ", h("span", { class: "pill", text: "Work in progress" })),
           h("p", { text: `When your server reaches its daily limit, AI Plus would keep the answers coming using the bot's own AI, with a bigger limit (${(ai.plusCap || 2000).toLocaleString()} answers a day), and nothing for you to set up.` }),
-          h("p", { class: "muted small", text: "Payments are not switched on yet, so there is nothing to buy today. Until then you can lift the limit for free with your own Anthropic key above. Press the button and the bot owner will know your server wants this." }),
+          h("p", { class: "muted small", text: "Payments are not switched on yet, so there is nothing to buy today. Until then you can lift the limit for free with your own AI key above. Press the button and the bot owner will know your server wants this." }),
           ai.plus ? h("div", { class: "notice", text: "AI Plus is on for this server right now, so the bigger limit applies." }) : null,
           ai.plusInterest ? h("p", { class: "ai-use", text: "Noted. Your server is on the list." }) : null,
           h("div", { class: "row" }, plusBtn)) : null;

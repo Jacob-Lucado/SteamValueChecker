@@ -1,9 +1,10 @@
 // The AI companion: someone writes "Hey AI, ..." (or mentions the bot) and gets an answer in the channel.
-// Off until a server manager turns it on, and only when the bot has an Anthropic key. Answers are short, never ping anyone, and each
+// Off until a server manager turns it on. Works with Anthropic, OpenAI, Gemini and a few others (src/aiproviders.js). Answers are short, never ping anyone, and each
 // server has a daily limit so the bill stays predictable.
 
+import { chat, PROVIDERS } from "./aiproviders.js";
+
 const GREETING = /^\s*(?:hey|hi|hello|yo|ok|okay|oi)[\s,]+ai\b[\s,:;!?.\-–—]*/i;
-const API = "https://api.anthropic.com/v1/messages";
 const MAX_QUESTION = 700;
 const MAX_REPLY = 1900;
 
@@ -105,37 +106,35 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, l
     }
 
     const MAX_ROUNDS = 4;
-    const post = (apiKey, model, system, messages, useTools) => fetchFn(API, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model, max_tokens: rt.get("ai_max_tokens"), system, messages, ...(useTools ? { tools: tools.defs } : {}) }),
-        signal: AbortSignal.timeout(25_000)
-    });
+    const label = provider => PROVIDERS[provider]?.label ?? provider;
+    /** What a server's own key is: { key, provider, model }. A plain string is an Anthropic key (older callers). */
+    const asOwn = v => (!v ? null : typeof v === "string" ? { key: v, provider: "anthropic", model: null } : v);
+    /** The key, service and model to use: the server's own, or the bot's. */
+    const credFor = own => (own ? { apiKey: own.key, provider: own.provider || "anthropic", model: own.model || PROVIDERS[own.provider || "anthropic"]?.defaultModel || rt.get("ai_model") }
+        : { apiKey: key, provider: rt.get("ai_provider"), model: rt.get("ai_model") });
 
-    /** One question, letting the model call tools (up to a few rounds). Returns { res, data, model, ms, used }. */
-    async function call({ name, question, history, ctx = {}, apiKey = key }) {
+    /** One question, letting the model call tools (up to a few rounds). Returns { r, model, provider, ms, used, usage } where r is the last reply. */
+    async function call({ name, question, history, ctx = {}, own = null }) {
         let messages = tidyHistory([...history, { role: "user", content: question || "Hi!" }]);
-        const model = rt.get("ai_model"), system = systemPrompt(name, rt.get("ai_tone"), rt.get("ai_extra"));
+        const cred = credFor(own), system = systemPrompt(name, rt.get("ai_tone"), rt.get("ai_extra"));
         const started = now(), used = [], usage = { in: 0, out: 0 };
         for (let round = 0; ; round++) {
-            const res = await post(apiKey, model, system, messages, Boolean(tools) && round < MAX_ROUNDS);
-            if (!res.ok) return { res, model, ms: now() - started, used, usage };
-            const data = await res.json();
-            usage.in += data?.usage?.input_tokens ?? 0; usage.out += data?.usage?.output_tokens ?? 0;
-            const calls = (data?.content ?? []).filter(b => b?.type === "tool_use");
-            if (data?.stop_reason !== "tool_use" || !calls.length || !tools || round >= MAX_ROUNDS) return { res, data, model, ms: now() - started, used, usage };
+            const r = await chat({ ...cred, fetchFn, system, messages, tools: tools && round < MAX_ROUNDS ? tools.defs : null, maxTokens: rt.get("ai_max_tokens") });
+            if (!r.ok) return { r, model: cred.model, provider: cred.provider, ms: now() - started, used, usage };
+            usage.in += r.usage.in; usage.out += r.usage.out;
+            if (!r.calls.length || !tools || round >= MAX_ROUNDS) return { r, model: cred.model, provider: cred.provider, ms: now() - started, used, usage };
             const results = [];
-            for (const c of calls) {
+            for (const c of r.calls) {
                 used.push(c.name);
-                results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(await tools.run(c.name, c.input, ctx)).slice(0, 6000) });
+                results.push({ id: c.id, name: c.name, output: JSON.stringify(await tools.run(c.name, c.input, ctx)).slice(0, 6000) });
             }
-            messages = [...messages, { role: "assistant", content: data.content }, { role: "user", content: results }];
+            messages = [...messages, { role: "assistant", raw: r.raw, calls: r.calls }, { role: "tool", results }];
         }
     }
 
     /** { ok: true, text } or { ok: false, reason: "off" | "paused" | "blocked" | "cooldown" | "cap" | "busy" | "error" }. */
     async function answer({ guildId, userId, name = "", question, history = [] }) {
-        const own = keyFor(guildId);
+        const own = asOwn(keyFor(guildId));
         if (!available && !own && !lite) return { ok: false, reason: "off" };
         if (!rt.get("ai_enabled")) return { ok: false, reason: "paused" };
         if (rt.isServerBlocked(guildId) || rt.isUserBlocked(userId)) return { ok: false, reason: "blocked" };
@@ -151,16 +150,16 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, l
         if (lastAt.size > 5000) for (const [u, at] of lastAt) if (t - at > cooldown) lastAt.delete(u);
         const keep = rt.get("ai_history");
         try {
-            const { res, data, ms, used, usage } = await call({ name, question, history: keep ? history.slice(-keep) : [], ctx: { userId, guildId }, apiKey: own || key });
-            if (res.status === 429 || res.status === 529) { addStat(db, now(), { errors: 1 }); return { ok: false, reason: "busy" }; }
-            if (own && (res.status === 401 || res.status === 403)) { db.setMeta(`aikeybad:${guildId}`, String(now())); return { ok: false, reason: "badkey" }; }
-            if (!res.ok) { log(`Anthropic answered ${res.status}`); db.setMeta("ai:lasterr", `${new Date(now()).toISOString()} · HTTP ${res.status}`); addStat(db, now(), { errors: 1 }); return { ok: false, reason: "error" }; }
-            const text = (data?.content ?? []).filter(b => b?.type === "text").map(b => b.text).join("\n").trim();
+            const { r, ms, used, usage, provider } = await call({ name, question, history: keep ? history.slice(-keep) : [], ctx: { userId, guildId }, own });
+            if (r.status === 429 || r.status === 529) { addStat(db, now(), { errors: 1 }); return { ok: false, reason: "busy" }; }
+            if (own && (r.status === 401 || r.status === 403)) { db.setMeta(`aikeybad:${guildId}`, String(now())); return { ok: false, reason: "badkey" }; }
+            if (!r.ok) { log(`${label(provider)} answered ${r.status}`); db.setMeta("ai:lasterr", `${new Date(now()).toISOString()} · ${label(provider)} HTTP ${r.status}${r.error ? ` · ${r.error}` : ""}`); addStat(db, now(), { errors: 1 }); return { ok: false, reason: "error" }; }
+            const text = r.text;
             if (!text) { addStat(db, now(), { errors: 1 }); return { ok: false, reason: "error" }; }
             addStat(db, now(), { answers: 1, inTok: usage.in, outTok: usage.out, ms, ...(used.length ? { toolAnswers: 1, toolCalls: used.length } : {}) });
             return { ok: true, text: text.replace(/@(everyone|here)/gi, "@\u200b$1").slice(0, MAX_REPLY) };
         } catch (e) {
-            log(`could not reach Anthropic: ${e?.message}`);
+            log(`could not reach the AI service: ${e?.message}`);
             db.setMeta("ai:lasterr", `${new Date(now()).toISOString()} · ${String(e?.message ?? e).slice(0, 120)}`);
             addStat(db, now(), { errors: 1 });
             return { ok: false, reason: "error" };
@@ -170,25 +169,25 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, l
     /** For the admin page: asks one question with the current settings, ignoring limits. Says what went wrong. */
     async function test(question, ownerId = null) {
         if (!available && lite) { const t0 = now(); try { return { ok: true, text: await lite({ question, userId: String(ownerId ?? "0"), guildId: null }), model: "no AI key: the bot's own answers", ms: now() - t0, inTok: 0, outTok: 0, tools: [] }; } catch (e) { return { ok: false, error: String(e?.message ?? e).slice(0, 200) }; } }
-        if (!available) return { ok: false, error: "There is no Anthropic key on this bot." };
+        if (!available) return { ok: false, error: "There is no AI key on this bot." };
         try {
-            const { res, data, model, ms, used, usage } = await call({ name: "the bot owner (a test)", question, history: [], ctx: { userId: String(ownerId ?? "0"), guildId: null } });
-            if (!res.ok) { let msg = ""; try { msg = (await res.json())?.error?.message ?? ""; } catch { /* no body */ } return { ok: false, error: `The API answered ${res.status}. ${msg}`.trim() }; }
-            const text = (data?.content ?? []).filter(b => b?.type === "text").map(b => b.text).join("\n").trim();
-            return { ok: Boolean(text), text: text.slice(0, MAX_REPLY), model, ms, inTok: usage.in, outTok: usage.out, tools: used, error: text ? null : "The answer came back empty." };
+            const { r, model, provider, ms, used, usage } = await call({ name: "the bot owner (a test)", question, history: [], ctx: { userId: String(ownerId ?? "0"), guildId: null } });
+            if (!r.ok) return { ok: false, error: `${label(provider)} answered ${r.status}. ${r.error ?? ""}`.trim() };
+            return { ok: Boolean(r.text), text: r.text.slice(0, MAX_REPLY), model: `${label(provider)} · ${model}`, ms, inTok: usage.in, outTok: usage.out, tools: used, error: r.text ? null : "The answer came back empty." };
         } catch (e) { return { ok: false, error: String(e?.message ?? e).slice(0, 200) }; }
     }
 
     /** Checks a key someone pasted, with the cheapest possible call. { ok: true } or { ok: false, error }. */
-    async function checkKey(candidate) {
+    async function checkKey(candidate, { provider = "anthropic", model = null } = {}) {
+        const name = label(provider), use = model || PROVIDERS[provider]?.defaultModel || rt.get("ai_model");
         try {
-            const res = await fetchFn(API, { method: "POST", headers: { "content-type": "application/json", "x-api-key": candidate, "anthropic-version": "2023-06-01" },
-                body: JSON.stringify({ model: rt.get("ai_model"), max_tokens: 1, messages: [{ role: "user", content: "hi" }] }), signal: AbortSignal.timeout(15_000) });
-            if (res.ok) return { ok: true };
-            if (res.status === 401 || res.status === 403) return { ok: false, error: "Anthropic did not accept that key. Check that you copied all of it." };
-            if (res.status === 429 || res.status === 529) return { ok: true, note: "Anthropic is busy right now, so the key could not be fully checked." };
-            return { ok: false, error: `Anthropic answered ${res.status} for that key. Check that it has credit.` };
-        } catch { return { ok: false, error: "Could not reach Anthropic to check the key. Try again in a moment." }; }
+            const r = await chat({ provider, apiKey: candidate, model: use, fetchFn, timeoutMs: 15_000, system: "Reply with ok.", messages: [{ role: "user", content: "hi" }], tools: null, maxTokens: provider === "anthropic" ? 1 : 16 });
+            if (r.ok) return { ok: true };
+            if (r.status === 401 || r.status === 403) return { ok: false, error: `${name} did not accept that key. Check that you copied all of it.` };
+            if (r.status === 429 || r.status === 529) return { ok: true, note: `${name} is busy right now, so the key could not be fully checked.` };
+            if (r.status === 404) return { ok: false, error: `${name} does not know a model called ${use}. Check the model name.` };
+            return { ok: false, error: `${name} answered ${r.status}${r.error ? ` (${r.error})` : ""}. Check the model name and that the account has credit.` };
+        } catch { return { ok: false, error: `Could not reach ${name} to check the key. Try again in a moment.` }; }
     }
 
     return { available, lite: Boolean(lite), answer, test, checkKey };

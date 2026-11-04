@@ -1,6 +1,7 @@
 // Settings the bot owner can change while the bot is running, from the admin panel. Anything not changed keeps its default.
 // Stored as one JSON value, so there is nothing to migrate when a setting is added: it just has its default until someone sets it.
 import { UserError } from "./errors.js";
+import { PROVIDERS, PROVIDER_IDS, providerList } from "./aiproviders.js";
 
 export const AI_MODELS = [
     ["claude-haiku-5-5", "Haiku 5.5: fastest and cheapest"],
@@ -18,7 +19,8 @@ export const GROUPS = {
 /** Every adjustable setting. `type` is bool, int, enum, text (several lines) or line (one line). */
 export const SETTINGS = [
     { key: "ai_enabled", group: "ai", type: "bool", def: true, label: "AI companion on", help: "The master switch. Off, every server's AI companion goes quiet at once, whatever the servers chose." },
-    { key: "ai_model", group: "ai", type: "line", def: "claude-haiku-5-5", maxLen: 80, label: "Model", help: "Which model writes the answers. Pick one of the usual ones or paste any model name your key can use." },
+    { key: "ai_provider", group: "ai", type: "enum", def: "anthropic", options: PROVIDER_IDS.map(id => [id, PROVIDERS[id].label]), label: "AI service", help: "Which service the bot's own key (the AI_API_KEY secret) belongs to. Servers that bring their own key pick their own service." },
+    { key: "ai_model", group: "ai", type: "line", def: "claude-haiku-5-5", maxLen: 100, label: "Model", help: "Which model writes the answers. For Anthropic pick one of the usual ones. For any other service type the model name from that service's model list." },
     { key: "ai_daily_cap", group: "ai", type: "int", def: 300, min: 1, max: 5000, label: "Answers per server per day", help: "The most answers one server can get in a (UTC) day. You can give a single server a different number below." },
     { key: "ai_cooldown", group: "ai", type: "int", def: 15, min: 3, max: 600, label: "Seconds between questions", help: "How long one person waits before they can ask again." },
     { key: "ai_max_question", group: "ai", type: "int", def: 700, min: 50, max: 2000, label: "Longest question (characters)", help: "Longer questions are cut off here." },
@@ -92,7 +94,7 @@ export function createRuntimeCfg(db, defaults = {}) {
         const state = read();
         return {
             settings: SETTINGS.map(s => ({ key: s.key, group: s.group, type: s.type, label: s.label, help: s.help, min: s.min, max: s.max, maxLen: s.maxLen, options: s.options, default: def(s), value: state.values[s.key] === undefined ? def(s) : state.values[s.key] })),
-            groups: GROUPS, models: AI_MODELS,
+            groups: GROUPS, models: AI_MODELS, providers: providerList(),
             blockedUsers: state.blockedUsers, blockedServers: state.blockedServers, serverCaps: state.serverCaps
         };
     }

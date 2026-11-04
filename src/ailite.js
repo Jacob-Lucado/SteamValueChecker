@@ -1,4 +1,4 @@
-// The AI companion without the AI: while there is no Anthropic key the bot still answers the questions people ask most, by looking
+// The AI companion without the AI: while there is no AI key the bot still answers the questions people ask most, by looking
 // them up itself with the same tools the full AI uses. Anything else gets an honest "coming soon" and a list of what works.
 
 const EXAMPLES = [

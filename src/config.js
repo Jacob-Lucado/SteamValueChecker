@@ -51,9 +51,10 @@ export function loadConfig(env = process.env, required = ["DISCORD_TOKEN", "CLIE
             host: env.DASHBOARD_HOST || "127.0.0.1"
         } : null,
         ownerId: env.OWNER_DISCORD_ID || null,
-        // Optional. The AI companion ("Hey AI ...") answers through the Anthropic API. Without a key the feature stays off.
-        anthropicKey: env.ANTHROPIC_API_KEY || null,
-        aiModel: env.AI_MODEL || "claude-haiku-5-5",
+        // Optional. The AI companion ("Hey AI ...") answers through an AI service: Anthropic by default, or OpenAI, Gemini, OpenRouter, Groq, Mistral, xAI or DeepSeek with AI_PROVIDER. Without a key the bot only answers the common questions itself.
+        anthropicKey: env.AI_API_KEY || env.ANTHROPIC_API_KEY || null, // the bot's own AI key, for whichever service AI_PROVIDER names
+        aiProvider: env.AI_PROVIDER || "anthropic",
+        aiModel: env.AI_MODEL || undefined,
         // How many answers one server can get per day, to keep the bill predictable.
         aiDailyCap: Math.max(10, Number(env.AI_DAILY_CAP) || 300),
         // Shown on /bot about and the dashboard. Set CREATOR_NAME / CREATOR_X_URL to change them.

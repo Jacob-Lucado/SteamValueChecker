@@ -282,3 +282,70 @@ test("lite mode: with no key the bot still answers (cooldown, switch and blocks 
     assert.equal((await ai.test("what's free?")).model, "no AI key: the bot's own answers");
     assert.equal((await createAiChat({ db, rt, key: null }).answer({ guildId: "1", userId: "z", question: "x" })).reason, "off", "no key and no lite: off");
 });
+
+test("AI services: OpenAI-style, Gemini and Anthropic requests are built right and tool turns round-trip", async () => {
+    const { chat, checkKeyShape, PROVIDERS, PROVIDER_IDS } = await import("../src/aiproviders.js");
+    const tools = [{ name: "free_games", description: "d", input_schema: { type: "object", properties: {} } }, { name: "check_prices", description: "p", input_schema: { type: "object", properties: { titles: { type: "array", items: { type: "string" } } }, required: ["titles"] } }];
+    const reply = body => async () => ({ ok: true, status: 200, json: async () => body });
+    const seen = [];
+    const spy = (body) => async (url, o) => { seen.push({ url, headers: o.headers, body: JSON.parse(o.body) }); return { ok: true, status: 200, json: async () => body }; };
+
+    // OpenAI: bearer key, max_completion_tokens, tool calls parsed from JSON strings, tool results as role "tool"
+    const oa = { choices: [{ message: { content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "check_prices", arguments: '{"titles":["Hades"]}' } }] }, finish_reason: "tool_calls" }], usage: { prompt_tokens: 11, completion_tokens: 3 } };
+    const r1 = await chat({ provider: "openai", apiKey: "sk-test-key-1234567890", model: "m1", system: "S", messages: [{ role: "user", content: "hi" }], tools, maxTokens: 50, fetchFn: spy(oa) });
+    assert.equal(seen[0].url, "https://api.openai.com/v1/chat/completions");
+    assert.equal(seen[0].headers.authorization, "Bearer sk-test-key-1234567890");
+    assert.equal(seen[0].body.max_completion_tokens, 50); assert.equal(seen[0].body.messages[0].role, "system");
+    assert.equal(seen[0].body.tools[1].function.parameters.required[0], "titles");
+    assert.deepEqual(r1.calls, [{ id: "c1", name: "check_prices", input: { titles: ["Hades"] } }]); assert.deepEqual(r1.usage, { in: 11, out: 3 });
+    await chat({ provider: "openai", apiKey: "sk-test-key-1234567890", model: "m1", system: "S", tools, maxTokens: 50, fetchFn: spy({ choices: [{ message: { content: "ok" } }] }),
+        messages: [{ role: "user", content: "hi" }, { role: "assistant", raw: r1.raw, calls: r1.calls }, { role: "tool", results: [{ id: "c1", name: "check_prices", output: '{"a":1}' }] }] });
+    const wire = seen[1].body.messages;
+    assert.deepEqual([wire[2].role, wire[2].tool_calls[0].id, wire[3]], ["assistant", "c1", { role: "tool", tool_call_id: "c1", content: '{"a":1}' }]);
+    // compatible services use max_tokens and their own fixed address
+    await chat({ provider: "groq", apiKey: "gsk_abcdefghijklmnop", model: "m", system: "S", messages: [{ role: "user", content: "x" }], maxTokens: 9, fetchFn: spy({ choices: [{ message: { content: "ok" } }] }) });
+    assert.equal(seen[2].url, "https://api.groq.com/openai/v1/chat/completions"); assert.equal(seen[2].body.max_tokens, 9); assert.equal(seen[2].body.max_completion_tokens, undefined);
+
+    // Gemini: key in a header, system instruction, an empty tool schema is left out, function results go back as a user turn
+    const gm = { candidates: [{ content: { parts: [{ functionCall: { name: "free_games", args: {} } }] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2 } };
+    const g1 = await chat({ provider: "gemini", apiKey: "AIza-test-key-1234567", model: "gm-1", system: "S", messages: [{ role: "user", content: "hi" }, { role: "assistant", content: "yo" }, { role: "user", content: "free?" }], tools, maxTokens: 70, fetchFn: spy(gm) });
+    assert.equal(seen[3].url, "https://generativelanguage.googleapis.com/v1beta/models/gm-1:generateContent"); assert.equal(seen[3].headers["x-goog-api-key"], "AIza-test-key-1234567");
+    assert.equal(seen[3].body.generationConfig.maxOutputTokens, 70); assert.deepEqual(seen[3].body.contents.map(c => c.role), ["user", "model", "user"]);
+    assert.equal(seen[3].body.tools[0].functionDeclarations[0].parameters, undefined, "no empty parameter object"); assert.ok(seen[3].body.tools[0].functionDeclarations[1].parameters);
+    assert.deepEqual([g1.calls[0].name, g1.usage], ["free_games", { in: 5, out: 2 }]);
+    await chat({ provider: "gemini", apiKey: "AIza-test-key-1234567", model: "gm-1", system: "S", tools, maxTokens: 70, fetchFn: spy({ candidates: [{ content: { parts: [{ text: "done" }] } }] }),
+        messages: [{ role: "user", content: "hi" }, { role: "assistant", raw: g1.raw, calls: g1.calls }, { role: "tool", results: [{ id: "x", name: "free_games", output: '{"count":0}' }] }] });
+    assert.deepEqual(seen[4].body.contents.map(c => c.role), ["user", "model", "user"]); assert.deepEqual(seen[4].body.contents[2].parts[0].functionResponse, { name: "free_games", response: { result: { count: 0 } } });
+
+    // errors come back as data, with the service's own message
+    const bad = await chat({ provider: "openai", apiKey: "k".repeat(20), model: "m", system: "S", messages: [], maxTokens: 1, fetchFn: async () => ({ ok: false, status: 401, json: async () => ({ error: { message: "Incorrect API key" } }) }) });
+    assert.deepEqual([bad.ok, bad.status, bad.error], [false, 401, "Incorrect API key"]);
+
+    // keys and model names are sanity checked per service; only fixed addresses exist
+    assert.match(checkKeyShape("anthropic", "sk-nope-123456789012345", ""), /sk-ant-/);
+    assert.match(checkKeyShape("openai", "sk-abcdefghijklmnopqrst", ""), /model/);
+    assert.equal(checkKeyShape("openai", "sk-abcdefghijklmnopqrst", "some-model"), null);
+    assert.match(checkKeyShape("openai", "has a space in it 12345", "m"), /does not look like/);
+    assert.match(checkKeyShape("openai", "sk-abcdefghijklmnopqrst", "bad model!"), /characters/);
+    assert.match(checkKeyShape("nope", "x", ""), /Pick one/);
+    assert.ok(PROVIDER_IDS.every(id => /^https:\/\//.test(PROVIDERS[id].url)));
+});
+
+test("AI companion: a server's own OpenAI or Gemini key answers with that service and model, and the bot's service can be switched live", async () => {
+    const db = openDb(":memory:"), rt = createRuntimeCfg(db), urls = [];
+    const fetchFn = async (url, o) => { urls.push([url, JSON.parse(o.body).model ?? null]);
+        return { ok: true, status: 200, json: async () => (url.includes("openai") ? { choices: [{ message: { content: "from openai" } }] } : url.includes("google") ? { candidates: [{ content: { parts: [{ text: "from gemini" }] } }] } : { content: [{ type: "text", text: "from anthropic" }] }) }; };
+    let t = Date.parse("2026-11-04T12:00:00Z");
+    const own = { 11111: { key: "sk-openai-key-12345678", provider: "openai", model: "my-model" }, 22222: { key: "AIza-gem-key-1234567890", provider: "gemini", model: "gem-1" } };
+    const ai = createAiChat({ db, rt, key: "bot-key-1234567890", keyFor: g => own[g] ?? null, fetchFn, now: () => t });
+    const ask = async g => { t += 20_000; return (await ai.answer({ guildId: g, userId: "u", question: "x" })).text; };
+    assert.equal(await ask("11111"), "from openai"); assert.equal(await ask("22222"), "from gemini"); assert.equal(await ask("33333"), "from anthropic");
+    assert.deepEqual(urls.map(u => u[1]), ["my-model", null, "claude-haiku-5-5"]);
+    rt.set({ ai_provider: "openai", ai_model: "bot-openai-model" });
+    assert.equal(await ask("33333"), "from openai"); assert.equal(urls.at(-1)[1], "bot-openai-model");
+    assert.match((await ai.test("hi")).model, /OpenAI · bot-openai-model/);
+    const ck = (provider, status, model) => createAiChat({ db, rt, key: null, fetchFn: async () => ({ ok: status < 300, status, json: async () => ({ error: { message: "nope" } }) }) }).checkKey("k".repeat(20), { provider, model });
+    assert.equal((await ck("gemini", 200, "m")).ok, true);
+    assert.match((await ck("openai", 404, "ghost")).error, /does not know a model called ghost/);
+    assert.match((await ck("groq", 401, "m")).error, /Groq did not accept/);
+});

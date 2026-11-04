@@ -101,6 +101,7 @@ import { honeypotHit, refreshHoneypotNotice } from "./honeypot.js";
 import { createAiChat, parseTrigger, AI_FAILURES } from "./aichat.js";
 import { createRuntimeCfg } from "./runtimecfg.js";
 import { createAiTools } from "./aitools.js";
+import { PROVIDER_IDS } from "./aiproviders.js";
 import { createMainGuild } from "./mainguild.js";
 import { liteAnswer } from "./ailite.js";
 import { guildBannerSvg, toPng, artFor } from "./communitycards.js";
@@ -412,10 +413,14 @@ client.once(Events.ClientReady, () => { setTimeout(() => music?.autoBoot().catch
 client.on(Events.GuildDelete, guild => { music?.onBotDisconnected(guild.id); if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
 
 // The AI companion. Only answers in servers where a manager turned it on, in the channel they picked (or any channel).
-const rt = createRuntimeCfg(db, { ai_model: cfg.aiModel, ai_daily_cap: cfg.aiDailyCap });
+const rt = createRuntimeCfg(db, { ...(cfg.aiModel ? { ai_model: cfg.aiModel } : {}), ...(PROVIDER_IDS.includes(cfg.aiProvider) ? { ai_provider: cfg.aiProvider } : {}), ai_daily_cap: cfg.aiDailyCap });
 const keyVault = cfg.keySecret ? createVault(cfg.keySecret) : null;
 /** A server's own API key, decrypted, or null. */
-const serverKey = gid => { const c = gid ? db.getCommunity(gid) : null; return c?.ai_key && keyVault ? keyVault.decrypt(c.ai_key) : null; };
+const serverKey = gid => {
+    const c = gid ? db.getCommunity(gid) : null;
+    const key = c?.ai_key && keyVault ? keyVault.decrypt(c.ai_key) : null;
+    return key ? { key, provider: c.ai_provider || "anthropic", model: c.ai_model || null } : null;
+};
 const aiTools = createAiTools({ db, itad, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
 const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, configuredInvite: cfg.supportInvite, log: t => console.log(`[main server] ${t}`) });
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
@@ -835,7 +840,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: k => ai.checkKey(k), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+const dashboard = createDashboard({ news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g) })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: (k, o) => ai.checkKey(k, o), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`))
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

@@ -134,7 +134,7 @@ If this policy changes, the date above will be updated.
 
 ## AI companion (only in servers that turn it on)
 - Until the full AI is switched on (it is coming soon), the bot answers the common questions itself and sends nothing to anyone. The points below apply once it is on.
-- When someone writes "Hey AI ..." or mentions the bot in a server where a manager switched it on, the question, the last few messages of that reply thread and the asker's display name are sent to **Anthropic** to write the answer. Anthropic's privacy policy applies to that request. Nothing else from the channel is sent.
+- When someone writes "Hey AI ..." or mentions the bot in a server where a manager switched it on, the question, the last few messages of that reply thread and the asker's display name are sent to the AI service to write the answer: **Anthropic** unless the bot owner or the server picked another one (OpenAI, Google Gemini, OpenRouter, Groq, Mistral, xAI or DeepSeek). That service's privacy policy applies to the request. Nothing else from the channel is sent.
 - To answer, the AI can call the bot's own lookups: game prices, free games, the asker's own wishlist and library summary, and the server's opt-in savings leaderboard. The results of those lookups for that question are sent along. It only sees the asker's own lists, never another member's, and it can add a game to the asker's wishlist only when they ask.
-- A server manager can add that server's own Anthropic API key in the dashboard. It is stored encrypted, only that server's questions use it, and it can be removed at any time.
+- A server manager can add that server's own AI API key (for any of those services) in the dashboard. It is stored encrypted, only that server's questions use it, and it can be removed at any time.
 - The bot keeps counts only (answers per day, tokens used, per-server daily totals), not the questions or answers.
