@@ -819,6 +819,20 @@ test("trap channel: made by setup with a warning notice and description; posting
     assert.equal(await hit({ isBot: true }), "ignored");
     assert.equal(await hit({ channelId: "other" }), "ignored", "other channels are never touched");
     assert.equal(bans.length, 1);
+    // the live counter: each ban is counted, and the notice in the channel is edited to show it
+    const { refreshHoneypotNotice, honeypotBans } = await import("../src/honeypot.js");
+    assert.equal(honeypotBans(db, "G"), 1);
+    assert.match(notice.p.embeds[0].description, /\*\*0\*\* accounts banned here so far/);
+    let queued = 0;
+    assert.equal(await hit({ userId: "spam2", onBan: () => queued++ }), "banned");
+    assert.equal(queued, 1); assert.equal(honeypotBans(db, "G"), 2);
+    assert.equal(await refreshHoneypotNotice({ db, api, guildId: "G" }), true);
+    assert.match(api.state.edits.at(-1).p.embeds[0].description, /\*\*2\*\* accounts banned here so far/);
+    api.state.denyEdit = true; // notice deleted: a fresh one is posted
+    const sentNow = api.state.sent.length;
+    assert.equal(await refreshHoneypotNotice({ db, api, guildId: "G" }), true);
+    assert.equal(api.state.sent.length, sentNow + 1); api.state.denyEdit = false;
+    bans.length = 0;
     // a refused ban still removes the message
     let removed = 0;
     const refused = await honeypotHit({ db, moderation: { ban: async () => { throw new Error("hierarchy"); } }, guildId: "G", botId: "bot", channelId: ch.id, userId: "x", deleteMessage: async () => { removed++; } });

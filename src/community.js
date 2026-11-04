@@ -7,7 +7,7 @@ export { levelFromXp, xpForNext };
 import { refreshLeaderboard } from "./leaderboard.js";
 import { forumTags, backfillForum } from "./requestsync.js";
 import { safeFetchImage, isEmojiGgCdn } from "./emojisource.js";
-import { HONEYPOT_NAME, HONEYPOT_TOPIC, honeypotPayload } from "./honeypot.js";
+import { HONEYPOT_NAME, HONEYPOT_TOPIC, postHoneypotNotice } from "./honeypot.js";
 const B = n => 1n << BigInt(n);
 export const PERM = { createInvite: B(0), kick: B(1), ban: B(2), viewChannel: B(10), sendMessages: B(11), manageMessages: B(13), addReactions: B(6), connect: B(20),
     speak: B(21), muteMembers: B(22), deafenMembers: B(23), moveMembers: B(24), manageNicknames: B(27), viewAuditLog: B(7), createThreads: B(35), createPrivateThreads: B(36), moderate: B(40) };
@@ -317,7 +317,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     const rp = rulesPayload({ server: gname, base: baseUrl, rules: db.getCommunity(guildId).rules_text, helpChannel: chIds.help });
     await say(api, chIds.rules, rp);
     await say(api, chIds.help, helpPanel());
-    await say(api, chIds.honeypot, honeypotPayload());
+    await postHoneypotNotice({ db, api, guildId, channelId: chIds.honeypot });
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     await say(api, chIds.bugs, bugPanel());
     await say(api, chIds.announcements, { embeds: [{ color: 0x4d8cff, title: "Announcements", description: "News from the staff lands here. Server managers can post announcements from the dashboard.\n\nMessages marked **Official message from the bot developer** come from the person who runs Steam Value Checker, for things like planned downtime." }] });
@@ -407,7 +407,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     // connect only what is new, and only where nothing is chosen yet
     if (chIds.honeypot) {
         if (!db.getCommunity(guildId).honeypot_channel) db.setCommunity(guildId, { honeypot_channel: chIds.honeypot });
-        if (created.channels.includes(HONEYPOT_NAME)) await say(api, chIds.honeypot, honeypotPayload()); // only in a channel made just now
+        if (created.channels.includes(HONEYPOT_NAME)) await postHoneypotNotice({ db, api, guildId, channelId: chIds.honeypot }); // only in a channel made just now
     }
     if (chIds.musiccmd && !db.getMusicSettings(guildId).channel_id) db.setMusicSettings(guildId, { channel_id: chIds.musiccmd });
     if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins

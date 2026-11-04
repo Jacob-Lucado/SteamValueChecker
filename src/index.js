@@ -97,7 +97,7 @@ import { createModHandlers } from "./modhandlers.js";
 import { tickLeaderboards } from "./leaderboard.js";
 import { createMemes, createMemeHandlers, tickMemes } from "./memes.js";
 import { createBroadcaster } from "./broadcast.js";
-import { honeypotHit } from "./honeypot.js";
+import { honeypotHit, refreshHoneypotNotice } from "./honeypot.js";
 import { guildBannerSvg, toPng, artFor } from "./communitycards.js";
 let logoUri;
 const brandLogo = () => { try { return (logoUri ??= "data:image/png;base64," + readFileSync(new URL("../public/logo.png", import.meta.url)).toString("base64")); } catch { return null; } };
@@ -403,6 +403,16 @@ client.on(Events.VoiceStateUpdate, (oldS, newS) => {
 client.once(Events.ClientReady, () => { setTimeout(() => music?.autoBoot().catch(err => console.error(`[music] ${err.message}`)), 8000).unref?.(); }); // rejoin Auto DJ channels that have people in them after a restart
 client.on(Events.GuildDelete, guild => { music?.onBotDisconnected(guild.id); if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
 
+// The trap channel's notice shows how many accounts it has banned. A raid can ban many at once, so edits are bundled to one every few seconds.
+const trapTimers = new Map();
+function queueTrapCount(guildId) {
+    if (trapTimers.has(guildId)) return;
+    trapTimers.set(guildId, setTimeout(() => {
+        trapTimers.delete(guildId);
+        refreshHoneypotNotice({ db, api: rest, guildId }).catch(err => console.error(`[honeypot] counter: ${err.message}`));
+    }, 4000).unref?.() ?? null);
+}
+
 // ---- community: XP, welcome, invites ----
 client.on(Events.MessageCreate, async m => {
     try {
@@ -412,7 +422,7 @@ client.on(Events.MessageCreate, async m => {
             const p = m.member?.permissions;
             const staff = m.guild?.ownerId === m.author.id || Boolean(p?.has?.(["Administrator"]) || p?.has?.(["BanMembers"]) || p?.has?.(["ManageMessages"]) || p?.has?.(["ModerateMembers"]));
             const res = await honeypotHit({ db, moderation, guildId: m.guildId, channelId: m.channelId, userId: m.author.id, botId: client.user.id, staff,
-                deleteMessage: () => m.delete(), log: t => console.error(`[honeypot] ${t}`) });
+                deleteMessage: () => m.delete(), log: t => console.error(`[honeypot] ${t}`), onBan: () => queueTrapCount(m.guildId) });
             if (res === "banned") await m.delete().catch(() => {});
             return;
         }

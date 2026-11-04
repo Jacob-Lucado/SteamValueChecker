@@ -3,7 +3,7 @@ import { xpForNext } from "../communitystore.js";
 import { buildAnnouncement } from "../announce.js";
 import { UserError } from "../errors.js";
 import { backfillForum } from "../requestsync.js";
-import { honeypotPayload, HONEYPOT_TOPIC } from "../honeypot.js";
+import { postHoneypotNotice, HONEYPOT_TOPIC } from "../honeypot.js";
 import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.js";
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { createMemes, postMeme, MEME_HOURS } from "../memes.js";
@@ -145,7 +145,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         const row = db.setCommunity(gid, patch);
         if (trap) { // a newly chosen trap channel gets the warning notice and description straight away
             await Promise.resolve(rest.editChannel?.(trap, { topic: HONEYPOT_TOPIC })).catch(() => {});
-            await rest.sendMessage(trap, { embeds: honeypotPayload().embeds, allowed_mentions: { parse: [] } }).catch(() => {});
+            await postHoneypotNotice({ db, api: rest, guildId: gid, channelId: trap });
         }
         if (patch.requests_channel) backfillForum({ db, api: rest, guildId: gid, base: publicUrl }).catch(() => {}); // fill the forum with recent requests
         return row;
