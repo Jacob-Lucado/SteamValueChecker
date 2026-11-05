@@ -1,27 +1,27 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
-    { version: "2026.11.20", date: "2026-11-20", title: "More free games caught", items: [
+    { version: "2026.11.20", date: "2026-11-04", title: "More free games caught", items: [
         "**Short-run freebies:** the bot now also watches GamerPower's live giveaways, so the batches of small Epic, Steam and GOG games that are free for only a few days show up in your free game alerts and in `/games freegames`.",
         "**No repeats:** a game that was already announced from another source isn't posted twice, and the first run stays quiet about what was already open."
     ] },
-    { version: "2026.11.19", date: "2026-11-19", title: "Game trivia", items: [
+    { version: "2026.11.19", date: "2026-11-04", title: "Game trivia", items: [
         "**Guess the game:** a manager starts trivia with `/server trivia start` (or on the Trivia page in the dashboard). Each round shows the genre and release year, then the developer, then a description with the name blanked out and a screenshot.",
         "**Tap to answer:** four titles to pick from, one guess each. Right answers score 3, 2 or 1 points depending on how many clues you needed, and the round's answer is revealed when time is up.",
         "**Leaderboard:** points add up per server. `/server trivia top` shows the all-time board, and `/server trivia stop` ends a game early without losing the scores so far."
     ] },
-    { version: "2026.11.18", date: "2026-11-18", title: "Secret Santa", items: [
+    { version: "2026.11.18", date: "2026-11-04", title: "Secret Santa", items: [
         "**Secret Santa for your server:** a manager starts one with `/server santa create` (or on the Secret Santa page in the dashboard) and sets a budget. Members join, then a manager draws the names.",
         "**Private and useful:** everyone gets a message saying who they're buying for, plus what's on that person's wishlist inside the budget at today's cheapest price, with links. Joining is what shares your wishlist, and only with whoever draws you.",
         "**No mix-ups:** nobody draws themselves, DMs that fail are reported to the manager, and `/server santa ideas` shows your giftee again if you lose the message. `/server santa reveal` shows who had who when it's over."
     ] },
-    { version: "2026.11.17", date: "2026-11-17", title: "Smarter alerts", items: [
+    { version: "2026.11.17", date: "2026-11-04", title: "Smarter alerts", items: [
         "**Match score:** each sale alert now shows how well the game fits what you actually play, worked out from your Steam library hours and the game's genres. It only shows once you have a linked library to compare against.",
         "**Next likely sale:** the price history note adds a rough guess of when the next sale might start, based on how often that game has dropped before. It says plainly that it is a guess.",
         "**Price ceiling:** set the highest price you'd pay and alerts above it stay quiet. It is on the alert settings page, in `/alerts` and in the dashboard.",
         "**Record lows only:** one switch to hear only about all-time lows. Starred games always come through, whatever you set.",
         "**Ready-made announcements and a time zone default:** times now default to Eastern, and the bot owner can send restart, development and thank-you notices in one click."
     ] },
-    { version: "2026.11.16", date: "2026-11-16", title: "AI companion (coming soon)", items: [
+    { version: "2026.11.16", date: "2026-11-04", title: "AI companion (coming soon)", items: [
         "**Coming soon, with a preview already working:** the full AI turns on when the bot owner adds an AI key. Until then, when a server turns the companion on, the bot answers the common questions itself: game prices, the free games right now, your wishlist, your library and what to play next. Anything else gets a polite “coming soon” and a list of what works.",
         "**Ask the bot anything:** say `Hey AI` followed by a question, or mention the bot, and it answers in the channel. It is off until a server manager turns it on under Community in the dashboard (or `/manage community ai`), and managers can limit it to one channel.",
         "**It uses the bot's real data:** it can look up live game prices and the cheapest store, list the free games right now, check your wishlist for sales, summarise your library and suggest what to play next from your backlog, show the server's savings leaderboard, and add a game to your wishlist when you ask it to. It only ever sees your own lists.",
@@ -31,24 +31,24 @@ export const CHANGELOG = [
         "**Limits, spelled out in the dashboard:** a daily answer limit per server, a short wait between one person's questions, a cap on question and answer length, and a note on what is sent to the AI provider (only the question and recent replies in the thread).",
         "**Bot owner controls:** the Admin area has an AI companion page (master switch, model, tone, extra instructions, limits, per-server limits, blocking people or servers, usage by day, and a box to try it) and a Bot settings page (profile pages, profile songs, trap channel bans, and a notice banner shown across the dashboard).",
     ] },
-    { version: "2026.11.15", date: "2026-11-15", title: "12 languages", items: [
+    { version: "2026.11.15", date: "2026-11-04", title: "12 languages", items: [
         "**Dashboard languages:** a language picker (🌐) in the top bar switches the dashboard between English, Spanish, French, German, Portuguese, Italian, Russian, Polish, Turkish, Japanese, Korean and Chinese. It starts in your browser's language. The menus, tabs, buttons, wishlist and profile editor are translated; anything not translated yet stays in English.",
         "**`/language`:** pick the language for the bot's buttons and alert messages. It is the same setting as the dashboard picker, so changing one changes the other.",
         "**Command descriptions in your Discord language:** the main commands now show their descriptions in the language your Discord app is set to. Discord decides that from your own app setting, so the bot cannot switch it per person. Command names stay the same everywhere.",
     ] },
-    { version: "2026.11.14", date: "2026-11-14", title: "Public profiles", items: [
+    { version: "2026.11.14", date: "2026-11-03", title: "Public profiles", items: [
         "**Your own profile page:** build it under Account, My profile, with a live preview. Pick a theme and accent colour, background, layout and banner, write a bio, add up to six links (Twitch, Kick, YouTube, X, Bluesky, Steam, GitHub or a website) and pin up to five favorite games. Share it at `/u/yourname`; it shows a proper preview card when pasted into Discord.",
         "**Profile song:** set a YouTube, SoundCloud or Spotify link, or the address of a live radio stream, and visitors get a play button on your page. Turn on the optional **Click to enter** screen and the song starts the moment they click it.",
         "**You choose who sees each part:** about, favorites, wishlist, recently finished, trophies, Steam stats, streaming and playing now are each public, server only or hidden, and can be reordered. Hidden parts are never sent to visitors.",
         "**Live ban counter in the trap channel:** the do-not-type-here notice now shows how many accounts it has banned so far, and updates itself within a few seconds of each ban.",
         "**`/me profile`:** view, bio, name, look, song, link, unlink, favorite, unfavorite and show, all from Discord. Visitors can report a page, and moderators can hide one from the Admin area.",
     ] },
-    { version: "2026.11.13", date: "2026-11-13", title: "Menus and settings panels", items: [
+    { version: "2026.11.13", date: "2026-11-03", title: "Menus and settings panels", items: [
         "**Panels for every command group:** `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu` and `/mod menu` open a private panel with live status for each area (your wishlist count, open giveaways, who is live and so on). Pick a command, fill in its options with dropdowns, member and channel pickers or a small form, and press Run. No typing of options. `/music` has the same from the All commands button on `/player`.",
         "**Wishlist, library and streaming panels:** open them from the wishlist, library and stream areas in `/me menu` and `/server menu`. Browse and page your wishlist, star, remove or set an alert on a game, change a library game's status, or go live and give a key away, all with buttons. Menus reopen where you left off and refresh themselves while open.",
         "**`/alerts status` is now a settings panel:** dropdowns and buttons for every alert, where they go, quiet hours, digest, minimum discount, muting and which games send you codes. Every old `/alerts` command still works."
     ] },
-    { version: "2026.11.12", date: "2026-11-12", title: "Streamer hub, Now playing and Game club", items: [
+    { version: "2026.11.12", date: "2026-11-03", title: "Streamer hub, Now playing and Game club", items: [
         "**Game club:** `/server club pick` sets the server's game of the month; the Game club page and `/server club status` show who is playing, finished or has not started, and a card is posted weekly in the club channel.",
         "**Share your wishlist page:** `/me publicpage share:true` posts your page in the channel as a card with a button. `/me publicpage` on its own shows your link. The dashboard has a Copy link button.",
         "**Extension 2.9 (needs the link with the bot):** on Steam store pages the extension now shows playtest and demo badges, how many server members own the game, one-click wishlist and Spotlight on stream, plus a toolbar count of new free games, playtests and alerts. Until you link it, the icon shows a ! and store pages show a Link now card.",
@@ -58,13 +58,13 @@ export const CHANGELOG = [
         "**Deals overlay for OBS:** a private link that rotates the best deal on your wishlist, a free game right now and a gift-me card. Pick the cards, corner, colours and speed.",
         "**Now playing:** `/server nowplaying` and a dashboard page show who in your server is in a game. Members opt in with `join:true`. Setup adds a #now-playing channel and Squad pings role for squad-up posts when two or more play the same game.",
     ] },
-    { version: "2026.11.11", date: "2026-11-11", title: "Playtests page and a guided first run", items: [
+    { version: "2026.11.11", date: "2026-11-03", title: "Playtests page and a guided first run", items: [
         "**More playtest sources, no duplicates:** playtests, betas and demos are now also read from GamerPower (free beta and playtest key listings), itch.io's playtest tag and Steam's list of new demos, next to Alpha Beta Gamer and Steam announcements. Steam's demo list is long, so it only counts for games on someone's wishlist. A game announced by one source is not announced again by another, in your DMs, in server channels or on the Playtests page, and each new source starts quiet so nothing is dumped on you when it is added.",
         "**Refresh the playtest channel:** server managers can run `/manage community playtests` (or press **Post current playtests now** in the dashboard's Ping roles panel) to post what is listed right now, not only what is new. It posts the newest 8 (up to 15), oldest first, without pinging the role, and the regular check won't repeat them. Once a minute at most.",
         "**Playtests page:** a new page under Free & codes lists every playtest, beta, demo and free weekend the bot can see: Steam announcements for games on your wishlist or in your library, plus the Alpha Beta Gamer site. Filter by type, show only your wishlist, hide games you own, or search. It checks again every five minutes by itself, marks what is new since you opened it, and pauses while the tab is hidden.",
         "**First-run tutorial and setup:** new members now get a guided welcome on the dashboard: a nine-part tour of every area, then a six-step setup for region and stores, delivery, Steam, alerts and your server. The tour can be skipped (it asks to confirm) and setup still follows. Replay it any time with **Take the tour** on My page.",
     ] },
-    { version: "2026.11.10", date: "2026-11-10", title: "Refund reminders, milestones and right-click shortcuts", items: [
+    { version: "2026.11.10", date: "2026-11-03", title: "Refund reminders, milestones and right-click shortcuts", items: [
         "**Community setup:** setup now makes a **#playtests** channel and a **Playtest pings** role (members pick it in #roles) and connects them. The channel posts every playtest and demo the bot finds and pings the role, whatever members have set in their own alert settings. Managers can change the channel and role on the dashboard. Run `/manage community setup` again on an existing server to add them. The new-member welcome message also mentions playtests and the right-click shortcuts.",
         "**Playtest watcher:** `/alerts playtests` (off by default) now has two modes: only games on your wishlist, or every free playtest, beta and demo the bot finds. It reads Steam announcements and the Alpha Beta Gamer site (alphabetagamer.com), which lists sign-ups and demos Steam news never mentions. Every post links back to the site. Servers can also pick a **Playtests** ping role in the dashboard's Ping roles panel: the bot then posts those announcements in the alert channel for games the server's sharing members watch, and pings the role. There is also a switch to post every playtest, not only watched games. No member is named.",
         "**Vote on game night:** the game night card has a **Start a vote** button. It posts up to five games everyone owns, people tap to vote (and can change their vote), and the tally updates live for six hours.",
@@ -80,14 +80,14 @@ export const CHANGELOG = [
         "**Playtime milestones:** `/alerts milestones` (off by default) sends a card when a game passes 100, 250, 500, 1000 or 2000 hours. The first check is quiet.",
         "**Right-click shortcuts:** right-click (or long-press) a member, then Apps: **Compare libraries**, **See their wishlist** or **Play together** (shared games tagged co-op or multiplayer, barely played first) or **Gift ideas** (their shared wishlist games that are on sale and not yet claimed). Right-click a message that is just a game title for **Check this game's price** or **Add to my wishlist**.",
     ] },
-    { version: "2026.11.09", date: "2026-11-09", title: "DLC sales and an installable dashboard", items: [
+    { version: "2026.11.09", date: "2026-11-03", title: "DLC sales and an installable dashboard", items: [
         "**DLC sale alerts:** turn on `/alerts dlc` (or the checkbox in Alert settings) and the bot tells you when DLC or add-ons for a game you play go 40% off or more. It looks at the Steam games you have played for two hours or more, and your own minimum discount still applies. Your first check is quiet.",
         "**Install the dashboard:** the site can now be added to your phone's home screen or installed as an app from your browser, with shortcuts to your wishlist, free games and alert settings.",
     ] },
-    { version: "2026.11.08", date: "2026-11-08", title: "Steam reviews on your alerts", items: [
+    { version: "2026.11.08", date: "2026-11-03", title: "Steam reviews on your alerts", items: [
         "**Steam reviews:** sale alerts and `/me wishlist check` now show how Steam players rate the game (for example \"Very Positive on Steam: 92% of 18,420 reviews are positive\"), so you can tell a good deal on a good game from a good deal on a bad one. Games with very few reviews show nothing.",
     ] },
-    { version: "2026.11.07", date: "2026-11-07", title: "Sample alerts and price charts", items: [
+    { version: "2026.11.07", date: "2026-11-03", title: "Sample alerts and price charts", items: [
         "**Price chart on game checks:** `/me wishlist check` now comes with a picture of the game's price over the last year, with its lowest price and today's price marked.",
         "**Release dates:** you hear when a wishlist game gets a release date, and when a date is pushed back or brought forward by two days or more. Same switch as release-day alerts.",
         "**Mute a game:** on the Wishlist page, each game now has an alerts menu: snooze for 7 or 30 days, or mute it until you switch it back on.",
@@ -96,11 +96,11 @@ export const CHANGELOG = [
         "**For server managers:** the Community page shows who joined and left over the last 30 days (people only), and can preview the welcome picture card before it goes out.",
         "**New board:** `/server leaderboard` has \"Most games finished, all time\".",
     ] },
-    { version: "2026.11.06", date: "2026-11-06", title: "People-only counts", items: [
+    { version: "2026.11.06", date: "2026-11-02", title: "People-only counts", items: [
         "**Member counts leave out bots:** the member numbers the bot shows (about, status, welcome messages, member numbers, the dashboard) now count people only. Turn on the Server Members intent so every bot can be spotted; without it only the bot itself is left out.",
         "**Admin system health:** now shows when the running bot started and which release, machine and region it is on.",
     ] },
-    { version: "2026.11.05", date: "2026-11-05", title: "Fewer commands, bigger music", items: [
+    { version: "2026.11.05", date: "2026-11-01", title: "Fewer commands, bigger music", items: [
         "**Patch notes and news:** turn on `/alerts news` (or pick it on the dashboard's Alerts page) and the bot tells you about new patch notes, or every announcement, for the Steam games you own or wishlist. `/me library news` shows the latest right now. Your first check is quiet, so only new posts reach you.",
         "**Sale countdowns:** alerts, `/me wishlist check` and the weekly digest now say when a sale ends (\"ends in 9 hours\") whenever the store gives an end date.",
         "**Welcome cards:** the welcome message for new members now comes with a picture card showing their avatar, name and member number. Servers can turn it off with `/manage welcome card:false` or on the dashboard's Community page.",
@@ -133,13 +133,13 @@ export const CHANGELOG = [
         "**Stay in the channel:** with `stay` on (`/music settings`, or the Music page), the bot waits in the voice channel it was last used in instead of leaving. When someone joins it goes back to the last live station, or starts the Auto DJ if no station was playing. It also rejoins after a restart.",
         "**Music on the dashboard:** the Music page now has live status with album art, seek, the radio list, Auto DJ requests and settings, and roles for managers, moderators, DJs and listeners.",
     ] },
-    { version: "2026.11.04", date: "2026-11-04", title: "Music", items: [
+    { version: "2026.11.04", date: "2026-11-01", title: "Music", items: [
         "**SoundCloud music:** join a voice channel and use `/play` with a SoundCloud link, a playlist link or just words to search. There is a queue, skip (others vote), previous, loop, shuffle, seek, volume and a now-playing panel with buttons.",
         "**Playlists:** paste a SoundCloud playlist (up to 100 songs) and it queues the lot, or save your own with `/music saveplaylist` and load it in any server.",
         "**Dashboard:** a new **Music** page under Servers does all of it from the browser, and managers set a DJ role, starting volume, limits and where song messages go.",
         "**Setup:** community setup adds a Music category with a #music-commands channel and two voice channels (run `/manage community setup` again on an existing server). The bot needs Connect and Speak permission, so servers that added it earlier may need to grant them."
     ] },
-    { version: "2026.11.03", date: "2026-11-03", title: "Promo drops", items: [
+    { version: "2026.11.03", date: "2026-11-01", title: "Promo drops", items: [
         "**Alerts to your DMs:** `/alerts codes` messages you when a new game code drops (all games, or only the ones you pick), and `/alerts promos` does the same for giveaway and code news. Both are on the dashboard's Alerts page, show up in Notifications, can be muted, and only send what is new from the moment you turn them on.",
         "**Promo drops:** for key giveaways like SteelSeries or NVIDIA rewards. A server manager adds the code or link with `/server promos add` (or on the dashboard under Servers, Promo drops) and the bot posts it once in the promo channel, then greys it out when it ends.",
         "**News watching:** turn on `/server promos news` and the bot also posts news that mentions a giveaway or a code: the NVIDIA and SteelSeries blogs, and the official Steam news for Dead by Daylight, Warframe, Destiny 2, Apex Legends, Rainbow Six Siege, Marvel Rivals, Wuthering Waves, Path of Exile and PUBG. It only posts new ones, and it can be wrong now and then, so each one links to the post.",
@@ -147,12 +147,12 @@ export const CHANGELOG = [
         "**Ping roles:** community setup adds opt-in **Game code pings** and **Promo drop pings** roles to the role picker, and those are pinged by default (or pick your own role on the dashboard or with `/games codes ping` and `/server promos ping`). Run `/manage community setup` again to add them to an existing server.",
         "**Where they go:** community setup adds a #promo-drops channel (run `/manage community setup` again to add it to an existing server)."
     ] },
-    { version: "2026.11.02", date: "2026-11-02", title: "Game codes", items: [
+    { version: "2026.11.02", date: "2026-11-01", title: "Game codes", items: [
         "**Limited-time game codes:** the bot now watches for SHiFT codes (Borderlands 2, 3, 4, The Pre-Sequel, Wonderlands and the GOTY edition) plus redeem codes for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, and posts each one once, with the right game's art, the reward, the platform and when it ends. When a code runs out, its post is greyed out.",
         "**Where they go:** servers get a #game-codes channel from community setup (run `/manage community setup` again to add it to an existing server). Managers can pick the channel, which games to include and a role to ping with `/games codes`, or on the dashboard under Servers, Game codes.",
         "**Dashboard:** a new **Game codes** page under Prices lists every working code with a copy button, and lets you look at ones that just ended. `/games codes latest` shows the same list in Discord.",
     ] },
-    { version: "2026.11.01", date: "2026-11-01", title: "A full community bot", items: [
+    { version: "2026.11.01", date: "2026-10-29", title: "A full community bot", items: [
         "**Brand-new servers are set up for you.** Add the bot to a fresh server and it builds the usual gaming layout (welcome, rules, general, gaming, deals, voice and a private staff area), with Moderator and Member roles, a role picker and the bot's own channels connected. Any other server can run `/manage community setup`.",
         "**Welcome messages, levels and XP, invites and referrals.** New members are greeted with who invited them, chat and voice earn XP, `/server rank` and `/server levels` show where you stand, and `/server invites link` gives you your own link with rewards for bringing people in.",
         "**Emoji import:** `/manage emoji import` copies emoji from other servers or adds an image. The dashboard can paste emoji or upload an image too.",
@@ -163,7 +163,7 @@ export const CHANGELOG = [
         "**Steam Verified:** fresh servers get a Steam Verified role and a #verify channel. Press the button (or run `/me steam verify`) after signing in through Steam. You can also add **Linked Roles** from the Steam page so your Steam shows on your Discord profile; the normal way to link still works.",
         "**Cross-server giveaways** now say they are cross-server and who hosts them, can be hosted by a partner with their links, and can ask for entry steps like following on X or joining a Discord. Giveaway numbers no longer show on posts."
     ] },
-    { version: "2026.10.31", date: "2026-10-31", title: "Sign in through Steam", items: [
+    { version: "2026.10.31", date: "2026-10-29", title: "Sign in through Steam", items: [
         "**Sign in through Steam** on the dashboard: one click on Steam's own page and your library, hours and taste profile fill in. No profile links to paste. Wishlist import, `/me wishlist import` and `/me steam link` use the Steam account you signed in with.",
         "The Steam page has a new **Library analytics** view: games, hours, collection value, how much you have played, hours by genre, played versus backlog and your most played games.",
         "Free DLC is now labelled, and if your Steam library is synced the alert says whether you own the base game.",
@@ -171,7 +171,7 @@ export const CHANGELOG = [
         "**For you** page and `/me steam foryou`: live deals ranked by a match score from your library taste and wishlist, with filters for all-time lows, discount, price and store.",
         "Home page: a live count of free offers and a feature ticker. `/help` is now a full command list."
     ] },
-    { version: "2026.10.30", date: "2026-10-30", title: "Goals, bundles, more leaderboards and a tidier menu", items: [
+    { version: "2026.10.30", date: "2026-10-28", title: "Goals, bundles, more leaderboards and a tidier menu", items: [
         "`/me steam goal`: set an hours goal for the year and see if you are on pace (also on the Steam page). `/me steam recap` now posts a picture you can share, and the Steam page can make the same image.",
         "`/me library bundle` and `/me library bundles`: record a bundle you bought and see what its games are worth, what each cost you and how much you have played.",
         "`/server leaderboard` has two more boards: hours played this year and biggest library. The dashboard shows all four in one picker.",
@@ -179,7 +179,7 @@ export const CHANGELOG = [
         "Dashboard menu: pages are grouped into Library, Prices, Friends, Servers, Account and Help, with each section's pages as tabs under the menu. Theme and contrast now share one Display menu.",
         "FanaticalGrabber: bundle and cart pages on Fanatical now show how the price compares with Steam and whether it is worth buying. It can also fill in what you paid from your Steam purchase history (Send what I paid)",
     ] },
-    { version: "2026.10.29", date: "2026-10-29", title: "Hours tracked, challenges, gifts and a Steam panel", items: [
+    { version: "2026.10.29", date: "2026-10-27", title: "Hours tracked, challenges, gifts and a Steam panel", items: [
         "`/me steam recap` (and a card you can save as an image on the Steam page): the hours you add after linking Steam, for this year and in total since you linked, per month and per game. Steam only shares lifetime hours, so nothing from before you linked. Linked libraries now sync automatically every few hours.",
         "`/me library challenge`: set a monthly goal of games to finish and keep a streak. It is on the Library page too.",
         "Wishlist: `/me wishlist cleanup` removes games you already own, and `/me wishlist priority` stars a game so it is listed first and its alerts come through quiet hours.",
@@ -199,7 +199,7 @@ export const CHANGELOG = [
         "`/me steam value` now answers with a picture that looks like the Steam page's account value panel. The Steam page has a Save as image button for it too.",
         "New: a short guided tour the first time you open the dashboard (replay it from My page), and a one-time quick start after your first command.",
         "Taste profile (`/me steam taste`) suggests games from your own library's tags." ] },
-    { version: "2026.10.28", date: "2026-10-28", title: "Steam library, bundles and looking for group", items: [
+    { version: "2026.10.28", date: "2026-10-26", title: "Steam library, bundles and looking for group", items: [
         "`/me steam link` (or the Steam page) links a public profile: your games, hours played, what you never played and what it is all worth. `/me steam next` picks what to play next from your own library, and `/me steam value` estimates your Steam account's value. A sync marks games with every achievement unlocked as Finished.",
         "`/games bundle` checks whether a bundle beats buying separately. `/games saleprep` plans a sale shopping list and recaps past alerts.",
         "`/server lfg post` makes a looking-for-group post with Join and Leave buttons and an optional Discord event.",
@@ -210,7 +210,7 @@ export const CHANGELOG = [
         "Calendar: `/server calendar view` and a Calendar page show your wishlist release dates, Steam sales, server events and group games. Managers add server events (announced, with a reminder). An optional private link syncs it to Google, Apple or Outlook calendar.",
         "Batch redeem remembers how keys turned out (masked), skips repeats and has `/games redeem history:true`.",
         "The bot owner can download the latest backup from the Admin page." ] },
-    { version: "2026.10.27", date: "2026-10-27", title: "Game night and easier setup", items: [
+    { version: "2026.10.27", date: "2026-10-26", title: "Game night and easier setup", items: [
         "`/server gamenight`: what everyone in your voice channel can play together, who is missing a game, and what to buy together.",
         "Optional group-buy nudges in a voice channel when a game several of you want goes on sale.",
         "`/manage setup` can create the channels for you, and the dashboard menu is now grouped." ] },
@@ -220,7 +220,7 @@ export const CHANGELOG = [
         "Sale alerts have Snooze 7 days and Only below a price buttons.",
         "Setup checklist on the dashboard home, a global search (press `/`), and a high-contrast theme.",
         "Spanish and French for the main buttons: `/alerts language`." ] },
-    { version: "2026.10.12", date: "2026-10-12", title: "Status page, free game menu and server tools", items: [
+    { version: "2026.10.12", date: "2026-10-26", title: "Status page, free game menu and server tools", items: [
         "A public Status page and `/bot status`.",
         "`/games freegames` is a scrollable menu with Games and DLC tabs.",
         "`/me library backlog`, `/games watch`, `/games sales`, `/me publicpage` and `/server serverstats`." ] }
