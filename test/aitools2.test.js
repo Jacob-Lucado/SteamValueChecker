@@ -55,7 +55,7 @@ test("AI lite: achievement questions are answered from the tool", async () => {
     assert.match(text, /not linked/);
 });
 
-test("AI tools: linked Steam gives rare achievements, hours and a play-next card", async () => {
+test("AI tools: linked Steam gives rare achievements and hours", async () => {
     const { db, t } = mk();
     db.setSteamLink("u1", "76561190000000001");
     db.syncSteamGames("u1", [{ itad_id: "a", title: "Hades", appid: 1145360, minutes: 3000 }, { itad_id: "b", title: "Celeste", appid: 504230, minutes: 0 }]);
@@ -67,7 +67,25 @@ test("AI tools: linked Steam gives rare achievements, hours and a play-next card
     const s = await t.run("my_steam", {}, ctx);
     assert.equal(s.games, 2);
     assert.equal(s.mostPlayed[0].title, "Hades");
-    assert.ok(cards[0].image.includes("504230") || cards[0].image.includes("1145360"));
+    assert.equal(cards.length, 0, "no dashboard set, and no unasked play-next card");
     const lite = await liteAnswer({ question: "what are my rarest achievements", userId: "u1", guildId: "G", tools: t, cards: [] });
     assert.match(lite, /Escaped/);
+});
+
+test("AI cards: a library question gets a dashboard card, not a random play-next pick", async () => {
+    const db = openDb(":memory:"); db.ensureUser("u1", "G");
+    db.upsertLibrary("u1", [{ itad_id: "a", title: "Hades", paid: 10 }]);
+    const t = createAiTools({ db, itad, dashUrl: "https://dash.test" });
+    const cards = [];
+    const r = await t.run("my_library", {}, { userId: "u1", cards });
+    assert.equal(r.games, 1);
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].url, "https://dash.test/#/library");
+    assert.ok(!cards[0].another && !cards[0].wish, "no pick buttons");
+    const pick = [];
+    await t.run("play_next", {}, { userId: "u1", cards: pick });
+    assert.ok(pick[0].title === "Hades");
+    const off = [];
+    await createAiTools({ db, itad }).run("my_library", {}, { userId: "u1", cards: off });
+    assert.equal(off.length, 0, "no dashboard, no card");
 });

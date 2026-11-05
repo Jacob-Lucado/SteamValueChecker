@@ -47,7 +47,7 @@ export function cardsPayload(cards, { db, userId }) {
 export function pickCard(next, skip = []) {
     const g = next.pick;
     return { title: g.title, url: Number.isInteger(g.appid) ? `https://store.steampowered.com/app/${g.appid}/` : undefined, linkLabel: "Steam page", image: artUrl(g) ?? (Number.isInteger(g.appid) ? steamArt(g.appid) : undefined),
-        description: next.why, footer: next.remaining ? `${next.remaining} more waiting in your backlog` : "That's the last one in your backlog", another: next.remaining ? { skip: [...skip, g.itad_id] } : undefined };
+        description: String(next.why).replace(/,? or press Pick another/i, ", or hit Another pick"), footer: next.remaining ? `${next.remaining} more waiting in your backlog` : "That's the last one in your backlog", another: next.remaining ? { skip: [...skip, g.itad_id] } : undefined };
 }
 
 /** Presses on the AI's buttons. Only the person who asked can use them. */

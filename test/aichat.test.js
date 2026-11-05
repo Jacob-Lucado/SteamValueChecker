@@ -251,7 +251,7 @@ test("lite mode: reads the common questions, and answers them from the bot's own
     assert.equal(titleFrom("what's the price of Hollow Knight"), "Hollow Knight");
     assert.equal(titleFrom('is "Inside" cheap'), "Inside");
     assert.equal(titleFrom("tell me a joke"), null);
-    for (const [q, k] of [["", "help"], ["hi", "help"], ["what's free right now?", "free"], ["any free games today", "free"], ["what's on my wishlist", "wishlist"], ["what should I play next", "library"], ["leaderboard please", "board"], ["is Hades on sale", "price"], ["write me a poem about owls", "unknown"]]) assert.equal(intentOf(q).kind, k, q);
+    for (const [q, k] of [["", "help"], ["hi", "help"], ["what's free right now?", "free"], ["any free games today", "free"], ["what's on my wishlist", "wishlist"], ["what should I play next", "next"], ["what is my steam worth", "library"], ["leaderboard please", "board"], ["is Hades on sale", "price"], ["write me a poem about owls", "unknown"]]) assert.equal(intentOf(q).kind, k, q);
 
     const db = openDb(":memory:"); db.ensureUser("u1");
     const itad = {

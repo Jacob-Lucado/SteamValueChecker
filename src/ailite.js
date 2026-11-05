@@ -46,7 +46,8 @@ export function intentOf(question) {
     if (!q.trim() || /^(hi|hey|hello|yo|sup|help|what can you do|commands)\b/.test(q.trim()) && q.split(" ").length <= 4) return { kind: "help" };
     if (/\bfree\b.*\b(games?|now|today|right now|claim|epic|steam|gog)\b|\bwhat'?s free\b|\bfree (games?|stuff)\b/.test(q)) return { kind: "free" };
     if (/\b(my )?wish ?list\b/.test(q)) return { kind: "wishlist" };
-    if (/\b(play next|what (should|do) i play|backlog|my library|library)\b/.test(q)) return { kind: "library" };
+    if (/\b(play next|what (should|do) i play|what to play|something to play)\b/.test(q)) return { kind: "next" };
+    if (/\b(backlog|my library|library|(steam|library|games?) (worth|value))\b|\bworth\b/.test(q)) return { kind: "library" };
     if (/\b(leaderboard|top savers|who saved)\b/.test(q)) return { kind: "board" };
     const more = MORE.findIndex(([re]) => re.test(q));
     if (more >= 0) return { kind: "more", more };
@@ -93,12 +94,15 @@ export async function liteAnswer({ question, userId, guildId, tools, cards }) {
         const list = (sale.length ? sale : r.games).slice(0, 6).map(g => `• **${g.title}**${g.bestNow ? `: ${g.bestNow}` : ""}${g.discountPct ? ` (-${g.discountPct}%)` : ""}`).join("\n");
         return `${head}\n${list}`;
     }
+    if (it.kind === "next") {
+        const r = await run("play_next", {});
+        return r.error ? "I couldn't read your library just now. Try `/me library view`." : r.empty ? r.note : `Play **${r.pick}** next. ${r.why}`;
+    }
     if (it.kind === "library") {
         const r = await run("my_library", {});
         if (r.error) return "I couldn't read your library just now. Try `/me library view`.";
         if (r.empty) return "Your library is empty. It fills from a Steam sign-in or `/me library import`.";
-        const next = r.playNextSuggestion ? `\nPlay next: **${r.playNextSuggestion.title}**. ${r.playNextSuggestion.why}` : "";
-        return `You own **${r.games}** games, paid ${r.paid} (worth ${r.worthAtFullPrice} at full price). **${r.backlogGames}** still in the backlog.${next}`;
+        return `You own **${r.games}** games, paid ${r.paid} (worth ${r.worthAtFullPrice} at full price). **${r.backlogGames}** still in the backlog.`;
     }
     if (it.kind === "board") {
         const r = await run("server_leaderboard", {});

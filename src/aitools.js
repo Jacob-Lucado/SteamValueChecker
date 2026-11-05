@@ -7,7 +7,7 @@ import { libraryView, playNext, leaderboard } from "./library.js";
 import { money, itadArt, artUrl, safeUrl } from "./render.js";
 import { steamArt } from "./art.js";
 import { pickCard } from "./aicards.js";
-import { MORE_DEFS, createMoreTools } from "./aitools2.js";
+import { MORE_DEFS, createMoreTools, dashCard } from "./aitools2.js";
 
 const MAX_TITLES = 6;
 const clip = (s, n = 80) => String(s ?? "").slice(0, n);
@@ -31,13 +31,18 @@ export const TOOL_DEFS = [
     },
     {
         name: "my_library",
-        description: "A summary of the asker's own game library in this bot: how many games, what they paid, what it is worth, and their backlog. Also suggests what to play next from their backlog.",
+        description: "A summary of the asker's own game library in this bot: how many games, what they paid, what it is worth, and their backlog. Does not pick a game; use play_next for that.",
         input_schema: { type: "object", properties: {} }
     },
     {
         name: "add_to_wishlist",
         description: "Add a game to the asker's own wishlist so the bot alerts them when it goes on sale. Only call this when the asker clearly asked to add or track that game.",
         input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] }
+    },
+    {
+        name: "play_next",
+        description: "Pick a game for the asker to play next from their own library and backlog, shown with its picture. Use it only when they ask what to play.",
+        input_schema: { type: "object", properties: {} }
     },
     {
         name: "game_info",
@@ -52,12 +57,12 @@ export const TOOL_DEFS = [
 ];
 
 /** { defs, run(name, input, { userId, guildId }) } -> a JSON-able result. Errors come back as { error } so the AI can explain them. */
-export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globalThis.fetch, news = null, fx = null }) {
+export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globalThis.fetch, news = null, fx = null, dashUrl = null }) {
     const userOf = id => db.getUser?.(id) ?? { discord_id: id, region: "US", stores: "all" };
     const region = id => userOf(id)?.region || "US";
 
     const tools = {
-        ...createMoreTools({ db, itad, news, fx, nameOf }),
+        ...createMoreTools({ db, itad, news, fx, nameOf, dashUrl }),
         async check_prices({ titles }, ctx) {
             const { userId } = ctx;
             const list = arr(titles).map(t => clip(t, 80)).filter(Boolean).slice(0, MAX_TITLES);
@@ -103,10 +108,18 @@ export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globa
             const u = userOf(userId);
             const v = await libraryView(db, itad, u, { snapshot: false });
             if (!v.rows.length) return { empty: true, note: "Their library is empty. It fills from a Steam sign-in or /me library import." };
-            const t = v.totals, cur = v.currency, next = playNext(v.rows);
-            if (next) ctx?.cards?.push(pickCard(next));
-            return { currency: cur, games: t.games, paid: money(t.paid, cur), worthAtFullPrice: money(t.msrp, cur), backlogGames: t.backlogGames, playing: t.playing, finished: t.finished,
-                playNextSuggestion: next ? { title: next.pick.title, why: next.why } : null };
+            const t = v.totals, cur = v.currency;
+            dashCard(dashUrl, ctx, "library", { title: "Your library", description: "Every game, what you paid and what it is worth, in your dashboard.", fields: [{ name: "Games", value: String(t.games) }, { name: "Paid", value: money(t.paid, cur) }, { name: "Worth at full price", value: money(t.msrp, cur) }, { name: "Backlog", value: String(t.backlogGames) }] });
+            return { currency: cur, games: t.games, paid: money(t.paid, cur), worthAtFullPrice: money(t.msrp, cur), backlogGames: t.backlogGames, playing: t.playing, finished: t.finished };
+        },
+
+        async play_next(_i, ctx) {
+            const v = await libraryView(db, itad, userOf(ctx.userId), { snapshot: false });
+            if (!v.rows.length) return { empty: true, note: "Their library is empty. It fills from a Steam sign-in or /me library import." };
+            const next = playNext(v.rows);
+            if (!next) return { empty: true, note: "Nothing left in their backlog to suggest." };
+            ctx?.cards?.push(pickCard(next));
+            return { pick: next.pick.title, why: next.why, moreInBacklog: next.remaining };
         },
 
         async game_info({ title }, ctx) {

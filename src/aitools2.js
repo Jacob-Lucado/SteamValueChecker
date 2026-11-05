@@ -20,11 +20,18 @@ import { levelFromXp } from "./communitystore.js";
 import { REGIONS } from "./constants.js";
 import { money, itadArt, safeUrl } from "./render.js";
 import { steamArt } from "./art.js";
+import { dashLink } from "./dashlink.js";
 
 const clip = (s, n = 80) => String(s ?? "").slice(0, n);
 const arr = v => (Array.isArray(v) ? v : []);
 const day = ms => new Date(ms).toISOString().slice(0, 10);
 const STATUS = ["backlog", "playing", "played", "finished", "dropped"];
+/** A card that opens the matching dashboard page, with the headline numbers on it. Only added when the dashboard is on. */
+export function dashCard(dashUrl, ctx, page, { title, description, fields = [] }) {
+    const url = dashLink(dashUrl, page);
+    if (!url || !ctx?.cards) return;
+    ctx.cards.push({ title, url, linkLabel: "Open in the dashboard", description, fields });
+}
 const none = { type: "object", properties: {} };
 const title = { type: "object", properties: { title: { type: "string", description: "Game title" } }, required: ["title"] };
 
@@ -53,7 +60,7 @@ export const MORE_DEFS = [
     { name: "set_goals", description: "Set the asker's monthly 'games to finish' goal and/or their yearly hours-played goal. 0 clears a goal. Only when they asked.", input_schema: { type: "object", properties: { games_this_month: { type: "integer", minimum: 0, maximum: MAX_GOAL }, hours_this_year: { type: "integer", minimum: 0, maximum: 5000 } } } }
 ];
 
-export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () => null }) {
+export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () => null, dashUrl = null }) {
     const userOf = id => db.getUser?.(id) ?? { discord_id: id, region: "US", stores: "all" };
     const regionOf = id => userOf(id)?.region || "US";
     const cur = c => c ?? "USD";
@@ -61,10 +68,12 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
     const lookup = (rows, q) => { const f = findItem(rows, q); return f.item ? { item: f.item } : { error: f.ambiguous ? `More than one match: ${f.ambiguous.join(", ")}. Which one?` : "That game isn't there." }; };
 
     return {
-        async my_achievements(_i, { userId }) {
+        async my_achievements(_i, ctx) {
+            const { userId } = ctx;
             const miss = needSteam(userId); if (miss) return miss;
             const a = db.achievementShowcase(userId, 8);
             if (!a.done && !a.top.length) return { empty: true, note: "No achievement data yet. It fills in after a Steam sync, and only for games whose achievements are public." };
+            dashCard(dashUrl, ctx, "steam", { title: "Your achievements", description: "Rarest unlocks and progress per game, in your dashboard.", fields: [{ name: "Unlocked", value: String(a.done) }, { name: "Games", value: String(a.games) }, { name: "Rarest", value: a.top[0] ? `${a.top[0].name} (${a.top[0].pct}%)` : null }] });
             return { unlocked: a.done, gamesWithAchievements: a.games, rareUnlocks: a.rare, rarest: a.top.map(x => ({ game: x.game, achievement: x.name, ownedByPercentOfPlayers: x.pct })) };
         },
 
@@ -75,7 +84,7 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
             if (!rows.length) return { empty: true, note: "No Steam games synced yet. /me steam sync pulls them in." };
             const s = playStats(rows), year = new Date().getUTCFullYear(), recap = db.playRecap(userId, year), goal = db.getHourGoal(userId);
             const next = steamNext(rows);
-            if (next) cards?.push({ title: next.pick.title, url: `https://store.steampowered.com/app/${next.pick.appid}/`, linkLabel: "Steam page", image: steamArt(next.pick.appid), description: next.why, footer: "A pick from your Steam library" });
+            dashCard(dashUrl, { cards }, "steam", { title: "Your Steam library", description: "Hours, unplayed games and what it is all worth, in your dashboard.", fields: [{ name: "Games", value: String(s.games) }, { name: "Hours", value: String(Math.round(s.totalMinutes / 60)) }, { name: "Unplayed", value: String(s.unplayedCount) }] });
             return { games: s.games, played: s.playedGames, totalHours: Math.round(s.totalMinutes / 6) / 10, neverPlayedOrUnder1h: s.unplayedCount,
                 mostPlayed: s.mostPlayed.map(r => ({ title: r.title, hours: fmtHours(r.minutes), status: r.status })),
                 thisYear: { year, hoursTracked: Math.round(recap.totalMinutes / 6) / 10, games: recap.games, top: recap.top.map(t => ({ title: t.title, hours: fmtHours(t.minutes) })) },
@@ -83,21 +92,25 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
                 playNext: next ? { title: next.pick.title, why: next.why } : null };
         },
 
-        async my_spending(_i, { userId }) {
+        async my_spending(_i, ctx) {
+            const { userId } = ctx;
             const lib = db.listLibrary(userId);
             if (!lib.length) return { empty: true, note: "Their library is empty." };
             const u = userOf(userId), c = regionCurrency(u.region), s = spendSummary(lib, { currency: c });
             if (!s.games) return { empty: true, note: "None of their games have a price paid on record, so there is nothing to total. Adding what they paid fills this in." };
+            dashCard(dashUrl, ctx, "library", { title: "Your spending", description: "Month by month, cost per hour and bought-but-unplayed, in your dashboard.", fields: [{ name: "Total", value: money(s.total, c) }, { name: "This year", value: money(s.year.total, c) }, { name: "Unplayed", value: `${s.unplayed.count} games` }] });
             return { currency: c, total: s.total, games: s.games, averagePerGame: s.avg, thisYear: s.year, lastMonths: s.months.slice(-6), bestValue: s.bestValue, worstValue: s.worstValue, boughtButUnplayed: s.unplayed };
         },
 
-        async my_badges(_i, { userId }) {
-            const t = trophyCase(db, userId);
+        async my_badges(_i, ctx) {
+            const t = trophyCase(db, ctx.userId);
+            dashCard(dashUrl, ctx, "library", { title: "Your trophy case", description: "Every badge and what the next tier needs.", fields: [{ name: "Earned", value: `${t.earned} of ${t.total}` }] });
             return { earned: t.earned, total: t.total, badges: t.badges.map(b => ({ name: b.name, tier: b.tier, progress: `${b.value}${b.unit ? ` ${b.unit}` : ""}`, nextTierAt: b.next })) };
         },
 
-        async my_challenge(_i, { userId }) {
-            const c = challengeView(db, userId);
+        async my_challenge(_i, ctx) {
+            const c = challengeView(db, ctx.userId);
+            dashCard(dashUrl, ctx, "library", { title: "Monthly challenge", fields: [{ name: "This month", value: `${c.done}${c.goal ? ` of ${c.goal}` : ""} finished` }, { name: "Streak", value: `${c.streak} month${c.streak === 1 ? "" : "s"}` }] });
             return { month: c.month, goal: c.goal || null, finishedThisMonth: c.done, finishedTitles: c.titles, daysLeft: c.daysLeft, streakMonths: c.streak, bestStreak: c.best, recent: c.history };
         },
 
@@ -110,8 +123,10 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
             return { personalised: r.personalised, yourTopGenres: r.genres, deals: top.map(d => ({ title: d.title, price: money(d.price, cur(d.currency)), discountPct: d.cut, shop: d.shop, matchPct: d.match, atAllTimeLow: d.atl, onYourWishlist: d.wishlist })) };
         },
 
-        async my_settings(_i, { userId }) {
+        async my_settings(_i, ctx) {
+            const { userId } = ctx;
             const u = userOf(userId), p = prefsView(u);
+            dashCard(dashUrl, ctx, "alerts", { title: "Your alert settings", description: "Change any of them in your dashboard.", fields: [{ name: "Alerts", value: u.paused ? "Paused" : "On" }, { name: "Region", value: u.region }, { name: "Watching", value: `${db.countItems(userId)} games` }] });
             return { alerts: u.paused ? "paused" : "on", delivery: u.delivery, region: u.region, stores: u.stores, gamesWatched: db.countItems(userId), quietHours: describeQuiet(u), weeklyDigest: describeDigest(u),
                 minDiscountPct: p.min_discount, newsAlerts: ["off", "patch notes only", "every announcement"][p.news] ?? "off", freeGameAlerts: p.free, bundleAlerts: p.bundles, achievementAlerts: p.achv, language: p.lang };
         },
@@ -178,12 +193,14 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
             return { friends: f.slice(0, 12).map(x => ({ name: x.name, birthday: x.birthday ?? null, daysUntil: x.daysToBirthday })) };
         },
 
-        async server_activity(_i, { userId, guildId }) {
+        async server_activity(_i, ctx) {
+            const { userId, guildId } = ctx;
             if (!guildId) return { error: "Only works inside a server." };
             const xp = db.getXp?.(guildId, userId), lv = xp ? levelFromXp(xp.xp ?? 0) : null;
             const st = serverStats(db, guildId), now = Date.now();
             const lfg = db.listOpenLfg(guildId).slice(0, 5).map(p => ({ game: p.game, when: day(p.starts_at) + " " + new Date(p.starts_at).toISOString().slice(11, 16) + " UTC", slots: p.slots }));
             const events = db.listCalEvents(guildId, now, now + 14 * 86400_000).slice(0, 5).map(e => ({ title: e.title, when: day(e.starts_at) }));
+            dashCard(dashUrl, ctx, "xp", { title: "Your server level", description: "Levels, rank and the leaderboard in your dashboard.", fields: lv ? [{ name: "Level", value: String(lv.level) }, { name: "Rank", value: String(db.xpRank?.(guildId, userId) ?? "") }] : [] });
             return { you: lv ? { level: lv.level, xpIntoLevel: lv.into, xpNeeded: lv.need, rank: db.xpRank?.(guildId, userId) ?? null } : null, openGroupPosts: lfg, upcomingEvents: events,
                 membersSharingStats: st.members ?? st.sharing ?? undefined, gamesAcrossThem: st.games, savedAcrossThem: st.saved ? Math.round(st.saved) : 0, topSavers: st.top.map((t, n) => ({ rank: n + 1, member: nameOf(t.discord_id) ?? "a member", savedPct: Math.round(t.savedPct) })) };
         },
