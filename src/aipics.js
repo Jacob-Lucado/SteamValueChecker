@@ -54,7 +54,10 @@ export function panelSvg(panel, pics = {}) {
 
 /** The panel as a PNG buffer. A picture that cannot be fetched is drawn as a plain tile. */
 export async function renderPanel(panel, { fetchImpl = fetch } = {}) {
-    const urls = [...new Set((panel.rows ?? []).slice(0, 8).map(r => r.icon).filter(u => typeof u === "string" && /^https:\/\//i.test(u)))], pics = {};
-    await Promise.all(urls.map(async u => { const d = await fetchImageDataUri(u, { fetchImpl }).catch(() => null); if (d) pics[u] = d; }));
+    // A row's icon may be a list of addresses to try in order (the achievement icon, then the game's own picture).
+    const rows = (panel.rows ?? []).slice(0, 8).map(r => (Array.isArray(r.icon) ? { ...r, icons: r.icon.filter(u => typeof u === "string" && /^https:\/\//i.test(u)) } : { ...r, icons: typeof r.icon === "string" ? [r.icon] : [] }));
+    const pics = {};
+    await Promise.all(rows.map(async r => { for (const u of r.icons) { if (!pics[u]) { const d = await fetchImageDataUri(u, { fetchImpl }).catch(() => null); if (d) pics[u] = d; } if (pics[u]) { r.icon = u; return; } } r.icon = r.icon === undefined || r.icon === null ? r.icon : null; }));
+    panel = { ...panel, rows };
     return svgToPng(panelSvg(panel, pics), W * 2 > 1920 ? 1920 : W * 2);
 }

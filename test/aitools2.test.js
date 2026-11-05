@@ -102,3 +102,30 @@ test("AI pictures: a card with a picture becomes an attachment on the embed", as
     assert.equal(p.files[0].name, "a.png");
     assert.equal(p.components[0].components[0].url, "https://dash.test/");
 });
+
+test("AI pictures: redirects are followed, a dead icon falls back to the next picture, and the model is told not to repeat the list", async () => {
+    const { fetchImageDataUri } = await import("../src/imgrender.js");
+    const { renderPanel } = await import("../src/aipics.js");
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+    const hits = [];
+    const fetchImpl = async url => {
+        hits.push(url);
+        if (url.includes("/old")) return { ok: false, status: 302, headers: new Map([["location", "https://cdn.test/new.png"]]) };
+        if (url.includes("/new")) return { ok: true, status: 200, headers: new Map([["content-type", "image/png"]]), arrayBuffer: async () => png };
+        return { ok: false, status: 404, headers: new Map() };
+    };
+    const resolve = async () => [{ address: "93.184.216.34" }];
+    assert.match(await fetchImageDataUri("https://cdn.test/old.png", { fetchImpl, resolve }), /^data:image\/png/);
+    const loop = async () => ({ ok: false, status: 302, headers: new Map([["location", "https://cdn.test/old.png"]]) });
+    assert.equal(await fetchImageDataUri("https://cdn.test/old.png", { fetchImpl: loop, resolve }), null, "endless redirects give up");
+    assert.equal(await fetchImageDataUri("https://cdn.test/a.png", { fetchImpl: async () => ({ ok: false, status: 302, headers: new Map([["location", "http://10.0.0.1/x"]]) }), resolve }), null, "a redirect to plain http is refused");
+
+    const db = openDb(":memory:"); db.ensureUser("u1", "G");
+    db.setSteamLink("u1", "76561190000000001");
+    db.syncSteamGames("u1", [{ itad_id: "a", title: "Fargone", appid: 111, minutes: 60 }]);
+    db.setRareAchievements("u1", 111, "Fargone", [{ apiname: "X", name: "Mutant hunter", icon: "https://cdn.test/dead.png", pct: 0.1 }]);
+    const t = createAiTools({ db, itad, fetchImpl: async u => (u.includes("dead") ? { ok: false, status: 404, headers: new Map() } : { ok: true, status: 200, headers: new Map([["content-type", "image/png"]]), arrayBuffer: async () => png }) });
+    const r = await t.run("my_achievements", {}, { userId: "u1", cards: [] });
+    assert.match(r.shownAsPicture, /Do not list them again/);
+    assert.ok((await renderPanel({ title: "t", rows: [{ label: "a", icon: ["https://cdn.test/dead.png", null] }] }, { fetchImpl: async () => ({ ok: false, status: 404, headers: new Map() }) })).length > 500);
+});

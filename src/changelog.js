@@ -6,6 +6,7 @@ export const CHANGELOG = [
         "**It can do things too:** when you ask, it adds or removes games, stars a wishlist game, sets a game's status, sets your goals, pauses alerts or changes your region, and tells you exactly what it changed.",
         "**Your server:** it can show your level and rank, open group posts and the leaderboard.",
         "**Pictures, not walls of text:** your achievements, library value, Steam hours, spending, trophies and challenge now come back as a picture with big numbers, bars and the achievement icons.",
+        "**Missing icons fixed:** pictures now follow Steam's image redirects and fall back to the game's own art, so no more blank tiles. The AI also stops repeating the list in text when a picture shows it.",
         "**Cards that fit the question:** ask about your library, Steam, spending or settings and you get a card that opens that page in your dashboard. Play-next picks only show when you ask what to play."
     ] },
     { version: "2026.11.34", date: "2026-11-05", title: "The AI companion shows its work", items: [

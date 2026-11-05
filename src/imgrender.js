@@ -34,12 +34,18 @@ const TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
  */
 export async function fetchImageDataUri(url, { fetchImpl = fetch, resolve = h => dns.lookup(h, { all: true }), max = 4_000_000, timeoutMs = 7000 } = {}) {
     try {
-        const u = new URL(url);
-        if (u.protocol !== "https:" || u.username || u.password || net.isIP(u.hostname.replace(/^\[|\]$/g, ""))) return null;
-        if (u.port && u.port !== "443") return null;
-        const addrs = await resolve(u.hostname);
-        if (!addrs.length || addrs.some(a => isPrivateIp(a.address))) return null;
-        const res = await fetchImpl(u.href, { redirect: "manual", signal: AbortSignal.timeout(timeoutMs), headers: { Accept: "image/*" } });
+        let u = new URL(url), res;
+        for (let hop = 0; ; hop++) { // a few redirects are fine (Steam's image hosts use them), each one checked like the first address
+            if (u.protocol !== "https:" || u.username || u.password || net.isIP(u.hostname.replace(/^\[|\]$/g, ""))) return null;
+            if (u.port && u.port !== "443") return null;
+            const addrs = await resolve(u.hostname);
+            if (!addrs.length || addrs.some(a => isPrivateIp(a.address))) return null;
+            res = await fetchImpl(u.href, { redirect: "manual", signal: AbortSignal.timeout(timeoutMs), headers: { Accept: "image/*" } });
+            const where = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+            if (!where) break;
+            if (hop >= 3) return null;
+            u = new URL(where, u);
+        }
         if (!res.ok) return null;
         const type = String(res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
         if (!TYPES.has(type)) return null;

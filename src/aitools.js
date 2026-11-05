@@ -160,7 +160,12 @@ export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globa
         async run(name, input, ctx) {
             const fn = tools[name];
             if (!fn) return { error: "Unknown tool." };
-            try { return await fn(input ?? {}, ctx); } catch (e) { return { error: String(e?.message ?? "That lookup failed.").slice(0, 200) }; }
+            const pics = () => (ctx?.cards ?? []).filter(c => c.file).length, before = pics();
+            try {
+                const out = await fn(input ?? {}, ctx);
+                if (out && typeof out === "object" && pics() > before) out.shownAsPicture = "A picture with these exact numbers and the full list is already shown under your reply. Do not list them again. Write one short friendly line with your take, nothing more.";
+                return out;
+            } catch (e) { return { error: String(e?.message ?? "That lookup failed.").slice(0, 200) }; }
         }
     };
 }
