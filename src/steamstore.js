@@ -65,6 +65,8 @@ export function recapSummary(rows, year) {
 const startStatus = (g, lastPlayedMs, nowMs) => ((g.minutes ?? 0) < 60 ? "backlog" : lastPlayedMs && nowMs - lastPlayedMs < 14 * 86400_000 ? "playing" : "played");
 
 export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
+    /** The two-letter country on the member's Steam profile, read during a sync. Used to warn about cross-region gifts. */
+    const setSteamCountry = (id, cc) => run("UPDATE steam_links SET country = ? WHERE discord_id = ?", /^[A-Z]{2}$/.test(String(cc)) ? String(cc) : null, id);
     const getSteamLink = id => clean(get("SELECT * FROM steam_links WHERE discord_id = ?", id)) ?? null;
     // `verified` means the owner signed in through Steam. A pasted profile stays unverified and can never be used to sign in.
     const setSteamLink = (id, steamid, { verified = false } = {}) => run(
@@ -185,5 +187,5 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     const achvUsers = () => all("SELECT * FROM users WHERE achv = 1 AND paused = 0").map(clean);
     /** Games with synced achievement counts that are partly done. */
     const achievementGames = userId => all("SELECT itad_id, title, appid, minutes, ach_done, ach_total FROM library WHERE discord_id = ? AND ach_total > 0 AND ach_done < ach_total", userId).map(clean);
-    return { paidGameCount, achvUsers, achievementGames, nudgeUsers, yearlyUsers, milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    return { setSteamCountry, paidGameCount, achvUsers, achievementGames, nudgeUsers, yearlyUsers, milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

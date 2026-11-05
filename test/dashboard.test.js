@@ -1131,6 +1131,35 @@ test("gift marks: need a Discord sign-in, one person per game, the owner sees a 
     await t.close();
 });
 
+test("gift marks: warn a visitor whose Steam region differs from the list owner's", async () => {
+    let who = "u1";
+    const t = await setup({ config: { authPerMinute: 500, apiPerMinute: 5000 }, restExtra: { login: async () => ({ user: { id: who, username: who === "u1" ? "jacob" : "visitor-" + who, global_name: null, avatar: null }, guilds: [] }) } });
+    const as = async id => { who = id; await t.request("/auth/logout", { method: "POST", body: {} }); await t.signIn(); };
+    await t.signIn();
+    await t.request("/api/wishlist/add", { method: "POST", body: { title: "Celeste" } });
+    await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
+    const id = (await t.request("/api/wishlist")).data.rows[0].itad_id;
+    const pub = () => t.request("/api/public/wishlist?slug=jacob");
+    t.db.setSteamLink("u1", "76561198000000001"); t.db.setSteamCountry("u1", "US");
+    assert.equal((await pub()).data.region, null, "the owner never gets a note about their own list");
+
+    await as("v-same");
+    t.db.setSteamLink("v-same", "76561198000000002"); t.db.setSteamCountry("v-same", "US");
+    assert.equal((await pub()).data.region, null, "same region, no note");
+
+    await as("v-far");
+    t.db.setSteamLink("v-far", "76561198000000003"); t.db.setSteamCountry("v-far", "BR");
+    const far = (await pub()).data.region;
+    assert.equal(far.theirs, "US"); assert.equal(far.yours, "BR"); assert.equal(far.currencyDiffers, true);
+    assert.equal((await t.request("/api/public/profile?slug=jacob")).data.region?.yours, "BR");
+    const marked = await t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id } });
+    assert.equal(marked.data.claim, "mine"); assert.equal(marked.data.region.yours, "BR");
+
+    await t.request("/auth/logout", { method: "POST", body: {} });
+    assert.equal((await pub()).data.region, null, "signed out, nothing to compare");
+    await t.close();
+});
+
 test("gift marks: limits, expiry and moderation in the store", async () => {
     const { openDb } = await import("../src/db.js");
     const { MAX_CLAIMS_TOTAL, CLAIM_TTL_MS, accountOldEnough, accountCreatedAt } = await import("../src/giftstore.js");

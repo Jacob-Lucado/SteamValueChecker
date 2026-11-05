@@ -293,6 +293,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "verified_role_id", "TEXT");
     addColumn("community", "mod_log_channel", "TEXT");
     addColumn("users", "last_seen", "INTEGER");
+    addColumn("steam_links", "country", "TEXT");
     addColumn("notifications", "extra", "TEXT");
     addColumn("users", "promo_off", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "wish_sync", "INTEGER NOT NULL DEFAULT 1");

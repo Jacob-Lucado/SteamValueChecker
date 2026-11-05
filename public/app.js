@@ -1184,7 +1184,7 @@
     return el;
   }
 
-  function renderProfile(p, { canMark = false, preview = false, signedIn = false } = {}) {
+  function renderProfile(p, { canMark = false, preview = false, signedIn = false, region = null } = {}) {
     const root = h("div", { class: "pf", "data-bg": p.theme.bgstyle, "data-layout": p.theme.layout, "data-light": p.theme.light ? "1" : "0" });
     root.style.setProperty("--pf-bg", p.theme.bg);
     root.style.setProperty("--pf-accent", p.theme.accent);
@@ -1238,7 +1238,7 @@
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"), preview ? null : soonControl(g, p.slug, canMark), preview ? null : giftButton(g, p.slug, { signedIn, owner: p.owner, open: s.giftsOpen !== false }))))) : h("p", { class: "muted", text: "Nothing on this list yet." });
+            g.url && ext(g.url, "View deal", "btn green small"), preview ? null : soonControl(g, p.slug, canMark), preview ? null : giftButton(g, p.slug, { signedIn, owner: p.owner, open: s.giftsOpen !== false, region }))))) : h("p", { class: "muted", text: "Nothing on this list yet." });
       }
       if (inner) body.append(h("section", { class: "pf-card pf-" + s.key }, title, inner));
     }
@@ -1254,7 +1254,7 @@
     try {
       const d = await api("/api/public/profile?slug=" + encodeURIComponent(slug));
       document.title = d.profile.name + " on Steam Value Checker";
-      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark, signedIn: d.signedIn }));
+      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark, signedIn: d.signedIn, region: d.region }));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
@@ -1431,7 +1431,10 @@
   }
 
   /** The gift mark under a game on a public wishlist. Needs a Discord sign-in; the list's owner can release a mark but is never told who made it. */
-  function giftButton(g, slug, { signedIn = false, owner = false, open = true } = {}) {
+  function regionNote(r) {
+    return r ? `Your Steam region (${r.yours}, ${r.yoursCurrency}) is not the same as theirs (${r.theirs}, ${r.theirsCurrency}). ${r.currencyDiffers ? "Steam can block gifts between regions with different currencies, and the price you pay may differ." : "Prices can differ a little, and some games are region locked."} Check the store page before you buy.` : "";
+  }
+  function giftButton(g, slug, { signedIn = false, owner = false, open = true, region = null } = {}) {
     const wrap = h("div", { class: "gift" });
     const draw = () => {
       if (owner) {
@@ -1456,7 +1459,8 @@
         draw();
       };
       const b = h("button", { class: "btn gray small", text: g.claim === "mine" ? "You are gifting this (undo)" : "I’ll gift this" });
-      b.addEventListener("click", () => busy(b, call(g.claim !== "mine", c => (c === "mine" ? "Marked. Others will see someone is gifting this. It runs out after three weeks unless you renew it." : "Mark removed."))));
+      b.addEventListener("click", () => { if (g.claim !== "mine" && region && !confirm(regionNote(region) + "\n\nMark it anyway?")) return; busy(b, call(g.claim !== "mine", c => (c === "mine" ? "Marked. Others will see someone is gifting this. It runs out after three weeks unless you renew it." : "Mark removed."))); });
+      if (g.claim === "mine" && region) wrap.title = regionNote(region);
       if (g.claim === "mine") {
         const r = h("button", { class: "btn gray small", type: "button", text: "Renew for 3 weeks" });
         r.addEventListener("click", () => busy(r, call(true, () => "Renewed for three more weeks.")));
@@ -1545,7 +1549,7 @@
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money2(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"), soonControl(g, d.slug, d.canMark), giftButton(g, d.slug, { signedIn: d.signedIn, owner: d.owner, open: d.giftsOpen !== false }))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
+            g.url && ext(g.url, "View deal", "btn green small"), soonControl(g, d.slug, d.canMark), giftButton(g, d.slug, { signedIn: d.signedIn, owner: d.owner, open: d.giftsOpen !== false, region: d.region }))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 

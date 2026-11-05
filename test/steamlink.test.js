@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, runSteamAutoSync, playStats, steamValue, steamNext, fetchAchievements, syncAchievements, fmtHours } from "../src/steamlib.js";
+import { fetchSteamCountry, parseGamesXml, parseGamesPage, parseOwnedJson, fetchOwnedGames, syncSteamLibrary, runSteamAutoSync, playStats, steamValue, steamNext, fetchAchievements, syncAchievements, fmtHours } from "../src/steamlib.js";
 import { SteamError } from "../src/steam.js";
 
 const XML = `<gamesList><steamID64>76561198000000000</steamID64><games>
@@ -322,4 +322,12 @@ test("hours tracked: this year and the total since linking, across years", async
     const e = recapEmbed({ ...year, allTime: all });
     assert.ok(e.fields.some(f => f.name === "Since you linked" && f.value.includes("3.0 h")), JSON.stringify(e.fields));
     assert.match(recapEmbed({ ...recapSummary([], 2026), allTime: all }).description, /since you linked/i);
+});
+
+test("fetchSteamCountry reads the profile country, and stays quiet without a key or on bad data", async () => {
+    const ok = async () => ({ ok: true, json: async () => ({ response: { players: [{ loccountrycode: "br" }] } }) });
+    assert.equal(await fetchSteamCountry("76561198000000000", "KEY", ok), "BR");
+    assert.equal(await fetchSteamCountry("76561198000000000", null, ok), null);
+    assert.equal(await fetchSteamCountry("76561198000000000", "KEY", async () => ({ ok: true, json: async () => ({ response: { players: [{}] } }) })), null);
+    assert.equal(await fetchSteamCountry("76561198000000000", "KEY", async () => { throw new Error("down"); }), null);
 });

@@ -21,6 +21,7 @@ import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.j
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
+import { compareGiftRegions } from "../giftregion.js";
 import { PAGE_PRESETS, MAX_BG_STORED, decodeUpload, fetchSteamBackground } from "../profilebg.js";
 import { expandGames } from "../codesource.js";
 import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
@@ -2462,7 +2463,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (rt && !rt.get("profile_songs")) { if (profile.song && profile.owner) profile.songOff = true; profile.song = null; profile.enter = false; }
             const wl = profile.sections.find(x => x.key === "wishlist");
             const canMark = Boolean(sess && owner.guild_id && !isHidden(owner.guild_id) && isStaff(sess.guilds.find(x => x.id === owner.guild_id)));
-            return { profile, canMark, signedIn: Boolean(sess), hasWishlist: Boolean(wl) };
+            return { profile, canMark, signedIn: Boolean(sess), hasWishlist: Boolean(wl), region: sess && !mine ? compareGiftRegions(db, sess.userId, owner.discord_id) : null };
         },
         "POST /api/public/profile/report": async (req, body) => {
             if (!giftLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
@@ -2561,7 +2562,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             // The colour picked for their profile card also tints their wishlist page. Only the fixed theme colours can come out of this.
             const owner = db.getProfileBySlug(page.slug);
             const accent = THEMES[viewPrefs(owner ? db.getCardPrefs(owner.discord_id) : {}).theme]?.[1] ?? null;
-            return { ...rest, canMark, accent, signedIn: Boolean(s), owner: Boolean(s && owner && s.userId === owner.discord_id) };
+            return { ...rest, canMark, accent, signedIn: Boolean(s), owner: Boolean(s && owner && s.userId === owner.discord_id), region: s && owner && s.userId !== owner.discord_id ? compareGiftRegions(db, s.userId, owner.discord_id) : null };
         },
         // Moderators and owners flag a wishlist game as "up for giveaway soon". It lives in the member's server, so only that server's staff can do it.
         "POST /api/wishlist/soon": async (req, body) => {
@@ -2604,7 +2605,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (r === "taken") throw new HttpError(409, "Someone else already said they are gifting this one.");
             if (r === "full") throw new HttpError(429, `You can mark up to ${MAX_CLAIMS_PER_LIST} games per list.`);
             if (r === "limit") throw new HttpError(429, `You can hold up to ${MAX_CLAIMS_TOTAL} gift marks at a time. Undo one first.`);
-            return { claim: "mine" };
+            return { claim: "mine", region: compareGiftRegions(db, s.userId, owner.discord_id) };
         },
         // The list's owner lets go of a mark (and can report it) or pauses marking. They still never learn who made it.
         "POST /api/profile/gifts": async (req, body) => {

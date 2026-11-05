@@ -165,6 +165,16 @@ export async function resolveProfile(input, fetchImpl = globalThis.fetch) {
  * Reads the linked profile and syncs it into the library. `steamid` is already resolved.
  * Games over the library limit are skipped, most played first so the ones that matter are kept.
  */
+/** The country code a member has set on their Steam profile (needs the bot's API key; null when private or not set). */
+export async function fetchSteamCountry(steamid, apiKey, fetchImpl = globalThis.fetch) {
+    if (!apiKey) return null;
+    try {
+        const res = await fetchImpl(`https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(apiKey)}&steamids=${encodeURIComponent(steamid)}`, { signal: AbortSignal.timeout(8000) });
+        const cc = res.ok ? (await res.json())?.response?.players?.[0]?.loccountrycode : null;
+        return /^[A-Za-z]{2}$/.test(cc ?? "") ? cc.toUpperCase() : null;
+    } catch { return null; }
+}
+
 export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = null, fetchImpl = globalThis.fetch, achievements: wantAch = true }) {
     const owned = await fetchOwnedGames(steamid, { apiKey, fetchImpl });
     const ranked = [...owned].sort((a, b) => b.minutes - a.minutes || a.name.localeCompare(b.name)).slice(0, MAX_LIBRARY_PER_USER);
@@ -180,6 +190,7 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
     const minutes = owned.reduce((t, g) => t + g.minutes, 0);
     db.setSteamLink(userId, steamid);
     db.markSteamSynced(userId, { games: owned.length, minutes });
+    try { const cc = await fetchSteamCountry(steamid, apiKey, fetchImpl); if (cc) db.setSteamCountry(userId, cc); } catch { /* the region note is a bonus */ }
     // What the synced games are worth right now. A price lookup problem must not undo a good sync, so it is optional.
     let value = null;
     try {
