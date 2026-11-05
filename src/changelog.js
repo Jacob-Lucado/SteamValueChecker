@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.20", date: "2026-11-20", title: "More free games caught", items: [
+        "**Short-run freebies:** the bot now also watches GamerPower's live giveaways, so the batches of small Epic, Steam and GOG games that are free for only a few days show up in your free game alerts and in `/games freegames`.",
+        "**No repeats:** a game that was already announced from another source isn't posted twice, and the first run stays quiet about what was already open."
+    ] },
     { version: "2026.11.19", date: "2026-11-19", title: "Game trivia", items: [
         "**Guess the game:** a manager starts trivia with `/server trivia start` (or on the Trivia page in the dashboard). Each round shows the genre and release year, then the developer, then a description with the name blanked out and a screenshot.",
         "**Tap to answer:** four titles to pick from, one guess each. Right answers score 3, 2 or 1 points depending on how many clues you needed, and the round's answer is revealed when time is up.",

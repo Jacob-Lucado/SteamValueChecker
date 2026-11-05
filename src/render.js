@@ -562,7 +562,7 @@ export function freeGamesPayload(shop, games, { pager = null } = {}) {
             ],
             image: big && art ? { url: art } : undefined,
             thumbnail: !big && art ? { url: art } : undefined,
-            footer: n === list.length - 1 || pager ? { text: /luna/i.test(shop) ? "Claim it with your Amazon account (free with Prime)  •  Data from Amazon Luna" : "Claiming needs you to be signed in to the store  •  Data by IsThereAnyDeal" } : undefined
+            footer: n === list.length - 1 || pager ? { text: /luna/i.test(shop) ? "Claim it with your Amazon account (free with Prime)  •  Data from Amazon Luna" : `Claiming needs you to be signed in to the store  •  Data by ${String(g.id).startsWith("gp:") ? "GamerPower" : "IsThereAnyDeal"}` } : undefined
         };
     });
     const link = (label, url) => ({ type: 2, style: 5, label: label.slice(0, 80), url: safeUrl(url) });

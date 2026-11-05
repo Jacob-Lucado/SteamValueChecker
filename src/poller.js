@@ -231,7 +231,7 @@ export async function runExtras({ db, itad, notifier, now = () => Date.now(), lo
 const LAST_CHANCE_MS = 24 * 3600_000;
 const SUBS_MARKER = "substart";
 const SUB_LEAVING_MS = 14 * 86400_000; // "leaving soon" starts two weeks before the game goes
-const QUIET_START = [{ prefix: "luna:", marker: "freestart:luna" }]; // Amazon Luna's games are already open when it first shows up
+const QUIET_START = [{ prefix: "luna:", marker: "freestart:luna" }, { prefix: "gp:", marker: "freestart:gp" }]; // Amazon Luna's games are already open when it first shows up
 
 export async function runFreeGames({ db, itad, notifier, now = () => Date.now(), log = () => {}, fetchImpl = globalThis.fetch }) {
     const stats = { found: 0, delivered: 0, failed: 0, deferred: 0 };

@@ -11,6 +11,7 @@ import {
 import { loadConfig } from "./config.js";
 import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
+import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
 import { humanCount, warmMembers } from "./members.js";
@@ -131,7 +132,8 @@ const epicSoon = createEpicSoon();
 const news = createNews();
 // Every playtest source in one list (Alpha Beta Gamer, GamerPower, itch.io, Steam's new demos), with duplicates between them removed.
 const abg = createPlaytestSources({ abg: createAbgFeed(), log: m => console.warn(`[playtests] ${m}`) });
-const itad = withLuna(createItad({ apiKey: cfg.itadKey }), luna);
+const gamerPower = createGamerPower({ enabled: process.env.GAMERPOWER !== "off", log: m => console.log(`[gamerpower] ${m}`) });
+const itad = withGamerPower(withLuna(createItad({ apiKey: cfg.itadKey }), luna), gamerPower);
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
 const APP_FLAGS = await (async () => {
@@ -548,8 +550,8 @@ const status = createStatusMonitor({
             staleAfter(beat.alerts, cfg.checkEveryMinutes * 60_000) ? { state: "degraded", detail: "The last check is overdue" } : { state: "operational" } },
         ...(giveaways ? { giveaways: { name: "Giveaway engine", desc: "Ends giveaways on time and delivers prize keys", critical: false, check: () =>
             staleAfter(beat.giveaways, 60_000) ? { state: "degraded", detail: "The last run is overdue" } : { state: "operational" } } } : {}),
-        freesources: { name: "Free game sources", desc: "Amazon Luna claims, Epic's upcoming free games and Steam news", critical: false, check: () => {
-            const bad = [["Amazon Luna", luna.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
+        freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games and Steam news", critical: false, check: () => {
+            const bad = [["Amazon Luna", luna.health()], ["GamerPower", gamerPower.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
             return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${h.lastError})`).join(" or ")}` } : { state: "operational" };
         } },
         golive: { name: "Go-live detection", desc: "Noticing when linked Twitch, Kick and YouTube streamers go live", critical: false, check: () => {
