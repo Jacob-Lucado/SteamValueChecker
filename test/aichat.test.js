@@ -151,7 +151,7 @@ test("AI companion: uses tools for real data, loops until it has an answer, and 
     const { ai } = mk(db, { fetchFn, tools });
     const r = await ai.answer({ guildId: "G", userId: "u", question: "anything free?" });
     assert.deepEqual([r.ok, r.text], [true, "Hades is free!"]);
-    assert.deepEqual(seen, [["free_games", { userId: "u", guildId: "G" }]]);
+    assert.deepEqual(seen, [["free_games", { userId: "u", guildId: "G", cards: [] }]]);
     assert.ok(bodies[0].tools && bodies[1].messages.at(-1).content[0].type === "tool_result");
     const st = aiStats(db, 1)[0];
     assert.deepEqual([st.answers, st.toolAnswers, st.toolCalls, st.inTok, st.outTok], [1, 1, 1, 30, 13]);

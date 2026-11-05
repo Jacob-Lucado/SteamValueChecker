@@ -116,6 +116,7 @@ import { honeypotHit, refreshHoneypotNotice } from "./honeypot.js";
 import { createAiChat, parseTrigger, AI_FAILURES } from "./aichat.js";
 import { createRuntimeCfg } from "./runtimecfg.js";
 import { createAiTools } from "./aitools.js";
+import { cardsPayload, handleAiButton, AI_PREFIX } from "./aicards.js";
 import { PROVIDER_IDS } from "./aiproviders.js";
 import { createMainGuild } from "./mainguild.js";
 import { liteAnswer } from "./ailite.js";
@@ -489,7 +490,10 @@ async function aiReply(m, t) {
     await m.channel.sendTyping?.().catch(() => {});
     const r = await ai.answer({ guildId: m.guildId, userId: m.author.id, name: m.member?.displayName ?? m.author.globalName ?? m.author.username, question: t.question, history });
     const mentions = { parse: [], repliedUser: rt.get("ai_ping_reply") };
-    if (r.ok) return void await m.reply({ content: r.text, allowedMentions: mentions }).catch(() => {});
+    if (r.ok) {
+        const extra = cardsPayload(r.cards ?? [], { db, userId: m.author.id });
+        return void await m.reply({ content: r.text, allowedMentions: mentions, ...extra }).catch(() => m.reply({ content: r.text, allowedMentions: mentions }).catch(() => {}));
+    }
     if (r.reason === "cooldown") return void (rt.get("ai_react") && await m.react("⏳").catch(() => {}));
     if (r.reason === "cap" && !rt.get("ai_limit_notice")) return;
     if (AI_FAILURES[r.reason]) await m.reply({ content: AI_FAILURES[r.reason], allowedMentions: mentions }).catch(() => {});
@@ -740,6 +744,7 @@ async function onInteraction(i, again = false) {
     if ((i.isButton() || i.isAnySelectMenu?.() || i.isModalSubmit()) && i.customId.startsWith(PANEL_PREFIX)) return panels.handle(i);
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if ((i.isStringSelectMenu() && i.customId === "help_pick") || isHelpNav(i)) return handleHelpPick(i);
+    if (i.isButton() && i.customId.startsWith(AI_PREFIX)) return handleAiButton(i, { db, itad });
     if ((i.isButton() && i.customId.startsWith(PAGE_PREFIX)) || (i.isStringSelectMenu() && i.customId.startsWith(JUMP_PREFIX))) return handlePager(i, db);
     if (i.isButton() && i.customId === "mu:cmds") return panels.open(i, "hub-music");
     if (i.isButton() && i.customId.startsWith("mu:")) return musicUi ? musicUi.handleButton(i) : musicOff(i);

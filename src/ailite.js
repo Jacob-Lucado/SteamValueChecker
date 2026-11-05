@@ -38,16 +38,16 @@ export function intentOf(question) {
 }
 
 /** Writes the reply for one question using the tools. Always returns text. */
-export async function liteAnswer({ question, userId, guildId, tools }) {
+export async function liteAnswer({ question, userId, guildId, tools, cards }) {
     const it = intentOf(question);
-    const run = (name, input) => tools.run(name, input, { userId, guildId });
+    const run = (name, input) => tools.run(name, input, { userId, guildId, cards });
     if (it.kind === "help" || it.kind === "unknown") return LITE_HELP;
 
     if (it.kind === "free") {
         const r = await run("free_games", {});
         if (r.error) return "I couldn't check the free games just now. Try `/games freegames`.";
         if (!r.games.length) return "Nothing is free to claim right now. I'll tell you in your alerts when something shows up.";
-        return `**Free to claim right now:**\n${r.games.slice(0, 8).map(g => `• **${g.title}** on ${g.store} (until ${g.endsAt})`).join("\n")}\nOpen \`/games freegames\` for links.`;
+        return `**Free to claim right now:**\n${r.games.slice(0, 8).map(g => `• **${g.title}** on ${g.store} (until ${g.endsAt})`).join("\n")}`;
     }
     if (it.kind === "price") {
         const r = await run("check_prices", { titles: [it.title] });

@@ -41,6 +41,7 @@ export function buildRows(resolved, pricesById, paidByTitle = new Map(), opts = 
         matched: r.matched ?? r.title,
         approx: Boolean(r.approx),
         found: Boolean(r.id),
+        id: r.id ?? null,
         paid: paidByTitle.get(r.title) ?? null,
         ...(r.id ? summarize(pricesById.get(r.id), opts) : { currency: null, msrp: null, steam: null, cut: 0, best: null, atl: null, hasPrices: false })
     }));

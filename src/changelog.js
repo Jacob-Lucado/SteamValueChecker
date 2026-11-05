@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.34", date: "2026-11-05", title: "The AI companion shows its work", items: [
+        "**Cards with pictures:** when you ask the AI about a game, it now answers with a card under its message: the game's art, prices, release info and store buttons.",
+        "**Buttons that work:** add a game to your wishlist straight from the card, or press Another pick to get a different suggestion from your backlog. They belong to whoever asked.",
+        "**Game facts:** ask what a game is or whether it's any good and it reads the Steam page for you.",
+        "**Speaks as itself:** answers are first person now and no longer mention things that don't exist."
+    ] },
     { version: "2026.11.33", date: "2026-11-05", title: "Profile card, guestbooks, feed alerts, leaderboards and pictures", items: [
         "**Profile card:** `/me profilecard` now draws your profile page itself as a picture: banner, avatar, bio, links and the sections you switched on, in your colours and your order. The old card editor on My page is gone. Design everything on My profile instead.",
         "**Guestbook:** a new section on profile pages where signed-in visitors leave a short note (no links). You can delete any note, close the guestbook, or block someone. Switch it on or off in your page editor.",
