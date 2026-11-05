@@ -651,6 +651,9 @@
       loadList();
     }) });
 
+    // After one import the bot keeps the list current by itself, until this is switched off.
+    const syncBox = h("input", { type: "checkbox", id: "wish-sync" }), syncRow = h("label", { class: "check", for: "wish-sync", hidden: true }, syncBox, " Keep it in sync with Steam automatically (new games are added and ones you removed on Steam are dropped, about twice a day)");
+    syncBox.addEventListener("change", () => api("/api/wishlist/sync", { on: syncBox.checked }).then(() => toast(syncBox.checked ? "I'll keep it in sync." : "Automatic sync is off.", "ok")).catch(e => { syncBox.checked = !syncBox.checked; toast(e.message, "warn"); }));
     const title = h("input", { type: "text", placeholder: "Game title", maxlength: "100" });
     const addType = select(state.cfg.alertTypes.map(a => [a.value, a.name]), "any");
     const addValue = h("input", { type: "number", step: "0.01", min: "0", placeholder: "value" });
@@ -680,6 +683,7 @@
       linked ? h("p", { class: "muted small", text: "Uses the Steam account you signed in with. Your wishlist must be public (Steam Profile > Edit Profile > Privacy Settings > Game details). Run it again to sync." })
         : h("p", { class: "muted small", text: "Sign in through Steam once and the bot knows your account everywhere. No links to paste." }),
       h("div", { class: "row" }, linked ? importBtn : steamLoginBtn()),
+      syncRow,
       linked ? null : h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Profile", profile), importBtn));
     const addDrawer = drawer("Add a game", field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField),
       h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("div", { class: "row" }, addBtn));
@@ -753,6 +757,7 @@
     async function loadList() {
       try {
         data = await api("/api/wishlist");
+        syncRow.hidden = !data.sync?.available; syncBox.checked = Boolean(data.sync?.on);
         if (!data.rows.length) { listBox.replaceChildren(h("div", { class: "empty", text: "Your wishlist is empty. Import your Steam wishlist or add a game above." })); return; }
         draw();
       } catch (e) { listBox.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
@@ -2254,7 +2259,9 @@
       // Just came back from Steam: read the library straight away, then tidy the address.
       history.replaceState(null, "", "#/steam");
       out.className = "muted"; out.textContent = "Reading your Steam library…";
-      api("/api/steam/sync", {}).then(r => { state.artForce = true; state.me.steam = { linked: true, verified: true, synced: true }; toast(`Signed in. Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + ".", "ok"); }).catch(e => toast(e.message, "error")).finally(load);
+      api("/api/steam/sync", {}).then(r => { state.artForce = true; state.me.steam = { linked: true, verified: true, synced: true }; toast(`Signed in. Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + ".", "ok"); })
+        .then(() => api("/api/wishlist/import", { profile: "" }).then(w => { if (w.added) { state.me.games += w.added; toast(`Also added ${w.added} game${w.added === 1 ? "" : "s"} from your Steam wishlist. I'll keep it in sync.`, "ok"); } }).catch(() => { /* private wishlist: the Wishlist page explains it */ }))
+        .catch(e => toast(e.message, "error")).finally(load);
     } else load();
   }
 

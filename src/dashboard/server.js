@@ -744,7 +744,13 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const s = session(req);
             const u = userRow(s);
             const { rows, currency } = await viewRows(db, itad, u);
-            return { rows, currency };
+            return { rows, currency, sync: { available: Boolean(u.steam_id), on: u.wish_sync !== 0, at: u.wish_synced_at ?? null } };
+        },
+        // Keep the Steam wishlist current by itself (only after one import).
+        "POST /api/wishlist/sync": async (req, body) => {
+            const s = session(req); userRow(s);
+            db.updateUser(s.userId, { wish_sync: body.on === false ? 0 : 1 });
+            return { on: body.on !== false };
         },
 
         "POST /api/wishlist/import": async (req, body) => {

@@ -61,6 +61,8 @@ import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
+import { runWishlistAutoSync } from "./wishlist.js";
+import { importWishlist } from "./steam.js";
 import { runFriendReminders } from "./friends.js";
 import { steamStillUpcoming } from "./steamrelease.js";
 import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runEpicSoon, runNews, runGuildFeeds, runHotDeals, runSaleStarts, runServerDigests, schedule } from "./poller.js";
@@ -381,6 +383,7 @@ client.once(Events.ClientReady, c => {
             result.digests = await ops.job("digests", () => runDigests({ db, itad, notifier, log }));
             result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
+            result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); } catch (err) { ops.error("cleanup", err); }
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }

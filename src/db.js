@@ -293,6 +293,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "last_seen", "INTEGER");
     addColumn("notifications", "extra", "TEXT");
     addColumn("users", "promo_off", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("users", "wish_sync", "INTEGER NOT NULL DEFAULT 1");
+    addColumn("users", "wish_synced_at", "INTEGER");
     addColumn("community", "announce_channel", "TEXT");
     addColumn("community", "rules_channel", "TEXT");
     addColumn("community", "rules_text", "TEXT");
@@ -367,7 +369,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
     const getUser = id => clean(get("SELECT * FROM users WHERE discord_id = ?", id));
 
-    const SETTABLE = new Set(["muted", "seen_version", "lang", "welcomed", "tipped",
+    const SETTABLE = new Set(["wish_sync", "wish_synced_at", "muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
         "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
     ]);
@@ -378,6 +380,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         }
     }
 
+    /** People who imported their Steam wishlist before and have not turned syncing off, least recently synced first. */
+    const wishSyncDue = (before, limit) => all("SELECT discord_id, steam_id FROM users WHERE steam_id IS NOT NULL AND steam_id <> '' AND wish_sync <> 0 AND (wish_synced_at IS NULL OR wish_synced_at < ?) ORDER BY COALESCE(wish_synced_at, 0) LIMIT ?", before, limit);
     const countItems = id => get("SELECT COUNT(*) AS n FROM items WHERE discord_id = ?", id).n;
     const listItems = id => all("SELECT * FROM items WHERE discord_id = ? ORDER BY priority DESC, title COLLATE NOCASE", id).map(clean);
 
@@ -798,7 +802,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta,
-        siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
+        siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,

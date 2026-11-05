@@ -969,3 +969,25 @@ test("every slash command stays under Discord's 8000 character limit, or registe
     const size = x => { let n = 0; const w = v => { if (v == null) return; if (Array.isArray(v)) return v.forEach(w); n += (v.name?.length ?? 0) + (v.description?.length ?? 0); for (const c of v.choices ?? []) n += String(c.name).length + String(c.value).length; w(v.options); }; w(x); return n; };
     for (const h of hubCommands) assert.ok(size(h) <= 7800, `/${h.name} is ${size(h)} characters (limit 8000, keep a margin)`);
 });
+
+test("wishlist auto-sync: refreshes people who imported before, drops what they removed on Steam, and skips private lists quietly", async () => {
+    const { runWishlistAutoSync } = await import("../src/wishlist.js");
+    let t = 10 * 3600_000 * 10;
+    const db = openDb(":memory:", { now: () => t });
+    for (const id of ["a", "b", "c", "off"]) db.ensureUser(id);
+    db.updateUser("a", { steam_id: "7656119800000001" }); db.updateUser("b", { steam_id: "7656119800000002" }); db.updateUser("c", { steam_id: null }); db.updateUser("off", { steam_id: "7656119800000003", wish_sync: 0 });
+    db.addItems("a", [{ itad_id: "old", title: "Old" }], { source: "steam" });
+    const reads = [];
+    const imp = async steamid => {
+        reads.push(steamid);
+        if (steamid.endsWith("2")) { const e = new Error("private"); e.code = "private"; throw e; }
+        return { steamid, complete: true, unmatched: 0, truncated: false, total: 1, games: [{ itad_id: "new", title: "New", appid: 5 }] };
+    };
+    const r = await runWishlistAutoSync({ db, itad: {}, importWishlist: imp, now: t });
+    assert.deepEqual(reads.sort(), ["7656119800000001", "7656119800000002"], "only people who imported, and not the one who turned it off");
+    assert.equal(r.synced, 1); assert.equal(r.skipped, 1); assert.equal(r.added, 1); assert.equal(r.removed, 1);
+    assert.deepEqual(db.listItems("a").map(i => i.itad_id), ["new"]);
+    reads.length = 0;
+    await runWishlistAutoSync({ db, itad: {}, importWishlist: imp, now: t + 3600_000 });
+    assert.equal(reads.length, 0, "not again within twelve hours, even for the private one");
+});

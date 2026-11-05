@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.25", date: "2026-11-04", title: "Steam wishlist stays in sync by itself", items: [
+        "**No extension needed:** after you sign in through Steam, your public Steam wishlist is added straight away, and from then on I re-read it about twice a day. New games appear on your list and ones you removed on Steam are dropped.",
+        "**Your choice:** switch automatic sync off with the checkbox on the Wishlist page. Your Steam Game details must be Public for it to work; if the list is private I just skip it quietly."
+    ] },
     { version: "2026.11.24", date: "2026-11-04", title: "Free games listed once", items: [
         "**No more doubles:** when two sources report the same free game, like one with \"- FREE on Epic Games\" on the end of its name and one without, it now shows once everywhere, in the free games page and in the alerts.",
         "**One Epic tab:** \"Epic Game Store\" and \"Epic Games Store\" are now the same store in the filters."

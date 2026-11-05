@@ -98,3 +98,25 @@ export function applySteamImport(db, userId, r) {
     const pruned = r.complete ? db.removeSteamNotIn(userId, r.games.map(g => g.itad_id)) : 0;
     return { ...res, pruned, unmatched: r.unmatched, truncated: r.truncated, total: r.total, rateLimited: Boolean(r.rateLimited) };
 }
+
+/**
+ * Keeps imported Steam wishlists current without anyone pressing a button: for people who imported before (and have not turned it off),
+ * reads their public wishlist again, adds new games and drops ones they removed on Steam. A private or empty wishlist is simply skipped
+ * until next time. `importWishlist` is passed in so this file stays free of the Steam client.
+ */
+export async function runWishlistAutoSync({ db, itad, importWishlist, now = Date.now(), minGapMs = 12 * 3600_000, maxUsers = 6, log = () => {} }) {
+    const stats = { synced: 0, added: 0, removed: 0, skipped: 0 };
+    for (const u of db.wishSyncDue(now - minGapMs, maxUsers)) {
+        try {
+            const r = await importWishlist(u.steam_id, itad);
+            const res = applySteamImport(db, u.discord_id, r);
+            stats.synced++; stats.added += res.added ?? 0; stats.removed += res.pruned ?? 0;
+        } catch (err) {
+            if (err?.code === "rate_limited") { log("wishlist auto-sync paused: rate limited"); break; }
+            stats.skipped++; // private, empty or unmatched: try again later, never loudly
+        }
+        db.updateUser(u.discord_id, { wish_synced_at: now });
+        await new Promise(r => setTimeout(r, 1500));
+    }
+    return stats;
+}
