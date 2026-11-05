@@ -963,3 +963,9 @@ test("presence sends a Watching activity as well as the custom status", async ()
     assert.match(acts[0].name, /12 game libraries/);
     assert.equal(acts[1].type, 4);
 });
+
+test("every slash command stays under Discord's 8000 character limit, or registering fails for everyone", async () => {
+    const { hubCommands } = await import("../src/commands.js");
+    const size = x => { let n = 0; const w = v => { if (v == null) return; if (Array.isArray(v)) return v.forEach(w); n += (v.name?.length ?? 0) + (v.description?.length ?? 0); for (const c of v.choices ?? []) n += String(c.name).length + String(c.value).length; w(v.options); }; w(x); return n; };
+    for (const h of hubCommands) assert.ok(size(h) <= 7800, `/${h.name} is ${size(h)} characters (limit 8000, keep a margin)`);
+});

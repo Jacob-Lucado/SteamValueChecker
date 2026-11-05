@@ -590,7 +590,7 @@ test("free games list is grouped by platform, needs sign-in, and the setting sav
 // ---------- giveaways ----------
 test("giveaways page: managers only, validated, and keys never come back", async () => {
     const posts = [], dms = [];
-    const t = await setup({ giveawayService: db => createGiveawayService({
+    const t = await setup({ extra: { botGuilds: () => true }, giveawayService: db => createGiveawayService({
         db, vault: createVault("dashboard-test-secret-123"),
         discord: { post: async (c, p) => { posts.push({ c, p }); return { id: "m" + posts.length }; }, edit: async () => {}, dm: async (u, p) => { dms.push({ u, p }); }, memberOk: async () => true, findChannelByName: async () => null }
     }) });
@@ -609,6 +609,18 @@ test("giveaways page: managers only, validated, and keys never come back", async
     assert.equal(made.data.prizes, 2);
     assert.ok(!made.text.includes("AAAAA"));
     assert.ok(!JSON.stringify(posts).includes("AAAAA")); // the public post carries no keys
+
+    // the streamer's overlay can show several of the running giveaways at once
+    const card = (await t.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
+    const shown = async () => (await (await fetch(t.base + "/api/giveawayoverlay/data?token=" + card.token)).json()).giveaways;
+    const pk = await t.request("/api/giveawayoverlay/pick?guild=g-admin"); assert.equal(pk.status, 200, pk.text); assert.equal(pk.data.giveaways[0].id, made.data.id);
+    assert.equal((await t.request("/api/giveawayoverlay/pick", { method: "POST", body: { guild_id: "g-admin", ids: [99999] } })).status, 400, "not a giveaway in this server");
+    assert.equal((await shown()).length, 0, "nothing picked and no stream giveaway");
+    assert.equal((await t.request("/api/giveawayoverlay/pick", { method: "POST", body: { guild_id: "g-admin", ids: [made.data.id] } })).status, 200);
+    const on = await shown();
+    assert.equal(on.length, 1); assert.equal(on[0].title, "Big one"); assert.deepEqual(on[0].prizes, ["Hades", "Celeste"]); assert.ok(!JSON.stringify(on).includes("AAAAA"));
+    await t.request("/api/giveawayoverlay/pick", { method: "POST", body: { guild_id: "g-admin", ids: [] } });
+    assert.equal((await shown()).length, 0, "clearing the pick goes back to following the stream giveaway");
 
     const list = await t.request("/api/giveaways?guild=g-admin");
     assert.equal(list.data.giveaways[0].prizes, 2);
@@ -1982,7 +1994,7 @@ test("giveaway overlay: needs the private link, and shows nothing until a stream
         assert.equal((await o.request("/api/giveawayoverlay/data?token=svcd_" + "x".repeat(32))).status, 404, "an unknown link shows nothing");
         const made = (await o.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
         const r = await fetch(o.base + "/api/giveawayoverlay/data?token=" + made.token);
-        assert.equal(r.status, 200); assert.deepEqual(await r.json(), { giveaway: null });
+        assert.equal(r.status, 200); assert.deepEqual((await r.json()).giveaways, []);
         const page = await fetch(o.base + "/giveawayoverlay"); assert.equal(page.status, 200);
         assert.match(page.headers.get("content-security-policy"), /frame-ancestors 'self'/); assert.match(page.headers.get("x-robots-tag"), /noindex/);
         assert.equal((await fetch(o.base + "/giveawayoverlay.js")).status, 200);

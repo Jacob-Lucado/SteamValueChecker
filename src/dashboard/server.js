@@ -455,6 +455,7 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
         return g;
     };
     // ----- streams: who may announce one, show the OBS overlay, or change the settings -----
+    const gwOverlayPicks = uid => { try { const v = JSON.parse(db.getMeta("gwov:" + uid) ?? "[]"); return Array.isArray(v) ? v.map(Number).filter(Number.isInteger).slice(0, 6) : []; } catch { return []; } };
     const streamGw = createStreamGiveaways({ db, giveaways: () => giveaways, now });
     const streams = rest?.sendMessage ? createStreams({ db, api: rest, now, onEnd: (g, u) => streamGw.onEnd(g, u) }) : null;
     const rolesIn = (gid, uid) => remember("mroles:" + gid + ":" + uid, 20_000, async () => { try { return (await rest.getMember?.(gid, uid))?.roles ?? []; } catch { return []; } }).catch(() => []);
@@ -1921,16 +1922,36 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
             return await cardsFor(o, o.kinds);
         },
-        // The giveaway overlay's numbers: the streamer's latest stream giveaway, with winners once it is drawn. Same private link as the cards.
+        // The giveaway overlay's numbers: the giveaways the streamer picked (or, with no pick, their latest stream giveaway), with winners once drawn.
         "GET /api/giveawayoverlay/data": async (req, _b, url) => {
             if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
             const o = db.streamCardByToken(String(url.searchParams.get("token") ?? ""));
             if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
-            const g = streamGw.latest(o.user_id);
-            if (!g) return { giveaway: null };
-            const keys = db.listKeys(g.id), over = g.status !== "active" && g.status !== "scheduled";
-            const winners = over ? await Promise.all(keys.filter(k => k.winner_id).map(async k => ({ prize: k.label, name: (await remember("mname:" + g.guild_id + ":" + k.winner_id, 10 * 60_000, () => rest.memberName(g.guild_id, k.winner_id)).catch(() => null)) || "A viewer" }))) : [];
-            return { giveaway: { title: g.title, game: g.game_title ?? null, prizes: keys.map(k => k.label), entries: db.countEntries(g.id), endsAt: g.ends_at, startedAt: g.starts_at ?? g.created_at, status: over ? "ended" : g.status, steps: stepsOf(g).map(x => ({ label: x.label, kind: x.kind })), winners }, now: now() };
+            const HOLD = 10 * 60_000, picked = gwOverlayPicks(o.user_id);
+            let rows = picked.map(id => db.getGiveaway(id)).filter(g => g && (g.status === "active" || g.status === "scheduled" || now() - (g.ended_at ?? g.ends_at) <= HOLD));
+            if (!rows.length) { const l = streamGw.latest(o.user_id); rows = l ? [l] : []; }
+            const card = async g => {
+                const keys = db.listKeys(g.id), over = g.status !== "active" && g.status !== "scheduled";
+                const winners = over ? await Promise.all(keys.filter(k => k.winner_id).map(async k => ({ prize: k.label, name: (await remember("mname:" + g.guild_id + ":" + k.winner_id, 10 * 60_000, () => rest.memberName(g.guild_id, k.winner_id)).catch(() => null)) || "A viewer" }))) : [];
+                return { id: g.id, title: g.title, game: g.game_title ?? null, prizes: keys.map(k => k.label), entries: db.countEntries(g.id), endsAt: g.ends_at, startedAt: g.starts_at ?? g.created_at, status: over ? "ended" : g.status, steps: stepsOf(g).map(x => ({ label: x.label, kind: x.kind })), winners };
+            };
+            return { giveaways: await Promise.all(rows.slice(0, 6).map(card)), now: now() };
+        },
+        // Which giveaways in a server the streamer can put on screen, and which are picked now.
+        "GET /api/giveawayoverlay/pick": async (req, _b, url) => {
+            const s = session(req), g = await streamAccess(s, url.searchParams.get("guild"));
+            const picked = new Set(gwOverlayPicks(s.userId));
+            const rows = db.listGiveaways(g.id, { limit: 50 }).filter(x => x.status === "active" || x.status === "scheduled");
+            return { giveaways: rows.map(x => ({ id: x.id, title: x.title, status: x.status, endsAt: x.ends_at, entries: db.countEntries(x.id), prizes: db.listKeys(x.id).length, mine: x.host_id === s.userId, picked: picked.has(x.id) })) };
+        },
+        "POST /api/giveawayoverlay/pick": async (req, body) => {
+            const s = session(req), g = await streamAccess(s, body.guild_id);
+            const want = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(Number).filter(Number.isInteger))].slice(0, 6);
+            for (const id of want) { const x = db.getGiveaway(id); if (!x || x.guild_id !== g.id || !["active", "scheduled"].includes(x.status)) throw new HttpError(400, "One of those giveaways isn't running in this server."); }
+            const keep = gwOverlayPicks(s.userId).filter(id => db.getGiveaway(id)?.guild_id !== g.id);
+            const all = [...keep, ...want].slice(-6);
+            db.setMeta("gwov:" + s.userId, JSON.stringify(all));
+            return { ok: true, ids: all };
         },
         // Game club: the server's game of the month. Anyone in the server can look; Manage Server changes it.
         "GET /api/club": async (req, _b, url) => {

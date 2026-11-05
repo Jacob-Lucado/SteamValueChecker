@@ -180,12 +180,12 @@
   document.addEventListener("keydown", e => { if (e.key === "Escape" && openMenu) { const b = openMenu.btn; closeMenu(); b.focus(); } });
   window.addEventListener("hashchange", closeMenu);
   // On phones the top bar folds into a Menu button so it doesn't cover the page.
-  {
-    const bar = document.querySelector(".topbar"), tog = document.getElementById("navtoggle");
+  const bar = document.querySelector(".topbar"), tog = document.getElementById("navtoggle");
+  if (bar && tog) { // the admin panel and other pages that share this script have no top bar
     const setOpen = on => { bar.classList.toggle("open", on); tog.setAttribute("aria-expanded", String(on)); };
     tog.addEventListener("click", () => setOpen(!bar.classList.contains("open")));
     window.addEventListener("hashchange", () => setOpen(false));
-    document.getElementById("nav").addEventListener("click", e => { if (e.target.closest("a")) setOpen(false); });
+    document.getElementById("nav")?.addEventListener("click", e => { if (e.target.closest("a")) setOpen(false); });
     document.addEventListener("keydown", e => { if (e.key === "Escape" && bar.classList.contains("open")) { setOpen(false); tog.focus(); } });
   }
   const STEAM_ICON = "M12 2a10 10 0 0 0-9.96 9.1l5.35 2.2a2.8 2.8 0 0 1 1.6-.5h.15l2.4-3.45v-.05a3.75 3.75 0 1 1 3.75 3.75h-.1l-3.4 2.45a2.8 2.8 0 0 1-5.55.45L2.3 14.2A10 10 0 1 0 12 2z";
@@ -6100,11 +6100,30 @@
     const KEY = "svc_gwoverlay";
     let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch { /* none */ }
     const copy = async text => { try { await navigator.clipboard.writeText(text); toast("Copied.", "ok"); } catch { toast("Select the link and copy it by hand.", "warn"); } };
+    /** Choose which of the server's running giveaways go on screen. With none picked it just follows your latest stream giveaway. */
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    function picker() {
+      if (!servers.length) return null;
+      const guild = select(servers.map(g => [g.id, g.name]), servers[0].id), list = h("div", { class: "gwpicks" }), save = h("button", { class: "btn blue small", type: "button", text: "Save my picks" });
+      let rows = [];
+      const note = h("p", { class: "muted small" });
+      async function loadList() {
+        list.replaceChildren(h("span", { class: "muted small", text: "Looking…" }));
+        try { rows = (await api("/api/giveawayoverlay/pick?guild=" + encodeURIComponent(guild.value))).giveaways; } catch (e) { rows = []; list.replaceChildren(h("div", { class: "notice warn", text: e.message })); note.textContent = ""; return; }
+        if (!rows.length) { list.replaceChildren(h("p", { class: "muted", text: "No giveaways are running in this server right now." })); note.textContent = ""; return; }
+        list.replaceChildren(...rows.map(r => { const c = h("input", { type: "checkbox", checked: r.picked }); c.dataset.id = String(r.id); const when = r.endsAt ? new Date(r.endsAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""; return h("label", { class: "check" }, c, h("span", {}, h("b", { text: r.title }), h("span", { class: "muted small", text: ` ${r.entries} entries · ${r.prizes} prize${r.prizes === 1 ? "" : "s"} · ends ${when}${r.mine ? " · yours" : ""}` }))); }));
+        note.textContent = "Tick up to six. With several ticked, the overlay slides between them with live stats.";
+      }
+      guild.addEventListener("change", loadList);
+      save.addEventListener("click", () => busy(save, async () => { const ids = [...list.querySelectorAll("input:checked")].map(i => Number(i.dataset.id)); await api("/api/giveawayoverlay/pick", { guild_id: guild.value, ids }); toast(ids.length ? "Saved. Your overlay switches within seconds." : "Cleared. It follows your latest stream giveaway.", "ok"); loadList(); }));
+      loadList();
+      return h("div", { class: "subpanel" }, h("h4", { text: "Which giveaways to show" }), servers.length > 1 ? field("Server", guild) : null, list, note, h("div", { class: "row" }, save));
+    }
     async function draw() {
       let d;
       try { d = await api("/api/streamcard"); } catch (e) { panel.replaceChildren(h("h3", { text: "Giveaway overlay for OBS" }), h("div", { class: "notice warn", text: e.message })); return; }
       const head = h("h3", { text: "Giveaway overlay for OBS" });
-      const blurb = h("p", { class: "muted", text: "Show your stream giveaway on screen: the prize, how many people entered, a countdown, the steps to enter, and then the winners the moment they are drawn. It follows your latest stream giveaway by itself, so you set it up once. Add it in OBS as a Browser source." });
+      const blurb = h("p", { class: "muted", text: "Show your stream giveaway on screen: the prize, how many people entered, a countdown, the steps to enter, and then the winners the moment they are drawn. Pick one giveaway or several and it slides between them with live stats, or pick none and it follows your latest stream giveaway by itself. Add it in OBS as a Browser source." });
       const base = (d.base || "").replace(/streamcard$/, "giveawayoverlay");
       if (!d.on) {
         const make = h("button", { class: "btn blue", type: "button", text: "Make my overlay link" });
@@ -6122,18 +6141,21 @@
       const label = h("input", { type: "text", maxlength: "40", placeholder: "Giveaway", value: v("label", ""), "aria-label": "Small heading" });
       const join = h("input", { type: "text", maxlength: "80", placeholder: "Join: discord.gg/yourserver", value: v("join", ""), "aria-label": "How to enter text" });
       const hold = h("input", { type: "number", min: "5", max: "600", value: v("hold", "60"), "aria-label": "Winner seconds" });
+      const every = h("input", { type: "number", min: "3", max: "60", value: v("every", "8"), "aria-label": "Seconds per giveaway" });
+      const dots = h("input", { type: "checkbox", checked: v("dots", true) !== false });
       const TOG = [["prizes", "Prizes"], ["entries", "Entry count"], ["timer", "Countdown"], ["bar", "Progress bar"], ["steps", "Steps to enter"], ["winners", "Winners when drawn"]];
       const tog = TOG.map(([k, t]) => { const c = h("input", { type: "checkbox", checked: v(k, true) !== false }); return [k, c, h("label", { class: "check" }, c, t)]; });
       const autoHide = h("input", { type: "checkbox", checked: v("hide", false) === true }); 
       const link = h("input", { type: "text", readonly: true, "aria-label": "Giveaway overlay link" });
       const prev = h("iframe", { class: "gwprev", title: "Preview", loading: "lazy" });
-      const demo = select([["1", "Preview: running"], ["ended", "Preview: winners"]], "1");
+      const demo = select([["1", "Preview: several giveaways"], ["one", "Preview: one giveaway"], ["ended", "Preview: winners"]], "1");
       const params = () => {
         const u = new URLSearchParams();
         if (style.value !== "card") u.set("style", style.value); if (theme.value !== "dark") u.set("theme", theme.value); if (anchor.value !== "tr") u.set("anchor", anchor.value);
         if (font.value !== "system") u.set("font", font.value); if (accent.value.toLowerCase() !== "#4da3ff") u.set("accent", accent.value.slice(1)); if (scale.value && scale.value !== "1") u.set("scale", scale.value);
         if (label.value.trim()) u.set("label", label.value.trim()); if (join.value.trim()) u.set("join", join.value.trim());
         for (const [k, c] of tog) if (!c.checked) u.set(k, "0");
+        if (every.value && every.value !== "8") u.set("every", every.value); if (!dots.checked) u.set("dots", "0");
         if (autoHide.checked) { u.set("hide", "1"); if (hold.value && hold.value !== "60") u.set("hold", hold.value); }
         return u;
       };
@@ -6141,12 +6163,13 @@
         const u = params(), real = new URL(base); real.searchParams.set("token", d.token); for (const [k, x] of u) real.searchParams.set(k, x);
         link.value = real.toString();
         const pv = new URL(base); pv.searchParams.set("demo", demo.value); for (const [k, x] of u) pv.searchParams.set(k, x); if (pv.toString() !== prev.getAttribute("src")) prev.src = pv.toString();
-        try { localStorage.setItem(KEY, JSON.stringify({ style: style.value, theme: theme.value, anchor: anchor.value, font: font.value, accent: accent.value, scale: scale.value, label: label.value, join: join.value, hold: hold.value, hide: autoHide.checked, ...Object.fromEntries(tog.map(([k, c]) => [k, c.checked])) })); } catch { /* fine */ }
+        try { localStorage.setItem(KEY, JSON.stringify({ style: style.value, theme: theme.value, anchor: anchor.value, font: font.value, accent: accent.value, scale: scale.value, label: label.value, join: join.value, hold: hold.value, every: every.value, dots: dots.checked, hide: autoHide.checked, ...Object.fromEntries(tog.map(([k, c]) => [k, c.checked])) })); } catch { /* fine */ }
       };
-      [style, theme, anchor, font, accent, scale, label, join, hold, autoHide, demo, ...tog.map(t => t[1])].forEach(e => e.addEventListener("input", rebuild)); rebuild();
+      [style, theme, anchor, font, accent, scale, label, join, hold, every, dots, autoHide, demo, ...tog.map(t => t[1])].forEach(e => e.addEventListener("input", rebuild)); rebuild();
       const copyBtn = h("button", { class: "btn blue small", type: "button", text: "Copy link" }); copyBtn.addEventListener("click", () => copy(link.value));
       panel.replaceChildren(head, blurb,
         h("div", { class: "gwprevwrap" }, prev), h("div", { class: "row" }, field("Preview", demo)),
+        picker(), h("div", { class: "grid two" }, field("Seconds on each giveaway", every), h("label", { class: "check" }, dots, "Dots under the card when several are showing")),
         h("h4", { text: "Look" }), h("div", { class: "grid two" }, field("Layout", style), field("Colors", theme), field("Where", anchor), field("Font", font), field("Accent color", accent), field("Size (1 is normal)", scale)),
         h("h4", { text: "What it shows" }), h("div", { class: "grid two" }, tog.map(t => t[2])),
         h("div", { class: "grid two" }, field("Small heading", label), field("How to enter (your invite or link)", join)),

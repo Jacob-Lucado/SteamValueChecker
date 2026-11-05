@@ -3,6 +3,7 @@ export const CHANGELOG = [
     { version: "2026.11.22", date: "2026-11-04", title: "Giveaway overlay for streamers", items: [
         "**On-screen giveaway:** the Streamer hub has a new Giveaway overlay for OBS. It shows your stream giveaway's prizes, how many people entered, a live countdown and the steps to enter, then shows the winners the moment they are drawn.",
         "**Make it yours:** pick a card, wide bar or small tag layout; dark, light, glass, neon or no background; any corner of the screen; four fonts; your own accent color and size. Switch the prizes, entry count, countdown, progress bar, steps and winners on or off, add your own heading and a line like your Discord invite, and choose whether the winners hide after a while.",
+        "**Several giveaways at once:** tick up to six of the giveaways running in your server and the overlay slides between them, each with its own live entry count and countdown, with dots underneath. Pick none and it follows your latest stream giveaway.",
         "**Live preview:** you see every change as you make it, and your choices are remembered. It uses the same private link as your deals overlay and follows your latest stream giveaway by itself, so you set it up once."
     ] },
     { version: "2026.11.21", date: "2026-11-04", title: "Full giveaway tools for streamers", items: [
