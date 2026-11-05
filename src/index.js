@@ -263,7 +263,7 @@ const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\
 // every message the bot sends gets the same finish: colour, name and logo in the footer, bare text turned into a card
 const brandOpts = { logo: publicBase ? `${publicBase}/logo.png` : null };
 brandRest(botRest, brandOpts); brandRest(discord, brandOpts);
-configureHelp({ base: publicBase, supportUrl: cfg.creator?.url ?? null, inviteUrl: cfg.clientId ? botInviteUrl(cfg.clientId) : null });
+configureHelp({ base: publicBase, supportUrl: cfg.supportInvite || cfg.creator?.url || null, inviteUrl: cfg.clientId ? botInviteUrl(cfg.clientId) : null });
 const tickets = createTicketService({ db, discord: gwDiscord, ownerId: cfg.ownerId, publicUrl: publicBase, log: m => (m.startsWith("[bug") ? console.error(m) : console.log(`[tickets] ${m}`)) });
 let codesBusy = false;
 const pollCodes = async () => {
