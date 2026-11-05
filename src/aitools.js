@@ -8,6 +8,7 @@ import { money, itadArt, artUrl, safeUrl } from "./render.js";
 import { steamArt } from "./art.js";
 import { pickCard } from "./aicards.js";
 import { MORE_DEFS, createMoreTools, dashCard } from "./aitools2.js";
+import { EXTRA_DEFS, createExtraTools } from "./aitools3.js";
 
 const MAX_TITLES = 6;
 const clip = (s, n = 80) => String(s ?? "").slice(0, n);
@@ -57,12 +58,13 @@ export const TOOL_DEFS = [
 ];
 
 /** { defs, run(name, input, { userId, guildId }) } -> a JSON-able result. Errors come back as { error } so the AI can explain them. */
-export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globalThis.fetch, news = null, fx = null, dashUrl = null }) {
+export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globalThis.fetch, news = null, fx = null, dashUrl = null, lfg = null, calendar = null }) {
     const userOf = id => db.getUser?.(id) ?? { discord_id: id, region: "US", stores: "all" };
     const region = id => userOf(id)?.region || "US";
 
     const tools = {
         ...createMoreTools({ db, itad, news, fx, nameOf, dashUrl, fetchImpl }),
+        ...createExtraTools({ db, itad, fetchImpl, dashUrl, lfg, calendar }),
         async check_prices({ titles }, ctx) {
             const { userId } = ctx;
             const list = arr(titles).map(t => clip(t, 80)).filter(Boolean).slice(0, MAX_TITLES);
@@ -156,7 +158,7 @@ export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globa
     };
 
     return {
-        defs: [...TOOL_DEFS, ...MORE_DEFS],
+        defs: [...TOOL_DEFS, ...MORE_DEFS, ...EXTRA_DEFS],
         async run(name, input, ctx) {
             const fn = tools[name];
             if (!fn) return { error: "Unknown tool." };

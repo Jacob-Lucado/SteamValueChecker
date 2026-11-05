@@ -6068,7 +6068,16 @@
           h("p", { class: "muted small", text: st.meme_at ? "Last meme " + new Date(st.meme_at).toLocaleString() + "." : "None posted yet." }),
           h("div", { class: "row" }, save("Save", () => post("/api/community/memes", mBody())), save("Save and post one now", () => post("/api/community/memes", { ...mBody(), now: true }), "btn green small")));
         // group everything a manager can customise into tabs
-        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["AI companion", [aiP, plusP].filter(Boolean)], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Memes", [memeP]], ["Emoji", [emoji]]];
+        // Guides managers write for their own server: the bot answers matching questions by itself, and the AI can use them too
+        const gTitle = h("input", { type: "text", maxlength: "80", placeholder: "How do I get the Raider role?" });
+        const gKeys = h("textarea", { rows: "2", maxlength: "400", placeholder: "get raider role, raider role, how to join raids" });
+        const gBody = h("textarea", { rows: "5", maxlength: "1500", placeholder: "Write the answer exactly as members should read it." });
+        const guidesP = h("div", { class: "panel" }, h("h3", { text: "Server guides" }),
+          h("p", { class: "muted", text: "Write answers to the questions your members keep asking: rules, roles, channels, how things work here. When someone asks something that contains one of your phrases, the bot replies with the guide by itself. The AI companion uses them too." }),
+          (st.serverGuides || d.serverGuides || []).length ? h("ul", { class: "plain" }, (st.serverGuides || d.serverGuides || []).map(g => h("li", {}, h("b", { text: g.title }), h("span", { class: "muted small", text: "  ·  " + g.keywords.join(", ") }), " ", save("Remove", () => post("/api/community/guides", { remove: g.id }), "btn gray small")))) : h("p", { class: "muted small", text: "No guides yet." }),
+          field("Title", gTitle), field("Phrases that trigger it (separate with commas)", gKeys), field("The answer", gBody),
+          h("div", { class: "row" }, save("Add guide", () => post("/api/community/guides", { title: gTitle.value, keywords: gKeys.value, body: gBody.value }))));
+        const groups = [["Setup", [build]], ["Welcome & verify", [welcome, verify]], ["AI companion", [aiP, guidesP, plusP].filter(Boolean)], ["Rules & announcements", [places, rulesP, announceP]], ["Support", [supportP]], ["Roles & pings", [pings, referral]], ["Leaderboard", [lbP]], ["Memes", [memeP]], ["Emoji", [emoji]]];
         const tabBar = h("div", { class: "tabs" }), body = h("div");
         const show = n => { mgrTab = n; [...tabBar.children].forEach((b, k) => b.classList.toggle("active", k === n)); body.replaceChildren(...groups[n][1]); };
         groups.forEach(([label], n) => tabBar.append(h("button", { class: "tab small", type: "button", text: label, onclick: () => show(n) })));

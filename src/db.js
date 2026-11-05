@@ -35,6 +35,7 @@ import { giftSchema, giftStore } from "./giftstore.js";
 import { socialSchema, socialStore } from "./socialstore.js";
 import { friendSchema, friendStore } from "./friendstore.js";
 import { challengeSchema, challengeStore } from "./challengestore.js";
+import { aiSchema, aiStore } from "./aistore.js";
 import { bundleSchema, bundleStore } from "./bundlestore.js";
 import { broadcastSchema, broadcastStore } from "./broadcast.js";
 import { communitySchema, communityStore } from "./communitystore.js";
@@ -202,6 +203,7 @@ ${giftSchema}
 ${socialSchema}
 ${friendSchema}
 ${challengeSchema}
+${aiSchema}
 ${bundleSchema}
 ${broadcastSchema}
 ${lfgSchema}`;
@@ -372,6 +374,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const social = socialStore({ run, get, all, now, clean });
     const friends = friendStore({ run, get, all, now });
     const challenges = challengeStore({ run, all });
+    const aiData = aiStore({ run, get, all, now });
     const bundles = bundleStore({ run, all, get, now });
     const broadcasts = broadcastStore({ run, all, get, now });
     const steam = steamStore({ db, run, get, all, clean, now, maxLibrary: MAX_LIBRARY_PER_USER, onFinished: (id, g) => social.addEvent(id, "finished", { appid: g.appid ?? null, game: g.title, ref: g.itad_id }) });
@@ -773,13 +776,13 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId) };
+        return { user: u, community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId) };
     }
 
     function deleteUser(discordId) {
         db.exec("BEGIN");
         try {
-            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            for (const t of ["ai_notes", "items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM gift_marks WHERE claimer_id = ?", discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
@@ -830,6 +833,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

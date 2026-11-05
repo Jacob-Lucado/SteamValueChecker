@@ -1,5 +1,14 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.37", date: "2026-11-05", title: "The AI can do a lot more", items: [
+        "**Buy or wait:** ask if a game is worth it and get a verdict with a price-history graph, reviews and the next sale.",
+        "**X vs Y:** compare two games side by side in one picture. **Play plan:** tell it how many hours you have and it picks from your library.",
+        "**Play together:** games you and a @mentioned friend both own (they have to share their stats in this server).",
+        "**Groups and events by chat:** ask it to set up a looking-for-group post, and managers can add server events.",
+        "**Price targets:** \"tell me when Hades is under $10\" sets the alert for you.",
+        "**It remembers what you like** (a few short notes, ask it to forget any time), and **server managers can write their own guides** for rules, roles and channels in the dashboard; the bot answers them automatically.",
+        "**Server setup check** for managers, and ask \"what can you do?\" for a picture of everything."
+    ] },
     { version: "2026.11.36", date: "2026-11-05", title: "How-to guides the bot answers by itself", items: [
         "**Ask and get a guide:** when someone in a server asks something like \"how do I get Steam verified\", the bot replies on its own with a card: a short intro, a picture of the numbered steps with the exact commands, and buttons that go straight to the right page. No AI needed.",
         "**Sixteen topics:** Steam Verified, linking Steam, importing a wishlist, sale alerts, free games, where alerts arrive, adding your library, your public profile page, the dashboard, region and currency, getting help, your data, music, finding a group, and levels.",

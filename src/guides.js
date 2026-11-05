@@ -170,6 +170,27 @@ export function matchGuide(text, { hasVerifiedRole = false } = {}) {
     return null;
 }
 
+/** A guide a server's managers wrote: matches when the message sounds like a question and contains one of its phrases. `loose` skips the question check (the AI already decided it is one). */
+export function matchServerGuide(text, list, { loose = false } = {}) {
+    const t = String(text ?? "").toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, " ").trim();
+    if (t.length < 6 || t.length > 280 || t.startsWith("/")) return null;
+    if (!loose && !HOWTO.test(t)) return null;
+    const words = new Set(t.split(/[^\p{L}\p{N}']+/u).filter(Boolean));
+    let best = null, bestScore = 0;
+    for (const g of list ?? []) {
+        for (const k of g.keywords ?? []) {
+            const parts = k.split(" ");
+            const score = t.includes(k) ? parts.length + 2 : loose && parts.length > 1 && parts.filter(p => p.length > 2 && words.has(p)).length >= Math.max(2, Math.ceil(parts.length * 0.6)) ? parts.length : 0;
+            if (score > bestScore) { best = g; bestScore = score; }
+        }
+    }
+    return best;
+}
+
+export function serverGuidePayload(g, { botName = "Steam Value Checker" } = {}) {
+    return { embeds: [{ color: 0x5865f2, title: String(g.title).slice(0, 250), description: String(g.body).slice(0, 3800), footer: { text: `Server guide · ${botName}` } }] };
+}
+
 export const guideById = id => GUIDES.find(g => g.id === id) ?? null;
 /** Best guess for a free-text topic (used by the AI's how_to tool). */
 export function findGuide(topic) {

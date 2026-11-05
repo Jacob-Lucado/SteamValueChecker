@@ -43,7 +43,8 @@ const MORE = [
 
 export function intentOf(question) {
     const q = String(question ?? "").toLowerCase();
-    if (!q.trim() || /^(hi|hey|hello|yo|sup|help|what can you do|commands)\b/.test(q.trim()) && q.split(" ").length <= 4) return { kind: "help" };
+    if (/\b(what (all )?(can|do) you (do|help)|what are you (able|capable)|your (features|abilities|commands)|how (can|do) you help|what do you know|abilities|capabilities)\b|^help\b/.test(q)) return { kind: "abilities" };
+    if (!q.trim() || /^(hi|hey|hello|yo|sup|commands)\b/.test(q.trim()) && q.split(" ").length <= 4) return { kind: "help" };
     if (/\bfree\b.*\b(games?|now|today|right now|claim|epic|steam|gog)\b|\bwhat'?s free\b|\bfree (games?|stuff)\b/.test(q)) return { kind: "free" };
     if (/\b(my )?wish ?list\b/.test(q)) return { kind: "wishlist" };
     if (/\b(play next|what (should|do) i play|what to play|something to play)\b/.test(q)) return { kind: "next" };
@@ -60,6 +61,7 @@ export function intentOf(question) {
 export async function liteAnswer({ question, userId, guildId, tools, cards }) {
     const it = intentOf(question);
     const run = (name, input) => tools.run(name, input, { userId, guildId, cards });
+    if (it.kind === "abilities") { const r = await run("what_can_you_do", {}); return `**Here's what I can do:**\n${r.abilities.map(x => `• ${x}`).join("\n")}`; }
     if (it.kind === "help" || it.kind === "unknown") return LITE_HELP;
 
     if (it.kind === "more") {

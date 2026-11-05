@@ -264,7 +264,7 @@ export function communityStore({ run, get, all, clean, now }) {
         run("UPDATE announcements SET user_id = NULL WHERE user_id = ?", userId);
     };
     /** Server gone: drop its community data. */
-    const forgetCommunityGuild = guildId => { for (const t of ["community", "member_xp", "level_roles", "invite_joins", "invite_links", "referral_rewards", "self_roles", "mod_cases", "announcements"]) run(`DELETE FROM ${t} WHERE guild_id = ?`, guildId); };
+    const forgetCommunityGuild = guildId => { for (const t of ["community", "member_xp", "level_roles", "invite_joins", "invite_links", "referral_rewards", "self_roles", "mod_cases", "announcements", "server_guides"]) run(`DELETE FROM ${t} WHERE guild_id = ?`, guildId); };
 
     return { getCommunity, setCommunity, allCommunity, getXp, addXp, setXp, xpRank, xpTop, countXpMembers, listLevelRoles, setLevelRole, removeLevelRole,
         recordJoin, recordLeave, growth, everJoined, inviteStats, inviteTop, whoInvited, getInviteLink, setInviteLink, inviteLinkOwner, listRewards, setReward, removeReward,

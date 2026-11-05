@@ -53,6 +53,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             const tk = db.getTicketSettings(gid);
             out.support = { ticket_channel: tk.channel_id, staff_role_id: tk.staff_role_id };
             out.announcements = db.listAnnouncements(gid, 8);
+            out.serverGuides = db.listServerGuides(gid);
             out.growth = db.growth(gid, 30);
             out.defaultRules = TEMPLATE.rules.join("\n\n");
         }
@@ -251,6 +252,13 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         db.bumpUsage("dash_announce");
         return { id, channel_id: channel, message_id: msg?.id ?? null, history: db.listAnnouncements(gid, 8) };
     }
+    /** A server's own guides: members who ask a matching question get the answer, from the bot or the AI. */
+    async function guides(gid, b, userId = null) {
+        if (b.remove) return { removed: db.deleteServerGuide(gid, b.remove), guides: db.listServerGuides(gid) };
+        const r = db.addServerGuide(gid, { title: b.title, keywords: b.keywords, body: b.body }, userId);
+        if (r.error) fail(400, r.error);
+        return { id: r.id, guides: db.listServerGuides(gid) };
+    }
     async function autorole(gid, b) { return db.setCommunity(gid, { autorole_id: await roleOk(gid, b.role_id || null) }); }
     async function xp(gid, b) {
         const patch = {};
@@ -326,5 +334,5 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
+    return { overview, setup, welcome, guides, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
 }

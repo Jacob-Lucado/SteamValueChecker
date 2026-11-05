@@ -117,7 +117,7 @@ import { createAiChat, parseTrigger, AI_FAILURES } from "./aichat.js";
 import { createRuntimeCfg } from "./runtimecfg.js";
 import { createAiTools } from "./aitools.js";
 import { cardsPayload, handleAiButton, AI_PREFIX } from "./aicards.js";
-import { matchGuide, guidePayload, handleGuideInteraction, GUIDE_BUTTON, createGuideThrottle } from "./guides.js";
+import { matchGuide, matchServerGuide, serverGuidePayload, guidePayload, handleGuideInteraction, GUIDE_BUTTON, createGuideThrottle } from "./guides.js";
 import { PROVIDER_IDS } from "./aiproviders.js";
 import { createMainGuild } from "./mainguild.js";
 import { liteAnswer } from "./ailite.js";
@@ -463,22 +463,23 @@ const serverKey = gid => {
     const key = c?.ai_key && keyVault ? keyVault.decrypt(c.ai_key) : null;
     return key ? { key, provider: c.ai_provider || "anthropic", model: c.ai_model || null } : null;
 };
-const aiTools = createAiTools({ db, itad, news, fx, dashUrl: cfg.dashboard?.publicUrl ?? null, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
+const aiTools = createAiTools({ db, itad, news, fx, lfg, calendar, dashUrl: cfg.dashboard?.publicUrl ?? null, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
 const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, configuredInvite: cfg.supportInvite, log: t => console.log(`[main server] ${t}`) });
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
 const guideThrottle = createGuideThrottle();
 /** A how-to question gets a step by step guide from the bot itself. Returns true when it answered. */
 async function guideReply(m, c) {
-    const g = matchGuide(m.content, { hasVerifiedRole: Boolean(c.verified_role_id) });
+    const own = matchServerGuide(m.content, db.listServerGuides(m.guildId));
+    const g = own ?? matchGuide(m.content, { hasVerifiedRole: Boolean(c.verified_role_id) });
     if (!g) return false;
     const me = m.guild?.members?.me;
     const perms = me ? m.channel.permissionsFor(me) : null;
     if (perms && !perms.has(["SendMessages", "EmbedLinks", "AttachFiles"])) return false;
-    if (!guideThrottle.allow({ guildId: m.guildId, channelId: m.channelId, userId: m.author.id, guideId: g.id })) return false;
+    if (!guideThrottle.allow({ guildId: m.guildId, channelId: m.channelId, userId: m.author.id, guideId: own ? `s${own.id}` : g.id })) return false;
     await m.channel.sendTyping?.().catch(() => {});
-    const payload = await guidePayload(g, { publicUrl: cfg.dashboard?.publicUrl ?? null });
-    db.bumpUsage?.(`guide:${g.id}`);
+    const payload = own ? serverGuidePayload(own) : await guidePayload(g, { publicUrl: cfg.dashboard?.publicUrl ?? null });
+    db.bumpUsage?.(own ? "guide:server" : `guide:${g.id}`);
     await m.reply({ ...payload, allowedMentions: { parse: [], repliedUser: false } }).catch(() => {});
     return true;
 }
@@ -504,7 +505,8 @@ async function aiReply(m, t) {
         }
     } catch { /* no history: answer on its own */ }
     await m.channel.sendTyping?.().catch(() => {});
-    const r = await ai.answer({ guildId: m.guildId, userId: m.author.id, name: m.member?.displayName ?? m.author.globalName ?? m.author.username, question: t.question, history });
+    const r = await ai.answer({ guildId: m.guildId, userId: m.author.id, name: m.member?.displayName ?? m.author.globalName ?? m.author.username, question: t.question, history,
+        scope: { channelId: m.channelId, canManage: Boolean(m.member?.permissions?.has?.("ManageGuild")), mentions: [...m.mentions.users.values()].filter(u => !u.bot && u.id !== m.author.id).slice(0, 3).map(u => ({ id: u.id, name: m.guild?.members?.cache?.get(u.id)?.displayName ?? u.globalName ?? u.username })) } });
     const mentions = { parse: [], repliedUser: rt.get("ai_ping_reply") };
     if (r.ok) {
         const extra = cardsPayload(r.cards ?? [], { db, userId: m.author.id });
