@@ -14,6 +14,7 @@ const cap = (s, n) => (String(s ?? "").length > n ? String(s).slice(0, n - 1) + 
 
 /** One card as a Discord embed. The first carries a big picture, the rest a small one. */
 function embedOf(c, i) {
+    if (c.file) return { color: COLOR, image: { url: `attachment://${c.file.name}` }, footer: c.footer ? { text: cap(c.footer, 100) } : undefined }; // the picture says it all
     const img = safeUrl(c.image);
     return { color: COLOR, title: cap(c.title, 250), url: safeUrl(c.url), description: c.description ? cap(c.description, 600) : undefined,
         fields: (c.fields ?? []).filter(f => f.value).slice(0, 6).map(f => ({ name: cap(f.name, 60), value: cap(f.value, 200), inline: f.inline !== false })),
@@ -40,7 +41,8 @@ export function cardsPayload(cards, { db, userId }) {
         if (wish.length) row.push(action(wish.length === 1 ? "➕ Add to my wishlist" : "➕ Add these to my wishlist", `${AI_PREFIX}wish:${token}`));
         if (another) row.push(action("🎲 Another pick", `${AI_PREFIX}next:${token}`));
     }
-    return { embeds: list.map(embedOf), components: row.length ? [{ type: 1, components: row.slice(0, 5) }] : [] };
+    const files = list.filter(c => c.file).map(c => ({ attachment: c.file.data, name: c.file.name }));
+    return { embeds: list.map(embedOf), components: row.length ? [{ type: 1, components: row.slice(0, 5) }] : [], ...(files.length ? { files } : {}) };
 }
 
 /** The card for a play-next suggestion, in the shape cardsPayload takes. */
@@ -69,7 +71,7 @@ export async function handleAiButton(i, { db, itad }) {
         const next = playNext(v.rows, { skip: data.skip ?? [] });
         if (!next) return i.followUp({ content: "That's everything in your backlog. Nothing left to suggest.", flags: 64 }).catch(() => {});
         const p = cardsPayload([pickCard(next, data.skip ?? [])], { db, userId: i.user.id });
-        return i.editReply({ embeds: p.embeds, components: p.components }).catch(() => {});
+        return i.editReply({ embeds: p.embeds, components: p.components, ...(p.files ? { files: p.files } : {}) }).catch(() => {});
     }
     return i.deferUpdate().catch(() => {});
 }

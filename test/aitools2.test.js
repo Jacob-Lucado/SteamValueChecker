@@ -67,7 +67,7 @@ test("AI tools: linked Steam gives rare achievements and hours", async () => {
     const s = await t.run("my_steam", {}, ctx);
     assert.equal(s.games, 2);
     assert.equal(s.mostPlayed[0].title, "Hades");
-    assert.equal(cards.length, 0, "no dashboard set, and no unasked play-next card");
+    assert.ok(cards.every(c => c.file && !c.another), "pictures only, no unasked play-next card");
     const lite = await liteAnswer({ question: "what are my rarest achievements", userId: "u1", guildId: "G", tools: t, cards: [] });
     assert.match(lite, /Escaped/);
 });
@@ -81,11 +81,24 @@ test("AI cards: a library question gets a dashboard card, not a random play-next
     assert.equal(r.games, 1);
     assert.equal(cards.length, 1);
     assert.equal(cards[0].url, "https://dash.test/#/library");
+    assert.ok(cards[0].file.data.length > 1000, "drawn as a picture");
     assert.ok(!cards[0].another && !cards[0].wish, "no pick buttons");
     const pick = [];
     await t.run("play_next", {}, { userId: "u1", cards: pick });
     assert.ok(pick[0].title === "Hades");
     const off = [];
     await createAiTools({ db, itad }).run("my_library", {}, { userId: "u1", cards: off });
-    assert.equal(off.length, 0, "no dashboard, no card");
+    assert.ok(off[0].file?.data?.length > 1000 && off[0].file.name.endsWith(".png"), "a picture card even without a dashboard");
+    assert.ok(!off[0].url, "but no dashboard link");
+});
+
+test("AI pictures: a card with a picture becomes an attachment on the embed", async () => {
+    const { cardsPayload } = await import("../src/aicards.js");
+    const { renderPanel } = await import("../src/aipics.js");
+    const db = openDb(":memory:");
+    const data = await renderPanel({ title: "T", tiles: [{ label: "A", value: "1" }], rows: [{ label: "x", sub: "y", value: "z", pct: 50 }] });
+    const p = cardsPayload([{ title: "T", url: "https://dash.test/", file: { name: "a.png", data } }], { db, userId: "u1" });
+    assert.equal(p.embeds[0].image.url, "attachment://a.png");
+    assert.equal(p.files[0].name, "a.png");
+    assert.equal(p.components[0].components[0].url, "https://dash.test/");
 });

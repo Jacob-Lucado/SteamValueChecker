@@ -62,7 +62,7 @@ export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globa
     const region = id => userOf(id)?.region || "US";
 
     const tools = {
-        ...createMoreTools({ db, itad, news, fx, nameOf, dashUrl }),
+        ...createMoreTools({ db, itad, news, fx, nameOf, dashUrl, fetchImpl }),
         async check_prices({ titles }, ctx) {
             const { userId } = ctx;
             const list = arr(titles).map(t => clip(t, 80)).filter(Boolean).slice(0, MAX_TITLES);
@@ -109,7 +109,7 @@ export function createAiTools({ db, itad, nameOf = id => null, fetchImpl = globa
             const v = await libraryView(db, itad, u, { snapshot: false });
             if (!v.rows.length) return { empty: true, note: "Their library is empty. It fills from a Steam sign-in or /me library import." };
             const t = v.totals, cur = v.currency;
-            dashCard(dashUrl, ctx, "library", { title: "Your library", description: "Every game, what you paid and what it is worth, in your dashboard.", fields: [{ name: "Games", value: String(t.games) }, { name: "Paid", value: money(t.paid, cur) }, { name: "Worth at full price", value: money(t.msrp, cur) }, { name: "Backlog", value: String(t.backlogGames) }] });
+            await dashCard(dashUrl, ctx, "library", { fetchImpl, title: "Your library", panel: { sub: `${t.games} games tracked`, tiles: [{ label: "Worth at full price", value: money(t.msrp, cur) }, { label: "You paid", value: money(t.paid, cur) }, { label: "Cheapest today", value: money(t.cheapest, cur) }, { label: "Backlog", value: String(t.backlogGames) }], rows: [{ label: "Saved vs full price", value: money(Math.max(0, t.saved), cur), pct: t.savedPct }, { label: "Playing now", value: String(t.playing), pct: t.games ? t.playing / t.games * 100 : 0 }, { label: "Finished", value: String(t.finished), pct: t.games ? t.finished / t.games * 100 : 0 }] }, description: "Every game, what you paid and what it is worth, in your dashboard.", fields: [{ name: "Games", value: String(t.games) }, { name: "Paid", value: money(t.paid, cur) }, { name: "Worth at full price", value: money(t.msrp, cur) }, { name: "Backlog", value: String(t.backlogGames) }] });
             return { currency: cur, games: t.games, paid: money(t.paid, cur), worthAtFullPrice: money(t.msrp, cur), backlogGames: t.backlogGames, playing: t.playing, finished: t.finished };
         },
 
