@@ -1284,3 +1284,4 @@ body.wiz-open { overflow: hidden; }
 .pf-bg-thumb { height: 84px; border-radius: 8px; background-size: cover; background-position: center; border: 2px solid transparent; margin-bottom: 4px; }
 .pf-bg-thumb.on { border-color: var(--accent, #66c0f4); }
 .pf-bg-use, .pf-bg-del { font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 0; cursor: pointer; background: rgba(128, 128, 128, .25); color: inherit; }
+.pf-pagebg video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }

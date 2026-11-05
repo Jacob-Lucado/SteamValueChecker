@@ -1173,6 +1173,13 @@
     const el = h("div", { class: "pf-pagebg" + (preview ? " in-preview" : ""), "aria-hidden": "true" });
     if (bg.kind === "preset" && PAGE_PRESET_CSS[bg.preset]) el.style.background = PAGE_PRESET_CSS[bg.preset];
     else if (bg.kind === "image" && typeof bg.url === "string" && /^\/pbg\/\d+(\?v=\d+)?$/.test(bg.url)) { el.style.backgroundImage = `url("${bg.url}")`; el.classList.add("img"); el.style.setProperty("--dim", String((Number(bg.dim) || 0) / 100)); }
+    else if (bg.kind === "video" && typeof bg.url === "string" && /^https:\/\//.test(bg.url)) {
+      // Steam's animated background plays straight from Steam's own servers, muted and looping; nothing is stored here.
+      const v = h("video", { src: bg.url, muted: true, loop: true, playsinline: true, autoplay: true, preload: "auto", "aria-hidden": "true", tabindex: "-1" });
+      v.muted = true;
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) v.removeAttribute("autoplay"); else v.play?.().catch(() => {});
+      el.append(v); el.classList.add("img", "vid"); el.style.setProperty("--dim", String((Number(bg.dim) || 0) / 100));
+    }
     else return null;
     return el;
   }
@@ -1380,7 +1387,7 @@
     const bgCall = (body, b) => busy(b, async () => { try { adopt(await api("/api/profile/background", body)); } catch (e) { toast(e.message, "error"); } });
     function drawBg() {
       const pb = cfg.pagebg || (cfg.pagebg = { kind: "none", preset: "aurora", dim: 35, image: null });
-      const kinds = h("div", { class: "pf-bg-kinds" }, [["none", "None"], ["preset", "Preset"], ["image", "My picture"]].map(([k, label]) => {
+      const kinds = h("div", { class: "pf-bg-kinds" }, [["none", "None"], ["preset", "Preset"], ["image", "My picture"], ...(pb.video ? [["video", "Steam animated"]] : [])].map(([k, label]) => {
         const b = h("button", { type: "button", class: "btn small " + (pb.kind === k ? "blue" : "gray"), text: label, "aria-pressed": String(pb.kind === k) });
         b.addEventListener("click", () => { if (k === "image" && !(d.backgrounds || []).length) return toast("Upload a picture or copy your Steam background first.", "warn"); pb.kind = k; if (k === "image" && !pb.image) pb.image = d.backgrounds[0].id; drawBg(); changed(); });
         return b;
@@ -1409,7 +1416,7 @@
       up.addEventListener("click", () => file.click());
       file.addEventListener("change", () => { const f = file.files[0]; file.value = ""; if (!f) return; busy(up, async () => { try { adopt(await api("/api/profile/background", { action: "upload", data: await shrink(f) })); toast("Uploaded.", "ok"); } catch (e) { toast(e.message, "error"); } }); });
       const st = h("button", { type: "button", class: "btn gray small", text: "Use my Steam background", disabled: !d.steamLinked, title: d.steamLinked ? "" : "Link Steam first" });
-      st.addEventListener("click", () => busy(st, async () => { try { adopt(await api("/api/profile/background", { action: "steam" })); toast("Copied your Steam background.", "ok"); } catch (e) { toast(e.message, "error"); } }));
+      st.addEventListener("click", () => busy(st, async () => { try { adopt(await api("/api/profile/background", { action: "steam" })); toast(cfg.pagebg && cfg.pagebg.kind === "video" ? "Using your animated Steam background." : "Copied your Steam background.", "ok"); } catch (e) { toast(e.message, "error"); } }));
       parts.push(h("div", { class: "row" }, up, st, file));
       parts.push(h("p", { class: "muted small", text: `You can keep up to ${d.maxBackgrounds} pictures (${(d.backgrounds || []).length} stored). Pictures are cleared if you have not opened the bot or dashboard for 30 days. Keep it to pictures you have the right to use. If a page is reported, it can be hidden.` }));
       bgBox.replaceChildren(...parts);

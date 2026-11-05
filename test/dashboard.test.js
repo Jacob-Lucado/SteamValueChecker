@@ -2365,7 +2365,7 @@ const asData = (buf, mime = "image/png") => `data:${mime};base64,${buf.toString(
 
 test("page background: presets, uploads (three kept), the Steam background, serving rules and clearing for inactive members", async () => {
     const steamHtml = `<html><div class="no_header profile_page has_profile_background " style="background-image: url( 'https://shared.fastly.steamstatic.com/community_assets/images/items/1/bg.jpg' );"></div></html>`;
-    const steamFetch = async url => url.includes("steamcommunity.com/profiles/") ? { ok: true, status: 200, text: async () => (steamFetch.none ? "<html></html>" : steamHtml) }
+    const steamFetch = async url => url.includes("steamcommunity.com/profiles/") ? { ok: true, status: 200, text: async () => (steamFetch.video ? `<video><source src="https://shared.akamai.steamstatic.com/community_assets/images/items/284160/aabb0b693d4e99ae6d39106a7a735add27b95b6b.webm"></video>` : steamFetch.none ? "<html></html>" : steamHtml) }
         : url.includes("steamstatic.com") ? { ok: true, status: 200, arrayBuffer: async () => PNG1 } : { ok: false, status: 404 };
     const t = await setup({ extra: { steamFetch }, config: { apiPerMinute: 5000 } });
     await t.signIn();
@@ -2411,6 +2411,16 @@ test("page background: presets, uploads (three kept), the Steam background, serv
     steamFetch.none = true;
     assert.equal((await bg({ action: "steam" })).status, 404, "no Steam background to copy");
 
+    // an animated Steam background stays on Steam's servers: nothing is stored, and it takes no picture slot
+    const before = t.db.countProfileBgs("u1");
+    steamFetch.none = false; steamFetch.video = true;
+    const vid = await bg({ action: "steam" });
+    assert.equal(vid.status, 200); assert.equal(t.db.countProfileBgs("u1"), before);
+    const pv = await shown();
+    assert.equal(pv.kind, "video"); assert.match(pv.url, /\.webm$/);
+    assert.equal((await save({ kind: "video", video: "https://evil.example/a.webm" })).status, 400, "only Steam's own animated backgrounds");
+    steamFetch.video = false;
+
     // only the owner can pick or delete their pictures; a hidden page does not show its picture to strangers
     assert.equal((await bg({ action: "use", id: 99999 })).status, 404);
     assert.equal((await bg({ action: "remove", id: 99999 })).status, 404);
@@ -2437,6 +2447,11 @@ test("page background: reading the Steam profile page", async () => {
     const { parseSteamBackground, sniffImage, safeSteamUrl } = await import("../src/profilebg.js");
     assert.equal(parseSteamBackground(`<div class="no_header profile_page has_profile_background" style="background-image: url( 'https://shared.fastly.steamstatic.com/community_assets/images/items/2/x.jpg' );">`), "https://shared.fastly.steamstatic.com/community_assets/images/items/2/x.jpg");
     assert.equal(parseSteamBackground("<html>no background</html>"), null);
+    const { parseSteamBackgrounds, safeSteamVideo } = await import("../src/profilebg.js");
+    const VID = "https://shared.akamai.steamstatic.com/community_assets/images/items/284160/aabb0b693d4e99ae6d39106a7a735add27b95b6b.webm";
+    assert.deepEqual(parseSteamBackgrounds(`<div class="profile_animated_background"><video autoplay muted loop><source src="${VID}" type="video/webm"></video></div>`), { image: null, video: VID });
+    assert.equal(safeSteamVideo("https://evil.example/items/1/aa.webm"), null);
+    assert.equal(safeSteamVideo("https://shared.akamai.steamstatic.com/x.jpg"), null);
     assert.equal(safeSteamUrl("https://evil.example/steamstatic.com/x.jpg"), null);
     assert.equal(safeSteamUrl("http://cdn.steamstatic.com/x.jpg"), null, "https only");
     assert.equal(sniffImage(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'></svg>")), null, "SVG is not accepted");

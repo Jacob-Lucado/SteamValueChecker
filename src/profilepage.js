@@ -168,6 +168,7 @@ const canSee = (vis, viewer) => viewer.owner || vis === "public" || (vis === "se
 function pageBgFor(db, owner, bg) {
     const b = { ...defaultPageBg(), ...(bg || {}) };
     if (b.kind === "preset") return { kind: "preset", preset: b.preset, dim: b.dim, url: null };
+    if (b.kind === "video" && b.video) return { kind: "video", preset: b.preset, dim: b.dim, url: b.video };
     if (b.kind === "image" && b.image) {
         const row = db.getProfileBg(b.image);
         if (row && row.discord_id === owner.discord_id) return { kind: "image", preset: b.preset, dim: b.dim, url: `/pbg/${row.id}?v=${row.created_at}` };

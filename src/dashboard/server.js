@@ -2428,6 +2428,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
                 if (!link) throw new HttpError(400, "Link your Steam account first (Steam page, or /steam link).");
                 let img; try { img = await fetchSteamBackground(link.steamid, steamFetch); } catch (e) { throw new HttpError(502, e.message); }
                 if (!img) throw new HttpError(404, "No background found on your Steam profile. Equip one there first, and make sure the profile is public.");
+                if (img.video) { setActive({ kind: "video", video: img.video }); return await profileEditorPayload(db.getUser(s.userId)); }
                 db.deleteSteamProfileBg(s.userId);
                 if (db.countProfileBgs(s.userId) >= MAX_BG_STORED) throw new HttpError(400, `You can keep up to ${MAX_BG_STORED} pictures. Delete one first.`);
                 setActive({ kind: "image", image: db.addProfileBg(s.userId, img.mime, img.buf, "steam") });
