@@ -56,13 +56,35 @@ export function createGamerPower({ fetchImpl = globalThis.fetch, now = () => Dat
 
 const norm = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-/** Adds GamerPower's giveaways to `getGiveawayList`, skipping any game the list already has for the same store. */
+/** "Sorry We're Closed - FREE on Epic Games" is the same game as "Sorry We're Closed": drop the sales wording from the end of a title. */
+export function tidyTitle(t) {
+    return String(t ?? "").replace(/\s*[-\u2013\u2014:|]\s*(?:now\s+)?free\b[^()]*$/i, "").replace(/\s+(?:is\s+)?free\s+(?:on|at|from)\s+[\w .']+$/i, "").replace(/\s+/g, " ").trim() || String(t ?? "").trim();
+}
+
+const SHOP_NAMES = [[/^epic game(s)?( store)?$/i, "Epic Games Store"]];
+const shopName = s => SHOP_NAMES.find(([re]) => re.test(String(s ?? "").trim()))?.[1] ?? s;
+
+/**
+ * One row per game. Several sources report the same giveaway under different wording and store names ("Epic Game Store" and
+ * "Epic Games Store", a title with "- FREE on Epic Games" on the end), so a game shows once, from the first source that has it.
+ */
+export function tidyFree(list) {
+    const seen = new Set(), out = [];
+    for (const g of list) {
+        const title = tidyTitle(g.title), key = norm(title) + (g.type === "dlc" ? "|dlc" : "");
+        if (!norm(title) || seen.has(key)) continue;
+        seen.add(key);
+        out.push({ ...g, title, shop: shopName(g.shop) });
+    }
+    return out;
+}
+
+/** Adds GamerPower's giveaways to `getGiveawayList`, then shows each game once. */
 export function withGamerPower(itad, gp) {
     const base = itad.getGiveawayList.bind(itad);
     itad.getGiveawayList = async () => {
         const [main, extra] = await Promise.all([base(), gp.list().catch(() => [])]);
-        const have = new Set(main.map(g => `${norm(g.title)}|${norm(g.shop)}`));
-        return [...main, ...extra.filter(g => !have.has(`${norm(g.title)}|${norm(g.shop)}`))];
+        return tidyFree([...main, ...extra]);
     };
     return itad;
 }

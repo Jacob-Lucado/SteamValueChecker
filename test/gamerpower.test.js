@@ -31,5 +31,22 @@ test("gamerpower: caches, survives a failure and merges without repeating a game
     assert.ok(gp.health().lastErrorAt);
     const itad = withGamerPower({ getGiveawayList: async () => [{ id: "i1", title: "Highway Driving", shop: "Epic Game Store" }, { id: "i2", title: "Highway Driving", shop: "Epic Games Store" }] }, gp);
     const merged = await itad.getGiveawayList();
-    assert.deepEqual(merged.map(g => g.id), ["i1", "i2", "gp:9"]);
+    assert.deepEqual(merged.map(g => g.id), ["i1", "gp:9"]);
+});
+
+test("the same game from two sources shows once, with the store name tidied", async () => {
+    const { tidyFree, tidyTitle } = await import("../src/gamerpower.js");
+    assert.equal(tidyTitle("Sorry We're Closed - FREE on Epic Games"), "Sorry We're Closed");
+    assert.equal(tidyTitle("Letter Quest: Grimm's Journey Remastered - FREE on Fanatical"), "Letter Quest: Grimm's Journey Remastered");
+    assert.equal(tidyTitle("Gladiator: Blades of Fury free on EGS"), "Gladiator: Blades of Fury");
+    assert.equal(tidyTitle("Free Guy: The Game"), "Free Guy: The Game", "a title that starts with Free is left alone");
+    const out = tidyFree([
+        { id: "a", title: "Sorry We're Closed - FREE on Epic Games", shop: "Epic Game Store", type: "game" },
+        { id: "b", title: "Sorry We're Closed", shop: "Epic Games Store", type: "game" },
+        { id: "c", title: "Letter Quest: Grimm's Journey Remastered", shop: "Steam", type: "game" },
+        { id: "d", title: "Letter Quest: Grimm's Journey Remastered - FREE on Fanatical", shop: "Fanatical", type: "game" },
+        { id: "e", title: "Hades", shop: "Steam", type: "game" }, { id: "f", title: "Hades", shop: "Steam", type: "dlc" }
+    ]);
+    assert.deepEqual(out.map(g => g.id), ["a", "c", "e", "f"]);
+    assert.equal(out[0].title, "Sorry We're Closed"); assert.equal(out[0].shop, "Epic Games Store");
 });

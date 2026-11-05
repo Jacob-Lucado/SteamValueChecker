@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.24", date: "2026-11-04", title: "Free games listed once", items: [
+        "**No more doubles:** when two sources report the same free game, like one with \"- FREE on Epic Games\" on the end of its name and one without, it now shows once everywhere, in the free games page and in the alerts.",
+        "**One Epic tab:** \"Epic Game Store\" and \"Epic Games Store\" are now the same store in the filters."
+    ] },
     { version: "2026.11.23", date: "2026-11-04", title: "Enter giveaways from Twitch chat", items: [
         "**!enter in chat:** when you start a stream giveaway you can let viewers type `!enter` in your Twitch chat. The bot listens only while the giveaway runs, and the overlay can show a \"Type !enter in chat\" line.",
         "**Link your Twitch once:** viewers link their Twitch on the Steam page of the dashboard. It reads the Twitch account shown in their Discord connections, so nobody can enter as someone else, and winners still get their prize by Discord message.",
