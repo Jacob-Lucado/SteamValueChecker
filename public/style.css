@@ -1153,3 +1153,33 @@ body.wiz-open { overflow: hidden; }
 .support-btn{white-space:nowrap}
 
 .preset-img{display:block;width:100%;max-width:440px;height:auto;border-radius:12px;margin:10px 0 14px;border:1px solid var(--line,#34363b)}
+
+/* ---------- phones: portrait and landscape ----------
+   Under 900px wide, or a short landscape screen, the bar shrinks to the logo and a Menu button. The links and account controls
+   open as a panel under it, so nothing runs off the side and the page keeps its room. */
+.navtoggle { display: none; align-items: center; gap: 8px; margin-left: auto; padding: 7px 14px; border: 1px solid var(--line); background: var(--soft); color: var(--white); border-radius: 999px; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
+.navtoggle-bars, .navtoggle-bars::before, .navtoggle-bars::after { display: block; width: 16px; height: 2px; background: currentColor; border-radius: 2px; position: relative; }
+.navtoggle-bars::before, .navtoggle-bars::after { content: ""; position: absolute; left: 0; }
+.navtoggle-bars::before { top: -5px; } .navtoggle-bars::after { top: 5px; }
+.topbar.open .navtoggle-bars { background: transparent; }
+.topbar.open .navtoggle-bars::before { top: 0; transform: rotate(45deg); } .topbar.open .navtoggle-bars::after { top: 0; transform: rotate(-45deg); }
+@media (max-width: 900px), (max-height: 500px) and (max-width: 1100px) {
+  .topbar-inner { flex-wrap: wrap; padding: 8px 14px; gap: 8px; }
+  .brand { min-width: 0; flex: 1 1 auto; }
+  .brand span { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .navtoggle { display: inline-flex; flex: 0 0 auto; }
+  #nav, #account { display: none; flex: 1 1 100%; width: 100%; }
+  .topbar.open .topbar-inner { max-height: 100vh; max-height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+  .topbar.open #nav { display: flex; flex-wrap: wrap; gap: 6px; }
+  .topbar.open #nav a { padding: 9px 14px; background: var(--soft); }
+  .topbar.open #account { display: flex; flex-wrap: wrap; margin-left: 0; gap: 8px; padding-bottom: 6px; }
+  .nav-group { position: static; }
+  .menu { left: 14px; right: 14px; min-width: 0; max-height: 60vh; overflow-y: auto; }
+  .page { padding: 20px 14px 40px; }
+  .hubbar { padding: 10px 14px 0; }
+  .hubbar .tab, .hubbar a { flex: 0 0 auto; white-space: nowrap; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .page { padding-top: 14px; }
+  .toasts { bottom: 8px; right: 8px; }
+}

@@ -179,6 +179,15 @@
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && openMenu) { const b = openMenu.btn; closeMenu(); b.focus(); } });
   window.addEventListener("hashchange", closeMenu);
+  // On phones the top bar folds into a Menu button so it doesn't cover the page.
+  {
+    const bar = document.querySelector(".topbar"), tog = document.getElementById("navtoggle");
+    const setOpen = on => { bar.classList.toggle("open", on); tog.setAttribute("aria-expanded", String(on)); };
+    tog.addEventListener("click", () => setOpen(!bar.classList.contains("open")));
+    window.addEventListener("hashchange", () => setOpen(false));
+    document.getElementById("nav").addEventListener("click", e => { if (e.target.closest("a")) setOpen(false); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && bar.classList.contains("open")) { setOpen(false); tog.focus(); } });
+  }
   const STEAM_ICON = "M12 2a10 10 0 0 0-9.96 9.1l5.35 2.2a2.8 2.8 0 0 1 1.6-.5h.15l2.4-3.45v-.05a3.75 3.75 0 1 1 3.75 3.75h-.1l-3.4 2.45a2.8 2.8 0 0 1-5.55.45L2.3 14.2A10 10 0 1 0 12 2z";
   const steamIcon = () => { const n = document.createElementNS("http://www.w3.org/2000/svg", "svg"); n.setAttribute("viewBox", "0 0 24 24"); n.setAttribute("width", "18"); n.setAttribute("height", "18"); n.setAttribute("aria-hidden", "true"); const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", STEAM_ICON); p.setAttribute("fill", "currentColor"); n.append(p); return n; };
   const steamLoginBtn = (text = "Sign in through Steam", cls = "btn steam") => h("a", { class: cls, href: "/auth/steam" }, steamIcon(), " " + text);
@@ -265,6 +274,9 @@
     bar.replaceChildren(...(tabs.length < 2 ? [] : [
       ...tabs.map(([id, text]) => h("a", { href: "#/" + id, class: "hubtab" + (view === id ? " active" : ""), "aria-current": view === id ? "page" : null }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
       here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null].filter(Boolean)));
+    // On a narrow screen this row scrolls sideways, so bring the page you're on into view.
+    const cur = bar.querySelector(".hubtab.active");
+    if (cur && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, cur.offsetLeft - (bar.clientWidth - cur.offsetWidth) / 2);
 
     const acct = document.getElementById("account");
     const support = state.cfg && state.cfg.supportUrl ? ext(state.cfg.supportUrl, "Support server", "btn gray small support-btn") : null;
