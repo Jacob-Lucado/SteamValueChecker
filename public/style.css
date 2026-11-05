@@ -1271,3 +1271,16 @@ body.wiz-open { overflow: hidden; }
 .pf-sc-bar:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .pf-sc .pf-rprog i { animation: none; opacity: .5; }
 .pf-float .pf-sc .pf-rsub { display: block; }
+
+/* the picture behind a profile page */
+.pf-pagebg { position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center; background-repeat: no-repeat; pointer-events: none; }
+.pf-pagebg.img::after { content: ""; position: absolute; inset: 0; background: rgba(0, 0, 0, var(--dim, .35)); }
+.pf-stage { position: relative; padding: 18px; border-radius: 16px; overflow: hidden; isolation: isolate; }
+.pf-pagebg.in-preview { position: absolute; z-index: -1; }
+.pf-bg-kinds, .pf-presets, .pf-bg-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.pf-preset { width: 56px; height: 40px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
+.pf-preset.on { border-color: var(--accent, #66c0f4); }
+.pf-bg-thumbs > div { width: 150px; }
+.pf-bg-thumb { height: 84px; border-radius: 8px; background-size: cover; background-position: center; border: 2px solid transparent; margin-bottom: 4px; }
+.pf-bg-thumb.on { border-color: var(--accent, #66c0f4); }
+.pf-bg-use, .pf-bg-del { font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 0; cursor: pointer; background: rgba(128, 128, 128, .25); color: inherit; }

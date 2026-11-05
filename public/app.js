@@ -1157,6 +1157,26 @@
   }
 
   /** Draws one profile. Used for the public page and for the live preview in the editor. */
+  // The picture behind a profile page. Presets are plain CSS; an upload or Steam background is an image from our own address.
+  const PAGE_PRESET_CSS = {
+    aurora: "radial-gradient(900px 600px at 18% 8%, rgba(59,130,246,.55), transparent 60%), radial-gradient(800px 600px at 88% 18%, rgba(34,211,160,.45), transparent 60%), #0a1020",
+    nebula: "radial-gradient(900px 650px at 80% 10%, rgba(217,70,239,.5), transparent 60%), radial-gradient(800px 600px at 10% 40%, rgba(99,102,241,.55), transparent 60%), #0d0a1c",
+    dusk: "radial-gradient(1000px 600px at 50% 0%, rgba(251,146,60,.5), transparent 65%), radial-gradient(900px 600px at 90% 60%, rgba(168,85,247,.4), transparent 60%), #150d1a",
+    ember: "radial-gradient(900px 600px at 15% 0%, rgba(239,68,68,.5), transparent 62%), radial-gradient(800px 600px at 90% 30%, rgba(251,146,60,.35), transparent 60%), #140a0a",
+    forest: "radial-gradient(900px 600px at 20% 10%, rgba(34,197,94,.42), transparent 62%), radial-gradient(800px 600px at 85% 40%, rgba(20,184,166,.32), transparent 60%), #08120e",
+    ocean: "radial-gradient(1000px 650px at 70% 0%, rgba(14,165,233,.5), transparent 62%), radial-gradient(800px 600px at 10% 50%, rgba(45,212,191,.32), transparent 60%), #071420",
+    carbon: "linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 32px 32px, linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 32px 32px, #0d0f14",
+    paper: "radial-gradient(900px 600px at 20% 0%, rgba(255,255,255,.7), transparent 60%), #e4dfd2"
+  };
+  function pageBgEl(bg, { preview = false } = {}) {
+    if (!bg || bg.kind === "none") return null;
+    const el = h("div", { class: "pf-pagebg" + (preview ? " in-preview" : ""), "aria-hidden": "true" });
+    if (bg.kind === "preset" && PAGE_PRESET_CSS[bg.preset]) el.style.background = PAGE_PRESET_CSS[bg.preset];
+    else if (bg.kind === "image" && typeof bg.url === "string" && /^\/pbg\/\d+(\?v=\d+)?$/.test(bg.url)) { el.style.backgroundImage = `url("${bg.url}")`; el.classList.add("img"); el.style.setProperty("--dim", String((Number(bg.dim) || 0) / 100)); }
+    else return null;
+    return el;
+  }
+
   function renderProfile(p, { canMark = false, preview = false, signedIn = false } = {}) {
     const root = h("div", { class: "pf", "data-bg": p.theme.bgstyle, "data-layout": p.theme.layout, "data-light": p.theme.light ? "1" : "0" });
     root.style.setProperty("--pf-bg", p.theme.bg);
@@ -1172,6 +1192,8 @@
       h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug })),
       h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
     root.append(banner, head);
+    const pageBg = pageBgEl(p.pagebg, { preview });
+    if (pageBg && !preview) root.append(pageBg);
     let songBox = null;
     if (p.songOff && p.owner && !preview) root.append(h("div", { class: "notice warn", text: "Your song is saved, but profile songs are switched off on this bot right now, so visitors don't see the player. (Admin panel > Bot settings > Profile songs play.)" }));
     if (p.song) { songBox = pfSong(p.song, preview); root.append(songBox); }
@@ -1215,6 +1237,7 @@
     }
     if (!p.sections.length) body.append(h("p", { class: "muted", text: "This profile has nothing to show right now." }));
     root.append(body);
+    if (pageBg && preview) { const stage = h("div", { class: "pf-stage" }, pageBg, root); return stage; }
     return root;
   }
 
@@ -1339,8 +1362,62 @@
     const open = h("a", { class: "btn gray", href: "#/u/" + d.slug, text: "Open my page" });
     const copy = h("button", { type: "button", class: "btn gray", text: "Copy link" });
     copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(location.origin + "/u/" + d.slug); toast("Link copied.", "ok"); } catch { toast(location.origin + "/u/" + d.slug); } });
+    // behind the page: a preset, an uploaded picture, or the Steam profile background
+    const bgBox = h("div", { class: "pf-bg-panel" });
+    const shrink = file => new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), im = new Image();
+      im.onload = () => {
+        const k = Math.min(1, 1920 / im.width), c = document.createElement("canvas"); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+        c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        let q = 0.85, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 1_550_000 && q > 0.4) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+        out.length > 1_550_000 ? reject(new Error("That picture is too big even after shrinking it. Try a smaller one.")) : resolve(out);
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file is not a picture this browser can open.")); };
+      im.src = url;
+    });
+    const adopt = r => { d.backgrounds = r.backgrounds; cfg.pagebg = r.config.pagebg; drawBg(); draw(r.profile); };
+    const bgCall = (body, b) => busy(b, async () => { try { adopt(await api("/api/profile/background", body)); } catch (e) { toast(e.message, "error"); } });
+    function drawBg() {
+      const pb = cfg.pagebg || (cfg.pagebg = { kind: "none", preset: "aurora", dim: 35, image: null });
+      const kinds = h("div", { class: "pf-bg-kinds" }, [["none", "None"], ["preset", "Preset"], ["image", "My picture"]].map(([k, label]) => {
+        const b = h("button", { type: "button", class: "btn small " + (pb.kind === k ? "blue" : "gray"), text: label, "aria-pressed": String(pb.kind === k) });
+        b.addEventListener("click", () => { if (k === "image" && !(d.backgrounds || []).length) return toast("Upload a picture or copy your Steam background first.", "warn"); pb.kind = k; if (k === "image" && !pb.image) pb.image = d.backgrounds[0].id; drawBg(); changed(); });
+        return b;
+      }));
+      const parts = [kinds];
+      if (pb.kind === "preset") parts.push(h("div", { class: "pf-presets" }, d.presets.map(id => {
+        const b = h("button", { type: "button", class: "pf-preset" + (pb.preset === id ? " on" : ""), title: id, "aria-label": id + " background", "aria-pressed": String(pb.preset === id) });
+        b.style.background = PAGE_PRESET_CSS[id]; b.addEventListener("click", () => { pb.preset = id; drawBg(); changed(); }); return b;
+      })));
+      if (pb.kind === "image") {
+        parts.push(h("div", { class: "pf-bg-thumbs" }, (d.backgrounds || []).map(bg => {
+          const t = h("div", { class: "pf-bg-thumb" + (pb.image === bg.id ? " on" : "") });
+          t.style.backgroundImage = `url("${bg.url}")`;
+          const use = h("button", { type: "button", class: "pf-bg-use", "aria-label": "Use this picture", "aria-pressed": String(pb.image === bg.id), text: pb.image === bg.id ? "In use" : "Use" });
+          use.addEventListener("click", () => bgCall({ action: "use", id: bg.id }, use));
+          const del = h("button", { type: "button", class: "pf-bg-del", "aria-label": "Delete this picture", text: "✕" });
+          del.addEventListener("click", () => { if (confirm("Delete this picture?")) bgCall({ action: "remove", id: bg.id }, del); });
+          return h("div", {}, t, h("div", { class: "row" }, use, del, h("span", { class: "muted small", text: (bg.source === "steam" ? "Steam · " : "") + Math.round(bg.bytes / 1024) + " KB" })));
+        })));
+        const dim = h("input", { type: "range", min: "0", max: "70", value: String(pb.dim ?? 35), "aria-label": "Dim the picture" });
+        dim.addEventListener("input", () => { pb.dim = Number(dim.value); changed(); });
+        parts.push(field("Dim the picture so the page stays readable", dim));
+      }
+      const file = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true });
+      const up = h("button", { type: "button", class: "btn gray small", text: "Upload a picture" });
+      up.addEventListener("click", () => file.click());
+      file.addEventListener("change", () => { const f = file.files[0]; file.value = ""; if (!f) return; busy(up, async () => { try { adopt(await api("/api/profile/background", { action: "upload", data: await shrink(f) })); toast("Uploaded.", "ok"); } catch (e) { toast(e.message, "error"); } }); });
+      const st = h("button", { type: "button", class: "btn gray small", text: "Use my Steam background", disabled: !d.steamLinked, title: d.steamLinked ? "" : "Link Steam first" });
+      st.addEventListener("click", () => busy(st, async () => { try { adopt(await api("/api/profile/background", { action: "steam" })); toast("Copied your Steam background.", "ok"); } catch (e) { toast(e.message, "error"); } }));
+      parts.push(h("div", { class: "row" }, up, st, file));
+      parts.push(h("p", { class: "muted small", text: `You can keep up to ${d.maxBackgrounds} pictures (${(d.backgrounds || []).length} stored). Pictures are cleared if you have not opened the bot or dashboard for 30 days. Keep it to pictures you have the right to use. If a page is reported, it can be hidden.` }));
+      bgBox.replaceChildren(...parts);
+    }
+    drawBg();
+    const pageBgPanel = h("div", { class: "panel" }, h("h3", { text: "Page background" }), h("p", { class: "muted small", text: "The space around your profile card." }), bgBox);
     holder.replaceChildren(h("div", { class: "pf-editor" },
-      h("div", { class: "pf-form" }, look, about, links, favs, song, secs, h("div", { class: "row pf-save" }, saveBtn, open, copy)),
+      h("div", { class: "pf-form" }, look, pageBgPanel, about, links, favs, song, secs, h("div", { class: "row pf-save" }, saveBtn, open, copy)),
       h("div", { class: "pf-side" }, h("div", { class: "pf-sticky" }, h("h3", { text: "Preview" }), pv))));
     draw(d.profile);
     window.addEventListener("hashchange", () => { clearTimeout(timer); }, { once: true });

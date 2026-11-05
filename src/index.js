@@ -46,6 +46,7 @@ import { isHidden } from "./hidden.js";
 import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
 import { configureArt } from "./art.js";
+import { BG_INACTIVE_MS } from "./profilebg.js";
 import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
@@ -396,7 +397,7 @@ client.once(Events.ClientReady, c => {
             result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
-            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); } catch (err) { ops.error("cleanup", err); }
+            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); } catch (err) { ops.error("cleanup", err); }
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }
             catch (err) { await ops.backupDone(null, err); }

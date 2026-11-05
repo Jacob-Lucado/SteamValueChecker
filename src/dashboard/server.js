@@ -21,6 +21,7 @@ import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.j
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
+import { PAGE_PRESETS, MAX_BG_STORED, decodeUpload, fetchSteamBackground } from "../profilebg.js";
 import { expandGames } from "../codesource.js";
 import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
 import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
@@ -316,6 +317,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
     const cache = new Map();
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
+    const bgLimit = createLimiter({ windowMs: 3600_000, max: 20, now });
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
     const shareLimit = createLimiter({ windowMs: 60_000, max: 120, now });
     const artLimit = createLimiter({ windowMs: 60_000, max: 900, now });
@@ -491,6 +493,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         return {
             slug: u.profile_slug ?? null, public: Boolean(u.profile_public), blocked, config: withDefaults(data),
             steamLinked: Boolean(db.getSteamLink(u.discord_id)),
+            backgrounds: db.listProfileBgs(u.discord_id).map(b => ({ id: b.id, source: b.source, bytes: b.bytes, url: `/pbg/${b.id}?v=${b.created_at}` })), maxBackgrounds: MAX_BG_STORED, presets: PAGE_PRESETS,
             choices: { themes: Object.entries(PROFILE_THEMES).map(([k, v]) => ({ key: k, bg: v.bg, accent: v.accent })), bgstyles: BG_STYLES, layouts: LAYOUTS, sections: Object.entries(SECTIONS), links: LINK_KIND_NAMES, titles },
             profile: u.profile_slug ? await buildProfile({ db, itad, nowPlaying }, u, { owner: true, sameServer: true }) : null
         };
@@ -2409,6 +2412,36 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             db.setProfileData(s.userId, cleanProfile(body ?? {}, data));
             return await profileEditorPayload(db.getUser(s.userId));
         },
+        // The picture behind the page: upload one (a few are kept), copy the Steam background, switch between them, or delete one.
+        "POST /api/profile/background": async (req, body) => {
+            const s = session(req); const u = userRow(s);
+            if (!bgLimit.hit(s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            const { data } = db.getProfileData(s.userId);
+            const setActive = (bg) => db.setProfileData(s.userId, cleanProfile({ pagebg: bg }, data));
+            const action = String(body.action ?? "");
+            if (action === "upload") {
+                let img; try { img = decodeUpload(body.data); } catch (e) { throw new HttpError(400, e.message); }
+                if (db.countProfileBgs(s.userId) >= MAX_BG_STORED) throw new HttpError(400, `You can keep up to ${MAX_BG_STORED} pictures. Delete one first.`);
+                setActive({ kind: "image", image: db.addProfileBg(s.userId, img.mime, img.buf, "upload") });
+            } else if (action === "steam") {
+                const link = db.getSteamLink(s.userId);
+                if (!link) throw new HttpError(400, "Link your Steam account first (Steam page, or /steam link).");
+                let img; try { img = await fetchSteamBackground(link.steamid, steamFetch); } catch (e) { throw new HttpError(502, e.message); }
+                if (!img) throw new HttpError(404, "No background found on your Steam profile. Equip one there first, and make sure the profile is public.");
+                db.deleteSteamProfileBg(s.userId);
+                if (db.countProfileBgs(s.userId) >= MAX_BG_STORED) throw new HttpError(400, `You can keep up to ${MAX_BG_STORED} pictures. Delete one first.`);
+                setActive({ kind: "image", image: db.addProfileBg(s.userId, img.mime, img.buf, "steam") });
+            } else if (action === "use") {
+                const row = db.getProfileBg(Number(body.id));
+                if (!row || row.discord_id !== s.userId) throw new HttpError(404, "That picture is not yours.");
+                setActive({ kind: "image", image: row.id });
+            } else if (action === "remove") {
+                const row = db.getProfileBg(Number(body.id));
+                if (!row || row.discord_id !== s.userId || !db.deleteProfileBg(s.userId, row.id)) throw new HttpError(404, "That picture is not yours.");
+                if (data.pagebg?.image === row.id) setActive({ kind: "none", image: null });
+            } else throw new HttpError(400, "Unknown action.");
+            return await profileEditorPayload(db.getUser(s.userId));
+        },
         // Preview unsaved changes. Nothing is stored.
         "POST /api/profile/preview": async (req, body) => {
             const s = session(req); const u = userRow(s);
@@ -3556,6 +3589,15 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
                 if (!got) return send(res, 404, "No picture.", { "Content-Type": "text/plain", "Cache-Control": "public, max-age=600" });
                 return send(res, 200, got.buf, { "Content-Type": got.type, "Cache-Control": "public, max-age=604800" });
             }
+            const bgMatch = req.method === "GET" ? /^\/pbg\/(\d{1,12})$/.exec(url.pathname) : null;
+            if (bgMatch) {
+                if (!artLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const row = db.getProfileBg(Number(bgMatch[1])), owner = row ? db.getUser(row.discord_id) : null;
+                const mine = Boolean(owner && softSession(req)?.userId === owner.discord_id);
+                // Only pages that are public (and not hidden by moderation) show their picture to strangers.
+                if (!row || !owner || !(mine || (owner.profile_public && !db.getProfileData(owner.discord_id).blocked))) return send(res, 404, "No picture.", { "Content-Type": "text/plain" });
+                return send(res, 200, row.data, { "Content-Type": row.mime, "X-Content-Type-Options": "nosniff", "Cache-Control": mine ? "private, max-age=3600" : "public, max-age=86400" });
+            }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}\/og\.png$/i.test(url.pathname)) {
                 if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
                 return await serveProfileShare(res, url.pathname.split("/")[2].toLowerCase());
@@ -3763,7 +3805,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             let body = {};
             if (req.method === "POST") {
                 checkWrite(req);
-                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
+                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/profile/background" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
             }
             const out = await handler(req, body, url);
             if (req.method === "POST" && url.pathname.startsWith("/api/admin/")) auditAdmin(req, url.pathname, body);

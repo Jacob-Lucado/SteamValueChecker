@@ -2359,3 +2359,85 @@ test("trivia: managers start and stop it, everyone sees the board", async () => 
         assert.equal((await post({ action: "start", channel_id: "c1" }, "g-member")).status, 403);
     } finally { await o.close(); }
 });
+
+const PNG1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+const asData = (buf, mime = "image/png") => `data:${mime};base64,${buf.toString("base64")}`;
+
+test("page background: presets, uploads (three kept), the Steam background, serving rules and clearing for inactive members", async () => {
+    const steamHtml = `<html><div class="no_header profile_page has_profile_background " style="background-image: url( 'https://shared.fastly.steamstatic.com/community_assets/images/items/1/bg.jpg' );"></div></html>`;
+    const steamFetch = async url => url.includes("steamcommunity.com/profiles/") ? { ok: true, status: 200, text: async () => (steamFetch.none ? "<html></html>" : steamHtml) }
+        : url.includes("steamstatic.com") ? { ok: true, status: 200, arrayBuffer: async () => PNG1 } : { ok: false, status: 404 };
+    const t = await setup({ extra: { steamFetch }, config: { apiPerMinute: 5000 } });
+    await t.signIn();
+    await t.request("/api/wishlist/add", { method: "POST", body: { title: "Celeste" } });
+    await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
+    assert.equal((await t.request("/api/profile/background", { method: "POST", body: { action: "steam" } })).status, 400, "needs a linked Steam account");
+    t.db.setSteamLink("u1", "76561198000000000");
+    const save = pagebg => t.request("/api/profile/page", { method: "POST", body: { pagebg } });
+    const bg = body => t.request("/api/profile/background", { method: "POST", body });
+    const shown = async () => (await t.request("/api/public/profile?slug=jacob")).data.profile.pagebg;
+
+    assert.equal((await shown()).kind, "none");
+    assert.equal((await save({ kind: "preset", preset: "nope" })).status, 400);
+    assert.equal((await save({ kind: "wallpaper" })).status, 400);
+    await save({ kind: "preset", preset: "ember", dim: 999 });
+    assert.deepEqual(await shown(), { kind: "preset", preset: "ember", dim: 70, url: null });
+    assert.equal((await save({ kind: "image", image: 9999 })).status, 200);
+    assert.equal((await shown()).kind, "none", "a picture that is not stored paints nothing");
+
+    // uploads: only real pictures, and three at most
+    assert.equal((await bg({ action: "upload", data: "data:text/html;base64,PGI+" })).status, 400);
+    assert.equal((await bg({ action: "upload", data: asData(Buffer.from("not an image at all, just text bytes", "utf8")) })).status, 400, "the bytes are checked, not the label");
+    assert.equal((await bg({ action: "upload", data: asData(Buffer.alloc(1_210_000, 1)) })).status, 400);
+    const up = await bg({ action: "upload", data: asData(PNG1) });
+    assert.equal(up.status, 200); assert.equal(up.data.backgrounds.length, 1);
+    const id1 = up.data.backgrounds[0].id;
+    const p1 = await shown();
+    assert.equal(p1.kind, "image"); assert.match(p1.url, new RegExp(`^/pbg/${id1}\\?v=\\d+$`));
+    const served = await t.request(p1.url);
+    assert.equal(served.status, 200); assert.equal(served.headers.get("content-type"), "image/png"); assert.equal(served.headers.get("x-content-type-options"), "nosniff");
+    await bg({ action: "upload", data: asData(PNG1) }); await bg({ action: "upload", data: asData(PNG1) });
+    const fourth = await bg({ action: "upload", data: asData(PNG1) });
+    assert.equal(fourth.status, 400); assert.match(fourth.data.error, /up to 3/);
+
+    // the Steam background takes one of the three places, and is replaced rather than piled up
+    assert.equal((await bg({ action: "steam" })).status, 400, "full until one is deleted");
+    assert.equal((await bg({ action: "remove", id: id1 })).status, 200);
+    assert.equal((await shown()).kind === "image" || (await shown()).kind === "none", true);
+    const st = await bg({ action: "steam" });
+    assert.equal(st.status, 200); assert.equal(st.data.backgrounds.filter(b => b.source === "steam").length, 1);
+    t.db.deleteProfileBg("u1", st.data.backgrounds.find(b => b.source !== "steam").id);
+    assert.equal((await bg({ action: "steam" })).data.backgrounds.filter(b => b.source === "steam").length, 1);
+    steamFetch.none = true;
+    assert.equal((await bg({ action: "steam" })).status, 404, "no Steam background to copy");
+
+    // only the owner can pick or delete their pictures; a hidden page does not show its picture to strangers
+    assert.equal((await bg({ action: "use", id: 99999 })).status, 404);
+    assert.equal((await bg({ action: "remove", id: 99999 })).status, 404);
+    const mine = t.db.listProfileBgs("u1")[0];
+    await bg({ action: "use", id: mine.id });
+    const url = (await shown()).url;
+    await t.request("/api/profile", { method: "POST", body: { enabled: false, slug: "jacob" } });
+    await t.request("/auth/logout", { method: "POST", body: {} });
+    assert.equal((await t.request(url)).status, 404, "a page that is switched off keeps its picture private");
+    await t.signIn();
+    assert.equal((await t.request(url)).status, 200, "but the owner still sees it");
+
+    // inactive members lose their stored pictures
+    const n = t.db.countProfileBgs("u1");
+    assert.ok(n > 0);
+    assert.equal(t.db.pruneInactiveProfileBgs(30 * 86400_000), 0, "someone just seen keeps them");
+    t.db.updateUser("u1", { last_seen: Date.now() - 31 * 86400_000 });
+    assert.equal(t.db.pruneInactiveProfileBgs(30 * 86400_000), n);
+    assert.equal(t.db.countProfileBgs("u1"), 0);
+    await t.close();
+});
+
+test("page background: reading the Steam profile page", async () => {
+    const { parseSteamBackground, sniffImage, safeSteamUrl } = await import("../src/profilebg.js");
+    assert.equal(parseSteamBackground(`<div class="no_header profile_page has_profile_background" style="background-image: url( 'https://shared.fastly.steamstatic.com/community_assets/images/items/2/x.jpg' );">`), "https://shared.fastly.steamstatic.com/community_assets/images/items/2/x.jpg");
+    assert.equal(parseSteamBackground("<html>no background</html>"), null);
+    assert.equal(safeSteamUrl("https://evil.example/steamstatic.com/x.jpg"), null);
+    assert.equal(safeSteamUrl("http://cdn.steamstatic.com/x.jpg"), null, "https only");
+    assert.equal(sniffImage(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'></svg>")), null, "SVG is not accepted");
+});

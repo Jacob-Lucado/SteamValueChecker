@@ -5,6 +5,7 @@ import { UserError } from "./errors.js";
 import { THEMES } from "./cardprefs.js";
 import { artUrl, steamArt } from "./render.js";
 import { publicWishlist, fillAppIds } from "./profile.js";
+import { cleanPageBg, defaultPageBg } from "./profilebg.js";
 import { trophyCase } from "./badges.js";
 import { channelUrl } from "./streamwatch.js";
 
@@ -117,6 +118,7 @@ export function cleanProfile(input, prev = {}) {
     if (has("bgstyle")) { if (!BG_STYLES.includes(input.bgstyle)) throw new UserError("Pick a background style from the list."); out.bgstyle = input.bgstyle; }
     if (has("layout")) { if (!LAYOUTS.includes(input.layout)) throw new UserError("Pick a layout from the list."); out.layout = input.layout; }
     if (has("banner")) { if (!["gradient", "game", "none"].includes(input.banner)) throw new UserError("Pick a banner style."); out.banner = input.banner; }
+    if (has("pagebg")) out.pagebg = cleanPageBg(input.pagebg, prev.pagebg, m => { throw new UserError(m); });
     if (has("avatar")) out.avatar = Boolean(input.avatar);
     if (has("links")) {
         if (!Array.isArray(input.links)) throw new UserError("Links should be a list.");
@@ -150,6 +152,7 @@ export function withDefaults(data = {}) {
         name: data.name ?? "", bio: data.bio ?? "", theme: PROFILE_THEMES[data.theme] ? data.theme : "night", accent: HEX.test(data.accent ?? "") ? data.accent : null,
         bgstyle: BG_STYLES.includes(data.bgstyle) ? data.bgstyle : "gradient", layout: LAYOUTS.includes(data.layout) ? data.layout : "classic",
         banner: ["gradient", "game", "none"].includes(data.banner) ? data.banner : "gradient", avatar: Boolean(data.avatar),
+        pagebg: { ...defaultPageBg(), ...(data.pagebg && typeof data.pagebg === "object" ? data.pagebg : {}) },
         enter: Boolean(data.enter), links: data.links ?? [], favorites: data.favorites ?? [], song: data.song ?? null,
         sections: Array.isArray(data.sections) && data.sections.length ? data.sections : DEFAULT_SECTIONS
     };
@@ -161,6 +164,17 @@ const canSee = (vis, viewer) => viewer.owner || vis === "public" || (vis === "se
  * Everything the page needs, for one viewer. Sections the viewer may not see are left out entirely, so nothing leaks
  * through the data. `draft` lets the owner preview unsaved changes.
  */
+/** What the page needs to paint its background. An uploaded picture only counts while it is still stored (it can be cleared for inactivity). */
+function pageBgFor(db, owner, bg) {
+    const b = { ...defaultPageBg(), ...(bg || {}) };
+    if (b.kind === "preset") return { kind: "preset", preset: b.preset, dim: b.dim, url: null };
+    if (b.kind === "image" && b.image) {
+        const row = db.getProfileBg(b.image);
+        if (row && row.discord_id === owner.discord_id) return { kind: "image", preset: b.preset, dim: b.dim, url: `/pbg/${row.id}?v=${row.created_at}` };
+    }
+    return { kind: "none", preset: b.preset, dim: b.dim, url: null };
+}
+
 export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewer, { viewerId = null, draft = null } = {}) {
     const cfg = withDefaults(draft ?? db.getProfileData(owner.discord_id).data);
     const theme = PROFILE_THEMES[cfg.theme];
@@ -211,6 +225,7 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
         slug: owner.profile_slug, name: cfg.name || owner.profile_slug, bio: cfg.bio, avatar: cfg.avatar && steam?.avatar ? steam.avatar : null,
         theme: { key: cfg.theme, bg: theme.bg, accent: cfg.accent ?? theme.accent, light: theme.light, bgstyle: cfg.bgstyle, layout: cfg.layout },
         banner: { kind: cfg.banner, art: bannerGame },
+        pagebg: pageBgFor(db, owner, cfg.pagebg),
         links: cfg.links.map(l => ({ kind: l.kind, label: LINK_KINDS[l.kind]?.label ?? l.kind, url: l.url })),
         song, sections, owner: Boolean(viewer.owner), since: owner.created_at ?? null
     };
