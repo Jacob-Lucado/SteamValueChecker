@@ -1440,3 +1440,11 @@ a.fd-name:hover { text-decoration: underline; }
   pre, code { overflow-x: auto; max-width: 100%; }
   img, video, iframe { max-width: 100%; }
 }
+
+/* a long slider must never widen the page: every ancestor is allowed to shrink below its content */
+.pf-card, .pf-slider, .pf-slide-wrap, .pf-track { min-width: 0; max-width: 100%; }
+.pf-slider, .pf-slide-wrap { width: 100%; }
+.pf, .pf-body, #app > .pf { min-width: 0; max-width: 100%; }
+.pf { overflow-x: clip; }
+.pf-slide .btn { height: auto; min-height: 34px; padding: 6px 14px; white-space: normal; text-align: center; line-height: 1.25; max-width: 100%; }
+.pf-slide .gift { margin-top: 0; }
