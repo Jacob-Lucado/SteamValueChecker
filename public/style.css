@@ -1259,3 +1259,15 @@ body.wiz-open { overflow: hidden; }
 
 .gift { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 .gift-owner { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+
+/* SoundCloud: the real player stays hidden, the card above it is ours */
+.pf-sc-hidden { position: absolute; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
+.pf-frame.soundcloud { filter: invert(.9) hue-rotate(180deg); border-radius: 12px; color-scheme: dark; }
+.pf-sc-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.pf-sc-time { font-size: 11px; color: #a9bad2; font-variant-numeric: tabular-nums; min-width: 2.4em; }
+.pf-sc-time:last-child { text-align: right; }
+.pf-sc-bar { position: relative; flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .14); cursor: pointer; }
+.pf-sc-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 0%); border-radius: 3px; background: linear-gradient(90deg, var(--ra), #7c6cff); }
+.pf-sc-bar:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.pf-sc .pf-rprog i { animation: none; opacity: .5; }
+.pf-float .pf-sc .pf-rsub { display: block; }
