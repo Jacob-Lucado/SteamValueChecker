@@ -93,6 +93,7 @@ import { autoImage } from "../giveaway.js";
 import { isHidden } from "../hidden.js";
 import { legalPage, legalFramePage } from "../legal.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
+import { giveawayInput } from "../gwinput.js";
 import { MAX_KEYS } from "../gwstore.js";
 import { createMusicChat } from "../musicchat.js";
 import { checkPassword, burnTime, passwordProblem, USERNAME_RE, newTotpSecret, matchTotp, totpUri } from "../adminlogin.js";
@@ -971,7 +972,8 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
                 can: { go: canStreamIn(c, { roleIds, isManager: isManager(g), isBotOwner: isOwner(s) }), manage: mgr },
                 optedIn: streams ? await streams.optedIn(g.id, s.userId) : null,
                 link: (l => (l ? { platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) } : null))(db.getStreamLink(g.id, s.userId)),
-                watch: watchable(process.env)
+                watch: watchable(process.env),
+                stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint }))
             };
             if (mgr) { const ch = await remember("choices:" + g.id, 60_000, () => guildChoices(g.id)); out.channels = ch.channels; out.roles = ch.roles; }
             return out;
@@ -989,8 +991,18 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             if (!streamGw.enabled()) throw new HttpError(503, "Giveaways aren't set up on this bot.");
             cooldown(s.userId, "streamgw");
             const me = (await remember("mname:" + g.id + ":" + s.userId, 10 * 60_000, () => rest.memberName(g.id, s.userId)).catch(() => null)) || s.username || "Someone";
-            const r = await musicCall(() => streamGw.start(g.id, { id: s.userId, name: me }, { game: body.game, key: body.key, minutes: body.minutes }));
-            return { ok: true, channelId: r.channelId, endsAt: r.endsAt };
+            // The full form sends `keys` (a list of prizes) and every option; the short one sends a single `key`.
+            if (body.keys === undefined) {
+                const r = await musicCall(() => streamGw.start(g.id, { id: s.userId, name: me }, { game: body.game, key: body.key, minutes: body.minutes }));
+                return { ok: true, channelId: r.channelId, endsAt: r.endsAt, endsWithStream: true, prizes: 1 };
+            }
+            const form = { ...body };
+            if (!(isManager(g) || isOwner(s))) for (const k of ["require_role_id", "bonus_role_id", "ping_role_id", "vouch_channel_id"]) delete form[k]; // server rules are the managers' call
+            const r = await musicCall(async () => {
+                const { input } = giveawayInput(form, { defaults: { length: "1h", prize: "Prize" } });
+                return streamGw.start(g.id, { id: s.userId, name: me }, { input, endWithStream: body.end_with_stream !== false });
+            });
+            return { ok: true, channelId: r.channelId, endsAt: r.endsAt, endsWithStream: r.endsWithStream, prizes: r.prizes };
         },
         // everyone linked in a server, with who is live right now (any member may look: it is only public channel names)
         "GET /api/streams/roster": async (req, _b, url) => {
@@ -2550,7 +2562,7 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
                 const keys = db.listKeys(x.id);
                 return { id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length };
             });
-            return { giveaways: rows, settings: db.getGiveawaySettings(g.id), max: MAX_KEYS };
+            return { giveaways: rows, settings: db.getGiveawaySettings(g.id), max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
 
         "GET /api/giveaways/templates": async (req, _b, url) => {
@@ -2604,20 +2616,8 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
                 throw err;
             });
             if (!channels.some(c => c.id === body.channel_id)) throw new HttpError(400, "Pick a text channel from the list.");
-            const text = v => (v === null || v === undefined || v === "" ? null : String(v));
-            const int = v => (v === null || v === undefined || v === "" ? undefined : Number(v));
-            const { keys, duplicates } = parseKeys(String(body.keys ?? "").slice(0, 20_000), text(body.game) ?? text(body.title) ?? "Prize");
-            const r = await giveaways.create({
-                guild_id: g.id, channel_id: body.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
-                game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
-                color: parseColor(body.color), button_label: text(body.button_label), ping_role_id: text(body.ping_role_id), require_role_id: text(body.require_role_id),
-                bonus_role_id: text(body.bonus_role_id), bonus_entries: int(body.bonus_entries), claim_hours: int(body.claim_hours),
-                min_account_days: int(body.min_account_days), min_member_days: int(body.min_member_days),
-                vouch_channel_id: channels.some(c => c.id === body.vouch_channel_id) ? body.vouch_channel_id : null,
-                auto_image: body.auto_image !== false, keys, require_boost: Boolean(body.boosters),
-                start_in_ms: text(body.start_in) ? parseDuration(text(body.start_in), { min: 0 }) : 0,
-                rounds: int(body.rounds) ?? 1, repeat_ms: text(body.repeat_every) ? parseDuration(text(body.repeat_every)) : null
-            });
+            const { input, duplicates } = giveawayInput(body, { channelIds: channels.map(c => c.id) });
+            const r = await giveaways.create({ ...input, guild_id: g.id, channel_id: body.channel_id, host_id: s.userId });
             return { ...r, duplicates };
             } catch (err) { undo(); throw err; }
         },

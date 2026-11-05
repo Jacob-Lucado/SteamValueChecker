@@ -3722,6 +3722,29 @@
     ["other", "🏅", "Other", "other: Signed poster | I will ship it, send me your address"]
   ];
   /** Buttons that add a prize line of each type, so nobody has to remember the format. */
+  /** The "required steps" editor: rows of a kind, a link and an optional button label. get() gives the list to send. */
+  function stepsEditor(kinds, { prefill = [] } = {}) {
+    const rows = h("div"), list = [];
+    const add = (kind = "follow_x", link = "") => {
+      if (list.length >= 8) { toast("Up to 8 steps.", "warn"); return; }
+      const sel = select(kinds.map(k => [k.id, k.label]), kind), url = h("input", { type: "url", maxlength: "300", placeholder: "https://…", "aria-label": "Step link", value: link });
+      const label = h("input", { type: "text", maxlength: "80", placeholder: "Button text (optional)", "aria-label": "Step button text" });
+      const hint = h("span", { class: "muted small" });
+      const setHint = () => { const k = kinds.find(x => x.id === sel.value); hint.textContent = k ? k.hint : ""; };
+      sel.addEventListener("change", setHint); setHint();
+      const del = h("button", { class: "btn gray small", type: "button", text: "Remove" });
+      const row = h("div", { class: "setup-row" }, h("div", { class: "row" }, sel, label, url, del), hint);
+      const entry = { sel, url, label };
+      del.addEventListener("click", () => { list.splice(list.indexOf(entry), 1); row.remove(); });
+      list.push(entry); rows.append(row);
+    };
+    const quick = ["follow_twitch", "follow_x", "join_discord", "youtube", "wishlist_steam", "repost_x"].map(id => kinds.find(k => k.id === id)).filter(Boolean);
+    const chips = h("div", { class: "chips" }, h("span", { class: "muted small", text: "Add a step: " }),
+      quick.map(k => h("button", { type: "button", class: "tab small", text: k.label, onclick: () => add(k.id) })),
+      h("button", { type: "button", class: "tab small", text: "Something else", onclick: () => add("custom") }));
+    for (const x of prefill) add(x.kind, x.url);
+    return { el: h("div", {}, chips, rows), get: () => list.map(e => ({ kind: e.sel.value, url: e.url.value, label: e.label.value })) };
+  }
   function prizeButtons(area, after) {
     return h("div", { class: "chips" }, h("span", { class: "muted small", text: "Add a prize: " }),
       PRIZE_TYPES.map(([, icon, name, line]) => h("button", { type: "button", class: "tab small", text: `${icon} ${name}`, onclick: () => {
@@ -3795,11 +3818,11 @@
           api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })),
           api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))
         ]);
-        holder.replaceChildren(giveawayForm(ch.channels, ro.roles, list.settings), giveawayTable(list.giveaways), setupPanel(ch.channels, ro.roles, list.settings));
+        holder.replaceChildren(giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways), setupPanel(ch.channels, ro.roles, list.settings));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
-    function giveawayForm(channels, roles, settings) {
+    function giveawayForm(channels, roles, settings, stepKinds) {
       const text = (ph, max, type = "text") => h("input", { type, placeholder: ph, maxlength: String(max) });
       const chSel = select(channels.map(c => [c.id, "#" + c.name]), channels[0] && channels[0].id);
       const roleSel = () => select([["", "None"], ...roles.map(r => [r.id, r.name])], "");
@@ -3828,6 +3851,7 @@
       const color = text("#5865F2", 8), label = text("Enter giveaway", 40);
       const claim = text("48", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
       const reqRole = roleSel(), bonusRole = roleSel(), pingRole = roleSel();
+      const steps = stepsEditor(stepKinds);
       const boosters = h("input", { type: "checkbox" });
       const startIn = text("Start later, e.g. 2h or 1d (blank = now)", 20), rounds = text("1", 2, "number"), repeatEvery = text("e.g. 7d", 20);
       const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
@@ -3854,7 +3878,7 @@
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
           claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN),
           require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value,
-          boosters: boosters.checked, start_in: startIn.value, rounds: num(rounds), repeat_every: repeatEvery.value
+          boosters: boosters.checked, start_in: startIn.value, rounds: num(rounds), repeat_every: repeatEvery.value, steps: steps.get()
         });
         keys.value = "";
         toast(r.rounds > 1 ? `Series created: ${r.rounds} rounds scheduled.` : r.scheduled ? `Giveaway #${r.id} is scheduled.` : `Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.`, "ok");
@@ -3876,6 +3900,9 @@
           h("label", { class: "check" }, auto, "Find artwork automatically when I don't give an image"),
           h("p", { class: "muted small", text: "Use a direct link to a picture (it ends in .png, .jpg, .gif or .webp). Links copied from a Discord message can expire, so host it somewhere permanent like Imgur." })),
           h("div", {}, h("b", { text: "Preview" }), gp.el)),
+        h("h4", { text: "Required steps (optional)" }),
+        h("p", { class: "muted small", text: "Ask people to do something first, like following you on X or Twitch, joining a Discord or wishlisting a game. Each step shows on the post as a numbered line and a link button. Discord can't check these, so it works on trust and winners may be checked." }),
+        steps.el,
         h("details", { class: "more" }, h("summary", { text: "Rules, schedule and more (all optional)" }),
           h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN)),
           h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),
@@ -5889,6 +5916,59 @@
       if (!ov) { ov = window.SvcOverlayPanel({ api, toast, getData: () => musicData, getGuild: () => guild.value, storeKey: "svc_music_ov" }); ovBox = h("div", { class: "panel" }, h("h3", { text: "Stream overlay for OBS" }), ov.el); pollMusic(); }
       into.append(ovBox);
     }
+    /** The giveaway tool for streamers: the same options as a server giveaway, plus drawing when the stream ends. */
+    function streamGiveawayPanel(d, unset, post, run) {
+      const text = (ph, max, type = "text") => h("input", { type, placeholder: ph, maxlength: String(max) });
+      const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
+      const game = text("Game name (for the artwork, optional)", 100), title = text("Title (optional)", 100), desc = h("textarea", { placeholder: "Extra text on the giveaway (optional)", maxlength: "1500" });
+      const length = text("30m, 1h, 2h", 20); length.value = "1h";
+      const presets = h("div", { class: "chips" }, ["30m", "1h", "2h", "3h", "6h"].map(p => h("button", { type: "button", class: "tab small", text: p, onclick: () => { length.value = p; } })));
+      const endWith = h("input", { type: "checkbox", id: "sgw-end", checked: true });
+      const image = text("Your own image, GIF or video link, https (optional)", 500), thumb = text("Your own small picture or GIF link, https (optional)", 500);
+      const auto = h("input", { type: "checkbox", checked: true }), color = text("#9146ff", 8), label = text("Enter giveaway", 40);
+      const claim = text("24", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
+      const boosters = h("input", { type: "checkbox" });
+      const roles = d.roles || null, roleSel = () => select([["", "None"], ...(roles || []).map(r => [r.id, r.name])], "");
+      const reqRole = roleSel(), bonusRole = roleSel(), pingRole = roleSel();
+      const prefill = d.link && /twitch/i.test(d.link.platform) ? [{ kind: "follow_twitch", url: d.link.url }] : d.link && /youtube/i.test(d.link.platform) ? [{ kind: "youtube", url: d.link.url }] : [];
+      const steps = stepsEditor(d.stepKinds || [], { prefill });
+      const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), length: length.value.trim(), host: "you" }));
+      for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
+      const go = h("button", { class: "btn blue", type: "button", text: "🎁 Start the giveaway", disabled: unset });
+      go.addEventListener("click", () => run(go, async () => {
+        const num = el => (el.value === "" ? undefined : Number(el.value));
+        const r = await post("/api/streams/giveaway", {
+          keys: keys.value, game: game.value, title: title.value, description: desc.value, length: length.value, end_with_stream: endWith.checked,
+          image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
+          claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN), boosters: boosters.checked,
+          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, steps: steps.get()
+        });
+        keys.value = "";
+        toast(`Giveaway posted in the live channel with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.${r.endsWithStream ? " It draws when you end your stream." : ""}`, "ok");
+      }));
+      return h("div", { class: "panel" }, h("h3", { text: "Giveaway for your viewers" }),
+        unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
+        h("p", { class: "muted small", text: "Give away one or more prizes while you are live. It is posted in the live channel and draws winners when you end your stream, or when the time is up. Winners get their prize from the bot by message. You must be marked live first." }),
+        field("Prizes (one per line)", keys), prizeButtons(keys, gp.paint),
+        h("p", { class: "muted small", text: "Keys, Discord Nitro links and gift card codes are kept encrypted and handed to the winner by a Claim button. Money and other prizes have no code: the bot tells you who won and you send it yourself." }),
+        h("div", { class: "row" }, field("Runs for at most", length), field("Title", title)), presets,
+        h("label", { class: "check", for: "sgw-end" }, endWith, " Draw the winners as soon as I end my stream"),
+        h("h4", { text: "Look" }),
+        h("div", { class: "grid two" }, h("div", {},
+          field("Description", desc),
+          h("div", { class: "row" }, field("Big picture, GIF or video link (https)", image), field("Small picture or GIF link (https)", thumb)),
+          h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color (#9146ff)", color)),
+          h("label", { class: "check" }, auto, " Find artwork automatically when I don't give an image")),
+          h("div", {}, h("b", { text: "Preview" }), gp.el)),
+        h("h4", { text: "Required steps (optional)" }),
+        h("p", { class: "muted small", text: "Ask viewers to do something first, like following your channel, joining your Discord or wishlisting your game. Each step shows on the post as a numbered line and a link button. Discord can't check these, so it works on trust and winners may be checked." }),
+        steps.el,
+        h("details", { class: "more" }, h("summary", { text: "Rules (all optional)" }),
+          h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb), field("Hours to claim", claim)),
+          h("label", { class: "check" }, boosters, " Only server boosters can enter"),
+          roles ? h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN), field("Ping role", pingRole)) : h("p", { class: "muted small", text: "Role rules and pings are set by a server manager." })),
+        h("p"), h("div", { class: "row" }, go));
+    }
     async function load() {
       holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
       let d;
@@ -5948,12 +6028,7 @@
       }
       let gwPanel = null;
       if (d.can.go) {
-        const gGame = h("input", { type: "text", maxlength: "80", placeholder: "Which game" }), gKey = h("input", { type: "password", maxlength: "200", placeholder: "The key", autocomplete: "off" }), gMin = h("input", { type: "number", min: "5", max: "720", value: "60" });
-        const gb = h("button", { class: "btn blue", type: "button", text: "🎁 Start a giveaway", disabled: unset });
-        gb.addEventListener("click", () => run(gb, async () => { await post("/api/streams/giveaway", { game: gGame.value, key: gKey.value, minutes: Number(gMin.value) }); gKey.value = ""; }, "Giveaway posted in the live channel."));
-        gwPanel = h("div", { class: "panel" }, h("h3", { text: "Giveaway for your viewers" }),
-          h("p", { class: "muted small", text: "Give away one key while you are live. It is posted in the live channel and draws a winner when you end your stream, or when the time is up. The winner gets the key from the bot by message. You must be marked live first." }),
-          h("div", { class: "grid two" }, field("Game", gGame), field("Key (kept private)", gKey)), field("Longest it runs, in minutes", gMin), h("div", { class: "row" }, gb));
+        gwPanel = streamGiveawayPanel(d, unset, post, run);
       }
       holder.replaceChildren(...[picker, liveList, linkPanel, goPanel, gwPanel, pingPanel, settings].filter(Boolean));
       if (d.can.go) mountOverlay(holder);

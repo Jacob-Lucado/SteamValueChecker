@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.21", date: "2026-11-04", title: "Full giveaway tools for streamers", items: [
+        "**Stream giveaways grew up:** the Streamer hub's giveaway panel now takes several prizes (keys, Nitro, gift cards, money or anything else), a title and description, your own pictures or automatic artwork, a colour and button text, with a live preview of the post.",
+        "**Required steps:** ask viewers to follow you on Twitch or X, join your Discord, subscribe on YouTube, wishlist a game or any link you like. They show on the post as numbered steps with link buttons. Discord can't check them, so it runs on trust and winners may be checked.",
+        "**Rules:** minimum account age, minimum time in the server, boosters only, hours to claim, and for managers a required role, a bonus-entry role and a ping role. Choose whether it draws the moment your stream ends or runs for its full length.",
+        "**Everywhere:** the server Giveaways page has the same required steps, and `/server stream giveaway` still gives away a single key quickly."
+    ] },
     { version: "2026.11.20", date: "2026-11-04", title: "More free games caught", items: [
         "**Short-run freebies:** the bot now also watches GamerPower's live giveaways, so the batches of small Epic, Steam and GOG games that are free for only a few days show up in your free game alerts and in `/games freegames`.",
         "**No repeats:** a game that was already announced from another source isn't posted twice, and the first run stays quiet about what was already open."

@@ -78,6 +78,18 @@ export const linksOf = g => safeJson(g.host_links);
 
 const md = (label, url) => `[${label.replace(/[\[\]]/g, "")}](${url})`;
 
+/** The "how to enter" lines, the honour-system note and the link buttons for a giveaway's required steps. Works for any giveaway. */
+export function stepParts(g) {
+    const steps = stepsOf(g);
+    if (!steps.length) return { howToEnter: null, stepsNote: null, buttons: [] };
+    const how = [...steps.map((s, i) => `${i + 1}. ${md(`${STEP_KINDS[s.kind]?.icon ?? "•"} ${s.label}`, s.url)}`), `${steps.length + 1}. Press **Enter giveaway** below`];
+    return {
+        howToEnter: how.join("\n"),
+        stepsNote: "Complete every step to be considered. Winners may be checked, and a new winner is drawn if a step was skipped.",
+        buttons: steps.slice(0, MAX_STEPS).map(s => ({ type: 2, style: 5, label: s.label.slice(0, 80), url: s.url }))
+    };
+}
+
 /** The extra embed pieces for a cross-server giveaway: who hosts it, and what to do to be considered. */
 export function crossServerParts(g) {
     const links = linksOf(g), steps = stepsOf(g);

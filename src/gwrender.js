@@ -6,7 +6,7 @@ const GREEN = 0x57f287;
 const GREY = 0x8b95a5;
 const RED = 0xed4245;
 import { isVideoLink } from "./gwparse.js";
-import { crossServerParts, stepRows } from "./gwpartner.js";
+import { crossServerParts, stepParts, stepRows } from "./gwpartner.js";
 import { kindInfo, isCode, theme } from "./prizes.js";
 const GALLERY_URL = "https://store.steampowered.com/";
 const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
@@ -46,6 +46,7 @@ function winnerLines(keys) {
 export function giveawayPayload(g, keys, entryCount, state = g.status) {
     const lines = prizeSummary(keys);
     const cross = g.is_global && g.host_name ? crossServerParts(g) : null; // a cross-server giveaway says so and who hosts it
+    const tasks = cross ? null : stepParts(g); // a normal giveaway can ask for steps too
     const th = theme(keys);
     const winners = state === "ended" ? winnerLines(keys) : [];
     const shown = lines.slice(0, 12);
@@ -73,6 +74,7 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
     const req = requirements(g);
     if (req.length && state === "active") fields.push({ name: "📋 To enter", value: req.join("\n").slice(0, 1000) });
     if (cross?.howToEnter && state === "active") fields.push({ name: "How to enter", value: `${cross.howToEnter}\n\n${cross.stepsNote}`.slice(0, 1020) });
+    if (tasks?.howToEnter && state === "active") fields.push({ name: "✅ Required steps", value: `${tasks.howToEnter}\n\n${tasks.stepsNote}`.slice(0, 1020) });
 
     // A video can't sit inside an embed, so its link goes in the message text where Discord plays it.
     const video = safeUrl(g.image_url) && isVideoLink(g.image_url);
@@ -103,7 +105,7 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
         embed.url = GALLERY_URL;
         for (const u of extra) embeds.push({ url: GALLERY_URL, image: { url: u } });
     }
-    const payload = { embeds, components: [{ type: 1, components: [enter] }, ...(cross && state === "active" ? stepRows(cross.buttons) : [])] };
+    const payload = { embeds, components: [{ type: 1, components: [enter] }, ...(state === "active" ? stepRows((cross ?? tasks)?.buttons ?? []) : [])] };
     const ping = state === "active" && g.ping_role_id ? role(g.ping_role_id) : null;
     const content = [ping, video ? g.image_url : null].filter(Boolean).join("\n");
     if (content) payload.content = content;
