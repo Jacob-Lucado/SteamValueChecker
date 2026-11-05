@@ -1285,3 +1285,23 @@ body.wiz-open { overflow: hidden; }
 .pf-bg-thumb.on { border-color: var(--accent, #66c0f4); }
 .pf-bg-use, .pf-bg-del { font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 0; cursor: pointer; background: rgba(128, 128, 128, .25); color: inherit; }
 .pf-pagebg video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* The rarest-achievement showcase: a row of gold-edged icons like Steam's own. */
+.pf-ach { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.pf-ach-i { aspect-ratio: 1; border-radius: 4px; overflow: hidden; background: rgba(255,255,255,.05); border: 1px solid rgba(232,190,95,.55); box-shadow: 0 0 10px rgba(232,190,95,.28); display: grid; place-items: center; }
+.pf-ach-i img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-ach-x { color: #e8be5f; font-size: 1.4rem; }
+
+/* Recent activity: a game, its hours, and how far through its achievements the member is. */
+.pf-act { display: grid; gap: 10px; }
+.pf-act-g { background: rgba(0,0,0,.22); border-radius: 6px; padding: 10px; display: grid; gap: 10px; }
+.pf-act-top { display: flex; gap: 12px; align-items: center; }
+.pf-act-top .pf-art, .pf-act-top img { width: 120px; flex: none; border-radius: 3px; }
+.pf-act-info { display: grid; gap: 2px; min-width: 0; }
+.pf-act-ach { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(0,0,0,.25); border-radius: 4px; padding: 8px 10px; }
+.pf-act-bar { flex: 1 1 160px; display: grid; gap: 4px; font-size: .82rem; }
+.pf-act-bar i { display: block; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
+.pf-act-bar b { display: block; height: 100%; background: var(--pf-accent, #66c0f4); }
+.pf-act-ico { display: flex; gap: 4px; align-items: center; }
+.pf-act-ico img { width: 32px; height: 32px; border-radius: 3px; }
+.pf-act-more { background: rgba(255,255,255,.1); border-radius: 3px; min-width: 32px; height: 32px; display: grid; place-items: center; font-size: .78rem; padding: 0 6px; }

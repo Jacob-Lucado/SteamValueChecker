@@ -10,6 +10,25 @@ CREATE TABLE IF NOT EXISTS steam_links (
     games      INTEGER NOT NULL DEFAULT 0,
     minutes    INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS ach_rare (
+    discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    appid      INTEGER NOT NULL,
+    apiname    TEXT NOT NULL,
+    game       TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    icon       TEXT,
+    pct        REAL NOT NULL,
+    PRIMARY KEY (discord_id, appid, apiname)
+);
+CREATE TABLE IF NOT EXISTS ach_recent (
+    discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    appid      INTEGER NOT NULL,
+    apiname    TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    icon       TEXT,
+    at         INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (discord_id, appid, apiname)
+);
 CREATE TABLE IF NOT EXISTS playtime_log (
     discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
     day        TEXT NOT NULL,
@@ -100,13 +119,13 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
                     const before = get("SELECT minutes FROM library WHERE id = ?", have.id)?.minutes ?? 0;
                     const gained = Math.max(0, (g.minutes ?? 0) - before);
                     if ((track === undefined ? before > 0 : track) && gained > 0) run("INSERT INTO playtime_log (discord_id, day, itad_id, title, minutes) VALUES (?,?,?,?,?)", discordId, new Date(now()).toISOString().slice(0, 10), g.itad_id, g.title, gained);
-                    run("UPDATE library SET appid = ?, minutes = ?, last_played = ? WHERE id = ?", g.appid ?? null, g.minutes ?? 0, played, have.id);
+                    run("UPDATE library SET appid = ?, minutes = ?, last_played = ?, min_2w = ? WHERE id = ?", g.appid ?? null, g.minutes ?? 0, played, g.recent ?? 0, have.id);
                     updated++;
                 } else if (n >= maxLibrary) {
                     skippedForLimit++;
                 } else {
-                    run("INSERT INTO library (discord_id, itad_id, title, paid, added_at, status, appid, minutes, last_played) VALUES (?,?,?,?,?,?,?,?,?)",
-                        discordId, g.itad_id, g.title, null, now(), startStatus(g, played, now()), g.appid ?? null, g.minutes ?? 0, played);
+                    run("INSERT INTO library (discord_id, itad_id, title, paid, added_at, status, appid, minutes, last_played, min_2w) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        discordId, g.itad_id, g.title, null, now(), startStatus(g, played, now()), g.appid ?? null, g.minutes ?? 0, played, g.recent ?? 0);
                     // Only after the first sync (the first one just imports what was already played), a new game that shows up already played counts too.
                     if (track === true && (g.minutes ?? 0) > 0) run("INSERT INTO playtime_log (discord_id, day, itad_id, title, minutes) VALUES (?,?,?,?,?)", discordId, new Date(now()).toISOString().slice(0, 10), g.itad_id, g.title, g.minutes);
                     n++; added++;
@@ -130,6 +149,30 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
         const finish = complete && !wasComplete && !["finished", "dropped"].includes(row.status);
         run("UPDATE library SET ach_done = ?, ach_total = ?, ach_checked = ?, status = ?, status_at = CASE WHEN ? THEN ? ELSE status_at END WHERE discord_id = ? AND itad_id = ?", done, total, now(), finish ? "finished" : row.status, finish ? 1 : 0, now(), discordId, itadId);
         return { newlyFinished: finish };
+    }
+
+    /** Replaces one game's rare unlocks (achievements under 10% of players). */
+    function setRareAchievements(discordId, appid, game, list) {
+        run("DELETE FROM ach_rare WHERE discord_id = ? AND appid = ?", discordId, appid);
+        for (const a of list.slice(0, 40)) run("INSERT OR REPLACE INTO ach_rare (discord_id, appid, apiname, game, name, icon, pct) VALUES (?,?,?,?,?,?,?)", discordId, appid, String(a.apiname).slice(0, 120), String(game).slice(0, 120), String(a.name).slice(0, 160), a.icon ?? null, Number(a.pct));
+    }
+    function setRecentUnlocks(discordId, appid, list) {
+        run("DELETE FROM ach_recent WHERE discord_id = ? AND appid = ?", discordId, appid);
+        for (const a of list.slice(0, 5)) run("INSERT OR REPLACE INTO ach_recent (discord_id, appid, apiname, name, icon, at) VALUES (?,?,?,?,?,?)", discordId, appid, String(a.apiname).slice(0, 120), String(a.name).slice(0, 160), a.icon ?? null, Number(a.at) || 0);
+    }
+    /** Games played in the last two weeks, newest first, with their achievement progress and latest unlocks. */
+    function recentActivity(discordId, limit = 3) {
+        const since = now() - 14 * 86400_000;
+        const games = all("SELECT appid, title, minutes, min_2w, last_played, ach_done, ach_total FROM library WHERE discord_id = ? AND appid IS NOT NULL AND last_played > ? ORDER BY last_played DESC LIMIT ?", discordId, since, limit).map(clean);
+        const total2w = get("SELECT COALESCE(SUM(min_2w),0) AS m FROM library WHERE discord_id = ?", discordId)?.m ?? 0;
+        return { minutes2w: total2w, games: games.map(g => ({ ...g, unlocks: all("SELECT name, icon FROM ach_recent WHERE discord_id = ? AND appid = ? ORDER BY at DESC", discordId, g.appid).map(clean) })) };
+    }
+    /** What the profile shows: every unlock counted, how many are rare, and the rarest few. */
+    function achievementShowcase(discordId, limit = 14) {
+        const t = get("SELECT COALESCE(SUM(ach_done),0) AS done, COUNT(CASE WHEN ach_total > 0 THEN 1 END) AS games FROM library WHERE discord_id = ?", discordId);
+        const rare = get("SELECT COUNT(*) AS n FROM ach_rare WHERE discord_id = ?", discordId)?.n ?? 0;
+        const top = all("SELECT appid, game, name, icon, pct FROM ach_rare WHERE discord_id = ? ORDER BY pct ASC, game ASC, name ASC LIMIT ?", discordId, limit).map(clean);
+        return { done: t?.done ?? 0, games: t?.games ?? 0, rare, top };
     }
 
     const playtimeLog = id => all("SELECT day, itad_id, title, minutes FROM playtime_log WHERE discord_id = ? ORDER BY day", id);
@@ -187,5 +230,5 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     const achvUsers = () => all("SELECT * FROM users WHERE achv = 1 AND paused = 0").map(clean);
     /** Games with synced achievement counts that are partly done. */
     const achievementGames = userId => all("SELECT itad_id, title, appid, minutes, ach_done, ach_total FROM library WHERE discord_id = ? AND ach_total > 0 AND ach_done < ach_total", userId).map(clean);
-    return { setSteamCountry, paidGameCount, achvUsers, achievementGames, nudgeUsers, yearlyUsers, milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
+    return { setRecentUnlocks, recentActivity, setRareAchievements, achievementShowcase, setSteamCountry, paidGameCount, achvUsers, achievementGames, nudgeUsers, yearlyUsers, milestoneUsers, playedGames, refundUsers, refundCandidates, saveAppDlc, appsNeedingDlc, ownedWithDlc, dlcUsers, saveAppTags, getAppTags, appsNeedingTags, allAppsNeedingTags, playtimeLog, playRecap, playRecapAll, getHourGoal, setHourGoal, prunePlaytime, getSteamLink, setSteamLink, findVerifiedSteamUser, setSteamWho, markSteamSynced, removeSteamLink, steamLinkedUsers, syncSteamGames, setAchievements };
 }

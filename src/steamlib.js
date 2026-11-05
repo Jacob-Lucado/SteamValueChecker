@@ -47,7 +47,7 @@ export function parseGamesPage(html) {
 export function parseOwnedJson(data) {
     const games = data?.response?.games;
     if (!Array.isArray(games)) return null;
-    return games.map(g => ({ appid: Number(g?.appid), name: typeof g?.name === "string" ? g.name.trim() : "", minutes: Math.max(0, Math.round(Number(g?.playtime_forever) || 0)), lastPlayed: Number(g?.rtime_last_played) || null }))
+    return games.map(g => ({ appid: Number(g?.appid), name: typeof g?.name === "string" ? g.name.trim() : "", minutes: Math.max(0, Math.round(Number(g?.playtime_forever) || 0)), lastPlayed: Number(g?.rtime_last_played) || null, recent: Math.max(0, Math.round(Number(g?.playtime_2weeks) || 0)) }))
         .filter(g => Number.isInteger(g.appid) && g.appid > 0);
 }
 
@@ -86,14 +86,46 @@ export async function fetchOwnedGames(steamid, { apiKey = null, fetchImpl = glob
  * Throws rate_limited on HTTP 429 so the caller can stop.
  */
 export async function fetchAchievements(steamid, appid, { apiKey, fetchImpl = globalThis.fetch }) {
-    const res = await get(fetchImpl, `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${Number(appid)}&key=${encodeURIComponent(apiKey)}&steamid=${steamid}`);
+    const res = await get(fetchImpl, `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${Number(appid)}&key=${encodeURIComponent(apiKey)}&steamid=${steamid}&l=english`);
     if (res.status === 429) throw new SteamError("rate_limited", "Steam is rate limiting the bot. Try again in a few minutes.");
     let data = null;
     try { data = await res.json(); } catch { /* not json */ }
     const stats = data?.playerstats;
-    if (Array.isArray(stats?.achievements)) return { done: stats.achievements.filter(a => Number(a?.achieved) === 1).length, total: stats.achievements.length };
+    if (Array.isArray(stats?.achievements)) {
+        const got = stats.achievements.filter(a => Number(a?.achieved) === 1);
+        return { done: got.length, total: stats.achievements.length, unlocked: got.map(a => ({ apiname: String(a.apiname ?? ""), name: String(a.name ?? ""), at: Number(a.unlocktime) || 0 })).filter(a => a.apiname) };
+    }
     if (/no stats/i.test(String(stats?.error ?? ""))) return { done: 0, total: 0 };
     return null;
+}
+
+const RARE_UNDER = 10; // percent of players, the same bar Steam uses for "rare"
+const steamImage = u => (/^https:\/\/[a-z0-9.-]*(steamstatic\.com|steamcommunity\.com|akamaihd\.net)\//i.test(u ?? "") ? u : null);
+
+/**
+ * The pictures and rarity for a game's unlocked achievements: `rare` (held by under 10% of players, rarest first) and,
+ * when asked, `recent` (the newest unlocks). The percentages need no key; names and pictures come from the game's schema.
+ * Returns empty lists when Steam would not say.
+ */
+export async function fetchAchievementArt(appid, unlocked, { apiKey, fetchImpl = globalThis.fetch, wantRecent = false }) {
+    const none = { rare: [], recent: [] };
+    try {
+        let rare = [];
+        const res = await get(fetchImpl, `https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/?gameid=${Number(appid)}`);
+        if (res.ok) {
+            const pct = new Map(((await res.json())?.achievementpercentages?.achievements ?? []).map(a => [String(a.name), Number(a.percent)]));
+            rare = unlocked.map(a => ({ ...a, pct: pct.get(a.apiname) })).filter(a => Number.isFinite(a.pct) && a.pct < RARE_UNDER).sort((a, b) => a.pct - b.pct).slice(0, 40);
+        }
+        const recent = wantRecent ? [...unlocked].sort((a, b) => b.at - a.at).slice(0, 5) : [];
+        if (!rare.length && !recent.length) return none;
+        const info = new Map();
+        try {
+            const sr = await get(fetchImpl, `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=${encodeURIComponent(apiKey)}&appid=${Number(appid)}&l=english`);
+            if (sr.ok) for (const a of (await sr.json())?.game?.availableGameStats?.achievements ?? []) info.set(String(a.name), { icon: steamImage(a.icon), name: a.displayName });
+        } catch { /* the pictures are a bonus */ }
+        const dress = a => ({ apiname: a.apiname, name: info.get(a.apiname)?.name || a.name || a.apiname, icon: info.get(a.apiname)?.icon ?? null });
+        return { rare: rare.map(a => ({ ...dress(a), pct: Math.round(a.pct * 10) / 10 })), recent: recent.map(a => ({ ...dress(a), at: a.at })) };
+    } catch { return none; }
 }
 
 /**
@@ -102,8 +134,11 @@ export async function fetchAchievements(steamid, appid, { apiKey, fetchImpl = gl
  * At most `limit` games per run; run it again for the rest. Never throws: a Steam problem just ends the run early.
  */
 export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl = globalThis.fetch, now = Date.now(), limit = 400, concurrency = 6 }) {
-    const stale = now - 7 * 86400_000;
-    const todo = db.listLibrary(userId).filter(g => g.appid && (g.minutes ?? 0) >= 30 && (!g.ach_checked || g.ach_checked < stale)).sort((a, b) => b.minutes - a.minutes).slice(0, limit);
+    const stale = now - 7 * 86400_000, fresh = now - 86400_000, lately = now - 14 * 86400_000;
+    const isRecent = g => (g.last_played ?? 0) > lately;
+    // Games played in the last two weeks are looked at daily so the profile's recent activity stays current.
+    const todo = db.listLibrary(userId).filter(g => g.appid && (g.minutes ?? 0) >= 30 && (!g.ach_checked || g.ach_checked < (isRecent(g) ? fresh : stale)))
+        .sort((a, b) => (isRecent(b) - isRecent(a)) || b.minutes - a.minutes).slice(0, limit);
     let checked = 0, newlyFinished = 0, stopped = false, i = 0;
     const worker = async () => {
         while (!stopped && i < todo.length) {
@@ -113,6 +148,11 @@ export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl 
                 if (!a) continue;
                 checked++;
                 if (db.setAchievements(userId, g.itad_id, a).newlyFinished) newlyFinished++;
+                if (a.unlocked?.length) {
+                    const art = await fetchAchievementArt(g.appid, a.unlocked, { apiKey, fetchImpl, wantRecent: isRecent(g) });
+                    db.setRareAchievements(userId, g.appid, g.title, art.rare);
+                    db.setRecentUnlocks(userId, g.appid, art.recent);
+                } else { db.setRareAchievements(userId, g.appid, g.title, []); db.setRecentUnlocks(userId, g.appid, []); }
             } catch { stopped = true; }
         }
     };
@@ -184,7 +224,7 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
         const id = map.get(`app/${g.appid}`);
         if (!id || seen.has(id)) continue;
         seen.add(id);
-        games.push({ itad_id: id, title: g.name || `App ${g.appid}`, appid: g.appid, minutes: g.minutes, lastPlayed: g.lastPlayed });
+        games.push({ itad_id: id, title: g.name || `App ${g.appid}`, appid: g.appid, minutes: g.minutes, lastPlayed: g.lastPlayed, recent: g.recent ?? 0 });
     }
     const res = db.syncSteamGames(userId, games, { track: !!db.getSteamLink(userId)?.synced_at });
     const minutes = owned.reduce((t, g) => t + g.minutes, 0);

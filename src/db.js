@@ -282,6 +282,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library", "appid", "INTEGER");
     addColumn("library", "minutes", "INTEGER NOT NULL DEFAULT 0");
     addColumn("library", "last_played", "INTEGER");
+    addColumn("library", "min_2w", "INTEGER NOT NULL DEFAULT 0");
     addColumn("library", "ach_done", "INTEGER");
     addColumn("library", "ach_total", "INTEGER");
     addColumn("library", "ach_checked", "INTEGER");
@@ -763,7 +764,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     function deleteUser(discordId) {
         db.exec("BEGIN");
         try {
-            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM gift_marks WHERE claimer_id = ?", discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);

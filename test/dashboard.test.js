@@ -1160,6 +1160,32 @@ test("gift marks: warn a visitor whose Steam region differs from the list owner'
     await t.close();
 });
 
+test("profile page: rarest achievements and recent activity show up for a Steam-linked member, and stay hidden otherwise", async () => {
+    const t = await setup();
+    t.advance(Date.now()); // the test clock starts near 1970; recent activity looks at the last two weeks
+    await t.signIn();
+    await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
+    const nowS = Math.floor(Date.now() / 1000);
+    t.db.setSteamLink("u1", "76561198000000009");
+    t.db.syncSteamGames("u1", [{ itad_id: "h", title: "Hades", appid: 1145360, minutes: 600, lastPlayed: nowS - 3600, recent: 90 }]);
+    t.db.setAchievements("u1", "h", { done: 3, total: 10 });
+    t.db.setRareAchievements("u1", 1145360, "Hades", [{ apiname: "r", name: "Escaped", icon: null, pct: 1.2 }]);
+    t.db.setRecentUnlocks("u1", 1145360, [{ apiname: "r", name: "Escaped", icon: null, at: nowS }]);
+    const sections = [{ key: "about", vis: "public" }, { key: "achievements", vis: "public" }, { key: "activity", vis: "public" }];
+    const saved = await t.request("/api/profile/page", { method: "POST", body: { sections } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.data));
+    const view = await t.request("/api/public/profile?slug=jacob");
+    assert.equal(view.status, 200, JSON.stringify(view.data));
+    const pub = view.data.profile;
+    const ach = pub.sections.find(x => x.key === "achievements"), act = pub.sections.find(x => x.key === "activity");
+    assert.equal(ach.done, 3); assert.equal(ach.rare, 1); assert.equal(ach.top[0].name, "Escaped");
+    assert.equal(act.games[0].title, "Hades"); assert.equal(act.games[0].hours2w, 1.5); assert.equal(act.games[0].unlocks[0].name, "Escaped");
+    t.db.removeSteamLink("u1");
+    const after = (await t.request("/api/public/profile?slug=jacob")).data.profile;
+    assert.ok(!after.sections.some(x => x.key === "achievements" || x.key === "activity"), "no Steam link, nothing to show");
+    await t.close();
+});
+
 test("gift marks: limits, expiry and moderation in the store", async () => {
     const { openDb } = await import("../src/db.js");
     const { MAX_CLAIMS_TOTAL, CLAIM_TTL_MS, accountOldEnough, accountCreatedAt } = await import("../src/giftstore.js");

@@ -21,7 +21,7 @@ test("the community XML list is parsed, including commas in hours and CDATA name
 test("the Web API response is parsed defensively", () => {
     assert.equal(parseOwnedJson({ response: {} }), null);
     const g = parseOwnedJson({ response: { games: [{ appid: 5, name: " A ", playtime_forever: 90, rtime_last_played: 1700000000 }, { appid: "no" }] } });
-    assert.deepEqual(g, [{ appid: 5, name: "A", minutes: 90, lastPlayed: 1700000000 }]);
+    assert.deepEqual(g, [{ appid: 5, name: "A", minutes: 90, lastPlayed: 1700000000, recent: 0 }]);
 });
 
 test("a private profile gives a clear message, with or without an API key", async () => {
@@ -330,4 +330,27 @@ test("fetchSteamCountry reads the profile country, and stays quiet without a key
     assert.equal(await fetchSteamCountry("76561198000000000", null, ok), null);
     assert.equal(await fetchSteamCountry("76561198000000000", "KEY", async () => ({ ok: true, json: async () => ({ response: { players: [{}] } }) })), null);
     assert.equal(await fetchSteamCountry("76561198000000000", "KEY", async () => { throw new Error("down"); }), null);
+});
+
+test("achievements: rarest unlocks and the newest unlocks are saved with names and pictures", async () => {
+    const { db } = rig();
+    const nowS = Math.floor(Date.now() / 1000);
+    db.syncSteamGames("u1", [{ itad_id: "g1", title: "Hades", appid: 11, minutes: 900, lastPlayed: nowS - 3600, recent: 150 }, { itad_id: "g2", title: "Old", appid: 12, minutes: 900, lastPlayed: nowS - 90 * 86400, recent: 0 }]);
+    const ach = [{ apiname: "A", achieved: 1, name: "First", unlocktime: nowS - 500 }, { apiname: "B", achieved: 1, name: "Rare one", unlocktime: nowS - 100 }, { apiname: "C", achieved: 0, name: "Nope", unlocktime: 0 }];
+    const f = async u => {
+        u = String(u);
+        if (u.includes("GetPlayerAchievements")) return res({ playerstats: { achievements: ach } }, { json: true });
+        if (u.includes("GlobalAchievementPercentages")) return res({ achievementpercentages: { achievements: [{ name: "A", percent: "55.2" }, { name: "B", percent: 1.46 }, { name: "C", percent: 0.1 }] } }, { json: true });
+        if (u.includes("GetSchemaForGame")) return res({ game: { availableGameStats: { achievements: [{ name: "B", displayName: "Escaped", icon: "https://cdn.fastly.steamstatic.com/steamcommunity/public/images/apps/11/b.jpg" }, { name: "A", displayName: "Started", icon: "https://evil.example/x.jpg" }] } } }, { json: true });
+        return res({}, { json: true, status: 400 });
+    };
+    await syncAchievements({ db, userId: "u1", steamid: "76561198000000000", apiKey: "k", fetchImpl: f });
+    const show = db.achievementShowcase("u1");
+    assert.deepEqual(show.top.map(t => [t.name, t.pct, t.game]), [["Escaped", 1.5, "Hades"], ["Escaped", 1.5, "Old"]]);
+    assert.equal(show.done, 4); assert.equal(show.rare, 2);
+    const act = db.recentActivity("u1");
+    assert.equal(act.games.length, 1, "only games played in the last two weeks");
+    assert.equal(act.games[0].title, "Hades"); assert.equal(act.games[0].min_2w, 150);
+    assert.deepEqual(act.games[0].unlocks.map(u => u.name), ["Escaped", "Started"], "newest first");
+    assert.equal(act.games[0].unlocks[1].icon, null, "pictures from other hosts are dropped");
 });

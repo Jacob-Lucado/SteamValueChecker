@@ -991,7 +991,7 @@
 
   // ---------- full profiles ----------
   const PF_VIS = { public: "Public", server: "Server only", hidden: "Hidden" };
-  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", trophies: "Trophies", steam: "Steam stats", streams: "Streaming" };
+  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming" };
   const httpsOnly = u => (/^https:\/\//i.test(u || "") ? u : "");
 
   /** The profile song: a play button that loads the official player when pressed (browsers block sound that starts alone). */
@@ -1226,6 +1226,25 @@
         inner = s.games.length ? h("div", { class: "pf-tiles" }, s.games.map(pfTile)) : h("p", { class: "muted", text: "Nothing marked finished yet." });
       } else if (s.key === "trophies") {
         inner = s.badges.length ? h("div", { class: "pf-links" }, s.badges.map(b => h("span", { class: "pf-chip", text: `${b.icon} ${b.name} · ${b.tier}` })), h("span", { class: "muted small", text: `${s.earned} of ${s.total} earned` })) : h("p", { class: "muted", text: "No trophies yet." });
+      } else if (s.key === "achievements") {
+        const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: Number(n).toLocaleString() }), h("span", { text: l }));
+        inner = h("div", {},
+          s.top.length ? h("div", { class: "pf-ach" }, s.top.map(a => h("div", { class: "pf-ach-i", title: `${a.name} · ${a.game} · ${a.pct}% of players` },
+            a.icon ? h("img", { src: a.icon, alt: a.name, loading: "lazy", referrerpolicy: "no-referrer" }) : h("span", { class: "pf-ach-x", text: "★" })))) : null,
+          h("div", { class: "pf-stats" }, stat(s.done, "Achievements"), stat(s.rare, "Rare achievements")));
+      } else if (s.key === "activity") {
+        const day = t => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        inner = h("div", { class: "pf-act" },
+          s.hours2w ? h("p", { class: "muted small", text: `${s.hours2w} hours past 2 weeks` }) : null,
+          s.games.map(g => h("div", { class: "pf-act-g" },
+            h("div", { class: "pf-act-top" }, pfArt(g.art, g.title),
+              h("div", { class: "pf-act-info" }, h("strong", { text: g.title }),
+                h("span", { class: "muted small", text: `${g.hours.toLocaleString()} hrs on record` }),
+                h("span", { class: "muted small", text: `last played ${day(g.last)}` }))),
+            g.total ? h("div", { class: "pf-act-ach" },
+              h("div", { class: "pf-act-bar" }, h("span", { text: `${g.done} / ${g.total} Achievements` }), h("i", {}, (() => { const fill = h("b"); fill.style.width = Math.round(g.done / g.total * 100) + "%"; return fill; })())),
+              h("div", { class: "pf-act-ico" }, g.unlocks.map(u => u.icon ? h("img", { src: u.icon, alt: u.name, title: u.name, loading: "lazy", referrerpolicy: "no-referrer" }) : null),
+                g.done > g.unlocks.length ? h("span", { class: "pf-act-more", text: "+" + (g.done - g.unlocks.length) }) : null)) : null)));
       } else if (s.key === "steam") {
         const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: Number(n).toLocaleString() }), h("span", { text: l }));
         inner = h("div", { class: "pf-stats" }, stat(s.games, "Steam games"), stat(s.hours, "Hours played"), stat(s.library, "In the library"), stat(s.finished, "Finished"));

@@ -17,9 +17,9 @@ export const LAYOUTS = ["classic", "wide", "compact"];
 export const VISIBILITY = ["public", "server", "hidden"];
 export const SECTIONS = {
     about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished",
-    trophies: "Trophies", steam: "Steam stats", streams: "Streaming"
+    trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming"
 };
-export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["trophies", "hidden"], ["steam", "hidden"], ["streams", "hidden"]]
+export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["trophies", "hidden"], ["achievements", "hidden"], ["activity", "hidden"], ["steam", "hidden"], ["streams", "hidden"]]
     .map(([key, vis]) => ({ key, vis }));
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -210,6 +210,12 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
             } else if (s.key === "trophies") {
                 const t = trophyCase(db, owner.discord_id);
                 sections.push({ key: "trophies", vis: s.vis, earned: t.earned, total: t.total, badges: t.badges.filter(b => b.tier).map(b => ({ icon: b.icon, name: b.name, tier: b.tier })) });
+            } else if (s.key === "achievements") {
+                const a = steam ? db.achievementShowcase(owner.discord_id) : null;
+                if (a && (a.done || a.top.length)) sections.push({ key: "achievements", vis: s.vis, done: a.done, rare: a.rare, games: a.games, top: a.top.map(x => ({ game: x.game, name: x.name, icon: x.icon, pct: x.pct })) });
+            } else if (s.key === "activity") {
+                const r = steam ? db.recentActivity(owner.discord_id) : null;
+                if (r?.games.length) sections.push({ key: "activity", vis: s.vis, hours2w: Math.round(r.minutes2w / 6) / 10, games: r.games.map(g => ({ title: g.title, art: steamArt(g.appid), hours: Math.round((g.minutes ?? 0) / 6) / 10, hours2w: Math.round((g.min_2w ?? 0) / 6) / 10, last: g.last_played, done: g.ach_done ?? 0, total: g.ach_total ?? 0, unlocks: g.unlocks })) });
             } else if (s.key === "steam") {
                 if (steam) sections.push({ key: "steam", vis: s.vis, games: steam.games ?? lib.length, hours: Math.round((steam.minutes ?? 0) / 60), library: lib.length, finished: lib.filter(x => x.status === "finished").length });
             } else if (s.key === "streams") {
