@@ -1256,6 +1256,57 @@ test("community feed: follow, post, react, reply, report and moderate through th
     await t.close();
 });
 
+test("community feed: every connected server has a feed and a directory entry, and managers can opt out or add a join link", async () => {
+    const ID = n => "30000000000000000" + n;
+    const SERVERS = { [ID(1)]: ["g1"], [ID(2)]: ["g2"], [ID(3)]: ["g1", "g2"], [ID(4)]: ["g3"], [ID(5)]: [] };
+    const NAMES = { g1: "Alpha", g2: "Beta", g3: "Gamma" };
+    let who = ID(1);
+    const t = await setup({ config: { authPerMinute: 500, apiPerMinute: 5000 }, extra: { guildList: () => [{ id: "g1", name: "Alpha", members: 50 }, { id: "g2", name: "Beta", members: 20 }, { id: "g3", name: "Gamma", members: 5 }, { id: "g4", name: "Empty", members: 2 }] },
+        restExtra: { login: async () => ({ user: { id: who, username: "m" + who.slice(-1), global_name: null, avatar: null }, guilds: SERVERS[who].map(id => ({ id, name: NAMES[id], icon: null, owner: false, permissions: who === ID(1) && id === "g1" ? MANAGE : "0" })) }) } });
+    t.advance(Date.now());
+    const as = async id => { who = id; await t.request("/auth/logout", { method: "POST", body: {} }); await t.signIn(); };
+    const feed = q => t.request("/api/social/feed?" + q);
+    const slugs = r => r.data.items.map(i => i.by.slug).sort();
+    for (const [i, n] of [[1, "ann"], [2, "ben"], [3, "cyd"], [4, "dee"], [5, "eve"]]) { await as(ID(i)); await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: n } }); await t.request("/api/social/post", { method: "POST", body: { body: "hello from " + n } }); }
+
+    // anyone can browse any connected server, whether or not they are in it
+    await as(ID(5));
+    assert.deepEqual(slugs(await feed("scope=servers&server=g1")), ["ann", "cyd"]);
+    assert.deepEqual(slugs(await feed("scope=servers&server=g2")), ["ben", "cyd"]);
+    assert.deepEqual(slugs(await feed("scope=servers&server=all")), ["ann", "ben", "cyd", "dee"], "all connected servers; eve is in none");
+    assert.equal((await feed("scope=servers&server=g9")).status, 404);
+    assert.equal((await feed("scope=servers&server=g4")).data.items.length, 0, "a connected server with no members yet is just empty");
+    assert.deepEqual((await feed("scope=servers&server=all")).data.items.find(i => i.by.slug === "cyd").servers.map(s => s.name).sort(), ["Alpha", "Beta"]);
+    await t.request("/auth/logout", { method: "POST", body: {} });
+    assert.deepEqual(slugs(await feed("scope=servers&server=g1")), ["ann", "cyd"], "guests can browse too");
+
+    // the directory: busiest first, with a way to join
+    await as(ID(1));
+    assert.equal((await t.request("/api/social/server", { method: "POST", body: { guild: "g2", about: "x" } })).status, 403, "not your server to manage");
+    assert.equal((await t.request("/api/social/server", { method: "POST", body: { guild: "g1", invite: "https://evil.example/x" } })).status, 400);
+    assert.equal((await t.request("/api/social/server", { method: "POST", body: { guild: "g1", about: "Chill folks who finish games", invite: "https://discord.gg/alpha123" } })).data.settings.invite, "https://discord.gg/alpha123");
+    const dir = (await t.request("/api/social/servers")).data;
+    assert.deepEqual(dir.servers.map(s => s.name).slice(0, 2).sort(), ["Alpha", "Beta"]);
+    const alpha = dir.servers.find(s => s.id === "g1");
+    assert.equal(alpha.people, 2); assert.equal(alpha.active, 2); assert.equal(alpha.about, "Chill folks who finish games"); assert.equal(alpha.invite, "https://discord.gg/alpha123"); assert.equal(alpha.members, 50);
+    assert.deepEqual(dir.manage.map(m => m.id), ["g1"], "only servers you manage");
+    const one = (await t.request("/api/social/server?id=g1")).data;
+    assert.deepEqual(one.people.map(p => p.slug).sort(), ["ann", "cyd"]); assert.equal(one.server.invite, "https://discord.gg/alpha123");
+
+    // opting out takes the server out of the directory and its feed
+    assert.equal((await t.request("/api/social/server", { method: "POST", body: { guild: "g1", listed: false } })).data.settings.listed, false);
+    assert.equal((await t.request("/api/social/servers")).data.servers.some(s => s.id === "g1"), false);
+    assert.equal((await feed("scope=servers&server=g1")).status, 404);
+    assert.deepEqual(slugs(await feed("scope=servers&server=all")), ["ben", "cyd", "dee"], "ann was only in the server that opted out");
+    assert.equal((await feed("scope=everyone")).data.items.length, 5, "Everyone is unaffected");
+
+    t.db.syncSteamGames(ID(2), [{ itad_id: "y", title: "Hades", appid: 1145360, minutes: 60, lastPlayed: null }]);
+    t.db.addEvent(ID(2), "finished", { appid: 1145360, game: "Hades", ref: "y" });
+    assert.deepEqual((await t.request("/api/social/discover?server=g2")).data.trending.map(g => g.game), ["Hades"]);
+    assert.equal((await t.request("/api/social/discover?server=g1")).status, 404);
+    await t.close();
+});
+
 test("gift marks: limits, expiry and moderation in the store", async () => {
     const { openDb } = await import("../src/db.js");
     const { MAX_CLAIMS_TOTAL, CLAIM_TTL_MS, accountOldEnough, accountCreatedAt } = await import("../src/giftstore.js");

@@ -1376,3 +1376,20 @@ a.fd-name:hover { text-decoration: underline; }
 .pf-posts { display: grid; gap: 10px; }
 .pf-post p { margin: 0 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .fd-art { width: 72px; } .fd-compose-row { justify-content: stretch; } .fd-pick { max-width: none; flex: 1 1 100%; } }
+
+/* Servers in the community */
+.fd-serverbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.fd-serverhead:empty { display: none; }
+.fd-server-top { display: flex; align-items: center; gap: 12px; }
+.fd-server-top .btn, .fd-server-top > a, .fd-server-top > span:last-child { margin-left: auto; }
+.fd-about { margin: 10px 0 0; color: var(--text); overflow-wrap: anywhere; }
+.fd-compact { margin-top: 12px; }
+.fd-servers { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.fd-server-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 8px; align-content: start; }
+.fd-search { flex: 1 1 220px; max-width: 360px; }
+.fd-srvs { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.fd-srv { background: var(--soft); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 1px 8px; font: inherit; font-size: .74rem; cursor: pointer; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-srv:hover { color: var(--white); border-color: var(--accent); }
+.fd-manage { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.fd-manage:first-of-type { border-top: 0; }
+.fd-seg { display: inline-flex; gap: 6px; }

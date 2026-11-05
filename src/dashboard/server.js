@@ -418,12 +418,21 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         const u = db.getUser(id), data = db.getProfileData(id).data, link = db.getSteamLink(id);
         return { slug: u?.profile_slug ?? null, name: data.name || u?.profile_slug || "Someone", avatar: data.avatar && link?.avatar ? link.avatar : null };
     };
-    const shapeItems = (items, viewerId) => {
-        const cache = new Map();
+    /** Every server the bot is in that has not opted out, as the community directory lists them. */
+    const directory = () => (guildList ? guildList() : []).filter(g => !isHidden(g.id) && db.guildSocial(g.id).listed).map(g => ({ id: g.id, name: g.name, members: g.members ?? null }));
+    /** "all" or one listed server id. Returns the guild ids to filter by. */
+    const serverFilter = (_sess, which) => {
+        const dir = directory();
+        if (!which || which === "all") return dir.map(g => g.id);
+        if (!dir.some(g => g.id === which)) throw new HttpError(404, "That server isn't in the community directory.");
+        return [which];
+    };
+    const shapeItems = (items, viewerId, servers = []) => {
+        const cache = new Map(), names = new Map(servers.map(g => [g.id, g.name])), shared = new Map();
         return items.map(i => {
-            if (!cache.has(i.author)) cache.set(i.author, authorCard(i.author));
-            const { author, slug, ...rest } = i;
-            return { ...rest, own: author === viewerId, by: cache.get(i.author), art: i.appid ? steamArt(i.appid) : null };
+            if (!cache.has(i.author)) { cache.set(i.author, authorCard(i.author)); shared.set(i.author, db.userGuildIds(i.author).filter(g => names.has(g)).map(g => ({ id: g, name: names.get(g) })).slice(0, 2)); }
+            const { author, slug, guild, ...rest } = i;
+            return { ...rest, own: author === viewerId, by: cache.get(i.author), art: i.appid ? steamArt(i.appid) : null, servers: shared.get(i.author) };
         });
     };
     const peopleList = (rows, viewerId) => rows.map(r => ({ ...authorCard(r.discord_id), shared: r.shared ?? undefined, following: viewerId ? db.isFollowing(viewerId, r.discord_id) : false }));
@@ -2653,22 +2662,53 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         "GET /api/social/feed": async (req, _b, url) => {
             const sess = softSession(req);
             if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const scope = ["following", "mine"].includes(url.searchParams.get("scope")) && sess ? url.searchParams.get("scope") : "everyone";
+            const asked = url.searchParams.get("scope");
+            const scope = asked === "servers" ? "servers" : ["following", "mine"].includes(asked) && sess ? asked : "everyone";
+            const servers = directory();
+            const guilds = scope === "servers" ? serverFilter(sess, url.searchParams.get("server")) : null;
             const author = url.searchParams.get("author") ? slugOwner(url.searchParams.get("author")).discord_id : null;
-            const r = db.feed(sess?.userId ?? null, { scope, before: url.searchParams.get("before"), appid: Number(url.searchParams.get("game")) || null, author, limit: 20 });
+            const r = db.feed(sess?.userId ?? null, { scope, before: url.searchParams.get("before"), appid: Number(url.searchParams.get("game")) || null, author, limit: 20, guilds });
             const following = sess ? db.followCounts(sess.userId).following : 0;
-            return { items: shapeItems(r.items, sess?.userId), more: r.more, signedIn: Boolean(sess), following, reactions: REACTIONS };
+            return { items: shapeItems(r.items, sess?.userId, servers), more: r.more, signedIn: Boolean(sess), following, reactions: REACTIONS, servers: servers.map(g => ({ id: g.id, name: g.name })) };
         },
         // The games a member can tag a post with: their own library, most played first.
         "GET /api/social/mygames": async (req) => {
             const s = session(req); userRow(s);
             return { games: db.listLibrary(s.userId).filter(g => g.appid).sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 300).map(g => ({ appid: g.appid, title: g.title })) };
         },
+        // Every server the bot is in (that has not opted out), busiest first, so anyone can find a community to join.
+        "GET /api/social/servers": async (req) => {
+            const sess = softSession(req);
+            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const dir = directory(), stats = db.socialGuildStats(dir.map(g => g.id), now() - 7 * 86400_000);
+            const list = dir.map(g => { const st = stats.get(g.id) ?? { people: 0, active: 0 }, gs = db.guildSocial(g.id); return { id: g.id, name: g.name, members: g.members, people: st.people, active: st.active, about: gs.about, invite: gs.invite || null }; })
+                .sort((a, b) => b.active - a.active || b.people - a.people || (b.members ?? 0) - (a.members ?? 0) || a.name.localeCompare(b.name));
+            const mine = sess ? (sess.guilds ?? []).filter(g => isManager(g) && (guildList?.() ?? []).some(x => x.id === g.id)).map(g => ({ id: g.id, name: g.name, ...db.guildSocial(g.id) })) : [];
+            return { servers: list, manage: mine };
+        },
+        "GET /api/social/server": async (req, _b, url) => {
+            const sess = softSession(req);
+            const id = String(url.searchParams.get("id") ?? "");
+            const g = directory().find(x => x.id === id);
+            if (!g) throw new HttpError(404, "That server isn't in the community directory.");
+            const st = db.socialGuildStats([id], now() - 7 * 86400_000).get(id) ?? { people: 0, active: 0 }, gs = db.guildSocial(id);
+            return { server: { id, name: g.name, members: g.members, people: st.people, active: st.active, about: gs.about, invite: gs.invite || null }, people: peopleList(db.guildMembers(id, 24), sess?.userId ?? null) };
+        },
+        // A server's managers choose whether it is listed, what it says about itself and where people can join.
+        "POST /api/social/server": async (req, body) => {
+            const s = session(req);
+            const g = s.guilds.find(x => x.id === String(body.guild ?? ""));
+            if (!g || !isManager(g)) throw new HttpError(403, "Only people who manage that server can change this.");
+            const r = db.setGuildSocial(g.id, { listed: body.listed === undefined ? undefined : Boolean(body.listed), about: body.about, invite: body.invite });
+            if (r.error) throw new HttpError(400, r.error);
+            return { settings: r };
+        },
         "GET /api/social/item": async (req, _b, url) => {
             const sess = softSession(req);
             const t = db.thread(url.searchParams.get("id"), sess?.userId ?? null);
             if (!t) throw new HttpError(404, "That post is gone.");
-            return { item: shapeItems([t.item], sess?.userId)[0], replies: shapeItems(t.replies, sess?.userId), reactions: REACTIONS };
+            const servers = directory();
+            return { item: shapeItems([t.item], sess?.userId, servers)[0], replies: shapeItems(t.replies, sess?.userId, servers), reactions: REACTIONS };
         },
         "POST /api/social/post": async (req, body) => {
             const s = session(req); userRow(s); mayPost(s);
@@ -2738,13 +2778,16 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const s = session(req); userRow(s);
             return { prefs: db.setPrefs(s.userId, { events: body.events === undefined ? undefined : Boolean(body.events), digest: body.digest === undefined ? undefined : Boolean(body.digest) }) };
         },
-        "GET /api/social/discover": async (req) => {
+        "GET /api/social/discover": async (req, _b, url) => {
             const sess = softSession(req);
             if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
             const week = now() - 7 * 86400_000;
+            const which = url.searchParams.get("server");
+            const guilds = sess && which ? serverFilter(sess, which) : null;
             return {
-                trending: db.trendingGames(week, 10).map(g => ({ appid: g.appid, game: g.game, people: g.people, posts: g.posts, finishes: g.finishes, art: steamArt(g.appid) })),
-                rare: db.rareBoard(10).map(r => ({ ...authorCard(r.discord_id), game: r.game, achievement: r.name, icon: r.icon, pct: r.pct })),
+                servers: directory().map(g => ({ id: g.id, name: g.name })),
+                trending: db.trendingGames(week, 10, guilds).map(g => ({ appid: g.appid, game: g.game, people: g.people, posts: g.posts, finishes: g.finishes, art: steamArt(g.appid) })),
+                rare: db.rareBoard(10, 2, guilds).map(r => ({ ...authorCard(r.discord_id), game: r.game, achievement: r.name, icon: r.icon, pct: r.pct })),
                 similar: sess ? peopleList(db.similarPeople(sess.userId, 8), sess.userId) : []
             };
         },
@@ -3550,6 +3593,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         if (sessions.size >= MAX_SESSIONS) sweep();
         if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value);
         const id = randomBytes(32).toString("hex");
+        if (data.userId && !data.adminOnly && Array.isArray(data.guilds) && data.guilds.length) { try { db.rememberGuilds(data.userId, data.guilds.map(g => g.id)); } catch { /* the server chip is a nicety */ } }
         sessions.set(id, { ...data, expires: now() + ttl });
         setCookie(res, COOKIE, id, ttl / 1000);
     }

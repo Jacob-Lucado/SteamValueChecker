@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.31", date: "2026-11-05", title: "Server feeds and a community directory", items: [
+        "**Every server, one community:** the Feed has a new Servers view. Show posts from every server the bot is in at once, or switch to One server and pick a single community. Posts carry a small tag for the server the person is from.",
+        "**Communities page:** browse every server connected to the bot with member counts and how many people were active this week, then open any server's feed. Guests can browse too.",
+        "**Server managers:** from the Communities page you can hide your server from the directory, write a short blurb and add a Discord invite so people can join.",
+        "**Discover by server:** the Discover page can be narrowed to one server to see what that community is playing and who has similar libraries."
+    ] },
     { version: "2026.11.30", date: "2026-11-05", title: "A community feed: follow people, post, react, discover", items: [
         "**Feed:** a new Feed menu. Follow people from their page and see what they finish, which rare achievements they unlock and what they post, all on one timeline. Switch between Following, Everyone and your own posts, and tap a game to see who is talking about it.",
         "**Posts, replies and reactions:** write a short post (280 characters, no links), tag a game from your library, reply, and react with 👍 🔥 😂 🎮 ❤️ or 😮. Report anything that is off. Three reports hide a post until the bot owner has looked, and you can block anyone.",

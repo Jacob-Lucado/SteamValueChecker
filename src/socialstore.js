@@ -47,6 +47,18 @@ CREATE TABLE IF NOT EXISTS feed_reports (
     at          INTEGER NOT NULL,
     UNIQUE (feed_id, reporter_id)
 );
+CREATE TABLE IF NOT EXISTS user_guilds (
+    discord_id TEXT NOT NULL,
+    guild_id   TEXT NOT NULL,
+    PRIMARY KEY (discord_id, guild_id)
+);
+CREATE INDEX IF NOT EXISTS user_guilds_by_guild ON user_guilds (guild_id);
+CREATE TABLE IF NOT EXISTS guild_social (
+    guild_id TEXT PRIMARY KEY,
+    listed   INTEGER NOT NULL DEFAULT 1,
+    about    TEXT NOT NULL DEFAULT '',
+    invite   TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS social_bans (
     discord_id TEXT PRIMARY KEY,
     reason     TEXT NOT NULL DEFAULT '',
@@ -58,6 +70,10 @@ CREATE TABLE IF NOT EXISTS social_prefs (
     digest      INTEGER NOT NULL DEFAULT 0,
     last_digest INTEGER NOT NULL DEFAULT 0
 );`;
+
+/** Only real Discord invite links, so a server cannot point visitors somewhere else. */
+export const INVITE_RE = /^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9-]{2,32}$/;
+export const MAX_ABOUT_CHARS = 200;
 
 export const REACTIONS = ["👍", "🔥", "😂", "🎮", "❤️", "😮"];
 export const MAX_POST_CHARS = 280;
@@ -84,6 +100,9 @@ export function cleanPostText(input) {
     return { text };
 }
 
+/** Only members whose home server is one of these. */
+const inGuilds = (col, guilds) => { const q = guilds.map(() => "?").join(","); return `${col} IN (SELECT discord_id FROM users WHERE guild_id IN (${q}) UNION SELECT discord_id FROM user_guilds WHERE guild_id IN (${q}))`; };
+
 export function socialStore({ run, get, all, now, clean = x => x }) {
     const rows = (sql, ...args) => all(sql, ...args).map(clean);
 
@@ -95,6 +114,43 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
         return getPrefs(id);
     }
     const markDigest = (id, at = now()) => run("INSERT INTO social_prefs (discord_id, last_digest) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET last_digest = excluded.last_digest", id, at);
+
+    // ---- servers in the community directory. Every server the bot is in is listed unless its managers opt out.
+    function guildSocial(id) { const r = get("SELECT listed, about, invite FROM guild_social WHERE guild_id = ?", String(id)); return { listed: r ? Boolean(r.listed) : true, about: r?.about ?? "", invite: r?.invite ?? "" }; }
+    /** Returns { error } for a bad invite or description, otherwise the saved settings. */
+    function setGuildSocial(id, { listed, about, invite }) {
+        const cur = guildSocial(id);
+        const a = about === undefined ? cur.about : String(about).replace(/\s+/g, " ").trim();
+        if ([...a].length > MAX_ABOUT_CHARS) return { error: `Keep the description to ${MAX_ABOUT_CHARS} characters.` };
+        const inv = invite === undefined ? cur.invite : String(invite).trim();
+        if (inv && !INVITE_RE.test(inv)) return { error: "That doesn't look like a Discord invite link (discord.gg/… or discord.com/invite/…)." };
+        run("INSERT INTO guild_social (guild_id, listed, about, invite) VALUES (?,?,?,?) ON CONFLICT(guild_id) DO UPDATE SET listed = excluded.listed, about = excluded.about, invite = excluded.invite", String(id), (listed ?? cur.listed) ? 1 : 0, a, inv);
+        return guildSocial(id);
+    }
+    const MEMBERS = "(SELECT discord_id, guild_id FROM users WHERE guild_id IS NOT NULL UNION SELECT discord_id, guild_id FROM user_guilds)";
+    /** For each server: members with a public page, and how many of them did something in the feed since `sinceMs`. */
+    function socialGuildStats(guildIds, sinceMs) {
+        if (!guildIds.length) return new Map();
+        const q = guildIds.map(() => "?").join(",");
+        const out = new Map();
+        for (const r of all(`SELECT m.guild_id, COUNT(DISTINCT m.discord_id) AS people,
+              COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM feed f WHERE f.discord_id = m.discord_id AND f.parent_id IS NULL AND f.hidden = 0 AND f.at > ?) THEN m.discord_id END) AS active
+            FROM ${MEMBERS} m JOIN users u ON u.discord_id = m.discord_id AND u.profile_public = 1 AND u.profile_slug IS NOT NULL
+            WHERE m.guild_id IN (${q}) AND NOT EXISTS (SELECT 1 FROM profile_ext p WHERE p.discord_id = m.discord_id AND p.blocked = 1) GROUP BY m.guild_id`, sinceMs, ...guildIds)) out.set(r.guild_id, { people: r.people, active: r.active });
+        return out;
+    }
+    /** Members of a server with a public page, the most recently active first. */
+    const guildMembers = (guildId, limit = 24) => rows(`SELECT u.discord_id, u.profile_slug AS slug, (SELECT MAX(f.id) FROM feed f WHERE f.discord_id = u.discord_id AND f.hidden = 0) AS last
+        FROM ${MEMBERS} m JOIN users u ON u.discord_id = m.discord_id WHERE m.guild_id = ? AND u.profile_public = 1 AND u.profile_slug IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM profile_ext p WHERE p.discord_id = u.discord_id AND p.blocked = 1)
+        ORDER BY last IS NULL, last DESC, u.profile_slug LIMIT ?`, String(guildId), limit);
+
+    /** The servers a member is in, noted when they sign in, so their public activity can show up in those servers' feeds. */
+    function rememberGuilds(id, guildIds) {
+        run("DELETE FROM user_guilds WHERE discord_id = ?", id);
+        for (const g of [...new Set(guildIds.map(String))].slice(0, 200)) run("INSERT OR IGNORE INTO user_guilds (discord_id, guild_id) VALUES (?,?)", id, g);
+    }
+    const userGuildIds = id => [...new Set([get("SELECT guild_id FROM users WHERE discord_id = ?", id)?.guild_id, ...all("SELECT guild_id FROM user_guilds WHERE discord_id = ?", id).map(r => r.guild_id)].filter(Boolean))];
 
     // ---- who is who
     const isSocialBanned = id => Boolean(get("SELECT 1 FROM social_bans WHERE discord_id = ?", id));
@@ -188,20 +244,21 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
         if (viewer) for (const r of all(`SELECT feed_id, emoji FROM feed_reactions WHERE discord_id = ? AND feed_id IN (${q})`, viewer, ...ids)) mine.set(r.feed_id, r.emoji);
         for (const r of all(`SELECT parent_id, COUNT(*) AS n FROM feed WHERE parent_id IN (${q}) AND hidden = 0 GROUP BY parent_id`, ...ids)) replies.set(r.parent_id, r.n);
         const authors = new Map();
-        for (const a of all(`SELECT discord_id, profile_slug AS slug FROM users WHERE discord_id IN (${[...new Set(list.map(r => r.discord_id))].map(() => "?").join(",")})`, ...new Set(list.map(r => r.discord_id)))) authors.set(a.discord_id, a.slug);
+        for (const a of all(`SELECT discord_id, profile_slug AS slug, guild_id AS guild FROM users WHERE discord_id IN (${[...new Set(list.map(r => r.discord_id))].map(() => "?").join(",")})`, ...new Set(list.map(r => r.discord_id)))) authors.set(a.discord_id, a);
         return list.map(r => {
             let data = null; try { data = r.data ? JSON.parse(r.data) : null; } catch { /* old row */ }
-            return { id: r.id, author: r.discord_id, slug: authors.get(r.discord_id) ?? null, kind: r.kind, appid: r.appid, game: r.game, body: r.body, parentId: r.parent_id, data, at: r.at, hidden: Boolean(r.hidden),
+            return { id: r.id, author: r.discord_id, slug: authors.get(r.discord_id)?.slug ?? null, guild: authors.get(r.discord_id)?.guild ?? null, kind: r.kind, appid: r.appid, game: r.game, body: r.body, parentId: r.parent_id, data, at: r.at, hidden: Boolean(r.hidden),
                 reactions: reacts.get(r.id) ?? {}, mine: mine.get(r.id) ?? null, replies: replies.get(r.id) ?? 0 };
         });
     }
 
     /** One page of the feed, newest first. scope: "following" (people you follow and you), "everyone", "mine" or a single author. */
-    function feed(viewer, { scope = "everyone", before = null, limit = 20, appid = null, author = null } = {}) {
+    function feed(viewer, { scope = "everyone", before = null, limit = 20, appid = null, author = null, guilds = null } = {}) {
         const where = ["f.parent_id IS NULL", "(f.hidden = 0 OR (f.hidden = 1 AND f.discord_id = ?))", `(${LIVE} OR f.discord_id = ?)`], args = [viewer ?? "", viewer ?? ""];
         if (viewer) { where.push(NOT_BLOCKED(viewer)); args.push(viewer, viewer); }
         if (scope === "following" && viewer) { where.push("(f.discord_id = ? OR f.discord_id IN (SELECT followee FROM follows WHERE follower = ?))"); args.push(viewer, viewer); }
         if (scope === "mine" && viewer) { where.push("f.discord_id = ?"); args.push(viewer); }
+        if (scope === "servers") { if (!guilds?.length) return { items: [], more: false }; where.push(inGuilds("f.discord_id", guilds)); args.push(...guilds, ...guilds); }
         if (author) { where.push("f.discord_id = ?"); args.push(author); }
         if (appid) { where.push("f.appid = ?"); args.push(Number(appid)); }
         if (before) { where.push("f.id < ?"); args.push(Number(before)); }
@@ -240,17 +297,19 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
 
     // ---- discovery
     /** Games people are talking about or finishing this week, across public pages. */
-    function trendingGames(sinceMs, limit = 10) {
+    function trendingGames(sinceMs, limit = 10, guilds = null) {
+        const g = guilds?.length ? ` AND ${inGuilds("f.discord_id", guilds)}` : "";
         return rows(`SELECT f.appid, MAX(f.game) AS game, COUNT(DISTINCT f.discord_id) AS people, SUM(f.kind = 'post') AS posts, SUM(f.kind = 'finished') AS finishes
-            FROM feed f WHERE f.appid IS NOT NULL AND f.parent_id IS NULL AND f.hidden = 0 AND f.at > ? AND ${LIVE}
-            GROUP BY f.appid ORDER BY people DESC, posts DESC, finishes DESC LIMIT ?`, sinceMs, limit);
+            FROM feed f WHERE f.appid IS NOT NULL AND f.parent_id IS NULL AND f.hidden = 0 AND f.at > ? AND ${LIVE}${g}
+            GROUP BY f.appid ORDER BY people DESC, posts DESC, finishes DESC LIMIT ?`, sinceMs, ...(guilds?.length ? [...guilds, ...guilds] : []), limit);
     }
     /** The rarest achievements held by members with public pages. */
-    function rareBoard(limit = 10, perPerson = 2) {
+    function rareBoard(limit = 10, perPerson = 2, guilds = null) {
+        const g = guilds?.length ? ` AND ${inGuilds("a.discord_id", guilds)}` : "";
         const found = rows(`SELECT a.appid, a.game, a.name, a.icon, a.pct, u.profile_slug AS slug, u.discord_id
             FROM ach_rare a JOIN users u ON u.discord_id = a.discord_id
-            WHERE u.profile_public = 1 AND u.profile_slug IS NOT NULL AND NOT EXISTS (SELECT 1 FROM profile_ext p WHERE p.discord_id = a.discord_id AND p.blocked = 1)
-            ORDER BY a.pct ASC, a.game ASC LIMIT ?`, limit * 8);
+            WHERE u.profile_public = 1 AND u.profile_slug IS NOT NULL AND NOT EXISTS (SELECT 1 FROM profile_ext p WHERE p.discord_id = a.discord_id AND p.blocked = 1)${g}
+            ORDER BY a.pct ASC, a.game ASC LIMIT ?`, ...(guilds?.length ? [...guilds, ...guilds] : []), limit * 8);
         const seen = new Map(), out = [];
         for (const r of found) { const n = seen.get(r.discord_id) ?? 0; if (n >= perPerson) continue; seen.set(r.discord_id, n + 1); out.push({ ...r, pct: Math.round(r.pct * 10) / 10 }); if (out.length >= limit) break; }
         return out;
@@ -304,8 +363,8 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
     function forgetSocialUser(id) {
         run("DELETE FROM feed_reactions WHERE feed_id IN (SELECT id FROM feed WHERE discord_id = ? OR parent_id IN (SELECT id FROM feed WHERE discord_id = ?))", id, id);
         run("DELETE FROM feed WHERE discord_id = ? OR parent_id IN (SELECT id FROM feed WHERE discord_id = ?)", id, id);
-        for (const [t, c] of [["follows", "follower"], ["follows", "followee"], ["feed_reactions", "discord_id"], ["social_blocks", "discord_id"], ["social_blocks", "blocked_id"], ["feed_reports", "reporter_id"], ["feed_reports", "author_id"], ["social_prefs", "discord_id"]]) run(`DELETE FROM ${t} WHERE ${c} = ?`, id);
+        for (const [t, c] of [["follows", "follower"], ["follows", "followee"], ["feed_reactions", "discord_id"], ["social_blocks", "discord_id"], ["social_blocks", "blocked_id"], ["feed_reports", "reporter_id"], ["feed_reports", "author_id"], ["social_prefs", "discord_id"], ["user_guilds", "discord_id"]]) run(`DELETE FROM ${t} WHERE ${c} = ?`, id);
     }
 
-    return { getPrefs, setPrefs, markDigest, isSocialBanned, blockedEither, setBlock, listBlocks, follow, isFollowing, followCounts, listFollowers, listFollowing, addEvent, trophyEvents, createPost, deleteItem, getItem, react, feed, thread, report, listReports, dismissReports, listSocialBans, banPoster, unbanPoster, trendingGames, rareBoard, similarPeople, gameOwners, ownerCount, compareLibraries, digestFor, socialDigestUsers, pruneFeed: prune, forgetSocialUser };
+    return { guildSocial, setGuildSocial, socialGuildStats, guildMembers, rememberGuilds, userGuildIds, getPrefs, setPrefs, markDigest, isSocialBanned, blockedEither, setBlock, listBlocks, follow, isFollowing, followCounts, listFollowers, listFollowing, addEvent, trophyEvents, createPost, deleteItem, getItem, react, feed, thread, report, listReports, dismissReports, listSocialBans, banPoster, unbanPoster, trendingGames, rareBoard, similarPeople, gameOwners, ownerCount, compareLibraries, digestFor, socialDigestUsers, pruneFeed: prune, forgetSocialUser };
 }

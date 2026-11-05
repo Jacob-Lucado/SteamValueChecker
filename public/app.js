@@ -145,10 +145,10 @@
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
     { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
-    { id: "feed", label: "Feed", pages: [["feed", "Feed"], ["discover", "Discover"], ["people", "People"]] },
+    { id: "feed", label: "Social", pages: [["feed", "Feed"], ["people", "People"], ["friends", "Friends"], ["compare", "Compare"], ["communities", "Communities"], ["discover", "Discover"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
-    { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
+    { id: "social", label: "Play together", pages: [["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
     { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["streams", "Go live"], ["streamers", "Who is live"]] },
     { id: "account", label: "Account", pages: [["profile", "My profile"], ["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
@@ -157,7 +157,7 @@
   ];
   // Pages that are not tabs themselves but belong to a section: one game's page sits under Deals.
   const HUB_ALIAS = { g: "deals" };
-  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "feed", "discover"]);
+  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "feed", "discover", "communities"]);
   function pageVisible(id) {
     const me = state.me;
     if (id === "home" && me) return false; // the logo already goes home when signed in
@@ -6760,7 +6760,7 @@
 
 
   // ---------- community feed ----------
-  const FEED_STATE = { scope: null, game: null };
+  const FEED_STATE = { scope: null, game: null, server: "all" };
   const feedAgo = ms => { const m = Math.max(0, Math.floor((Date.now() - ms) / 60000)); if (m < 1) return "just now"; if (m < 60) return m + " min ago"; const hr = Math.floor(m / 60); if (hr < 24) return hr + " h ago"; const d = Math.floor(hr / 24); return d < 30 ? d + " d ago" : new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
   const feedAvatar = (by, cls = "fd-av") => httpsOnly(by.avatar) ? h("img", { class: cls, src: by.avatar, alt: "", referrerpolicy: "no-referrer" }) : h("div", { class: cls + " init", text: (by.name || "?").slice(0, 1).toUpperCase() });
   const feedName = by => by.slug ? h("a", { class: "fd-name", href: "#/u/" + by.slug, text: by.name }) : h("span", { class: "fd-name", text: by.name });
@@ -6790,7 +6790,8 @@
       }));
       menu.append(del);
     }
-    const head = h("div", { class: "fd-head" }, feedAvatar(it.by), h("div", { class: "fd-who" }, feedName(it.by), h("span", { class: "muted small", text: feedAgo(it.at) + (it.hidden ? " · hidden pending review" : "") })), menu);
+    const srv = !it.parentId && it.servers?.length && ctx.onServer ? h("span", { class: "fd-srvs" }, it.servers.map(g => { const b = h("button", { class: "fd-srv", type: "button", text: g.name, title: "See " + g.name + "'s feed" }); b.addEventListener("click", () => ctx.onServer(g.id)); return b; })) : null;
+    const head = h("div", { class: "fd-head" }, feedAvatar(it.by), h("div", { class: "fd-who" }, feedName(it.by), h("span", { class: "muted small", text: feedAgo(it.at) + (it.hidden ? " · hidden pending review" : "") })), srv, menu);
     const bar = h("div", { class: "fd-actions" });
     const drawBar = () => {
       bar.replaceChildren(...ctx.reactions.map(e => {
@@ -6856,30 +6857,49 @@
     const list = h("div", { class: "fd-list" }), more = h("button", { class: "btn gray small fd-more", type: "button", text: "Show more", hidden: true });
     const filter = h("div", { class: "fd-filter", hidden: true });
     const composer = h("div", { class: "fd-composer" });
-    const scopes = h("div", { class: "fd-scopes" });
+    const scopes = h("div", { class: "fd-scopes" }), serverBar = h("div", { class: "fd-serverbar", hidden: true }), serverHead = h("div", { class: "fd-serverhead" });
+    let servers = [];
+    const onServer = id => { st.scope = "servers"; st.server = id; drawChrome(); reload(); window.scrollTo({ top: 0, behavior: "smooth" }); };
     const onGame = (appid, game) => { st.game = { appid, game }; drawChrome(); reload(); window.scrollTo({ top: 0, behavior: "smooth" }); };
     function drawChrome() {
-      scopes.replaceChildren(...[["following", "Following"], ["everyone", "Everyone"], ["mine", "My posts"]].filter(([k]) => signedIn || k === "everyone").map(([k, label]) => {
+      if (st.scope === "following" && !signedIn) st.scope = "everyone";
+      scopes.replaceChildren(...[["following", "Following"], ["everyone", "Everyone"], ["servers", "Servers"], ["mine", "My posts"]].filter(([k]) => signedIn || k === "everyone" || k === "servers").map(([k, label]) => {
         const b = h("button", { class: "chip-btn" + (st.scope === k ? " on" : ""), type: "button", text: label, "aria-pressed": String(st.scope === k) });
         b.addEventListener("click", () => { st.scope = k; drawChrome(); reload(); });
         return b;
       }));
-      if (!signedIn) st.scope = "everyone";
+      if (!signedIn && st.scope === "mine") st.scope = "everyone";
+      drawServerBar();
       filter.hidden = !st.game;
       if (st.game) { const x = h("button", { class: "fd-link", type: "button", text: "Clear" }); x.addEventListener("click", () => { st.game = null; drawChrome(); reload(); }); filter.replaceChildren(h("span", { text: "Showing posts about " }), h("strong", { text: st.game.game }), x); }
+    }
+    function drawServerBar() {
+      serverBar.hidden = st.scope !== "servers";
+      if (st.scope !== "servers") { serverHead.replaceChildren(); return; }
+      const one = st.server !== "all";
+      const seg = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label, "aria-pressed": String(on) }); b.addEventListener("click", fn); return b; };
+      const sel = h("select", { class: "fd-pick", "aria-label": "Pick a server" }, ...(servers.some(g => g.id === st.server) || !one ? [] : [h("option", { value: st.server, text: "This server" })]), ...servers.map(g => h("option", { value: g.id, text: g.name })));
+      if (one) sel.value = st.server;
+      sel.addEventListener("change", () => { st.server = sel.value; drawServerBar(); reload(); });
+      serverBar.replaceChildren(h("div", { class: "fd-seg" }, seg("All servers", !one, () => { if (!one) return; st.server = "all"; drawServerBar(); reload(); }),
+        seg("One server", one, () => { if (one) return; st.server = servers[0]?.id ?? "all"; if (st.server === "all") return toast("No servers are listed yet.", "warn"); drawServerBar(); reload(); })),
+        one ? sel : null, h("a", { class: "fd-link", href: "/communities", text: "Browse all servers" }));
+      serverHead.replaceChildren();
+      if (one) api("/api/social/server?id=" + encodeURIComponent(st.server)).then(r => serverHead.replaceChildren(serverCard(r.server, r.people))).catch(() => {});
     }
     async function load(append) {
       if (loading) return; loading = true;
       try {
-        const q = new URLSearchParams({ scope: st.scope }); if (st.game) q.set("game", st.game.appid); if (append && cursor) q.set("before", cursor);
+        const q = new URLSearchParams({ scope: st.scope }); if (st.scope === "servers") q.set("server", st.server); if (st.game) q.set("game", st.game.appid); if (append && cursor) q.set("before", cursor);
         const r = await api("/api/social/feed?" + q);
         following = r.following; reactions = r.reactions;
-        const ctx = { signedIn, reactions, onGame };
+        if (JSON.stringify(servers) !== JSON.stringify(r.servers)) { servers = r.servers; if (st.scope === "servers") drawServerBar(); }
+        const ctx = { signedIn, reactions, onGame, onServer };
         if (!append) list.replaceChildren();
         if (!r.items.length && !append) {
           list.replaceChildren(h("div", { class: "empty fd-empty" }, st.scope === "following" && !following
             ? [h("strong", { text: "Your feed is empty" }), h("p", { text: "Follow a few people and what they finish, unlock and post shows up here." }), h("a", { class: "btn blue small", href: "/discover", text: "Find people to follow" })]
-            : [h("strong", { text: st.game ? "Nobody has posted about that yet" : st.scope === "mine" ? "You haven't posted yet" : "Nothing here yet" }), h("p", { text: st.scope === "mine" ? "Say something above, or finish a game and it appears on its own." : "Check back in a bit, or switch to Everyone." })]));
+            : [h("strong", { text: st.game ? "Nobody has posted about that yet" : st.scope === "mine" ? "You haven't posted yet" : st.scope === "servers" ? "Nothing from this server yet" : "Nothing here yet" }), h("p", { text: st.scope === "mine" ? "Say something above, or finish a game and it appears on its own." : "Check back in a bit, or switch to Everyone." })]));
         } else r.items.forEach(it => list.append(feedCard(it, ctx)));
         cursor = r.items.length ? r.items[r.items.length - 1].id : cursor; more.hidden = !r.more;
       } catch (e) { if (!append) list.replaceChildren(h("div", { class: "notice warn", text: e.message })); else toast(e.message, "error"); }
@@ -6887,7 +6907,7 @@
     }
     const reload = () => { cursor = null; return load(false); };
     more.addEventListener("click", () => busy(more, () => load(true)));
-    app.replaceChildren(pageHead("Feed", "What people are finishing, unlocking and saying. It follows the pages people have made public."), composer, h("div", { class: "fd-bar" }, scopes), filter, list, h("div", { class: "fd-foot" }, more));
+    app.replaceChildren(pageHead("Feed", "What people are finishing, unlocking and saying. It follows the pages people have made public."), composer, h("div", { class: "fd-bar" }, scopes), serverBar, serverHead, filter, list, h("div", { class: "fd-foot" }, more));
     drawChrome();
     if (signedIn) {
       let games = []; try { games = (await api("/api/social/mygames")).games; } catch { /* the picker is optional */ }
@@ -6905,11 +6925,65 @@
     reload();
   }
 
+
+  /** A server's card: what it is, how active it is, a way in, and the members who have public pages. */
+  function serverCard(g, people = []) {
+    const join = g.invite ? ext(g.invite, "Join on Discord", "btn blue small") : h("span", { class: "muted small", text: "No public invite yet" });
+    return h("div", { class: "panel fd-server" },
+      h("div", { class: "fd-server-top" }, h("div", { class: "fd-av init", text: (g.name || "?").slice(0, 1).toUpperCase() }), h("div", { class: "fd-who" }, h("strong", { class: "fd-name", text: g.name }),
+        h("span", { class: "muted small", text: [g.members ? `${g.members.toLocaleString()} members` : null, `${g.people} on the bot with a public page`, g.active ? `${g.active} active this week` : null].filter(Boolean).join(" · ") })), join),
+      g.about ? h("p", { class: "fd-about", text: g.about }) : null,
+      people.length ? h("div", { class: "fd-people fd-compact" }, people.slice(0, 8).map(p => personRow(p))) : null);
+  }
+
+  async function communitiesView() {
+    const box = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Communities", "Every server the bot is in. Open one to see what its members are up to, or join it."), box);
+    try {
+      const d = await api("/api/social/servers");
+      const q = h("input", { type: "search", class: "fd-search", placeholder: "Find a server", "aria-label": "Find a server" });
+      const grid = h("div", { class: "fd-servers" });
+      const draw = () => {
+        const term = q.value.trim().toLowerCase();
+        const shown = d.servers.filter(g => !term || g.name.toLowerCase().includes(term) || (g.about || "").toLowerCase().includes(term));
+        grid.replaceChildren(...(shown.length ? shown.map(g => {
+          const open = h("button", { class: "btn gray small", type: "button", text: "Open feed" });
+          open.addEventListener("click", () => { FEED_STATE.scope = "servers"; FEED_STATE.server = g.id; FEED_STATE.game = null; navigate("/feed"); });
+          return h("div", { class: "fd-server-card" }, h("div", { class: "fd-server-top" }, h("div", { class: "fd-av init", text: g.name.slice(0, 1).toUpperCase() }), h("div", { class: "fd-who" }, h("strong", { class: "fd-name", text: g.name }),
+            h("span", { class: "muted small", text: [g.members ? `${g.members.toLocaleString()} members` : null, `${g.people} with public pages`, g.active ? `${g.active} active this week` : null].filter(Boolean).join(" · ") }))),
+            g.about ? h("p", { class: "fd-about", text: g.about }) : null, h("div", { class: "fd-actions" }, open, g.invite ? ext(g.invite, "Join", "btn blue small") : null));
+        }) : [h("div", { class: "empty", text: "No servers match that." })]));
+      };
+      q.addEventListener("input", draw);
+      box.className = ""; box.replaceChildren(h("div", { class: "fd-bar" }, q, h("a", { class: "btn gray small", href: "/feed", text: "All servers' feed" })), grid);
+      draw();
+      if (d.manage.length) box.append(h("div", { class: "panel" }, h("h3", { text: "Your servers" }),
+        h("p", { class: "muted small", text: "Servers you manage show up here by default. Add a short description and a Discord invite so people can join, or take the server out of the directory." }), ...d.manage.map(manageRow)));
+    } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  function manageRow(g) {
+    const on = h("input", { type: "checkbox", checked: g.listed });
+    const about = h("input", { type: "text", maxlength: "200", value: g.about || "", placeholder: "A line about your server", "aria-label": "Description" });
+    const invite = h("input", { type: "text", value: g.invite || "", placeholder: "https://discord.gg/yourinvite", "aria-label": "Invite link" });
+    const save = h("button", { class: "btn blue small", type: "button", text: "Save" });
+    save.addEventListener("click", () => busy(save, async () => { await api("/api/social/server", { guild: g.id, listed: on.checked, about: about.value, invite: invite.value }); toast("Saved.", "ok"); }));
+    return h("div", { class: "fd-manage" }, h("strong", { text: g.name }), h("label", { class: "fd-check" }, on, h("span", { text: "Show this server in the community directory" })), field("Description", about), field("Invite link", invite), save);
+  }
+
   async function discoverView() {
     const box = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Discover", "What people are into this week, the rarest achievements around, and members whose libraries look like yours."), box);
+    const pickWrap = h("div", { class: "fd-bar" });
+    let which = "all-servers";
+    app.replaceChildren(pageHead("Discover", "What people are into this week, the rarest achievements around, and members whose libraries look like yours."), pickWrap, box);
+    const run = async () => {
     try {
-      const d = await api("/api/social/discover");
+      const d = await api("/api/social/discover" + (which === "all-servers" ? "" : "?server=" + encodeURIComponent(which)));
+      if (!pickWrap.children.length) {
+        const sel = h("select", { class: "fd-pick", "aria-label": "Where" }, h("option", { value: "all-servers", text: "Everywhere" }), h("option", { value: "all", text: "All connected servers" }), ...d.servers.map(g => h("option", { value: g.id, text: g.name })));
+        sel.addEventListener("change", () => { which = sel.value; run(); });
+        pickWrap.append(sel);
+      }
       const trend = d.trending.length ? h("div", { class: "fd-trend" }, d.trending.map(g => {
         const a = h("button", { class: "fd-trend-card", type: "button" }, h("div", { class: "fd-art" }, pfArt(g.art, g.game)), h("strong", { text: g.game }), h("span", { class: "muted small", text: `${g.people} ${g.people === 1 ? "person" : "people"}${g.posts ? ` · ${g.posts} post${g.posts === 1 ? "" : "s"}` : ""}${g.finishes ? ` · ${g.finishes} finished` : ""}` }));
         a.addEventListener("click", () => { FEED_STATE.game = { appid: g.appid, game: g.game }; FEED_STATE.scope = "everyone"; navigate("/feed"); });
@@ -6920,6 +6994,8 @@
       const people = state.me ? (d.similar.length ? h("div", { class: "fd-people" }, d.similar.map(p => personRow(p, `${p.shared} games in common`))) : h("p", { class: "muted", text: "Sync your Steam library and you'll see members who own a lot of the same games." })) : h("p", { class: "muted", text: "Sign in to see people with libraries like yours." });
       box.className = ""; box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Trending this week" }), trend), h("div", { class: "panel" }, h("h3", { text: "Rarest achievements" }), rare), h("div", { class: "panel" }, h("h3", { text: "People you might like" }), people));
     } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    };
+    run();
   }
 
   /** A person in a list, with a follow button. */
@@ -6986,7 +7062,7 @@
       h("div", { class: "muted small" }, feedAgo(x.at), x.game ? " · " + x.game : "", Object.entries(x.reactions || {}).map(([e, n]) => ` · ${e} ${n}`).join(""), x.replies ? ` · ${x.replies} ${x.replies === 1 ? "reply" : "replies"}` : ""))));
   }
 
-  const VIEWS = { feed: feedView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
+  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
@@ -6996,7 +7072,7 @@
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else delete document.documentElement.dataset.area;
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u" && view !== "feed" && view !== "discover") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
