@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.32", date: "2026-11-05", title: "Videos in news posts, a slider for wishlists, a better phone layout", items: [
+        "**News with videos:** when a news post or giveaway announcement has a YouTube clip or a video file, the bot now puts the video under the card so you can press play right in Discord. The card gets a Watch the video button too.",
+        "**Wishlist slider:** a wishlist on a profile page is now a row of compact cards you swipe through, so a long list no longer makes the page endless.",
+        "**Phones:** the profile song player becomes a slim bar along the bottom of the screen with bigger tap targets, and buttons and fields across the dashboard are easier to hit and no longer make the page zoom."
+    ] },
     { version: "2026.11.31", date: "2026-11-05", title: "Server feeds and a community directory", items: [
         "**Every server, one community:** the Feed has a new Servers view. Show posts from every server the bot is in at once, or switch to One server and pick a single community. Posts carry a small tag for the server the person is from.",
         "**Communities page:** browse every server connected to the bot with member counts and how many people were active this week, then open any server's feed. Guests can browse too.",

@@ -1,6 +1,7 @@
 // Promo drops: the posts, the blog watcher and the poll that puts each one in a server once.
 import { CodeFeedError } from "./codesource.js";
 import { sendNewsAlerts } from "./dropalerts.js";
+import { findVideo } from "./video.js";
 
 const sleepDefault = ms => new Promise(r => setTimeout(r, ms));
 const TEAL = 0x1abc9c, GREY = 0x6b7280, GREEN = 0x76b900;
@@ -26,10 +27,12 @@ const tag = (xml, name) => decode(xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*
 export function parseNewsFeed(xml, source) {
     const out = [];
     for (const m of String(xml ?? "").matchAll(/<item>([\s\S]*?)<\/item>/g)) {
-        const title = tag(m[1], "title"), url = tag(m[1], "link"), summary = tag(m[1], "description").slice(0, 300);
+        const rawDesc = m[1].match(/<description[^>]*>([\s\S]*?)<\/description>/)?.[1] ?? "";
+        const title = tag(m[1], "title"), url = tag(m[1], "link"), full = tag(m[1], "description"), summary = full.length > 300 ? full.slice(0, 300).replace(/\s+\S*$/, "") + "…" : full;
+        const video = findVideo(rawDesc.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"') + " " + m[1]);
         if (!title || !/^https:\/\//.test(url)) continue;
         if (!GIVEAWAY.test(`${title} ${summary}`)) continue;
-        out.push({ key: `${source.key}:${url}`, source: source.name, kind: source.kind ?? "blog", title: title.slice(0, 200), url, summary });
+        out.push({ key: `${source.key}:${url}`, source: source.name, kind: source.kind ?? "blog", title: title.slice(0, 200), url, summary, video: video?.url ?? null, thumb: video?.thumb ?? null });
     }
     return out;
 }
@@ -88,12 +91,17 @@ export function dropEmbed(d, { ended = false } = {}) {
 }
 
 export function newsEmbed(n) {
-    return { embeds: [{ color: GREEN, author: { name: `${n.source} ${n.kind === "game" ? "news" : "blog"}` }, title: n.title, url: n.url,
+    const video = /^https:\/\//.test(n.video ?? "") ? n.video : null;
+    const thumb = findVideo(video ?? "")?.thumb ?? null;
+    const watch = video ? [{ type: 2, style: 5, label: "▶ Watch the video", url: video }] : [];
+    return { ...(video ? { content: video } : {}), embeds: [{ color: GREEN, author: { name: `${n.source} ${n.kind === "game" ? "news" : "blog"}` }, title: n.title, url: n.url,
         description: `${n.summary ? n.summary + "\n\n" : ""}This post mentions a giveaway or a code. Open it to see how to claim it.`,
-        footer: { text: "Steam Value Checker · spotted automatically, so it can be a false alarm" } }],
-        components: [{ type: 1, components: [{ type: 2, style: 5, label: "Read the post", url: n.url }] }], allowed_mentions: { parse: [] } };
+        footer: { text: "Steam Value Checker · spotted automatically, so it can be a false alarm" }, ...(thumb ? { image: { url: thumb } } : {}) }],
+        components: [{ type: 1, components: [{ type: 2, style: 5, label: "Read the post", url: n.url }, ...watch] }], allowed_mentions: { parse: [] } };
 }
 
+/** A role ping and a video link both live in the message text, so they are joined rather than one replacing the other. */
+const joinMention = (post, m) => ({ ...post, ...m, content: [m.content, post.content].filter(Boolean).join("\n") || undefined });
 const mention = (s, role) => { const r = s.role_id ?? role ?? null; return { content: r ? `<@&${r}>` : undefined, allowed_mentions: r ? { roles: [r] } : { parse: [] } }; };
 
 /**
@@ -130,7 +138,7 @@ export async function runDrops({ db, api, notifier = null, getNews = fetchNews, 
         if (!db.hasAnyNewsPost(s.guild_id)) { for (const n of fresh) db.addNewsPost(n.id, s.guild_id, s.channel_id, null); continue; } // first time on: only future posts
         for (const n of fresh.slice(0, MAX_NEWS_PER_RUN).reverse()) {
             try {
-                const msg = await api.sendMessage(s.channel_id, { ...newsEmbed(n), ...mention(s, db.getCommunity?.(s.guild_id)?.ping_promos) });
+                const msg = await api.sendMessage(s.channel_id, joinMention(newsEmbed(n), mention(s, db.getCommunity?.(s.guild_id)?.ping_promos)));
                 db.addNewsPost(n.id, s.guild_id, s.channel_id, msg?.id ?? null);
                 stats.posted++;
             } catch (err) { stats.failed++; log(`news post failed (${err?.status ?? err?.name})`); break; }

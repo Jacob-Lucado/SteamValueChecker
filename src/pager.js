@@ -21,7 +21,8 @@ export function renderPage(token, data, n) {
         rows.push({ type: 1, components: [{ type: 3, custom_id: `${JUMP_PREFIX}${token}`, placeholder: "Jump to…", options: data.pages.map((x, i) => ({ label: String(x.label ?? `Page ${i + 1}`).slice(0, 100) || `Page ${i + 1}`, value: String(i), default: i === page })) }] });
     }
     for (const r of p.rows ?? []) if (rows.length < 5) rows.push(r);
-    return { ...(data.content ? { content: data.content } : {}), embeds: p.embeds ?? [p.embed], components: rows };
+    const content = p.content ?? data.content;
+    return { content: content ?? "", embeds: p.embeds ?? [p.embed], components: rows };
 }
 
 /**

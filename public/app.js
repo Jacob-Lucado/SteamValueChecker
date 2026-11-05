@@ -1258,12 +1258,12 @@
         inner = h("div", {}, h("div", { class: "pf-links" }, ext(s.url, (s.platform === "twitch" ? "Twitch" : s.platform === "kick" ? "Kick" : "YouTube") + ": " + s.handle, "pf-chip"), s.live ? h("span", { class: "chip warn", text: "LIVE NOW" }) : null),
           s.live ? h("p", { class: "muted small", text: s.live.title + (s.live.game ? " · " + s.live.game : "") }) : null);
       } else if (s.key === "wishlist") {
-        inner = s.games.length ? h("div", { class: "free-grid" }, s.games.map(g => h("div", { class: "free-card" },
+        inner = s.games.length ? wishSlider(s.games, g => h("div", { class: "free-card pf-slide" },
           pfArt(g.art, g.title),
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"), preview ? null : soonControl(g, p.slug, canMark), preview ? null : giftButton(g, p.slug, { signedIn, owner: p.owner, open: s.giftsOpen !== false, region }))))) : h("p", { class: "muted", text: "Nothing on this list yet." });
+            h("div", { class: "pf-slide-act" }, g.url && ext(g.url, "View deal", "btn green small"), preview ? null : soonControl(g, p.slug, canMark), preview ? null : giftButton(g, p.slug, { signedIn, owner: p.owner, open: s.giftsOpen !== false, region }))))) : h("p", { class: "muted", text: "Nothing on this list yet." });
       }
       if (inner) body.append(h("section", { class: "pf-card pf-" + s.key }, title, inner));
     }
@@ -1271,6 +1271,19 @@
     root.append(body);
     if (pageBg && preview) { const stage = h("div", { class: "pf-stage" }, pageBg, root); return stage; }
     return root;
+  }
+
+  /** A row of cards you slide through instead of one very long list. Swipe on a phone, arrows on a computer. */
+  function wishSlider(games, card) {
+    const track = h("div", { class: "pf-track", tabindex: "0", role: "list", "aria-label": "Wishlist games" }, games.map(g => { const c = card(g); c.setAttribute("role", "listitem"); return c; }));
+    const step = dir => track.scrollBy({ left: dir * Math.max(200, track.clientWidth * .85), behavior: "smooth" });
+    const prev = h("button", { class: "pf-arrow prev", type: "button", "aria-label": "Previous games", text: "‹", onclick: () => step(-1) });
+    const next = h("button", { class: "pf-arrow next", type: "button", "aria-label": "Next games", text: "›", onclick: () => step(1) });
+    const count = h("span", { class: "muted small pf-slide-count", text: games.length + (games.length === 1 ? " game" : " games") + (games.length > 1 ? " · slide for more" : "") });
+    const edges = () => { prev.hidden = track.scrollLeft < 8; next.hidden = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8; };
+    track.addEventListener("scroll", edges, { passive: true });
+    requestAnimationFrame(edges); setTimeout(edges, 400);
+    return h("div", { class: "pf-slider" }, count, h("div", { class: "pf-slide-wrap" }, prev, track, next));
   }
 
   async function publicProfileView(slug) {

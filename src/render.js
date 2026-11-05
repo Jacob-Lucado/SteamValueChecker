@@ -510,10 +510,12 @@ export function newsEmbed(p) {
 export function newsPayload(posts, { pager = null } = {}) {
     const list = posts.filter(p => safeUrl(p.url)).slice(0, 8);
     if (!list.length) return null;
-    const row = p => ({ type: 1, components: [linkButton("Read the post", safeUrl(p.url))] });
-    const content = list.length === 1 ? `News for ${list[0].gameTitle}` : `${list.length} news posts for your games`;
-    if (pager && list.length > 1) return pagedPayload(pager, { content, pages: list.map(p => ({ embed: newsEmbed(p), rows: [row(p)], label: p.gameTitle })) });
-    return { content, embeds: list.slice(0, 4).map(newsEmbed), components: list.length === 1 ? [row(list[0])] : [] };
+    const row = p => ({ type: 1, components: [linkButton("Read the post", safeUrl(p.url)), ...(safeUrl(p.video) ? [linkButton("▶ Watch the video", safeUrl(p.video))] : [])] });
+    const base = list.length === 1 ? `News for ${list[0].gameTitle}` : `${list.length} news posts for your games`;
+    // A video link in the message text is what makes Discord show a player under the card.
+    const withVideo = (text, p) => safeUrl(p.video) ? `${text}\n${safeUrl(p.video)}` : text;
+    if (pager && list.length > 1) return pagedPayload(pager, { content: base, pages: list.map(p => ({ embed: newsEmbed(p), rows: [row(p)], label: p.gameTitle, ...(safeUrl(p.video) ? { content: withVideo(p.gameTitle, p) } : {}) })) });
+    return { content: list.length === 1 ? withVideo(base, list[0]) : base, embeds: list.slice(0, 4).map(newsEmbed), components: list.length === 1 ? [row(list[0])] : [] };
 }
 
 /** "Next on Epic": free games that haven't started yet, as one message with a card each. */

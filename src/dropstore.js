@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS drop_news (
     title   TEXT NOT NULL,
     url     TEXT NOT NULL,
     summary TEXT,
+    video   TEXT,
     seen_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS drop_news_posts (
@@ -99,7 +100,7 @@ export function dropStore({ run, get, all, clean, now }) {
     // ----- news from the blogs -----
     function upsertNews(n) {
         if (get("SELECT id FROM drop_news WHERE key = ?", n.key)) return { isNew: false };
-        const r = run("INSERT INTO drop_news (key, source, kind, title, url, summary, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)", n.key, n.source, n.kind ?? "blog", n.title, n.url, n.summary ?? null, now());
+        const r = run("INSERT INTO drop_news (key, source, kind, title, url, summary, video, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", n.key, n.source, n.kind ?? "blog", n.title, n.url, n.summary ?? null, n.video ?? null, now());
         return { isNew: true, id: Number(r.lastInsertRowid) };
     }
     const listNews = (limit = 10) => all("SELECT * FROM drop_news ORDER BY seen_at DESC, id DESC LIMIT ?", Math.min(50, Math.max(1, limit))).map(clean);

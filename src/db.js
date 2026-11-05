@@ -217,6 +217,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const cols = t => db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
     const addColumn = (table, name, def) => { if (!cols(table).includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`); };
     for (const [col, def] of MUSIC_EXTRA_COLUMNS) addColumn("music_settings", col, def);
+    addColumn("drop_news", "video", "TEXT");
     addColumn("items", "priority", "INTEGER NOT NULL DEFAULT 0");
     addColumn("items", "release_at", "INTEGER");
     addColumn("items", "release_check", "INTEGER");
