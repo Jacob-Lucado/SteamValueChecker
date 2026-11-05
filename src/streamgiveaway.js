@@ -21,6 +21,8 @@ export function createStreamGiveaways({ db, giveaways, now = () => Date.now() })
             if (over && now() - (g.ended_at ?? g.ends_at) > holdMs) return null;
             return g;
         },
+        /** Chat entry settings for a giveaway ({ invite } when viewers may type !enter in the streamer's chat), or null. */
+        chatFor(giveawayId) { try { const v = JSON.parse(db.getMeta(`streamgw:chat:${giveawayId}`) ?? "null"); return v && typeof v === "object" ? v : null; } catch { return null; } },
         enabled: () => Boolean(svc()),
         active,
         /**
@@ -28,7 +30,7 @@ export function createStreamGiveaways({ db, giveaways, now = () => Date.now() })
          * command), or `input` from the full form: prizes, look, rules and entry steps. `endWithStream` (on by default) draws the winners
          * the moment the stream ends; without it the giveaway just runs for its length.
          */
-        async start(guildId, who, { game, key, minutes = 60, input = null, endWithStream = true }) {
+        async start(guildId, who, { game, key, minutes = 60, input = null, endWithStream = true, chat = null }) {
             const gw = svc();
             if (!gw) throw new UserError("Giveaways aren't set up on this bot.");
             const c = db.getCommunity(guildId);
@@ -55,8 +57,9 @@ export function createStreamGiveaways({ db, giveaways, now = () => Date.now() })
             }
             const r = await gw.create(req);
             if (endWithStream) db.setMeta(metaKey(guildId, who.id), String(r.id));
+            if (chat) db.setMeta(`streamgw:chat:${r.id}`, JSON.stringify({ invite: chat.invite ?? null }));
             db.setMeta(`streamgw:last:${who.id}`, String(r.id)); // the overlay shows the latest one, even a plain timed giveaway
-            return { id: r.id, channelId: c.live_channel, endsAt: now() + req.duration_ms, endsWithStream: endWithStream, prizes: r.prizes };
+            return { id: r.id, channelId: c.live_channel, endsAt: now() + req.duration_ms, endsWithStream: endWithStream, prizes: r.prizes, chat: Boolean(chat) };
         },
         /** Called when a stream ends. Draws the winner right away. Never throws: ending a stream must not fail because of this. */
         async onEnd(guildId, userId) {

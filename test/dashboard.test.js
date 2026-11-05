@@ -19,10 +19,11 @@ async function setup({ sendFails = false, guildsOf, config = {}, giveawayService
     let clock = 1_000_000;
     const sent = [];
     const rest = {
-        authorizeUrl: state => `https://discord.example/authorize?state=${state}`,
-        login: async code => {
-            if (code !== "good") throw new DiscordApiError(400, "bad code");
+        authorizeUrl: (state, o = {}) => `https://discord.example/authorize?state=${state}${o.connections ? "&connections=1" : ""}`,
+        login: async (code, o = {}) => {
+            if (code !== "good" && code !== "good-twitch" && code !== "good-notwitch") throw new DiscordApiError(400, "bad code");
             return {
+                ...(o.withConnections ? { connections: code === "good-notwitch" ? [{ type: "steam", id: "7", name: "x", verified: true }] : [{ type: "twitch", id: "555", name: "FanName", verified: true }, { type: "twitch", id: "556", name: "Other", verified: false }] } : {}),
                 user: { id: "u1", username: "jacob", global_name: "Jacob", avatar: null },
                 guilds: guildsOf ?? [
                     { id: "g-admin", name: "Mine", icon: null, owner: false, permissions: MANAGE },
@@ -108,6 +109,24 @@ test("the app asks for sign-in, and the config carries the FanaticalGrabber link
     assert.match(c.data.inviteUrl, /client_id=123/);
     assert.ok(c.data.regions.length >= 6);
     await t.close();
+});
+
+test("twitch link: read from Discord's connections, never typed in", async () => {
+    const t = await setup();
+    assert.equal((await t.request("/api/twitchlink")).status, 401);
+    const start = await t.request("/auth/twitch");
+    assert.equal(start.status, 302); assert.match(start.headers.get("location"), /connections=1/);
+    const state = new URL(start.headers.get("location")).searchParams.get("state");
+    assert.equal((await t.request(`/auth/callback?code=good-twitch&state=${state}`)).headers.get("location"), "/#/steam?twitch=1");
+    assert.deepEqual((await t.request("/api/twitchlink")).data, { linked: true, login: "fanname" }, "the verified one wins");
+    assert.equal(t.db.twitchLinkByTwitchId("555").discord_id, "u1");
+    assert.equal((await t.request("/api/twitchlink", { method: "POST", body: { action: "remove" }, headers: { Origin: "https://evil.example" } })).status, 403);
+    assert.equal((await t.request("/api/twitchlink", { method: "POST", body: { action: "remove" } })).data.linked, false);
+    await t.request("/auth/twitch");
+    assert.match((await t.request("/auth/callback?code=good-twitch&state=wrong")).headers.get("location"), /error=login/, "a wrong state links nothing");
+    // no Twitch in their Discord connections: told how to add it
+    const again = new URL((await t.request("/auth/twitch")).headers.get("location")).searchParams.get("state");
+    assert.equal((await t.request(`/auth/callback?code=good-notwitch&state=${again}`)).headers.get("location"), "/#/steam?twitch=none");
 });
 
 test("discord login: state is checked, the session cookie is locked down, logout ends it", async () => {
@@ -1986,6 +2005,24 @@ test("playtests page data needs sign-in and lists what the sources found", async
     assert.equal(r.data.items[0].label, "Demo");
     assert.equal(r.data.sources.abg, true);
     await t.close();
+});
+
+test("stream giveaway: chat entry needs a linked Twitch channel and a real Discord invite", async () => {
+    const t = await setup({ extra: { botGuilds: () => true, twitchReply: true }, giveawayService: db => createGiveawayService({
+        db, vault: createVault("dashboard-test-secret-123"),
+        discord: { post: async () => ({ id: "m1" }), edit: async () => {}, dm: async () => {}, memberOk: async () => true, findChannelByName: async () => null }
+    }) });
+    await t.signIn();
+    t.db.setCommunity("g-admin", { live_channel: "c1" });
+    t.db.setStreamLive("g-admin", "u1", { title: "t", url: "https://twitch.tv/mia", started: 1_000_000 });
+    const body = { guild_id: "g-admin", keys: "Hades | AAAAA-BBBBB", length: "1h", auto_image: false, chat_enter: true, chat_invite: "https://discord.gg/abc" };
+    const post = b => { t.advance(6_000); return t.request("/api/streams/giveaway", { method: "POST", body: b }); };
+    const noLink = await post(body); assert.equal(noLink.status, 400); assert.match(noLink.data.error, /Link your Twitch channel/);
+    t.db.setStreamLink("g-admin", "u1", { platform: "twitch", handle: "mia", via: "role", added: 1 });
+    const bad = await post({ ...body, chat_invite: "https://evil.example/x" }); assert.equal(bad.status, 400); assert.match(bad.data.error, /invite/);
+    const ok = await post(body);
+    assert.equal(ok.status, 200, ok.text); assert.equal(ok.data.chat, true); assert.equal(ok.data.chatReplies, true);
+    assert.equal(JSON.parse(t.db.getMeta(`streamgw:chat:${t.db.getMeta("streamgw:last:u1")}`)).invite, "https://discord.gg/abc");
 });
 
 test("giveaway overlay: needs the private link, and shows nothing until a stream giveaway exists", async () => {

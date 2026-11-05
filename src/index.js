@@ -55,6 +55,7 @@ import { createClubHandlers, runGameClubs } from "./gameclub.js";
 import { createSantaHandlers } from "./santa.js";
 import { createTrivia, createTriviaHandlers } from "./trivia.js";
 import { createStreamGiveaways } from "./streamgiveaway.js";
+import { createTwitchChat } from "./twitchchat.js";
 import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
@@ -251,6 +252,13 @@ const gwDiscord = {
         try { const g = await client.guilds.fetch(guildId); await g.members.fetch(userId); return true; }
         catch (e) { return !(e?.code === 10007 || e?.status === 404); } // false only for "Unknown Member"
     },
+    /** Roles and join dates for a server member, or null when they aren't in the server. Used when a viewer types !enter in Twitch chat. */
+    async memberInfo(guildId, userId) {
+        try {
+            const g = await client.guilds.fetch(guildId), m = await g.members.fetch(userId);
+            return { roleIds: [...m.roles.cache.keys()], boosting: Boolean(m.premiumSinceTimestamp), joinedAt: m.joinedTimestamp ?? null, createdAt: m.user.createdTimestamp ?? null };
+        } catch (e) { if (e?.code === 10007 || e?.status === 404) return null; throw e; }
+    },
     async findChannelByName(guildId, name) {
         try {
             const g = await client.guilds.fetch(guildId);
@@ -297,6 +305,8 @@ const giveaways = cfg.keySecret
     ? createGiveawayService({ db, tickets, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
     : null;
 const gw = createGiveawayHandlers({ db, giveaways });
+const twitchChat = createTwitchChat({ db, giveaways, streamGw, member: (g, u) => discord.memberInfo(g, u), site: publicBase ?? "", env: process.env, log: m => console.log(`[twitch chat] ${m}`) });
+client.once(Events.ClientReady, () => { if (giveaways && process.env.TWITCH_CHAT !== "off") twitchChat.start(); });
 const lfg = createLfgService({ db, discord: gwDiscord, log: m => console.log(`[lfg] ${m}`) });
 const lfgUi = createLfgHandlers({ db, lfg });
 const calendar = createCalendarService({ db, discord: gwDiscord, log: m => console.log(`[calendar] ${m}`) });
@@ -865,7 +875,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

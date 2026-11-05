@@ -17,6 +17,7 @@ import { auditSchema, auditStore } from "./auditstore.js";
 import { adminLoginSchema, adminLoginStore } from "./adminlogin.js";
 import { overlaySchema, overlayStore } from "./overlaystore.js";
 import { streamCardSchema, streamCardStore } from "./streamcard.js";
+import { twitchLinkSchema, twitchLinkStore } from "./twitchlink.js";
 import { clubSchema, clubStore } from "./gameclub.js";
 import { santaSchema, santaStore } from "./santa.js";
 import { triviaSchema, triviaStore } from "./trivia.js";
@@ -182,6 +183,7 @@ ${auditSchema}
 ${adminLoginSchema}
 ${overlaySchema}
 ${streamCardSchema}
+${twitchLinkSchema}
 ${clubSchema}
 ${santaSchema}
 ${triviaSchema}
@@ -344,6 +346,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const adminLogin = adminLoginStore({ run, get, now });
     const overlay = overlayStore({ run, get, all, now });
     const streamCard = streamCardStore({ run, get, now });
+    const twitchLink = twitchLinkStore({ run, get, now });
     const club = clubStore({ run, get, all });
     const santa = santaStore({ run, get, all, now });
     const trivia = triviaStore({ run, get, all, now });
@@ -763,6 +766,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             community.forgetCommunityUser(discordId);
             for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link", "stream_card"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
+            run("DELETE FROM twitch_link WHERE discord_id = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");
             return r.changes > 0;
@@ -800,6 +804,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

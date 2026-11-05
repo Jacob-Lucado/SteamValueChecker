@@ -8,20 +8,20 @@
   const cfg = { token: q.get("token") || "", demo: q.has("demo") && q.get("demo") !== "0", style: pick("style", ["card", "bar", "mini"], "card"), theme: pick("theme", ["dark", "light", "glass", "neon", "clear"], "dark"),
     anchor: pick("anchor", ["tl", "tc", "tr", "ml", "mc", "mr", "bl", "bc", "br"], "tr"), font: pick("font", ["system", "rounded", "mono", "serif"], "system"), scale: num("scale", 1, 0.5, 3),
     accent: /^[0-9a-fA-F]{6}$/.test(q.get("accent") || "") ? "#" + q.get("accent") : "#4da3ff", entries: on("entries", true), timer: on("timer", true), bar: on("bar", true), steps: on("steps", true),
-    prizes: on("prizes", true), winners: on("winners", true), hide: on("hide", false), join: (q.get("join") || "").slice(0, 80), label: (q.get("label") || "").slice(0, 40), hold: num("hold", 60, 5, 600), every: num("every", 8, 3, 60), dots: on("dots", true) };
+    prizes: on("prizes", true), winners: on("winners", true), hide: on("hide", false), join: (q.get("join") || "").slice(0, 80), label: (q.get("label") || "").slice(0, 40), hold: num("hold", 60, 5, 600), every: num("every", 8, 3, 60), dots: on("dots", true), chat: on("chat", true) };
   const root = document.getElementById("gw");
   root.dataset.theme = cfg.theme; root.dataset.style = cfg.style; root.dataset.font = cfg.font;
   root.dataset.anchor = [cfg.anchor[0] === "t" ? "t" : cfg.anchor[0] === "m" ? "m" : "b", cfg.anchor[1] === "l" ? "l" : cfg.anchor[1] === "r" ? "r" : "c"].join(" ");
   root.style.setProperty("--accent", cfg.accent); root.style.zoom = String(cfg.scale);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const DEMO = () => { const t = Date.now(); return { giveaways: [
-    { id: 1, title: "Stream giveaway: Hades II", prizes: ["Hades II", "Celeste"], entries: 128, endsAt: t + 47 * 60_000 + 12_000, startedAt: t - 13 * 60_000, status: "active", steps: [{ label: "Follow on Twitch" }, { label: "Join the Discord" }], winners: [] },
+    { id: 1, title: "Stream giveaway: Hades II", prizes: ["Hades II", "Celeste"], entries: 128, endsAt: t + 47 * 60_000 + 12_000, startedAt: t - 13 * 60_000, status: "active", steps: [{ label: "Follow on Twitch" }, { label: "Join the Discord" }], winners: [], chat: true },
     { id: 2, title: "Weekend key drop", prizes: ["Balatro"], entries: 54, endsAt: t + 5 * 3600_000, startedAt: t - 3600_000, status: "active", steps: [{ label: "Wishlist on Steam" }], winners: [] },
     { id: 3, title: "Subscriber thank-you", prizes: ["Discord Nitro"], entries: 301, endsAt: t + 22 * 60_000, startedAt: t - 98 * 60_000, status: "active", steps: [], winners: [] }], now: t }; };
   const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
 
   let list = [], skew = 0, idx = 0, box = null, shownId = 0, shownSig = "", lastEntries = -1, parts = {}, dotsEl = null, endedSeen = new Map();
-  const sig = d => JSON.stringify([d.id, d.title, d.prizes, d.steps, d.status, d.winners, d.endsAt]);
+  const sig = d => JSON.stringify([d.id, d.title, d.prizes, d.steps, d.status, d.winners, d.endsAt, d.chat]);
 
   function build(d, dir) {
     const b = el("div", "gbox"), body = el("div", "gbody");
@@ -40,6 +40,7 @@
       if (stats.children.length) body.append(stats);
       if (cfg.bar && cfg.timer) { const t = el("div", "track"), i = el("i"); t.append(i); parts.bar = i; body.append(t); }
       if (cfg.steps && d.steps.length) { const ul = el("ul", "steps"); for (const s of d.steps.slice(0, 5)) ul.append(el("li", null, s.label)); body.append(ul); }
+      if (d.chat && cfg.chat) body.append(el("div", "how", "Type !enter in chat to join"));
       if (cfg.join) body.append(el("div", "how", cfg.join));
     }
     b.append(body); if (dir) b.classList.add(dir); return b;

@@ -39,19 +39,19 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
     const audit = reason => (reason ? { "X-Audit-Log-Reason": encodeURIComponent(String(reason).slice(0, 400)) } : {});
 
     return {
-        authorizeUrl(state, { linkedRoles = false } = {}) {
+        authorizeUrl(state, { linkedRoles = false, connections = false } = {}) {
             const u = new URL("https://discord.com/oauth2/authorize");
             u.searchParams.set("client_id", clientId);
             u.searchParams.set("response_type", "code");
             u.searchParams.set("redirect_uri", redirectUri);
-            u.searchParams.set("scope", linkedRoles ? "identify guilds role_connections.write" : "identify guilds");
+            u.searchParams.set("scope", linkedRoles ? "identify guilds role_connections.write" : connections ? "identify guilds connections" : "identify guilds");
             u.searchParams.set("state", state);
             u.searchParams.set("prompt", "none");
             return u.toString();
         },
 
         /** Code from the redirect -> { user, guilds }. The access token never leaves this function. */
-        async login(code, { withToken = false } = {}) {
+        async login(code, { withToken = false, withConnections = false } = {}) {
             const form = new URLSearchParams({
                 client_id: clientId, client_secret: clientSecret, grant_type: "authorization_code",
                 code, redirect_uri: redirectUri
@@ -59,11 +59,12 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
             const token = await call("/oauth2/token", {
                 method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form
             });
-            const [user, guilds] = await Promise.all([
+            const [user, guilds, connections] = await Promise.all([
                 call("/users/@me", { headers: bearer(token.access_token) }),
-                call("/users/@me/guilds", { headers: bearer(token.access_token) })
+                call("/users/@me/guilds", { headers: bearer(token.access_token) }),
+                withConnections ? call("/users/@me/connections", { headers: bearer(token.access_token) }) : null
             ]);
-            return { user, guilds, ...(withToken ? { accessToken: token.access_token } : {}) };
+            return { user, guilds, ...(withConnections ? { connections } : {}), ...(withToken ? { accessToken: token.access_token } : {}) };
         },
 
         /** Text and announcement channels of a server the bot is in. Throws DiscordApiError 403/404 otherwise. */

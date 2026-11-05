@@ -2119,6 +2119,25 @@
     return box;
   }
 
+  /** Ties the viewer's Twitch account to their Discord account (read from their Discord connections), so !enter in a streamer's chat enters them. */
+  function twitchLinkPanel() {
+    const box = h("div", { class: "panel", id: "twitch-link" });
+    async function draw() {
+      let d; try { d = await api("/api/twitchlink"); } catch { box.replaceChildren(); return; }
+      const hash = location.hash, back = /[?&]twitch=(1|none)/.exec(hash)?.[1];
+      if (back) { history.replaceState(null, "", "#/steam"); if (back === "1") toast("Twitch linked.", "ok"); }
+      const off = h("button", { class: "btn gray small", type: "button", text: "Unlink" });
+      off.addEventListener("click", () => busy(off, async () => { await api("/api/twitchlink", { action: "remove" }); toast("Unlinked.", "ok"); draw(); }));
+      box.replaceChildren(h("h3", { text: "Twitch (enter giveaways from chat)" }),
+        h("p", { class: "muted", text: "When a streamer runs a giveaway, you can type !enter in their Twitch chat to join. Link your Twitch once so the bot knows it is you. It reads the Twitch account shown in your Discord connections, so nobody can claim your name." }),
+        back === "none" ? h("div", { class: "notice warn", text: "Discord doesn't show a Twitch account for you yet. In Discord open Settings, then Connections, add Twitch, then press the button again." }) : null,
+        d.linked ? h("p", {}, "Linked to Twitch account ", h("b", { text: d.login }), ".") : null,
+        h("div", { class: "row" }, h("a", { class: "btn blue", href: "/auth/twitch", text: d.linked ? "Link a different Twitch account" : "Link my Twitch" }), d.linked ? off : null));
+    }
+    draw();
+    return box;
+  }
+
   async function steamView() {
     const out = h("div", { class: "muted", text: "Loading…" });
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
@@ -2230,7 +2249,7 @@
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     app.replaceChildren(pageHead("Steam", "Sign in through Steam to fill your library automatically: your games, hours played, what you never played and what to play next."),
-      slot, out);
+      slot, out, twitchLinkPanel());
     if (/[?&]linked=1/.test(location.hash)) {
       // Just came back from Steam: read the library straight away, then tidy the address.
       history.replaceState(null, "", "#/steam");
@@ -5934,6 +5953,8 @@
       const steps = stepsEditor(d.stepKinds || [], { prefill });
       const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), length: length.value.trim(), host: "you" }));
       for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
+      const isTwitch = Boolean(d.link && /twitch/i.test(d.link.platform));
+      const chatOn = h("input", { type: "checkbox", id: "sgw-chat", disabled: !isTwitch }), chatInvite = text("https://discord.gg/yourserver", 120, "url");
       const go = h("button", { class: "btn blue", type: "button", text: "🎁 Start the giveaway", disabled: unset });
       go.addEventListener("click", () => run(go, async () => {
         const num = el => (el.value === "" ? undefined : Number(el.value));
@@ -5941,10 +5962,10 @@
           keys: keys.value, game: game.value, title: title.value, description: desc.value, length: length.value, end_with_stream: endWith.checked,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
           claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN), boosters: boosters.checked,
-          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, steps: steps.get()
+          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, steps: steps.get(), chat_enter: chatOn.checked, chat_invite: chatInvite.value
         });
         keys.value = "";
-        toast(`Giveaway posted in the live channel with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.${r.endsWithStream ? " It draws when you end your stream." : ""}`, "ok");
+        toast(`Giveaway posted in the live channel with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.${r.endsWithStream ? " It draws when you end your stream." : ""}${r.chat ? (r.chatReplies ? " Viewers can type !enter in your chat." : " Linked viewers can type !enter in your chat (the bot can't answer in chat until a Twitch bot login is set).") : ""}`, "ok");
       }));
       return h("div", { class: "panel" }, h("h3", { text: "Giveaway for your viewers" }),
         unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
@@ -5963,6 +5984,11 @@
         h("h4", { text: "Required steps (optional)" }),
         h("p", { class: "muted small", text: "Ask viewers to do something first, like following your channel, joining your Discord or wishlisting your game. Each step shows on the post as a numbered line and a link button. Discord can't check these, so it works on trust and winners may be checked." }),
         steps.el,
+        h("h4", { text: "Enter from Twitch chat" }),
+        h("label", { class: "check", for: "sgw-chat" }, chatOn, " Let viewers type !enter in my Twitch chat"),
+        isTwitch ? h("div", {}, field("Your Discord invite (the bot tells new viewers to join it)", chatInvite),
+          h("p", { class: "muted small", text: "Viewers link their Twitch to the bot once on the Steam page (it reads the Twitch account shown in their Discord connections, so it can't be faked), then !enter works like the Enter button. Anyone who isn't linked gets a reply in chat pointing them to your Discord invite and the link page." + (d.chatReplies ? "" : " The bot can't write in chat yet (no Twitch bot login is set on the bot), so it only counts linked viewers.") }))
+          : h("p", { class: "muted small", text: "Link your Twitch channel in the Your channel box above first, so I know which chat to listen to." }),
         h("details", { class: "more" }, h("summary", { text: "Rules (all optional)" }),
           h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb), field("Hours to claim", claim)),
           h("label", { class: "check" }, boosters, " Only server boosters can enter"),
@@ -6143,7 +6169,7 @@
       const hold = h("input", { type: "number", min: "5", max: "600", value: v("hold", "60"), "aria-label": "Winner seconds" });
       const every = h("input", { type: "number", min: "3", max: "60", value: v("every", "8"), "aria-label": "Seconds per giveaway" });
       const dots = h("input", { type: "checkbox", checked: v("dots", true) !== false });
-      const TOG = [["prizes", "Prizes"], ["entries", "Entry count"], ["timer", "Countdown"], ["bar", "Progress bar"], ["steps", "Steps to enter"], ["winners", "Winners when drawn"]];
+      const TOG = [["prizes", "Prizes"], ["entries", "Entry count"], ["timer", "Countdown"], ["bar", "Progress bar"], ["steps", "Steps to enter"], ["chat", "“Type !enter in chat” line"], ["winners", "Winners when drawn"]];
       const tog = TOG.map(([k, t]) => { const c = h("input", { type: "checkbox", checked: v(k, true) !== false }); return [k, c, h("label", { class: "check" }, c, t)]; });
       const autoHide = h("input", { type: "checkbox", checked: v("hide", false) === true }); 
       const link = h("input", { type: "text", readonly: true, "aria-label": "Giveaway overlay link" });

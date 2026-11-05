@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.23", date: "2026-11-04", title: "Enter giveaways from Twitch chat", items: [
+        "**!enter in chat:** when you start a stream giveaway you can let viewers type `!enter` in your Twitch chat. The bot listens only while the giveaway runs, and the overlay can show a \"Type !enter in chat\" line.",
+        "**Link your Twitch once:** viewers link their Twitch on the Steam page of the dashboard. It reads the Twitch account shown in their Discord connections, so nobody can enter as someone else, and winners still get their prize by Discord message.",
+        "**Newcomers are pointed the right way:** anyone who types `!enter` without being linked gets a reply in chat with your Discord invite and the link page. Members who are not in your server yet are asked to join first."
+    ] },
     { version: "2026.11.22", date: "2026-11-04", title: "Giveaway overlay for streamers", items: [
         "**On-screen giveaway:** the Streamer hub has a new Giveaway overlay for OBS. It shows your stream giveaway's prizes, how many people entered, a live countdown and the steps to enter, then shows the winners the moment they are drawn.",
         "**Make it yours:** pick a card, wide bar or small tag layout; dark, light, glass, neon or no background; any corner of the screen; four fonts; your own accent color and size. Switch the prizes, entry count, countdown, progress bar, steps and winners on or off, add your own heading and a line like your Discord invite, and choose whether the winners hide after a while.",

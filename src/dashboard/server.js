@@ -188,7 +188,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -977,7 +977,7 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
                 optedIn: streams ? await streams.optedIn(g.id, s.userId) : null,
                 link: (l => (l ? { platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) } : null))(db.getStreamLink(g.id, s.userId)),
                 watch: watchable(process.env),
-                stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint }))
+                chatReplies: Boolean(twitchReply), stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint }))
             };
             if (mgr) { const ch = await remember("choices:" + g.id, 60_000, () => guildChoices(g.id)); out.channels = ch.channels; out.roles = ch.roles; }
             return out;
@@ -1004,9 +1004,17 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             if (!(isManager(g) || isOwner(s))) for (const k of ["require_role_id", "bonus_role_id", "ping_role_id", "vouch_channel_id"]) delete form[k]; // server rules are the managers' call
             const r = await musicCall(async () => {
                 const { input } = giveawayInput(form, { defaults: { length: "1h", prize: "Prize" } });
-                return streamGw.start(g.id, { id: s.userId, name: me }, { input, endWithStream: body.end_with_stream !== false });
+                // Chat entry: viewers type !enter in the streamer's Twitch chat. Needs their Twitch channel linked here, and a Discord invite to point newcomers at.
+                let chat = null;
+                if (body.chat_enter) {
+                    if (db.getStreamLink(g.id, s.userId)?.platform !== "twitch") throw new UserError("Link your Twitch channel first (the Your channel box above), so I know which chat to listen to.");
+                    let invite = null;
+                    if (String(body.chat_invite ?? "").trim()) { try { invite = parseSteps([{ kind: "join_discord", url: body.chat_invite }])[0].url; } catch (e) { if (e instanceof StepError) throw new UserError("The Discord link for chat must be an invite, like https://discord.gg/yourserver."); throw e; } }
+                    chat = { invite };
+                }
+                return streamGw.start(g.id, { id: s.userId, name: me }, { input, endWithStream: body.end_with_stream !== false, chat });
             });
-            return { ok: true, channelId: r.channelId, endsAt: r.endsAt, endsWithStream: r.endsWithStream, prizes: r.prizes };
+            return { ok: true, channelId: r.channelId, endsAt: r.endsAt, endsWithStream: r.endsWithStream, prizes: r.prizes, chat: r.chat, chatReplies: Boolean(twitchReply) };
         },
         // everyone linked in a server, with who is live right now (any member may look: it is only public channel names)
         "GET /api/streams/roster": async (req, _b, url) => {
@@ -1933,7 +1941,7 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             const card = async g => {
                 const keys = db.listKeys(g.id), over = g.status !== "active" && g.status !== "scheduled";
                 const winners = over ? await Promise.all(keys.filter(k => k.winner_id).map(async k => ({ prize: k.label, name: (await remember("mname:" + g.guild_id + ":" + k.winner_id, 10 * 60_000, () => rest.memberName(g.guild_id, k.winner_id)).catch(() => null)) || "A viewer" }))) : [];
-                return { id: g.id, title: g.title, game: g.game_title ?? null, prizes: keys.map(k => k.label), entries: db.countEntries(g.id), endsAt: g.ends_at, startedAt: g.starts_at ?? g.created_at, status: over ? "ended" : g.status, steps: stepsOf(g).map(x => ({ label: x.label, kind: x.kind })), winners };
+                return { id: g.id, title: g.title, game: g.game_title ?? null, prizes: keys.map(k => k.label), entries: db.countEntries(g.id), endsAt: g.ends_at, startedAt: g.starts_at ?? g.created_at, status: over ? "ended" : g.status, steps: stepsOf(g).map(x => ({ label: x.label, kind: x.kind })), winners, chat: Boolean(streamGw.chatFor(g.id)) };
             };
             return { giveaways: await Promise.all(rows.slice(0, 6).map(card)), now: now() };
         },
@@ -1952,6 +1960,13 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             const all = [...keep, ...want].slice(-6);
             db.setMeta("gwov:" + s.userId, JSON.stringify(all));
             return { ok: true, ids: all };
+        },
+        // The viewer's Twitch account, as Discord shows it. It is read from their Discord connections (never typed in), so it can't be faked.
+        "GET /api/twitchlink": async (req) => { const s = session(req), l = db.getTwitchLink(s.userId); return { linked: Boolean(l), login: l?.login ?? null }; },
+        "POST /api/twitchlink": async (req, body) => {
+            const s = session(req);
+            if (body.action !== "remove") throw new HttpError(400, "Unknown action.");
+            return { linked: false, removed: db.removeTwitchLink(s.userId) };
         },
         // Game club: the server's game of the month. Anyone in the server can look; Manage Server changes it.
         "GET /api/club": async (req, _b, url) => {
@@ -3154,9 +3169,21 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
         send(res, 302, "", { Location: rest.authorizeUrl(state, { linkedRoles: true }) });
     }
 
+    // Twitch link: the same Discord sign-in, plus permission to read which Twitch account is in their Discord connections.
+    const twitchStates = new Set();
+    async function twitchStart(req, res) {
+        sweep();
+        const state = randomBytes(24).toString("hex");
+        states.set(state, now() + 10 * 60_000);
+        twitchStates.add(state);
+        setCookie(res, STATE_COOKIE, state, 600);
+        send(res, 302, "", { Location: rest.authorizeUrl(state, { connections: true }) });
+    }
+
     async function callback(req, res, url) {
         const state = url.searchParams.get("state");
         const linked = linkedStates.delete(state);
+        const twitch = twitchStates.delete(state);
         const code = url.searchParams.get("code");
         const ok = state && states.has(state) && states.get(state) > now() && cookies(req)[STATE_COOKIE] === state;
         states.delete(state);
@@ -3172,7 +3199,7 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
         if (!ok || !code) return send(res, 302, "", { Location: "/?error=login" });
 
         let who;
-        try { who = await rest.login(code, linked ? { withToken: true } : undefined); }
+        try { who = await rest.login(code, linked ? { withToken: true } : twitch ? { withConnections: true } : undefined); }
         catch (err) { log(`Discord sign-in failed (${err.status ?? err.name})`, "warn"); return send(res, 302, "", { Location: "/?error=login" }); }
 
         const name = who.user.global_name || who.user.username;
@@ -3183,6 +3210,13 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             guilds: (who.guilds ?? []).map(g => ({ id: g.id, name: g.name, icon: g.icon, owner: Boolean(g.owner), permissions: String(g.permissions ?? "0") }))
         });
         db.ensureUser(who.user.id);
+        if (twitch) {
+            const tw = (who.connections ?? []).filter(c => c.type === "twitch" && c.id && c.name).sort((a, b) => Number(Boolean(b.verified)) - Number(Boolean(a.verified)))[0];
+            if (!tw) return send(res, 302, "", { Location: "/#/steam?twitch=none" });
+            db.setTwitchLink(who.user.id, { twitchId: tw.id, login: String(tw.name).toLowerCase() });
+            db.bumpUsage("twitch_linked");
+            return send(res, 302, "", { Location: "/#/steam?twitch=1" });
+        }
         // Came here from "Sign in through Steam" and had no account yet: attach the proven Steam account now.
         const pend = steamPending.get(cookies(req)[STEAM_PENDING_COOKIE]);
         steamPending.delete(cookies(req)[STEAM_PENDING_COOKIE]);
@@ -3401,6 +3435,7 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             if (key === "GET /auth/login" && onAdminHost(req)) return send(res, 302, "", { Location: `${origin}/auth/login?next=admin` }); // sign-in happens on the main address
             if (key === "GET /auth/login") return await login(req, res);
             if (key === "GET /auth/callback") return await callback(req, res, url);
+            if (key === "GET /auth/twitch") return await twitchStart(req, res);
             if (key === "GET /auth/linked") return await linkedStart(req, res);
             if (key === "GET /auth/steam") return await steamLogin(req, res);
             if (key === "GET /auth/steam/return") return await steamReturn(req, res, url);
