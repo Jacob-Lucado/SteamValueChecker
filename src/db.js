@@ -32,6 +32,7 @@ import { calendarSchema, calendarStore } from "./calendarstore.js";
 import { lfgSchema, lfgStore } from "./lfgstore.js";
 import { hiddenGuilds, isHidden } from "./hidden.js";
 import { giftSchema, giftStore } from "./giftstore.js";
+import { socialSchema, socialStore } from "./socialstore.js";
 import { friendSchema, friendStore } from "./friendstore.js";
 import { challengeSchema, challengeStore } from "./challengestore.js";
 import { bundleSchema, bundleStore } from "./bundlestore.js";
@@ -198,6 +199,7 @@ ${grabberSchema}
 ${redeemSchema}
 ${calendarSchema}
 ${giftSchema}
+${socialSchema}
 ${friendSchema}
 ${challengeSchema}
 ${bundleSchema}
@@ -362,11 +364,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const streamLive = streamStore({ run, get, all, clean });
     const memes = memeStore({ run, all });
     const gifts = giftStore({ run, get, all, now });
+    const social = socialStore({ run, get, all, now, clean });
     const friends = friendStore({ run, get, all, now });
     const challenges = challengeStore({ run, all });
     const bundles = bundleStore({ run, all, get, now });
     const broadcasts = broadcastStore({ run, all, get, now });
-    const steam = steamStore({ db, run, get, all, clean, now, maxLibrary: MAX_LIBRARY_PER_USER });
+    const steam = steamStore({ db, run, get, all, clean, now, maxLibrary: MAX_LIBRARY_PER_USER, onFinished: (id, g) => social.addEvent(id, "finished", { appid: g.appid ?? null, game: g.title, ref: g.itad_id }) });
 
     function ensureUser(discordId, guildId = null) {
         run("INSERT OR IGNORE INTO users (discord_id, guild_id, created_at, tz) VALUES (?, ?, ?, ?)", discordId, guildId, now(), DEFAULT_TZ);
@@ -560,10 +563,16 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         ? run("UPDATE library SET paid = ? WHERE id = ? AND discord_id = ?", paid, id, discordId)
         : run("UPDATE library SET paid = ?, gifted = ? WHERE id = ? AND discord_id = ?", paid, gifted ? 1 : 0, id, discordId)).changes;
     const setProfile = (id, { slug, isPublic }) => run("UPDATE users SET profile_slug = ?, profile_public = ? WHERE discord_id = ?", slug, isPublic ? 1 : 0, id);
+    const publicProfileIds = () => all("SELECT discord_id FROM users WHERE profile_public = 1 AND profile_slug IS NOT NULL").map(r => r.discord_id);
     const getProfileBySlug = slug => clean(get("SELECT * FROM users WHERE profile_slug = ?", slug));
     const LIB_STATUSES = ["backlog", "playing", "played", "finished", "dropped"];
-    const setLibraryStatus = (discordId, itadId, status) => LIB_STATUSES.includes(status)
-        ? run("UPDATE library SET status = ?, status_at = CASE WHEN status = ? THEN status_at ELSE ? END WHERE discord_id = ? AND itad_id = ?", status, status, now(), discordId, itadId).changes > 0 : false;
+    const setLibraryStatus = (discordId, itadId, status) => {
+        if (!LIB_STATUSES.includes(status)) return false;
+        const was = get("SELECT status, title, appid FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId);
+        const done = run("UPDATE library SET status = ?, status_at = CASE WHEN status = ? THEN status_at ELSE ? END WHERE discord_id = ? AND itad_id = ?", status, status, now(), discordId, itadId).changes > 0;
+        if (done && status === "finished" && was && was.status !== "finished") social.addEvent(discordId, "finished", { appid: was.appid ?? null, game: was.title, ref: itadId });
+        return done;
+    };
     const removeLibrary = (discordId, itadId) => run("DELETE FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId).changes > 0;
 
     const dayKey = (ms = now()) => new Date(ms).toISOString().slice(0, 10);
@@ -773,6 +782,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             music.forgetMusicUser(discordId);
             lfg.forgetLfgUser(discordId);
             tickets.deleteUserTickets(discordId);
+            social.forgetSocialUser(discordId);
             requests.forgetRequestUser(discordId);
             community.forgetCommunityUser(discordId);
             for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link", "stream_card"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
@@ -812,9 +822,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
-        countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
+        countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

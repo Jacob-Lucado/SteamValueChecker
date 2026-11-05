@@ -1305,3 +1305,74 @@ body.wiz-open { overflow: hidden; }
 .pf-act-ico { display: flex; gap: 4px; align-items: center; }
 .pf-act-ico img { width: 32px; height: 32px; border-radius: 3px; }
 .pf-act-more { background: rgba(255,255,255,.1); border-radius: 3px; min-width: 32px; height: 32px; display: grid; place-items: center; font-size: .78rem; padding: 0 6px; }
+
+/* ---------- Community feed ---------- */
+.fd-tabs { display: flex; gap: 6px; margin: 4px 0 16px; border-bottom: 1px solid var(--line); }
+.fd-tab { padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; text-decoration: none; font-weight: 600; }
+.fd-tab:hover { color: var(--white); }
+.fd-tab.on { color: var(--white); border-bottom-color: var(--accent); }
+.fd-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; flex-wrap: wrap; }
+.fd-scopes { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.fd-bar .fd-scopes { margin: 0; }
+.fd-filter { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: .9rem; color: var(--muted); }
+.fd-link { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: .82rem; padding: 2px 4px; text-decoration: underline; }
+.fd-link:hover { color: var(--white); }
+.fd-panel { margin-bottom: 14px; }
+.fd-compose { display: grid; gap: 8px; }
+.fd-text { width: 100%; resize: vertical; min-height: 64px; font: inherit; color: var(--text); background: var(--input-bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; box-sizing: border-box; }
+.fd-text:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fd-compose-row { display: flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.fd-pick { max-width: 220px; margin-right: auto; background: var(--input-bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 8px; font: inherit; font-size: .88rem; }
+.fd-count.warn { color: var(--warn); }
+.fd-list { display: grid; gap: 12px; }
+.fd-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 10px; box-shadow: var(--shadow); }
+.fd-card.reply { box-shadow: none; background: var(--panel-2); padding: 10px 12px; border-radius: var(--radius-sm); }
+.fd-card.hidden-item { opacity: .6; border-style: dashed; }
+.fd-head { display: flex; align-items: center; gap: 10px; }
+.fd-av { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex: none; background: var(--soft-2); }
+.fd-av.init { display: grid; place-items: center; font-weight: 700; color: var(--white); }
+.fd-who { display: grid; line-height: 1.25; min-width: 0; flex: 1; }
+.fd-name { color: var(--white); font-weight: 700; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.fd-name:hover { text-decoration: underline; }
+.fd-menu { margin-left: auto; }
+.fd-post p { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); line-height: 1.5; }
+.fd-event { display: flex; gap: 12px; align-items: center; }
+.fd-line { color: var(--text); }
+.fd-art { width: 92px; flex: none; border-radius: 6px; overflow: hidden; background: var(--soft); }
+.fd-art img { display: block; width: 100%; height: auto; }
+.fd-art .free-noart { aspect-ratio: 460 / 215; display: grid; place-items: center; }
+.fd-ach { width: 52px; height: 52px; flex: none; border-radius: 6px; object-fit: cover; border: 1px solid rgba(232, 190, 95, .6); box-shadow: 0 0 10px rgba(232, 190, 95, .25); background: var(--soft); }
+.fd-ach.none { display: grid; place-items: center; font-size: 1.5rem; color: #e8be5f; }
+.fd-game { background: var(--soft); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 2px 10px; font: inherit; font-size: .85rem; cursor: pointer; }
+.fd-game:hover { border-color: var(--accent); color: var(--white); }
+.fd-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.fd-react, .fd-reply { background: var(--soft); border: 1px solid transparent; border-radius: 999px; padding: 3px 10px; cursor: pointer; font: inherit; font-size: .9rem; color: var(--text); display: inline-flex; gap: 5px; align-items: center; }
+.fd-react:hover, .fd-reply:hover { border-color: var(--line); background: var(--soft-2); }
+.fd-react.on { background: var(--accent); color: var(--on-accent); }
+.fd-react span { font-size: .8rem; font-weight: 700; }
+.fd-reply { margin-left: auto; }
+.fd-thread { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.fd-replies { display: grid; gap: 8px; }
+.fd-empty { border: 1px dashed var(--line); border-radius: var(--radius); }
+.fd-foot { display: flex; justify-content: center; margin: 14px 0; }
+.fd-prefs { margin-top: 18px; }
+.fd-prefs summary { cursor: pointer; font-weight: 700; color: var(--white); }
+.fd-check { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.fd-trend { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.fd-trend-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; display: grid; gap: 6px; text-align: left; cursor: pointer; color: var(--text); font: inherit; }
+.fd-trend-card:hover { border-color: var(--accent); }
+.fd-trend-card .fd-art { width: 100%; }
+.fd-rare, .fd-people { display: grid; gap: 10px; }
+.fd-rare-row, .fd-person { display: flex; gap: 12px; align-items: center; }
+.fd-person .btn { margin-left: auto; }
+
+/* Follow bar and extras on a public profile */
+.pf-social { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 1.4rem 0; position: relative; }
+.pf-compare, .pf-cmp { flex-basis: 100%; }
+.pf-compare { background: rgba(0, 0, 0, .25); border-radius: 10px; padding: 12px; margin-top: 6px; }
+.pf-cmp { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.pf-cmp-col h4 { margin: 0 0 6px; font-size: .9rem; }
+.pf-cmp-col ul { margin: 0; padding-left: 18px; max-height: 220px; overflow: auto; font-size: .88rem; }
+.pf-posts { display: grid; gap: 10px; }
+.pf-post p { margin: 0 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .fd-art { width: 72px; } .fd-compose-row { justify-content: stretch; } .fd-pick { max-width: none; flex: 1 1 100%; } }

@@ -83,7 +83,7 @@ export function recapSummary(rows, year) {
 /** A new Steam game starts as backlog (barely touched), played (an hour or more), or playing (an hour or more, in the last two weeks). */
 const startStatus = (g, lastPlayedMs, nowMs) => ((g.minutes ?? 0) < 60 ? "backlog" : lastPlayedMs && nowMs - lastPlayedMs < 14 * 86400_000 ? "playing" : "played");
 
-export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
+export function steamStore({ db, run, get, all, clean, now, maxLibrary, onFinished = () => {} }) {
     /** The two-letter country on the member's Steam profile, read during a sync. Used to warn about cross-region gifts. */
     const setSteamCountry = (id, cc) => run("UPDATE steam_links SET country = ? WHERE discord_id = ?", /^[A-Z]{2}$/.test(String(cc)) ? String(cc) : null, id);
     const getSteamLink = id => clean(get("SELECT * FROM steam_links WHERE discord_id = ?", id)) ?? null;
@@ -142,12 +142,13 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
      * Returns { newlyFinished }.
      */
     function setAchievements(discordId, itadId, { done, total }) {
-        const row = get("SELECT status, ach_done, ach_total FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId);
+        const row = get("SELECT status, ach_done, ach_total, title, appid FROM library WHERE discord_id = ? AND itad_id = ?", discordId, itadId);
         if (!row) return { newlyFinished: false };
         const wasComplete = row.ach_total > 0 && row.ach_done === row.ach_total;
         const complete = total > 0 && done === total;
         const finish = complete && !wasComplete && !["finished", "dropped"].includes(row.status);
         run("UPDATE library SET ach_done = ?, ach_total = ?, ach_checked = ?, status = ?, status_at = CASE WHEN ? THEN ? ELSE status_at END WHERE discord_id = ? AND itad_id = ?", done, total, now(), finish ? "finished" : row.status, finish ? 1 : 0, now(), discordId, itadId);
+        if (finish) onFinished(discordId, { itad_id: itadId, title: row.title, appid: row.appid });
         return { newlyFinished: finish };
     }
 

@@ -73,7 +73,8 @@ import { calendarEntries, toIcs, KINDS } from "../calendar.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
-import { artUrl } from "../render.js";
+import { artUrl, steamArt } from "../render.js";
+import { REACTIONS } from "../socialstore.js";
 import { isSoundcloudUrl } from "../musicsource.js";
 import { CATEGORIES } from "../stations.js";
 import { parseChannel, channelUrl, watchable } from "../streamwatch.js";
@@ -317,6 +318,8 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
     const lastRun = new Map();
     const cache = new Map();
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
+    const socialRead = createLimiter({ windowMs: 60_000, max: 90, now });
+    const socialWrite = createLimiter({ windowMs: 60_000, max: 25, now });
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
     const bgLimit = createLimiter({ windowMs: 3600_000, max: 20, now });
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
@@ -407,6 +410,33 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         for (const [k, p] of steamKnown) if (p.exp < t) steamKnown.delete(k);
         for (const [k, at] of lastRun) if (t - at > 120_000) lastRun.delete(k); // the longest cooldown is a minute
     }
+
+
+    // ---- community feed helpers
+    /** What a feed card shows for a member: their page name, picture and address. No account ids leave the server. */
+    const authorCard = id => {
+        const u = db.getUser(id), data = db.getProfileData(id).data, link = db.getSteamLink(id);
+        return { slug: u?.profile_slug ?? null, name: data.name || u?.profile_slug || "Someone", avatar: data.avatar && link?.avatar ? link.avatar : null };
+    };
+    const shapeItems = (items, viewerId) => {
+        const cache = new Map();
+        return items.map(i => {
+            if (!cache.has(i.author)) cache.set(i.author, authorCard(i.author));
+            const { author, slug, ...rest } = i;
+            return { ...rest, own: author === viewerId, by: cache.get(i.author), art: i.appid ? steamArt(i.appid) : null };
+        });
+    };
+    const peopleList = (rows, viewerId) => rows.map(r => ({ ...authorCard(r.discord_id), shared: r.shared ?? undefined, following: viewerId ? db.isFollowing(viewerId, r.discord_id) : false }));
+    /** Posting needs a real Discord account, not a brand new one, and not one the bot's owner has turned posting off for. */
+    const mayPost = s => {
+        if (s.steamOnly) throw new HttpError(403, "Sign in with Discord to post.");
+        if (s.userId !== config.ownerId && !accountOldEnough(s.userId, now())) throw new HttpError(403, "Your Discord account is too new to post yet. Try again in a few days.");
+    };
+    const slugOwner = slug => {
+        const o = db.getProfileBySlug(String(slug ?? "").toLowerCase());
+        if (!o || !o.profile_public || db.getProfileData(o.discord_id).blocked) throw new HttpError(404, "That page does not exist or is private.");
+        return o;
+    };
 
     function session(req) {
         const s = sessions.get(cookies(req)[COOKIE]);
@@ -2463,7 +2493,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (rt && !rt.get("profile_songs")) { if (profile.song && profile.owner) profile.songOff = true; profile.song = null; profile.enter = false; }
             const wl = profile.sections.find(x => x.key === "wishlist");
             const canMark = Boolean(sess && owner.guild_id && !isHidden(owner.guild_id) && isStaff(sess.guilds.find(x => x.id === owner.guild_id)));
-            return { profile, canMark, signedIn: Boolean(sess), hasWishlist: Boolean(wl), region: sess && !mine ? compareGiftRegions(db, sess.userId, owner.discord_id) : null };
+            return { profile, canMark, signedIn: Boolean(sess), hasWishlist: Boolean(wl), social: { ...db.followCounts(owner.discord_id), me: mine, iFollow: Boolean(sess && !mine && db.isFollowing(sess.userId, owner.discord_id)), canFollow: Boolean(sess && !mine && !db.blockedEither(sess.userId, owner.discord_id)), blocked: Boolean(sess && !mine && db.blockedEither(sess.userId, owner.discord_id)) }, region: sess && !mine ? compareGiftRegions(db, sess.userId, owner.discord_id) : null };
         },
         "POST /api/public/profile/report": async (req, body) => {
             if (!giftLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
@@ -2618,6 +2648,138 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const r = db.releaseGift(s.userId, id, { report: Boolean(body.report), slug: u.profile_slug ?? "", title: game?.title ?? "" });
             if (!r.released) throw new HttpError(404, "Nobody has marked that one.");
             return { released: true, reported: Boolean(body.report) };
+        },
+        // ---- the community feed
+        "GET /api/social/feed": async (req, _b, url) => {
+            const sess = softSession(req);
+            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const scope = ["following", "mine"].includes(url.searchParams.get("scope")) && sess ? url.searchParams.get("scope") : "everyone";
+            const author = url.searchParams.get("author") ? slugOwner(url.searchParams.get("author")).discord_id : null;
+            const r = db.feed(sess?.userId ?? null, { scope, before: url.searchParams.get("before"), appid: Number(url.searchParams.get("game")) || null, author, limit: 20 });
+            const following = sess ? db.followCounts(sess.userId).following : 0;
+            return { items: shapeItems(r.items, sess?.userId), more: r.more, signedIn: Boolean(sess), following, reactions: REACTIONS };
+        },
+        // The games a member can tag a post with: their own library, most played first.
+        "GET /api/social/mygames": async (req) => {
+            const s = session(req); userRow(s);
+            return { games: db.listLibrary(s.userId).filter(g => g.appid).sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 300).map(g => ({ appid: g.appid, title: g.title })) };
+        },
+        "GET /api/social/item": async (req, _b, url) => {
+            const sess = softSession(req);
+            const t = db.thread(url.searchParams.get("id"), sess?.userId ?? null);
+            if (!t) throw new HttpError(404, "That post is gone.");
+            return { item: shapeItems([t.item], sess?.userId)[0], replies: shapeItems(t.replies, sess?.userId), reactions: REACTIONS };
+        },
+        "POST /api/social/post": async (req, body) => {
+            const s = session(req); userRow(s); mayPost(s);
+            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            let appid = null, game = null;
+            if (body.appid && !body.parent) {
+                const g = db.listLibrary(s.userId).find(x => x.appid === Number(body.appid));
+                if (!g) throw new HttpError(400, "Pick a game from your own library.");
+                appid = g.appid; game = g.title;
+            }
+            const r = db.createPost(s.userId, { body: body.body, appid, game, parentId: body.parent ?? null }, { staff: s.userId === config.ownerId });
+            if (r.error) throw new HttpError(r.status ?? 400, r.error);
+            if (r.parentAuthor && r.parentAuthor !== s.userId) db.addNotification(r.parentAuthor, { type: "social", title: `${authorCard(s.userId).name} replied to your post`, body: String(body.body ?? "").trim().slice(0, 140), url: "/feed" });
+            return { id: r.id };
+        },
+        "POST /api/social/react": async (req, body) => {
+            const s = session(req); userRow(s);
+            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            const emoji = body.emoji === null || body.emoji === undefined ? null : String(body.emoji);
+            if (emoji !== null && !REACTIONS.includes(emoji)) throw new HttpError(400, "Pick one of the reactions.");
+            const id = Number(body.id);
+            const item = db.getItem(id);
+            const visible = item && (item.hidden === 0 || item.discord_id === s.userId) && !db.blockedEither(s.userId, item.discord_id);
+            if (!visible) throw new HttpError(404, "That post is gone.");
+            return { mine: db.react(id, s.userId, emoji) };
+        },
+        "POST /api/social/delete": async (req, body) => {
+            const s = session(req);
+            const item = db.getItem(Number(body.id));
+            if (!item) throw new HttpError(404, "That post is gone.");
+            if (item.discord_id !== s.userId && !isOwner(s)) throw new HttpError(403, "That one is not yours.");
+            db.deleteItem(item.id);
+            return { deleted: true };
+        },
+        "POST /api/social/report": async (req, body) => {
+            const s = session(req);
+            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            const r = db.report(Number(body.id), s.userId, body.reason);
+            if (!r) throw new HttpError(404, "Nothing to report there.");
+            return { reported: true };
+        },
+        "POST /api/social/follow": async (req, body) => {
+            const s = session(req); userRow(s);
+            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            const o = slugOwner(body.slug);
+            const r = db.follow(s.userId, o.discord_id, body.on !== false);
+            if (r === "self") throw new HttpError(400, "That's you.");
+            if (r === "blocked") throw new HttpError(403, "You can't follow this person.");
+            if (r === "limit") throw new HttpError(429, "You are following as many people as you can. Unfollow someone first.");
+            if (r === "new") { const me = authorCard(s.userId); db.addNotification(o.discord_id, { type: "social", title: `${me.name} followed you`, body: null, url: me.slug ? "/u/" + me.slug : "/feed" }); }
+            return { following: body.on !== false, ...db.followCounts(o.discord_id) };
+        },
+        "POST /api/social/block": async (req, body) => {
+            const s = session(req);
+            const o = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
+            if (!o) throw new HttpError(404, "That page does not exist.");
+            if (o.discord_id === s.userId) throw new HttpError(400, "That's you.");
+            db.setBlock(s.userId, o.discord_id, body.on !== false);
+            return { blocked: body.on !== false };
+        },
+        "GET /api/social/people": async (req) => {
+            const s = session(req); userRow(s);
+            return { ...db.followCounts(s.userId), followers: peopleList(db.listFollowers(s.userId), s.userId), following: peopleList(db.listFollowing(s.userId).filter(x => x.slug), s.userId),
+                blocked: db.listBlocks(s.userId).map(b => ({ slug: b.slug, name: b.slug ?? "Someone" })).filter(b => b.slug), prefs: db.getPrefs(s.userId) };
+        },
+        "POST /api/social/prefs": async (req, body) => {
+            const s = session(req); userRow(s);
+            return { prefs: db.setPrefs(s.userId, { events: body.events === undefined ? undefined : Boolean(body.events), digest: body.digest === undefined ? undefined : Boolean(body.digest) }) };
+        },
+        "GET /api/social/discover": async (req) => {
+            const sess = softSession(req);
+            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const week = now() - 7 * 86400_000;
+            return {
+                trending: db.trendingGames(week, 10).map(g => ({ appid: g.appid, game: g.game, people: g.people, posts: g.posts, finishes: g.finishes, art: steamArt(g.appid) })),
+                rare: db.rareBoard(10).map(r => ({ ...authorCard(r.discord_id), game: r.game, achievement: r.name, icon: r.icon, pct: r.pct })),
+                similar: sess ? peopleList(db.similarPeople(sess.userId, 8), sess.userId) : []
+            };
+        },
+        "GET /api/social/game": async (req, _b, url) => {
+            const sess = softSession(req);
+            const appid = Number(url.searchParams.get("appid"));
+            if (!Number.isInteger(appid) || appid <= 0) throw new HttpError(400, "Which game?");
+            return { appid, art: steamArt(appid), owners: db.ownerCount(appid), people: peopleList(db.gameOwners(appid, 12), sess?.userId ?? null) };
+        },
+        // Two libraries side by side. Only for members who chose to show their Steam stats, since this shows what they own.
+        "GET /api/social/compare": async (req, _b, url) => {
+            const s = session(req); userRow(s);
+            const o = slugOwner(url.searchParams.get("slug"));
+            if (o.discord_id === s.userId) throw new HttpError(400, "That's you.");
+            const shows = (db.getProfileData(o.discord_id).data.sections ?? []).some(x => x.key === "steam" && x.vis === "public");
+            if (!shows) throw new HttpError(403, "This member keeps their library to themselves.");
+            return { them: authorCard(o.discord_id), ...db.compareLibraries(s.userId, o.discord_id) };
+        },
+        "GET /api/admin/social": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            return { reports: db.listReports().map(r => ({ ...r, by: authorCard(r.author_id) })), bans: db.listSocialBans().map(b => ({ ...b, by: authorCard(b.discord_id) })) };
+        },
+        "POST /api/admin/social": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do that.");
+            const id = Number(body.id);
+            if (body.action === "dismiss") db.dismissReports(id);
+            else if (body.action === "delete") db.deleteItem(id);
+            else if (body.action === "ban" || body.action === "unban") {
+                const who = body.action === "ban" && id ? db.getItem(id)?.discord_id : String(body.user ?? "");
+                if (!who) throw new HttpError(404, "Nobody to act on.");
+                if (body.action === "ban") db.banPoster(who, body.reason); else db.unbanPoster(who);
+            } else throw new HttpError(400, "Unknown action.");
+            return { ok: true };
         },
         "GET /api/admin/gifts": async (req) => {
             const s = session(req);

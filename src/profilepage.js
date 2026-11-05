@@ -17,9 +17,9 @@ export const LAYOUTS = ["classic", "wide", "compact"];
 export const VISIBILITY = ["public", "server", "hidden"];
 export const SECTIONS = {
     about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished",
-    trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming"
+    posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming"
 };
-export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["trophies", "hidden"], ["achievements", "public"], ["activity", "public"], ["steam", "hidden"], ["streams", "hidden"]]
+export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["posts", "public"], ["trophies", "hidden"], ["achievements", "public"], ["activity", "public"], ["steam", "hidden"], ["streams", "hidden"]]
     .map(([key, vis]) => ({ key, vis }));
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -217,6 +217,9 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
             } else if (s.key === "trophies") {
                 const t = trophyCase(db, owner.discord_id);
                 sections.push({ key: "trophies", vis: s.vis, earned: t.earned, total: t.total, badges: t.badges.filter(b => b.tier).map(b => ({ icon: b.icon, name: b.name, tier: b.tier })) });
+            } else if (s.key === "posts") {
+                const mine = db.feed(viewerId ?? null, { author: owner.discord_id, limit: 8 }).items.filter(x => x.kind === "post").slice(0, 3);
+                if (mine.length || viewer.owner) sections.push({ key: "posts", vis: s.vis, items: mine.map(x => ({ id: x.id, body: x.body, game: x.game, at: x.at, reactions: x.reactions, replies: x.replies })) });
             } else if (s.key === "achievements") {
                 const a = steam ? db.achievementShowcase(owner.discord_id) : null;
                 if (a && (a.done || a.top.length)) sections.push({ key: "achievements", vis: s.vis, done: a.done, rare: a.rare, games: a.games, top: a.top.map(x => ({ game: x.game, name: x.name, icon: x.icon, pct: x.pct })) });

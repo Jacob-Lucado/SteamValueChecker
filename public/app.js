@@ -145,6 +145,7 @@
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
     { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
+    { id: "feed", label: "Feed", pages: [["feed", "Feed"], ["discover", "Discover"], ["people", "People"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
@@ -156,7 +157,7 @@
   ];
   // Pages that are not tabs themselves but belong to a section: one game's page sits under Deals.
   const HUB_ALIAS = { g: "deals" };
-  const PUBLIC_PAGES = new Set(["home", "help", "about", "status"]);
+  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "feed", "discover"]);
   function pageVisible(id) {
     const me = state.me;
     if (id === "home" && me) return false; // the logo already goes home when signed in
@@ -991,7 +992,7 @@
 
   // ---------- full profiles ----------
   const PF_VIS = { public: "Public", server: "Server only", hidden: "Hidden" };
-  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming" };
+  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming" };
   const httpsOnly = u => (/^https:\/\//i.test(u || "") ? u : "");
 
   /** The profile song: a play button that loads the official player when pressed (browsers block sound that starts alone). */
@@ -1186,7 +1187,7 @@
     return el;
   }
 
-  function renderProfile(p, { canMark = false, preview = false, signedIn = false, region = null } = {}) {
+  function renderProfile(p, { canMark = false, preview = false, signedIn = false, region = null, social = null } = {}) {
     const root = h("div", { class: "pf", "data-bg": p.theme.bgstyle, "data-layout": p.theme.layout, "data-light": p.theme.light ? "1" : "0" });
     root.style.setProperty("--pf-bg", p.theme.bg);
     root.style.setProperty("--pf-accent", p.theme.accent);
@@ -1201,6 +1202,7 @@
       h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug })),
       h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
     root.append(banner, head);
+    if (social && !preview) root.append(pfSocial(p, social));
     const pageBg = pageBgEl(p.pagebg, { preview });
     if (pageBg && !preview) root.append(pageBg);
     let songBox = null;
@@ -1228,6 +1230,8 @@
         inner = s.games.length ? h("div", { class: "pf-tiles" }, s.games.map(pfTile)) : h("p", { class: "muted", text: "Nothing marked finished yet." });
       } else if (s.key === "trophies") {
         inner = s.badges.length ? h("div", { class: "pf-links" }, s.badges.map(b => h("span", { class: "pf-chip", text: `${b.icon} ${b.name} · ${b.tier}` })), h("span", { class: "muted small", text: `${s.earned} of ${s.total} earned` })) : h("p", { class: "muted", text: "No trophies yet." });
+      } else if (s.key === "posts") {
+        inner = pfPosts(s);
       } else if (s.key === "achievements") {
         const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: Number(n).toLocaleString() }), h("span", { text: l }));
         inner = h("div", {},
@@ -1275,7 +1279,7 @@
     try {
       const d = await api("/api/public/profile?slug=" + encodeURIComponent(slug));
       document.title = d.profile.name + " on Steam Value Checker";
-      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark, signedIn: d.signedIn, region: d.region }));
+      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark, signedIn: d.signedIn, region: d.region, social: d.social }));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
@@ -3563,6 +3567,23 @@
       load();
       return [box];
     };
+    const socialTab = () => {
+      const box = h("div", { class: "muted", text: "Loading…" });
+      const load = () => api("/api/admin/social").then(r => {
+        box.className = "";
+        const act = (body, label, cls, ok) => { const b = h("button", { class: "btn " + cls + " small", type: "button", text: label }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/social", body); toast(ok, "ok"); await load(); })); return b; };
+        box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Reported posts" }),
+          h("p", { class: "muted small", text: "Three different people reporting a post hides it until you decide. Restore keeps it, Delete removes it and any replies, and Block stops the author posting." }),
+          r.reports.length ? h("div", { class: "scroll-y" }, r.reports.map(x => h("div", { class: "bug-card" }, h("strong", { text: `${x.by.name}${x.slug ? " (@" + x.slug + ")" : ""}` }),
+            h("div", { class: "muted small", text: `${x.reports} report${x.reports === 1 ? "" : "s"} · last ${when(x.last_at)}${x.hidden ? " · hidden" : ""}${x.reasons ? " · " + x.reasons : ""}` }),
+            h("p", { text: x.snapshot }),
+            h("div", { class: "row" }, act({ action: "dismiss", id: x.feed_id }, "Restore", "gray", "Restored."), act({ action: "delete", id: x.feed_id }, "Delete", "red", "Deleted."), act({ action: "ban", id: x.feed_id, reason: "reported posts" }, "Delete and block author", "red", "Blocked."))))) : h("div", { class: "empty", text: "Nothing reported." })),
+          h("div", { class: "panel" }, h("h3", { text: "Blocked from posting" }),
+            r.bans.length ? h("div", { class: "scroll-y" }, r.bans.map(x => h("div", { class: "row" }, h("span", { text: `${x.by.name}${x.slug ? " (@" + x.slug + ")" : ""} · ${when(x.at)}${x.reason ? " · " + x.reason : ""}` }), act({ action: "unban", user: x.discord_id }, "Unblock", "gray", "Unblocked.")))) : h("div", { class: "empty", text: "Nobody." })));
+      }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
+      load();
+      return [box];
+    };
     const requestsTab = () => { const box = h("div", { class: "muted", text: "Loading…" }); requestList(box, { admin: true }).then(() => { box.className = ""; }); return [box]; };
     const musicTab = () => {
       const box = h("div", { class: "muted", text: "Loading…" });
@@ -3704,7 +3725,7 @@
       }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
       return [box];
     };
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["gifts", "Gift marks", giftsTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["ai", "AI companion", aiTab], ["settings", "Bot settings", settingsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["gifts", "Gift marks", giftsTab], ["social", "Community", socialTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["ai", "AI companion", aiTab], ["settings", "Bot settings", settingsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     if (opts.shell) return { TABS, tile, table, when, n0, st, hl, bot, ins, bugData, sum, daily };
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
@@ -3723,7 +3744,7 @@
   const ADMIN_NAV = [
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
     ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."]]],
-    ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."]]],
+    ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
     ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
@@ -6737,7 +6758,235 @@
     load();
   }
 
-  const VIEWS = { bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
+
+  // ---------- community feed ----------
+  const FEED_STATE = { scope: null, game: null };
+  const feedAgo = ms => { const m = Math.max(0, Math.floor((Date.now() - ms) / 60000)); if (m < 1) return "just now"; if (m < 60) return m + " min ago"; const hr = Math.floor(m / 60); if (hr < 24) return hr + " h ago"; const d = Math.floor(hr / 24); return d < 30 ? d + " d ago" : new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
+  const feedAvatar = (by, cls = "fd-av") => httpsOnly(by.avatar) ? h("img", { class: cls, src: by.avatar, alt: "", referrerpolicy: "no-referrer" }) : h("div", { class: cls + " init", text: (by.name || "?").slice(0, 1).toUpperCase() });
+  const feedName = by => by.slug ? h("a", { class: "fd-name", href: "#/u/" + by.slug, text: by.name }) : h("span", { class: "fd-name", text: by.name });
+  const gameChip = (it, onGame) => { const b = h("button", { class: "fd-game", type: "button", text: "🎮 " + it.game, title: "Show posts about " + it.game }); b.addEventListener("click", () => onGame(it.appid, it.game)); return b; };
+
+  function feedBody(it, onGame) {
+    const art = it.art ? h("div", { class: "fd-art" }, pfArt(it.art, it.game)) : null;
+    if (it.kind === "finished") return h("div", { class: "fd-event" }, art, h("div", {}, h("div", { class: "fd-line" }, "🏁 Finished ", it.appid ? gameChip(it, onGame) : h("strong", { text: it.game })), h("div", { class: "muted small", text: "Added to their finished list." })));
+    if (it.kind === "rare") {
+      const d = it.data || {};
+      return h("div", { class: "fd-event" }, httpsOnly(d.icon) ? h("img", { class: "fd-ach", src: d.icon, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : h("div", { class: "fd-ach none", text: "★" }),
+        h("div", {}, h("div", { class: "fd-line" }, "💎 Unlocked ", h("strong", { text: d.name || "a rare achievement" }), " in ", it.appid ? gameChip(it, onGame) : h("strong", { text: it.game })), h("div", { class: "muted small", text: d.pct != null ? `Only ${d.pct}% of players have it.` : "" })));
+    }
+    if (it.kind === "trophy") { const d = it.data || {}; return h("div", { class: "fd-event" }, h("div", { class: "fd-ach none", text: d.icon || "🏆" }), h("div", {}, h("div", { class: "fd-line", text: `Earned the ${d.name || "a"} trophy` }), h("div", { class: "muted small", text: (d.tier || "") + " tier" }))); }
+    return h("div", { class: "fd-post" }, h("p", { text: it.body }), it.appid ? gameChip(it, onGame) : null);
+  }
+
+  /** One card in the feed or one reply: who, when, what, reactions, and the actions that make sense for the viewer. */
+  function feedCard(it, ctx) {
+    const card = h("article", { class: "fd-card" + (it.parentId ? " reply" : "") + (it.hidden ? " hidden-item" : ""), "data-id": String(it.id) });
+    const menu = h("span", { class: "fd-menu" });
+    if (ctx.signedIn) {
+      const del = h("button", { class: "fd-link", type: "button", text: it.own ? "Delete" : "Report" });
+      del.addEventListener("click", () => busy(del, async () => {
+        if (it.own) { if (!confirm("Delete this?")) return; await api("/api/social/delete", { id: it.id }); card.remove(); ctx.onGone?.(it); toast("Deleted.", "ok"); }
+        else { const why = prompt("What's wrong with it? (optional)"); if (why === null) return; await api("/api/social/report", { id: it.id, reason: why }); toast("Thanks. It will be looked at.", "ok"); }
+      }));
+      menu.append(del);
+    }
+    const head = h("div", { class: "fd-head" }, feedAvatar(it.by), h("div", { class: "fd-who" }, feedName(it.by), h("span", { class: "muted small", text: feedAgo(it.at) + (it.hidden ? " · hidden pending review" : "") })), menu);
+    const bar = h("div", { class: "fd-actions" });
+    const drawBar = () => {
+      bar.replaceChildren(...ctx.reactions.map(e => {
+        const n = it.reactions[e] || 0, on = it.mine === e;
+        const b = h("button", { class: "fd-react" + (on ? " on" : ""), type: "button", title: on ? "Take it back" : "React", "aria-pressed": String(on) }, e, n ? h("span", { text: String(n) }) : null);
+        b.addEventListener("click", async () => {
+          if (!ctx.signedIn) return toast("Sign in with Discord to react.", "warn");
+          try {
+            const r = await api("/api/social/react", { id: it.id, emoji: e });
+            if (it.mine) it.reactions[it.mine] = Math.max(0, (it.reactions[it.mine] || 1) - 1);
+            it.mine = r.mine; if (r.mine) it.reactions[r.mine] = (it.reactions[r.mine] || 0) + 1;
+            drawBar();
+          } catch (err) { toast(err.message, "error"); }
+        });
+        return b;
+      }));
+      if (!it.parentId) bar.append(replyBtn);
+    };
+    const thread = h("div", { class: "fd-thread", hidden: true });
+    const replyBtn = h("button", { class: "fd-reply", type: "button" });
+    const paintReply = () => { replyBtn.textContent = "💬 " + (it.replies ? it.replies : "Reply"); };
+    paintReply();
+    let loaded = false;
+    replyBtn.addEventListener("click", async () => {
+      thread.hidden = !thread.hidden;
+      if (thread.hidden || loaded) return;
+      loaded = true; thread.replaceChildren(h("div", { class: "muted small", text: "Loading…" }));
+      try {
+        const r = await api("/api/social/item?id=" + it.id);
+        const list = h("div", { class: "fd-replies" });
+        const add = rep => list.append(feedCard(rep, { ...ctx, onGone: () => { it.replies = Math.max(0, it.replies - 1); paintReply(); } }));
+        r.replies.forEach(add);
+        thread.replaceChildren(list);
+        if (ctx.signedIn) thread.append(feedComposer({ parent: it.id, placeholder: "Write a reply", button: "Reply", onPosted: async () => { loaded = false; thread.hidden = true; const r2 = await api("/api/social/item?id=" + it.id); it.replies = r2.replies.length; paintReply(); thread.hidden = false; list.replaceChildren(...r2.replies.map(x => feedCard(x, { ...ctx, onGone: () => { it.replies = Math.max(0, it.replies - 1); paintReply(); } }))); loaded = true; } }));
+        else thread.append(h("p", { class: "muted small", text: "Sign in with Discord to reply." }));
+      } catch (err) { loaded = false; thread.replaceChildren(h("div", { class: "notice warn", text: err.message })); }
+    });
+    drawBar();
+    card.append(head, feedBody(it, ctx.onGame), bar, thread);
+    return card;
+  }
+
+  /** The box for writing a post or a reply. */
+  function feedComposer({ parent = null, placeholder = "What are you playing?", button = "Post", games = [], onPosted }) {
+    const box = h("textarea", { class: "fd-text", maxlength: "280", rows: parent ? "2" : "3", placeholder, "aria-label": placeholder });
+    const count = h("span", { class: "muted small fd-count", text: "280" });
+    const pick = !parent ? h("select", { class: "fd-pick", "aria-label": "Tag a game" }, h("option", { value: "", text: "No game" }), ...games.map(g => h("option", { value: String(g.appid), text: g.title }))) : null;
+    const send = h("button", { class: "btn blue small", type: "button", text: button });
+    box.addEventListener("input", () => { count.textContent = String(280 - [...box.value].length); count.classList.toggle("warn", 280 - [...box.value].length < 20); });
+    send.addEventListener("click", () => busy(send, async () => {
+      await api("/api/social/post", { body: box.value, appid: pick?.value ? Number(pick.value) : undefined, parent: parent ?? undefined });
+      box.value = ""; count.textContent = "280"; if (pick) pick.value = "";
+      await onPosted?.();
+    }));
+    return h("div", { class: "fd-compose" }, box, h("div", { class: "fd-compose-row" }, pick, count, send));
+  }
+
+  async function feedView() {
+    const signedIn = Boolean(state.me);
+    const st = FEED_STATE;
+    if (!st.scope) st.scope = "following";
+    let following = 0, reactions = [], cursor = null, loading = false;
+    const list = h("div", { class: "fd-list" }), more = h("button", { class: "btn gray small fd-more", type: "button", text: "Show more", hidden: true });
+    const filter = h("div", { class: "fd-filter", hidden: true });
+    const composer = h("div", { class: "fd-composer" });
+    const scopes = h("div", { class: "fd-scopes" });
+    const onGame = (appid, game) => { st.game = { appid, game }; drawChrome(); reload(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    function drawChrome() {
+      scopes.replaceChildren(...[["following", "Following"], ["everyone", "Everyone"], ["mine", "My posts"]].filter(([k]) => signedIn || k === "everyone").map(([k, label]) => {
+        const b = h("button", { class: "chip-btn" + (st.scope === k ? " on" : ""), type: "button", text: label, "aria-pressed": String(st.scope === k) });
+        b.addEventListener("click", () => { st.scope = k; drawChrome(); reload(); });
+        return b;
+      }));
+      if (!signedIn) st.scope = "everyone";
+      filter.hidden = !st.game;
+      if (st.game) { const x = h("button", { class: "fd-link", type: "button", text: "Clear" }); x.addEventListener("click", () => { st.game = null; drawChrome(); reload(); }); filter.replaceChildren(h("span", { text: "Showing posts about " }), h("strong", { text: st.game.game }), x); }
+    }
+    async function load(append) {
+      if (loading) return; loading = true;
+      try {
+        const q = new URLSearchParams({ scope: st.scope }); if (st.game) q.set("game", st.game.appid); if (append && cursor) q.set("before", cursor);
+        const r = await api("/api/social/feed?" + q);
+        following = r.following; reactions = r.reactions;
+        const ctx = { signedIn, reactions, onGame };
+        if (!append) list.replaceChildren();
+        if (!r.items.length && !append) {
+          list.replaceChildren(h("div", { class: "empty fd-empty" }, st.scope === "following" && !following
+            ? [h("strong", { text: "Your feed is empty" }), h("p", { text: "Follow a few people and what they finish, unlock and post shows up here." }), h("a", { class: "btn blue small", href: "/discover", text: "Find people to follow" })]
+            : [h("strong", { text: st.game ? "Nobody has posted about that yet" : st.scope === "mine" ? "You haven't posted yet" : "Nothing here yet" }), h("p", { text: st.scope === "mine" ? "Say something above, or finish a game and it appears on its own." : "Check back in a bit, or switch to Everyone." })]));
+        } else r.items.forEach(it => list.append(feedCard(it, ctx)));
+        cursor = r.items.length ? r.items[r.items.length - 1].id : cursor; more.hidden = !r.more;
+      } catch (e) { if (!append) list.replaceChildren(h("div", { class: "notice warn", text: e.message })); else toast(e.message, "error"); }
+      loading = false;
+    }
+    const reload = () => { cursor = null; return load(false); };
+    more.addEventListener("click", () => busy(more, () => load(true)));
+    app.replaceChildren(pageHead("Feed", "What people are finishing, unlocking and saying. It follows the pages people have made public."), composer, h("div", { class: "fd-bar" }, scopes), filter, list, h("div", { class: "fd-foot" }, more));
+    drawChrome();
+    if (signedIn) {
+      let games = []; try { games = (await api("/api/social/mygames")).games; } catch { /* the picker is optional */ }
+      composer.replaceChildren(h("div", { class: "panel fd-panel" }, feedComposer({ games, onPosted: async () => { await reload(); toast("Posted.", "ok"); } })));
+      const prefs = h("details", { class: "fd-prefs panel" }, h("summary", { text: "Feed settings" }));
+      api("/api/social/people").then(r => {
+        const ev = h("input", { type: "checkbox", checked: r.prefs.events }), dg = h("input", { type: "checkbox", checked: r.prefs.digest });
+        ev.addEventListener("change", () => api("/api/social/prefs", { events: ev.checked }).then(() => toast(ev.checked ? "Your finished games and rare unlocks show in the feed." : "Only your posts show in the feed now.", "ok")).catch(e => { ev.checked = !ev.checked; toast(e.message, "error"); }));
+        dg.addEventListener("change", () => api("/api/social/prefs", { digest: dg.checked }).then(() => toast(dg.checked ? "You'll get a weekly rundown on Discord." : "No more weekly digest.", "ok")).catch(e => { dg.checked = !dg.checked; toast(e.message, "error"); }));
+        prefs.append(h("label", { class: "fd-check" }, ev, h("span", { text: "Show my finished games, rare unlocks and trophies in the feed" })), h("label", { class: "fd-check" }, dg, h("span", { text: "Send me a weekly rundown of the people I follow on Discord" })),
+          h("p", { class: "muted small", text: "Your page has to be on for anything to show. Turn it on under My page." }));
+      }).catch(() => {});
+      app.append(prefs);
+    } else composer.replaceChildren(h("div", { class: "notice", role: "status" }, "You're reading as a guest. ", h("a", { href: "/auth/login", text: "Sign in with Discord" }), " to follow people, post and react."));
+    reload();
+  }
+
+  async function discoverView() {
+    const box = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("Discover", "What people are into this week, the rarest achievements around, and members whose libraries look like yours."), box);
+    try {
+      const d = await api("/api/social/discover");
+      const trend = d.trending.length ? h("div", { class: "fd-trend" }, d.trending.map(g => {
+        const a = h("button", { class: "fd-trend-card", type: "button" }, h("div", { class: "fd-art" }, pfArt(g.art, g.game)), h("strong", { text: g.game }), h("span", { class: "muted small", text: `${g.people} ${g.people === 1 ? "person" : "people"}${g.posts ? ` · ${g.posts} post${g.posts === 1 ? "" : "s"}` : ""}${g.finishes ? ` · ${g.finishes} finished` : ""}` }));
+        a.addEventListener("click", () => { FEED_STATE.game = { appid: g.appid, game: g.game }; FEED_STATE.scope = "everyone"; navigate("/feed"); });
+        return a;
+      })) : h("p", { class: "muted", text: "Nothing is trending yet. Finish a game or post about one and it will show up here." });
+      const rare = d.rare.length ? h("div", { class: "fd-rare" }, d.rare.map(r => h("div", { class: "fd-rare-row" }, httpsOnly(r.icon) ? h("img", { class: "fd-ach", src: r.icon, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : h("div", { class: "fd-ach none", text: "★" }),
+        h("div", {}, h("strong", { text: r.achievement }), h("div", { class: "muted small" }, `${r.game} · ${r.pct}% of players · `, r.slug ? h("a", { href: "#/u/" + r.slug, text: r.name }) : r.name))))) : h("p", { class: "muted", text: "Nobody has shared achievements yet. Turn on the Rarest achievements section on your page." });
+      const people = state.me ? (d.similar.length ? h("div", { class: "fd-people" }, d.similar.map(p => personRow(p, `${p.shared} games in common`))) : h("p", { class: "muted", text: "Sync your Steam library and you'll see members who own a lot of the same games." })) : h("p", { class: "muted", text: "Sign in to see people with libraries like yours." });
+      box.className = ""; box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Trending this week" }), trend), h("div", { class: "panel" }, h("h3", { text: "Rarest achievements" }), rare), h("div", { class: "panel" }, h("h3", { text: "People you might like" }), people));
+    } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  /** A person in a list, with a follow button. */
+  function personRow(p, note) {
+    const btn = h("button", { class: "btn small", type: "button" });
+    const paint = () => { btn.className = "btn small " + (p.following ? "gray" : "blue"); btn.textContent = p.following ? "Following" : "Follow"; };
+    paint();
+    btn.addEventListener("click", () => busy(btn, async () => { await api("/api/social/follow", { slug: p.slug, on: !p.following }); p.following = !p.following; paint(); }));
+    return h("div", { class: "fd-person" }, feedAvatar(p), h("div", { class: "fd-who" }, feedName(p), note ? h("span", { class: "muted small", text: note }) : null), state.me ? btn : null);
+  }
+
+  async function peopleView() {
+    const box = h("div", { class: "muted", text: "Loading…" });
+    app.replaceChildren(pageHead("People", "Who you follow, who follows you, and who you've blocked."), box);
+    const tab = { v: "following" };
+    const draw = r => {
+      const unblock = b => { const x = h("button", { class: "btn gray small", type: "button", text: "Unblock" }); x.addEventListener("click", () => busy(x, async () => { await api("/api/social/block", { slug: b.slug, on: false }); r.blocked = r.blocked.filter(y => y !== b); draw(r); toast("Unblocked.", "ok"); })); return x; };
+      const lists = { following: r.following.map(p => personRow(p)), followers: r.followers.map(p => personRow(p)), blocked: r.blocked.map(b => h("div", { class: "fd-person" }, h("div", { class: "fd-av init", text: "∅" }), h("div", { class: "fd-who" }, h("span", { class: "fd-name", text: b.name })), unblock(b))) };
+      const empty = { following: "You aren't following anyone yet. Try Discover.", followers: "Nobody follows you yet. Share your page link.", blocked: "You haven't blocked anyone." };
+      const tabs = h("div", { class: "fd-scopes" }, [["following", `Following (${r.following.length})`], ["followers", `Followers (${r.followers.length})`], ["blocked", `Blocked (${r.blocked.length})`]].map(([k, label]) => {
+        const b = h("button", { class: "chip-btn" + (tab.v === k ? " on" : ""), type: "button", text: label }); b.addEventListener("click", () => { tab.v = k; draw(r); }); return b;
+      }));
+      box.className = ""; box.replaceChildren(tabs, h("div", { class: "panel" }, lists[tab.v].length ? h("div", { class: "fd-people" }, lists[tab.v]) : h("p", { class: "muted", text: empty[tab.v] })));
+    };
+    try { draw(await api("/api/social/people")); } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  /** The follow button, counts, library comparison and block on someone's public page. */
+  function pfSocial(p, social) {
+    const wrap = h("div", { class: "pf-social" });
+    const counts = h("span", { class: "muted small" });
+    const paintCounts = () => { counts.textContent = `${social.followers} ${social.followers === 1 ? "follower" : "followers"} · ${social.following} following`; };
+    paintCounts();
+    wrap.append(counts);
+    if (social.canFollow) {
+      const f = h("button", { class: "btn small", type: "button" });
+      const paint = () => { f.className = "btn small " + (social.iFollow ? "gray" : "blue"); f.textContent = social.iFollow ? "Following" : "Follow"; };
+      paint();
+      f.addEventListener("click", () => busy(f, async () => { const r = await api("/api/social/follow", { slug: p.slug, on: !social.iFollow }); social.iFollow = r.following; social.followers = r.followers; paint(); paintCounts(); }));
+      const cmp = h("button", { class: "btn gray small", type: "button", text: "Compare libraries" });
+      const out = h("div", { class: "pf-compare", hidden: true });
+      cmp.addEventListener("click", () => busy(cmp, async () => {
+        if (!out.hidden) { out.hidden = true; return; }
+        try {
+          const r = await api("/api/social/compare?slug=" + encodeURIComponent(p.slug));
+          const col = (title, games, empty) => h("div", { class: "pf-cmp-col" }, h("h4", { text: `${title} (${games.length})` }), games.length ? h("ul", {}, games.slice(0, 40).map(g => h("li", { text: g }))) : h("p", { class: "muted small", text: empty }));
+          out.replaceChildren(h("p", { class: "muted small", text: `You own ${r.yours} games and ${r.them.name} owns ${r.theirs}.` }),
+            h("div", { class: "pf-cmp" }, col("You both own", r.shared, "No overlap yet."), col(`${r.them.name} has, you don't`, r.theyHave, "You have everything they do."), col("You have, they don't", r.youHave, "They have everything you do.")));
+          out.hidden = false;
+        } catch (e) { toast(e.message, "warn"); }
+      }));
+      wrap.append(f, cmp);
+      const blk = h("button", { class: "fd-link", type: "button", text: "Block" });
+      blk.addEventListener("click", () => busy(blk, async () => { if (!confirm(`Block ${p.name}? You won't see each other's posts.`)) return; await api("/api/social/block", { slug: p.slug }); social.iFollow = false; toast("Blocked. You can undo it under People.", "ok"); navigate("/people"); }));
+      wrap.append(blk, out);
+    } else if (!social.me && !state.me) wrap.append(h("a", { class: "btn blue small", href: "/auth/login", text: "Sign in to follow" }));
+    return wrap;
+  }
+
+  /** Latest posts on a profile page. */
+  function pfPosts(s) {
+    if (!s.items.length) return h("p", { class: "muted", text: "No posts yet. Write one in the Feed." });
+    return h("div", { class: "pf-posts" }, s.items.map(x => h("div", { class: "pf-post" }, h("p", { text: x.body }),
+      h("div", { class: "muted small" }, feedAgo(x.at), x.game ? " · " + x.game : "", Object.entries(x.reactions || {}).map(([e, n]) => ` · ${e} ${n}`).join(""), x.replies ? ` · ${x.replies} ${x.replies === 1 ? "reply" : "replies"}` : ""))));
+  }
+
+  const VIEWS = { feed: feedView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
@@ -6747,7 +6996,7 @@
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else delete document.documentElement.dataset.area;
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u" && view !== "feed" && view !== "discover") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }

@@ -1186,6 +1186,76 @@ test("profile page: rarest achievements and recent activity show up for a Steam-
     await t.close();
 });
 
+test("community feed: follow, post, react, reply, report and moderate through the API", async () => {
+    const ID = n => "30000000000000000" + n; // a Discord-style id from long ago, so the account is old enough
+    let who = ID(1);
+    const t = await setup({ ownerId: ID(9), config: { authPerMinute: 500, apiPerMinute: 5000, ownerId: ID(9) }, restExtra: { login: async () => ({ user: { id: who, username: "member-" + who.slice(-1), global_name: null, avatar: null }, guilds: [] }) } });
+    t.advance(Date.now());
+    const as = async id => { who = id; await t.request("/auth/logout", { method: "POST", body: {} }); await t.signIn(); };
+    const post = (body, extra = {}) => t.request("/api/social/post", { method: "POST", body: { body, ...extra } });
+    for (const [i, n] of [[1, "ann"], [2, "ben"], [3, "cy"]]) { await as(ID(i)); await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: n } }); }
+    t.db.syncSteamGames(ID(1), [{ itad_id: "x", title: "Celeste", appid: 504230, minutes: 60, lastPlayed: null }]);
+
+    await as(ID(1));
+    assert.equal((await post("Anyone for a Celeste run?", { appid: 999 })).status, 400, "the game has to be in your own library");
+    const first = (await post("Anyone for a Celeste run?", { appid: 504230 })).data.id;
+    assert.ok(first);
+    assert.equal((await post("see https://spam.example")).status, 400);
+    const everyone = (await t.request("/api/social/feed")).data;
+    assert.equal(everyone.items[0].body, "Anyone for a Celeste run?"); assert.equal(everyone.items[0].game, "Celeste"); assert.equal(everyone.items[0].own, true); assert.equal(everyone.items[0].by.slug, "ann");
+    assert.equal(JSON.stringify(everyone).includes(ID(1)), false, "no account ids in the feed");
+
+    await as(ID(2));
+    assert.equal((await t.request("/api/social/follow", { method: "POST", body: { slug: "ann" } })).data.followers, 1);
+    assert.equal((await t.request("/api/social/follow", { method: "POST", body: { slug: "ben" } })).status, 400, "not yourself");
+    const mine = (await t.request("/api/social/feed?scope=following")).data;
+    assert.equal(mine.items.length, 1); assert.equal(mine.following, 1);
+    assert.equal((await t.request("/api/social/react", { method: "POST", body: { id: first, emoji: "🔥" } })).data.mine, "🔥");
+    assert.equal((await t.request("/api/social/react", { method: "POST", body: { id: first, emoji: "💩" } })).status, 400);
+    const reply = await post("I'm in", { parent: first });
+    assert.ok(reply.data.id);
+    const thread = (await t.request("/api/social/item?id=" + first)).data;
+    assert.equal(thread.item.reactions["🔥"], 1); assert.equal(thread.replies.length, 1); assert.equal(thread.replies[0].body, "I'm in");
+    const prof = (await t.request("/api/public/profile?slug=ann")).data;
+    assert.equal(prof.social.followers, 1); assert.equal(prof.social.iFollow, true);
+    assert.equal(prof.profile.sections.find(x => x.key === "posts").items[0].body, "Anyone for a Celeste run?");
+
+    await as(ID(1));
+    const notes = (await t.request("/api/notifications")).data;
+    const titles = JSON.stringify(notes);
+    assert.match(titles, /followed you/); assert.match(titles, /replied to your post/);
+    assert.equal((await t.request("/api/social/delete", { method: "POST", body: { id: reply.data.id } })).status, 403, "only your own");
+
+    for (const [i, n] of [[2, "ben"], [3, "cy"]]) { await as(ID(i)); assert.equal((await t.request("/api/social/report", { method: "POST", body: { id: first, reason: "annoying" } })).data.reported, true); }
+    await as(ID(4)); await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "dee" } });
+    assert.equal((await t.request("/api/social/feed")).data.items.length, 1, "two reports do not hide it");
+    await t.request("/api/social/report", { method: "POST", body: { id: first } });
+    assert.equal((await t.request("/api/social/feed")).data.items.length, 0, "three do");
+    assert.equal((await t.request("/api/admin/social")).status, 403);
+
+    await as(ID(9));
+    const adm = (await t.request("/api/admin/social")).data;
+    assert.equal(adm.reports[0].reports, 3); assert.equal(adm.reports[0].by.slug, "ann");
+    assert.equal((await t.request("/api/admin/social", { method: "POST", body: { action: "ban", id: first, reason: "test" } })).data.ok, true);
+    await as(ID(1));
+    assert.equal((await post("hello again")).status, 403, "banned from posting");
+    await as(ID(9));
+    await t.request("/api/admin/social", { method: "POST", body: { action: "unban", user: ID(1) } });
+    await as(ID(1));
+    assert.ok((await post("hello again")).data.id, "and back after an unban");
+
+    // compare needs the other member to show their library
+    await as(ID(2));
+    assert.equal((await t.request("/api/social/compare?slug=ann")).status, 403);
+    t.db.setProfileData(ID(1), { sections: [{ key: "steam", vis: "public" }] });
+    assert.equal((await t.request("/api/social/compare?slug=ann")).data.theirs, 1);
+    const disc = (await t.request("/api/social/discover")).data;
+    assert.ok(Array.isArray(disc.trending) && Array.isArray(disc.rare) && Array.isArray(disc.similar));
+    assert.equal((await t.request("/api/social/block", { method: "POST", body: { slug: "ann" } })).data.blocked, true);
+    assert.equal((await t.request("/api/social/feed")).data.items.some(i => i.by.slug === "ann"), false);
+    await t.close();
+});
+
 test("gift marks: limits, expiry and moderation in the store", async () => {
     const { openDb } = await import("../src/db.js");
     const { MAX_CLAIMS_TOTAL, CLAIM_TTL_MS, accountOldEnough, accountCreatedAt } = await import("../src/giftstore.js");

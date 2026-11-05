@@ -1,5 +1,6 @@
 // Steam library linking: read the owned games and playtime of a PUBLIC profile, store them in the member's library,
 // and work out what the playtime says about value. Pure logic plus two fetches; Discord and the dashboard call this.
+import { refreshTrophies } from "./socialevents.js";
 import { STEAM_SHOP_ID, SteamError, parseProfileInput, resolveVanity, get } from "./steam.js";
 import { MAX_LIBRARY_PER_USER } from "./db.js";
 import { libraryView } from "./library.js";
@@ -124,7 +125,7 @@ export async function fetchAchievementArt(appid, unlocked, { apiKey, fetchImpl =
             if (sr.ok) for (const a of (await sr.json())?.game?.availableGameStats?.achievements ?? []) info.set(String(a.name), { icon: steamImage(a.icon), name: a.displayName });
         } catch { /* the pictures are a bonus */ }
         const dress = a => ({ apiname: a.apiname, name: info.get(a.apiname)?.name || a.name || a.apiname, icon: info.get(a.apiname)?.icon ?? null });
-        return { rare: rare.map(a => ({ ...dress(a), pct: Math.round(a.pct * 10) / 10 })), recent: recent.map(a => ({ ...dress(a), at: a.at })) };
+        return { rare: rare.map(a => ({ ...dress(a), pct: Math.round(a.pct * 10) / 10, at: a.at })), recent: recent.map(a => ({ ...dress(a), at: a.at })) };
     } catch { return none; }
 }
 
@@ -139,7 +140,7 @@ export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl 
     // Games played in the last two weeks are looked at daily so the profile's recent activity stays current.
     const todo = db.listLibrary(userId).filter(g => g.appid && (g.minutes ?? 0) >= 30 && (!g.ach_checked || !g.ach_art || g.ach_checked < (isRecent(g) ? fresh : stale)))
         .sort((a, b) => (isRecent(b) - isRecent(a)) || b.minutes - a.minutes).slice(0, limit);
-    let checked = 0, newlyFinished = 0, stopped = false, i = 0;
+    let checked = 0, newlyFinished = 0, stopped = false, i = 0, feedPosts = 0;
     const worker = async () => {
         while (!stopped && i < todo.length) {
             const g = todo[i++];
@@ -151,6 +152,11 @@ export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl 
                 if (a.unlocked?.length) {
                     const art = await fetchAchievementArt(g.appid, a.unlocked, { apiKey, fetchImpl, wantRecent: isRecent(g) });
                     db.setRareAchievements(userId, g.appid, g.title, art.rare);
+                    // A fresh, very rare unlock goes in the community feed. A few per run, so a long backlog never floods it.
+                    for (const r of art.rare) {
+                        if (feedPosts >= 5 || !r.at || r.pct >= 5 || now - r.at * 1000 > 14 * 86400_000) continue;
+                        if (db.addEvent(userId, "rare", { appid: g.appid, game: g.title, ref: `${g.appid}:${r.apiname}`, data: { name: r.name, icon: r.icon, pct: r.pct }, at: r.at * 1000 })) feedPosts++;
+                    }
                     db.setRecentUnlocks(userId, g.appid, art.recent);
                 } else { db.setRareAchievements(userId, g.appid, g.title, []); db.setRecentUnlocks(userId, g.appid, []); }
             } catch { stopped = true; }
@@ -231,6 +237,7 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
     db.setSteamLink(userId, steamid);
     db.markSteamSynced(userId, { games: owned.length, minutes });
     try { const cc = await fetchSteamCountry(steamid, apiKey, fetchImpl); if (cc) db.setSteamCountry(userId, cc); } catch { /* the region note is a bonus */ }
+    refreshTrophies(db, userId);
     // What the synced games are worth right now. A price lookup problem must not undo a good sync, so it is optional.
     let value = null;
     try {

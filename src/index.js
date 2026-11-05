@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { dailySocial } from "./socialevents.js";
 import { noticePreset } from "./noticepresets.js";
 import { asksCreator, creatorEmbed } from "./aicreator.js";
 import { missingAiPerms, permsNotice, shouldTell } from "./aiperms.js";
@@ -51,6 +52,7 @@ import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
+import { runSocialDigest } from "./socialdigest.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createNowPlaying, runSquadUps } from "./nowplaying.js";
 import { createClubHandlers, runGameClubs } from "./gameclub.js";
@@ -380,6 +382,7 @@ client.once(Events.ClientReady, c => {
             result.refundDrops = await ops.job("refund price drops", () => runRefundDrops({ db, itad, notifier }));
             result.milestones = await ops.job("milestones", () => runMilestones({ db, notifier }));
             result.achv = await ops.job("achievement nudges", () => runAchievementNudges({ db, notifier }));
+            result.digest = await ops.job("feed digest", () => runSocialDigest({ db, notifier, dashboardUrl: cfg.dashboard?.publicUrl ?? null }));
             result.nudge = await ops.job("backlog pick", () => runBacklogNudge({ db, notifier }));
             result.yearly = await ops.job("year in games", () => runYearInGames({ db, notifier, render: (userId, name) => renderRecap({ db, userId, name }) }));
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
@@ -397,7 +400,7 @@ client.once(Events.ClientReady, c => {
             result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
-            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); } catch (err) { ops.error("cleanup", err); }
+            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }
             catch (err) { await ops.backupDone(null, err); }

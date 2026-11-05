@@ -1,5 +1,13 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.30", date: "2026-11-05", title: "A community feed: follow people, post, react, discover", items: [
+        "**Feed:** a new Feed menu. Follow people from their page and see what they finish, which rare achievements they unlock and what they post, all on one timeline. Switch between Following, Everyone and your own posts, and tap a game to see who is talking about it.",
+        "**Posts, replies and reactions:** write a short post (280 characters, no links), tag a game from your library, reply, and react with 👍 🔥 😂 🎮 ❤️ or 😮. Report anything that is off. Three reports hide a post until the bot owner has looked, and you can block anyone.",
+        "**Discover:** games people are into this week, the rarest achievements across public pages, and members whose libraries look like yours.",
+        "**On profile pages:** a Follow button with follower counts, a Compare libraries button (for members who show their Steam stats) and a Latest posts section.",
+        "**You stay in control:** only pages that are switched on appear in the feed. Turn off finished games and unlocks in the Feed settings, or block people. Your new followers and replies show up in your notifications.",
+        "**Weekly digest:** opt in on the Feed page and the bot sends you a weekly rundown of what the people you follow got up to."
+    ] },
     { version: "2026.11.29", date: "2026-11-05", title: "Achievements on profile pages, region heads-up for gifts", items: [
         "**Region heads-up for gifts:** when you press \"I'll gift this\" and your Steam region (taken from your synced Steam profile, otherwise your bot price region) is not the list owner's, you get a note before the mark goes through. It says whether the currencies differ, since Steam can block gifts across those, and a reminder stays on the mark.",
         "**Achievements on your profile page:** two new sections for Steam-linked members, styled after Steam. *Rarest achievements* shows your rarest unlocks (held by under 10% of players) as a gold-edged row of icons with your total and rare counts, and *Recent activity* shows the games you played in the last two weeks with hours, last played date, an achievement progress bar and your newest unlocks. Turn them on in the page editor. They fill in after your next Steam sync, and games you played lately are re-checked daily."
