@@ -41,12 +41,12 @@ export async function fillAppIds(db, itad, userId, rows) {
     return rows;
 }
 
-export async function publicWishlist(db, itad, slug, token = null) {
+export async function publicWishlist(db, itad, slug, viewerId = null) {
     const user = db.getProfileBySlug(String(slug ?? "").toLowerCase());
     if (!user || !user.profile_public) return null;
     // Games the owner already has are not worth gifting, so they are left off the page.
     const owned = new Set(db.listLibrary(user.discord_id).map(x => x.itad_id));
-    const claims = db.giftClaimMap(user.discord_id, token);
+    const claims = db.giftClaimMap(user.discord_id, viewerId);
     const soon = user.guild_id ? db.soonIds(user.guild_id) : new Set();
     const items = db.listItems(user.discord_id).filter(i => i.source !== "watch" && !owned.has(i.itad_id)).slice(0, 100);
     await fillAppIds(db, itad, user.discord_id, items);
@@ -56,5 +56,5 @@ export async function publicWishlist(db, itad, slug, token = null) {
         const now = current(s);
         return { id: it.itad_id, soon: soon.has(it.itad_id), claim: claims.get(it.itad_id) ?? null, title: it.title, art: artUrl(it) ?? null, price: s.best?.price ?? null, shop: s.best?.shop ?? null, url: /^https:\/\//i.test(s.best?.url ?? "") ? s.best.url : null, discount: Math.round((now.discount ?? 0) * 100), currency: s.currency ?? "USD" };
     }).sort((a, b) => b.discount - a.discount || a.title.localeCompare(b.title));
-    return { slug: user.profile_slug, guild_id: user.guild_id ?? null, games };
+    return { slug: user.profile_slug, guild_id: user.guild_id ?? null, giftsOpen: !db.giftsPaused(user.discord_id), games };
 }

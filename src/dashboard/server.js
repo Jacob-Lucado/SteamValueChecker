@@ -84,7 +84,7 @@ import { buyOrWait } from "../advice.js";
 import { friendDeals, friendRows, saveFriend } from "../friends.js";
 import { spendSummary, regionCurrency, grabberRegion } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
-import { GIFT_TOKEN, MAX_CLAIMS_PER_VISITOR } from "../giftstore.js";
+import { MAX_CLAIMS_PER_LIST, MAX_CLAIMS_TOTAL, accountOldEnough } from "../giftstore.js";
 import { upcomingSales, salesBefore, SALES_UPDATED } from "../salescal.js";
 import { playNext } from "../library.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext, fetchProfileCard, fetchOwnedGames } from "../steamlib.js";
@@ -2389,7 +2389,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             };
         },
 
-        "GET /api/profile": async (req) => { const s = session(req); const u = userRow(s); return { slug: u.profile_slug ?? null, public: Boolean(u.profile_public), claims: db.countGiftClaims(s.userId) }; },
+        "GET /api/profile": async (req) => { const s = session(req); const u = userRow(s); return { slug: u.profile_slug ?? null, public: Boolean(u.profile_public), claims: db.countGiftClaims(s.userId), giftsPaused: db.giftsPaused(s.userId) }; },
         "POST /api/profile": async (req, body) => {
             const s = session(req); userRow(s);
             const r = setProfile(db, s.userId, { enabled: Boolean(body.enabled), slug: body.slug });
@@ -2424,8 +2424,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const sess = softSession(req);
             const mine = Boolean(sess && sess.userId === owner.discord_id);
             const sameServer = Boolean(mine || (sess && owner.guild_id && !isHidden(owner.guild_id) && sess.guilds.some(g => g.id === owner.guild_id)));
-            const t = url.searchParams.get("t");
-            const profile = await buildProfile({ db, itad, nowPlaying }, owner, { owner: mine, sameServer }, { token: GIFT_TOKEN.test(t ?? "") ? t : null });
+            const profile = await buildProfile({ db, itad, nowPlaying }, owner, { owner: mine, sameServer }, { viewerId: sess?.userId ?? null });
             if (rt && !rt.get("profile_songs")) { if (profile.song && profile.owner) profile.songOff = true; profile.song = null; profile.enter = false; }
             const wl = profile.sections.find(x => x.key === "wishlist");
             const canMark = Boolean(sess && owner.guild_id && !isHidden(owner.guild_id) && isStaff(sess.guilds.find(x => x.id === owner.guild_id)));
@@ -2519,8 +2518,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         },
 
         "GET /api/public/wishlist": async (req, _b, url) => {
-            const t = url.searchParams.get("t");
-            const page = await publicWishlist(db, itad, url.searchParams.get("slug"), GIFT_TOKEN.test(t ?? "") ? t : null);
+            const page = await publicWishlist(db, itad, url.searchParams.get("slug"), softSession(req)?.userId ?? null);
             if (!page) throw new HttpError(404, "That page does not exist or is private.");
             // Staff of the member's server get the "Up for giveaway" button; everyone else just sees which games are marked.
             const s = softSession(req);
@@ -2529,7 +2527,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             // The colour picked for their profile card also tints their wishlist page. Only the fixed theme colours can come out of this.
             const owner = db.getProfileBySlug(page.slug);
             const accent = THEMES[viewPrefs(owner ? db.getCardPrefs(owner.discord_id) : {}).theme]?.[1] ?? null;
-            return { ...rest, canMark, accent };
+            return { ...rest, canMark, accent, signedIn: Boolean(s), owner: Boolean(s && owner && s.userId === owner.discord_id) };
         },
         // Moderators and owners flag a wishlist game as "up for giveaway soon". It lives in the member's server, so only that server's staff can do it.
         "POST /api/wishlist/soon": async (req, body) => {
@@ -2552,20 +2550,55 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const names = new Map(s.guilds.map(g => [g.id, g.name]));
             return { games: db.listSoon([...names.keys()]).map(x => ({ ...x, server: names.get(x.guild_id) })) };
         },
-        // Anyone with the link can mark or unmark a gift. A made-up code from their browser is the only identity; the owner is never told who.
+        // Marking a gift needs a Discord sign-in, so a mark belongs to a real account that can be limited or blocked. The list's owner is never told who.
         "POST /api/public/gift": async (req, body) => {
-            if (!giftLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const token = String(body.token ?? "");
-            if (!GIFT_TOKEN.test(token)) throw new HttpError(400, "Bad request.");
+            const s = session(req);
+            if (!giftLimit.hit(clientIp(req)).ok || !giftLimit.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
             const owner = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
             if (!owner || !owner.profile_public) throw new HttpError(404, "That page does not exist or is private.");
+            if (owner.discord_id === s.userId) throw new HttpError(400, "That is your own list. Someone else marks the gifts.");
             const id = String(body.id ?? "");
-            if (!db.listItems(owner.discord_id).some(g => g.itad_id === id && g.source !== "watch")) throw new HttpError(404, "That game is not on this list.");
-            if (body.claim === false) return { claim: db.unclaimGift(owner.discord_id, id, token) ? null : "taken" };
-            const r = db.claimGift(owner.discord_id, id, token);
+            const game = db.listItems(owner.discord_id).find(g => g.itad_id === id && g.source !== "watch");
+            if (!game) throw new HttpError(404, "That game is not on this list.");
+            if (body.claim === false) return { claim: db.unclaimGift(owner.discord_id, id, s.userId) ? null : "taken" };
+            if (db.giftsPaused(owner.discord_id)) throw new HttpError(403, "Gift marks are switched off on this list right now.");
+            if (s.userId !== config.ownerId) {
+                if (db.isGiftBanned(s.userId)) throw new HttpError(403, "Gift marks are turned off for your account.");
+                if (!accountOldEnough(s.userId, now())) throw new HttpError(403, "Your Discord account is too new to mark gifts yet. Try again in a few days.");
+            }
+            const r = db.claimGift(owner.discord_id, id, s.userId, s.username ?? "");
             if (r === "taken") throw new HttpError(409, "Someone else already said they are gifting this one.");
-            if (r === "full") throw new HttpError(429, `You can claim up to ${MAX_CLAIMS_PER_VISITOR} games per list.`);
+            if (r === "full") throw new HttpError(429, `You can mark up to ${MAX_CLAIMS_PER_LIST} games per list.`);
+            if (r === "limit") throw new HttpError(429, `You can hold up to ${MAX_CLAIMS_TOTAL} gift marks at a time. Undo one first.`);
             return { claim: "mine" };
+        },
+        // The list's owner lets go of a mark (and can report it) or pauses marking. They still never learn who made it.
+        "POST /api/profile/gifts": async (req, body) => {
+            const s = session(req);
+            const u = userRow(s);
+            if (body.action === "pause") { db.setGiftsPaused(s.userId, Boolean(body.on)); return { paused: db.giftsPaused(s.userId) }; }
+            if (body.action !== "release") throw new HttpError(400, "Unknown action.");
+            const id = String(body.id ?? "");
+            const game = db.listItems(s.userId).find(g => g.itad_id === id);
+            const r = db.releaseGift(s.userId, id, { report: Boolean(body.report), slug: u.profile_slug ?? "", title: game?.title ?? "" });
+            if (!r.released) throw new HttpError(404, "Nobody has marked that one.");
+            return { released: true, reported: Boolean(body.report) };
+        },
+        "GET /api/admin/gifts": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            return { reports: db.listGiftReports(), bans: db.listGiftBans() };
+        },
+        "POST /api/admin/gifts": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const id = String(body.claimer ?? "");
+            if (!/^[\w-]{1,40}$/.test(id)) throw new HttpError(400, "Pick an account first.");
+            if (body.action === "ban") db.banGift(id, "Blocked by the bot owner");
+            else if (body.action === "unban") db.unbanGift(id);
+            else if (body.action === "dismiss") db.dismissGiftReports(id);
+            else throw new HttpError(400, "Unknown action.");
+            return { ok: true };
         },
 
         "GET /api/bundles": async (req, _b, url) => {

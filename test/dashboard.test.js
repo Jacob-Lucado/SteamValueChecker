@@ -1061,38 +1061,101 @@ test("extension store overlay: prices and owned/wishlist state for one Steam app
     await t.close();
 });
 
-test("gift claims: visitors mark a game, others see it taken, the owner only sees a count and can clear it", async () => {
-    const t = await signedIn();
-    await t.request("/api/wishlist/add", { method: "POST", body: { title: "Celeste" } });
+test("gift marks: need a Discord sign-in, one person per game, the owner sees a count, can release and report, and repeat offenders are blocked", async () => {
+    let who = "u1";
+    const t = await setup({ config: { authPerMinute: 500, apiPerMinute: 5000 }, restExtra: { login: async () => ({ user: { id: who, username: who === "u1" ? "jacob" : "visitor-" + who, global_name: null, avatar: null }, guilds: [] }) } });
+    const as = async id => { who = id; await t.request("/auth/logout", { method: "POST", body: {} }); await t.signIn(); };
+    await t.signIn();
+    for (const title of ["Celeste", "Hades", "Hollow Knight", "Dead Cells", "Tunic", "Inside", "Limbo"]) { t.advance(5_000); await t.request("/api/wishlist/add", { method: "POST", body: { title } }); }
     await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
-    const id = (await t.request("/api/wishlist")).data.rows[0].itad_id;
-    const A = "a".repeat(24), B = "b".repeat(24);
-    const pub = (tok) => t.request("/api/public/wishlist?slug=jacob" + (tok ? "&t=" + tok : ""));
-    const gift = (body) => t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id, ...body } });
-    assert.equal((await pub(A)).data.games[0].claim, null);
-    assert.equal((await pub(A)).data.accent, "#66c0f4", "the default card colour tints the page");
+    const ids = (await t.request("/api/wishlist")).data.rows.map(r => r.itad_id);
+    const pub = () => t.request("/api/public/wishlist?slug=jacob");
+    const gift = (id, extra = {}) => t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id, ...extra } });
+    assert.equal((await pub()).data.accent, "#66c0f4", "the default card colour tints the page");
     t.db.setCardPrefs("u1", { theme: "forest" });
-    assert.equal((await pub(A)).data.accent, "#5fd38d");
-    assert.equal((await gift({ token: "short" })).status, 400);
-    assert.equal((await gift({ token: A })).data.claim, "mine");
-    assert.equal((await pub(A)).data.games[0].claim, "mine");
-    assert.equal((await pub(B)).data.games[0].claim, "taken");
-    assert.equal((await pub()).data.games[0].claim, "taken");
-    assert.equal((await gift({ token: B })).status, 409, "a second visitor cannot take it");
-    assert.equal((await gift({ token: B, claim: false })).data.claim, "taken", "and cannot undo someone else's");
-    assert.equal((await t.request("/api/profile")).data.claims, 1);
-    assert.equal(JSON.stringify((await t.request("/api/profile")).data).includes(A), false, "the owner is not told who");
-    assert.equal((await t.request("/api/public/gift", { method: "POST", body: { slug: "nobody", id, token: A } })).status, 404);
-    assert.equal((await gift({ token: A, claim: false })).data.claim, null);
-    assert.equal((await pub(B)).data.games[0].claim, null);
-    await gift({ token: A });
-    const cleared = await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob", resetClaims: true } });
-    assert.equal(cleared.data.cleared, 1);
-    assert.equal((await pub(B)).data.games[0].claim, null);
-    // a game the owner already has is left off the page
-    t.db.upsertLibrary("u1", [{ itad_id: id, title: "Celeste", paid: null }]);
-    assert.equal((await pub(B)).data.games.length, 0);
+    assert.equal((await pub()).data.accent, "#5fd38d");
+    assert.equal((await gift(ids[0])).status, 400, "the list's owner does not mark their own gifts");
+
+    await as("v-a");
+    const own = (await pub()).data;
+    assert.equal(own.signedIn, true); assert.equal(own.giftsOpen, true);
+    assert.equal((await gift(ids[0])).data.claim, "mine");
+    assert.equal((await pub()).data.games.find(g => g.id === ids[0]).claim, "mine");
+    assert.equal((await gift(ids[0])).data.claim, "mine", "marking again renews it");
+    for (const id of ids.slice(1, 5)) assert.equal((await gift(id)).data.claim, "mine");
+    const full = await gift(ids[5]);
+    assert.equal(full.status, 429, "five marks per list");
+    assert.match(full.data.error, /up to 5/);
+    assert.equal((await gift(ids[0], { claim: false })).data.claim, null);
+    await gift(ids[0]);
+
+    await as("v-b");
+    assert.equal((await pub()).data.games.find(g => g.id === ids[0]).claim, "taken");
+    assert.equal((await gift(ids[0])).status, 409, "a second person cannot take it");
+    assert.equal((await gift(ids[0], { claim: false })).data.claim, "taken", "and cannot undo someone else's");
+    assert.equal((await gift("nope")).status, 404);
+    assert.equal((await t.request("/api/public/gift", { method: "POST", body: { slug: "nobody", id: ids[0] } })).status, 404);
+
+    // signed out: viewing works, marking does not
+    await t.request("/auth/logout", { method: "POST", body: {} });
+    assert.equal((await pub()).data.signedIn, false);
+    assert.equal((await gift(ids[6])).status, 401);
+
+    // a brand new account (its id says it was made after the clock) cannot mark yet
+    await as(String(1n << 62n));
+    const tooNew = await gift(ids[6]);
+    assert.equal(tooNew.status, 403); assert.match(tooNew.data.error, /too new/);
+
+    // the owner: sees only a count, can release a mark, pause marking, and report
+    await as("u1");
+    assert.equal((await t.request("/api/profile")).data.claims, 5);
+    assert.equal(JSON.stringify((await t.request("/api/profile")).data).includes("v-a"), false, "the owner is not told who");
+    assert.equal((await t.request("/api/profile/gifts", { method: "POST", body: { action: "release", id: ids[6] } })).status, 404, "nothing to release there");
+    assert.equal((await t.request("/api/profile/gifts", { method: "POST", body: { action: "release", id: ids[1] } })).data.released, true);
+    assert.equal(t.db.listGiftReports().length, 0, "a plain release is not a report");
+    assert.equal((await t.request("/api/profile/gifts", { method: "POST", body: { action: "pause", on: true } })).data.paused, true);
+    assert.equal((await t.request("/api/profile")).data.giftsPaused, true);
+    await as("v-c");
+    assert.equal((await gift(ids[1])).status, 403, "paused lists take no new marks");
+    await as("u1");
+    await t.request("/api/profile/gifts", { method: "POST", body: { action: "pause", on: false } });
+    for (const id of [ids[0], ids[2], ids[3]]) { const r = await t.request("/api/profile/gifts", { method: "POST", body: { action: "release", id, report: true } }); assert.equal(r.data.reported, true, JSON.stringify(r.data)); }
+    assert.equal(t.db.isGiftBanned("v-a"), true, "three reports block the account");
+    assert.equal(t.db.countGiftClaims("u1"), 0, "and its other marks are removed");
+    await as("v-a");
+    const blocked = await gift(ids[0]);
+    assert.equal(blocked.status, 403); assert.match(blocked.data.error, /turned off for your account/);
+
+    // only the bot owner reaches the moderation list
+    assert.equal((await t.request("/api/admin/gifts")).status, 403);
     await t.close();
+});
+
+test("gift marks: limits, expiry and moderation in the store", async () => {
+    const { openDb } = await import("../src/db.js");
+    const { MAX_CLAIMS_TOTAL, CLAIM_TTL_MS, accountOldEnough, accountCreatedAt } = await import("../src/giftstore.js");
+    let clock = 5_000_000_000_000;
+    const db = openDb(":memory:", { now: () => clock });
+    for (const o of ["o1", "o2", "o3", "o4"]) db.ensureUser(o);
+    // the overall cap applies across lists
+    for (let i = 0; i < MAX_CLAIMS_TOTAL; i++) assert.equal(db.claimGift(["o1", "o2", "o3"][i % 3], "g" + i, "me"), "claimed");
+    assert.equal(db.claimGift("o4", "x", "me"), "limit");
+    // marks run out, a renewal pushes that back
+    clock += CLAIM_TTL_MS - 1000; db.claimGift("o1", "g0", "me"); clock += 2000;
+    assert.equal(db.pruneGiftClaims(), MAX_CLAIMS_TOTAL - 1);
+    assert.equal(db.giftClaimMap("o1", "me").get("g0"), "mine");
+    // account age comes from the Discord id
+    const jan2020 = String((BigInt(Date.UTC(2020, 0, 1)) - 1420070400000n) << 22n);
+    assert.equal(new Date(accountCreatedAt(jan2020)).getUTCFullYear(), 2020);
+    assert.equal(accountOldEnough(jan2020, Date.UTC(2026, 0, 1)), true);
+    assert.equal(accountOldEnough(jan2020, Date.UTC(2020, 0, 3)), false);
+    assert.equal(accountOldEnough("u1", 0), true, "ids that are not real snowflakes are not judged");
+    // owner banning, unbanning and dismissing
+    db.banGift("bad", "test"); db.claimGift("o1", "z", "bad");
+    assert.equal(db.isGiftBanned("bad"), true);
+    db.unbanGift("bad");
+    assert.equal(db.isGiftBanned("bad"), false);
+    db.close();
 });
 
 test("profile song: saved songs show on the public page, and an owner is told when songs are switched off", async () => {

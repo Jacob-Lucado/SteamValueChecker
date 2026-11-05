@@ -762,7 +762,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     function deleteUser(discordId) {
         db.exec("BEGIN");
         try {
-            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_claims", "challenges", "bundles_bought", "friends"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            for (const t of ["items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            run("DELETE FROM gift_marks WHERE claimer_id = ?", discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
             calendar.forgetCalendarUser(discordId);

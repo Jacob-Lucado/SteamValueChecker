@@ -980,7 +980,9 @@
       panel.replaceChildren(h("h3", { text: "Public wishlist page" }),
         h("p", { class: "muted", text: "Share a link to your wishlist and its best prices, handy for gifts. It shows only game names, art and prices. Never your Discord account or anything else." }),
         h("label", { class: "check" }, on, "Turn my page on"), field("Page name", slug), link,
-        h("p", { class: "muted small", text: "Visitors can mark a game as “I’m gifting this” so nobody doubles up. You are never told who or which games, so the surprise stays." + (p.claims ? ` ${p.claims} ${p.claims === 1 ? "is" : "are"} claimed right now.` : "") }),
+        h("p", { class: "muted small", text: "Signed-in Discord members can mark a game as “I’m gifting this” so nobody doubles up. You are never told who, so the surprise stays. Marks run out after three weeks unless renewed, and each person can hold only a few." + (p.claims ? ` ${p.claims} ${p.claims === 1 ? "is" : "are"} marked right now.` : "") }),
+        h("label", { class: "check" }, (() => { const c = h("input", { type: "checkbox", checked: !p.giftsPaused }); c.addEventListener("change", () => api("/api/profile/gifts", { action: "pause", on: !c.checked }).then(() => toast(c.checked ? "Gift marks are on." : "Gift marks are paused. Existing ones stay until you clear them.", "ok")).catch(e => { toast(e.message, "error"); c.checked = !c.checked; })); return c; })(), "Let visitors mark gifts"),
+        h("p", { class: "muted small", text: "If a mark looks fake, open your public page: you can release any mark there, and report it so abusive accounts get blocked." }),
         h("button", { class: "btn gray small", text: "Copy my page link", onclick: async () => { if (!slug.value || !on.checked) return toast("Turn your page on and save it first.", "warn"); try { await navigator.clipboard.writeText(location.origin + "/u/" + slug.value); toast("Copied. In Discord, `/me publicpage share:true` posts it for everyone.", "ok"); } catch { toast("Select the link above and copy it by hand.", "warn"); } } }),
         p.claims ? h("button", { class: "btn gray small", text: "Clear gift marks", onclick: ev => busy(ev.currentTarget, async () => { const r = await api("/api/profile", { enabled: on.checked, slug: slug.value, resetClaims: true }); toast(`Cleared ${r.cleared}.`, "ok"); }) }) : "", h("p"), save);
     }).catch(e => panel.replaceChildren(h("h3", { text: "Public wishlist page" }), h("div", { class: "notice warn", text: e.message })));
@@ -1078,7 +1080,7 @@
   }
 
   /** Draws one profile. Used for the public page and for the live preview in the editor. */
-  function renderProfile(p, { canMark = false, preview = false } = {}) {
+  function renderProfile(p, { canMark = false, preview = false, signedIn = false } = {}) {
     const root = h("div", { class: "pf", "data-bg": p.theme.bgstyle, "data-layout": p.theme.layout, "data-light": p.theme.light ? "1" : "0" });
     root.style.setProperty("--pf-bg", p.theme.bg);
     root.style.setProperty("--pf-accent", p.theme.accent);
@@ -1130,7 +1132,7 @@
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"), preview ? null : soonControl(g, p.slug, canMark), preview || p.owner ? null : giftButton(g, p.slug))))) : h("p", { class: "muted", text: "Nothing on this list yet." });
+            g.url && ext(g.url, "View deal", "btn green small"), preview ? null : soonControl(g, p.slug, canMark), preview ? null : giftButton(g, p.slug, { signedIn, owner: p.owner, open: s.giftsOpen !== false }))))) : h("p", { class: "muted", text: "Nothing on this list yet." });
       }
       if (inner) body.append(h("section", { class: "pf-card pf-" + s.key }, title, inner));
     }
@@ -1143,9 +1145,9 @@
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(holder);
     try {
-      const d = await api("/api/public/profile?slug=" + encodeURIComponent(slug) + "&t=" + encodeURIComponent(giftCode()));
+      const d = await api("/api/public/profile?slug=" + encodeURIComponent(slug));
       document.title = d.profile.name + " on Steam Value Checker";
-      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark }));
+      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark, signedIn: d.signedIn }));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
@@ -1267,35 +1269,45 @@
     window.addEventListener("hashchange", () => { clearTimeout(timer); }, { once: true });
   }
 
-  // A random code that stands in for "me" on public wishlist pages, so I can undo a gift mark. Never tied to an account.
-  let memoryCode = "";
-  function giftCode() {
-    try {
-      let c = localStorage.getItem("svc-gift-code");
-      if (!/^[A-Za-z0-9_-]{16,64}$/.test(c || "")) { c = randomCode(); localStorage.setItem("svc-gift-code", c); }
-      return c;
-    } catch { return memoryCode || (memoryCode = randomCode()); }
-  }
-  function randomCode() { const a = new Uint8Array(24); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
-  function giftButton(g, slug) {
+  /** The gift mark under a game on a public wishlist. Needs a Discord sign-in; the list's owner can release a mark but is never told who made it. */
+  function giftButton(g, slug, { signedIn = false, owner = false, open = true } = {}) {
     const wrap = h("div", { class: "gift" });
     const draw = () => {
+      if (owner) {
+        if (g.claim !== "taken") { wrap.replaceChildren(); return; }
+        const mk = (label, report) => {
+          const b = h("button", { class: "btn gray small", type: "button", text: label });
+          b.addEventListener("click", () => {
+            if (report && !confirm("Release this mark and report it? Reporting is for fake or abusive marks. Accounts with repeated reports lose gift marks.")) return;
+            busy(b, async () => { try { await api("/api/profile/gifts", { action: "release", id: g.id, report }); g.claim = null; toast(report ? "Released and reported. Thank you." : "Released.", "ok"); } catch (e) { toast(e.message, "error"); } draw(); });
+          });
+          return b;
+        };
+        wrap.replaceChildren(h("span", { class: "muted small", text: "Someone is gifting this" }), h("span", { class: "gift-owner" }, mk("Release", false), mk("Release and report", true)));
+        return;
+      }
       if (g.claim === "taken") { wrap.replaceChildren(h("span", { class: "muted small", text: "Someone is already gifting this" })); return; }
-      const b = h("button", { class: "btn gray small", text: g.claim === "mine" ? "You are gifting this (undo)" : "I’ll gift this" });
-      b.addEventListener("click", () => busy(b, async () => {
-        try {
-          const r = await api("/api/public/gift", { slug, id: g.id, token: giftCode(), claim: g.claim !== "mine" });
-          g.claim = r.claim; toast(g.claim === "mine" ? "Marked. Others will see someone is gifting this." : "Mark removed.", "ok");
-        } catch (e) { toast(e.message, "error"); if (/already/.test(e.message)) g.claim = "taken"; }
+      if (!open && g.claim !== "mine") { wrap.replaceChildren(h("span", { class: "muted small", text: "Gift marks are off for this list" })); return; }
+      if (!signedIn) { wrap.replaceChildren(h("a", { class: "btn gray small", href: "/auth/login", text: "Sign in with Discord to gift this" })); return; }
+      const call = (claim, done) => async () => {
+        try { const r = await api("/api/public/gift", { slug, id: g.id, claim }); g.claim = r.claim; toast(done(g.claim), "ok"); }
+        catch (e) { toast(e.message, "error"); if (/already/.test(e.message)) g.claim = "taken"; }
         draw();
-      }));
+      };
+      const b = h("button", { class: "btn gray small", text: g.claim === "mine" ? "You are gifting this (undo)" : "I’ll gift this" });
+      b.addEventListener("click", () => busy(b, call(g.claim !== "mine", c => (c === "mine" ? "Marked. Others will see someone is gifting this. It runs out after three weeks unless you renew it." : "Mark removed."))));
+      if (g.claim === "mine") {
+        const r = h("button", { class: "btn gray small", type: "button", text: "Renew for 3 weeks" });
+        r.addEventListener("click", () => busy(r, call(true, () => "Renewed for three more weeks.")));
+        wrap.replaceChildren(b, r);
+        return;
+      }
       wrap.replaceChildren(b);
     };
     draw();
     return wrap;
   }
 
-  // Staff of the member's server flag a game as "up for giveaway soon". Everyone else just sees the badge.
   function soonControl(g, slug, canMark) {
     const wrap = h("div", { class: "soon" });
     const draw = () => {
@@ -1362,7 +1374,7 @@
     const holder = h("div", { class: "muted", text: "Loading…" });
     app.replaceChildren(holder);
     try {
-      const d = await api("/api/public/wishlist?slug=" + encodeURIComponent(slug) + "&t=" + encodeURIComponent(giftCode()));
+      const d = await api("/api/public/wishlist?slug=" + encodeURIComponent(slug));
       const money2 = (n, c) => (n === null || n === undefined ? "-" : new Intl.NumberFormat(undefined, { style: "currency", currency: c || "USD" }).format(n));
       holder.className = "";
       if (/^#[0-9a-f]{6}$/i.test(d.accent || "")) { holder.style.setProperty("--accent", d.accent); holder.style.setProperty("--accent-2", d.accent); }
@@ -1372,7 +1384,7 @@
           h("div", { class: "free-info" }, h("strong", { text: g.title }),
             h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
             h("b", { text: money2(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"), soonControl(g, d.slug, d.canMark), giftButton(g, d.slug))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
+            g.url && ext(g.url, "View deal", "btn green small"), soonControl(g, d.slug, d.canMark), giftButton(g, d.slug, { signedIn: d.signedIn, owner: d.owner, open: d.giftsOpen !== false }))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
@@ -3348,6 +3360,23 @@
       return [box];
     };
 
+    const giftsTab = () => {
+      const box = h("div", { class: "muted", text: "Loading…" });
+      const load = () => api("/api/admin/gifts").then(r => {
+        box.className = "";
+        const act = (id, action, label, cls) => { const b = h("button", { class: "btn " + cls + " small", type: "button", text: label }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/gifts", { claimer: id, action }); toast("Done.", "ok"); await load(); })); return b; };
+        const who = x => `${x.name || "Unknown name"} (${x.claimer_id})`;
+        box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Gift mark reports" }),
+          h("p", { class: "muted small", text: "List owners release a mark and report it when it looks fake. Three reports in 60 days blocks the account from marking gifts automatically, and its marks are removed." }),
+          r.reports.length ? h("div", { class: "scroll-y" }, r.reports.map(x => h("div", { class: "bug-card" }, h("strong", { text: who(x) }),
+            h("div", { class: "muted small", text: `${x.reports} report${x.reports === 1 ? "" : "s"} · last ${when(x.last_at)} · lists: ${x.lists || "?"} · games: ${x.games || "?"} · holds ${x.holding} now` }),
+            h("div", { class: "row" }, x.banned ? h("span", { class: "chip warn", text: "Blocked" }) : act(x.claimer_id, "ban", "Block", "red"), x.banned ? act(x.claimer_id, "unban", "Unblock and clear", "gray") : act(x.claimer_id, "dismiss", "Dismiss reports", "gray"))))) : h("p", { class: "muted", text: "No reports." })),
+          h("div", { class: "panel" }, h("h3", { text: "Blocked from gift marks" }),
+            r.bans.length ? h("div", { class: "scroll-y" }, r.bans.map(x => h("div", { class: "row" }, h("span", { text: `${x.claimer_id} · ${x.auto ? "automatic" : "by you"} · ${when(x.at)} · ${x.reason}` }), act(x.claimer_id, "unban", "Unblock", "gray")))) : h("p", { class: "muted", text: "Nobody is blocked." })));
+      }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
+      load();
+      return [box];
+    };
     const requestsTab = () => { const box = h("div", { class: "muted", text: "Loading…" }); requestList(box, { admin: true }).then(() => { box.className = ""; }); return [box]; };
     const musicTab = () => {
       const box = h("div", { class: "muted", text: "Loading…" });
@@ -3489,7 +3518,7 @@
       }).catch(e => { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); });
       return [box];
     };
-    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["ai", "AI companion", aiTab], ["settings", "Bot settings", settingsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
+    const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["gifts", "Gift marks", giftsTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["ai", "AI companion", aiTab], ["settings", "Bot settings", settingsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
     if (opts.shell) return { TABS, tile, table, when, n0, st, hl, bot, ins, bugData, sum, daily };
     let current = "overview";
     const tabBar = h("div", { class: "tabs" });
@@ -3508,7 +3537,7 @@
   const ADMIN_NAV = [
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
     ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."]]],
-    ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."]]],
+    ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
     ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]

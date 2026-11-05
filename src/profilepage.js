@@ -161,7 +161,7 @@ const canSee = (vis, viewer) => viewer.owner || vis === "public" || (vis === "se
  * Everything the page needs, for one viewer. Sections the viewer may not see are left out entirely, so nothing leaks
  * through the data. `draft` lets the owner preview unsaved changes.
  */
-export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewer, { token = null, draft = null } = {}) {
+export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewer, { viewerId = null, draft = null } = {}) {
     const cfg = withDefaults(draft ?? db.getProfileData(owner.discord_id).data);
     const theme = PROFILE_THEMES[cfg.theme];
     const lib = db.listLibrary(owner.discord_id);
@@ -179,8 +179,8 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
             if (s.key === "about") sections.push({ key: "about", vis: s.vis });
             else if (s.key === "favorites") { if (favs.length || viewer.owner) sections.push({ key: "favorites", vis: s.vis, games: favs }); }
             else if (s.key === "wishlist") {
-                const w = await publicWishlist(db, itad, owner.profile_slug, token);
-                sections.push({ key: "wishlist", vis: s.vis, games: w?.games ?? [] });
+                const w = await publicWishlist(db, itad, owner.profile_slug, viewerId);
+                sections.push({ key: "wishlist", vis: s.vis, games: w?.games ?? [], giftsOpen: w?.giftsOpen ?? true });
             } else if (s.key === "recent") {
                 const rows = lib.filter(x => x.status === "finished").sort((a, b) => (b.status_at ?? 0) - (a.status_at ?? 0)).slice(0, 8).map(x => ({ ...x }));
                 await fillAppIds(db, itad, owner.discord_id, rows);

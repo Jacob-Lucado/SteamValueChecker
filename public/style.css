@@ -1256,3 +1256,6 @@ body.wiz-open { overflow: hidden; }
 @media (max-width: 560px) { .pf-song.pf-float { right: 12px; bottom: 12px; } .pf-float .pf-rcard { width: min(292px, calc(100vw - 24px)); } }
 /* a filled-forward entrance animation would trap the floating player inside the profile box */
 #app > .pf { animation-fill-mode: backwards; }
+
+.gift { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.gift-owner { display: inline-flex; flex-wrap: wrap; gap: 6px; }

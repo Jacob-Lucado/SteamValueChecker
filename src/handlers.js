@@ -857,7 +857,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
         const wanted = games.filter(x => !owned.has(x.itad_id)).sort((a, b) => Number(b.priority) - Number(a.priority));
         const url = publicUrl ? `${publicUrl}/u/${u.profile_slug}` : null;
         const embed = { color: 0x4da3ff, title: `🎁 ${who}'s wishlist`, ...(url ? { url } : {}),
-            description: wanted.length ? `${wanted.length} game${wanted.length === 1 ? "" : "s"} on the list, with today's best prices. Open it to see them, and mark one as "I'm gifting this" so nobody doubles up.\n\n` + wanted.slice(0, 6).map(x => `• ${x.title}`).join("\n") + (wanted.length > 6 ? `\n…and ${wanted.length - 6} more` : "") : "Open it to see what is on the list, and mark a game as \"I'm gifting this\" so nobody doubles up.",
+            description: wanted.length ? `${wanted.length} game${wanted.length === 1 ? "" : "s"} on the list, with today's best prices. Open it to see them, and sign in to mark one as "I'm gifting this" so nobody doubles up.\n\n` + wanted.slice(0, 6).map(x => `• ${x.title}`).join("\n") + (wanted.length > 6 ? `\n…and ${wanted.length - 6} more` : "") : "Open it to see what is on the list, and mark a game as \"I'm gifting this\" so nobody doubles up.",
             footer: { text: "Only game names, art and prices are shown  •  /me publicpage to get your own" } };
         return { embeds: [embed], components: url ? [{ type: 1, components: [{ type: 2, style: 5, label: "Open the wishlist", url }] }] : [], allowedMentions: { parse: [] } };
     }
@@ -880,7 +880,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
             if (!r.public) return eph(i, "Your public page is off. Nobody can open it." + (cleared ? ` Cleared ${cleared} gift claim${cleared === 1 ? "" : "s"}.` : ""));
             const n = db.countGiftClaims(i.user.id), shown = link(r.slug);
             return eph(i, `Your page is on${shown ? `: ${shown}` : `, as **${r.slug}**`}\nIt shows only game names, art and today's best prices. Never your Discord account.\n` +
-                `Visitors can mark a game as "I'm gifting this" so nobody doubles up. You are not told who, or which games` + (n ? `, only that **${n}** ${n === 1 ? "is" : "are"} claimed right now.` : ".") +
+                `Visitors who sign in with Discord can mark a game as "I'm gifting this" so nobody doubles up. You are not told who, or which games` + (n ? `, only that **${n}** ${n === 1 ? "is" : "are"} claimed right now.` : ".") +
                 (cleared ? ` Cleared ${cleared} just now.` : n ? " Add `reset_claims: true` to clear them." : ""));
         } catch (err) { await failed(i, "publicpage", err); }
     }
