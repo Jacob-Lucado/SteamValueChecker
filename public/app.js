@@ -993,7 +993,7 @@
   const httpsOnly = u => (/^https:\/\//i.test(u || "") ? u : "");
 
   /** The profile song: a play button that loads the official player when pressed (browsers block sound that starts alone). */
-  function pfSong(song) {
+  function pfSong(song, preview = false) {
     const box = h("div", { class: "pf-song" });
     const name = song.title || ({ youtube: "YouTube", soundcloud: "SoundCloud", spotify: "Spotify", radio: "Live radio" })[song.provider] || "Song";
     // A live radio stream gets the same card as the OBS overlay: art tile, pulsing label, big title and a glowing live strip.
@@ -1007,7 +1007,13 @@
       vol.addEventListener("input", () => { a.volume = Number(vol.value) / 100; });
       a.volume = 0.8;
       const card = h("div", { class: "pf-rcard" }, art, h("div", { class: "pf-rbody" }, label, h("div", { class: "pf-rtitle", text: name }), h("div", { class: "pf-rsub muted small", text: "Profile song" }),
-        h("div", { class: "pf-rrow" }, h("span", { class: "pf-rvolicon", "aria-hidden": "true", text: "🔈" }), vol)), h("div", { class: "pf-rprog", "aria-hidden": "true" }, h("i")));
+        h("div", { class: "pf-rrow" }, h("span", { class: "pf-rvolicon", "aria-hidden": "true", text: "🔈" }), vol, song.link ? ext(song.link, "Open", "pf-open") : null)), h("div", { class: "pf-rprog", "aria-hidden": "true" }, h("i")));
+      // On a real profile the player floats in the corner so it never sits in the middle of the page; the dash arrow folds it down to just the play tile.
+      if (!preview) {
+        const fold = h("button", { type: "button", class: "pf-rfold", "aria-label": "Minimise the player", text: "–" });
+        fold.addEventListener("click", () => { const mini = card.classList.toggle("mini"); fold.textContent = mini ? "+" : "–"; fold.setAttribute("aria-label", mini ? "Open the player" : "Minimise the player"); });
+        card.append(fold);
+      }
       const paint = on => { card.classList.toggle("playing", on); btn.textContent = on ? "❚❚" : "▶"; btn.setAttribute("aria-label", on ? "Pause" : "Play"); label.lastChild.textContent = "Live radio"; };
       btn.addEventListener("click", () => { if (a.paused) { a.src = song.stream; a.play().catch(() => {}); } else { a.pause(); } });
       a.addEventListener("playing", () => paint(true));
@@ -1015,14 +1021,15 @@
       a.addEventListener("error", () => { card.classList.remove("playing"); label.lastChild.textContent = "Not available"; card.querySelector(".pf-rsub").textContent = "This stream is not available right now."; btn.textContent = "▶"; });
       paint(auto);
       box.classList.add("pf-song-radio");
-      box.replaceChildren(card, song.link ? ext(song.link, "Open", "pf-open") : null);
+      box.classList.toggle("pf-float", !preview);
+      box.replaceChildren(card);
       if (auto) a.play().catch(() => paint(false));
       box.stopAudio = () => { a.pause(); a.removeAttribute("src"); a.load(); };
     };
     const draw = playing => {
       if (song.stream) { radioCard(playing); return; }
       if (!playing) {
-        box.classList.remove("pf-song-radio");
+        box.classList.remove("pf-song-radio", "pf-float");
         const b = h("button", { type: "button", class: "pf-play", "aria-label": "Play profile song", text: "▶" });
         b.addEventListener("click", () => draw(true));
         box.replaceChildren(b, h("div", { class: "pf-song-info" }, h("strong", { text: name }), h("span", { class: "muted small", text: song.provider === "radio" ? "Live radio" : "Profile song" })),
@@ -1079,7 +1086,7 @@
     const banner = h("div", { class: "pf-banner" + (p.banner.kind === "none" ? " none" : "") });
     if (p.banner.kind === "game" && httpsOnly(p.banner.art)) { banner.classList.add("art");
       // Steam's header is only 460 wide and looks soft stretched across the page. The hero is much larger; where a game has none, the header underneath shows instead.
-      const hero = p.banner.art.replace(/\/header\.jpg$/, "/library_hero.jpg");
+      const hero = p.banner.art.replace(/\/art\/header\/(\d+)\.jpg$/, "/art/hero/$1.jpg").replace(/\/header\.jpg(\?.*)?$/, "/library_hero.jpg");
       banner.style.backgroundImage = hero !== p.banner.art ? `url("${hero}"), url("${p.banner.art}")` : `url("${p.banner.art}")`; }
     const avatar = httpsOnly(p.avatar) ? h("img", { class: "pf-avatar", src: p.avatar, alt: "" }) : h("div", { class: "pf-avatar init", text: (p.name || "?").slice(0, 1).toUpperCase() });
     const head = h("div", { class: "pf-head" }, avatar,
@@ -1088,7 +1095,7 @@
     root.append(banner, head);
     let songBox = null;
     if (p.songOff && p.owner && !preview) root.append(h("div", { class: "notice warn", text: "Your song is saved, but profile songs are switched off on this bot right now, so visitors don't see the player. (Admin panel > Bot settings > Profile songs play.)" }));
-    if (p.song) { songBox = pfSong(p.song); root.append(songBox); }
+    if (p.song) { songBox = pfSong(p.song, preview); root.append(songBox); }
     if (p.song && p.enter && !preview) {
       // The click on this screen is what lets the browser start the sound straight away.
       const gate = h("button", { type: "button", class: "pf-enter", "aria-label": "Enter " + p.name }, h("span", { class: "pf-enter-in" }, h("span", { class: "pf-enter-name", text: p.name }), h("span", { class: "pf-enter-hint", text: "Click to enter" })));

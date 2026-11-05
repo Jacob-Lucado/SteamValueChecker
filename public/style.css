@@ -1235,3 +1235,24 @@ body.wiz-open { overflow: hidden; }
 .pf-rcard:not(.playing) .pf-rprog i { opacity: .25; }
 @keyframes pf-glow { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .pf-rcard .pf-eq i, .pf-rprog i { animation: none !important; } }
+
+/* the radio as a floating widget in the corner of a profile */
+.pf-song.pf-float { position: fixed; right: 18px; bottom: 18px; z-index: 60; margin: 0; padding: 0; }
+.pf-float .pf-rcard { min-width: 0; width: 292px; max-width: calc(100vw - 24px); gap: 12px; padding: 10px 14px 12px 10px; border-radius: 18px; box-shadow: 0 16px 44px rgba(0, 0, 0, .5); transition: width .2s ease, padding .2s ease; }
+.pf-float .pf-rart { width: 58px; height: 58px; border-radius: 12px; }
+.pf-float .pf-rglyph { font-size: 24px; }
+.pf-float .pf-rplay { font-size: 17px; }
+.pf-float .pf-rtitle { font-size: 16px; }
+.pf-float .pf-rlabel { font-size: 10px; }
+.pf-float .pf-rsub { display: none; }
+.pf-float .pf-rrow { margin-top: 2px; }
+.pf-float .pf-rvol { max-width: 110px; }
+.pf-float .pf-open { margin-left: auto; font-size: 12px; }
+.pf-rfold { position: absolute; top: 4px; right: 8px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .1); color: #dbe6f5; font-size: 15px; line-height: 1; cursor: pointer; }
+.pf-rfold:hover { background: rgba(255, 255, 255, .22); }
+.pf-rcard.mini { width: 78px; padding: 10px; gap: 0; }
+.pf-rcard.mini .pf-rbody, .pf-rcard.mini .pf-rprog { display: none; }
+.pf-rcard.mini .pf-rfold { top: 3px; right: 3px; width: 18px; height: 18px; font-size: 13px; }
+@media (max-width: 560px) { .pf-song.pf-float { right: 12px; bottom: 12px; } .pf-float .pf-rcard { width: min(292px, calc(100vw - 24px)); } }
+/* a filled-forward entrance animation would trap the floating player inside the profile box */
+#app > .pf { animation-fill-mode: backwards; }

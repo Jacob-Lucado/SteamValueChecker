@@ -1,6 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.28", date: "2026-11-04", title: "Fanatical and Steam bundles, game art that always shows, a nicer radio player, much more translated", items: [
+        "**Sharper profile banners and a floating radio:** a game banner on a profile now uses the game's large hero picture instead of the small store header that looked blurry stretched out. A live radio song now plays in a small player floating in the corner of the page, with a button to fold it down to just the play tile.",
         "**Far more of the dashboard is translated:** the landing page, menus, footer, Library, Wishlist, Free games, Friends, Servers, the Streamer page and the profile editor now follow your language in Spanish, French, German, Portuguese, Italian, Russian, Polish, Turkish, Japanese, Korean and Chinese. Pages not done yet fall back to English.",
         "**Fanatical bundles load again:** Fanatical turns away automated requests, so its bundles are now read through IsThereAnyDeal when Fanatical says no. The owner's check now reports every store it could and could not read.",
         "**Every Steam bundle:** Steam has no public list of its bundles, so the bot now walks the newest bundle pages itself. A normal check looks at what is new; the owner's \"Check for new bundles now\" goes back through hundreds of older ones so you can see it working. Older ones fill the page quietly and are not announced.",
