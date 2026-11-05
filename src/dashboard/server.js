@@ -30,7 +30,7 @@ import { createModDash, ModDashError } from "./moddash.js";
 import { botInviteUrl } from "../community.js";
 import { listModels } from "../aiproviders.js";
 import { connectionPayload } from "../linkedroles.js";
-import { parseHost, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
+import { parseHost, stepsOf, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
@@ -124,6 +124,9 @@ const FILES = {
     "/streamcard": ["streamcard.html", "text/html; charset=utf-8"],
     "/streamcard.css": ["streamcard.css", "text/css; charset=utf-8"],
     "/streamcard.js": ["streamcard.js", "text/javascript; charset=utf-8"],
+    "/giveawayoverlay": ["giveawayoverlay.html", "text/html; charset=utf-8"],
+    "/giveawayoverlay.css": ["giveawayoverlay.css", "text/css; charset=utf-8"],
+    "/giveawayoverlay.js": ["giveawayoverlay.js", "text/javascript; charset=utf-8"],
     "/overlay.css": ["overlay.css", "text/css; charset=utf-8"],
     "/overlay.js": ["overlay.js", "text/javascript; charset=utf-8"],
     "/music": ["music.html", "text/html; charset=utf-8"],
@@ -351,9 +354,9 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             "Cross-Origin-Opener-Policy": "same-origin",
             ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
             // The data and sign-in endpoints never belong in a search result, even if something links to them.
-            ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music|overlay|streamcard)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
-            "Content-Security-Policy": /^\/overlay(\?|$)/.test(path) ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
-            ...(/^\/overlay(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
+            ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music|overlay|streamcard|giveawayoverlay)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
+            "Content-Security-Policy": /^\/(overlay|giveawayoverlay)(\?|$)/.test(path) ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
+            ...(/^\/(overlay|giveawayoverlay)(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
             // The terms and privacy PDFs are shown in a frame on our own pages, so they may be framed by us and by no one else.
             ...(/^\/[a-z-]+\.pdf(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "frame-ancestors 'self'", "Content-Disposition": "inline" } : {}),
             ...headers
@@ -1917,6 +1920,17 @@ export function createDashboard({ trivia = null, emojigg = null, news = null, ab
             const o = db.streamCardByToken(String(url.searchParams.get("token") ?? ""));
             if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
             return await cardsFor(o, o.kinds);
+        },
+        // The giveaway overlay's numbers: the streamer's latest stream giveaway, with winners once it is drawn. Same private link as the cards.
+        "GET /api/giveawayoverlay/data": async (req, _b, url) => {
+            if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const o = db.streamCardByToken(String(url.searchParams.get("token") ?? ""));
+            if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
+            const g = streamGw.latest(o.user_id);
+            if (!g) return { giveaway: null };
+            const keys = db.listKeys(g.id), over = g.status !== "active" && g.status !== "scheduled";
+            const winners = over ? await Promise.all(keys.filter(k => k.winner_id).map(async k => ({ prize: k.label, name: (await remember("mname:" + g.guild_id + ":" + k.winner_id, 10 * 60_000, () => rest.memberName(g.guild_id, k.winner_id)).catch(() => null)) || "A viewer" }))) : [];
+            return { giveaway: { title: g.title, game: g.game_title ?? null, prizes: keys.map(k => k.label), entries: db.countEntries(g.id), endsAt: g.ends_at, startedAt: g.starts_at ?? g.created_at, status: over ? "ended" : g.status, steps: stepsOf(g).map(x => ({ label: x.label, kind: x.kind })), winners }, now: now() };
         },
         // Game club: the server's game of the month. Anyone in the server can look; Manage Server changes it.
         "GET /api/club": async (req, _b, url) => {

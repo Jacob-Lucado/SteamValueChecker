@@ -13,6 +13,14 @@ export function createStreamGiveaways({ db, giveaways, now = () => Date.now() })
         return g && (g.status === "active" || g.status === "scheduled") ? g : null;
     };
     return {
+        /** What the OBS overlay shows: the streamer's latest stream giveaway (running, or just ended with its winners), or null. */
+        latest(userId, { holdMs = 10 * 60_000 } = {}) {
+            const id = Number(db.getMeta(`streamgw:last:${userId}`) ?? 0), g = id ? db.getGiveaway(id) : null;
+            if (!g || g.host_id !== String(userId)) return null;
+            const over = g.status !== "active" && g.status !== "scheduled";
+            if (over && now() - (g.ended_at ?? g.ends_at) > holdMs) return null;
+            return g;
+        },
         enabled: () => Boolean(svc()),
         active,
         /**
@@ -47,6 +55,7 @@ export function createStreamGiveaways({ db, giveaways, now = () => Date.now() })
             }
             const r = await gw.create(req);
             if (endWithStream) db.setMeta(metaKey(guildId, who.id), String(r.id));
+            db.setMeta(`streamgw:last:${who.id}`, String(r.id)); // the overlay shows the latest one, even a plain timed giveaway
             return { id: r.id, channelId: c.live_channel, endsAt: now() + req.duration_ms, endsWithStream: endWithStream, prizes: r.prizes };
         },
         /** Called when a stream ends. Draws the winner right away. Never throws: ending a stream must not fail because of this. */

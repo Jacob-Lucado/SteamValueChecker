@@ -1976,6 +1976,19 @@ test("playtests page data needs sign-in and lists what the sources found", async
     await t.close();
 });
 
+test("giveaway overlay: needs the private link, and shows nothing until a stream giveaway exists", async () => {
+    const o = await signedIn({ extra: { botGuilds: () => true } });
+    try {
+        assert.equal((await o.request("/api/giveawayoverlay/data?token=svcd_" + "x".repeat(32))).status, 404, "an unknown link shows nothing");
+        const made = (await o.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
+        const r = await fetch(o.base + "/api/giveawayoverlay/data?token=" + made.token);
+        assert.equal(r.status, 200); assert.deepEqual(await r.json(), { giveaway: null });
+        const page = await fetch(o.base + "/giveawayoverlay"); assert.equal(page.status, 200);
+        assert.match(page.headers.get("content-security-policy"), /frame-ancestors 'self'/); assert.match(page.headers.get("x-robots-tag"), /noindex/);
+        assert.equal((await fetch(o.base + "/giveawayoverlay.js")).status, 200);
+    } finally { await o.close(); }
+});
+
 test("stream cards overlay: a private link per person that shows the best deal, a free game and the gift page, and a new link kills the old one", async () => {
     const o = await signedIn({ extra: { botGuilds: () => true } });
     try {

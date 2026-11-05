@@ -48,3 +48,20 @@ test("stream giveaway: the full form keeps prizes, rules and steps, and can run 
     await assert.rejects(() => sg.start("g", { id: "u1", name: "Mia" }, { input: { ...input, keys: [], duration_ms: 3600_000 } }), /at least one prize/);
     await assert.rejects(() => sg.start("g", { id: "u1", name: "Mia" }, { input: { ...input, duration_ms: 99 * 3600_000 } }), /5 minutes and 12 hours/);
 });
+
+test("giveaway overlay: follows the streamer's latest stream giveaway and lets the winners show for a while", async () => {
+    let clock = 1_000_000;
+    const db = openDb(":memory:", { now: () => clock });
+    db.setCommunity("g", { live_channel: "live" });
+    db.setStreamLive("g", "u1", { title: "t", url: "https://twitch.tv/mia", started: clock });
+    const create = async i => ({ id: db.createGiveaway({ guild_id: "g", channel_id: "live", host_id: "u1", title: i.title, ends_at: clock + 3600_000, status: "active" }, i.keys.map(k => ({ label: k.label, enc: "x" }))), prizes: i.keys.length });
+    const sg = createStreamGiveaways({ db, giveaways: () => ({ create, end: async () => {} }), now: () => clock });
+    assert.equal(sg.latest("u1"), null, "nothing running yet");
+    const r = await sg.start("g", { id: "u1", name: "Mia" }, { game: "Hades", key: "AAAA-BBBB" });
+    assert.equal(sg.latest("u1").id, r.id);
+    assert.equal(sg.latest("u2"), null, "someone else's overlay never shows it");
+    db.setGiveawayStatus(r.id, "ended");
+    assert.equal(sg.latest("u1").id, r.id, "the winners stay up right after the draw");
+    clock += 11 * 60_000;
+    assert.equal(sg.latest("u1"), null, "then it clears");
+});

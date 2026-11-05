@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.22", date: "2026-11-04", title: "Giveaway overlay for streamers", items: [
+        "**On-screen giveaway:** the Streamer hub has a new Giveaway overlay for OBS. It shows your stream giveaway's prizes, how many people entered, a live countdown and the steps to enter, then shows the winners the moment they are drawn.",
+        "**Make it yours:** pick a card, wide bar or small tag layout; dark, light, glass, neon or no background; any corner of the screen; four fonts; your own accent color and size. Switch the prizes, entry count, countdown, progress bar, steps and winners on or off, add your own heading and a line like your Discord invite, and choose whether the winners hide after a while.",
+        "**Live preview:** you see every change as you make it, and your choices are remembered. It uses the same private link as your deals overlay and follows your latest stream giveaway by itself, so you set it up once."
+    ] },
     { version: "2026.11.21", date: "2026-11-04", title: "Full giveaway tools for streamers", items: [
         "**Stream giveaways grew up:** the Streamer hub's giveaway panel now takes several prizes (keys, Nitro, gift cards, money or anything else), a title and description, your own pictures or automatic artwork, a colour and button text, with a live preview of the post.",
         "**Required steps:** ask viewers to follow you on Twitch or X, join your Discord, subscribe on YouTube, wishlist a game or any link you like. They show on the post as numbered steps with link buttons. Discord can't check them, so it runs on trust and winners may be checked.",
