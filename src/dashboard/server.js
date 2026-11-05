@@ -3647,6 +3647,9 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (key === "GET /api/overlay/stream") return overlayStream(req, res, url);
             if (key === "GET /api/streamcard/text") return await streamCardText(req, res, url);
             const handler = routes[key];
+            // Dashboard pages have clean addresses (/wishlist, /servers/123). Opening one directly, or reloading it, gets the app.
+            if (!handler && req.method === "GET" && !/^\/(api|auth)\//.test(url.pathname) && !/\.[a-z0-9]+$/i.test(url.pathname) && String(req.headers.accept ?? "").includes("text/html")
+                && !onAdminHost(req) && !onMusicHost(req)) return await serveFile(res, "/");
             if (!handler) throw new HttpError(404, "Not found.");
             let body = {};
             if (req.method === "POST") {

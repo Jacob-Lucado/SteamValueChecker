@@ -2,7 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.26", date: "2026-11-04", title: "Profile links get their own preview", items: [
         "**Your name and look in the preview:** when you post your profile link (steamvaluechecker.com/u/yourname) in Discord, X or anywhere else that shows link previews, it now shows your own picture with your name, bio, favorite games and colors instead of the generic bot image.",
-        "**Use the /u/ link:** the Copy my page link button already gives you that form. Links with a # in them, like steamvaluechecker.com/#/u/yourname, can't show a preview because sites never see the part after the #. Swap the # out and you're set.",
+        "**Clean addresses:** every dashboard page now has a plain address like steamvaluechecker.com/wishlist or /u/yourname instead of one with /#/ in it. Old links with the # still open the right page, and what you copy from the address bar now previews properly when you share it.",
         "**Streamers tab colors:** the Streamers pages now glow in a mix of Twitch purple, YouTube red and Kick green, with a matching gradient strip under the top bar. Every other page keeps its normal look.",
         "**Songs:** a saved profile song now shows up for visitors, and if profile songs are switched off by the bot owner you get a note on your own page saying so."
     ] },

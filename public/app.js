@@ -2,8 +2,8 @@
 (() => {
   "use strict";
 
-  // A shared link is /u/name (so chat apps can show a preview). The app itself keeps profiles at #/u/name.
-  { const m = /^\/u\/([a-z0-9_-]{3,24})\/?$/i.exec(location.pathname); if (m) history.replaceState(null, "", "/#/u/" + m[1].toLowerCase()); }
+  // A profile's address is /u/name, so chat apps can show a preview. The address bar keeps that form while one is open,
+  // which means whatever people copy from it shares properly.
 
   const state = { cfg: null, me: null };
   const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
@@ -191,8 +191,14 @@
   const STEAM_ICON = "M12 2a10 10 0 0 0-9.96 9.1l5.35 2.2a2.8 2.8 0 0 1 1.6-.5h.15l2.4-3.45v-.05a3.75 3.75 0 1 1 3.75 3.75h-.1l-3.4 2.45a2.8 2.8 0 0 1-5.55.45L2.3 14.2A10 10 0 1 0 12 2z";
   const steamIcon = () => { const n = document.createElementNS("http://www.w3.org/2000/svg", "svg"); n.setAttribute("viewBox", "0 0 24 24"); n.setAttribute("width", "18"); n.setAttribute("height", "18"); n.setAttribute("aria-hidden", "true"); const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", STEAM_ICON); p.setAttribute("fill", "currentColor"); n.append(p); return n; };
   const steamLoginBtn = (text = "Sign in through Steam", cls = "btn steam") => h("a", { class: cls, href: "/auth/steam" }, steamIcon(), " " + text);
-  const currentView = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[0];
-  const currentParam = () => (location.hash.replace(/^#\/?/, "") || "").split("?")[0].split("/")[1] || null;
+  // Pages have plain addresses like /wishlist and /servers/123. Old links with a # still work: they are rewritten on load.
+  const routeText = () => {
+    const h = location.hash.replace(/^#\/?/, "");
+    return h || location.pathname.replace(/^\/+|\/+$/g, "") + location.search;
+  };
+  const navigate = path => { history.pushState(null, "", path); window.dispatchEvent(new Event("hashchange")); };
+  const currentView = () => routeText().split("?")[0].split("/")[0];
+  const currentParam = () => routeText().split("?")[0].split("/")[1] || null;
 
   const navText = (id, text) => text; // h() translates it
 
@@ -289,7 +295,7 @@
         h("div", { class: "user-chip" },
           state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
           h("span", { class: "who", text: state.me.user.username }),
-          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; location.hash = "#/"; boot(); } }))].filter(Boolean));
+          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; navigate("/"); boot(); } }))].filter(Boolean));
     } else {
       acct.replaceChildren(...[...links, support, languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
@@ -1690,7 +1696,7 @@
     const grid = h("div", { class: "sv-grid" });
 
     function card(g) {
-      const open = () => { location.hash = "#/servers/" + g.id; };
+      const open = () => { navigate("/servers/" + g.id); };
       const stat = (icon, label, value) => h("div", { class: "sv-stat" }, h("span", { class: "sv-ico", text: icon }), h("span", { class: "muted", text: label }), h("b", { text: value }));
       const actions = g.bot === false
         ? [guildInvite(g) && g.manageable ? ext(guildInvite(g), "Add the bot", "btn green") : null, h("button", { class: "btn gray", text: "Details", onclick: open })]
@@ -1743,7 +1749,7 @@
 
   function serverDetail(id) {
     const g = state.me.servers.find(x => x.id === id);
-    if (!g) { location.hash = "#/servers"; return; }
+    if (!g) { navigate("/servers"); return; }
     const canUse = g.bot !== false;
     const body = h("div", { class: "sv-body" });
     const sections = [["overview", "Overview"], ...(canUse ? [["alerts", "Deal alerts", true], ["codes", "Codes & promos", true], ["list", "Shared wishlist"], ["board", "Leaderboard"], ["stats", "Server stats"], ["giveaways", "Giveaways", true]] : [])]
@@ -1768,7 +1774,7 @@
           g.manageable && action("", "Choose the alert channel", "Where alerts go when a DM cannot be delivered", go("alerts")),
           action("", "Shared wishlist", "Suggest games and vote with your server", go("list")),
           action("", "Leaderboard", "Who has saved the most against MSRP", go("board")),
-          g.manageable && action("", "Giveaways", "Create and manage key giveaways", () => { location.hash = "#/giveaways"; })));
+          g.manageable && action("", "Giveaways", "Create and manage key giveaways", () => { navigate("/giveaways"); })));
       }
       return out.filter(Boolean);
     }
@@ -1922,7 +1928,7 @@
       else if (current === "board") { const into = h("div"); body.append(into); board(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
       else if (current === "codes") body.append(...codesPanel(), ...dropsPanel());
       else if (current === "stats") statsPanel(g, body);
-      else if (current === "giveaways") { location.hash = "#/giveaways"; }
+      else if (current === "giveaways") { navigate("/giveaways"); }
     }
     show();
     app.replaceChildren(
@@ -2133,8 +2139,8 @@
     const box = h("div", { class: "panel", id: "twitch-link" });
     async function draw() {
       let d; try { d = await api("/api/twitchlink"); } catch { box.replaceChildren(); return; }
-      const hash = location.hash, back = /[?&]twitch=(1|none)/.exec(hash)?.[1];
-      if (back) { history.replaceState(null, "", "#/steam"); if (back === "1") toast("Twitch linked.", "ok"); }
+      const back = /[?&]twitch=(1|none)/.exec(location.search)?.[1];
+      if (back) { history.replaceState(null, "", "/steam"); if (back === "1") toast("Twitch linked.", "ok"); }
       const off = h("button", { class: "btn gray small", type: "button", text: "Unlink" });
       off.addEventListener("click", () => busy(off, async () => { await api("/api/twitchlink", { action: "remove" }); toast("Unlinked.", "ok"); draw(); }));
       box.replaceChildren(h("h3", { text: "Twitch (enter giveaways from chat)" }),
@@ -2259,9 +2265,9 @@
     }
     app.replaceChildren(pageHead("Steam", "Sign in through Steam to fill your library automatically: your games, hours played, what you never played and what to play next."),
       slot, out, twitchLinkPanel());
-    if (/[?&]linked=1/.test(location.hash)) {
+    if (/[?&]linked=1/.test(location.search)) {
       // Just came back from Steam: read the library straight away, then tidy the address.
-      history.replaceState(null, "", "#/steam");
+      history.replaceState(null, "", "/steam");
       out.className = "muted"; out.textContent = "Reading your Steam library…";
       api("/api/steam/sync", {}).then(r => { state.artForce = true; state.me.steam = { linked: true, verified: true, synced: true }; toast(`Signed in. Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + ".", "ok"); })
         .then(() => api("/api/wishlist/import", { profile: "" }).then(w => { if (w.added) { state.me.games += w.added; toast(`Also added ${w.added} game${w.added === 1 ? "" : "s"} from your Steam wishlist. I'll keep it in sync.`, "ok"); } }).catch(() => { /* private wishlist: the Wishlist page explains it */ }))
@@ -4211,7 +4217,7 @@
       const kindSel = select([["help", "I need help"], ["bug", "Report a bug (goes to the bot owner)"]], "help");
       const send = h("button", { class: "btn green", text: "Open ticket", onclick: () => busy(send, async () => {
         const r = await api("/api/tickets", { subject: subject.value, body: body.value, guild_id: kindSel.value === "bug" ? null : guildSel.value || null, kind: kindSel.value });
-        toast(`Ticket #${r.id} opened.`); location.hash = "#/support/" + r.id;
+        toast(`Ticket #${r.id} opened.`); navigate("/support/" + r.id);
       }) });
       const q = h("input", { type: "search", placeholder: "Search subject, tag or #id", value: filter.q });
       const st = select([["active", "Active"], ["all", "All"], ["open", "Open"], ["waiting", "Waiting on user"], ["resolved", "Resolved"], ["closed", "Closed"]], filter.status);
@@ -4683,7 +4689,7 @@
     if (typing || e.ctrlKey || e.metaKey || e.altKey || !state.me) return;
     if (e.key === "/") { e.preventDefault(); return openSearch(); }
     if (e.key === "?") return toast("Keys: / search · g then w wishlist, l library, a alerts, s servers, n notifications, h help", "ok");
-    if (gPending) { gPending = false; const dest = { w: "wishlist", l: "library", a: "alerts", s: "servers", n: "notifications", h: "help", t: "support", v: "value" }[e.key]; if (dest) location.hash = "#/" + dest; return; }
+    if (gPending) { gPending = false; const dest = { w: "wishlist", l: "library", a: "alerts", s: "servers", n: "notifications", h: "help", t: "support", v: "value" }[e.key]; if (dest) navigate("/" + dest); return; }
     if (e.key === "g") { gPending = true; setTimeout(() => { gPending = false; }, 1200); }
   });
 
@@ -6438,6 +6444,7 @@
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
     if (state.restricted || new URLSearchParams(location.search).get("error") === "restricted") { state.restricted ||= "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard. If you think this is a mistake, contact the bot owner."; return showRestricted(); }
+    if (!ADMIN_MODE) { const old = /^#\/(.*)$/.exec(location.hash); if (old) history.replaceState(null, "", "/" + old[1]); }
     renderChrome();
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
@@ -6508,5 +6515,19 @@
   })();
 
   if (ADMIN_MODE) { window.addEventListener("hashchange", adminRoute); adminBoot(); }
-  else { window.addEventListener("hashchange", route); boot(); }
+  else {
+    window.addEventListener("hashchange", route);
+    window.addEventListener("popstate", () => window.dispatchEvent(new Event("hashchange")));
+    // Links written as #/page show and copy as plain addresses, and open without reloading the page.
+    const tidy = root => root.querySelectorAll?.('a[href^="#/"]').forEach(a => { a.dataset.spa = "1"; a.setAttribute("href", a.getAttribute("href").slice(1)); });
+    new MutationObserver(ms => { for (const m of ms) m.addedNodes.forEach(n => { if (n.nodeType === 1) { if (n.matches('a[href^="#/"]')) tidy({ querySelectorAll: () => [n] }); tidy(n); } }); }).observe(document.body, { childList: true, subtree: true });
+    tidy(document);
+    document.addEventListener("click", e => {
+      if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target.closest?.("a[data-spa], a[href^=\"#/\"]");
+      if (!a || a.target) return;
+      e.preventDefault(); navigate(a.dataset.spa ? a.getAttribute("href") : a.getAttribute("href").slice(1));
+    });
+    boot();
+  }
 })();
