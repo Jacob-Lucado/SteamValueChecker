@@ -52,13 +52,16 @@ export const pendingBundlesFor = (db, guildId, settings) => db.listFeedBundles({
  * One poll: read the stores, save anything new, retire what ended, post what each server has not had, and edit old posts.
  * `fetchBundles` is injectable for tests. A failed read still lets the expiry and edit steps run.
  */
-export async function runBundleFeed({ db, api, fetchBundles = fetchAllBundles, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
+export async function runBundleFeed({ db, api, deep = false, fetchBundles = fetchAllBundles, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
     const stats = { fetched: 0, added: 0, posted: 0, expired: 0, failed: 0, feedError: null };
     try {
-        const got = await fetchBundles();
+        const got = await fetchBundles({ deep });
         const list = Array.isArray(got) ? got : got.bundles;
         stats.fetched = list.length;
-        for (const b of list) if (db.upsertFeedBundle(b).isNew) stats.added++;
+        const backfilled = [];
+        for (const b of list) { const r = db.upsertFeedBundle(b); if (r.isNew) { stats.added++; if (deep && b.store === "steam") backfilled.push(r.id ?? db.getFeedBundle(b.key)?.id); } }
+        // A deep check reaches back through hundreds of older Steam bundles; they fill the dashboard page but are not announced as news.
+        for (const id of backfilled.filter(Boolean)) for (const g of db.bundleFeedGuilds()) db.addFeedBundlePost(id, g.guild_id, g.channel_id, null);
         if (got.errors?.length) { stats.feedError = got.errors.join("; "); log(`bundle feed (partial): ${stats.feedError}`); }
         for (const store of got.complete ?? []) stats.expired += db.expireMissingBundles(store, list.filter(b => b.store === store).map(b => b.key)).length;
     } catch (err) { stats.feedError = err.message; log(`bundle feed: ${err.message}`); }

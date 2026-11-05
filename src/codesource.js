@@ -1,3 +1,4 @@
+import { steamArt } from "./art.js";
 // Where limited-time game codes come from, and how a raw entry becomes something we can trust.
 // SHiFT codes come from a community list on GitHub (scraped from mentalmars.com); HoYoverse codes come from two public APIs.
 // Every field is checked before it is stored.
@@ -52,7 +53,7 @@ export const gameByKey = key => ALL_GAMES.find(g => g.key === key) ?? null;
 /** The SHiFT game a feed entry's game name belongs to. */
 export const gameByName = name => SHIFT_GAMES.find(g => g.match.test(String(name ?? ""))) ?? null;
 /** Steam's header for Borderlands; our own copy for the HoYoverse games. `base` is the site address ("" for the dashboard's own pages, null when there is none). */
-export const gameArt = (game, base = null) => (game?.appid ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg` : game?.artFile && base !== null && base !== undefined ? `${base}${game.artFile}` : null);
+export const gameArt = (game, base = null) => (game?.appid ? (base === "" ? `/art/header/${game.appid}.jpg` : base ? steamArt(game.appid) : `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`) : game?.artFile && base !== null && base !== undefined ? `${base}${game.artFile}` : null);
 /** Where to redeem one code. HoYoverse links fill the code in for you. */
 export const redeemUrlFor = (game, code) => (game?.redeem ? game.redeem(code) : game?.redeemUrl ?? SHIFT_REDEEM_URL);
 

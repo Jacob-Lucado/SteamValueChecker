@@ -1512,7 +1512,7 @@ test("game codes: signed-in members see the list, managers set up their server, 
     const list = (await o.request("/api/codes")).data;
     assert.equal(list.codes.length, 2);
     assert.ok(list.codes.every(c => c.art && c.redeemUrl && c.gameTitle));
-    assert.match(list.codes.find(c => c.game === "bl2").art, /\/apps\/49520\//, "each code shows its own game's art");
+    assert.match(list.codes.find(c => c.game === "bl2").art, /\/art\/header\/49520\.jpg/, "each code shows its own game's art");
     assert.equal((await o.request("/api/codes?game=bl2")).data.codes.length, 1);
     assert.equal((await o.request("/api/codes?game=nope")).status, 400);
     const s = (await o.request("/api/servers/codes?guild=g-admin")).data;

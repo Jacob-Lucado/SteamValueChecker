@@ -304,7 +304,7 @@ test("codes: the Borderlands games are one entry, and the HoYoverse games have t
         assert.equal(gameArt(gameByKey(k), "https://bot.example"), `https://bot.example/img/codes/${k}.jpg`);
         assert.equal(gameArt(gameByKey(k)), null);
     }
-    assert.match(gameArt(gameByKey("bl4"), ""), /steamstatic/);
+    assert.match(gameArt(gameByKey("bl4"), ""), /^\/art\/header\/\d+\.jpg$/);
     const e = codeEmbed({ code: "ABC", game: "hsr", reward: "x", expires_at: null }, { base: "https://bot.example" });
     assert.equal(e.embeds[0].image.url, "https://bot.example/img/codes/hsr.jpg");
     assert.equal(codeView({ id: 1, code: "ABC", game: "zzz", status: "active" }).art, "/img/codes/zzz.jpg");

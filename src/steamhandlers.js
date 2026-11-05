@@ -1,5 +1,6 @@
 // /me steam: link a public Steam profile so the library and hours played fill in by themselves, and get a pick for what to play next.
 import { MessageFlags } from "discord.js";
+import { steamArt } from "./art.js";
 import { libraryView } from "./library.js";
 import { viewRows } from "./wishlist.js";
 import { forYou } from "./foryou.js";
@@ -20,7 +21,7 @@ const wait = userId => { const w = COOLDOWN_MS - (Date.now() - (last.get(userId)
 
 const achievementsLine = v => `**${v.achDone.toLocaleString("en-US")}** of **${v.achTotal.toLocaleString("en-US")}** unlocked (${Math.round(v.achDone / v.achTotal * 100)}%) across ${v.achGames} games`;
 const line = (r, f) => `• **${r.title}** ${f(r)}`;
-const art = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIComponent(appid)}/header.jpg`;
+const art = appid => steamArt(appid);
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export function recapEmbed(r) {

@@ -117,12 +117,13 @@ export function toCsv(rows, currency) {
     return "﻿" + [head.map(csvCell).join(","), ...lines].join("\r\n") + "\r\n";
 }
 
+import { steamArt } from "./art.js";
 const GREEN = 0x57f287;
 export const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 
 export const STOP_ID = "alert_stop";
 export const SNOOZE_ID = "alert_snooze", BELOW_ID = "alert_below", BELOW_MODAL_ID = "alert_m_below";
-export const steamArt = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
+export { steamArt };
 export const itadArt = id => `https://assets.isthereanydeal.com/${encodeURIComponent(id)}/banner400.jpg`;
 /** Game art for an alert: Steam's header when the Steam id is known, otherwise IsThereAnyDeal's banner. */
 export const artUrl = item => (Number.isInteger(item?.appid) ? steamArt(item.appid) : item?.itad_id ? itadArt(item.itad_id) : undefined);

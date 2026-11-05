@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseHumbleList, parseHumbleDetail, parseFanatical, parseIndieGala, parseSteamBundles, fetchAllBundles } from "../src/bundlefeedsource.js";
+import { parseHumbleList, parseHumbleDetail, parseFanatical, parseIndieGala, parseSteamBundlePage, parseIndieGalaDetail, parseItadIndex, parseItadDetail, fetchFanatical, fetchAllBundles } from "../src/bundlefeedsource.js";
 import { bundleFeedEmbed, runBundleFeed, applyBundleFeedSettings, describeStores } from "../src/bundlefeed.js";
 import { TEMPLATE, ADDED_LATER } from "../src/community.js";
 
@@ -12,8 +12,8 @@ const HUMBLE_LIST = `<html>${json({}).replace('id="x"', 'id="landingPage-json-da
     { machine_name: "book_bundle", tile_name: "A book bundle", product_url: "/books/stuff" }] }] } } }))}</html>`;
 const HUMBLE_DETAIL = `<html>${json({}).replace('id="x"', 'id="webpack-bundle-data"').replace("{}", JSON.stringify({ bundleData: {
     tier_item_data: { a: { human_name: "Alan Wake" }, b: { human_name: "Dead Space" } }, tier_pricing_data: { "1": { "price|money": { amount: 1 } }, "2": { "price|money": { amount: 12 } } } } }))}</html>`;
-const STEAM = { results_html: `<a href="https://store.steampowered.com/bundle/4242/Big_Pack/?snr=1" class="search_result_row"><img src="https://shared.akamai.steamstatic.com/b.jpg"><span class="title">Big Pack &amp; More</span>
-<div class="discount_pct">-35%</div><div class="discount_final_price">$19.49</div></a><a href="https://store.steampowered.com/app/1/x" class="search_result_row"><span class="title">Not a bundle</span></a>` };
+const STEAM_PAGE = `<meta property="og:title" content="Save 35% on Big Pack &amp; More on Steam"><div class="price bundle_discount">35%</div><div class="price bundle_final_price_with_discount">$19.49</div>
+<div class="tab_item_name">One</div><div class="tab_item_name">Two</div><div data-ds-appid="111"></div><div data-ds-appid="222"></div>`;
 
 test("humble: the list and a bundle's own page give title, end time, games and tier prices", () => {
     const l = parseHumbleList(HUMBLE_LIST, NOW);
@@ -28,15 +28,18 @@ test("fanatical, indiegala and steam listings are read into clean records, and j
     assert.equal(f.length, 1); assert.equal(f[0].url, "https://www.fanatical.com/en/bundle/resident-evil-bundle"); assert.equal(f[0].gameCount, 15); assert.equal(f[0].price, "Pick and mix"); assert.match(f[0].image, /^https:\/\/cdn\.fanatical\.com/);
     const i = parseIndieGala(`<a href="/bundle/pixel-traditions-4"><img src="https://img.ig.com/p.jpg" alt="Pixel Traditions Bundle 4"></a><a href="/bundle/pixel-traditions-4">again</a>`, NOW);
     assert.equal(i.length, 1); assert.equal(i[0].title, "Pixel Traditions Bundle 4"); assert.equal(i[0].key, "indiegala:pixel-traditions-4");
-    const s = parseSteamBundles(STEAM, NOW);
-    assert.equal(s.length, 1); assert.equal(s[0].title, "Big Pack & More"); assert.equal(s[0].price, "$19.49 (35% off)"); assert.equal(s[0].url, "https://store.steampowered.com/bundle/4242/");
+    const s = parseSteamBundlePage(STEAM_PAGE, 4242, NOW);
+    assert.equal(s.title, "Big Pack & More"); assert.equal(s.price, "$19.49 (35% off)"); assert.equal(s.url, "https://store.steampowered.com/bundle/4242/");
+    assert.equal(s.gameCount, 2); assert.match(s.image, /apps\/111\/header\.jpg$/); assert.deepEqual(s.games, ["One", "Two"]);
+    const g = parseIndieGalaDetail('<meta content="Power Halt  Bundle | 9 Steam Games | 95% OFF" property="og:title"/><meta content="https://www.indiegalacdn.com/c.jpg" property="og:image"/> steam/apps/5/header steam/apps/6/header');
+    assert.equal(g.image, "https://www.indiegalacdn.com/c.jpg"); assert.equal(g.gameCount, 2); assert.match(g.title, /^Power Halt Bundle/);
 });
 
 test("one store being down never hides the others, and the error is reported", async () => {
     const fetchImpl = async url => url.includes("humblebundle.com/bundles") ? { ok: true, text: async () => HUMBLE_LIST } : url.includes("humblebundle.com/games") ? { ok: true, text: async () => HUMBLE_DETAIL }
-        : url.includes("steampowered") ? { ok: true, json: async () => STEAM } : { ok: false, status: 503 };
+        : { ok: false, status: 503 };
     const r = await fetchAllBundles({ fetchImpl, now: NOW });
-    assert.deepEqual(r.complete.sort(), ["humble", "steam"]); assert.equal(r.errors.length, 2);
+    assert.deepEqual(r.complete.sort(), ["humble"]); assert.equal(r.errors.length, 2);
     assert.deepEqual(r.bundles.find(b => b.store === "humble").games, ["Alan Wake", "Dead Space"]);
     await assert.rejects(fetchAllBundles({ fetchImpl: async () => ({ ok: false, status: 500 }) }), /answered 500/);
 });
@@ -97,4 +100,24 @@ test("community setup makes a bundles-feed channel and a Bundle pings role, and 
     const chans = TEMPLATE.categories.flatMap(c => c.channels ?? []);
     assert.ok(chans.some(c => c.key === "bundles" && c.name === "bundles-feed" && c.readonly));
     assert.ok(TEMPLATE.selfRoles.some(r => r.name === "Bundle pings")); assert.ok(ADDED_LATER.has("bundles"));
+});
+
+test("fanatical turning the server away (403) falls back to IsThereAnyDeal's bundle pages", async () => {
+    const index = '<a href="/bundles/16718/" class="x"><div class="title y">Build Your Own Slayer Bundle</div> <div class="page y"><span class="z">Fanatical<span></span></span></div></a><a href="/bundles/16771/"><div class="title y">Resident Evil Bundle</div><div class="page y"><span class="z">Humble Store</span></div></a>';
+    assert.deepEqual(parseItadIndex(index).map(b => [b.id, b.store]), [["16718", "Fanatical"], ["16771", "Humble Store"]]);
+    const detail = '..."id":16718,"url":"https:\\/\\/www.awin1.com\\/cread.php?awinmid=1&ued=https%3A%2F%2Fwww.fanatical.com%2Fen%2Fpick-and-mix%2Fbuild-your-own-slayer-bundle","expiry":1796050800,"isExpired":false,"bundled":{"count":1},"bundled":{"count":2}';
+    const d = parseItadDetail(detail.replace(/\\\//g, "/"), "fanatical.com", 1);
+    assert.equal(d.url, "https://www.fanatical.com/en/pick-and-mix/build-your-own-slayer-bundle");
+    assert.equal(d.expiresAt, 1796050800000);
+    assert.equal(parseItadDetail(detail.replace("fanatical.com", "evil.example"), "fanatical.com", 1), null);
+    assert.equal(parseItadDetail(detail.replace('"isExpired":false', '"isExpired":true'), "fanatical.com", 1), null);
+    const fetchImpl = async url => {
+        if (url.includes("fanatical.com")) return { ok: false, status: 403 };
+        const body = url.endsWith("/bundles/") ? index : detail.replace(/\\\//g, "/");
+        return { ok: true, status: 200, text: async () => body };
+    };
+    const list = await fetchFanatical({ fetchImpl, now: 1, timeoutMs: 1000 });
+    assert.equal(list.length, 1);
+    assert.equal(list[0].title, "Build Your Own Slayer Bundle");
+    assert.equal(list[0].price, "Pick and mix");
 });

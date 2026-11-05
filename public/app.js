@@ -996,20 +996,37 @@
   function pfSong(song) {
     const box = h("div", { class: "pf-song" });
     const name = song.title || ({ youtube: "YouTube", soundcloud: "SoundCloud", spotify: "Spotify", radio: "Live radio" })[song.provider] || "Song";
+    // A live radio stream gets the same card as the OBS overlay: art tile, pulsing label, big title and a glowing live strip.
+    const radioCard = auto => {
+      const a = h("audio", { src: song.stream, preload: "none", referrerpolicy: "no-referrer" });
+      const btn = h("button", { type: "button", class: "pf-rplay", "aria-label": "Pause" });
+      const art = h("div", { class: "pf-rart" }, h("span", { class: "pf-rglyph", text: "📻" }), btn);
+      const eq = h("span", { class: "pf-eq", "aria-hidden": "true" }, h("i"), h("i"), h("i"));
+      const label = h("div", { class: "pf-rlabel" }, eq, h("span", { text: "Live radio" }));
+      const vol = h("input", { type: "range", min: "0", max: "100", value: "80", class: "pf-rvol", "aria-label": "Volume" });
+      vol.addEventListener("input", () => { a.volume = Number(vol.value) / 100; });
+      a.volume = 0.8;
+      const card = h("div", { class: "pf-rcard" }, art, h("div", { class: "pf-rbody" }, label, h("div", { class: "pf-rtitle", text: name }), h("div", { class: "pf-rsub muted small", text: "Profile song" }),
+        h("div", { class: "pf-rrow" }, h("span", { class: "pf-rvolicon", "aria-hidden": "true", text: "🔈" }), vol)), h("div", { class: "pf-rprog", "aria-hidden": "true" }, h("i")));
+      const paint = on => { card.classList.toggle("playing", on); btn.textContent = on ? "❚❚" : "▶"; btn.setAttribute("aria-label", on ? "Pause" : "Play"); label.lastChild.textContent = "Live radio"; };
+      btn.addEventListener("click", () => { if (a.paused) { a.src = song.stream; a.play().catch(() => {}); } else { a.pause(); } });
+      a.addEventListener("playing", () => paint(true));
+      a.addEventListener("pause", () => paint(false));
+      a.addEventListener("error", () => { card.classList.remove("playing"); label.lastChild.textContent = "Not available"; card.querySelector(".pf-rsub").textContent = "This stream is not available right now."; btn.textContent = "▶"; });
+      paint(auto);
+      box.classList.add("pf-song-radio");
+      box.replaceChildren(card, song.link ? ext(song.link, "Open", "pf-open") : null);
+      if (auto) a.play().catch(() => paint(false));
+      box.stopAudio = () => { a.pause(); a.removeAttribute("src"); a.load(); };
+    };
     const draw = playing => {
+      if (song.stream) { radioCard(playing); return; }
       if (!playing) {
+        box.classList.remove("pf-song-radio");
         const b = h("button", { type: "button", class: "pf-play", "aria-label": "Play profile song", text: "▶" });
         b.addEventListener("click", () => draw(true));
         box.replaceChildren(b, h("div", { class: "pf-song-info" }, h("strong", { text: name }), h("span", { class: "muted small", text: song.provider === "radio" ? "Live radio" : "Profile song" })),
           song.link ? ext(song.link, "Open", "pf-open") : null);
-        return;
-      }
-      if (song.stream) {
-        const a = h("audio", { src: song.stream, autoplay: "", controls: "", preload: "none", referrerpolicy: "no-referrer", class: "pf-audio" });
-        const stop = h("button", { type: "button", class: "pf-play stop", "aria-label": "Stop the song", text: "■" });
-        stop.addEventListener("click", () => { a.pause(); a.removeAttribute("src"); a.load(); draw(false); });
-        a.addEventListener("error", () => { box.replaceChildren(h("div", { class: "pf-song-info" }, h("strong", { text: name }), h("span", { class: "muted small", text: "This stream is not available right now." }))); });
-        box.replaceChildren(stop, h("div", { class: "pf-song-info" }, h("strong", { text: name }), a));
         return;
       }
       const f = h("iframe", { src: song.embed, title: "Profile song: " + name, allow: "autoplay; encrypted-media", referrerpolicy: "strict-origin-when-cross-origin", class: "pf-frame " + song.provider });
@@ -1170,7 +1187,7 @@
     gateBox.addEventListener("change", () => { cfg.enter = gateBox.checked; changed(); });
     const look = h("div", { class: "panel" }, h("h3", { text: "Look" }), field("Theme", themeBox), h("div", { class: "row" }, field("Accent colour", accent), h("div", {}, h("label", { text: "\u00a0" }), accentReset)),
       h("div", { class: "row" }, pick("Background", "bgstyle", d.choices.bgstyles.map(x => [x, nice(x)])), pick("Layout", "layout", d.choices.layouts.map(x => [x, nice(x)])), pick("Banner", "banner", [["gradient", "Colour"], ["game", "First favorite game's art"], ["none", "None"]])),
-      h("label", { class: "check" }, av, " Show my Steam picture", d.steamLinked ? null : h("span", { class: "muted small", text: " (link Steam first)" })));
+      h("label", { class: "check" }, av, " ", "Show my Steam picture", d.steamLinked ? null : h("span", { class: "muted small", text: " (link Steam first)" })));
 
     // about
     const name = h("input", { type: "text", maxlength: "32", value: cfg.name, placeholder: d.slug });
@@ -1605,7 +1622,7 @@
         if (!d.enabled) { out.replaceChildren(h("div", { class: "notice warn", text: "This bot has no Steam API key set, so it cannot see what people are playing." })); return; }
         out.replaceChildren(d.games.length
           ? h("div", { class: "grid three" }, d.games.map(g => h("div", { class: "panel np-card" },
-              h("img", { src: "https://cdn.cloudflare.steamstatic.com/steam/apps/" + g.appid + "/header.jpg", alt: "", loading: "lazy", referrerpolicy: "no-referrer" }),
+              h("img", { src: "/art/header/" + g.appid + ".jpg", alt: "", loading: "lazy" }),
               h("h3", { text: g.game }), h("p", { class: "muted", text: g.players.map(p => p.name).join(", ") }),
               g.players.length >= 2 ? h("span", { class: "chip ok", text: g.players.length + " playing together" }) : null,
               ext("https://store.steampowered.com/app/" + g.appid + "/", "Steam page", "btn gray small"))))
@@ -1661,7 +1678,7 @@
         h("button", { class: "tab small" + (st.status === "expired" ? " active" : ""), text: st.status === "expired" ? "Showing ended" : "Show ended", onclick: () => { st.status = st.status === "expired" ? "active" : "expired"; load().catch(fail); } }));
       list.className = "";
       list.replaceChildren(d.bundles.length ? h("div", { class: "free-grid" }, d.bundles.map(b => h("div", { class: "free-card" + (b.status === "expired" ? " ended" : "") },
-        b.image ? h("img", { src: b.image, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: b.storeName }),
+        b.image ? (() => { const img = h("img", { src: "/art/bundle/" + b.id + ".jpg", alt: "", loading: "lazy" }); let direct = false; img.addEventListener("error", () => { if (!direct) { direct = true; img.src = b.image; } else img.replaceWith(h("div", { class: "free-noart", text: b.storeName })); }); return img; })() : h("div", { class: "free-noart", text: b.storeName }),
         h("div", { class: "free-info" }, h("strong", { text: b.title }), h("div", { class: "muted small", text: b.storeName + (b.gameCount ? ` · ${b.gameCount} games` : "") }),
           b.price ? h("div", { text: b.price }) : null,
           b.games.length ? h("details", {}, h("summary", { class: "muted small", text: "See the games" }), h("ul", { class: "muted small" }, ...b.games.slice(0, 12).map(g => h("li", { text: g })), b.games.length > 12 ? h("li", { text: `and ${b.games.length - 12} more` }) : null)) : null,
@@ -2082,6 +2099,7 @@
   // Steam game art. Newer games are not on the old path, so try the others in turn and show a quiet placeholder if none load.
   function steamArt(appid, cls, w, ht, itadId) {
     const urls = [...(appid ? [
+      `/art/header/${appid}.jpg`,
       `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`,
       `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appid}/header.jpg`,
       `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/capsule_231x87.jpg`,
@@ -6556,8 +6574,8 @@
       last = d;
       out.replaceChildren(
         typeof d.online === "number" ? h("span", { class: "live-dot", "aria-hidden": "true", text: "● " }) : null,
-        typeof d.online === "number" ? `${n(Math.max(1, d.online))} viewing now · ` : null,
-        `${n(d.visitors)} visitors · ${n(d.views)} page views`);
+        typeof d.online === "number" ? tx(`${n(Math.max(1, d.online))} viewing now · `) : null,
+        tx(`${n(d.visitors)} visitors · ${n(d.views)} page views`));
       out.hidden = false;
     };
     fetch(`${BASE}?id=${id}${isNew ? "&new=1" : ""}`, { method: "POST", keepalive: true })

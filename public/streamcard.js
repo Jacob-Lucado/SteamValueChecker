@@ -18,14 +18,14 @@
   function build(c) {
     const card = el("div", "card"), body = el("div");
     if (c.kind === "deal") {
-      const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; if (c.appid) img.src = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + Number(c.appid) + "/header.jpg"; else img.hidden = true; card.append(img);
+      const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; if (c.appid) img.src = "/art/header/" + Number(c.appid) + ".jpg"; else img.hidden = true; card.append(img);
       body.append(el("div", "tag", c.spot ? "Spotlight" : "On sale now"), el("div", "name", c.title));
       const p = el("div", "line"), pr = el("span", "price", money(c.price, c.currency)); p.append(pr);
       if (c.discount) p.append(el("span", "off", "-" + Math.round(c.discount) + "%"));
       if (c.regular) p.append(el("s", null, money(c.regular, c.currency)));
       body.append(p); if (c.shop) body.append(el("div", "line", "at " + c.shop));
     } else if (c.kind === "game") {
-      const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + Number(c.appid) + "/header.jpg"; card.append(img);
+      const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = "/art/header/" + Number(c.appid) + ".jpg"; card.append(img);
       body.append(el("div", "tag", "Playing now"), el("div", "name", c.title)); if (c.hours) body.append(el("div", "line", c.hours + " hours in this game"));
     } else if (c.kind === "free") {
       const a = safeImg(c.art); if (a) { const img = el("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = a; card.append(img); }

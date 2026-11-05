@@ -1,5 +1,6 @@
 // The shareable profile card and the Steam account value picture, drawn as SVG and turned into PNG. They match what the website shows.
 import { trophyCase } from "./badges.js";
+import { resolveArt } from "./art.js";
 import { challengeView } from "./challenge.js";
 import { tasteProfile } from "./taste.js";
 import { libraryView } from "./library.js";
@@ -229,7 +230,8 @@ async function pictures(prefs, steam, fetchImpl) {
     const avatarUrl = prefs.avatar || steam?.card?.avatar || "";
     const top = steam?.stats?.mostPlayed?.[0]?.appid;
     const bannerUrls = [prefs.banner, top && `https://cdn.akamai.steamstatic.com/steam/apps/${Number(top)}/library_hero.jpg`, top && `https://cdn.akamai.steamstatic.com/steam/apps/${Number(top)}/header.jpg`].filter(Boolean);
-    const [avatar, banner] = await Promise.all([avatarUrl ? get(avatarUrl) : null, (async () => { for (const u of bannerUrls) { const r = await get(u); if (r) return r; } return null; })()]);
+    const viaArt = async kind => { const r = top ? await resolveArt(Number(top), kind, { fetchImpl }).catch(() => null) : null; return r ? `data:${r.type};base64,${r.buf.toString("base64")}` : null; };
+    const [avatar, banner] = await Promise.all([avatarUrl ? get(avatarUrl) : null, (async () => { for (const u of bannerUrls) { const r = await get(u); if (r) return r; } return (await viaArt("hero")) ?? (await viaArt("header")); })()]);
     return { avatar: avatar ?? undefined, banner: banner ?? undefined };
 }
 

@@ -45,6 +45,7 @@ import { createLogBuffer, ACTIVITY } from "./logbuffer.js";
 import { isHidden } from "./hidden.js";
 import { createStatusMonitor } from "./status.js";
 import { dirname, join } from "node:path";
+import { configureArt } from "./art.js";
 import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
@@ -273,6 +274,7 @@ const gwDiscord = {
 };
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
 // every message the bot sends gets the same finish: colour, name and logo in the footer, bare text turned into a card
+configureArt({ base: publicBase, dir: join(dirname(cfg.dbPath), "art") });
 const brandOpts = { logo: publicBase ? `${publicBase}/logo.png` : null };
 brandRest(botRest, brandOpts); brandRest(discord, brandOpts);
 configureHelp({ base: publicBase, supportUrl: cfg.creator?.url ?? null, inviteUrl: cfg.clientId ? botInviteUrl(cfg.clientId) : null });
@@ -285,10 +287,10 @@ const pollCodes = async () => {
 };
 const codeUi = createCodeHandlers({ db, runNow: pollCodes });
 let bundlesBusy = false;
-const pollBundles = async () => {
+const pollBundles = async ({ deep = false } = {}) => {
     if (bundlesBusy) return null;
     bundlesBusy = true;
-    try { return await runBundleFeed({ db, api: botRest, log: m => console.log(`[bundles] ${m}`) }); } finally { bundlesBusy = false; }
+    try { return await runBundleFeed({ db, api: botRest, deep, log: m => console.log(`[bundles] ${m}`) }); } finally { bundlesBusy = false; }
 };
 const bundleUi = createBundleFeedHandlers({ db, runNow: pollBundles });
 let dropsBusy = false;

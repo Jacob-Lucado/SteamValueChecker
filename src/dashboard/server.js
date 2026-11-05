@@ -20,6 +20,7 @@ import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
+import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
 import { expandGames } from "../codesource.js";
 import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
 import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
@@ -317,6 +318,8 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
     const shareLimit = createLimiter({ windowMs: 60_000, max: 120, now });
+    const artLimit = createLimiter({ windowMs: 60_000, max: 900, now });
+    const artFetch = config.artFetch ?? globalThis.fetch;
     const loginLimit = createLimiter({ windowMs: 60_000, max: 8, now });
     const authLimit = createLimiter({ windowMs: 60_000, max: config.authPerMinute ?? 20, now });
     const names = new Map(); // "guild:user" -> { name, until }
@@ -913,7 +916,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!bundleFeed?.poll) throw new HttpError(400, "The bundle poll is not running on this bot.");
-            const r = await bundleFeed.poll();
+            const r = await bundleFeed.poll({ deep: true });
             return { result: r ?? { skipped: true } };
         },
         "GET /api/servers/codes": async (req, _b, url) => {
@@ -3512,6 +3515,14 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (req.method === "GET" && (url.pathname === "/admin" || (url.pathname === "/" && onAdminHost(req)))) return await serveFile(res, "/admin", { "Cache-Control": "no-store" });
             if (req.method === "GET" && url.pathname === "/overlay") return await serveFile(res, "/overlay", { "Cache-Control": "no-store" });
             if (req.method === "GET" && (url.pathname === "/music" || (url.pathname === "/" && onMusicHost(req)))) return await serveFile(res, "/music", { "Cache-Control": "no-store" });
+            const artMatch = req.method === "GET" ? /^\/art\/(header|hero|portrait|bundle)\/(\d{1,10})\.jpg$/.exec(url.pathname) : null;
+            if (artMatch) {
+                if (!artLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const [, kind, id] = artMatch;
+                const got = kind === "bundle" ? await resolveUrlArt(`bundle-${id}`, db.getFeedBundle?.(Number(id))?.image, { fetchImpl: artFetch }) : ART_KINDS.includes(kind) ? await resolveArt(id, kind, { fetchImpl: artFetch }) : null;
+                if (!got) return send(res, 404, "No picture.", { "Content-Type": "text/plain", "Cache-Control": "public, max-age=600" });
+                return send(res, 200, got.buf, { "Content-Type": got.type, "Cache-Control": "public, max-age=604800" });
+            }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}\/og\.png$/i.test(url.pathname)) {
                 if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
                 return await serveProfileShare(res, url.pathname.split("/")[2].toLowerCase());

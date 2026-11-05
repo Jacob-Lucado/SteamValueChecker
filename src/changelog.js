@@ -1,5 +1,13 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.28", date: "2026-11-04", title: "Fanatical and Steam bundles, game art that always shows, a nicer radio player, much more translated", items: [
+        "**Far more of the dashboard is translated:** the landing page, menus, footer, Library, Wishlist, Free games, Friends, Servers, the Streamer page and the profile editor now follow your language in Spanish, French, German, Portuguese, Italian, Russian, Polish, Turkish, Japanese, Korean and Chinese. Pages not done yet fall back to English.",
+        "**Fanatical bundles load again:** Fanatical turns away automated requests, so its bundles are now read through IsThereAnyDeal when Fanatical says no. The owner's check now reports every store it could and could not read.",
+        "**Every Steam bundle:** Steam has no public list of its bundles, so the bot now walks the newest bundle pages itself. A normal check looks at what is new; the owner's \"Check for new bundles now\" goes back through hundreds of older ones so you can see it working. Older ones fill the page quietly and are not announced.",
+        "**Pictures that show:** IndieGala bundles now have their cover, and game art for newer Steam games, which are not on the old picture address, is found through the store and used everywhere: embeds, the dashboard, profiles and share pictures.",
+        "**Pictures are kept:** every game and bundle picture is saved the first time it is fetched and served from our own address with a week-long browser cache, so visiting a page no longer goes out to the stores again.",
+        "**Live radio on profiles:** a radio stream set as a profile song now plays in a card that matches the OBS now-playing overlay, with a play and pause button, volume and the live strip."
+    ] },
     { version: "2026.11.27", date: "2026-11-04", title: "Bundles feed, plus Destiny 2 and Warframe codes", items: [
         "**Bundles feed:** new game bundles from Humble Bundle, Fanatical, IndieGala and the Steam store are posted once each in a channel, with the games inside, the price tiers when the store shows them, and when the bundle ends. Ended bundles are greyed out. Browse them on the new Bundles page, or set up the channel on your server's Codes & promos tab or with `/server promos bundles`.",
         "**Community setup:** setup now makes a #bundles-feed channel and an opt-in **Bundle pings** role and connects them. Servers that were set up before get both the next time you run `/manage community setup`.",

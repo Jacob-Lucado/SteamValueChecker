@@ -63,3 +63,42 @@ test("dashboard phrases: every language has every phrase, and unknown text stays
     assert.equal(I.tx("de", 42), 42);
     assert.equal(I.tx("constructor", "Wishlist"), "Wishlist");
 });
+
+test("dashboard translations: every row has all eleven languages, patterns work, key pages covered", () => {
+    const w = { localStorage: { getItem: () => "en", setItem() {} }, navigator: { language: "en" } };
+    w.window = w; w.document = { documentElement: {}, addEventListener() {} };
+    vm.runInNewContext(readFileSync(new URL("../public/i18n.js", import.meta.url), "utf8"), w);
+    const I = w.SVC_I18N;
+    const langs = ["es", "fr", "de", "pt", "it", "ru", "pl", "tr", "ja", "ko", "zh"];
+    const en = Object.keys(I._dict.es);
+    assert.ok(en.length > 550, `only ${en.length} strings`);
+    for (const l of langs) {
+        assert.equal(Object.keys(I._dict[l]).length, en.length, l);
+        for (const k of en) assert.ok(I._dict[l][k] && I._dict[l][k].trim(), `${l} missing: ${k}`);
+    }
+    for (const l of langs) for (const t of ["Giveaway overlay", "Nobody is streaming right now.", "Server only", "Move up"]) assert.notEqual(I.tx(l, t), t, `${l}: ${t}`);
+    assert.equal(I.tx("de", 42), 42);
+    assert.equal(I.tx("constructor", "Wishlist"), "Wishlist");
+});
+
+test("dashboard translations: every row has all eleven languages, patterns work, key pages covered", () => {
+    const w = { localStorage: { getItem: () => "en", setItem() {} }, navigator: { language: "en" } };
+    w.window = w; w.document = { documentElement: {}, addEventListener() {} };
+    vm.runInNewContext(readFileSync(new URL("../public/i18n.js", import.meta.url), "utf8"), w);
+    const I = w.SVC_I18N;
+    const langs = ["es", "fr", "de", "pt", "it", "ru", "pl", "tr", "ja", "ko", "zh"];
+    const en = Object.keys(I._dict.es);
+    assert.ok(en.length > 550, `only ${en.length} strings`);
+    for (const l of langs) {
+        assert.equal(Object.keys(I._dict[l]).length, en.length, l);
+        for (const k of en) assert.ok(I._dict[l][k] && I._dict[l][k].trim(), `${l} missing: ${k}`);
+    }
+    for (const l of langs) {
+        for (const s of ["Giveaway overlay", "Nobody is streaming right now.", "Server only", "Move up"]) assert.notEqual(I.tx(l, s), s === "Move up" && l === "x" ? "" : undefined, s);
+        assert.notEqual(I.tx(l, "Server only"), "Server only", l);
+    }
+    assert.equal(I.tx("de", "Server only"), "Nur Server");
+    assert.equal(I.tx("en", "Server only"), "Server only");
+    assert.equal(I.tx("es", "Something never translated"), "Something never translated");
+    assert.equal(I.tx("es", "20% off"), "20% de descuento");
+});

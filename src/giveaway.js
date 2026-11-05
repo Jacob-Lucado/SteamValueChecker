@@ -4,6 +4,7 @@
 // Prize keys are encrypted by the vault and wiped when the winner confirms, the giveaway is cancelled, or they go unused for too long.
 
 import { randomInt } from "node:crypto";
+import { steamArt } from "./art.js";
 import { stepsOf } from "./gwpartner.js";
 import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
@@ -20,7 +21,7 @@ const cancellable = g => g.status === "active" || g.status === "scheduled";
 const MAX_ROUNDS = 12;
 
 /** The prize artwork Steam publishes for an app id. */
-export const steamHeader = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${encodeURIComponent(appid)}/header.jpg`;
+export const steamHeader = appid => steamArt(appid);
 
 const artCache = new Map(); // game name -> { at, art }
 const ART_TTL_MS = 6 * 3600_000;
