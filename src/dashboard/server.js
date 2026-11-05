@@ -44,7 +44,7 @@ import { createStreams, canStreamIn } from "../streamlive.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
-import { profileCardData, renderProfileCard, renderSteamValue, renderRecap, renderWelcomeCard } from "../cardimg.js";
+import { profileCardData, renderProfileCard, renderSteamValue, renderRecap, renderWelcomeCard, renderProfileShare } from "../cardimg.js";
 import { PLATFORMS, THEMES, mergePrefs, viewPrefs } from "../cardprefs.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
@@ -314,6 +314,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
+    const shareLimit = createLimiter({ windowMs: 60_000, max: 120, now });
     const loginLimit = createLimiter({ windowMs: 60_000, max: 8, now });
     const authLimit = createLimiter({ windowMs: 60_000, max: config.authPerMinute ?? 20, now });
     const names = new Map(); // "guild:user" -> { name, until }
@@ -2357,7 +2358,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const sameServer = Boolean(mine || (sess && owner.guild_id && !isHidden(owner.guild_id) && sess.guilds.some(g => g.id === owner.guild_id)));
             const t = url.searchParams.get("t");
             const profile = await buildProfile({ db, itad, nowPlaying }, owner, { owner: mine, sameServer }, { token: GIFT_TOKEN.test(t ?? "") ? t : null });
-            if (rt && !rt.get("profile_songs")) { profile.song = null; profile.enter = false; }
+            if (rt && !rt.get("profile_songs")) { if (profile.song && profile.owner) profile.songOff = true; profile.song = null; profile.enter = false; }
             const wl = profile.sections.find(x => x.key === "wishlist");
             const canMark = Boolean(sess && owner.guild_id && !isHidden(owner.guild_id) && isStaff(sess.guilds.find(x => x.id === owner.guild_id)));
             return { profile, canMark, signedIn: Boolean(sess), hasWishlist: Boolean(wl) };
@@ -3315,24 +3316,57 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         return body;
     }
     const escHtml = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-    // /u/name serves the same app with that person's name and bio in the share preview, then the app opens #/u/name.
+    // The page for a profile that anyone may see, or null. Share previews and the share picture both start here.
+    function publicOwner(slug) {
+        const owner = db.getProfileBySlug(slug);
+        if (!owner || !owner.profile_public || db.getProfileData(owner.discord_id).blocked || (rt && !rt.get("profiles_enabled"))) return null;
+        return owner;
+    }
+    // /u/name serves the same app with that person's name, bio and picture in the share preview, then the app opens #/u/name.
     async function serveProfileShell(res, slug) {
         const body = await loadFile("index.html");
         if (!body) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
-        const owner = db.getProfileBySlug(slug);
-        const ok = owner && owner.profile_public && !db.getProfileData(owner.discord_id).blocked && (!rt || rt.get("profiles_enabled"));
+        const owner = publicOwner(slug);
         let html = body.toString("utf8");
-        if (ok) {
+        if (owner) {
             const cfg = withDefaults(db.getProfileData(owner.discord_id).data);
             const name = cfg.name || owner.profile_slug;
-            const desc = (cfg.bio || "A game profile: favorites, wishlist and more.").replace(/\s+/g, " ").slice(0, 160);
-            html = html.replace(/(<meta property="og:title" content=")[^"]*"/, `$1${escHtml(name)} on Steam Value Checker"`)
-                .replace(/(<meta property="og:description" content=")[^"]*"/, `$1${escHtml(desc)}"`)
-                .replace(/(<meta property="og:url" content=")[^"]*"/, `$1${origin}/u/${owner.profile_slug}"`)
-                .replace(/(<link rel="canonical" href=")[^"]*"/, `$1${origin}/u/${owner.profile_slug}"`)
-                .replace(/<title>[^<]*<\/title>/, `<title>${escHtml(name)} on Steam Value Checker</title>`);
+            const title = `${name} on Steam Value Checker`;
+            const desc = (cfg.bio || `${name}'s game profile: favorite games, wishlist and more.`).replace(/\s+/g, " ").slice(0, 160);
+            const url = `${origin}/u/${owner.profile_slug}`;
+            const img = `${url}/og.png?v=${createHash("sha1").update(JSON.stringify(db.getProfileData(owner.discord_id).data)).digest("hex").slice(0, 8)}`;
+            const set = (re, v) => { html = html.replace(re, `$1${escHtml(v).replace(/\$/g, "$$$$")}"`); };
+            set(/(<meta property="og:title" content=")[^"]*"/, title);
+            set(/(<meta property="og:description" content=")[^"]*"/, desc);
+            set(/(<meta property="og:url" content=")[^"]*"/, url);
+            set(/(<link rel="canonical" href=")[^"]*"/, url);
+            set(/(<meta property="og:image" content=")[^"]*"/, img);
+            set(/(<meta property="og:image:alt" content=")[^"]*"/, `${name}'s profile on Steam Value Checker`);
+            set(/(<meta name="twitter:title" content=")[^"]*"/, title);
+            set(/(<meta name="twitter:description" content=")[^"]*"/, desc);
+            set(/(<meta name="twitter:image" content=")[^"]*"/, img);
+            set(/(<meta name="twitter:image:alt" content=")[^"]*"/, `${name}'s profile on Steam Value Checker`);
+            set(/(<meta name="description" content=")[^"]*"/, desc);
+            const ld = { "@context": "https://schema.org", "@type": "ProfilePage", name: title, url, image: img.replace(/\?.*/, ""), description: desc, mainEntity: { "@type": "Person", name, url, image: img.replace(/\?.*/, "") } };
+            html = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`);
+            html = html.replace(/<meta property="og:image:type" content="[^"]*">/, '<meta property="og:image:type" content="image/png">')
+                .replace(/<meta property="og:type" content="website">/, '<meta property="og:type" content="profile">')
+                .replace(/<title>[^<]*<\/title>/, () => `<title>${escHtml(title)}</title>`);
         }
         return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+    }
+    const shareCache = new Map(); // slug -> { at, png }
+    async function serveProfileShare(res, slug) {
+        const owner = publicOwner(slug);
+        if (!owner) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+        let hit = shareCache.get(slug);
+        if (!hit || Date.now() - hit.at > 600_000) {
+            const profile = await buildProfile({ db, itad, nowPlaying }, owner, { owner: false, sameServer: false });
+            hit = { at: Date.now(), png: await renderProfileShare({ profile }) };
+            shareCache.set(slug, hit);
+            if (shareCache.size > 200) shareCache.delete(shareCache.keys().next().value);
+        }
+        return send(res, 200, hit.png, { "Content-Type": "image/png", "Cache-Control": "public, max-age=600" });
     }
     async function serveFile(res, path, extra = {}) {
         const [file, type] = FILES[path];
@@ -3413,6 +3447,10 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (req.method === "GET" && (url.pathname === "/admin" || (url.pathname === "/" && onAdminHost(req)))) return await serveFile(res, "/admin", { "Cache-Control": "no-store" });
             if (req.method === "GET" && url.pathname === "/overlay") return await serveFile(res, "/overlay", { "Cache-Control": "no-store" });
             if (req.method === "GET" && (url.pathname === "/music" || (url.pathname === "/" && onMusicHost(req)))) return await serveFile(res, "/music", { "Cache-Control": "no-store" });
+            if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}\/og\.png$/i.test(url.pathname)) {
+                if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                return await serveProfileShare(res, url.pathname.split("/")[2].toLowerCase());
+            }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {

@@ -1064,6 +1064,7 @@
       h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
     root.append(banner, head);
     let songBox = null;
+    if (p.songOff && p.owner && !preview) root.append(h("div", { class: "notice warn", text: "Your song is saved, but profile songs are switched off on this bot right now, so visitors don't see the player. (Admin panel > Bot settings > Profile songs play.)" }));
     if (p.song) { songBox = pfSong(p.song); root.append(songBox); }
     if (p.song && p.enter && !preview) {
       // The click on this screen is what lets the browser start the sound straight away.
@@ -1132,7 +1133,9 @@
     }
     const cfg = JSON.parse(JSON.stringify(d.config));
     // The saved song is stored as provider and id. The editor works with the pasted link, so turn it back into one.
-    if (cfg.song) cfg.song = { url: cfg.song.provider === "radio" ? cfg.song.id : cfg.song.provider === "youtube" ? "https://youtu.be/" + cfg.song.id : cfg.song.provider === "soundcloud" ? "https://soundcloud.com/" + cfg.song.id : "https://open.spotify.com/" + cfg.song.kind + "/" + cfg.song.id, title: cfg.song.title || "" };
+    // The saved song is stored as provider and id. The editor works with the pasted link, so turn it back into one (also after every save).
+    const songToLink = sg => (sg ? { url: sg.provider === "radio" ? sg.id : sg.provider === "youtube" ? "https://youtu.be/" + sg.id : sg.provider === "soundcloud" ? "https://soundcloud.com/" + sg.id : "https://open.spotify.com/" + sg.kind + "/" + sg.id, title: sg.title || "" } : null);
+    cfg.song = songToLink(cfg.song);
     const pv = h("div", { class: "pf-preview" });
     let dirty = false, timer = null;
     const payload = () => ({ ...cfg, links: cfg.links.filter(l => l.url.trim()), favorites: cfg.favorites, song: cfg.song && cfg.song.url ? cfg.song : null });
@@ -1222,7 +1225,7 @@
     const saveBtn = h("button", { type: "button", class: "btn green", text: "Save profile", disabled: true });
     saveBtn.addEventListener("click", () => busy(saveBtn, async () => {
       const r = await api("/api/profile/page", payload());
-      dirty = false; Object.assign(cfg, r.config); draw(r.profile); toast("Saved.", "ok");
+      dirty = false; Object.assign(cfg, r.config, { song: songToLink(r.config.song) }); draw(r.profile); toast("Saved.", "ok");
     }));
     const open = h("a", { class: "btn gray", href: "#/u/" + d.slug, text: "Open my page" });
     const copy = h("button", { type: "button", class: "btn gray", text: "Copy link" });
@@ -6437,6 +6440,8 @@
     if (state.restricted || new URLSearchParams(location.search).get("error") === "restricted") { state.restricted ||= "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard. If you think this is a mistake, contact the bot owner."; return showRestricted(); }
     renderChrome();
     const view = currentView();
+    // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
+    if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else delete document.documentElement.dataset.area;
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }

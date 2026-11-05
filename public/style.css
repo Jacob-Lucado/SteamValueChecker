@@ -1189,3 +1189,21 @@ body.wiz-open { overflow: hidden; }
 @media (max-width: 600px) { .gwprev { height: 340px; } }
 
 .pf-letter { background: linear-gradient(135deg, var(--panel-2), var(--panel)); color: var(--muted); font-weight: 800; }
+
+/* Streamers area: a gradient mix of Twitch purple, YouTube red and Kick green. */
+:root[data-area="streamer"] {
+  --accent: #a970ff; --accent-2: #53fc18; --accent-hover: #c19bff; --on-accent: #ffffff;
+  --bg-glow: rgba(145, 70, 255, .32); --glow-2: rgba(255, 40, 40, .2); --hover-row: rgba(169, 112, 255, .08);
+  --stream-grad: linear-gradient(90deg, #9146ff, #ff2d2d 52%, #53fc18);
+}
+:root[data-area="streamer"][data-theme="light"] { --accent: #7a3df0; --accent-hover: #9456ff; --bg-glow: rgba(145, 70, 255, .2); --glow-2: rgba(255, 40, 40, .12); }
+:root[data-area="streamer"] body {
+  background:
+    radial-gradient(760px 420px at 90% -60px, rgba(83, 252, 24, .16), transparent 70%),
+    radial-gradient(900px 480px at 50% -120px, var(--glow-2), transparent 70%),
+    radial-gradient(900px 480px at -5% 0, var(--bg-glow), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
+:root[data-area="streamer"] #nav::after, :root[data-area="streamer"] header::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--stream-grad); }
+:root[data-area="streamer"] #app h1, :root[data-area="streamer"] #app h2:first-child { background: var(--stream-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }

@@ -1,5 +1,6 @@
 import { createTicketService } from "../src/tickets.js";
 import test from "node:test";
+import { createRuntimeCfg } from "../src/runtimecfg.js";
 import assert from "node:assert/strict";
 import { createDashboard } from "../src/dashboard/server.js";
 import { DiscordApiError } from "../src/dashboard/discord.js";
@@ -1092,6 +1093,20 @@ test("gift claims: visitors mark a game, others see it taken, the owner only see
     t.db.upsertLibrary("u1", [{ itad_id: id, title: "Celeste", paid: null }]);
     assert.equal((await pub(B)).data.games.length, 0);
     await t.close();
+});
+
+test("profile song: saved songs show on the public page, and an owner is told when songs are switched off", async () => {
+    let rt;
+    const t = await setup({ extra: db => { rt = createRuntimeCfg(db); return { rt }; } });
+    await t.signIn();
+    await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
+    const saved = await t.request("/api/profile/page", { method: "POST", body: { song: { url: "https://youtu.be/dQw4w9WgXcQ", title: "Test" }, enter: true } });
+    assert.equal(saved.status, 200); assert.equal(saved.data.config.song.provider, "youtube");
+    let pub = (await t.request("/api/public/profile?slug=jacob")).data.profile;
+    assert.equal(pub.song.provider, "youtube"); assert.equal(pub.enter, true);
+    rt.set({ profile_songs: false });
+    pub = (await t.request("/api/public/profile?slug=jacob")).data.profile;
+    assert.equal(pub.song, null); assert.equal(pub.songOff, true, "the owner is told why nothing shows");
 });
 
 test("up for giveaway: only the member's server staff can mark a wishlist game, everyone sees the mark, members get a list", async () => {
@@ -2187,6 +2202,11 @@ test("profiles: editor saves and validates, visitors only get what is switched o
         const shell = await fetch(o.base + "/u/" + slug);
         const html = await shell.text();
         assert.equal(shell.status, 200); assert.match(html, /og:title" content="Jacob on Steam Value Checker"/); assert.match(html, /og:description" content="I play too much\."/);
+        assert.match(html, new RegExp(`og:image" content="[^"]*/u/${slug}/og\\.png\\?v=`), "the preview picture is this profile's own, not the bot's");
+        assert.match(html, /twitter:image" content="[^"]*\/og\.png/); assert.match(html, /twitter:title" content="Jacob on Steam Value Checker"/); assert.doesNotMatch(html, /preview\.jpg/);
+        const pic = await fetch(o.base + "/u/" + slug + "/og.png"); const bytes = Buffer.from(await pic.arrayBuffer());
+        assert.equal(pic.status, 200); assert.equal(pic.headers.get("content-type"), "image/png"); assert.equal(bytes.subarray(1, 4).toString(), "PNG");
+        assert.equal((await fetch(o.base + "/u/nobody-here/og.png")).status, 404);
         assert.match(shell.headers.get("content-security-policy"), /frame-src[^;]*youtube-nocookie\.com[^;]*soundcloud\.com[^;]*spotify\.com/);
 
         const post = (path, b) => fetch(o.base + path, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "dashboard" }, body: JSON.stringify(b) });

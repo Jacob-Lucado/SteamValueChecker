@@ -305,3 +305,69 @@ export async function renderWelcomeCard({ name, server, count, avatarUrl = null,
     const avatar = avatarUrl ? await fetchImageDataUri(avatarUrl, { fetchImpl }).catch(() => null) : null;
     return svgToPng(welcomeSvg({ name, server, count, avatar: avatar?.uri ?? avatar ?? null }), 1000);
 }
+
+// ---------------------------------------------------------------- profile share picture
+// The 1200x630 picture chat apps and social sites show when a /u/name link is posted. It is drawn from what the page
+// shows to anyone (name, bio, look, favorite games), never from private sections.
+const wrapText = (text, size, maxW, maxLines) => {
+    const lines = []; let cur = "";
+    for (const word of String(text).split(/\s+/).filter(Boolean)) {
+        const next = cur ? cur + " " + word : word;
+        if (tw(next, size) <= maxW || !cur) cur = next; else { lines.push(cur); cur = word; }
+        if (lines.length === maxLines) break;
+    }
+    if (cur && lines.length < maxLines) lines.push(cur);
+    if (lines.join(" ").length < String(text).replace(/\s+/g, " ").trim().length && lines.length) lines[lines.length - 1] = lines[lines.length - 1].replace(/[.,;:\s]+$/, "") + "…";
+    return lines;
+};
+
+export function profileShareSvg({ name, bio, accent = "#ff9800", bg = "#0f1117", light = false, avatar = null, art = [], facts = [], slug = "" }) {
+    const ink = light ? "#161a24" : "#ffffff", sub = light ? "#4a5163" : "#c8cedb";
+    const n = cut(String(name ?? "Player"), 24), nameSize = Math.max(34, Math.min(64, Math.floor(430 / (tw(n, 1, true) || 1))));
+    const lines = wrapText(bio || "Favorite games, wishlist and more, all in one place.", 32, 560, 3);
+    const initial = esc([...n][0]?.toUpperCase() ?? "?");
+    const ax = 150, ay = 190, R = 82;
+    const tiles = art.slice(0, 3).map((uri, i) => {
+        const y = 52 + i * 176;
+        return `<rect x="780" y="${y}" width="368" height="164" rx="14" fill="${accent}" fill-opacity="0.25"/><image href="${uri}" x="780" y="${y}" width="368" height="164" clip-path="url(#t${i})" preserveAspectRatio="xMidYMid slice"/><rect x="780" y="${y}" width="368" height="164" rx="14" fill="none" stroke="${accent}" stroke-opacity="0.55" stroke-width="2"/>`;
+    }).join("");
+    const clips = [0, 1, 2].map(i => `<clipPath id="t${i}"><rect x="780" y="${52 + i * 176}" width="368" height="164" rx="14"/></clipPath>`).join("");
+    let cx = 70;
+    const chips = facts.slice(0, 3).map(f => {
+        const w = Math.round(tw(f, 24, true)) + 40, out = `<rect x="${cx}" y="500" width="${w}" height="46" rx="23" fill="${accent}" fill-opacity="0.18" stroke="${accent}" stroke-width="2"/><text x="${cx + 20}" y="531" font-size="24" font-weight="600" fill="${ink}">${esc(f)}</text>`;
+        cx += w + 14; return out;
+    }).join("");
+    const top = 300;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${bg}"/><stop offset="1" stop-color="${light ? "#dfe5f2" : "#07080c"}"/></linearGradient>
+<radialGradient id="glow" cx="200" cy="120" r="700" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${accent}" stop-opacity="0.3"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient>
+<clipPath id="av"><circle cx="${ax}" cy="${ay}" r="${R}"/></clipPath>${clips}</defs>
+<rect width="1200" height="630" fill="url(#bg)"/><rect width="1200" height="630" fill="url(#glow)"/>
+<rect x="0" y="0" width="12" height="630" fill="${accent}"/><rect x="0" y="622" width="1200" height="8" fill="${accent}" fill-opacity="0.8"/>
+${tiles}
+<circle cx="${ax}" cy="${ay}" r="${R + 8}" fill="${accent}"/>
+${avatar ? `<image href="${avatar}" x="${ax - R}" y="${ay - R}" width="${R * 2}" height="${R * 2}" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
+        : `<circle cx="${ax}" cy="${ay}" r="${R}" fill="${light ? "#e9edf6" : "#262b38"}"/><text x="${ax}" y="${ay + 30}" text-anchor="middle" font-size="84" font-weight="700" fill="${accent}">${initial}</text>`}
+<text x="${ax + R + 40}" y="${ay - 18}" font-size="26" font-weight="600" fill="${accent}" letter-spacing="6">GAME PROFILE</text>
+<text x="${ax + R + 38}" y="${ay + 44}" font-size="${nameSize}" font-weight="700" fill="${ink}">${esc(n)}</text>
+${lines.map((l, i) => `<text x="70" y="${top + i * 46}" font-size="32" fill="${sub}">${esc(l)}</text>`).join("")}
+${chips}
+<text x="70" y="596" font-size="26" font-weight="600" fill="${sub}">steamvaluechecker.com/u/${esc(slug)}</text>
+</svg>`;
+}
+
+/** The share picture as PNG. `profile` is what buildProfile returns for an anonymous viewer. */
+export async function renderProfileShare({ profile, fetchImpl = fetch }) {
+    const favs = profile.sections.find(s => s.key === "favorites")?.games ?? [];
+    const wish = profile.sections.find(s => s.key === "wishlist")?.games ?? [];
+    const pool = [...favs, ...wish].map(g => g.art).filter(Boolean);
+    if (profile.banner?.art) pool.unshift(profile.banner.art);
+    const urls = [...new Set(pool)].slice(0, 3);
+    const [avatar, ...art] = await Promise.all([profile.avatar ? fetchImageDataUri(profile.avatar, { fetchImpl }) : null, ...urls.map(u => fetchImageDataUri(u, { fetchImpl }))]);
+    const facts = [];
+    if (favs.length) facts.push(`${favs.length} favorite${favs.length === 1 ? "" : "s"}`);
+    if (wish.length) facts.push(`${wish.length} on wishlist`);
+    const tr = profile.sections.find(s => s.key === "trophies");
+    if (tr?.earned) facts.push(`${tr.earned} trophies`);
+    return svgToPng(profileShareSvg({ name: profile.name, bio: profile.bio, accent: profile.theme.accent, bg: profile.theme.bg, light: profile.theme.light, avatar, art: art.filter(Boolean), facts, slug: profile.slug }), 1200);
+}
