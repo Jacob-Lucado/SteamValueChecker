@@ -28,4 +28,24 @@
       return next;
     }
   };
+
+  // The page's loading screen: rotate a few friendly lines, and offer a reload if it takes too long.
+  const pre = () => document.getElementById("pre-tip");
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startPre); else startPre();
+  function startPre() {
+    const tip = pre();
+    if (!tip) return;
+    const lines = ["Waking up the price checker…", "Counting your savings…", "Checking the sales…", "Dusting off the wishlist…", "Almost there…"];
+    let i = 0;
+    const t = setInterval(() => {
+      const el = pre();
+      if (!el) { clearInterval(t); return; }
+      el.classList.add("out");
+      setTimeout(() => { i = (i + 1) % lines.length; el.textContent = lines[i]; el.classList.remove("out"); }, 250);
+    }, 2400);
+    setTimeout(() => {
+      const el = pre(), b = document.getElementById("pre-reload");
+      if (el && b) { b.hidden = false; el.textContent = "Still loading. This can take a moment if the bot just restarted."; }
+    }, 9000);
+  }
 })();
