@@ -992,7 +992,7 @@
 
   // ---------- full profiles ----------
   const PF_VIS = { public: "Public", server: "Server only", hidden: "Hidden" };
-  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming" };
+  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming", guestbook: "Guestbook" };
   const httpsOnly = u => (/^https:\/\//i.test(u || "") ? u : "");
 
   /** The profile song: a play button that loads the official player when pressed (browsers block sound that starts alone). */
@@ -1232,6 +1232,8 @@
         inner = s.badges.length ? h("div", { class: "pf-links" }, s.badges.map(b => h("span", { class: "pf-chip", text: `${b.icon} ${b.name} · ${b.tier}` })), h("span", { class: "muted small", text: `${s.earned} of ${s.total} earned` })) : h("p", { class: "muted", text: "No trophies yet." });
       } else if (s.key === "posts") {
         inner = pfPosts(s);
+      } else if (s.key === "guestbook") {
+        inner = preview ? h("p", { class: "muted", text: "Visitors who sign in with Discord can leave you a short note here." }) : pfGuestbook(p, s);
       } else if (s.key === "achievements") {
         const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: Number(n).toLocaleString() }), h("span", { text: l }));
         inner = h("div", {},
@@ -2501,7 +2503,6 @@
         const d = await api("/api/steam");
         state.steamLinked = !!d.link;
         state.me.steam = d.link ? { linked: true, verified: Boolean(d.link.verified), synced: Boolean(d.link.synced_at) } : { linked: false };
-        if (d.link && autoFillArt(d.card, d.stats, state.artForce)) toast("Updated your profile card picture and banner from Steam.", "ok");
         state.artForce = false;
         // Linked: the look-up takes the link box's place. Not linked: link first, look-up below.
         slot.replaceChildren(...(d.link ? [d.link.verified ? null : h("div", { class: "notice" }, "This profile was added from a link. ", steamLoginBtn("Verify with Steam", "btn steam small"), " Verified accounts can sign in with Steam and need no links."), lookup].filter(Boolean) : [linkPanel, lookup]));
@@ -5408,8 +5409,6 @@
   async function myPageView() {
     const grid = h("div", { class: "mp-grid" });
     const KEY = "svc_mypage";
-    const art = loadMyArt();
-    const artBox = h("details", { class: "panel" });
     const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
     const save = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* per-device only */ } };
     const lay = Object.assign({ order: [], hidden: [], pinned: [] }, load());
@@ -5479,181 +5478,10 @@
     const bar = h("div", { class: "mp-bar" });
     const on = CARDS.filter(c => c.status && c.status()[0]).length, tot = CARDS.filter(c => c.status).length;
     const tourBtn = h("button", { class: "btn gray small", type: "button", text: "Take the tour", onclick: () => startTour({ replay: true }) });
-    app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), tourBtn, myBanner(art), artBox, bar, grid, publicPagePanel());
-    drawArt(artBox, art);
+    app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), tourBtn, bar, grid, publicPagePanel());
     draw();
-    app.append(profileCardPanel());
   }
 
-  // Pictures from any https address for your own My page and profile card. Shown on your profile card. The links are saved with your account so /me profilecard can draw them; nothing is uploaded and nobody else sees them unless you post your card.
-  const ART_KEY = "svc_myart";
-  function loadMyArt() { try { const v = JSON.parse(localStorage.getItem(ART_KEY) || "{}"); return { banner: okImage(v.banner) ? v.banner : "", avatar: okImage(v.avatar) ? v.avatar : "", auto: v.auto === true }; } catch { return { banner: "", avatar: "", auto: false }; } }
-  function saveMyArt(art) {
-    try { localStorage.setItem(ART_KEY, JSON.stringify(art)); } catch { /* the website still works without it */ }
-    // The /me profilecard command draws from the server, so it needs the same pictures. Failing quietly is fine; the card here still works.
-    if (state.me) api("/api/profile/card-settings", { avatar: art.avatar || "", banner: art.banner || "" }).catch(() => {});
-  }
-  // Steam art for the pictures. A wide hero for the banner (with the store header as a fallback) and the Steam profile picture.
-  const heroUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/library_hero.jpg`;
-  const headerUrl = appid => `https://cdn.akamai.steamstatic.com/steam/apps/${Number(appid)}/header.jpg`;
-  // From Steam: the profile picture, and a banner from the hero art of the game you play most. Steam does not share profile
-  // backgrounds, so the banner is the closest thing. On a sync or link (`force`) both are replaced with the fresh ones;
-  // otherwise only empty slots are filled.
-  function autoFillArt(card, stats, force = false) {
-    const art = loadMyArt();
-    let changed = false;
-    if (okImage(card?.avatar) && (force || !art.avatar) && art.avatar !== card.avatar) { art.avatar = card.avatar; changed = true; }
-    const top = stats?.mostPlayed?.[0]?.appid;
-    if (top && (force || !art.banner) && art.banner !== heroUrl(top)) { art.banner = heroUrl(top); changed = true; }
-    art.auto = true; saveMyArt(art);
-    return changed;
-  }
-  function okImage(u) { if (!u) return false; try { const x = new URL(u); return x.protocol === "https:" && !x.username && !x.password && u.length <= 500; } catch { return false; } }
-  function myBanner(art) {
-    if (!art.banner) return "";
-    const img = h("img", { class: "mp-banner", src: art.banner, alt: "", referrerpolicy: "no-referrer", loading: "lazy" });
-    // Not every game has a wide hero image; fall back to its store header before giving up.
-    img.addEventListener("error", () => { const m = /\/steam\/apps\/(\d+)\/library_hero\.jpg$/.exec(img.src); if (m && !img.dataset.tried) { img.dataset.tried = "1"; img.src = headerUrl(m[1]); } else img.remove(); });
-    return img;
-  }
-  function drawArt(box, art) {
-    const banner = h("input", { type: "url", maxlength: "500", placeholder: "https://… (a wide image)", value: art.banner });
-    const avatar = h("input", { type: "url", maxlength: "500", placeholder: "https://… (a square picture)", value: art.avatar });
-    const apply = h("button", { class: "btn blue", text: "Save pictures", onclick: () => {
-      for (const [v, n] of [[banner.value.trim(), "banner"], [avatar.value.trim(), "picture"]]) if (v && !okImage(v)) return toast("The " + n + " link must start with https://", "error");
-      art.banner = banner.value.trim(); art.avatar = avatar.value.trim(); art.auto = true;
-      saveMyArt(art);
-      toast("Saved on this device.", "ok"); myPageView();
-    } });
-    box.replaceChildren(h("summary", { text: "Your pictures (banner and profile card picture)" }),
-      h("p", { class: "muted small", text: "Use images from any https address: a banner for this page and a picture for your profile card. They are loaded by your browser from that site, which can see your address, so use hosts you trust. Only the links are saved (with your account, for /me profilecard); no image is uploaded. A picture the host does not allow for downloads is skipped on the saved card." }),
-      h("div", { class: "row" }, field("Banner", banner), field("Profile card picture", avatar)), apply);
-  }
-
-  // A shareable profile card drawn on a canvas. Pick what it shows and the colour, then save it as an image. Nothing is uploaded.
-  function profileCardPanel() {
-    const KEY = "svc_profilecard";
-    let opt = { games: true, finished: true, hours: true, saved: true, streak: true, badges: true, genres: true, theme: "steam" };
-    let platforms = [];
-    try { Object.assign(opt, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch { /* defaults */ }
-    const THEMES = { steam: ["#1b2838", "#66c0f4"], night: ["#14151a", "#b388ff"], forest: ["#13241c", "#5fd38d"], sunset: ["#2a1620", "#ff9a62"] };
-    const out = h("div", { class: "muted", text: "Loading…" });
-    const wrap = h("div", { class: "panel" }, h("h3", { text: "Profile card" }), out);
-    api("/api/profile/card").then(d => {
-      // What is saved with the account wins, so the card here and /me profilecard match.
-      const sp = d.prefs || {};
-      if (sp.show) Object.assign(opt, sp.show);
-      if (sp.theme) opt.theme = sp.theme;
-      platforms = (sp.platforms || []).map(p => ({ id: p.id, name: p.name }));
-      const labels = Object.fromEntries((d.platforms || []).map(p => [p.id, p.label]));
-      const pushCard = patch => api("/api/profile/card-settings", patch).catch(e => toast(e.message, "error"));
-      { const have = loadMyArt(); if ((have.avatar || "") !== (sp.avatar || "") || (have.banner || "") !== (sp.banner || "")) { if (have.avatar || have.banner) pushCard({ avatar: have.avatar, banner: have.banner }); } }
-      const canvas = h("canvas", { width: "1200", height: "630", class: "recap-card", role: "img", "aria-label": "Your profile card" });
-      let pic = null, banner = null;
-      const loadImg = (src, done, fallback) => { const im = new Image(); im.crossOrigin = "anonymous"; im.referrerPolicy = "no-referrer"; im.onload = () => { done(im); draw(); }; im.onerror = () => { if (fallback) loadImg(fallback, done); }; im.src = src; };
-      const loadArt = () => {
-        const myArt = loadMyArt();
-        if (myArt.avatar) loadImg(myArt.avatar, im => { pic = im; });
-        if (myArt.banner) { const m = /\/steam\/apps\/(\d+)\/library_hero\.jpg$/.exec(myArt.banner); loadImg(myArt.banner, im => { banner = im; }, m ? headerUrl(m[1]) : null); }
-      };
-      loadArt();
-      // Linked but no pictures yet: pull them from Steam so the card is never blank.
-      { const have = loadMyArt(); if (!have.avatar || !have.banner) api("/api/steam").then(sd => { if (sd.link && autoFillArt(sd.card, sd.stats)) loadArt(); }).catch(() => {}); }
-      const rr = (x, px, py, w, hh, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + hh, r); x.arcTo(px + w, py + hh, px, py + hh, r); x.arcTo(px, py + hh, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
-      const cover = (x, im, px, py, w, hh) => { const k = Math.max(w / im.width, hh / im.height), dw = im.width * k, dh = im.height * k; x.drawImage(im, px + (w - dw) / 2, py + (hh - dh) / 2, dw, dh); };
-      const draw = () => {
-        const [bg, ac] = THEMES[opt.theme] || THEMES.steam, x = canvas.getContext("2d");
-        const BH = 230;
-        // Background: a soft vertical fade with an accent glow in the corner.
-        const g = x.createLinearGradient(0, 0, 0, 630); g.addColorStop(0, bg); g.addColorStop(1, "#0b0d12");
-        x.fillStyle = g; x.fillRect(0, 0, 1200, 630);
-        const glow = x.createRadialGradient(1100, 80, 10, 1100, 80, 520); glow.addColorStop(0, ac + "33"); glow.addColorStop(1, ac + "00");
-        x.fillStyle = glow; x.fillRect(0, 0, 1200, 630);
-        // Banner: the picture if there is one, else a diagonal accent pattern. A dark fade keeps the name readable.
-        x.save(); x.beginPath(); x.rect(0, 0, 1200, BH); x.clip();
-        if (banner) cover(x, banner, 0, 0, 1200, BH);
-        else { const bg2 = x.createLinearGradient(0, 0, 1200, BH); bg2.addColorStop(0, ac + "55"); bg2.addColorStop(1, ac + "11"); x.fillStyle = bg2; x.fillRect(0, 0, 1200, BH); x.strokeStyle = ac + "22"; x.lineWidth = 2; for (let n = -BH; n < 1300; n += 36) { x.beginPath(); x.moveTo(n, BH); x.lineTo(n + BH, 0); x.stroke(); } }
-        const fade = x.createLinearGradient(0, 0, 0, BH); fade.addColorStop(0, "rgba(0,0,0,0.10)"); fade.addColorStop(1, "rgba(11,13,18,0.92)");
-        x.fillStyle = fade; x.fillRect(0, 0, 1200, BH); x.restore();
-        x.fillStyle = ac; x.fillRect(0, BH - 3, 1200, 3);
-        // Avatar: a ring in the accent colour overlapping the banner.
-        const ax = 140, ay = BH + 6, R = 72;
-        x.beginPath(); x.arc(ax, ay, R + 8, 0, Math.PI * 2); x.fillStyle = "#0b0d12"; x.fill();
-        x.beginPath(); x.arc(ax, ay, R + 4, 0, Math.PI * 2); x.fillStyle = ac; x.fill();
-        x.save(); x.beginPath(); x.arc(ax, ay, R, 0, Math.PI * 2); x.clip();
-        if (pic) cover(x, pic, ax - R, ay - R, R * 2, R * 2);
-        else { x.fillStyle = bg; x.fillRect(ax - R, ay - R, R * 2, R * 2); x.fillStyle = ac; x.font = "700 72px system-ui, sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText((d.name || "?").slice(0, 1).toUpperCase(), ax, ay + 4); x.textAlign = "left"; x.textBaseline = "alphabetic"; }
-        x.restore();
-        // Name and subtitle.
-        x.fillStyle = "#fff"; x.font = "700 52px system-ui, sans-serif"; x.fillText((d.name || "Gamer").slice(0, 24), 250, ay + 36);
-        x.fillStyle = ac; x.font = "600 22px system-ui, sans-serif"; x.fillText("GAME LIBRARY", 252, ay + 70);
-        // Stat tiles in one row.
-        const stats = [];
-        if (opt.games) stats.push([String(d.games), "games"]);
-        if (opt.finished) stats.push([String(d.finished), "finished"]);
-        if (opt.hours && d.hours) stats.push([d.hours.toLocaleString() + " h", "played"]);
-        if (opt.saved && d.savedPct !== null) stats.push([d.savedPct + "%", "saved vs full price"]);
-        if (opt.streak && d.bestStreak) stats.push([d.streak + " / " + d.bestStreak, "streak / best"]);
-        const n = stats.length, gap = 18, left = 60, tw = n ? (1080 - gap * (n - 1)) / n : 0, ty = 330, th = 136;
-        stats.forEach(([v, k], i) => {
-          const tx = left + i * (tw + gap);
-          rr(x, tx, ty, tw, th, 18); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill();
-          x.strokeStyle = "rgba(255,255,255,0.10)"; x.lineWidth = 1.5; x.stroke();
-          x.fillStyle = ac; rr(x, tx + 22, ty + 18, 34, 5, 2.5); x.fill();
-          x.fillStyle = "#fff"; x.font = `700 ${n > 4 ? 44 : 54}px system-ui, sans-serif`; x.fillText(v, tx + 22, ty + 82, tw - 40);
-          x.fillStyle = "#9fb3c4"; x.font = "21px system-ui, sans-serif"; x.fillText(k, tx + 22, ty + 114, tw - 40);
-        });
-        // Trophies (by name) on the left, top genres on the right, then the gaming names they added.
-        const by = 484, cut = (t, m) => (t.length > m ? t.slice(0, m - 1) + "…" : t);
-        if (opt.badges && d.badges.length) {
-          x.font = "600 20px system-ui, sans-serif"; let bx = 60;
-          for (const b of d.badges.slice(0, 4)) { const label = cut(b.name, 16), w = x.measureText(label).width + 36; if (bx + w > 700) break; rr(x, bx, by + 8, w, 40, 20); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke(); x.fillStyle = "#fff"; x.fillText(label, bx + 18, by + 35); bx += w + 10; }
-        }
-        if (opt.genres && d.genres.length) {
-          x.font = "600 21px system-ui, sans-serif"; let gx = 1140;
-          for (const gname of [...d.genres].slice(0, 3).reverse()) { const w = x.measureText(gname).width + 34; gx -= w; rr(x, gx, by + 8, w, 40, 20); x.fillStyle = ac + "26"; x.fill(); x.strokeStyle = ac + "66"; x.stroke(); x.fillStyle = ac; x.fillText(gname, gx + 17, by + 35); gx -= 12; }
-        }
-        { let px = 60; const py = 548;
-          for (let i = 0; i < platforms.length; i++) {
-            const p = platforms[i], label = labels[p.id] || p.id, name = cut(p.name, 22);
-            x.font = "18px system-ui, sans-serif"; const lw = x.measureText(label).width; x.font = "700 18px system-ui, sans-serif"; const w = lw + x.measureText(name).width + 40, more = platforms.length - i - 1;
-            if (px + w > 1140 - (more > 0 ? 90 : 0)) { const t = "+" + (platforms.length - i) + " more"; x.font = "600 18px system-ui, sans-serif"; const w2 = x.measureText(t).width + 28; rr(x, px, py, w2, 36, 18); x.fillStyle = "rgba(255,255,255,0.04)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke(); x.fillStyle = "#9fb3c4"; x.fillText(t, px + 14, py + 25); break; }
-            rr(x, px, py, w, 36, 18); x.fillStyle = "rgba(255,255,255,0.06)"; x.fill(); x.strokeStyle = "rgba(255,255,255,0.10)"; x.stroke();
-            x.font = "18px system-ui, sans-serif"; x.fillStyle = "#9fb3c4"; x.fillText(label, px + 18, py + 25); x.font = "700 18px system-ui, sans-serif"; x.fillStyle = "#fff"; x.fillText(name, px + 18 + lw + 8, py + 25);
-            px += w + 10;
-          } }
-        x.fillStyle = "#5c7080"; x.font = "16px system-ui, sans-serif"; x.fillText("Steam Value Checker", 60, 616);
-      };
-      const box = (key, label) => { const c = h("input", { type: "checkbox", checked: opt[key] }); c.addEventListener("change", () => { opt[key] = c.checked; keep(); draw(); }); return h("label", { class: "check" }, c, label); };
-      let timer = null;
-      const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(opt)); } catch { /* per-device */ } clearTimeout(timer); timer = setTimeout(() => pushCard({ theme: opt.theme, show: { games: opt.games, finished: opt.finished, hours: opt.hours, saved: opt.saved, streak: opt.streak, badges: opt.badges, genres: opt.genres } }), 600); };
-      const theme = select(Object.keys(THEMES).map(k => [k, k[0].toUpperCase() + k.slice(1)]), opt.theme);
-      theme.addEventListener("change", () => { opt.theme = theme.value; keep(); draw(); });
-      const save = h("button", { class: "btn blue", text: "Save as image", onclick: () => canvas.toBlob(b => { if (!b) return; const a = h("a", { href: URL.createObjectURL(b), download: "my-game-profile.png" }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }) });
-      // Gaming names: pick a platform, type your name there, add. They show as small tags on the card.
-      const plat = select((d.platforms || []).map(p => [p.id, p.label]), "steam");
-      const pname = h("input", { type: "text", maxlength: "40", placeholder: "Your name or ID there" });
-      const tags = h("div", { class: "chips" });
-      const paintTags = () => tags.replaceChildren(...platforms.map(p => h("span", { class: "chip dim plat-chip" }, (labels[p.id] || p.id) + ": " + p.name + " ",
-        h("button", { class: "chip-x", type: "button", title: "Remove", "aria-label": "Remove " + (labels[p.id] || p.id), text: "✕", onclick: () => { platforms = platforms.filter(q => q.id !== p.id); paintTags(); draw(); pushCard({ platforms }); } }))));
-      const addPlat = () => {
-        const name = pname.value.trim(); if (!name) return toast("Type your name or ID for " + (labels[plat.value] || "that platform") + " first.", "error");
-        platforms = [...platforms.filter(q => q.id !== plat.value), { id: plat.value, name }]; pname.value = ""; paintTags(); draw();
-        pushCard({ platforms }).then(r => { if (r) toast("Added to your card.", "ok"); });
-      };
-      pname.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPlat(); } });
-      paintTags();
-      out.className = "";
-      out.replaceChildren(h("p", { class: "muted small", text: "Drawn from your library, hours, challenge and badges. Choose what to show, add your gaming names, then save the image, or post it in Discord with /me profilecard. Your choices are saved with your account." }),
-        h("div", { class: "row" }, box("games", "Games"), box("finished", "Finished"), box("hours", "Hours"), box("saved", "Percent saved"), box("streak", "Streak"), box("badges", "Badges"), box("genres", "Top genres")),
-        field("Colour", theme),
-        h("h4", { text: "Your gaming names" }),
-        h("div", { class: "row plat-row" }, field("Platform", plat), field("Name or ID", pname), h("button", { class: "btn gray shrink", type: "button", text: "Add", onclick: addPlat })),
-        tags, canvas, save);
-      draw();
-    }).catch(e => out.replaceChildren(h("div", { class: "notice warn", text: e.message })));
-    return wrap;
-  }
 
   async function friendsView() {
     const list = h("div", { class: "muted", text: "Loading…" });
@@ -6843,23 +6671,57 @@
       } catch (err) { loaded = false; thread.replaceChildren(h("div", { class: "notice warn", text: err.message })); }
     });
     drawBar();
-    card.append(head, feedBody(it, ctx.onGame), bar, thread);
+    const pic = it.image ? h("a", { class: "fd-pic", href: "/fimg/" + it.image, target: "_blank", rel: "noopener" }, h("img", { src: "/fimg/" + it.image, alt: "Picture from " + (it.by?.name || "a post"), loading: "lazy" })) : null;
+    card.append(head, feedBody(it, ctx.onGame), pic, bar, thread);
     return card;
   }
 
   /** The box for writing a post or a reply. */
+  /** Shrinks a chosen picture to something light before it is sent: at most 1600 px wide, as a JPEG. Resolves a data: address. */
+  function shrinkPicture(file) {
+    return new Promise((resolve, reject) => {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return reject(new Error("Pick a JPEG, PNG or WebP picture."));
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        let q = 0.85, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 1_500_000 && q > 0.4) { q -= 0.15; out = c.toDataURL("image/jpeg", q); }
+        out.length > 1_500_000 ? reject(new Error("That picture is too big. Try a smaller one.")) : resolve(out);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file could not be read as a picture.")); };
+      img.src = url;
+    });
+  }
+
+  /** The box for writing a post or a reply. A post can also carry one picture. */
   function feedComposer({ parent = null, placeholder = "What are you playing?", button = "Post", games = [], onPosted }) {
     const box = h("textarea", { class: "fd-text", maxlength: "280", rows: parent ? "2" : "3", placeholder, "aria-label": placeholder });
     const count = h("span", { class: "muted small fd-count", text: "280" });
     const pick = !parent ? h("select", { class: "fd-pick", "aria-label": "Tag a game" }, h("option", { value: "", text: "No game" }), ...games.map(g => h("option", { value: String(g.appid), text: g.title }))) : null;
     const send = h("button", { class: "btn blue small", type: "button", text: button });
+    let picture = null;
+    const preview = h("div", { class: "fd-attach", hidden: true });
+    const file = !parent ? h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true, "aria-label": "Add a picture" }) : null;
+    const attach = file ? h("button", { class: "btn gray small", type: "button", text: "📷 Picture", onclick: () => file.click() }) : null;
+    const clear = () => { picture = null; preview.hidden = true; preview.replaceChildren(); if (file) file.value = ""; };
+    file?.addEventListener("change", async () => {
+      if (!file.files[0]) return;
+      try {
+        picture = await shrinkPicture(file.files[0]);
+        const im = h("img", { src: picture, alt: "Your picture" });
+        preview.replaceChildren(im, h("button", { class: "btn gray small", type: "button", text: "Remove", onclick: clear })); preview.hidden = false;
+      } catch (e) { clear(); toast(e.message, "warn"); }
+    });
     box.addEventListener("input", () => { count.textContent = String(280 - [...box.value].length); count.classList.toggle("warn", 280 - [...box.value].length < 20); });
     send.addEventListener("click", () => busy(send, async () => {
-      await api("/api/social/post", { body: box.value, appid: pick?.value ? Number(pick.value) : undefined, parent: parent ?? undefined });
-      box.value = ""; count.textContent = "280"; if (pick) pick.value = "";
+      await api("/api/social/post", { body: box.value, appid: pick?.value ? Number(pick.value) : undefined, parent: parent ?? undefined, image: picture ?? undefined });
+      box.value = ""; count.textContent = "280"; if (pick) pick.value = ""; clear();
       await onPosted?.();
     }));
-    return h("div", { class: "fd-compose" }, box, h("div", { class: "fd-compose-row" }, pick, count, send));
+    return h("div", { class: "fd-compose" }, box, preview, h("div", { class: "fd-compose-row" }, pick, attach, file, count, send));
   }
 
   async function feedView() {
@@ -6930,8 +6792,12 @@
         const ev = h("input", { type: "checkbox", checked: r.prefs.events }), dg = h("input", { type: "checkbox", checked: r.prefs.digest });
         ev.addEventListener("change", () => api("/api/social/prefs", { events: ev.checked }).then(() => toast(ev.checked ? "Your finished games and rare unlocks show in the feed." : "Only your posts show in the feed now.", "ok")).catch(e => { ev.checked = !ev.checked; toast(e.message, "error"); }));
         dg.addEventListener("change", () => api("/api/social/prefs", { digest: dg.checked }).then(() => toast(dg.checked ? "You'll get a weekly rundown on Discord." : "No more weekly digest.", "ok")).catch(e => { dg.checked = !dg.checked; toast(e.message, "error"); }));
+        const flag = (key, text, onMsg, offMsg) => { const c = h("input", { type: "checkbox", checked: r.prefs[key] }); c.addEventListener("change", () => api("/api/social/prefs", { [key]: c.checked }).then(() => toast(c.checked ? onMsg : offMsg, "ok")).catch(e => { c.checked = !c.checked; toast(e.message, "warn"); })); return h("label", { class: "fd-check" }, c, h("span", { text })); };
+        prefs.append(flag("notify", "Tell me in my notifications when someone replies, reacts, follows me or signs my guestbook", "You'll see feed activity in your notifications.", "Feed activity won't show up in your notifications."),
+          flag("dm", "Also send those to me on Discord (at most five an hour)", "You'll get them on Discord too.", "No Discord messages for feed activity."),
+          flag("guestbook", "Let visitors sign the guestbook on my page", "Your guestbook is open.", "Your guestbook is closed."));
         prefs.append(h("label", { class: "fd-check" }, ev, h("span", { text: "Show my finished games, rare unlocks and trophies in the feed" })), h("label", { class: "fd-check" }, dg, h("span", { text: "Send me a weekly rundown of the people I follow on Discord" })),
-          h("p", { class: "muted small", text: "Your page has to be on for anything to show. Turn it on under My page." }));
+          h("p", { class: "muted small", text: "Your page has to be on for anything to show. Turn it on under My profile." }));
       }).catch(() => {});
       app.append(prefs);
     } else composer.replaceChildren(h("div", { class: "notice", role: "status" }, "You're reading as a guest. ", h("a", { href: "/auth/login", text: "Sign in with Discord" }), " to follow people, post and react."));
@@ -6970,9 +6836,23 @@
       q.addEventListener("input", draw);
       box.className = ""; box.replaceChildren(h("div", { class: "fd-bar" }, q, h("a", { class: "btn gray small", href: "/feed", text: "All servers' feed" })), grid);
       draw();
+      box.append(leaderboardPanel(d.servers));
       if (d.manage.length) box.append(h("div", { class: "panel" }, h("h3", { text: "Your servers" }),
         h("p", { class: "muted small", text: "Servers you manage show up here by default. Add a short description and a Discord invite so people can join, or take the server out of the directory." }), ...d.manage.map(manageRow)));
     } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+  }
+
+  /** Who is posting, finishing and unlocking the most, for every server or one of them. Only members with a public page appear. */
+  function leaderboardPanel(servers) {
+    const body = h("div", { class: "fd-boards" });
+    const sel = h("select", { class: "fd-pick", "aria-label": "Leaderboard for" }, h("option", { value: "all", text: "All servers" }), ...servers.map(g => h("option", { value: g.id, text: g.name })));
+    const load = () => api("/api/social/leaderboards?server=" + encodeURIComponent(sel.value)).then(r => {
+      body.replaceChildren(...r.boards.map(b => h("div", { class: "fd-board" }, h("h4", { text: b.title }),
+        b.rows.length ? h("ol", {}, b.rows.map((x, i) => h("li", {}, h("span", { class: "fd-rank", text: String(i + 1) }), x.by.slug ? h("a", { href: "/u/" + x.by.slug, text: x.by.name }) : h("span", { text: x.by.name }), h("b", { text: String(x.n) })))) : h("p", { class: "muted small", text: "Nobody yet." }))));
+    }).catch(e => body.replaceChildren(h("p", { class: "muted", text: e.message })));
+    sel.addEventListener("change", load);
+    load();
+    return h("div", { class: "panel" }, h("div", { class: "fd-bar" }, h("h3", { text: "Leaderboards" }), sel), h("p", { class: "muted small", text: "Only members whose page is switched on are counted." }), body);
   }
 
   function manageRow(g) {
@@ -7069,6 +6949,47 @@
   }
 
   /** Latest posts on a profile page. */
+  /** The guestbook on a profile page: short notes from signed-in visitors. The page's owner can delete any note. */
+  function pfGuestbook(p, s) {
+    const box = h("div", { class: "pf-gb" }), list = h("div", { class: "pf-gb-list" }), foot = h("div", { class: "pf-gb-foot" });
+    let before = null;
+    const entry = e => {
+      const who = e.by.slug ? h("a", { href: "/u/" + e.by.slug, text: e.by.name }) : h("span", { text: e.by.name });
+      const del = e.canDelete ? h("button", { class: "linklike", type: "button", text: "Delete", onclick: () => busy(del, async () => { await api("/api/guestbook/delete", { id: e.id }); row.remove(); }) }) : null;
+      const row = h("div", { class: "pf-gb-note" }, h("p", { text: e.body }), h("div", { class: "muted small" }, who, " · ", feedAgo(e.at), del ? " · " : "", del));
+      return row;
+    };
+    let meta = null;
+    async function load(more = false) {
+      const q = new URLSearchParams({ slug: p.slug }); if (more && before) q.set("before", String(before));
+      const r = await api("/api/public/guestbook?" + q);
+      if (!more) { list.replaceChildren(); meta = r; }
+      if (!r.items.length && !more) list.append(h("p", { class: "muted", text: r.open ? "Nobody has signed yet. Be the first." : "This guestbook is closed." }));
+      for (const e of r.items) { list.append(entry(e)); before = e.id; }
+      foot.replaceChildren(r.more ? h("button", { class: "btn gray small", type: "button", text: "Show older notes", onclick: e => busy(e.currentTarget, () => load(true)) }) : null);
+      if (!more) composer(r);
+    }
+    const form = h("div", { class: "pf-gb-form" });
+    function composer(r) {
+      if (p.owner) {
+        const open = h("input", { type: "checkbox", checked: r.open });
+        open.addEventListener("change", () => api("/api/social/prefs", { guestbook: open.checked }).then(() => toast(open.checked ? "Your guestbook is open." : "Your guestbook is closed. Nobody can add notes.", "ok")).catch(e => { open.checked = !open.checked; toast(e.message, "warn"); }));
+        form.replaceChildren(h("label", { class: "fd-check" }, open, h("span", { text: "Let visitors sign my guestbook" })));
+        return;
+      }
+      if (!r.open) { form.replaceChildren(); return; }
+      if (!r.signedIn) { form.replaceChildren(h("p", { class: "muted small" }, h("a", { href: "/auth/login", text: "Sign in with Discord" }), " to leave a note.")); return; }
+      const ta = h("textarea", { rows: "2", maxlength: "280", placeholder: "Leave a note (no links)", "aria-label": "Leave a note" });
+      const go = h("button", { class: "btn blue small", type: "button", text: "Sign guestbook", onclick: () => busy(go, async () => {
+        await api("/api/guestbook/post", { slug: p.slug, body: ta.value }); ta.value = ""; toast("Signed.", "ok"); await load();
+      }) });
+      form.replaceChildren(ta, go);
+    }
+    box.append(form, list, foot);
+    load().catch(e => list.replaceChildren(h("p", { class: "muted", text: e.message })));
+    return box;
+  }
+
   function pfPosts(s) {
     if (!s.items.length) return h("p", { class: "muted", text: "No posts yet. Write one in the Feed." });
     return h("div", { class: "pf-posts" }, s.items.map(x => h("div", { class: "pf-post" }, h("p", { text: x.body }),

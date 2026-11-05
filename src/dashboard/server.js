@@ -49,8 +49,7 @@ import { createStreams, canStreamIn } from "../streamlive.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
 import { trophyCase } from "../badges.js";
-import { profileCardData, renderProfileCard, renderSteamValue, renderRecap, renderWelcomeCard, renderProfileShare } from "../cardimg.js";
-import { PLATFORMS, THEMES, mergePrefs, viewPrefs } from "../cardprefs.js";
+import { renderSteamValue, renderRecap, renderWelcomeCard, renderProfileShare } from "../cardimg.js";
 import { createBroadcaster, MAX_BODY } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
 import { createEvent, joinEvent, leaveEvent, drawEvent, endEvent, myAssignment, eventEmbed, revealEmbed } from "../santa.js";
@@ -441,6 +440,19 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         if (s.steamOnly) throw new HttpError(403, "Sign in with Discord to post.");
         if (s.userId !== config.ownerId && !accountOldEnough(s.userId, now())) throw new HttpError(403, "Your Discord account is too new to post yet. Try again in a few days.");
     };
+    // Feed activity reaches a person in the dashboard's notifications and, if they ask for it, in a Discord message. A few a hour at most.
+    const dmCounts = new Map(), reactSeen = new Set();
+    function notifySocial(userId, { title, body = null, url = "/feed" }) {
+        const prefs = db.getPrefs(userId);
+        if (prefs.notify) db.addNotification(userId, { type: "social", title, body, url });
+        if (!prefs.dm || !dm) return;
+        const hour = Math.floor(now() / 3_600_000), c = dmCounts.get(userId);
+        if (c && c.hour === hour && c.n >= 5) return;
+        dmCounts.set(userId, { hour, n: c && c.hour === hour ? c.n + 1 : 1 });
+        if (dmCounts.size > 5000) dmCounts.clear();
+        const origin = config.publicUrl ?? "";
+        Promise.resolve(dm(userId, { embeds: [{ color: 0x66c0f4, title: String(title).slice(0, 200), description: [body, origin ? `${origin}${url}` : null].filter(Boolean).join("\n\n").slice(0, 1000) || undefined, footer: { text: "Steam Value Checker · turn these off under Feed settings" } }] })).catch(() => {});
+    }
     const slugOwner = slug => {
         const o = db.getProfileBySlug(String(slug ?? "").toLowerCase());
         if (!o || !o.profile_public || db.getProfileData(o.discord_id).blocked) throw new HttpError(404, "That page does not exist or is private.");
@@ -1692,18 +1704,6 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         },
 
         "GET /api/library/spend": async (req) => { const s = session(req); const u = userRow(s); return spendSummary(db.listLibrary(s.userId), { currency: regionCurrency(u.region) }); },
-        // Everything the shareable profile card shows, from stored data only (no price lookups), plus the choices saved for it.
-        "GET /api/profile/card": async (req) => {
-            const s = session(req); userRow(s);
-            return { ...profileCardData(db, s.userId, s.username), prefs: viewPrefs(db.getCardPrefs(s.userId)), platforms: PLATFORMS.map(([id, label]) => ({ id, label })) };
-        },
-        // Save what the card shows: gaming names, colour, picture links, which stats. Only the keys sent are changed.
-        "POST /api/profile/card-settings": async (req, body) => {
-            const s = session(req); userRow(s);
-            const prefs = mergePrefs(db.getCardPrefs(s.userId), body ?? {});
-            db.setCardPrefs(s.userId, prefs);
-            return { prefs: viewPrefs(prefs) };
-        },
         "GET /api/library/news": async (req) => {
             const s = session(req); cooldown(s.userId, "libnews");
             const { known, posts } = await newsForUser(db, news ?? (news = createNews()), s.userId, { limit: 12 });
@@ -2598,9 +2598,9 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const s = softSession(req);
             const canMark = Boolean(s && page.guild_id && !isHidden(page.guild_id) && isStaff(s.guilds.find(x => x.id === page.guild_id)));
             const { guild_id: _g, ...rest } = page;
-            // The colour picked for their profile card also tints their wishlist page. Only the fixed theme colours can come out of this.
+            // The colour picked for their profile page also tints their wishlist page. Only the fixed theme colours can come out of this.
             const owner = db.getProfileBySlug(page.slug);
-            const accent = THEMES[viewPrefs(owner ? db.getCardPrefs(owner.discord_id) : {}).theme]?.[1] ?? null;
+            const accent = owner ? PROFILE_THEMES[withDefaults(db.getProfileData(owner.discord_id).data).theme]?.accent ?? null : null;
             return { ...rest, canMark, accent, signedIn: Boolean(s), owner: Boolean(s && owner && s.userId === owner.discord_id), region: s && owner && s.userId !== owner.discord_id ? compareGiftRegions(db, s.userId, owner.discord_id) : null };
         },
         // Moderators and owners flag a wishlist game as "up for giveaway soon". It lives in the member's server, so only that server's staff can do it.
@@ -2719,9 +2719,15 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
                 if (!g) throw new HttpError(400, "Pick a game from your own library.");
                 appid = g.appid; game = g.title;
             }
-            const r = db.createPost(s.userId, { body: body.body, appid, game, parentId: body.parent ?? null }, { staff: s.userId === config.ownerId });
+            let img = null;
+            if (body.image) {
+                if (body.parent) throw new HttpError(400, "Pictures go on posts, not replies.");
+                try { img = decodeUpload(body.image); } catch (e) { throw new HttpError(400, e.message); }
+            }
+            const r = db.createPost(s.userId, { body: body.body, appid, game, parentId: body.parent ?? null, hasImage: Boolean(img) }, { staff: s.userId === config.ownerId });
             if (r.error) throw new HttpError(r.status ?? 400, r.error);
-            if (r.parentAuthor && r.parentAuthor !== s.userId) db.addNotification(r.parentAuthor, { type: "social", title: `${authorCard(s.userId).name} replied to your post`, body: String(body.body ?? "").trim().slice(0, 140), url: "/feed" });
+            if (img) db.addPostImage(r.id, s.userId, img.mime, img.buf);
+            if (r.parentAuthor && r.parentAuthor !== s.userId) notifySocial(r.parentAuthor, { title: `${authorCard(s.userId).name} replied to your post`, body: String(body.body ?? "").trim().slice(0, 140), url: "/feed" });
             return { id: r.id };
         },
         "POST /api/social/react": async (req, body) => {
@@ -2733,7 +2739,12 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const item = db.getItem(id);
             const visible = item && (item.hidden === 0 || item.discord_id === s.userId) && !db.blockedEither(s.userId, item.discord_id);
             if (!visible) throw new HttpError(404, "That post is gone.");
-            return { mine: db.react(id, s.userId, emoji) };
+            const mine = db.react(id, s.userId, emoji);
+            if (mine && item.discord_id !== s.userId && !reactSeen.has(`${s.userId}:${id}`)) {
+                reactSeen.add(`${s.userId}:${id}`); if (reactSeen.size > 20000) reactSeen.clear();
+                notifySocial(item.discord_id, { title: `${authorCard(s.userId).name} reacted ${mine} to your ${item.parent_id ? "reply" : "post"}`, body: String(item.body ?? "").slice(0, 100) || null, url: "/feed" });
+            }
+            return { mine };
         },
         "POST /api/social/delete": async (req, body) => {
             const s = session(req);
@@ -2758,7 +2769,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (r === "self") throw new HttpError(400, "That's you.");
             if (r === "blocked") throw new HttpError(403, "You can't follow this person.");
             if (r === "limit") throw new HttpError(429, "You are following as many people as you can. Unfollow someone first.");
-            if (r === "new") { const me = authorCard(s.userId); db.addNotification(o.discord_id, { type: "social", title: `${me.name} followed you`, body: null, url: me.slug ? "/u/" + me.slug : "/feed" }); }
+            if (r === "new") { const me = authorCard(s.userId); notifySocial(o.discord_id, { title: `${me.name} followed you`, url: me.slug ? "/u/" + me.slug : "/feed" }); }
             return { following: body.on !== false, ...db.followCounts(o.discord_id) };
         },
         "POST /api/social/block": async (req, body) => {
@@ -2774,9 +2785,48 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             return { ...db.followCounts(s.userId), followers: peopleList(db.listFollowers(s.userId), s.userId), following: peopleList(db.listFollowing(s.userId).filter(x => x.slug), s.userId),
                 blocked: db.listBlocks(s.userId).map(b => ({ slug: b.slug, name: b.slug ?? "Someone" })).filter(b => b.slug), prefs: db.getPrefs(s.userId) };
         },
+        // ---- guestbook
+        "GET /api/public/guestbook": async (req, _b, url) => {
+            const sess = softSession(req);
+            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const o = slugOwner(url.searchParams.get("slug"));
+            const before = url.searchParams.get("before");
+            const g = db.guestbookList(o.discord_id, sess?.userId ?? null, { before: before ? Number(before) : null, limit: 12 });
+            const mine = Boolean(sess && sess.userId === o.discord_id);
+            return { open: db.getPrefs(o.discord_id).guestbook, total: g.total, more: g.more, signedIn: Boolean(sess && !sess.steamOnly), owner: mine,
+                items: g.items.map(e => ({ id: e.id, body: e.body, at: e.at, by: authorCard(e.author), mine: Boolean(sess && sess.userId === e.author), canDelete: mine || Boolean(sess && sess.userId === e.author) || Boolean(sess && isOwner(sess)) })) };
+        },
+        "POST /api/guestbook/post": async (req, body) => {
+            const s = session(req); userRow(s); mayPost(s);
+            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            const o = slugOwner(body.slug);
+            const r = db.guestbookPost(o.discord_id, s.userId, body.body, { staff: s.userId === config.ownerId });
+            if (r.error) throw new HttpError(r.status ?? 400, r.error);
+            const me = authorCard(s.userId);
+            notifySocial(o.discord_id, { title: `${me.name} signed your guestbook`, body: String(body.body ?? "").trim().slice(0, 140), url: o.profile_slug ? "/u/" + o.profile_slug : "/feed" });
+            return { id: r.id };
+        },
+        "POST /api/guestbook/delete": async (req, body) => {
+            const s = session(req);
+            const e = db.guestbookEntry(Number(body.id));
+            if (!e) throw new HttpError(404, "That note is gone.");
+            if (e.author !== s.userId && e.owner !== s.userId && !isOwner(s)) throw new HttpError(403, "That one is not yours to remove.");
+            db.guestbookDelete(e.id);
+            return { deleted: true };
+        },
         "POST /api/social/prefs": async (req, body) => {
             const s = session(req); userRow(s);
-            return { prefs: db.setPrefs(s.userId, { events: body.events === undefined ? undefined : Boolean(body.events), digest: body.digest === undefined ? undefined : Boolean(body.digest) }) };
+            return { prefs: db.setPrefs(s.userId, { events: body.events, digest: body.digest, notify: body.notify, dm: body.dm, guestbook: body.guestbook }) };
+        },
+        "GET /api/social/leaderboards": async (req, _b, url) => {
+            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const guilds = serverFilter(softSession(req), url.searchParams.get("server"));
+            const b = db.leaderboards(guilds, { postsSince: now() - 7 * 86400_000, finishedSince: now() - 30 * 86400_000 });
+            const shape = rows => rows.map(r => ({ by: authorCard(r.id), n: r.n })).filter(r => r.by.slug);
+            return { boards: [
+                { key: "active", title: "Most active this week", unit: "posts", rows: shape(b.active) },
+                { key: "finished", title: "Most games finished this month", unit: "finished", rows: shape(b.finished) },
+                { key: "rare", title: "Most rare achievements", unit: "rare", rows: shape(b.rare) }] };
         },
         "GET /api/social/discover": async (req, _b, url) => {
             const sess = softSession(req);
@@ -3806,6 +3856,14 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
                 if (!row || !owner || !(mine || (owner.profile_public && !db.getProfileData(owner.discord_id).blocked))) return send(res, 404, "No picture.", { "Content-Type": "text/plain" });
                 return send(res, 200, row.data, { "Content-Type": row.mime, "X-Content-Type-Options": "nosniff", "Cache-Control": mine ? "private, max-age=3600" : "public, max-age=86400" });
             }
+            const fimg = req.method === "GET" ? /^\/fimg\/(\d{1,12})$/.exec(url.pathname) : null;
+            if (fimg) {
+                if (!artLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const row = db.getPostImage(Number(fimg[1])), sess = softSession(req);
+                const seeable = row && !db.isSocialBanned(row.author) && (row.hidden === 0 || (sess && (sess.userId === row.author || isOwner(sess))));
+                if (!seeable) return send(res, 404, "No picture.", { "Content-Type": "text/plain" });
+                return send(res, 200, row.data, { "Content-Type": row.mime, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": row.hidden ? "private, no-store" : "public, max-age=86400" });
+            }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}\/og\.png$/i.test(url.pathname)) {
                 if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
                 return await serveProfileShare(res, url.pathname.split("/")[2].toLowerCase());
@@ -3844,14 +3902,12 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (key === "GET /auth/steam/return") return await steamReturn(req, res, url);
             if (key === "POST /auth/logout") { checkWrite(req); return logout(req, res); }
 
-            // The same pictures /me profilecard and /me steam value post in Discord. Saved straight from the website with a download name.
-            if (key === "GET /api/profile/card.png" || key === "GET /api/steam/value.png" || key === "GET /api/steam/recap.png") {
+            // The same pictures /me steam value and the recap post in Discord. Saved straight from the website with a download name.
+            if (key === "GET /api/steam/value.png" || key === "GET /api/steam/recap.png") {
                 const s = session(req); userRow(s);
                 const undo = cooldown(s.userId, "cardimg");
                 try {
-                    const png = key === "GET /api/profile/card.png"
-                        ? await renderProfileCard({ db, userId: s.userId, name: s.username, fetchImpl: steamFetch })
-                        : key === "GET /api/steam/recap.png" ? await renderRecap({ db, userId: s.userId, name: s.username, fetchImpl: steamFetch, now: now() })
+                    const png = key === "GET /api/steam/recap.png" ? await renderRecap({ db, userId: s.userId, name: s.username, fetchImpl: steamFetch, now: now() })
                         : await renderSteamValue({ db, itad, userId: s.userId, fetchImpl: steamFetch });
                     if (!png) throw new HttpError(404, "Link your Steam profile and sync first, so there is something to draw.");
                     return send(res, 200, Buffer.from(png), { "Content-Type": "image/png", "Cache-Control": "no-store", "Content-Disposition": `inline; filename="${key.includes("card") ? "my-game-profile" : key.includes("recap") ? "my-year-in-games" : "steam-account-value"}.png"` });
@@ -4013,7 +4069,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             let body = {};
             if (req.method === "POST") {
                 checkWrite(req);
-                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/profile/background" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
+                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/profile/background" || key === "POST /api/social/post" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
             }
             const out = await handler(req, body, url);
             if (req.method === "POST" && url.pathname.startsWith("/api/admin/")) auditAdmin(req, url.pathname, body);

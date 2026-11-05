@@ -188,7 +188,7 @@ const handlers = createHandlers({ panels, db, itad, nowPlaying, publicUrl: cfg.d
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const profileUi = createProfileHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
-const cardUi = createCardHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
+const cardUi = createCardHandlers({ db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const fx = createFx();
 const dealUi = createDealHandlers({ db, itad, fx });
 

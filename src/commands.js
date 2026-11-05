@@ -478,7 +478,7 @@ const profileCmd = new SlashCommandBuilder()
 
 const profilecard = new SlashCommandBuilder()
     .setName("profilecard")
-    .setDescription("Your shareable game profile card as a picture: library, hours, trophies and your gaming names")
+    .setDescription("Your profile page as a card picture: favorites, achievements, wishlist and links")
     .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it"));
 
 const mydata = new SlashCommandBuilder()

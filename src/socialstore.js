@@ -68,8 +68,30 @@ CREATE TABLE IF NOT EXISTS social_prefs (
     discord_id  TEXT PRIMARY KEY REFERENCES users(discord_id) ON DELETE CASCADE,
     events      INTEGER NOT NULL DEFAULT 1,
     digest      INTEGER NOT NULL DEFAULT 0,
-    last_digest INTEGER NOT NULL DEFAULT 0
+    last_digest INTEGER NOT NULL DEFAULT 0,
+    notify      INTEGER NOT NULL DEFAULT 1,
+    dm          INTEGER NOT NULL DEFAULT 0,
+    guestbook   INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS guestbook (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id  TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    author_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    body      TEXT NOT NULL,
+    at        INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS guestbook_by_owner ON guestbook (owner_id, id);
+CREATE INDEX IF NOT EXISTS guestbook_by_author ON guestbook (author_id, at);
+CREATE TABLE IF NOT EXISTS feed_images (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    feed_id    INTEGER NOT NULL UNIQUE,
+    discord_id TEXT NOT NULL REFERENCES users(discord_id) ON DELETE CASCADE,
+    mime       TEXT NOT NULL,
+    data       BLOB NOT NULL,
+    at         INTEGER NOT NULL
 );`;
+export const IMAGES_PER_DAY = 5;
+export const GUESTBOOK_PER_HOUR = 6, GUESTBOOK_KEEP = 300;
 
 /** Only real Discord invite links, so a server cannot point visitors somewhere else. */
 export const INVITE_RE = /^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9-]{2,32}$/;
@@ -106,13 +128,45 @@ const inGuilds = (col, guilds) => { const q = guilds.map(() => "?").join(","); r
 export function socialStore({ run, get, all, now, clean = x => x }) {
     const rows = (sql, ...args) => all(sql, ...args).map(clean);
 
-    const getPrefs = id => { const r = get("SELECT events, digest, last_digest FROM social_prefs WHERE discord_id = ?", id); return { events: r ? Boolean(r.events) : true, digest: r ? Boolean(r.digest) : false, lastDigest: r?.last_digest ?? 0 }; };
-    function setPrefs(id, { events, digest }) {
-        const cur = getPrefs(id);
-        run("INSERT INTO social_prefs (discord_id, events, digest, last_digest) VALUES (?,?,?,?) ON CONFLICT(discord_id) DO UPDATE SET events = excluded.events, digest = excluded.digest",
-            id, (events ?? cur.events) ? 1 : 0, (digest ?? cur.digest) ? 1 : 0, cur.lastDigest);
+    const getPrefs = id => {
+        const r = get("SELECT events, digest, last_digest, notify, dm, guestbook FROM social_prefs WHERE discord_id = ?", id);
+        return { events: r ? Boolean(r.events) : true, digest: r ? Boolean(r.digest) : false, lastDigest: r?.last_digest ?? 0, notify: r ? Boolean(r.notify) : true, dm: r ? Boolean(r.dm) : false, guestbook: r ? Boolean(r.guestbook) : true };
+    };
+    function setPrefs(id, patch) {
+        const cur = getPrefs(id), v = k => (patch[k] === undefined ? cur[k] : Boolean(patch[k])) ? 1 : 0;
+        run("INSERT INTO social_prefs (discord_id, events, digest, last_digest, notify, dm, guestbook) VALUES (?,?,?,?,?,?,?) ON CONFLICT(discord_id) DO UPDATE SET events = excluded.events, digest = excluded.digest, notify = excluded.notify, dm = excluded.dm, guestbook = excluded.guestbook",
+            id, v("events"), v("digest"), cur.lastDigest, v("notify"), v("dm"), v("guestbook"));
         return getPrefs(id);
     }
+
+    // ---- guestbook: short notes left on someone's page. The owner can delete any of them, close it, or block a person.
+    function guestbookList(ownerId, viewerId = null, { before = null, limit = 20 } = {}) {
+        const rows = all(`SELECT g.id, g.author_id AS author, g.body, g.at FROM guestbook g WHERE g.owner_id = ? ${before ? "AND g.id < ?" : ""}
+            AND NOT EXISTS (SELECT 1 FROM social_blocks b WHERE b.discord_id = ? AND b.blocked_id = g.author_id)
+            AND NOT EXISTS (SELECT 1 FROM social_blocks b WHERE b.discord_id = ? AND b.blocked_id = g.author_id)
+            AND NOT EXISTS (SELECT 1 FROM social_bans x WHERE x.discord_id = g.author_id)
+            ORDER BY g.id DESC LIMIT ?`, ownerId, ...(before ? [Number(before)] : []), ownerId, viewerId ?? "", Math.min(50, Math.max(1, limit)) + 1);
+        const more = rows.length > limit;
+        return { items: rows.slice(0, limit).map(clean), more, total: get("SELECT COUNT(*) AS n FROM guestbook WHERE owner_id = ?", ownerId).n };
+    }
+    function guestbookPost(ownerId, authorId, body, { staff = false } = {}) {
+        if (ownerId === authorId) return { error: "Sign someone else's guestbook.", status: 400 };
+        const c = cleanPostText(body);
+        if (c.error) return { error: c.error, status: 400 };
+        if (!getPrefs(ownerId).guestbook) return { error: "This guestbook is closed.", status: 403 };
+        if (!staff && isSocialBanned(authorId)) return { error: "Posting is turned off for your account.", status: 403 };
+        if (blockedEither(ownerId, authorId)) return { error: "You can't sign this guestbook.", status: 403 };
+        const t = now();
+        if (!staff) {
+            if (get("SELECT COUNT(*) AS n FROM guestbook WHERE author_id = ? AND at > ?", authorId, t - HOUR).n >= GUESTBOOK_PER_HOUR) return { error: "That's a lot of notes. Give it a little while.", status: 429 };
+            if (get("SELECT 1 FROM guestbook WHERE owner_id = ? AND author_id = ? AND body = ? AND at > ?", ownerId, authorId, c.text, t - 10 * 60_000)) return { error: "You already said that.", status: 409 };
+        }
+        const info = run("INSERT INTO guestbook (owner_id, author_id, body, at) VALUES (?,?,?,?)", ownerId, authorId, c.text, t);
+        run("DELETE FROM guestbook WHERE owner_id = ? AND id NOT IN (SELECT id FROM guestbook WHERE owner_id = ? ORDER BY id DESC LIMIT ?)", ownerId, ownerId, GUESTBOOK_KEEP);
+        return { id: Number(info.lastInsertRowid) };
+    }
+    const guestbookEntry = id => clean(get("SELECT id, owner_id AS owner, author_id AS author, body, at FROM guestbook WHERE id = ?", Number(id))) ?? null;
+    const guestbookDelete = id => run("DELETE FROM guestbook WHERE id = ?", Number(id));
     const markDigest = (id, at = now()) => run("INSERT INTO social_prefs (discord_id, last_digest) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET last_digest = excluded.last_digest", id, at);
 
     // ---- servers in the community directory. Every server the bot is in is listed unless its managers opt out.
@@ -200,8 +254,8 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
         return get(`SELECT COUNT(*) AS n FROM feed WHERE discord_id = ? AND kind = 'post' AND at > ? AND parent_id IS ${replies ? "NOT" : ""} NULL`, id, since).n;
     }
     /** A post or a reply. Returns { id } or { error, status }. */
-    function createPost(id, { body, appid = null, game = null, parentId = null }, { staff = false } = {}) {
-        const c = cleanPostText(body);
+    function createPost(id, { body, appid = null, game = null, parentId = null, hasImage = false }, { staff = false } = {}) {
+        const c = hasImage && !parentId && !String(body ?? "").trim() ? { text: "" } : cleanPostText(body);
         if (c.error) return { error: c.error, status: 400 };
         if (!staff && isSocialBanned(id)) return { error: "Posting is turned off for your account.", status: 403 };
         let parent = null;
@@ -216,16 +270,22 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
             if (get("SELECT COUNT(*) AS n FROM feed WHERE discord_id = ? AND kind = 'post' AND at > ?", id, t - DAY).n >= ITEMS_PER_DAY) return { error: "You've hit today's posting limit. It resets tomorrow.", status: 429 };
             if (get("SELECT 1 FROM feed WHERE discord_id = ? AND kind = 'post' AND body = ? AND at > ?", id, c.text, t - 10 * 60_000)) return { error: "You already said that.", status: 409 };
         }
+        if (hasImage && !parentId && !staff && get("SELECT COUNT(*) AS n FROM feed_images WHERE discord_id = ? AND at > ?", id, now() - DAY).n >= IMAGES_PER_DAY) return { error: `That's ${IMAGES_PER_DAY} pictures today. Try again tomorrow.`, status: 429 };
         const info = run("INSERT INTO feed (discord_id, kind, appid, game, body, parent_id, at) VALUES (?,?,?,?,?,?,?)", id, "post", parent ? null : (Number.isInteger(appid) && appid > 0 ? appid : null), parent ? null : (game ? String(game).slice(0, 120) : null), c.text, parent ? parent.id : null, now());
         return { id: Number(info.lastInsertRowid), parentAuthor: parent?.discord_id ?? null };
     }
 
     function deleteItem(feedId) {
         run("DELETE FROM feed_reactions WHERE feed_id IN (SELECT id FROM feed WHERE id = ? OR parent_id = ?)", feedId, feedId);
+        run("DELETE FROM feed_images WHERE feed_id = ?", feedId);
         run("DELETE FROM feed WHERE id = ? OR parent_id = ?", feedId, feedId);
         run("DELETE FROM feed_reports WHERE feed_id = ?", feedId);
     }
     const getItem = feedId => clean(get("SELECT * FROM feed WHERE id = ?", Number(feedId))) ?? null;
+
+    // ---- one picture per post, kept in the database and served from our own address
+    const addPostImage = (feedId, id, mime, buf) => Number(run("INSERT INTO feed_images (feed_id, discord_id, mime, data, at) VALUES (?,?,?,?,?)", Number(feedId), id, mime, buf, now()).lastInsertRowid);
+    const getPostImage = imageId => get("SELECT i.id, i.mime, i.data, i.discord_id AS author, f.hidden FROM feed_images i JOIN feed f ON f.id = i.feed_id WHERE i.id = ?", Number(imageId)) ?? null;
 
     /** One reaction per person per item. The same emoji again takes it back; a different one swaps it. */
     function react(feedId, id, emoji) {
@@ -243,12 +303,14 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
         for (const r of all(`SELECT feed_id, emoji, COUNT(*) AS n FROM feed_reactions WHERE feed_id IN (${q}) GROUP BY feed_id, emoji`, ...ids)) { const m = reacts.get(r.feed_id) ?? {}; m[r.emoji] = r.n; reacts.set(r.feed_id, m); }
         if (viewer) for (const r of all(`SELECT feed_id, emoji FROM feed_reactions WHERE discord_id = ? AND feed_id IN (${q})`, viewer, ...ids)) mine.set(r.feed_id, r.emoji);
         for (const r of all(`SELECT parent_id, COUNT(*) AS n FROM feed WHERE parent_id IN (${q}) AND hidden = 0 GROUP BY parent_id`, ...ids)) replies.set(r.parent_id, r.n);
+        const images = new Map();
+        for (const r of all(`SELECT feed_id, id FROM feed_images WHERE feed_id IN (${q})`, ...ids)) images.set(r.feed_id, r.id);
         const authors = new Map();
         for (const a of all(`SELECT discord_id, profile_slug AS slug, guild_id AS guild FROM users WHERE discord_id IN (${[...new Set(list.map(r => r.discord_id))].map(() => "?").join(",")})`, ...new Set(list.map(r => r.discord_id)))) authors.set(a.discord_id, a);
         return list.map(r => {
             let data = null; try { data = r.data ? JSON.parse(r.data) : null; } catch { /* old row */ }
             return { id: r.id, author: r.discord_id, slug: authors.get(r.discord_id)?.slug ?? null, guild: authors.get(r.discord_id)?.guild ?? null, kind: r.kind, appid: r.appid, game: r.game, body: r.body, parentId: r.parent_id, data, at: r.at, hidden: Boolean(r.hidden),
-                reactions: reacts.get(r.id) ?? {}, mine: mine.get(r.id) ?? null, replies: replies.get(r.id) ?? 0 };
+                reactions: reacts.get(r.id) ?? {}, mine: mine.get(r.id) ?? null, replies: replies.get(r.id) ?? 0, image: images.get(r.id) ?? null };
         });
     }
 
@@ -314,6 +376,21 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
         for (const r of found) { const n = seen.get(r.discord_id) ?? 0; if (n >= perPerson) continue; seen.set(r.discord_id, n + 1); out.push({ ...r, pct: Math.round(r.pct * 10) / 10 }); if (out.length >= limit) break; }
         return out;
     }
+    /**
+     * Three small boards for some servers: who has been posting, who has finished the most games lately, and who holds the most
+     * rare achievements. Only members whose public page is on appear, and nothing here shows hours or anything a page keeps private.
+     */
+    function leaderboards(guilds, { postsSince, finishedSince, limit = 5 }) {
+        if (!guilds?.length) return { active: [], finished: [], rare: [] };
+        const ok = col => `${col} IN (SELECT discord_id FROM users WHERE profile_public = 1 AND profile_slug IS NOT NULL) AND ${col} NOT IN (SELECT discord_id FROM profile_ext WHERE blocked = 1) AND ${col} NOT IN (SELECT discord_id FROM social_bans)`;
+        const g2 = [...guilds, ...guilds];
+        const top = (sql, args) => rows(sql, ...args).map(r => ({ id: r.id, n: r.n }));
+        return {
+            active: top(`SELECT f.discord_id AS id, COUNT(*) AS n FROM feed f WHERE f.kind = 'post' AND f.hidden = 0 AND f.at >= ? AND ${inGuilds("f.discord_id", guilds)} AND ${ok("f.discord_id")} GROUP BY f.discord_id ORDER BY n DESC, MAX(f.at) DESC LIMIT ?`, [postsSince, ...g2, limit]),
+            finished: top(`SELECT l.discord_id AS id, COUNT(*) AS n FROM library l WHERE l.status = 'finished' AND l.status_at >= ? AND ${inGuilds("l.discord_id", guilds)} AND ${ok("l.discord_id")} GROUP BY l.discord_id ORDER BY n DESC LIMIT ?`, [finishedSince, ...g2, limit]),
+            rare: top(`SELECT a.discord_id AS id, COUNT(*) AS n FROM ach_rare a WHERE ${inGuilds("a.discord_id", guilds)} AND ${ok("a.discord_id")} GROUP BY a.discord_id ORDER BY n DESC LIMIT ?`, [...g2, limit])
+        };
+    }
     /** Public pages whose libraries overlap yours the most, skipping people you follow or block. */
     function similarPeople(viewer, limit = 8) {
         return rows(`SELECT u.discord_id, u.profile_slug AS slug, COUNT(*) AS shared FROM library a JOIN library b ON b.itad_id = a.itad_id AND b.discord_id <> a.discord_id
@@ -358,13 +435,15 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
         run("DELETE FROM feed WHERE kind <> 'post' AND hidden = 0 AND at < ?", t - EVENT_KEEP_MS);
         run("DELETE FROM feed_reactions WHERE feed_id NOT IN (SELECT id FROM feed)");
         run("DELETE FROM feed_reports WHERE feed_id NOT IN (SELECT id FROM feed)");
+        run("DELETE FROM feed_images WHERE feed_id NOT IN (SELECT id FROM feed)");
     }
     /** Everything a member left behind goes when they delete their data. */
     function forgetSocialUser(id) {
         run("DELETE FROM feed_reactions WHERE feed_id IN (SELECT id FROM feed WHERE discord_id = ? OR parent_id IN (SELECT id FROM feed WHERE discord_id = ?))", id, id);
+        run("DELETE FROM feed_images WHERE discord_id = ? OR feed_id IN (SELECT id FROM feed WHERE discord_id = ?)", id, id);
         run("DELETE FROM feed WHERE discord_id = ? OR parent_id IN (SELECT id FROM feed WHERE discord_id = ?)", id, id);
-        for (const [t, c] of [["follows", "follower"], ["follows", "followee"], ["feed_reactions", "discord_id"], ["social_blocks", "discord_id"], ["social_blocks", "blocked_id"], ["feed_reports", "reporter_id"], ["feed_reports", "author_id"], ["social_prefs", "discord_id"], ["user_guilds", "discord_id"]]) run(`DELETE FROM ${t} WHERE ${c} = ?`, id);
+        for (const [t, c] of [["guestbook", "owner_id"], ["guestbook", "author_id"], ["follows", "follower"], ["follows", "followee"], ["feed_reactions", "discord_id"], ["social_blocks", "discord_id"], ["social_blocks", "blocked_id"], ["feed_reports", "reporter_id"], ["feed_reports", "author_id"], ["social_prefs", "discord_id"], ["user_guilds", "discord_id"]]) run(`DELETE FROM ${t} WHERE ${c} = ?`, id);
     }
 
-    return { guildSocial, setGuildSocial, socialGuildStats, guildMembers, rememberGuilds, userGuildIds, getPrefs, setPrefs, markDigest, isSocialBanned, blockedEither, setBlock, listBlocks, follow, isFollowing, followCounts, listFollowers, listFollowing, addEvent, trophyEvents, createPost, deleteItem, getItem, react, feed, thread, report, listReports, dismissReports, listSocialBans, banPoster, unbanPoster, trendingGames, rareBoard, similarPeople, gameOwners, ownerCount, compareLibraries, digestFor, socialDigestUsers, pruneFeed: prune, forgetSocialUser };
+    return { guildSocial, setGuildSocial, socialGuildStats, guildMembers, rememberGuilds, userGuildIds, getPrefs, setPrefs, leaderboards, guestbookList, guestbookPost, guestbookEntry, guestbookDelete, markDigest, isSocialBanned, blockedEither, setBlock, listBlocks, follow, isFollowing, followCounts, listFollowers, listFollowing, addEvent, trophyEvents, createPost, addPostImage, getPostImage, deleteItem, getItem, react, feed, thread, report, listReports, dismissReports, listSocialBans, banPoster, unbanPoster, trendingGames, rareBoard, similarPeople, gameOwners, ownerCount, compareLibraries, digestFor, socialDigestUsers, pruneFeed: prune, forgetSocialUser };
 }

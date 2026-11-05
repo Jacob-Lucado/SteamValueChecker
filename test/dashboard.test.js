@@ -1071,9 +1071,7 @@ test("gift marks: need a Discord sign-in, one person per game, the owner sees a 
     const ids = (await t.request("/api/wishlist")).data.rows.map(r => r.itad_id);
     const pub = () => t.request("/api/public/wishlist?slug=jacob");
     const gift = (id, extra = {}) => t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id, ...extra } });
-    assert.equal((await pub()).data.accent, "#66c0f4", "the default card colour tints the page");
-    t.db.setCardPrefs("u1", { theme: "forest" });
-    assert.equal((await pub()).data.accent, "#5fd38d");
+    assert.match((await pub()).data.accent, /^#[0-9a-f]{6}$/i, "the profile page colour tints the wishlist page");
     assert.equal((await gift(ids[0])).status, 400, "the list's owner does not mark their own gifts");
 
     await as("v-a");
@@ -1253,6 +1251,98 @@ test("community feed: follow, post, react, reply, report and moderate through th
     assert.ok(Array.isArray(disc.trending) && Array.isArray(disc.rare) && Array.isArray(disc.similar));
     assert.equal((await t.request("/api/social/block", { method: "POST", body: { slug: "ann" } })).data.blocked, true);
     assert.equal((await t.request("/api/social/feed")).data.items.some(i => i.by.slug === "ann"), false);
+    await t.close();
+});
+
+test("guestbooks and feed notifications: sign, delete, close, block, and Discord messages are opt in and capped", async () => {
+    const ID = n => "30000000000000000" + n;
+    let who = ID(1); const dms = [];
+    const t = await setup({ ownerId: ID(9), config: { authPerMinute: 500, apiPerMinute: 5000, ownerId: ID(9), publicUrl: "https://dash.example" }, extra: { dm: async (id, payload) => { dms.push([id, payload]); } }, restExtra: { login: async () => ({ user: { id: who, username: "member-" + who.slice(-1), global_name: "Member " + who.slice(-1), avatar: null }, accessToken: "tok", guilds: [{ id: "g1", name: "Game Junkies", permissions: "0" }] }) } });
+    t.advance(Date.now());
+    const as = async id => { who = id; await t.request("/auth/logout", { method: "POST", body: {} }); await t.signIn(); };
+    const post = (body, extra = {}) => t.request("/api/guestbook/post", { method: "POST", body: { slug: "ann", body, ...extra } });
+    for (const [i, n] of [[1, "ann"], [2, "ben"], [3, "cyd"]]) { await as(ID(i)); await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: n } }); }
+    await as(ID(2));
+    assert.equal((await t.request("/api/public/guestbook?slug=ann")).data.items.length, 0);
+    assert.equal((await post("Nice page!")).status, 200);
+    assert.equal((await post("see https://spam.example")).status, 400, "no links");
+    assert.equal((await post("Nice page!")).status, 409, "no repeats");
+    const g = (await t.request("/api/public/guestbook?slug=ann")).data;
+    assert.equal(g.items[0].body, "Nice page!"); assert.equal(g.items[0].by.slug, "ben"); assert.equal(g.items[0].canDelete, true); assert.equal(JSON.stringify(g).includes(ID(2)), false, "no account ids");
+    assert.equal((await t.request("/api/guestbook/post", { method: "POST", body: { slug: "ben", body: "hi me" } })).status, 400, "not your own book");
+    await as(ID(3));
+    const seen = (await t.request("/api/public/guestbook?slug=ann")).data;
+    assert.equal(seen.items[0].canDelete, false);
+    assert.equal((await t.request("/api/guestbook/delete", { method: "POST", body: { id: seen.items[0].id } })).status, 403);
+    await as(ID(1));
+    assert.match(JSON.stringify((await t.request("/api/notifications")).data), /signed your guestbook/);
+    assert.equal(dms.length, 0, "Discord messages are off until asked for");
+    assert.equal((await t.request("/api/guestbook/delete", { method: "POST", body: { id: seen.items[0].id } })).data.deleted, true);
+    assert.equal((await t.request("/api/social/prefs", { method: "POST", body: { dm: true } })).data.prefs.dm, true);
+    await as(ID(2));
+    for (let i = 0; i < 6; i++) { t.advance(1000); const r = await post("note number " + i); assert.equal(r.status, 200); }
+    assert.ok(dms.length >= 1 && dms.length <= 5, "capped at five an hour: " + dms.length);
+    assert.match(JSON.stringify(dms[0][1]), /signed your guestbook/); assert.ok(dms.every(d => d[0] === ID(1)));
+    await as(ID(1));
+    await t.request("/api/social/prefs", { method: "POST", body: { guestbook: false } });
+    await as(ID(3));
+    assert.equal((await post("closed?")).status, 403);
+    assert.equal((await t.request("/api/public/guestbook?slug=ann")).data.open, false);
+    await as(ID(1));
+    await t.request("/api/social/prefs", { method: "POST", body: { guestbook: true } });
+    await t.request("/api/social/block", { method: "POST", body: { slug: "ben", on: true } });
+    assert.equal((await t.request("/api/public/guestbook?slug=ann")).data.items.length, 0, "a blocked person's notes are hidden");
+    await as(ID(2));
+    assert.equal((await post("still here")).status, 403, "and they can't add more");
+    const prof = (await t.request("/api/public/profile?slug=ann")).data;
+    assert.ok(prof.profile.sections.some(x => x.key === "guestbook"), "the page has a guestbook section");
+    await t.close();
+});
+
+test("server leaderboards count only public pages and respect the server filter", async () => {
+    const ID = n => "30000000000000000" + n;
+    let who = ID(1);
+    const t = await setup({ ownerId: ID(9), config: { authPerMinute: 500, apiPerMinute: 5000, ownerId: ID(9) }, extra: { guildList: () => [{ id: "g1", name: "Game Junkies", members: 10 }, { id: "g2", name: "Cozy", members: 5 }] }, restExtra: { login: async () => ({ user: { id: who, username: "member-" + who.slice(-1), global_name: "M" + who.slice(-1), avatar: null }, accessToken: "tok", guilds: [{ id: "g1", name: "Game Junkies", permissions: "0" }] }) } });
+    t.advance(Date.now());
+    const as = async id => { who = id; await t.request("/auth/logout", { method: "POST", body: {} }); await t.signIn(); };
+    for (const [i, n] of [[1, "ann"], [2, "ben"]]) { await as(ID(i)); await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: n } }); }
+    t.db.updateUser(ID(1), { guild_id: "g1" }); t.db.updateUser(ID(2), { guild_id: "g2" });
+    await as(ID(1));
+    for (const text of ["one here", "two here"]) { t.advance(1000); await t.request("/api/social/post", { method: "POST", body: { body: text } }); }
+    await as(ID(2));
+    await t.request("/api/social/post", { method: "POST", body: { body: "ben here" } });
+    const all = (await t.request("/api/social/leaderboards?server=all")).data.boards[0].rows;
+    assert.deepEqual(all.map(r => [r.by.slug, r.n]), [["ann", 2], ["ben", 1]]);
+    const one = (await t.request("/api/social/leaderboards?server=g2")).data.boards[0].rows;
+    assert.deepEqual(one.map(r => r.by.slug), ["ben"]);
+    assert.equal((await t.request("/api/social/leaderboards?server=nope")).status, 404);
+    assert.equal(JSON.stringify(all).includes(ID(1)), false, "no account ids");
+    await t.close();
+});
+
+test("pictures in posts: sniffed, one per post, limited a day, served safely and removed with the post", async () => {
+    const ID = n => "30000000000000000" + n;
+    let who = ID(1);
+    const t = await setup({ ownerId: ID(9), config: { authPerMinute: 500, apiPerMinute: 5000, ownerId: ID(9) }, restExtra: { login: async () => ({ user: { id: who, username: "member-" + who.slice(-1), global_name: "M" + who.slice(-1), avatar: null }, accessToken: "tok", guilds: [{ id: "g1", name: "Game Junkies", permissions: "0" }] }) } });
+    t.advance(Date.now());
+    const as = async id => { who = id; await t.request("/auth/logout", { method: "POST", body: {} }); await t.signIn(); };
+    await as(ID(1)); await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "ann" } });
+    const png = "data:image/png;base64," + Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40, 1)]).toString("base64");
+    const post = (body, image, extra = {}) => t.request("/api/social/post", { method: "POST", body: { body, image, ...extra } });
+    assert.equal((await post("fake", "data:image/png;base64," + Buffer.from("not an image at all, just text").toString("base64"))).status, 400, "the bytes are checked, not the label");
+    const r = await post("", png);
+    assert.equal(r.status, 200, "a picture alone is a post");
+    const item = (await t.request("/api/social/feed?scope=everyone")).data.items[0];
+    assert.ok(item.image && item.id === r.data.id);
+    const raw = await t.request("/fimg/" + item.image, { raw: true });
+    assert.equal(raw.status, 200); assert.equal(raw.headers.get("content-type"), "image/png"); assert.equal(raw.headers.get("x-content-type-options"), "nosniff");
+    assert.match(raw.headers.get("content-security-policy"), /sandbox/);
+    assert.equal((await post("a reply", png, { parent: r.data.id })).status, 400, "replies carry no pictures");
+    for (let i = 0; i < 4; i++) { t.advance(1000); assert.equal((await post("pic " + i, png)).status, 200); }
+    t.advance(1000);
+    assert.equal((await post("one too many", png)).status, 429, "five a day");
+    assert.equal((await t.request("/api/social/delete", { method: "POST", body: { id: r.data.id } })).status, 200);
+    assert.equal((await t.request("/fimg/" + item.image, { raw: true })).status, 404, "gone with the post");
     await t.close();
 });
 
@@ -1508,36 +1598,12 @@ test("friends: add, list, deals and remove", async () => {
     } finally { await t.close(); }
 });
 
-test("profile card data comes from stored data only", async () => {
+test("the Steam value picture is rate limited and needs a linked Steam profile", async () => {
     const t = await signedIn();
     try {
-        const r = await t.request("/api/profile/card");
-        assert.equal(r.status, 200);
-        assert.equal(r.data.games, 0); assert.equal(r.data.savedPct, null);
-        assert.ok(Array.isArray(r.data.badges)); assert.ok(Array.isArray(r.data.genres));
-    } finally { await t.close(); }
-});
-
-test("profile card settings are saved per member, validated, and the same card is drawn as a PNG", async () => {
-    const t = await signedIn();
-    const post = (path, body) => t.request(path, { method: "POST", body });
-    try {
-        let r = await t.request("/api/profile/card");
-        assert.equal(r.data.prefs.theme, "steam"); assert.deepEqual(r.data.prefs.platforms, []); assert.ok(r.data.platforms.some(p => p.id === "xbox"));
-        assert.equal((await post("/api/profile/card-settings", { platforms: [{ id: "xbox", name: "Jacob360" }, { id: "gog", name: "jl" }], theme: "night" })).status, 200);
-        r = await t.request("/api/profile/card");
-        assert.deepEqual(r.data.prefs.platforms.map(p => p.id), ["xbox", "gog"]); assert.equal(r.data.prefs.theme, "night");
-        assert.equal((await post("/api/profile/card-settings", { platforms: [{ id: "bogus", name: "x" }] })).status, 400);
-        assert.equal((await post("/api/profile/card-settings", { avatar: "http://insecure.example/a.png" })).status, 400);
-        assert.equal((await t.request("/api/profile/card")).data.prefs.platforms.length, 2, "a refused change leaves the saved card alone");
-        t.advance(5_000);
-        const img = await t.request("/api/profile/card.png", { raw: true });
-        assert.equal(img.status, 200); assert.equal(img.headers.get("content-type"), "image/png");
-        assert.deepEqual([...new Uint8Array(await img.arrayBuffer()).subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
-        assert.equal((await t.request("/api/steam/value.png")).status, 429, "pictures are rate limited");
         t.advance(5_000);
         assert.equal((await t.request("/api/steam/value.png")).status, 404, "no Steam profile linked yet");
-        assert.ok(JSON.stringify(t.db.exportUser("u1").profile_card).includes("Jacob360"), "included in the data export");
+        assert.equal((await t.request("/api/profile/card")).status, 404, "the old card editor is gone");
     } finally { await t.close(); }
 });
 

@@ -1448,3 +1448,28 @@ a.fd-name:hover { text-decoration: underline; }
 .pf { overflow-x: clip; }
 .pf-slide .btn { height: auto; min-height: 34px; padding: 6px 14px; white-space: normal; text-align: center; line-height: 1.25; max-width: 100%; }
 .pf-slide .gift { margin-top: 0; }
+
+/* guestbook */
+.pf-gb { display: grid; gap: 12px; }
+.pf-gb-form { display: grid; gap: 8px; justify-items: start; }
+.pf-gb-form textarea { width: 100%; resize: vertical; min-height: 56px; }
+.pf-gb-list { display: grid; gap: 8px; }
+.pf-gb-note { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--pf-card, var(--panel-2)) 85%, transparent); border: 1px solid var(--line); }
+.pf-gb-note p { margin: 0 0 4px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.pf-gb-note a { color: var(--pf-accent, var(--accent)); }
+.linklike { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; opacity: .8; }
+
+/* leaderboards */
+.fd-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 8px; }
+.fd-board h4 { margin: 0 0 8px; font-size: .95rem; }
+.fd-board ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fd-board li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); min-width: 0; }
+.fd-board li a, .fd-board li > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-rank { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: .75rem; font-weight: 700; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); flex: none; }
+
+/* pictures in posts */
+.fd-attach { display: flex; align-items: flex-end; gap: 10px; margin: 8px 0; }
+.fd-attach img { max-width: min(220px, 60%); max-height: 160px; border-radius: 10px; border: 1px solid var(--line); object-fit: cover; }
+.fd-pic { display: block; margin: 8px 0; }
+.fd-pic img { display: block; max-width: 100%; max-height: 420px; border-radius: 12px; border: 1px solid var(--line); object-fit: contain; background: var(--panel-2); }
+.pf-gb-form textarea { font: inherit; background: color-mix(in srgb, var(--pf-card, var(--panel-2)) 90%, transparent); color: inherit; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }

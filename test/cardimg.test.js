@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mergePrefs, viewPrefs, okImageUrl } from "../src/cardprefs.js";
 import { fetchImageDataUri, isPrivateIp, svgToPng } from "../src/imgrender.js";
-import { profileCardSvg, valueSvg } from "../src/cardimg.js";
+import { valueSvg } from "../src/cardimg.js";
+import { profileCardSvg, renderProfileCard, cardPictures } from "../src/profilecard.js";
 
 const PNG = [0x89, 0x50, 0x4e, 0x47];
 
@@ -49,32 +50,37 @@ test("pictures are only fetched from public https addresses", async () => {
     assert.equal(await fetchImageDataUri("https://pics.example/a.png", { fetchImpl: async () => { throw new Error("down"); }, resolve: pub }), null);
 });
 
-test("the card and the account value draw to real PNG files, and names are escaped", () => {
-    const d = { name: "<script>alert(1)</script> & Co", games: 5, finished: 2, hours: 10, savedPct: 20, streak: 1, bestStreak: 2, badges: [{ name: "Collector" }], genres: ["Action"] };
-    const prefs = { platforms: [{ id: "xbox", name: "a&b <i>" }, { id: "steam", name: "me" }], theme: "forest" };
-    const svg = profileCardSvg(d, prefs);
-    assert.ok(!svg.includes("<script>") && !svg.includes("<i>"), "no raw markup from names");
-    assert.ok(svg.includes("Xbox") && svg.includes("a&amp;b"));
-    const png = svgToPng(svg);
-    assert.deepEqual([...png.subarray(0, 4)], PNG);
+const sampleProfile = (over = {}) => ({
+    slug: "jacob", name: "<script>alert(1)</script> & Co", bio: "Creator of things. I play a lot of roguelikes and a few too many city builders.", avatar: null,
+    theme: { key: "night", bg: "#0f1724", accent: "#ff9800", light: false }, banner: { kind: "gradient", art: null }, links: [{ kind: "twitch", label: "Twitch", url: "https://twitch.tv/x" }, { kind: "x", label: "X", url: "https://x.com/y" }],
+    sections: [{ key: "about", vis: "public" }, { key: "favorites", vis: "public", games: [{ title: "Hades", art: "https://a.example/h.jpg" }, { title: "Celeste", art: null }] },
+        { key: "steam", vis: "public", games: 10, hours: 300, library: 12, finished: 4 }, { key: "achievements", vis: "public", done: 120, rare: 5, top: [{ icon: "https://a.example/i.png" }] },
+        { key: "wishlist", vis: "public", games: Array.from({ length: 9 }, (_, i) => ({ title: "Wish " + i, art: null })) }], ...over });
+
+test("the account value draws to a real PNG", () => {
     const stats = { games: 3, playedGames: 2, totalMinutes: 600, unplayedCount: 1, unplayedMsrp: 10, value: { msrp: 100, cheapest: 40, atl: 30, achDone: 1, achTotal: 4, achGames: 1, priced: 3, top: [{ title: "A & B", msrp: 50 }] } };
     const v = valueSvg({ stats, currency: "USD", link: { games: 3, synced_at: 0 }, card: { name: "Me" } });
     assert.ok(v.includes("ESTIMATED ACCOUNT VALUE") && v.includes("$100.00") && v.includes("A &amp; B"));
     assert.deepEqual([...svgToPng(v).subarray(0, 4)], PNG);
-    // Without any picture links or Steam link it still draws (letter avatar, pattern banner).
-    assert.deepEqual([...svgToPng(profileCardSvg({ ...d, badges: [], genres: [] }, {})).subarray(0, 4)], PNG);
 });
 
-test("many platform names collapse into a +N more tag instead of running off the card", () => {
-    const platforms = ["steam", "xbox", "playstation", "nintendo", "epic", "gog", "battlenet", "ea", "ubisoft", "riot"].map(id => ({ id, name: "SomeLongPlayerName" + id }));
-    const svg = profileCardSvg({ name: "X", games: 1, finished: 0, hours: 0, savedPct: null, streak: 0, bestStreak: 0, badges: [], genres: [] }, { platforms });
-    assert.match(svg, /\+\d+ more/);
+test("the profile card follows the page: sections in order, escaped names, a real PNG even with no pictures", () => {
+    const svg = profileCardSvg(sampleProfile());
+    assert.ok(!svg.includes("<script>"), "no raw markup from names");
+    assert.ok(svg.includes("FAVORITE GAMES") && svg.includes("STEAM STATS") && svg.includes("RAREST ACHIEVEMENTS") && svg.includes("WISHLIST") && svg.includes("9 games"));
+    assert.ok(svg.indexOf("FAVORITE GAMES") < svg.indexOf("STEAM STATS") && svg.indexOf("STEAM STATS") < svg.indexOf("WISHLIST"), "same order as the page");
+    assert.ok(svg.includes("Twitch") && svg.includes("steamvaluechecker.com/u/jacob"));
+    assert.deepEqual([...svgToPng(svg, 1200).subarray(0, 4)], PNG);
+    assert.ok(!profileCardSvg(sampleProfile({ sections: [{ key: "about", vis: "public" }] })).includes("FAVORITE GAMES"), "hidden sections are not drawn");
+    assert.ok(cardPictures(sampleProfile()).includes("https://a.example/h.jpg"));
 });
 
 test("/profilecard replies with the card picture, privately unless public:true, and is rate limited", async () => {
     const { createCardHandlers } = await import("../src/cardhandlers.js");
     const { openDb } = await import("../src/db.js");
     const db = openDb(":memory:");
+    db.ensureUser("c1", "g1"); db.ensureUser("c2", "g1"); db.ensureUser("c3", "g1");
+    db.setProfile("c1", { slug: "cardone", isPublic: true }); db.setProfile("c2", { slug: "cardtwo", isPublic: true });
     const handlers = createCardHandlers({ db, fetchImpl: async () => { throw new Error("offline"); }, publicUrl: "https://dash.example" });
     const fake = (id, pub) => {
         const calls = { defer: null, edit: null, reply: null };
@@ -86,13 +92,16 @@ test("/profilecard replies with the card picture, privately unless public:true, 
     await handlers.handle(a);
     assert.ok(a.calls.defer.flags, "private by default");
     assert.equal(a.calls.edit.files.length, 1);
-    assert.equal(a.calls.edit.files[0].name, "my-game-profile.png");
+    assert.equal(a.calls.edit.files[0].name, "my-profile.png");
     assert.deepEqual([...Buffer.from(a.calls.edit.files[0].attachment).subarray(0, 4)], PNG);
-    assert.match(a.calls.edit.content, /dash\.example\/#\/mypage/);
+    assert.match(a.calls.edit.content, /dash\.example\/u\/cardone/);
     const b = fake("c1", false);
     await handlers.handle(b);
     assert.match(b.calls.reply.content, /Slow down/);
     const c = fake("c2", true);
     await handlers.handle(c);
     assert.equal(c.calls.defer.flags, undefined, "public posts in the channel");
+    const d = fake("c3", false);
+    await handlers.handle(d);
+    assert.match(d.calls.reply.content, /turn your page on first/, "no page, no card");
 });

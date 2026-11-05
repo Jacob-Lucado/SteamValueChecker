@@ -17,9 +17,9 @@ export const LAYOUTS = ["classic", "wide", "compact"];
 export const VISIBILITY = ["public", "server", "hidden"];
 export const SECTIONS = {
     about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished",
-    posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming"
+    posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming", guestbook: "Guestbook"
 };
-export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["posts", "public"], ["trophies", "hidden"], ["achievements", "public"], ["activity", "public"], ["steam", "hidden"], ["streams", "hidden"]]
+export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["posts", "public"], ["trophies", "hidden"], ["achievements", "public"], ["activity", "public"], ["guestbook", "public"], ["steam", "hidden"], ["streams", "hidden"]]
     .map(([key, vis]) => ({ key, vis }));
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -199,6 +199,7 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
         if (!canSee(s.vis, viewer)) continue;
         try {
             if (s.key === "about") sections.push({ key: "about", vis: s.vis });
+            else if (s.key === "guestbook") sections.push({ key: "guestbook", vis: s.vis, open: db.getPrefs(owner.discord_id).guestbook, total: db.guestbookList(owner.discord_id, viewerId, { limit: 1 }).total });
             else if (s.key === "favorites") { if (favs.length || viewer.owner) sections.push({ key: "favorites", vis: s.vis, games: favs }); }
             else if (s.key === "wishlist") {
                 const w = await publicWishlist(db, itad, owner.profile_slug, viewerId);

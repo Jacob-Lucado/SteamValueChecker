@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.33", date: "2026-11-05", title: "Profile card, guestbooks, feed alerts, leaderboards and pictures", items: [
+        "**Profile card:** `/me profilecard` now draws your profile page itself as a picture: banner, avatar, bio, links and the sections you switched on, in your colours and your order. The old card editor on My page is gone. Design everything on My profile instead.",
+        "**Guestbook:** a new section on profile pages where signed-in visitors leave a short note (no links). You can delete any note, close the guestbook, or block someone. Switch it on or off in your page editor.",
+        "**Feed alerts:** replies, reactions, new followers and guestbook notes now land in your notifications. Under Feed settings you can also get them on Discord, at most five an hour.",
+        "**Leaderboards:** the Communities page shows who has been posting, who finished the most games this month and who holds the most rare achievements, for every server or just one. Only members whose page is on are counted.",
+        "**Pictures in posts:** attach one picture to a post. It is shrunk for you, stays on our server, and goes away with the post."
+    ] },
     { version: "2026.11.32", date: "2026-11-05", title: "Videos in news posts, a slider for wishlists, a better phone layout", items: [
         "**News with videos:** when a news post or giveaway announcement has a YouTube clip or a video file, the bot now puts the video under the card so you can press play right in Discord. The card gets a Watch the video button too.",
         "**Wishlist slider:** a wishlist on a profile page is now a row of compact cards you swipe through, so a long list no longer makes the page endless.",
