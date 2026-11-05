@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.35", date: "2026-11-05", title: "The AI is plugged into everything", items: [
+        "**It knows your stuff:** ask about your rarest achievements, hours played, spending, badges, monthly challenge, alert settings, friend birthdays or what's coming up, and it answers from your real data.",
+        "**Deals and plans:** ask for deals that fit you, a sale plan with a budget, bundles for a game, news for your games, or what a game costs in other countries.",
+        "**It can do things too:** when you ask, it adds or removes games, stars a wishlist game, sets a game's status, sets your goals, pauses alerts or changes your region, and tells you exactly what it changed.",
+        "**Your server:** it can show your level and rank, open group posts and the leaderboard."
+    ] },
     { version: "2026.11.34", date: "2026-11-05", title: "The AI companion shows its work", items: [
         "**Cards with pictures:** when you ask the AI about a game, it now answers with a card under its message: the game's art, prices, release info and store buttons.",
         "**Buttons that work:** add a game to your wishlist straight from the card, or press Another pick to get a different suggestion from your backlog. They belong to whoever asked.",

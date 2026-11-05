@@ -25,6 +25,22 @@ export function titleFrom(q) {
     return t.length >= 2 && t.length <= 80 ? t : null;
 }
 
+// Everything else the AI can look up. Each row: what the question looks like, the tool, and how to put its answer in words.
+const bullets = (head, list) => `${head}\n${list.map(x => `• ${x}`).join("\n")}`;
+const MORE = [
+    [/\b(rarest|rare)\b.*\b(achievements?|trophies)\b|\bmy achievements\b/, "my_achievements", r => r.rarest ? bullets(`You've unlocked **${r.unlocked}** achievements across ${r.gamesWithAchievements} games. Your rarest:`, r.rarest.slice(0, 6).map(a => `**${a.achievement}** in ${a.game} (${a.ownedByPercentOfPlayers}% of players)`)) : r.note],
+    [/\b(hours|playtime|most played|play most|steam stats)\b/, "my_steam", r => r.games ? `You have **${r.games}** Steam games and about **${r.totalHours} h** played. Most played: ${r.mostPlayed.slice(0, 3).map(g => `${g.title} (${g.hours})`).join(", ")}.` : r.note],
+    [/\b(spent|spending|how much (have|did) i (spend|pay))\b/, "my_spending", r => r.total !== undefined ? `You've spent **${r.total} ${r.currency}** on ${r.games} games (${r.thisYear.total} this year). Bought but never played: ${r.boughtButUnplayed.count}.` : r.note],
+    [/\b(badges?|trophy case)\b/, "my_badges", r => bullets(`You've earned **${r.earned}** of ${r.total} badges:`, r.badges.filter(b => b.tier).slice(0, 8).map(b => `${b.name} (${b.tier})`))],
+    [/\b(challenge|streak|goal)\b/, "my_challenge", r => `This month: **${r.finishedThisMonth}**${r.goal ? ` of ${r.goal}` : ""} finished, ${r.daysLeft} days left. Streak: ${r.streakMonths} month${r.streakMonths === 1 ? "" : "s"}.`],
+    [/\b(deals? for me|what should i buy|recommend|picks? for me)\b/, "deals_for_you", r => r.deals ? bullets("Deals that fit you:", r.deals.slice(0, 5).map(d => `**${d.title}**: ${d.price} (-${d.discountPct}%) at ${d.shop}`)) : r.note],
+    [/\b(upcoming|coming up|calendar|events?|releases?)\b/, "upcoming", r => r.entries ? bullets("Coming up:", r.entries.slice(0, 8).map(e => `${e.date}: ${e.title}`)) : r.note],
+    [/\b(sale plan|next sale|steam sale|what to buy)\b/, "sale_plan", r => `${r.nextSale ? `Next big sale: **${r.nextSale.name}** (${r.nextSale.starts}).\n` : ""}${r.buyNow.length ? bullets("Worth buying now:", r.buyNow.slice(0, 5).map(g => `**${g.title}**: ${g.price}`)) : "Nothing on your wishlist is a great buy right now."}`],
+    [/\b(news|patch notes|updates)\b/, "game_news", r => r.posts ? bullets("Latest for your games:", r.posts.slice(0, 5).map(p => `**${p.game}**: ${p.title}`)) : r.note],
+    [/\b(birthdays?|friends)\b/, "my_friends", r => r.friends ? bullets("Your friends:", r.friends.slice(0, 8).map(f => `${f.name}${f.daysUntil !== null ? `: ${f.daysUntil} days to their birthday` : ""}`)) : r.note],
+    [/\b(my settings|alert settings)\b/, "my_settings", r => `Alerts are **${r.alerts}**, delivered by ${r.delivery}. Region ${r.region}, ${r.gamesWatched} games watched, quiet hours: ${r.quietHours}.`]
+];
+
 export function intentOf(question) {
     const q = String(question ?? "").toLowerCase();
     if (!q.trim() || /^(hi|hey|hello|yo|sup|help|what can you do|commands)\b/.test(q.trim()) && q.split(" ").length <= 4) return { kind: "help" };
@@ -32,6 +48,8 @@ export function intentOf(question) {
     if (/\b(my )?wish ?list\b/.test(q)) return { kind: "wishlist" };
     if (/\b(play next|what (should|do) i play|backlog|my library|library)\b/.test(q)) return { kind: "library" };
     if (/\b(leaderboard|top savers|who saved)\b/.test(q)) return { kind: "board" };
+    const more = MORE.findIndex(([re]) => re.test(q));
+    if (more >= 0) return { kind: "more", more };
     const title = titleFrom(String(question));
     if (title) return { kind: "price", title };
     return { kind: "unknown" };
@@ -43,6 +61,11 @@ export async function liteAnswer({ question, userId, guildId, tools, cards }) {
     const run = (name, input) => tools.run(name, input, { userId, guildId, cards });
     if (it.kind === "help" || it.kind === "unknown") return LITE_HELP;
 
+    if (it.kind === "more") {
+        const [, tool, say] = MORE[it.more];
+        const r = await run(tool, {});
+        return r.error ? `I couldn't look that up just now: ${r.error}` : r.empty ? r.note : r.linked === false ? r.note : say(r);
+    }
     if (it.kind === "free") {
         const r = await run("free_games", {});
         if (r.error) return "I couldn't check the free games just now. Try `/games freegames`.";

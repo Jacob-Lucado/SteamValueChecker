@@ -462,7 +462,7 @@ const serverKey = gid => {
     const key = c?.ai_key && keyVault ? keyVault.decrypt(c.ai_key) : null;
     return key ? { key, provider: c.ai_provider || "anthropic", model: c.ai_model || null } : null;
 };
-const aiTools = createAiTools({ db, itad, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
+const aiTools = createAiTools({ db, itad, news, fx, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
 const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, configuredInvite: cfg.supportInvite, log: t => console.log(`[main server] ${t}`) });
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
