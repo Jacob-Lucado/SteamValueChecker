@@ -21,7 +21,8 @@ import { REGIONS } from "./constants.js";
 import { money, itadArt, safeUrl } from "./render.js";
 import { steamArt } from "./art.js";
 import { dashLink } from "./dashlink.js";
-import { renderPanel } from "./aipics.js";
+import { renderPanel, renderSteps } from "./aipics.js";
+import { findGuide, GUIDES } from "./guides.js";
 
 const clip = (s, n = 80) => String(s ?? "").slice(0, n);
 const arr = v => (Array.isArray(v) ? v : []);
@@ -47,6 +48,7 @@ const none = { type: "object", properties: {} };
 const title = { type: "object", properties: { title: { type: "string", description: "Game title" } }, required: ["title"] };
 
 export const MORE_DEFS = [
+    { name: "how_to", description: `Step by step instructions for doing something with this bot, with the exact commands, shown as a picture. Use it for ANY "how do I..." question about the bot. Topics: ${GUIDES.map(g => g.title).join("; ")}. Pass the topic in the person's words.`, input_schema: { type: "object", properties: { topic: { type: "string", description: "What they want to do, e.g. 'get steam verified'" } }, required: ["topic"] } },
     { name: "my_achievements", description: "The asker's rarest Steam achievements (with how few players have them), how many they have unlocked and across how many games. Use it for anything about achievements or trophies earned in games.", input_schema: none },
     { name: "my_steam", description: "The asker's Steam stats from their linked account: most played games, hours, what they never played, this year's hours and their hours goal. Use it for playtime and 'what do I play most' questions.", input_schema: none },
     { name: "my_spending", description: "What the asker has spent on games: total, this year, month by month, best and worst value per hour, and bought-but-unplayed.", input_schema: none },
@@ -79,6 +81,13 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
     const lookup = (rows, q) => { const f = findItem(rows, q); return f.item ? { item: f.item } : { error: f.ambiguous ? `More than one match: ${f.ambiguous.join(", ")}. Which one?` : "That game isn't there." }; };
 
     return {
+        async how_to({ topic }, ctx) {
+            const g = findGuide(topic);
+            if (!g) return { found: false, note: "No guide covers that. Suggest /help, or the dashboard.", guides: GUIDES.map(x => x.title) };
+            try { ctx?.cards?.push({ title: g.title, file: { name: `guide-${g.id}.png`, data: renderSteps({ title: g.title, sub: "Step by step", steps: g.steps, accent: "#" + g.color.toString(16).padStart(6, "0"), foot: "Steam Value Checker" }) }, url: dashLink(dashUrl, g.buttons?.find(b => b.kind === "dash")?.page) ?? undefined, linkLabel: "Open in the dashboard" }); } catch { /* the text steps still answer */ }
+            return { guide: g.title, intro: g.intro, steps: g.steps.map((x, n) => `${n + 1}. ${x.text}${x.cmd ? ` (${x.cmd})` : ""}`), goodToKnow: g.tips };
+        },
+
         async my_achievements(_i, ctx) {
             const { userId } = ctx;
             const miss = needSteam(userId); if (miss) return miss;

@@ -61,3 +61,27 @@ export async function renderPanel(panel, { fetchImpl = fetch } = {}) {
     panel = { ...panel, rows };
     return svgToPng(panelSvg(panel, pics), W * 2 > 1920 ? 1920 : W * 2);
 }
+
+/** Numbered steps as a picture: a circle with the number, the instruction, and the command in a pill under it. */
+export function stepsSvg({ title, sub, steps, accent = ACCENT, foot }) {
+    const list = steps.slice(0, 7), body = [];
+    const TXT = W - PAD * 2 - 120;
+    const wrapLines = (text, size) => { const out = []; let cur = ""; for (const w of String(text).split(/\s+/)) { const n = cur ? cur + " " + w : w; if (tw(n, size) <= TXT || !cur) cur = n; else { out.push(cur); cur = w; } } if (cur) out.push(cur); return out.slice(0, 3); };
+    let y = PAD;
+    body.push(`<text x="${PAD}" y="${y + 30}" font-size="34" font-weight="700" fill="${INK}">${esc(fit(title, 34, W - PAD * 2 - 120, true))}</text><rect x="${W - PAD - 90}" y="${y + 6}" width="90" height="8" rx="4" fill="${accent}"/>`);
+    if (sub) body.push(`<text x="${PAD}" y="${y + 62}" font-size="19" fill="${SUB}">${esc(fit(sub, 19, W - PAD * 2))}</text>`);
+    y += sub ? 96 : 66;
+    list.forEach((s, n) => {
+        const lines = wrapLines(s.text, 21), cmd = s.cmd ? fit(s.cmd, 19, TXT - 30, true) : null;
+        const h = cmd ? 30 + lines.length * 28 - 6 + 38 + 20 : Math.max(84, 42 + lines.length * 28 + 14);
+        body.push(`<rect x="${PAD}" y="${y}" width="${W - PAD * 2}" height="${h}" rx="16" fill="${PANEL}"/>`);
+        body.push(`<circle cx="${PAD + 44}" cy="${y + 42}" r="24" fill="${accent}"/><text x="${PAD + 44}" y="${y + 51}" font-size="26" font-weight="700" text-anchor="middle" fill="#0b1220">${n + 1}</text>`);
+        lines.forEach((l, k) => body.push(`<text x="${PAD + 92}" y="${y + 40 + k * 28}" font-size="21" font-weight="${k === 0 ? 600 : 400}" fill="${INK}">${esc(l)}</text>`));
+        if (cmd) { const cw = tw(cmd, 19, true) + 34, cy = y + 30 + lines.length * 28 - 6; body.push(`<rect x="${PAD + 92}" y="${cy}" width="${cw}" height="38" rx="10" fill="#0b0f18" stroke="${accent}" stroke-opacity="0.6"/><text x="${PAD + 109}" y="${cy + 26}" font-size="19" font-weight="700" fill="${accent}">${esc(cmd)}</text>`); }
+        y += h + 12;
+    });
+    const H = y + PAD - 12 + (foot ? 24 : 0);
+    if (foot) body.push(`<text x="${PAD}" y="${H - PAD + 12}" font-size="15" fill="${SUB}">${esc(fit(foot, 15, W - PAD * 2))}</text>`);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${BG}"/><rect width="${W}" height="6" fill="${accent}"/>${body.join("")}</svg>`;
+}
+export const renderSteps = guide => svgToPng(stepsSvg(guide), 1920);

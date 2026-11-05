@@ -166,6 +166,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             if (b.ai_on && !ai.available && !hasKey && ai.lite === false) fail(400, "The AI companion isn't available on this bot yet. Add your own AI key here, or ask the bot owner to add one.");
             patch.ai_on = b.ai_on ? 1 : 0;
         };
+        if (b.guides_on !== undefined) patch.guides_on = b.guides_on ? 1 : 0;
         if (b.ai_channel !== undefined) patch.ai_channel = await channelOk(gid, b.ai_channel || null);
         let trap = null;
         if (b.honeypot_channel !== undefined) {

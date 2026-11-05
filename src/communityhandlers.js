@@ -110,11 +110,14 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             if (on !== null) {
                 patch.ai_on = on ? 1 : 0;
             }
+            const guides = i.options.getBoolean("guides");
+            if (guides !== null) patch.guides_on = guides ? 1 : 0;
             if (Object.keys(patch).length) db.setCommunity(gid, patch);
             const c = db.getCommunity(gid);
             const where = c.ai_channel ? `only in <#${c.ai_channel}>` : "in every channel";
+            const guideNote = `\nHow-to guides: **${db.getCommunity(gid).guides_on === 0 ? "off" : "on"}** (members who ask things like "how do I get Steam Verified" get a step by step guide).`;
             const how = aiPhrase() ? "Members write **Hey AI** followed by a question, or mention me." : "This bot can't read \"Hey AI\" yet, so members mention me instead.";
-            return eph(i, `AI companion is **${c.ai_on ? "on" : "off"}**${c.ai_on ? `, answering ${where}. ${how} Answers are short, nobody is pinged, and there is a daily limit for the server.${aiAvailable() || c.ai_key ? "" : "\n**Coming soon:** the full AI is not switched on yet. For now I answer prices, free games, your wishlist and your library myself."}` : ". Turn it on with `on:true`."}`);
+            return eph(i, `AI companion is **${c.ai_on ? "on" : "off"}**${c.ai_on ? `, answering ${where}. ${how} Answers are short, nobody is pinged, and there is a daily limit for the server.${aiAvailable() || c.ai_key ? "" : "\n**Coming soon:** the full AI is not switched on yet. For now I answer prices, free games, your wishlist and your library myself."}` : ". Turn it on with `on:true`."}${guideNote}`);
         }
         if (sub === "autorole") {
             const role = i.options.getRole("role");

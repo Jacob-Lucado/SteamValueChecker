@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.36", date: "2026-11-05", title: "How-to guides the bot answers by itself", items: [
+        "**Ask and get a guide:** when someone in a server asks something like \"how do I get Steam verified\", the bot replies on its own with a card: a short intro, a picture of the numbered steps with the exact commands, and buttons that go straight to the right page. No AI needed.",
+        "**Sixteen topics:** Steam Verified, linking Steam, importing a wishlist, sale alerts, free games, where alerts arrive, adding your library, your public profile page, the dashboard, region and currency, getting help, your data, music, finding a group, and levels.",
+        "**More guides button:** every guide has a menu with the rest, so people can browse them.",
+        "**Not spammy:** it only answers real how-to questions, once per person a minute and once per channel every few minutes. Managers can switch it off with `/manage community ai guides:false` or in the dashboard.",
+        "**The AI uses the same guides** when you ask it how to do something, so its answers match."
+    ] },
     { version: "2026.11.35", date: "2026-11-05", title: "The AI is plugged into everything", items: [
         "**It knows your stuff:** ask about your rarest achievements, hours played, spending, badges, monthly challenge, alert settings, friend birthdays or what's coming up, and it answers from your real data.",
         "**Deals and plans:** ask for deals that fit you, a sale plan with a budget, bundles for a game, news for your games, or what a game costs in other countries.",

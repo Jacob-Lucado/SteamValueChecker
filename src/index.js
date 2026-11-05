@@ -117,6 +117,7 @@ import { createAiChat, parseTrigger, AI_FAILURES } from "./aichat.js";
 import { createRuntimeCfg } from "./runtimecfg.js";
 import { createAiTools } from "./aitools.js";
 import { cardsPayload, handleAiButton, AI_PREFIX } from "./aicards.js";
+import { matchGuide, guidePayload, handleGuideInteraction, GUIDE_BUTTON, createGuideThrottle } from "./guides.js";
 import { PROVIDER_IDS } from "./aiproviders.js";
 import { createMainGuild } from "./mainguild.js";
 import { liteAnswer } from "./ailite.js";
@@ -466,6 +467,21 @@ const aiTools = createAiTools({ db, itad, news, fx, dashUrl: cfg.dashboard?.publ
 const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, configuredInvite: cfg.supportInvite, log: t => console.log(`[main server] ${t}`) });
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
+const guideThrottle = createGuideThrottle();
+/** A how-to question gets a step by step guide from the bot itself. Returns true when it answered. */
+async function guideReply(m, c) {
+    const g = matchGuide(m.content, { hasVerifiedRole: Boolean(c.verified_role_id) });
+    if (!g) return false;
+    const me = m.guild?.members?.me;
+    const perms = me ? m.channel.permissionsFor(me) : null;
+    if (perms && !perms.has(["SendMessages", "EmbedLinks", "AttachFiles"])) return false;
+    if (!guideThrottle.allow({ guildId: m.guildId, channelId: m.channelId, userId: m.author.id, guideId: g.id })) return false;
+    await m.channel.sendTyping?.().catch(() => {});
+    const payload = await guidePayload(g, { publicUrl: cfg.dashboard?.publicUrl ?? null });
+    db.bumpUsage?.(`guide:${g.id}`);
+    await m.reply({ ...payload, allowedMentions: { parse: [], repliedUser: false } }).catch(() => {});
+    return true;
+}
 async function aiReply(m, t) {
     const need = permsNotice(missingAiPerms(m.guild?.members?.me ? m.channel.permissionsFor(m.guild.members.me) : null), m.channelId);
     if (need) {
@@ -522,9 +538,11 @@ client.on(Events.MessageCreate, async m => {
             if (res === "banned") await m.delete().catch(() => {});
             return;
         }
+        let guided = false;
         {
             const c = db.getCommunity(m.guildId);
-            if (c.ai_on && rt.get("ai_enabled") && (!c.ai_channel || c.ai_channel === m.channelId)) {
+            if (c.guides_on !== 0 && m.content) guided = await guideReply(m, c);
+            if (!guided && c.ai_on && rt.get("ai_enabled") && (!c.ai_channel || c.ai_channel === m.channelId)) {
                 const t = parseTrigger(m.content, client.user.id, { phrase: CONTENT_INTENT, max: rt.get("ai_max_question") });
                 if (t) aiReply(m, t).catch(err => console.error(`[ai] ${err.message}`));
             }
@@ -744,6 +762,7 @@ async function onInteraction(i, again = false) {
     if ((i.isButton() || i.isAnySelectMenu?.() || i.isModalSubmit()) && i.customId.startsWith(PANEL_PREFIX)) return panels.handle(i);
     if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if ((i.isStringSelectMenu() && i.customId === "help_pick") || isHelpNav(i)) return handleHelpPick(i);
+    if ((i.isButton() && i.customId === `${GUIDE_BUTTON}list`) || (i.isStringSelectMenu() && i.customId === `${GUIDE_BUTTON}pick`)) return handleGuideInteraction(i, { publicUrl: cfg.dashboard?.publicUrl ?? null });
     if (i.isButton() && i.customId.startsWith(AI_PREFIX)) return handleAiButton(i, { db, itad });
     if ((i.isButton() && i.customId.startsWith(PAGE_PREFIX)) || (i.isStringSelectMenu() && i.customId.startsWith(JUMP_PREFIX))) return handlePager(i, db);
     if (i.isButton() && i.customId === "mu:cmds") return panels.open(i, "hub-music");

@@ -315,6 +315,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "honeypot_channel", "TEXT");
     addColumn("community", "ai_on", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "ai_channel", "TEXT");
+    addColumn("community", "guides_on", "INTEGER NOT NULL DEFAULT 1"); // the bot answers how-to questions with a guide by itself
     addColumn("community", "ai_key", "TEXT");        // the server's own API key, encrypted
     addColumn("community", "ai_key_last4", "TEXT");
     addColumn("community", "ai_provider", "TEXT");   // which AI service the server's own key is for (empty means Anthropic)
