@@ -146,7 +146,7 @@
     { id: "home", label: "Home", pages: [["home", "Home"]] },
     { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
-    { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
+    { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Friends", pages: [["friends", "Friends"], ["compare", "Compare"], ["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
     { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["streams", "Go live"], ["streamers", "Who is live"]] },
@@ -1646,6 +1646,37 @@
     } catch (e) { into.replaceChildren(h("h2", { text: "Giveaway news" }), h("div", { class: "notice warn", text: e.message })); }
   }
 
+  // ---------- bundles: what the storefronts have running ----------
+  async function bundlesView() {
+    const st = { store: "", status: "active" };
+    const list = h("div", { class: "muted", text: "Loading…" });
+    const head = h("div", { class: "chips" });
+    const owner = Boolean(state.me && state.me.isOwner);
+    const when = ms => { const d = ms - Date.now(); if (d < 0) return "ended"; const days = Math.floor(d / 86400_000); return days >= 1 ? `ends in ${days} day${days === 1 ? "" : "s"}` : `ends in ${Math.max(1, Math.round(d / 3600_000))} h`; };
+    async function load() {
+      const d = await api("/api/bundlefeed?status=" + st.status + (st.store ? "&store=" + encodeURIComponent(st.store) : ""));
+      head.replaceChildren(
+        h("button", { class: "tab small" + (!st.store ? " active" : ""), text: "All stores", onclick: () => { st.store = ""; load().catch(fail); } }),
+        ...d.stores.map(x => h("button", { class: "tab small" + (st.store === x.key ? " active" : ""), text: x.name, onclick: () => { st.store = x.key; load().catch(fail); } })),
+        h("button", { class: "tab small" + (st.status === "expired" ? " active" : ""), text: st.status === "expired" ? "Showing ended" : "Show ended", onclick: () => { st.status = st.status === "expired" ? "active" : "expired"; load().catch(fail); } }));
+      list.className = "";
+      list.replaceChildren(d.bundles.length ? h("div", { class: "free-grid" }, d.bundles.map(b => h("div", { class: "free-card" + (b.status === "expired" ? " ended" : "") },
+        b.image ? h("img", { src: b.image, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: b.storeName }),
+        h("div", { class: "free-info" }, h("strong", { text: b.title }), h("div", { class: "muted small", text: b.storeName + (b.gameCount ? ` · ${b.gameCount} games` : "") }),
+          b.price ? h("div", { text: b.price }) : null,
+          b.games.length ? h("details", {}, h("summary", { class: "muted small", text: "See the games" }), h("ul", { class: "muted small" }, ...b.games.slice(0, 12).map(g => h("li", { text: g })), b.games.length > 12 ? h("li", { text: `and ${b.games.length - 12} more` }) : null)) : null,
+          h("span", { class: "muted small", text: b.expiresAt ? when(b.expiresAt) : "no end date listed" }),
+          h("div", { class: "row" }, b.status === "active" ? h("a", { class: "btn blue small", href: b.url, target: "_blank", rel: "noopener noreferrer", text: "Open on " + b.storeName }) : h("span", { class: "chip dim", text: "Ended" })))))
+      ) : h("p", { class: "muted", text: st.status === "expired" ? "No ended bundles in the last week." : "No bundles listed right now. New ones show up here as soon as a store lists them." }));
+    }
+    const fail = e => list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
+    const poll = owner ? h("button", { class: "btn gray small", text: "Check for new bundles now" }) : null;
+    if (poll) poll.addEventListener("click", () => busy(poll, async () => { const r = await api("/api/admin/bundles/poll", {}); toast(r.result.skipped ? "A check is already running." : `Checked: ${r.result.added} new, ${r.result.posted} posted.${r.result.feedError ? " Problems: " + r.result.feedError : ""}`, r.result.feedError ? "warn" : "ok"); await load(); }));
+    app.replaceChildren(pageHead("Bundles", "Game bundles that are running now on Humble Bundle, Fanatical, IndieGala and the Steam store. Each one is listed once, with the games inside and when it ends where the store says. Server managers can have new ones posted in a channel from the Codes & promos tab of their server."),
+      h("div", { class: "row" }, head, poll), list);
+    load().catch(fail);
+  }
+
   async function codesView() {
     const st = { game: "", status: "active" };
     const list = h("div", { class: "muted", text: "Loading…" });
@@ -1670,14 +1701,14 @@
             h("code", { class: "code-text", text: c.code }),
             h("span", { class: "muted small", text: `${c.platform || "All platforms"} · ${c.expiresAt ? when(c.expiresAt) : "no end date listed"}` }),
             c.note ? h("span", { class: "muted small", text: c.note + ". May only work on that region's account." }) : null,
-            h("div", { class: "row" }, c.status === "active" ? copy : null, c.status === "active" ? ext(c.redeemUrl, c.provider === "hoyo" ? "Redeem" : "Redeem on SHiFT", "btn gray small") : h("span", { class: "chip dim", text: "Ended" }), retire)));
+            h("div", { class: "row" }, c.status === "active" ? copy : null, c.status === "active" ? ext(c.redeemUrl, c.provider === "hoyo" ? "Redeem" : c.provider === "community" ? "Redeem" : "Redeem on SHiFT", "btn gray small") : h("span", { class: "chip dim", text: "Ended" }), retire)));
       })) : h("p", { class: "muted", text: st.status === "expired" ? "No ended codes in the last two weeks." : "No working codes right now. New ones show up here as soon as they are listed." }));
     }
     const fail = e => list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
     const poll = owner ? h("button", { class: "btn gray small", text: "Check for new codes now" }) : null;
     if (poll) poll.addEventListener("click", () => busy(poll, async () => { const r = await api("/api/admin/codes/poll", {}); toast(r.result.skipped ? "A check is already running." : `Checked: ${r.result.added} new, ${r.result.posted} posted.`, "ok"); await load(); }));
     const news = h("div");
-    app.replaceChildren(pageHead("Codes & promos", "Limited-time codes for Borderlands (SHiFT), Genshin Impact, Honkai: Star Rail and Zenless Zone Zero. Each one is listed once, under the right game, with an end date when one is known. Servers can have them posted in a channel. SHiFT codes come from mentalmars.com through a community mirror, the HoYoverse ones from two community code lists."), poll && h("div", { class: "panel" }, poll), head, list, news,
+    app.replaceChildren(pageHead("Codes & promos", "Limited-time codes for Borderlands (SHiFT), Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Destiny 2 and Warframe. Each one is listed once, under the right game, with an end date when one is known. Servers can have them posted in a channel. SHiFT codes come from mentalmars.com through a community mirror, the HoYoverse ones from two community code lists."), poll && h("div", { class: "panel" }, poll), head, list, news,
       h("p", { class: "muted small" }, "Want a message when something new drops? Turn on game code and giveaway alerts in ", h("a", { href: "#/alerts", text: "Alert settings" }), "."));
     load().catch(fail);
     promoBlock(news);
@@ -1866,10 +1897,37 @@
           holder.className = "";
           holder.replaceChildren(
             h("div", { class: "panel" }, h("h3", { text: "Game codes" }),
-              h("p", { class: "muted", text: "Limited-time codes for Borderlands, Genshin Impact, Star Rail and Zenless Zone Zero, posted once each in the channel you pick. When a code ends, its post is greyed out. The same list is on the Game codes page for everyone." }),
+              h("p", { class: "muted", text: "Limited-time codes for Borderlands, Genshin Impact, Star Rail, Zenless Zone Zero, Destiny 2 and Warframe, posted once each in the channel you pick. When a code ends, its post is greyed out. The same list is on the Game codes page for everyone." }),
               field("Channel", chan), field("Ping this role for new codes", role),
               h("div", {}, h("label", { text: "Games" }), h("div", { class: "checks" }, boxes)),
               h("div", { class: "row" }, save)));
+        } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+      })();
+      return [holder];
+    }
+
+    function bundlesPanel() {
+      const holder = h("div", { class: "muted", text: "Loading…" });
+      (async () => {
+        try {
+          const d = await api("/api/servers/bundles?guild=" + encodeURIComponent(g.id));
+          const st = d.settings;
+          const chan = select([["", "No channel (off)"], ...d.channels.map(c => ["" + c.id, "#" + c.name])], st.channel_id || "");
+          const role = select([["", "Nobody"], ...d.roles.filter(r => r.name !== "@everyone").map(r => ["" + r.id, r.name])], st.role_id || "");
+          const picked = new Set(d.stores.filter(s => !st.stores.length || st.stores.includes(s.key)).map(s => s.key));
+          const boxes = d.stores.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.name); });
+          const save = h("button", { class: "btn green", text: "Save" });
+          save.addEventListener("click", () => busy(save, async () => {
+            if (!picked.size) throw new Error("Keep at least one store ticked, or pick no channel to turn this off.");
+            await api("/api/servers/bundles", { guild_id: g.id, channel_id: chan.value, role_id: role.value, stores: [...picked] });
+            toast(chan.value ? "Saved. New bundles will be posted there." : "Saved. Bundle posts are off for this server.", "ok");
+          }));
+          holder.className = "";
+          holder.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Game bundles" }),
+            h("p", { class: "muted", text: "New bundles from Humble, Fanatical, IndieGala and Steam, posted once each in the channel you pick, with the games inside and when it ends. When a bundle ends, its post is greyed out." }),
+            field("Channel", chan), field("Ping this role for new bundles", role),
+            h("div", {}, h("label", { text: "Stores" }), h("div", { class: "checks" }, boxes)),
+            h("div", { class: "row" }, save)));
         } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
       })();
       return [holder];
@@ -1926,7 +1984,7 @@
       else if (current === "alerts") body.append(...alertsPanel());
       else if (current === "list") { const into = h("div"); body.append(into); sharedList(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
       else if (current === "board") { const into = h("div"); body.append(into); board(g, into).catch(e => into.replaceChildren(h("div", { class: "notice warn", text: e.message }))); }
-      else if (current === "codes") body.append(...codesPanel(), ...dropsPanel());
+      else if (current === "codes") body.append(...codesPanel(), ...bundlesPanel(), ...dropsPanel());
       else if (current === "stats") statsPanel(g, body);
       else if (current === "giveaways") { navigate("/giveaways"); }
     }
@@ -5100,7 +5158,7 @@
       { id: "war", icon: "", title: "Sale planner", text: "Plan a sale cart with a budget slider, then see what your alerts caught.", href: "#/warroom", status: null },
       { id: "foryou", icon: "", title: "For you", text: "Discounts ranked by your taste and wishlist.", href: "#/foryou", status: null },
       { id: "deals", icon: "", title: "Check a deal", text: "Price by region and bundle checks.", href: "#/deals", status: null },
-      { id: "codes", icon: "", title: "Codes & promos", text: "Working codes for Borderlands, Genshin, Star Rail and Zenless, plus key giveaway news and DMs for new ones.", href: "#/codes", status: null },
+      { id: "codes", icon: "", title: "Codes & promos", text: "Working codes for Borderlands, Genshin, Star Rail, Zenless, Destiny 2 and Warframe, plus key giveaway news and DMs for new ones.", href: "#/codes", status: null },
       { id: "calendar", icon: "", title: "Calendar", text: "Release dates, Steam sales and server events.", href: "#/calendar", status: null },
       { id: "compare", icon: "", title: "Compare libraries", text: "See what you and a friend both own.", href: "#/compare", status: null },
       { id: "notifications", icon: "", title: "Notifications", text: "A copy of every alert, and what to mute.", href: "#/notifications", status: () => [me.unread === 0, me.unread ? me.unread + " unread" : "All read"] }
@@ -6439,7 +6497,7 @@
     load();
   }
 
-  const VIEWS = { streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
+  const VIEWS = { bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

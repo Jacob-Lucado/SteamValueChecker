@@ -25,12 +25,26 @@ export const HOYO_GAMES = [
     { key: "zzz", title: "Zenless Zone Zero", color: 0xf2c200, artFile: "/img/codes/zzz.jpg", ennead: "zenless", seria: "nap", redeem: code => `https://zenless.hoyoverse.com/redemption?code=${encodeURIComponent(code)}` }
 ].map(g => ({ ...g, provider: "hoyo", note: "Some codes only work on certain servers or regions" }));
 SHIFT_GAMES.forEach(g => { g.provider = "shift"; g.color = 0xff9800; });
-export const ALL_GAMES = [...SHIFT_GAMES, ...HOYO_GAMES];
+
+/**
+ * Games whose codes come from community lists on guide sites (no official feed exists). The art is the game's Steam header.
+ * `how` is the "How to claim" text on the post. `redeem` is where the button goes; neither site fills the code in for you.
+ */
+export const COMMUNITY_GAMES = [
+    { key: "destiny2", title: "Destiny 2", appid: 1085660, color: 0x4a90e2, emoji: "💠", redeemLabel: "Redeem on Bungie.net", redeemUrl: "https://www.bungie.net/7/en/Codes/Redeem",
+      how: "Open Bungie.net with the button below, sign in with the Steam, PlayStation or Xbox account you play on, and paste the code. The reward lands in your Collections tab in game.",
+      note: "A code can only be used once per account, and some only work on certain platforms" },
+    { key: "warframe", title: "Warframe", appid: 230410, color: 0x2fbf9b, emoji: "🗡️", redeemLabel: "Redeem on Warframe.com", redeemUrl: "https://www.warframe.com/promocode",
+      how: "Open Warframe.com with the button below and sign in, or redeem in game at the Orbiter's Market console, Redeem Code, bottom right.",
+      note: "Some codes are limited to new accounts or one use per account" }
+].map(g => ({ ...g, provider: "community" }));
+export const ALL_GAMES = [...SHIFT_GAMES, ...HOYO_GAMES, ...COMMUNITY_GAMES];
 
 /** What people pick from: all the Borderlands games are one entry. Keys of the individual games still work everywhere. */
 export const GAME_FAMILIES = [
     { key: "borderlands", title: "Borderlands", games: SHIFT_GAMES.map(g => g.key) },
-    ...HOYO_GAMES.map(g => ({ key: g.key, title: g.title, games: [g.key] }))
+    ...HOYO_GAMES.map(g => ({ key: g.key, title: g.title, games: [g.key] })),
+    ...COMMUNITY_GAMES.map(g => ({ key: g.key, title: g.title, games: [g.key] }))
 ];
 /** Turns a list that may hold family keys into individual game keys. Unknown keys are kept so callers can reject them. */
 export const expandGames = list => [...new Set((list ?? []).flatMap(k => GAME_FAMILIES.find(f => f.key === k)?.games ?? [k]))];
@@ -40,7 +54,7 @@ export const gameByName = name => SHIFT_GAMES.find(g => g.match.test(String(name
 /** Steam's header for Borderlands; our own copy for the HoYoverse games. `base` is the site address ("" for the dashboard's own pages, null when there is none). */
 export const gameArt = (game, base = null) => (game?.appid ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg` : game?.artFile && base !== null && base !== undefined ? `${base}${game.artFile}` : null);
 /** Where to redeem one code. HoYoverse links fill the code in for you. */
-export const redeemUrlFor = (game, code) => (game?.redeem ? game.redeem(code) : SHIFT_REDEEM_URL);
+export const redeemUrlFor = (game, code) => (game?.redeem ? game.redeem(code) : game?.redeemUrl ?? SHIFT_REDEEM_URL);
 
 /** A code with no end date is only trusted while it is fresh. Older ones in the list are almost always dead, so they are ignored. */
 export const UNDATED_MAX_AGE_MS = 21 * 86400_000;
@@ -176,13 +190,79 @@ export async function fetchHoyoCodes({ fetchImpl = globalThis.fetch, now = Date.
     return { codes, complete, errors };
 }
 
+// ---------- Destiny 2 and Warframe (community lists) ----------
+
+export const COMMUNITY_SOURCES = {
+    destiny2: "https://www.ggrecon.com/guides/destiny-2-promo-codes",
+    warframe: "https://progameguides.com/warframe/warframe-promo-codes/"
+};
+const decodeText = t => String(t ?? "").replace(/<[^>]*>/g, " ").replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/&#8217;|&rsquo;/g, "'").replace(/&#8211;|&ndash;/g, "-").replace(/&#8212;|&mdash;/g, "-").replace(/&quot;|&#8220;|&#8221;/g, '"').replace(/&#039;|&#39;/g, "'").replace(/&[a-z#0-9]+;/gi, " ").replace(/\s+/g, " ").trim();
+const tidyReward = r => { const t = decodeText(r).replace(/^(redeem|use|enter|get)( this code)?( for| to get| to unlock)?:?\s*/i, "").replace(/^[-:\u2013\u2014\s]+/, "").trim(); return t ? t[0].toUpperCase() + t.slice(1, 200) : "Free in-game item"; };
+
+const D2_CODE = /^[A-Z0-9]{3}-[A-Z0-9]{3}-[A-Z0-9]{3}$/;
+/** The Destiny 2 guide is a two column table: code, then reward. The same code can appear twice with different rewards; the first wins. */
+export function parseDestinyCodes(html) {
+    const out = new Map();
+    for (const row of String(html ?? "").split(/<tr[\s>]/i).slice(1)) {
+        const cells = row.split(/<\/t[dh]>/i).map(decodeText).filter(Boolean);
+        const code = cells.find(c => D2_CODE.test(c.toUpperCase()))?.toUpperCase();
+        if (!code || out.has(code)) continue;
+        const reward = cells.find(c => c.toUpperCase() !== code && !D2_CODE.test(c.toUpperCase()));
+        out.set(code, tidyReward(reward));
+    }
+    return out;
+}
+
+const WF_CODE = /^[A-Za-z0-9][A-Za-z0-9-]{3,29}$/;
+/** The Warframe guide lists "CODE - Redeem for ..." under an Active Codes heading and stops at the Expired one. */
+export function parseWarframeCodes(html) {
+    const text = String(html ?? "");
+    const start = text.search(/>\s*Active\s+(Warframe\s+)?(Promo\s+)?Codes/i);
+    if (start < 0) return new Map();
+    const rest = text.slice(start + 1);
+    const end = rest.slice(20).search(/>\s*(Expired|Old|Inactive)[^<]{0,30}Codes/i);
+    const block = end < 0 ? rest : rest.slice(0, end + 20);
+    const out = new Map();
+    for (const li of block.split(/<li[\s>]/i).slice(1)) {
+        const line = decodeText(li.split(/<\/li>/i)[0]);
+        const m = /^([A-Za-z0-9-]{4,30})\s+[-:\u2013\u2014]\s+(.+)$/.exec(line);
+        if (!m || !WF_CODE.test(m[1])) continue;
+        const code = m[1].toUpperCase();
+        if (!out.has(code)) out.set(code, tidyReward(m[2]));
+    }
+    return out;
+}
+
+async function getText(fetchImpl, url, timeoutMs) {
+    const res = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { "User-Agent": "Mozilla/5.0 (compatible; SteamValueChecker Discord bot)", Accept: "text/html" } });
+    if (!res.ok) throw new CodeFeedError(`${new URL(url).host} answered ${res.status}`);
+    return res.text();
+}
+
+/** Codes for Destiny 2 and Warframe. `complete` lists a game only when its page answered with at least one code. */
+export async function fetchCommunityCodes({ fetchImpl = globalThis.fetch, now = Date.now(), timeoutMs = 20_000 } = {}) {
+    const codes = [], complete = [], errors = [];
+    const parsers = { destiny2: parseDestinyCodes, warframe: parseWarframeCodes };
+    for (const game of COMMUNITY_GAMES) {
+        try {
+            const found = parsers[game.key](await getText(fetchImpl, COMMUNITY_SOURCES[game.key], timeoutMs));
+            if (!found.size) throw new CodeFeedError("the page had no codes I could read");
+            for (const [code, reward] of found) codes.push({ provider: "community", key: `community:${game.key}:${code}`, code, game: game.key, platform: "All platforms", reward, note: null, expiresAt: null, sourceUrl: COMMUNITY_SOURCES[game.key], seenAt: now });
+            complete.push(game.key);
+        } catch (err) { errors.push(`${game.title}: ${err.message ?? err}`); }
+    }
+    return { codes, complete, errors };
+}
+
 /** Every provider at once. One being down never hides the others. Throws only when nothing at all could be read. */
 export async function fetchAllCodes(opts = {}) {
-    const [shift, hoyo] = await Promise.allSettled([fetchShiftCodes(opts), fetchHoyoCodes(opts)]);
+    const [shift, hoyo, community] = await Promise.allSettled([fetchShiftCodes(opts), fetchHoyoCodes(opts), fetchCommunityCodes(opts)]);
     const codes = [], complete = [], errors = [];
     if (shift.status === "fulfilled") codes.push(...shift.value); else errors.push(`SHiFT: ${shift.reason?.message ?? shift.reason}`);
     if (hoyo.status === "fulfilled") { codes.push(...hoyo.value.codes); complete.push(...hoyo.value.complete.map(k => `hoyo:${k}`)); errors.push(...hoyo.value.errors); }
     else errors.push(`HoYoverse: ${hoyo.reason?.message ?? hoyo.reason}`);
+    if (community.status === "fulfilled") { codes.push(...community.value.codes); complete.push(...community.value.complete.map(k => `community:${k}`)); errors.push(...community.value.errors); }
+    else errors.push(`Community lists: ${community.reason?.message ?? community.reason}`);
     if (!codes.length) throw new CodeFeedError(errors.join("; ") || "no codes");
     return { codes, complete, errors };
 }

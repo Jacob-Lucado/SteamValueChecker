@@ -9,6 +9,7 @@ import { giveawaySchema, giveawayStore } from "./gwstore.js";
 import { ticketSchema, ticketStore } from "./ticketstore.js";
 import { requestSchema, requestStore } from "./requeststore.js";
 import { codeSchema, codeStore } from "./codestore.js";
+import { bundleFeedSchema, bundleFeedStore } from "./bundlefeedstore.js";
 import { dropSchema, dropStore } from "./dropstore.js";
 import { banSchema, banStore } from "./banstore.js";
 import { musicSchema, musicStore, MUSIC_EXTRA_COLUMNS } from "./musicstore.js";
@@ -175,6 +176,7 @@ ${giveawaySchema}
 ${ticketSchema}
 ${requestSchema}
 ${codeSchema}
+${bundleFeedSchema}
 ${dropSchema}
 ${banSchema}
 ${musicSchema}
@@ -316,7 +318,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     for (const c of ["streamer_role_id", "live_channel", "ping_stream", "meme_channel"]) addColumn("community", c, "TEXT");
     addColumn("stream_live", "auto", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "stream_auto", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_on", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_hours", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_at", "INTEGER");
-    for (const c of ["ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_promos"]) addColumn("community", c, "TEXT");
+    for (const c of ["ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_bundles", "ping_promos"]) addColumn("community", c, "TEXT");
     addColumn("promo_codes", "added_at", "INTEGER");
     addColumn("giveaways", "host_name", "TEXT");
     addColumn("giveaways", "host_kind", "TEXT");
@@ -335,6 +337,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const tickets = ticketStore({ run, get, all, clean, now });
     const requests = requestStore({ run, get, all, clean, now });
     const promoCodes = codeStore({ run, get, all, clean, now });
+    const bundleFeed = bundleFeedStore({ run, get, all, clean, now });
     const promoDrops = dropStore({ run, get, all, clean, now });
     const community = communityStore({ run, get, all, clean, now });
     const lfg = lfgStore({ db, run, get, all, clean, now });
@@ -808,6 +811,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

@@ -28,7 +28,7 @@ export const TOGGLES = [
     { key: "achv", label: "Almost 100%", hint: "A few achievements short in a game you play a lot", ...col("achv") },
     { key: "nudge", label: "Monthly backlog pick", hint: "One unplayed game to try on the 1st", ...col("nudge") },
     { key: "yearly", label: "Year in games", hint: "Your recap card after December 26", ...col("yearly") },
-    { key: "codes", label: "Game codes", hint: "New codes for Borderlands, Genshin, Star Rail, Zenless", read: (u, s) => !!s.codes, write: (db, u, on) => db.setAlertSubs(u.discord_id, { codes: on }) },
+    { key: "codes", label: "Game codes", hint: "New codes for Borderlands, Genshin, Star Rail, Zenless, Destiny 2, Warframe", read: (u, s) => !!s.codes, write: (db, u, on) => db.setAlertSubs(u.discord_id, { codes: on }) },
     { key: "promos", label: "Giveaway and promo news", hint: "NVIDIA, SteelSeries and game news mentioning a giveaway", read: (u, s) => !!s.promos, write: (db, u, on) => db.setAlertSubs(u.discord_id, { promos: on }) },
     { key: "share", label: "Share with my server", hint: "Show my name in group alerts and on the leaderboard", ...col("share") }
 ];

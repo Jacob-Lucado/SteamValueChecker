@@ -164,7 +164,7 @@ test("codes: a channel that vanished is skipped without stopping the other serve
 test("codes: settings are validated", () => {
     const db = openDb(":memory:");
     assert.throws(() => applyCodeSettings(db, "g1", { games: ["nope"] }), /not a game/);
-    assert.deepEqual(applyCodeSettings(db, "g1", { games: ["bl4", "bl3", "wonderlands", "blgoty", "bltps", "bl2", "genshin", "hsr", "zzz"] }).games, [], "every game selected means no filter");
+    assert.deepEqual(applyCodeSettings(db, "g1", { games: ["bl4", "bl3", "wonderlands", "blgoty", "bltps", "bl2", "genshin", "hsr", "zzz", "destiny2", "warframe"] }).games, [], "every game selected means no filter");
     assert.deepEqual(applyCodeSettings(db, "g1", { games: ["bl2"], channel_id: "c9" }).games, ["bl2"]);
     assert.equal(db.getCodeSettings("g1").channel_id, "c9");
 });
@@ -199,7 +199,7 @@ test("codes: /codes latest lists working codes for anyone, settings need Manage 
     assert.match(cantPost.replies[0].content, /can't post/);
     assert.equal(db.getCodeSettings("g1").channel_id, "c1");
     await ui.handleCommand(interaction({ sub: "games", options: { game: "bl4", on: false } }));
-    assert.ok(!db.getCodeSettings("g1").games.includes("bl4") && db.getCodeSettings("g1").games.length === 8);
+    assert.ok(!db.getCodeSettings("g1").games.includes("bl4") && db.getCodeSettings("g1").games.length === 10);
     await ui.handleCommand(interaction({ sub: "ping", options: { role: { id: "r5" } } }));
     assert.equal(db.getCodeSettings("g1").role_id, "r5");
 });
@@ -292,12 +292,12 @@ test("hoyo: codes without an end date do not age out like old SHiFT codes", () =
 test("codes: the Borderlands games are one entry, and the HoYoverse games have their own art", async () => {
     const { GAME_FAMILIES, expandGames, gameByKey, gameArt } = await import("../src/codesource.js");
     const { describeGames, codeFamilies, codeView } = await import("../src/codes.js");
-    assert.deepEqual(GAME_FAMILIES.map(f => f.key), ["borderlands", "genshin", "hsr", "zzz"]);
+    assert.deepEqual(GAME_FAMILIES.map(f => f.key), ["borderlands", "genshin", "hsr", "zzz", "destiny2", "warframe"]);
     assert.equal(expandGames(["borderlands"]).length, 6);
     assert.deepEqual(expandGames(["zzz", "bl4", "zzz"]), ["zzz", "bl4"]);
     assert.equal(describeGames(["bl4", "bl2", "genshin"]), "Borderlands, Genshin Impact");
     assert.equal(describeGames([]), "every game");
-    assert.equal(codeFamilies().length, 4);
+    assert.equal(codeFamilies().length, 6);
     // HoYoverse art is our own copy: a relative path for the site, the full address for Discord, nothing when there is no address
     for (const k of ["genshin", "hsr", "zzz"]) {
         assert.equal(gameArt(gameByKey(k), ""), `/img/codes/${k}.jpg`);
@@ -317,5 +317,52 @@ test("codes: picking Borderlands for a server turns on all six games", () => {
     const s = applyCodeSettings(db, "g1", { games: ["borderlands", "zzz"] });
     assert.equal(s.games.length, 7);
     assert.ok(!s.games.includes("genshin"));
-    assert.deepEqual(applyCodeSettings(db, "g1", { games: ["borderlands", "genshin", "hsr", "zzz"] }).games, [], "everything is no filter");
+    assert.deepEqual(applyCodeSettings(db, "g1", { games: ["borderlands", "genshin", "hsr", "zzz", "destiny2", "warframe"] }).games, [], "everything is no filter");
+});
+
+// ---------- Destiny 2 and Warframe ----------
+import { parseDestinyCodes, parseWarframeCodes, fetchCommunityCodes } from "../src/codesource.js";
+
+const D2_HTML = `<table><tr><th>Codes</th><th>Rewards</th></tr>
+<tr><td><strong>R9J-79M-J6C</strong></td><td>End of the Rainbow transmat</td></tr>
+<tr><td><strong>XVX-DKJ-CVM</strong></td><td>Seraphim&#8217;s Gauntlets Emblem</td></tr>
+<tr><td><strong>XVX-DKJ-CVM</strong></td><td>A repeat that is ignored</td></tr>
+<tr><td>not a code</td><td>nothing</td></tr></table>`;
+const WF_HTML = `<h2>Active Codes</h2><ul>
+<li>ANDROID-QV4RX - Redeem for 3 Day Affinity Booster, Zylok, and Wolf Howl</li>
+<li><strong>SPECIALEFFECT</strong> &#8211; Redeem for Special Effect Glyph</li>
+<li>Pride2025 - Redeem for Pride Glyph IV</li></ul>
+<h2>Expired Codes</h2><ul><li>Discord100k - Redeem for Glyph</li></ul>`;
+
+test("destiny 2: codes and rewards come out of the guide's table, repeats and junk rows are dropped", () => {
+    const m = parseDestinyCodes(D2_HTML);
+    assert.deepEqual([...m.keys()], ["R9J-79M-J6C", "XVX-DKJ-CVM"]);
+    assert.equal(m.get("XVX-DKJ-CVM"), "Seraphim's Gauntlets Emblem");
+});
+
+test("warframe: only the Active section is read, and 'Redeem for' is trimmed from the reward", () => {
+    const m = parseWarframeCodes(WF_HTML);
+    assert.deepEqual([...m.keys()], ["ANDROID-QV4RX", "SPECIALEFFECT", "PRIDE2025"]);
+    assert.equal(m.get("SPECIALEFFECT"), "Special Effect Glyph");
+    assert.equal(m.get("ANDROID-QV4RX"), "3 Day Affinity Booster, Zylok, and Wolf Howl");
+    assert.equal(parseWarframeCodes("<p>nothing here</p>").size, 0);
+});
+
+test("community codes: one list being down does not hide the other, and a game is only 'complete' when its page answered", async () => {
+    const fetchImpl = async url => url.includes("ggrecon") ? { ok: false, status: 503 } : { ok: true, status: 200, text: async () => WF_HTML };
+    const r = await fetchCommunityCodes({ fetchImpl, now: 5 });
+    assert.deepEqual(r.complete, ["warframe"]);
+    assert.equal(r.codes.length, 3); assert.equal(r.codes[0].key, "community:warframe:ANDROID-QV4RX");
+    assert.match(r.errors[0], /Destiny 2: .*503/);
+});
+
+test("destiny and warframe posts show the reward, how to claim, and a button to the game's own redeem page", () => {
+    const post = codeEmbed({ code: "J64-HYC-HTD", game: "destiny2", reward: "Red Shift Returning Emblem", key: "community:destiny2:J64-HYC-HTD", status: "active" });
+    const e = post.embeds[0];
+    assert.match(e.author.name, /Destiny 2 · promo code/); assert.match(e.description, /J64-HYC-HTD/);
+    assert.equal(e.fields.find(f => f.name === "How to claim").value.includes("Bungie.net"), true);
+    assert.equal(post.components[0].components[0].label, "Redeem on Bungie.net"); assert.match(post.components[0].components[0].url, /bungie\.net/);
+    assert.match(e.image.url, /1085660/);
+    const wf = codeEmbed({ code: "SPECIALEFFECT", game: "warframe", reward: "Special Effect Glyph", status: "active" });
+    assert.equal(wf.components[0].components[0].url, "https://www.warframe.com/promocode");
 });

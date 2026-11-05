@@ -38,16 +38,23 @@ export function codeEmbed(c, { expired = false, base = null } = {}) {
     ];
     const heads = c.note ? `${c.note}. This one may only work on that region's account.` : game?.note ? `${game.note}.` : null;
     if (heads) fields.push({ name: "Heads up", value: heads.slice(0, 300), inline: false });
+    const community = game?.provider === "community";
+    if (community) {
+        // Destiny 2 and Warframe: the code never has a platform or end date, so the post is the code, the reward and how to claim it.
+        fields.length = 0;
+        fields.push({ name: "Reward", value: c.reward || "Unknown", inline: false });
+        fields.push({ name: expired ? "Status" : "How to claim", value: expired ? "No longer listed as working" : game.how, inline: false });
+    }
     const embed = {
         color: expired ? GREY : (game?.color ?? ORANGE),
-        author: { name: `${game?.title ?? "Game"} · ${game?.provider === "hoyo" ? "redeem code" : "SHiFT code"}` },
+        author: { name: `${game?.emoji ? game.emoji + " " : ""}${game?.title ?? "Game"} · ${game?.provider === "hoyo" ? "redeem code" : community ? "promo code" : "SHiFT code"}` },
         title: expired ? `Expired: ${c.reward || "code"}` : (c.reward || "New code"),
-        description: expired ? `~~${c.code}~~\nThis code has ended.` : `\`\`\`\n${c.code}\n\`\`\`${game?.provider === "hoyo" ? "Copy it, then redeem it in the game (Settings, Redeem Code) or with the button below." : "Copy it, then redeem it on the SHiFT site while signed in to the account linked to your game."}`,
+        description: expired ? `~~${c.code}~~\nThis code has ended.` : `\`\`\`\n${c.code}\n\`\`\`${game?.provider === "hoyo" ? "Copy it, then redeem it in the game (Settings, Redeem Code) or with the button below." : community ? "A new code just dropped. Copy it, then use the button below." : "Copy it, then redeem it on the SHiFT site while signed in to the account linked to your game."}`,
         fields,
         image: game && gameArt(game, base) ? { url: gameArt(game, base) } : undefined,
-        footer: { text: expired ? "Steam Value Checker · code ended" : game?.provider === "hoyo" ? "Steam Value Checker · codes can stop working without warning" : "Codes from mentalmars.com · they can run out before the listed date" }
+        footer: { text: expired ? "Steam Value Checker · code ended" : game?.provider === "hoyo" || community ? "Steam Value Checker · codes can stop working without warning" : "Codes from mentalmars.com · they can run out before the listed date" }
     };
-    const buttons = [{ type: 2, style: 5, label: game?.provider === "hoyo" ? "Redeem this code" : "Redeem on SHiFT", url: redeemUrlFor(game, c.code) }];
+    const buttons = [{ type: 2, style: 5, label: game?.provider === "hoyo" ? "Redeem this code" : community ? game.redeemLabel : "Redeem on SHiFT", url: redeemUrlFor(game, c.code) }];
     if (c.source_url) buttons.push({ type: 2, style: 5, label: "Source", url: c.source_url });
     return { embeds: [embed], components: expired ? [] : [{ type: 1, components: buttons }], allowed_mentions: { parse: [] } };
 }

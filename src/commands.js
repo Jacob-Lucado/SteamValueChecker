@@ -144,7 +144,7 @@ const lfgCmd = new SlashCommandBuilder()
 
 const calendarCmd = new SlashCommandBuilder()
     .setName("calendar")
-    .setDescription("What is coming up: game releases, Steam sales and server events. Managers can add events")
+    .setDescription("What is coming up: game releases, Steam sales and server events")
     .addSubcommand(s => s.setName("view").setDescription("Release dates, sales, events and group games coming up")
         .addIntegerOption(o => o.setName("days").setDescription("How far ahead (default 14)").setMinValue(1).setMaxValue(90)))
     .addSubcommand(s => s.setName("add").setDescription("Managers: add a server event and announce it here")
@@ -293,7 +293,7 @@ const redeem = new SlashCommandBuilder()
 
 const compare = new SlashCommandBuilder()
     .setName("compare")
-    .setDescription("Compare your game library with a friend: what you both own and what only one of you has")
+    .setDescription("Compare your library with a friend: what you share and what only one has")
     .addUserOption(o => o.setName("friend").setDescription("Someone in this server who turned on /alerts share").setRequired(true))
     .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel (default: only you see it)"));
 
@@ -312,7 +312,7 @@ const watch = new SlashCommandBuilder()
     .addStringOption(o => o.setName("title").setDescription("Game title").setRequired(true).setMaxLength(100))
     .addStringOption(alertType).addNumberOption(alertValue);
 
-const CODE_GAME_CHOICES = [{ name: "Borderlands (all of them)", value: "borderlands" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }];
+const CODE_GAME_CHOICES = [{ name: "Borderlands (all of them)", value: "borderlands" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }, { name: "Destiny 2", value: "destiny2" }, { name: "Warframe", value: "warframe" }];
 const alerts = new SlashCommandBuilder()
     .setName("alerts")
     .setDescription("How and where you get sale alerts")
@@ -366,7 +366,7 @@ alerts
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
     .addSubcommand(s => s.setName("yearinreview").setDescription("Get your year in games card at the end of December (off by default)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
-    .addSubcommand(s => s.setName("codes").setDescription("Get a DM when a new game code drops (Borderlands, Genshin, Star Rail, Zenless)")
+    .addSubcommand(s => s.setName("codes").setDescription("Get a DM when a new game code drops (Borderlands, Genshin, Destiny 2 and more)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true))
         .addStringOption(o => o.setName("game").setDescription("Only some games: pick one to add or drop it").addChoices(...CODE_GAME_CHOICES))
         .addBooleanOption(o => o.setName("on").setDescription("With game: include it (default) or leave it out")))
@@ -404,7 +404,7 @@ const alertchannel = new SlashCommandBuilder()
 
 const serverstats = new SlashCommandBuilder()
     .setName("serverstats")
-    .setDescription("This server's numbers: most wanted games, savings and top savers (members who opted in)");
+    .setDescription("This server's numbers: most wanted games, savings and top savers");
 
 const clubCmd = new SlashCommandBuilder()
     .setName("club")
@@ -488,7 +488,7 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
 const gamenight = new SlashCommandBuilder().setName("gamenight")
-    .setDescription("What can everyone in your voice channel play together, and what is worth buying together?")
+    .setDescription("What can your voice channel play together, and what is worth buying together?")
     .addChannelOption(o => o.setName("channel").setDescription("A voice channel (default: the one you are in)").addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice))
     .addBooleanOption(o => o.setName("post").setDescription("Show it to everyone in this channel (default: only you)"));
 
@@ -665,7 +665,7 @@ const feature = new SlashCommandBuilder()
 
 const codes = new SlashCommandBuilder()
     .setName("codes")
-    .setDescription("Limited-time game codes: Borderlands SHiFT codes, Genshin, Star Rail and Zenless")
+    .setDescription("Limited-time game codes: Borderlands, Genshin, Star Rail, Zenless, Destiny 2, Warframe")
     .addSubcommand(s => s.setName("latest").setDescription("The newest codes that still work")
         .addStringOption(o => o.setName("game").setDescription("Only one game").addChoices(...CODE_GAME_CHOICES)))
     .addSubcommand(s => s.setName("channel").setDescription("Server managers: where new codes are posted")
@@ -695,7 +695,13 @@ const promos = new SlashCommandBuilder()
         .addBooleanOption(o => o.setName("clear").setDescription("Stop posting promo drops")))
     .addSubcommand(s => s.setName("ping").setDescription("Server managers: a role to ping for new drops")
         .addRoleOption(o => o.setName("role").setDescription("Role to ping (leave empty to stop pinging)")))
-    .addSubcommand(s => s.setName("news").setDescription("Server managers: also post giveaway and code news (NVIDIA, SteelSeries, Dead by Daylight...)")
+    .addSubcommand(s => s.setName("bundles").setDescription("Game bundle feed (managers set it up)")
+        .addChannelOption(o => o.setName("channel").setDescription("Where to post").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addStringOption(o => o.setName("store").setDescription("Store to turn on or off").addChoices({ name: "Humble Bundle", value: "humble" }, { name: "Fanatical", value: "fanatical" }, { name: "IndieGala", value: "indiegala" }, { name: "Steam", value: "steam" }))
+        .addBooleanOption(o => o.setName("on").setDescription("On (default) or off"))
+        .addRoleOption(o => o.setName("role").setDescription("Role to ping"))
+        .addBooleanOption(o => o.setName("clear").setDescription("Stop posting bundles")))
+    .addSubcommand(s => s.setName("news").setDescription("Managers: also post giveaway and code news")
         .addBooleanOption(o => o.setName("on").setDescription("On or off (leave empty to see the setting)")));
 
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");

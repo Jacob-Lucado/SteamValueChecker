@@ -18,6 +18,8 @@ import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
+import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
+import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { expandGames } from "../codesource.js";
 import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
 import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
@@ -188,7 +190,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -850,6 +852,69 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             const at = now();
             db.expireDue(at); // anything that ended since the last poll should not show as working
             return { games: codeGames(), families: codeFamilies(), status, codes: db.listCodes({ status, game: wanted, limit: 100 }).map(c => codeView(c, at)), counts: db.codeCounts() };
+        },
+        "GET /api/bundlefeed": async (req, _b, url) => {
+            session(req);
+            const store = url.searchParams.get("store") || null;
+            if (store && !BUNDLE_STORES[store]) throw new HttpError(400, "Unknown store.");
+            const status = url.searchParams.get("status") === "expired" ? "expired" : "active";
+            db.expireDueBundles(now()); // anything that ended since the last poll should not show as live
+            return { status, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), bundles: db.listFeedBundles({ status, stores: store ? [store] : null, limit: 100 }).map(bundleFeedView), counts: db.bundleFeedCounts() };
+        },
+        "GET /api/servers/bundles": async (req, _b, url) => {
+            const s = session(req);
+            const g = s.guilds.find(x => x.id === url.searchParams.get("guild"));
+            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            let channels, roles = [];
+            try { channels = await rest.listChannels(g.id); roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []); }
+            catch (err) {
+                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+                throw err;
+            }
+            const settings = db.getBundleFeedSettings(g.id);
+            return { settings, channels, roles, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), latest: db.listFeedBundles({ status: "active", stores: settings.stores, limit: 6 }).map(bundleFeedView) };
+        },
+        "POST /api/servers/bundles": async (req, body) => {
+            const s = session(req);
+            const g = s.guilds.find(x => x.id === body.guild_id);
+            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
+            const patch = {};
+            if (body.channel_id !== undefined) {
+                if (body.channel_id) {
+                    let channels;
+                    try { channels = await rest.listChannels(g.id); }
+                    catch (err) {
+                        if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
+                        throw err;
+                    }
+                    const channel = channels.find(c => c.id === body.channel_id);
+                    if (!channel) throw new HttpError(400, "Pick a text channel from the list.");
+                    if (channel.id !== db.getBundleFeedSettings(g.id).channel_id) {
+                        try { await rest.sendMessage(channel.id, { content: `Game bundles will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
+                        catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
+                    }
+                }
+                patch.channel_id = body.channel_id || null;
+            }
+            if (body.role_id !== undefined) {
+                if (body.role_id) {
+                    const roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []);
+                    if (!roles.some(r => r.id === body.role_id)) throw new HttpError(400, "Pick a role from the list.");
+                }
+                patch.role_id = body.role_id || null;
+            }
+            if (body.stores !== undefined) patch.stores = body.stores;
+            let settings;
+            try { settings = applyBundleFeedSettings(db, g.id, patch); } catch (err) { throw new HttpError(400, err.message); }
+            if (patch.channel_id) bundleFeed?.poll?.().catch(() => {}); // post what is current right away
+            return { settings };
+        },
+        "POST /api/admin/bundles/poll": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!bundleFeed?.poll) throw new HttpError(400, "The bundle poll is not running on this bot.");
+            const r = await bundleFeed.poll();
+            return { result: r ?? { skipped: true } };
         },
         "GET /api/servers/codes": async (req, _b, url) => {
             const s = session(req);

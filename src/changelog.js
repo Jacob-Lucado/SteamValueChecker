@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.27", date: "2026-11-04", title: "Bundles feed, plus Destiny 2 and Warframe codes", items: [
+        "**Bundles feed:** new game bundles from Humble Bundle, Fanatical, IndieGala and the Steam store are posted once each in a channel, with the games inside, the price tiers when the store shows them, and when the bundle ends. Ended bundles are greyed out. Browse them on the new Bundles page, or set up the channel on your server's Codes & promos tab or with `/server promos bundles`.",
+        "**Community setup:** setup now makes a #bundles-feed channel and an opt-in **Bundle pings** role and connects them. Servers that were set up before get both the next time you run `/manage community setup`.",
+        "**Destiny 2 and Warframe codes:** their promo codes are posted like the other game codes, with the reward, how to claim it and a button to Bungie.net or Warframe.com. Pick them in your server's game list, `/games codes games` or your code alerts."
+    ] },
     { version: "2026.11.26", date: "2026-11-04", title: "Profile links get their own preview", items: [
         "**Your name and look in the preview:** when you post your profile link (steamvaluechecker.com/u/yourname) in Discord, X or anywhere else that shows link previews, it now shows your own picture with your name, bio, favorite games and colors instead of the generic bot image.",
         "**Clean addresses:** every dashboard page now has a plain address like steamvaluechecker.com/wishlist or /u/yourname instead of one with /#/ in it. Old links with the # still open the right page, and what you copy from the address bar now previews properly when you share it.",

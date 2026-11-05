@@ -86,6 +86,8 @@ import { createSetupHandlers } from "./setup.js";
 import { createTicketHandlers } from "./tickethandlers.js";
 import { createCodeHandlers } from "./codeshandlers.js";
 import { runCodes } from "./codes.js";
+import { runBundleFeed } from "./bundlefeed.js";
+import { createBundleFeedHandlers } from "./bundlefeedhandlers.js";
 import { createDropHandlers } from "./dropshandlers.js";
 import { runDrops } from "./drops.js";
 import { createMusic } from "./music.js";
@@ -282,6 +284,13 @@ const pollCodes = async () => {
     try { return await runCodes({ db, api: botRest, base: publicBase, notifier, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
 };
 const codeUi = createCodeHandlers({ db, runNow: pollCodes });
+let bundlesBusy = false;
+const pollBundles = async () => {
+    if (bundlesBusy) return null;
+    bundlesBusy = true;
+    try { return await runBundleFeed({ db, api: botRest, log: m => console.log(`[bundles] ${m}`) }); } finally { bundlesBusy = false; }
+};
+const bundleUi = createBundleFeedHandlers({ db, runNow: pollBundles });
 let dropsBusy = false;
 const pollDrops = async () => {
     if (dropsBusy) return null;
@@ -350,6 +359,7 @@ client.once(Events.ClientReady, c => {
     // Support tickets: quiet ones resolve and close on their own
     schedule(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
     schedule(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
+    schedule(async () => { await pollBundles(); }, 30 * 60_000, { onError: err => { console.error(`[bundles] ${err.name}: ${err.message}`); ops.error("bundle feed", err); } });
     schedule(async () => { await pollCodes(); }, 20 * 60_000, { onError: err => { console.error(`[codes] ${err.name}: ${err.message}`); ops.error("game codes", err); } });
     schedule(async () => { await pollDrops(); }, 30 * 60_000, { onError: err => { console.error(`[promos] ${err.name}: ${err.message}`); ops.error("promo drops", err); } });
     schedule(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
@@ -811,7 +821,7 @@ async function onInteraction(i, again = false) {
             case "bug": return await ticketUi.handleBug(i);
             case "feature": return await requestUi.handleCommand(i);
             case "codes": return await codeUi.handleCommand(i);
-            case "promos": return await dropUi.handleCommand(i);
+            case "promos": return i.options.getSubcommand() === "bundles" ? await bundleUi.handle(i) : await dropUi.handleCommand(i);
             case "music": case "play": case "player": return musicUi ? await musicUi.handleCommand(i) : await musicOff(i);
             case "grabberad": {
                 const eph = content => i.reply({ content, flags: MessageFlags.Ephemeral });
@@ -878,7 +888,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

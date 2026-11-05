@@ -1516,7 +1516,7 @@ test("game codes: signed-in members see the list, managers set up their server, 
     assert.equal((await o.request("/api/codes?game=bl2")).data.codes.length, 1);
     assert.equal((await o.request("/api/codes?game=nope")).status, 400);
     const s = (await o.request("/api/servers/codes?guild=g-admin")).data;
-    assert.equal(s.channels.length, 2); assert.equal(s.games.length, 9);
+    assert.equal(s.channels.length, 2); assert.equal(s.games.length, 11);
     assert.equal((await o.request("/api/servers/codes?guild=g-member")).status, 403);
     const saved = (await post("/api/servers/codes", { guild_id: "g-admin", channel_id: "c1", role_id: "r1", games: ["bl4"] })).data;
     assert.equal(saved.settings.channel_id, "c1"); assert.deepEqual(saved.settings.games, ["bl4"]); assert.equal(saved.settings.role_id, "r1");
@@ -1531,6 +1531,28 @@ test("game codes: signed-in members see the list, managers set up their server, 
     assert.equal((await o.request("/api/codes?status=expired")).data.codes.length, 1);
     assert.equal((await post("/api/admin/codes/poll", {})).status, 200);
     assert.ok(polled >= 2, "retiring and checking now both run a poll");
+});
+
+test("game bundles: members see the list, managers set up their server, the owner can run a check", async () => {
+    let polled = 0;
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { bundleFeed: { poll: async () => { polled++; return { added: 0, posted: 0 }; } } } });
+    const mk = (n, store, over = {}) => ({ key: `${store}:b${n}`, store, title: "Bundle " + n, url: `https://example.com/b${n}`, image: null, games: ["A", "B"], gameCount: 2, price: "$5", expiresAt: null, seenAt: Date.now(), ...over });
+    o.db.upsertFeedBundle(mk(1, "humble")); o.db.upsertFeedBundle(mk(2, "steam"));
+    const post = (path, body) => o.request(path, { method: "POST", body });
+    const list = (await o.request("/api/bundlefeed")).data;
+    assert.equal(list.bundles.length, 2); assert.equal(list.stores.length, 4); assert.ok(list.bundles.every(b => b.storeName && b.url));
+    assert.equal((await o.request("/api/bundlefeed?store=steam")).data.bundles.length, 1);
+    assert.equal((await o.request("/api/bundlefeed?store=nope")).status, 400);
+    const s = (await o.request("/api/servers/bundles?guild=g-admin")).data;
+    assert.equal(s.channels.length, 2); assert.equal(s.latest.length, 2);
+    assert.equal((await o.request("/api/servers/bundles?guild=g-member")).status, 403);
+    const saved = (await post("/api/servers/bundles", { guild_id: "g-admin", channel_id: "c1", role_id: "r1", stores: ["humble", "steam"] })).data;
+    assert.equal(saved.settings.channel_id, "c1"); assert.deepEqual(saved.settings.stores, ["humble", "steam"]); assert.equal(saved.settings.role_id, "r1");
+    assert.ok(o.sent.some(m => m.id === "c1"), "a confirmation is posted in the chosen channel"); assert.ok(polled >= 1, "saving a channel posts what is current");
+    assert.equal((await post("/api/servers/bundles", { guild_id: "g-admin", channel_id: "nope" })).status, 400);
+    assert.equal((await post("/api/servers/bundles", { guild_id: "g-admin", stores: ["nope"] })).status, 400);
+    assert.equal((await post("/api/servers/bundles", { guild_id: "g-member", channel_id: "c1" })).status, 403);
+    assert.equal((await post("/api/admin/bundles/poll", {})).status, 200);
 });
 
 test("promo drops: managers set up their server, add and end a drop, members cannot", async () => {
@@ -1566,7 +1588,7 @@ test("alert settings: members opt in to game code and promo DMs, with a game fil
     const o = await signedIn({});
     const post = body => o.request("/api/alerts/codes", { method: "POST", body });
     const first = (await o.request("/api/alerts/codes")).data;
-    assert.equal(first.codes, false); assert.equal(first.promos, false); assert.equal(first.allGames.length, 9);
+    assert.equal(first.codes, false); assert.equal(first.promos, false); assert.equal(first.allGames.length, 11);
     const on = (await post({ codes: true, promos: true, games: ["genshin", "bl4"] })).data;
     assert.equal(on.codes, true); assert.equal(on.promos, true); assert.deepEqual(on.games.sort(), ["bl4", "genshin"]);
     assert.equal((await post({ games: ["nope"] })).status, 400);
@@ -1577,7 +1599,7 @@ test("alert settings: members opt in to game code and promo DMs, with a game fil
 
 test("the Deals page can load its bundle and sale prep parts back to back without being told to slow down", async () => {
     const o = await signedIn({});
-    const a = await o.request("/api/bundles");
+    const a = await o.request("/api/bundlefeed");
     const b = await o.request("/api/saleprep");
     const c = await o.request("/api/regions?game=x");
     assert.notEqual(a.status, 429); assert.notEqual(b.status, 429); assert.notEqual(c.status, 429);
@@ -1592,7 +1614,7 @@ test("game codes: the Borderlands filter covers all six games, and the art files
     o.db.upsertCode(mk(1, "Borderlands 4")); o.db.upsertCode(mk(2, "Borderlands 2"));
     o.db.upsertCode({ provider: "hoyo", key: "hoyo:zzz:ABCD1234", code: "ABCD1234", game: "zzz", reward: "20 Polychrome", expiresAt: null, seenAt: Date.now() });
     const all = (await o.request("/api/codes")).data;
-    assert.deepEqual(all.families.map(f => f.key), ["borderlands", "genshin", "hsr", "zzz"]);
+    assert.deepEqual(all.families.map(f => f.key), ["borderlands", "genshin", "hsr", "zzz", "destiny2", "warframe"]);
     assert.equal((await o.request("/api/codes?game=borderlands")).data.codes.length, 2);
     assert.equal((await o.request("/api/codes?game=zzz")).data.codes[0].art, "/img/codes/zzz.jpg");
     const img = await o.request("/img/codes/zzz.jpg");

@@ -53,7 +53,7 @@ export const TEMPLATE = {
     selfRoles: [
         { name: "PC", emoji: "🖥️" }, { name: "PlayStation", emoji: "🎮" }, { name: "Xbox", emoji: "🟩" }, { name: "Nintendo", emoji: "🔴" },
         { name: "Deal pings", emoji: "💸" }, { name: "Free game pings", emoji: "🎁" }, { name: "Giveaway pings", emoji: "🎉" }, { name: "LFG pings", emoji: "🤝" },
-        { name: "Game code pings", emoji: "🔑" }, { name: "Promo drop pings", emoji: "🎟️" }, { name: "Stream pings", emoji: "📺" }, { name: "Playtest pings", emoji: "🧪" }, { name: "Squad pings", emoji: "🎮" }
+        { name: "Game code pings", emoji: "🔑" }, { name: "Bundle pings", emoji: "📦" }, { name: "Promo drop pings", emoji: "🎟️" }, { name: "Stream pings", emoji: "📺" }, { name: "Playtest pings", emoji: "🧪" }, { name: "Squad pings", emoji: "🎮" }
     ],
     categories: [
         { name: "📢 INFORMATION", channels: [
@@ -84,6 +84,7 @@ export const TEMPLATE = {
             { key: "playtests", name: "playtests", topic: "Free playtests, betas and demos, posted once each. Pick the Playtest pings role in #roles to get pinged", readonly: true },
             { key: "nowplaying", name: "now-playing", topic: "Squad-up posts when two or more members are in the same game. Pick the Squad pings role in #roles to get pinged", readonly: true },
             { key: "codes", name: "game-codes", topic: "Limited-time game codes (SHiFT and more), posted once each and marked when they end", readonly: true },
+            { key: "bundles", name: "bundles-feed", topic: "New game bundles from Humble, Fanatical, IndieGala and Steam, posted once each and marked when they end. Pick the Bundle pings role in #roles to get pinged", readonly: true },
             { key: "giveaways", name: "giveaways", topic: "Game key giveaways", readonly: true },
             { key: "vouches", name: "vouches", topic: "Winners confirm their keys worked", readonly: true }] },
         { name: "🆘 SUPPORT", channels: [
@@ -305,7 +306,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
-    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_playtest: pingOf("Playtest pings"), playtest_channel: chIds.playtests ?? null, playtest_all: chIds.playtests ? 1 : 0, ping_squad: pingOf("Squad pings"), squad_channel: chIds.nowplaying ?? null, ping_promos: pingOf("Promo drop pings"), ping_stream: pingOf("Stream pings"), streamer_role_id: roleIds.streamer, live_channel: chIds.live ?? null });
+    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_bundles: pingOf("Bundle pings"), ping_playtest: pingOf("Playtest pings"), playtest_channel: chIds.playtests ?? null, playtest_all: chIds.playtests ? 1 : 0, ping_squad: pingOf("Squad pings"), squad_channel: chIds.nowplaying ?? null, ping_promos: pingOf("Promo drop pings"), ping_stream: pingOf("Stream pings"), streamer_role_id: roleIds.streamer, live_channel: chIds.live ?? null });
     db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, meme_channel: chIds.memes ?? db.getCommunity(guildId).meme_channel, honeypot_channel: chIds.honeypot ?? db.getCommunity(guildId).honeypot_channel ?? null, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
@@ -328,7 +329,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     await say(api, chIds.botcmd, { content: "Try **/rank** for your level, **/levels** for the leaderboard, **/invites link** to get your own invite link and **/wishlist import** for sale alerts. Right-click a member and open Apps to compare libraries or find games to play together." });
     await say(api, chIds.deals, { content: "Sale alerts and free games land here. Members: use `/me wishlist import` to get your own alerts." });
     if (chIds.playtests) await say(api, chIds.playtests, PLAYTEST_INTRO);
-    await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });
+    await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless, Destiny 2, Warframe) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });
     await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/server promos add` or on the dashboard, and can turn on news watching with `/server promos news`." });
     await say(api, chIds.tickets, { content: "Member tickets from `/bot support open` appear here with Reply, Assign me and Resolve buttons." });
     await say(api, chIds.modlog, { content: "Every moderator action is logged here as a numbered case: `/mod warn`, `timeout`, `kick`, `ban`, `unban` and `purge`. Use `/mod cases` to look back." });
@@ -343,6 +344,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.musiccmd && created.channels.includes("music-commands")) await say(api, chIds.musiccmd, musicIntroPayload()); // only in a channel made just now
     if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
     if (chIds.drops && !db.getDropSettings(guildId).channel_id) db.setDropSettings(guildId, { channel_id: chIds.drops });
+    if (chIds.bundles && !db.getBundleFeedSettings(guildId).channel_id) db.setBundleFeedSettings(guildId, { channel_id: chIds.bundles });
     db.setCommunity(guildId, { setup_keys: JSON.stringify(Object.keys(chIds)) });
     db.bumpUsage?.(fresh ? "setup_auto" : "setup_manual");
     db.bumpUsage?.("channels_created", created.channels.length);
@@ -350,7 +352,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
 }
 
 /** Channels added to the template after the first release. A server built before this list existed has every other channel already. */
-export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "drops", "musiccmd", "music1", "music2", "live", "playtests", "nowplaying"]);
+export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "bundles", "drops", "musiccmd", "music1", "music2", "live", "playtests", "nowplaying"]);
 const SQUAD_INTRO = { content: "When two or more members who turned on `/server nowplaying join:true` are in the same game, a squad-up card is posted here. Pick the **Squad pings** role in the roles channel to get pinged. Check who is playing now with `/server nowplaying`." };
 const PLAYTEST_INTRO = { content: "Free playtests, betas and demos are posted here once each, found from Steam announcements, Alpha Beta Gamer, GamerPower and itch.io, and never twice. Pick the **Playtest pings** role in the roles channel to get pinged. Managers can change the channel or the role on the dashboard." };
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
@@ -413,7 +415,9 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins
     if (chIds.musiccmd && created.channels.includes("music-commands")) await say(api, chIds.musiccmd, musicIntroPayload());
     if (chIds.codes && !db.getCodeSettings(guildId).channel_id) db.setCodeSettings(guildId, { channel_id: chIds.codes });
-    if (chIds.codes && created.channels.includes("game-codes")) await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });
+    if (chIds.codes && created.channels.includes("game-codes")) await say(api, chIds.codes, { content: "New limited-time game codes (Borderlands SHiFT, Genshin, Star Rail, Zenless, Destiny 2, Warframe) are posted here once each. When one ends, its post is greyed out. Managers can pick which games and a role to ping with `/games codes`, or on the dashboard." });
+    if (chIds.bundles && !db.getBundleFeedSettings(guildId).channel_id) db.setBundleFeedSettings(guildId, { channel_id: chIds.bundles });
+    if (chIds.bundles && created.channels.includes("bundles-feed")) await say(api, chIds.bundles, { content: "New game bundles from Humble, Fanatical, IndieGala and Steam are posted here once each, with the games inside and when the bundle ends. When one ends, its post is greyed out. Managers can change the stores or the channel with `/server promos bundles`, or on the dashboard." });
     if (chIds.drops && !db.getDropSettings(guildId).channel_id) db.setDropSettings(guildId, { channel_id: chIds.drops });
     if (chIds.drops && created.channels.includes("promo-drops")) await say(api, chIds.drops, { content: "Promo drops (key giveaways from SteelSeries, NVIDIA and others) are posted here once each, and greyed out when they end. Managers add one with `/server promos add` or on the dashboard, and can turn on news watching with `/server promos news`." });
     if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
@@ -435,7 +439,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     if (chIds.live && !db.getCommunity(guildId).live_channel) db.setCommunity(guildId, { live_channel: chIds.live });
     if (chIds.live && created.channels.includes("stream-live")) await say(api, chIds.live, { content: "When a streamer goes live they use `/server stream live` (or the dashboard's Streams page) and it shows up here. Pick the **Stream pings** role in the roles channel to get pinged." });
     // the opt-in ping roles for codes and promos (and streams), for servers that were set up before they existed
-    const newPings = TEMPLATE.selfRoles.filter(r => ["Game code pings", "Promo drop pings", "Stream pings", "Playtest pings", "Squad pings"].includes(r.name));
+    const newPings = TEMPLATE.selfRoles.filter(r => ["Game code pings", "Bundle pings", "Promo drop pings", "Stream pings", "Playtest pings", "Squad pings"].includes(r.name));
     const madeRoles = [];
     for (const r of newPings) {
         let ex = existingRoles.find(x => x.name.toLowerCase() === r.name.toLowerCase() && !x.managed);
@@ -445,7 +449,7 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
             created.roles.push(r.name); madeRoles.push(r); await wait();
         }
         db.addSelfRole(guildId, ex.id, r.name);
-        const col = r.name === "Game code pings" ? "ping_codes" : r.name === "Stream pings" ? "ping_stream" : r.name === "Playtest pings" ? "ping_playtest" : r.name === "Squad pings" ? "ping_squad" : "ping_promos";
+        const col = r.name === "Game code pings" ? "ping_codes" : r.name === "Bundle pings" ? "ping_bundles" : r.name === "Stream pings" ? "ping_stream" : r.name === "Playtest pings" ? "ping_playtest" : r.name === "Squad pings" ? "ping_squad" : "ping_promos";
         if (!db.getCommunity(guildId)[col]) db.setCommunity(guildId, { [col]: ex.id });
     }
     if (madeRoles.length) {
