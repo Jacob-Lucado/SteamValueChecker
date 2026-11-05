@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Companion (beta) · Steam Value Checker</title>
+<meta name="description" content="Say Hey AI in Discord and get game prices, buy-or-wait verdicts with price graphs, library stats, play plans, group posts and step-by-step guides, as pictures. Now in beta.">
+<link rel="canonical" href="__ORIGIN__/ai">
+<meta name="theme-color" content="#07060f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steam Value Checker">
+<meta property="og:title" content="AI Companion (beta) · Steam Value Checker">
+<meta property="og:description" content="A gaming sidekick inside Discord: prices, buy-or-wait verdicts, library stats, play plans and guides, as pictures.">
+<meta property="og:url" content="__ORIGIN__/ai">
+<meta property="og:image" content="__ORIGIN__/ai-ad-hero.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="stylesheet" href="/ai.css">
+</head>
+<body>
+<div class="sky" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i><div class="grid"></div></div>
+
+<header class="top"><div class="wrap">
+  <a class="brand" href="/ai"><img src="/logo.png" alt="" width="30" height="30"><span>Steam Value Checker</span><b class="beta">BETA</b></a>
+  <nav aria-label="Main">
+    <a href="#demo">See it work</a><a href="#powers">Everything it does</a><a href="#managers">For servers</a><a href="#beta">Beta</a>
+    <a class="home" href="/">Home ↗</a>
+  </nav>
+</div></header>
+
+<main>
+<section class="hero wrap">
+  <div class="hero-text">
+    <div class="pill"><i class="live"></i> AI Companion · <b>public beta</b></div>
+    <h1>The gaming sidekick that lives in your <span class="grad">Discord</span>.</h1>
+    <p class="lead">Say <code>Hey AI</code> and ask. It checks prices, tells you whether to buy now or wait, reads your Steam library, plans your evening, sets up a group, and answers back with real pictures, not walls of text.</p>
+    <div class="cta"><a class="btn go" id="invite" href="/">Add it to your server</a><a class="btn ghost" href="#demo">Watch it work</a></div>
+    <p class="fine">It's a beta. It's free to try, it only ever acts for the person asking, and it will tell you when it isn't sure. <a href="#beta">What beta means</a></p>
+  </div>
+
+  <div class="chat" id="chat" aria-label="Example conversation">
+    <div class="chat-bar"><span class="hash">#</span> general<span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="chat-body" id="chatBody" aria-live="polite"></div>
+    <div class="chat-input"><span id="typing"></span><i class="caret"></i></div>
+    <div class="chat-tabs" id="chatTabs" role="tablist"></div>
+  </div>
+</section>
+
+<div class="marquee" aria-hidden="true"><div class="track" id="track"></div></div>
+
+<section class="wrap summon" id="summon">
+  <h2>Three ways to ask</h2>
+  <div class="trio">
+    <div class="glass"><b class="n">1</b><h3>Say Hey AI</h3><p>Start a message with <code>Hey AI</code> in any channel it's switched on in. That's it.</p></div>
+    <div class="glass"><b class="n">2</b><h3>Mention it</h3><p>Tag the bot with a question. Mention a friend too and it can find games you both own.</p></div>
+    <div class="glass"><b class="n">3</b><h3>Or just ask for how-to</h3><p>"How do I get Steam verified?" The bot answers with a picture guide by itself, no AI needed.</p></div>
+  </div>
+</section>
+
+<section class="wrap showcase" id="demo">
+  <div class="eyebrow">What it shows you</div>
+  <h2>Answers you can read at a glance</h2>
+  <p class="sub">These are the real pictures it posts in chat. Game art, prices and links come with them.</p>
+
+  <article class="show">
+    <div class="show-text"><span class="tag t1">Buy or wait</span><h3>Is it a good price? It checks a whole year.</h3><p>A verdict with the reasons, a price-history graph, how often it hit its low, Steam reviews and the next big sale. Buy now, or hold out.</p><ul class="ticks"><li>Price history with the all-time low marked</li><li>Counts upcoming Steam sales</li><li>A button to add it to your wishlist</li></ul></div>
+    <figure class="frame"><img src="/img/ai/history.png" alt="Price history graph for a game with a dashed line at the current price" loading="lazy" width="1000" height="420"></figure>
+  </article>
+
+  <article class="show flip">
+    <div class="show-text"><span class="tag t2">X vs Y</span><h3>Can't pick between two? It will.</h3><p>Side by side: price now, discount, review score, genres and release year, with the cheaper and the better reviewed called out.</p><ul class="ticks"><li>One picture, two games, no tab hopping</li><li>Review bars from real Steam data</li></ul></div>
+    <figure class="frame"><img src="/img/ai/compare.png" alt="Side by side comparison of two games" loading="lazy" width="960" height="516"></figure>
+  </article>
+
+  <article class="show">
+    <div class="show-text"><span class="tag t3">Your library</span><h3>It knows your account.</h3><p>Worth, spending, hours, badges, your rarest achievements and your monthly challenge, from your own linked data. Ask in plain words.</p><ul class="ticks"><li>"What's my library worth?"</li><li>"What are my rarest achievements?"</li><li>Links to the matching dashboard page</li></ul></div>
+    <figure class="frame"><img src="/img/ai/library.png" alt="Library value panel with tiles and most played games" loading="lazy" width="960" height="700"></figure>
+  </article>
+
+  <article class="show flip">
+    <div class="show-text"><span class="tag t4">Play plan</span><h3>"I've got six hours. What should I play?"</h3><p>It plans your backlog around the time you have, favouring games you already started. Filter by genre or tag, like co-op or roguelike.</p><ul class="ticks"><li>Honest about not knowing game lengths</li><li>Play together: games you and a friend both own</li></ul></div>
+    <figure class="frame"><img src="/img/ai/plan.png" alt="A play plan for the evening" loading="lazy" width="960" height="640"></figure>
+  </article>
+
+  <article class="show">
+    <div class="show-text"><span class="tag t5">Guides</span><h3>Step-by-step, with the exact commands.</h3><p>Ask how to do anything: Steam verified, linking Steam, importing a wishlist, setting up alerts. You get a numbered picture with the commands ready to copy.</p><ul class="ticks"><li>The bot answers how-to questions on its own</li><li>Server managers can write their own guides</li></ul></div>
+    <figure class="frame"><img src="/img/ai/guide.png" alt="A numbered step guide for getting the Steam Verified role" loading="lazy" width="960" height="680"></figure>
+  </article>
+</section>
+
+<section class="wrap powers" id="powers">
+  <div class="eyebrow">The full list</div>
+  <h2>Everything it can do</h2>
+  <p class="sub">Forty-plus abilities, all plugged into the same bot you already use.</p>
+  <div class="filters" id="filters" role="tablist"></div>
+  <div class="cards" id="cards"></div>
+</section>
+
+<section class="wrap acts">
+  <div class="glass big">
+    <div class="eyebrow">It does things, not just talks</div>
+    <h2>Ask once, it's done</h2>
+    <div class="chips" id="chips"></div>
+    <p class="fine">Every change is for the person who asked, it tells you exactly what it changed, and it never touches anyone else's list.</p>
+  </div>
+</section>
+
+<section class="wrap managers" id="managers">
+  <div class="eyebrow">For server managers</div>
+  <h2>Yours to run</h2>
+  <div class="trio four">
+    <div class="glass"><h3>Switch it on where you want</h3><p>Pick the channels, bring your own AI key if you like, and set a daily cap so a busy server can't run away with it.</p><code>/manage community ai</code></div>
+    <div class="glass"><h3>Write your own guides</h3><p>Rules, roles, channels, "how do I join raids". Add a title, a few phrases and the answer in the dashboard. The bot and the AI use it.</p></div>
+    <div class="glass"><h3>Ask what's left to set up</h3><p>"Is my server configured?" gets you a checklist of what's done and the command that fixes what isn't.</p></div>
+    <div class="glass"><h3>Events and groups by chat</h3><p>Ask for a looking-for-group post or a calendar event and it creates the real thing, with a Join button.</p></div>
+  </div>
+</section>
+
+<section class="wrap betabox" id="beta">
+  <div class="glass warn">
+    <div class="beta-head"><b class="beta big">BETA</b><h2>It's new, and it says so</h2></div>
+    <div class="two">
+      <div><h3>What to expect</h3><ul class="ticks"><li>It can be wrong. Check a price before you buy.</li><li>Answers and pictures will keep getting better week to week.</li><li>Some things take a few seconds while it looks them up.</li><li>Your feedback shapes it. Tell us in the support server.</li></ul></div>
+      <div><h3>What it won't do</h3><ul class="ticks no"><li>Moderate your server, change settings or run giveaways. It points you to the right command.</li><li>See anyone's private lists, or yours without your say.</li><li>Ask for a password, a key or a payment.</li><li>Remember anything you didn't ask it to. Say "forget everything" any time.</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap faq" id="faq">
+  <h2>Quick questions</h2>
+  <details><summary>Is it free?</summary><p>Yes, during the beta. Servers can bring their own AI key, and a daily cap keeps usage in check.</p></details>
+  <details><summary>Does it work without an AI key?</summary><p>Partly. Without one, the bot still answers the most common questions itself: prices, free games, your wishlist, library stats, what to play, and how-to guides.</p></details>
+  <details><summary>Who can see my data?</summary><p>It answers from your own data, for you. Group features like "play together" only use friends who opted in to sharing in that server. Export or delete everything any time from <code>/me mydata</code>.</p></details>
+  <details><summary>Why did it reply with a picture?</summary><p>Because a graph or a table reads faster than a paragraph. The text under it stays short on purpose.</p></details>
+  <details><summary>It got something wrong.</summary><p>That's what the beta is for. Use <code>/bot bug</code> or the support server and say what you asked.</p></details>
+</section>
+
+<section class="wrap final">
+  <div class="glass cta-box">
+    <h2>Give it a go</h2>
+    <p>Add the bot, switch the AI on in a channel, and say <code>Hey AI</code>.</p>
+    <div class="cta center"><a class="btn go" id="invite2" href="/">Add it to your server</a><a class="btn ghost" id="support" href="/">Join the support server</a></div>
+  </div>
+</section>
+</main>
+
+<footer class="foot wrap"><span>Prices by <a href="https://isthereanydeal.com" target="_blank" rel="noopener noreferrer">IsThereAnyDeal</a>. Not affiliated with Valve, Steam or IsThereAnyDeal.</span><span><a href="/">Home</a> · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></span></footer>
+<script src="/ai.js" defer></script>
+</body>
+</html>

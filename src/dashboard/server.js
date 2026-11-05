@@ -141,6 +141,16 @@ const FILES = {
     "/overlayui.js": ["overlayui.js", "text/javascript; charset=utf-8"],
     "/admin": ["admin.html", "text/html; charset=utf-8"],
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
+    "/ai": ["ai.html", "text/html; charset=utf-8"],
+    "/ai.css": ["ai.css", "text/css; charset=utf-8"],
+    "/ai.js": ["ai.js", "text/javascript; charset=utf-8"],
+    "/ai-ad-hero.png": ["ai-ad-hero.png", "image/png"],
+    "/img/ai/history.png": ["img/ai/history.png", "image/png"],
+    "/img/ai/compare.png": ["img/ai/compare.png", "image/png"],
+    "/img/ai/library.png": ["img/ai/library.png", "image/png"],
+    "/img/ai/plan.png": ["img/ai/plan.png", "image/png"],
+    "/img/ai/achievements.png": ["img/ai/achievements.png", "image/png"],
+    "/img/ai/guide.png": ["img/ai/guide.png", "image/png"],
     "/grabber": ["grabber.html", "text/html; charset=utf-8"],
     "/grabber.html": ["grabber.html", "text/html; charset=utf-8"],
     "/grabber.css": ["grabber.css", "text/css; charset=utf-8"],
@@ -3702,7 +3712,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         if (!body) {
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
-            if (file === "index.html" || file === "grabber.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
+            if (file === "index.html" || file === "grabber.html" || file === "ai.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
             cache.set(file, body);
             cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`);
         }
@@ -3872,7 +3882,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\nAllow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();
@@ -3880,7 +3890,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
                 // Public pages only. The date is when the file behind each page last changed, so crawlers know what to revisit.
-                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"]];
+                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"]];
                 const day = f => { try { return statSync(join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
                 const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
                 return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });

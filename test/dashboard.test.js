@@ -701,6 +701,16 @@ test("the page has share-preview tags with the real address, plus robots and sit
     const map = await (await t.request("/sitemap.xml", { raw: true })).text();
     for (const p of ["/", "/grabber", "/terms.html", "/privacy.html"]) assert.ok(map.includes(`<loc>${ORIGIN}${p}</loc>`), p);
     assert.match(map, /<loc>[^<]+\/grabber<\/loc><lastmod>\d{4}-\d\d-\d\d<\/lastmod>/);
+    assert.ok(map.includes(`<loc>${ORIGIN}/ai</loc>`));
+    assert.match(robots, /Allow: \/ai\n/);
+    // The AI companion page: served with the real origin, labelled beta, and every file and picture it uses is there.
+    const ai = await t.request("/ai", { raw: true });
+    assert.equal(ai.status, 200);
+    const aiHtml = await ai.text();
+    assert.ok(!aiHtml.includes("__ORIGIN__") && aiHtml.includes(`${ORIGIN}/ai`));
+    assert.match(aiHtml, /BETA/);
+    for (const f of ["/ai.css", "/ai.js", "/img/ai/history.png", "/img/ai/compare.png", "/img/ai/library.png", "/img/ai/plan.png", "/img/ai/achievements.png", "/img/ai/guide.png", "/ai-ad-hero.png"]) assert.equal((await t.request(f, { raw: true })).status, 200, f);
+    assert.ok(!/\sstyle=/.test(aiHtml), "the page's content policy blocks inline styles");
     await t.close();
 });
 

@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.38", date: "2026-11-05", title: "An AI companion page and a new home page", items: [
+        "**The AI companion has its own page** at /ai, with a live chat demo, the pictures it posts and the full list of what it can do. It's marked as a beta, with what to expect and what it won't do.",
+        "**A new home page:** the AI spotlight, what's new, and six tabs covering deals, your library, server tools, community, giveaways and streaming, and music."
+    ] },
     { version: "2026.11.37", date: "2026-11-05", title: "The AI can do a lot more", items: [
         "**Buy or wait:** ask if a game is worth it and get a verdict with a price-history graph, reviews and the next sale.",
         "**X vs Y:** compare two games side by side in one picture. **Play plan:** tell it how many hours you have and it picks from your library.",
