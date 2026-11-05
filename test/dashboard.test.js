@@ -711,6 +711,27 @@ test("the page has share-preview tags with the real address, plus robots and sit
     assert.match(aiHtml, /BETA/);
     for (const f of ["/ai.css", "/ai.js", "/img/ai/history.png", "/img/ai/compare.png", "/img/ai/library.png", "/img/ai/plan.png", "/img/ai/achievements.png", "/img/ai/guide.png", "/ai-ad-hero.png"]) assert.equal((await t.request(f, { raw: true })).status, 200, f);
     assert.ok(!/\sstyle=/.test(aiHtml), "the page's content policy blocks inline styles");
+    // The pages that exist to be found: each one is complete without running any script.
+    const { seoSlugs } = await import("../src/seopages.js");
+    assert.ok(seoSlugs().length >= 5);
+    const seen = new Set();
+    for (const slug of seoSlugs()) {
+        const r = await t.request("/" + slug, { raw: true });
+        assert.equal(r.status, 200, slug);
+        const html = await r.text();
+        assert.ok(html.includes(`<link rel="canonical" href="${ORIGIN}/${slug}">`), slug);
+        assert.match(html, /<title>[^<]{20,}<\/title>/); assert.match(html, /<meta name="description" content="[^"]{60,}">/);
+        assert.equal((html.match(/<h1>/g) ?? []).length, 1, "one h1 on " + slug);
+        for (const type of ["FAQPage", "BreadcrumbList", "HowTo"]) assert.ok(html.includes(`"@type":"${type}"`), `${slug} ${type}`);
+        assert.ok(!/\sstyle=/.test(html) && !html.includes("__ORIGIN__"), slug);
+        assert.ok(!seen.has(html.match(/<title>([^<]*)/)[1]), "titles are unique"); seen.add(html.match(/<title>([^<]*)/)[1]);
+        assert.ok(map.includes(`<loc>${ORIGIN}/${slug}</loc>`), slug + " is in the sitemap");
+        assert.match(robots, new RegExp(`Allow: /${slug}\\n`));
+        for (const href of [...html.matchAll(/href="(\/[a-z-]+)"/g)].map(m => m[1])) if (href !== "/") assert.ok([...seoSlugs().map(x => "/" + x), "/ai", "/grabber", "/terms", "/privacy"].some(x => href.startsWith(x)) || href === "/auth", `${slug} links to ${href}`);
+    }
+    assert.equal((await t.request("/seo.css", { raw: true })).status, 200);
+    // The home page carries real text and links to those pages before the app draws it.
+    assert.ok(html.includes("/steam-library-value") && html.includes("<h1>Steam Value Checker"), "home page has crawlable content");
     await t.close();
 });
 
