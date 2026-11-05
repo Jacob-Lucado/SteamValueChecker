@@ -137,7 +137,7 @@ export async function syncAchievements({ db, userId, steamid, apiKey, fetchImpl 
     const stale = now - 7 * 86400_000, fresh = now - 86400_000, lately = now - 14 * 86400_000;
     const isRecent = g => (g.last_played ?? 0) > lately;
     // Games played in the last two weeks are looked at daily so the profile's recent activity stays current.
-    const todo = db.listLibrary(userId).filter(g => g.appid && (g.minutes ?? 0) >= 30 && (!g.ach_checked || g.ach_checked < (isRecent(g) ? fresh : stale)))
+    const todo = db.listLibrary(userId).filter(g => g.appid && (g.minutes ?? 0) >= 30 && (!g.ach_checked || !g.ach_art || g.ach_checked < (isRecent(g) ? fresh : stale)))
         .sort((a, b) => (isRecent(b) - isRecent(a)) || b.minutes - a.minutes).slice(0, limit);
     let checked = 0, newlyFinished = 0, stopped = false, i = 0;
     const worker = async () => {
@@ -215,7 +215,7 @@ export async function fetchSteamCountry(steamid, apiKey, fetchImpl = globalThis.
     } catch { return null; }
 }
 
-export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = null, fetchImpl = globalThis.fetch, achievements: wantAch = true }) {
+export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = null, fetchImpl = globalThis.fetch, achievements: wantAch = true, achLimit = 400 }) {
     const owned = await fetchOwnedGames(steamid, { apiKey, fetchImpl });
     const ranked = [...owned].sort((a, b) => b.minutes - a.minutes || a.name.localeCompare(b.name)).slice(0, MAX_LIBRARY_PER_USER);
     const map = await itad.lookupShopIds(STEAM_SHOP_ID, ranked.map(g => `app/${g.appid}`));
@@ -239,7 +239,7 @@ export async function syncSteamLibrary({ db, itad, userId, steamid, apiKey = nul
     } catch { /* value stays null */ }
     // Achievements need the bot's API key. They are a bonus: any trouble just leaves them out.
     let achievements = null;
-    if (apiKey && wantAch) { try { achievements = await syncAchievements({ db, userId, steamid, apiKey, fetchImpl }); } catch { /* optional */ } }
+    if (apiKey && wantAch) { try { achievements = await syncAchievements({ db, userId, steamid, apiKey, fetchImpl, limit: achLimit }); } catch { /* optional */ } }
     return { steamid, owned: owned.length, matched: games.length, unmatched: ranked.length - games.length, minutes, truncated: owned.length > ranked.length, value, achievements, ...res };
 }
 
@@ -308,7 +308,7 @@ export async function runSteamAutoSync({ db, itad, apiKey = null, fetchImpl = gl
     const due = db.steamLinkedUsers().map(id => ({ id, link: db.getSteamLink(id) })).filter(x => x.link && (!x.link.synced_at || now - x.link.synced_at >= minGapMs))
         .sort((a, b) => (a.link.synced_at ?? 0) - (b.link.synced_at ?? 0)).slice(0, maxUsers);
     for (const { id, link } of due) {
-        try { await syncSteamLibrary({ db, itad, userId: id, steamid: link.steamid, apiKey, fetchImpl, achievements: false }); stats.synced++; }
+        try { await syncSteamLibrary({ db, itad, userId: id, steamid: link.steamid, apiKey, fetchImpl, achievements: Boolean(apiKey), achLimit: 40 }); stats.synced++; }
         catch (err) {
             if (err?.code === "rate_limited") { log("steam auto-sync paused: rate limited"); break; }
             stats.failed++;

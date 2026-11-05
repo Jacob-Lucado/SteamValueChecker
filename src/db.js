@@ -283,6 +283,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library", "minutes", "INTEGER NOT NULL DEFAULT 0");
     addColumn("library", "last_played", "INTEGER");
     addColumn("library", "min_2w", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("library", "ach_art", "INTEGER NOT NULL DEFAULT 0"); // 1 once the rare and recent unlock pictures were read for the game
     addColumn("library", "ach_done", "INTEGER");
     addColumn("library", "ach_total", "INTEGER");
     addColumn("library", "ach_checked", "INTEGER");

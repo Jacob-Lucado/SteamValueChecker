@@ -1261,7 +1261,7 @@ body.wiz-open { overflow: hidden; }
 .gift-owner { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 
 /* SoundCloud: the real player stays hidden, the card above it is ours */
-.pf-sc-hidden { position: absolute; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
+.pf-sc-hidden { position: fixed; left: -9999px; top: 0; width: 320px; height: 166px; border: 0; opacity: 0; pointer-events: none; } /* real size, off screen: its waveform canvas breaks at 0 */
 .pf-frame.soundcloud { filter: invert(.9) hue-rotate(180deg); border-radius: 12px; color-scheme: dark; }
 .pf-sc-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .pf-sc-time { font-size: 11px; color: #a9bad2; font-variant-numeric: tabular-nums; min-width: 2.4em; }

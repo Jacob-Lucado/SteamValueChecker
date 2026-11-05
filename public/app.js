@@ -1069,14 +1069,16 @@
             const v = m.value || {};
             if (v.title && !song.title) title.textContent = v.title;
             if (v.user?.username) sub.textContent = v.user.username;
-            if (/^https:\/\/[\w.-]*(sndcdn|soundcloud)\.com\//.test(v.artwork_url || "")) { const img = h("img", { src: v.artwork_url.replace("-large", "-t300x300"), alt: "", referrerpolicy: "no-referrer" }); img.addEventListener("error", () => img.remove()); glyph.replaceWith(img); }
+            const artUrl = v.artwork_url || v.user?.avatar_url || "";
+            if (/^https:\/\/[\w.-]*(sndcdn|soundcloud)\.com\//.test(artUrl)) { const img = h("img", { src: artUrl.replace("-large", "-t300x300"), alt: "", referrerpolicy: "no-referrer" }); img.addEventListener("error", () => img.remove()); glyph.replaceWith(img); }
             break; }
           case "getDuration": duration = Number(m.value) || duration; tEnd.textContent = duration ? fmt(duration) : ""; break;
           case "getPosition": if (bar._want) { const d = bar._want; bar._want = 0; post("seekTo", Math.max(0, Math.min(duration || 1e12, Number(m.value || 0) + d))); } break;
           case "play": paint(true); break;
           case "pause": case "finish": paint(false); break;
           case "playProgress": {
-            const rel = Number(m.relativePosition) || 0, cur = Number(m.currentPosition) || 0;
+            const pv = m.value && typeof m.value === "object" ? m.value : m; // SoundCloud nests the numbers under value
+            const rel = Number(pv.relativePosition) || 0, cur = Number(pv.currentPosition) || 0;
             card.style.setProperty("--p", Math.round(rel * 1000) / 10 + "%"); bar.setAttribute("aria-valuenow", String(Math.round(rel * 100)));
             tNow.textContent = fmt(cur); if (!duration && rel > 0) { duration = cur / rel; tEnd.textContent = fmt(duration); }
             break; }

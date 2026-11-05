@@ -354,3 +354,21 @@ test("achievements: rarest unlocks and the newest unlocks are saved with names a
     assert.deepEqual(act.games[0].unlocks.map(u => u.name), ["Escaped", "Started"], "newest first");
     assert.equal(act.games[0].unlocks[1].icon, null, "pictures from other hosts are dropped");
 });
+
+test("achievements: games checked before the pictures existed are looked at again, and old page layouts gain the new sections", async () => {
+    const { withDefaults } = await import("../src/profilepage.js");
+    const keys = withDefaults({ sections: [{ key: "about", vis: "public" }, { key: "steam", vis: "hidden" }] }).sections;
+    assert.deepEqual(keys.slice(0, 2).map(s => s.key), ["about", "steam"], "their own order and settings stay");
+    assert.equal(keys.find(s => s.key === "achievements").vis, "public");
+    assert.ok(keys.some(s => s.key === "activity"));
+    const { db } = rig();
+    db.syncSteamGames("u1", [{ itad_id: "g1", title: "Old", appid: 21, minutes: 900, lastPlayed: null }]);
+    db.setAchievements("u1", "g1", { done: 1, total: 2 }); // checked just now, but before pictures were saved
+    let calls = 0;
+    const f = async u => { calls++; return String(u).includes("GetPlayerAchievements") ? res({ playerstats: { achievements: [{ apiname: "A", achieved: 1, name: "A", unlocktime: 5 }] } }, { json: true }) : res({}, { json: true, status: 400 }); };
+    await syncAchievements({ db, userId: "u1", steamid: "76561198000000000", apiKey: "k", fetchImpl: f });
+    assert.ok(calls > 0, "looked at again despite a fresh check");
+    calls = 0;
+    await syncAchievements({ db, userId: "u1", steamid: "76561198000000000", apiKey: "k", fetchImpl: f });
+    assert.equal(calls, 0, "and then left alone");
+});

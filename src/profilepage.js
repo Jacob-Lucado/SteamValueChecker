@@ -19,7 +19,7 @@ export const SECTIONS = {
     about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished",
     trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming"
 };
-export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["trophies", "hidden"], ["achievements", "hidden"], ["activity", "hidden"], ["steam", "hidden"], ["streams", "hidden"]]
+export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["trophies", "hidden"], ["achievements", "public"], ["activity", "public"], ["steam", "hidden"], ["streams", "hidden"]]
     .map(([key, vis]) => ({ key, vis }));
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -147,6 +147,13 @@ export function cleanProfile(input, prev = {}) {
 }
 
 /** What a saved profile looks like with every default filled in. */
+/** A saved layout from before a section existed gets that section added at its default setting, so new sections can be found and used. */
+function mergeSections(saved) {
+    if (!Array.isArray(saved) || !saved.length) return DEFAULT_SECTIONS;
+    const have = new Set(saved.map(x => x.key));
+    return [...saved, ...DEFAULT_SECTIONS.filter(d => !have.has(d.key))];
+}
+
 export function withDefaults(data = {}) {
     return {
         name: data.name ?? "", bio: data.bio ?? "", theme: PROFILE_THEMES[data.theme] ? data.theme : "night", accent: HEX.test(data.accent ?? "") ? data.accent : null,
@@ -154,7 +161,7 @@ export function withDefaults(data = {}) {
         banner: ["gradient", "game", "none"].includes(data.banner) ? data.banner : "gradient", avatar: Boolean(data.avatar),
         pagebg: { ...defaultPageBg(), ...(data.pagebg && typeof data.pagebg === "object" ? data.pagebg : {}) },
         enter: Boolean(data.enter), links: data.links ?? [], favorites: data.favorites ?? [], song: data.song ?? null,
-        sections: Array.isArray(data.sections) && data.sections.length ? data.sections : DEFAULT_SECTIONS
+        sections: mergeSections(data.sections)
     };
 }
 

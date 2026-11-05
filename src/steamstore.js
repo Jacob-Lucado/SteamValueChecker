@@ -154,6 +154,7 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary }) {
     /** Replaces one game's rare unlocks (achievements under 10% of players). */
     function setRareAchievements(discordId, appid, game, list) {
         run("DELETE FROM ach_rare WHERE discord_id = ? AND appid = ?", discordId, appid);
+        run("UPDATE library SET ach_art = 1 WHERE discord_id = ? AND appid = ?", discordId, appid);
         for (const a of list.slice(0, 40)) run("INSERT OR REPLACE INTO ach_rare (discord_id, appid, apiname, game, name, icon, pct) VALUES (?,?,?,?,?,?,?)", discordId, appid, String(a.apiname).slice(0, 120), String(game).slice(0, 120), String(a.name).slice(0, 160), a.icon ?? null, Number(a.pct));
     }
     function setRecentUnlocks(discordId, appid, list) {
