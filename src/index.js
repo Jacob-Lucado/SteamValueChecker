@@ -138,7 +138,7 @@ const cfg = loadConfig();
 const STARTED_AT = Date.now();
 const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version; } catch { return "1.0.0"; } })();
 // Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
-const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey] });
+const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey, process.env.TOPGG_TOKEN] });
 logs.capture();
 const luna = createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) });
 const epicSoon = createEpicSoon();
