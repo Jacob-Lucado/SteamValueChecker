@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.40", date: "2026-11-05", title: "Free tools on the website", items: [
+        "**Discord timestamp generator:** pick a date, time and zone and copy a code that shows in everyone's own time zone.",
+        "**Steam ID finder:** paste a profile link, custom name or any kind of Steam ID and get every format.",
+        "**Steam refund calculator:** enter the purchase date and hours played to see if you're still inside the refund window.",
+        "**Steam sale dates:** the next sales and festivals with a live countdown."
+    ] },
     { version: "2026.11.39", date: "2026-11-05", title: "Easier to find on search engines", items: [
         "**Five new pages** that explain what the bot does in plain words, each with its own questions and answers: Steam library value, game deal alerts, free game alerts, the Steam Verified role and giveaways.",
         "**The home page has real text now** that loads before anything else, so search engines and slow connections see what the site is about."

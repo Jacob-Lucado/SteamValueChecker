@@ -9,7 +9,7 @@ import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes, createHash } from "node:crypto";
 import { indexNowKey } from "../indexnow.js";
-import { SEO_PAGES, seoSlugs, renderSeoPage } from "../seopages.js";
+import { SEO_PAGES, seoSlugs, seoIsLive, renderSeoPage } from "../seopages.js";
 import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import v8 from "node:v8";
@@ -146,6 +146,10 @@ const FILES = {
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
     "/BingSiteAuth.xml": ["BingSiteAuth.xml", "application/xml; charset=utf-8"],
     "/seo.css": ["seo.css", "text/css; charset=utf-8"],
+    "/tools/timestamp.js": ["tools/timestamp.js", "text/javascript; charset=utf-8"],
+    "/tools/steamid.js": ["tools/steamid.js", "text/javascript; charset=utf-8"],
+    "/tools/refund.js": ["tools/refund.js", "text/javascript; charset=utf-8"],
+    "/tools/sales.js": ["tools/sales.js", "text/javascript; charset=utf-8"],
     ...Object.fromEntries(Object.keys(SEO_PAGES).map(slug => [`/${slug}`, [`seo/${slug}.html`, "text/html; charset=utf-8"]])),
     "/ai": ["ai.html", "text/html; charset=utf-8"],
     "/ai.css": ["ai.css", "text/css; charset=utf-8"],
@@ -333,6 +337,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
     const lastRun = new Map();
     const cache = new Map();
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
+    const idFinderLimit = createLimiter({ windowMs: 60_000, max: 15, now });
     const socialRead = createLimiter({ windowMs: 60_000, max: 90, now });
     const socialWrite = createLimiter({ windowMs: 60_000, max: 25, now });
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
@@ -710,6 +715,15 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
     const routes = {
         // The extension asks this (no sign-in, nothing sent about the person) to remind its users to update.
         "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
+        // The public Steam ID finder page. No sign-in, so it is rate limited by address; answers are only what the profile already shows.
+        "GET /api/steamid": async (req, _b, url) => {
+            if (!idFinderLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute.");
+            const q = String(url.searchParams.get("q") ?? "").trim().slice(0, 200);
+            if (!q) throw new HttpError(400, "Paste a profile link or name first.");
+            const steamid = await resolveProfile(q, steamFetch);
+            const card = await profileCard(steamid);
+            return { steamid, card: card ? { name: card.name, avatar: card.avatar } : null };
+        },
         "GET /api/config": async () => ({
             notice: rt && rt.get("notice_text") ? { text: rt.get("notice_text"), level: rt.get("notice_level") } : null,
             regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
@@ -3712,11 +3726,13 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
     }
 
     // ---------- static ----------
-    const zcache = new Map(); // `${file}:${encoding}` -> the compressed page code, made once
+    const zcache = new Map(); // `${file}:${encoding}:${etag}` -> the compressed page code, made once
     async function loadFile(file) {
         let body = cache.get(file);
+        // The sale-dates page counts days, so it is rebuilt every hour instead of once.
+        if (body && file.startsWith("seo/") && seoIsLive(file.slice(4, -5)) && Date.now() - (cache.get(file + ":at") ?? 0) > 3600_000) body = null;
         if (!body) {
-            if (file.startsWith("seo/")) { const html = renderSeoPage(file.slice(4, -5), { origin, invite: config.clientId ? botInviteUrl(config.clientId) : null }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
+            if (file.startsWith("seo/")) { cache.set(file + ":at", Date.now()); const html = renderSeoPage(file.slice(4, -5), { origin, invite: config.clientId ? botInviteUrl(config.clientId) : null }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
             if (file === "index.html" || file === "grabber.html" || file === "ai.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
@@ -3788,8 +3804,8 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         if (res.req?.headers?.["if-none-match"] === etag) return send(res, 304, "", { ETag: etag, "Cache-Control": headers["Cache-Control"] });
         const enc = COMPRESSIBLE.test(type) ? encodingOf(res.req) : null;
         if (enc) {
-            let z = zcache.get(`${file}:${enc}`);
-            if (!z) zcache.set(`${file}:${enc}`, z = squeeze(body, enc, 9));
+            let z = zcache.get(`${file}:${enc}:${etag}`);
+            if (!z) zcache.set(`${file}:${enc}:${etag}`, z = squeeze(body, enc, 9));
             return send(res, 200, z, { ...headers, "Content-Encoding": enc, Vary: "Accept-Encoding" });
         }
         send(res, 200, body, headers);

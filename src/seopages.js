@@ -2,6 +2,8 @@
 // headings, answers and structured data, and links to the others, so search engines (and people) land on the right one without
 // needing the dashboard to run. Kept as data so a new page is a few lines.
 
+import { upcomingSales, SALES_UPDATED } from "./salescal.js";
+
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export const SEO_PAGES = {
@@ -91,12 +93,76 @@ export const SEO_PAGES = {
             ["Can viewers enter from Twitch?", "Yes, from Twitch chat."]
         ],
         related: ["steam-verified-role", "free-game-alerts", "discord-game-deals-bot"]
+    },
+    "discord-timestamp-generator": {
+        tool: true, script: "/tools/timestamp.js",
+        title: "Discord timestamp generator: make timestamps that show in everyone's time zone",
+        desc: "Free Discord timestamp generator. Pick a date, time and time zone and copy the code for any style, including the relative style that counts down. Shows each member the time in their own zone.",
+        h1: "Discord timestamp generator",
+        lead: "Pick a date and time, and copy the code. Paste it into Discord and every member sees it in their own time zone, so nobody has to do the maths for your game night.",
+        html: `<section class="tool"><div class="fields"><label>Date and time<input type="datetime-local" id="when"></label><label>Time zone<select id="zone"></select></label></div>
+<p class="unix">Unix time: <code id="unix"></code></p><div id="styles" class="ts-list" aria-live="polite"></div><noscript><p>This tool needs JavaScript.</p></noscript></section>`,
+        sections: [["How Discord timestamps work", ["A timestamp is a code like <t:1767225600:F>. Discord swaps it for the date and time in each reader's own time zone.", "The letter at the end picks the style. R is the relative style (\"in 3 hours\") and updates by itself."]],
+            ["Make it automatic", ["Steam Value Checker uses the same codes for events, giveaways and looking-for-group posts, so you can just type the time and it does the rest."]]],
+        steps: ["Choose the date, time and time zone.", "Press Copy on the style you want.", "Paste it into a Discord message."],
+        faq: [["Do I need a bot for this?", "No. Timestamps are built into Discord. This page just writes the code for you."], ["Why does everyone see a different time?", "That's the point. Each person sees it converted to their own time zone."], ["Which style is best for events?", "Full date and time (F) for the start, and relative (R) next to it so people can see how long is left."]],
+        related: ["discord-game-deals-bot", "discord-giveaway-bot", "steam-verified-role"]
+    },
+    "steam-id-finder": {
+        tool: true, script: "/tools/steamid.js",
+        title: "Steam ID finder: find your SteamID64 from a profile link or custom URL",
+        desc: "Free Steam ID finder. Paste a profile link, custom URL name, SteamID or SteamID3 and get the SteamID64 and every other format, ready to copy.",
+        h1: "Steam ID finder",
+        lead: "Paste a Steam profile link, a custom profile name or any kind of Steam ID. You get the 64-bit SteamID64, the older STEAM_0 format, the SteamID3 format and a link to the profile.",
+        html: `<section class="tool"><form id="sid-form" class="fields row"><label class="grow">Profile link, name or ID<input id="sid-in" type="text" autocomplete="off" spellcheck="false" placeholder="https://steamcommunity.com/id/yourname"></label><button class="go" type="submit">Find</button></form>
+<p id="sid-msg" class="muted" aria-live="polite"></p><div id="sid-out" class="ts-list"></div><noscript><p>This tool needs JavaScript.</p></noscript></section>`,
+        sections: [["What each format is", ["SteamID64 is the long 17-digit number (it starts with 7656119). Most tools and websites use it.", "SteamID looks like STEAM_0:1:12345. It's the older format used by some game servers.", "SteamID3 looks like [U:1:24691] and is used by newer Valve tools."]],
+            ["Where to find it by hand", ["Open your Steam profile in a browser. If the address ends in /profiles/ and a number, that's your SteamID64. If it has a custom name after /id/, paste it here."]]],
+        steps: ["Paste your profile link, custom name or ID.", "Press Find.", "Copy the format you need."],
+        faq: [["Is it safe?", "Yes. It only reads public profile information. It never asks for a password."], ["Why can't it find my profile?", "Custom names have to match your profile address exactly, and the profile must exist. Try pasting the full link."], ["Can I use the ID to see my library value?", "Yes. Sign in with Steam on the dashboard and it works out your library value for you."]],
+        related: ["steam-library-value", "steam-verified-role", "discord-game-deals-bot"]
+    },
+    "steam-refund-calculator": {
+        tool: true, script: "/tools/refund.js",
+        title: "Steam refund calculator: can I still refund my game? 14 days and 2 hours explained",
+        desc: "Check if your Steam game is still refundable. Enter the purchase date and hours played and see if you're inside Steam's 14-day, 2-hour refund window, with the steps to ask for it.",
+        h1: "Steam refund calculator",
+        lead: "Steam usually refunds a game if you ask within 14 days of buying it and you've played less than 2 hours. Enter your purchase date and playtime to see where you stand.",
+        html: `<section class="tool"><div class="fields"><label>Purchase date<input type="date" id="rf-date"></label><label>Hours played<input type="number" id="rf-hours" min="0" step="0.1" value="0"></label></div>
+<label class="check"><input type="checkbox" id="rf-pre"> It's a pre-order that hasn't been released yet</label><div id="rf-out" class="rf-out" aria-live="polite"></div><noscript><p>This tool needs JavaScript.</p></noscript></section>`,
+        sections: [["The refund rules in short", ["14 days from purchase and under 2 hours of playtime. If you meet both, Steam refunds it, no reason needed.", "Pre-orders can be refunded any time before release.", "Outside the window, Steam can still look at special cases, so it never hurts to ask."]],
+            ["Never miss the window", ["Steam Value Checker can remind you before the two-hour and fourteen-day windows close, so you can decide while it's still free to change your mind."]]],
+        steps: ["Enter the purchase date and hours played.", "Read the result.", "If you're eligible, open Steam Support, pick the game under Purchases and choose “I would like a refund”."],
+        faq: [["Does it work for DLC?", "Mostly yes, the same 14-day, 2-hour idea applies to DLC, though some in-game items are different."], ["Where do I see my hours played?", "In your Steam library, on the game's page, under Play Time."], ["Does Steam refund to my card?", "Usually to your original payment method, or to Steam Wallet if you pick that."]],
+        related: ["steam-library-value", "discord-game-deals-bot", "free-game-alerts"]
+    },
+    "steam-sale-dates": {
+        dynamic: true,
+        title: "Steam sale dates: when is the next Steam sale?",
+        desc: "The next Steam sale dates, with a live countdown: Winter, Spring and Summer sales and Next Fest. Plus how to get a Discord ping when each one starts.",
+        h1: "When is the next Steam sale?",
+        lead: "Here are the dates Valve has published for Steam's big sales and festivals, soonest first. Get a ping in Discord when one starts.",
+        sections: [["Good to know", ["Valve announces sale dates ahead of time. Black Friday week deals are announced closer to the date.", "Steam events start at 10am Pacific.", "Winter is usually the deepest sale of the year, and Summer is second."]]],
+        steps: ["Add the bot to your server.", "Turn on sale-start alerts for the channel.", "Add your wishlist so you see which of your games are on sale."],
+        faq: [["How many Steam sales are there a year?", "Four big ones: Spring, Summer, Autumn and Winter, plus themed festivals and Next Fest, which is for demos."], ["Are these dates official?", "They come from Valve's published schedule. The page shows when it was last checked."], ["Should I wait for a sale?", "For most games the sale price is the lowest, but check the price history. The bot shows a year of prices and whether it has hit its low."]],
+        related: ["discord-game-deals-bot", "free-game-alerts", "steam-library-value"]
     }
 };
 
-const NAV_LABEL = { "steam-library-value": "Steam library value", "discord-game-deals-bot": "Game deal alerts", "free-game-alerts": "Free game alerts", "steam-verified-role": "Steam Verified role", "discord-giveaway-bot": "Giveaway bot" };
+const NAV_LABEL = { "steam-library-value": "Steam library value", "discord-game-deals-bot": "Game deal alerts", "free-game-alerts": "Free game alerts", "steam-verified-role": "Steam Verified role", "discord-giveaway-bot": "Giveaway bot", "discord-timestamp-generator": "Discord timestamp generator", "steam-id-finder": "Steam ID finder", "steam-refund-calculator": "Steam refund calculator", "steam-sale-dates": "Steam sale dates" };
+
+const dayFmt = new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeZone: "UTC" });
+function salesHtml(now = Date.now()) {
+    const rows = upcomingSales(now, { limit: 8 }).map(ev => {
+        const live = ev.start <= now, days = Math.max(0, Math.ceil((ev.start - now) / 86400_000));
+        const when = live ? "On now" : days <= 1 ? "Starts tomorrow" : `In ${days} days`;
+        return `<li class="sale"><div><b>${esc(ev.name)}</b><span>${dayFmt.format(ev.start)} to ${dayFmt.format(ev.end)}${ev.note ? ` · ${esc(ev.note)}` : ""}</span></div><time datetime="${new Date(ev.start).toISOString()}" data-end="${new Date(ev.end).toISOString()}">${when}</time></li>`;
+    }).join("");
+    return `<section class="tool"><ul class="sales">${rows}</ul><p class="muted">Dates checked ${dayFmt.format(Date.parse(SALES_UPDATED))}. Steam events start at 10am Pacific.</p></section>`;
+}
 
 export const seoSlugs = () => Object.keys(SEO_PAGES);
+export const seoIsLive = slug => !!SEO_PAGES[slug]?.dynamic;
 
 export function renderSeoPage(slug, { origin, invite = null } = {}) {
     const p = SEO_PAGES[slug];
@@ -105,6 +171,7 @@ export function renderSeoPage(slug, { origin, invite = null } = {}) {
     const ld = [
         { "@context": "https://schema.org", "@type": "WebPage", name: p.title, description: p.desc, url, isPartOf: { "@type": "WebSite", name: "Steam Value Checker", url: origin } },
         { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Steam Value Checker", item: origin + "/" }, { "@type": "ListItem", position: 2, name: NAV_LABEL[slug], item: url }] },
+        ...(p.tool ? [{ "@context": "https://schema.org", "@type": "WebApplication", name: p.h1, url, applicationCategory: "UtilitiesApplication", operatingSystem: "Any", offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }] : []),
         { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: p.faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) },
         { "@context": "https://schema.org", "@type": "HowTo", name: p.h1, step: p.steps.map((t, i) => ({ "@type": "HowToStep", position: i + 1, text: t })) }
     ];
@@ -139,6 +206,7 @@ ${ld.map(o => `<script type="application/ld+json">${JSON.stringify(o).replace(/<
 <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Steam Value Checker</a> / <span>${esc(NAV_LABEL[slug])}</span></nav>
 <h1>${esc(p.h1)}</h1>
 <p class="lead">${esc(p.lead)}</p>
+${p.tool ? p.html : p.dynamic ? salesHtml() : ""}
 <div class="cta"><a class="btn go" href="${invite ? esc(invite) : "/"}">${invite ? "Add it to your server" : "Open the dashboard"}</a><a class="btn alt" href="/auth/steam">Sign in through Steam</a></div>
 ${p.sections.map(([h, body]) => `<section><h2>${esc(h)}</h2>${body.length > 1 && body.every(x => x.length < 130) ? list(body) : body.map(t => `<p>${esc(t)}</p>`).join("")}</section>`).join("\n")}
 <section><h2>How to get started</h2><ol>${p.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></section>
@@ -147,6 +215,7 @@ ${p.sections.map(([h, body]) => `<section><h2>${esc(h)}</h2>${body.length > 1 &&
 </main>
 <footer class="foot wrap"><span>Prices by <a href="https://isthereanydeal.com" rel="noopener noreferrer">IsThereAnyDeal</a>. Not affiliated with Valve, Steam or IsThereAnyDeal.</span>
 <span>${seoSlugs().map(s => `<a href="/${s}">${esc(NAV_LABEL[s])}</a>`).join(" · ")} · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></span></footer>
+${p.script ? `<script src="${p.script}" defer></script>` : ""}${p.dynamic ? `<script src="/tools/sales.js" defer></script>` : ""}
 </body>
 </html>
 `;
