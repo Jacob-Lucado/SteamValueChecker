@@ -730,6 +730,9 @@ test("the page has share-preview tags with the real address, plus robots and sit
         for (const href of [...html.matchAll(/href="(\/[a-z-]+)"/g)].map(m => m[1])) if (href !== "/") assert.ok([...seoSlugs().map(x => "/" + x), "/ai", "/grabber", "/terms", "/privacy"].some(x => href.startsWith(x)) || href === "/auth", `${slug} links to ${href}`);
     }
     assert.equal((await t.request("/seo.css", { raw: true })).status, 200);
+    const bing = await t.request("/BingSiteAuth.xml", { raw: true });
+    assert.equal(bing.status, 200);
+    assert.match(await bing.text(), /<user>[0-9A-F]{32}<\/user>/);
     // The home page carries real text and links to those pages before the app draws it.
     assert.ok(html.includes("/steam-library-value") && html.includes("<h1>Steam Value Checker"), "home page has crawlable content");
     await t.close();

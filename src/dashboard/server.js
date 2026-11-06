@@ -143,6 +143,7 @@ const FILES = {
     "/overlayui.js": ["overlayui.js", "text/javascript; charset=utf-8"],
     "/admin": ["admin.html", "text/html; charset=utf-8"],
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
+    "/BingSiteAuth.xml": ["BingSiteAuth.xml", "application/xml; charset=utf-8"],
     "/seo.css": ["seo.css", "text/css; charset=utf-8"],
     ...Object.fromEntries(Object.keys(SEO_PAGES).map(slug => [`/${slug}`, [`seo/${slug}.html`, "text/html; charset=utf-8"]])),
     "/ai": ["ai.html", "text/html; charset=utf-8"],
