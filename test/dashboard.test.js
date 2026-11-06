@@ -2762,3 +2762,16 @@ test("the Top.gg vote card route says when voting is off", async () => {
     assert.equal(r.data.enabled, false);
     await t.close();
 });
+
+test("the GameHub sprite page is served but stays unlisted", async () => {
+    const t = await setup();
+    const page = await t.request("/gamehub");
+    assert.equal(page.status, 200);
+    assert.match(page.text, /<meta name="robots" content="noindex, nofollow">/);
+    const head = await fetch(t.base + "/gamehub");
+    assert.equal(head.headers.get("x-robots-tag"), "noindex, nofollow");
+    for (const f of ["/gamehub.css", "/gamehub.js", "/img/gamehub/sheet.png", "/img/gamehub/loot/coin.png", "/img/gamehub/loot/xp-gem.png", "/img/gamehub/idle.gif"]) assert.equal((await t.request(f)).status, 200, f);
+    assert.ok(!(await t.request("/sitemap.xml")).text.includes("gamehub"), "not in the sitemap");
+    assert.ok(!(await t.request("/robots.txt")).text.includes("gamehub"), "not announced in robots.txt");
+    await t.close();
+});

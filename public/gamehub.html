@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Byte · GameHub sprites</title>
+<meta name="theme-color" content="#0d0f22">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="stylesheet" href="/gamehub.css">
+<link rel="stylesheet" href="/scrollbar.css">
+<link rel="stylesheet" href="/motion.css">
+</head>
+<body>
+<div class="sky" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i><div class="grid"></div></div>
+
+<header class="top"><div class="wrap">
+  <a class="brand" href="/gamehub"><img src="/logo.png" alt="" width="30" height="30"><span>GameHub</span></a>
+  <nav aria-label="Page">
+    <a href="#play">Player</a><a href="#sheet">Sprite sheet</a><a href="#loot">Loot</a><a href="#motion">In motion</a><a href="#files">Files</a>
+  </nav>
+</div></header>
+
+<main>
+<section class="hero wrap">
+  <div class="hero-text">
+    <p class="eyebrow">GameHub sprite pack</p>
+    <h1><span class="px" data-px="BYTE" data-s="12" role="img" aria-label="Byte"></span></h1>
+    <p class="lead">Byte is the GameHub crew's headset-wearing bot. It's 32 by 32 pixels, has nine animations and a pile of loot to pick up, and every color comes from the site palette.</p>
+    <div class="swatches" role="list" aria-label="Palette, click one to copy its code">
+      <button type="button" role="listitem" class="sw" data-hex="#5865F2" aria-label="Blurple 5865F2"></button>
+      <button type="button" role="listitem" class="sw" data-hex="#949eff" aria-label="Lavender 949EFF"></button>
+      <button type="button" role="listitem" class="sw" data-hex="#4ff0ff" aria-label="Cyan 4FF0FF"></button>
+      <button type="button" role="listitem" class="sw" data-hex="#57F287" aria-label="Green 57F287"></button>
+      <button type="button" role="listitem" class="sw" data-hex="#EB459E" aria-label="Pink EB459E"></button>
+      <button type="button" role="listitem" class="sw" data-hex="#FEE75C" aria-label="Yellow FEE75C"></button>
+    </div>
+    <p class="fine" id="swnote" aria-live="polite">Click a color to copy it.</p>
+  </div>
+  <div class="hero-art">
+    <div class="halo" aria-hidden="true"></div>
+    <div class="hero-byte mini" data-row="0" data-n="4" data-fps="5" data-size="288" role="img" aria-label="Byte standing around, bobbing a little"></div>
+  </div>
+</section>
+
+<section id="play" class="wrap">
+  <p class="eyebrow">Player</p>
+  <h2>Pick an animation</h2>
+  <p class="sub">All nine are cut straight from the sprite sheet. Pause on a frame, flip him around or click any frame to look closer.</p>
+  <div class="player">
+    <div class="stage-col">
+      <div class="stage" id="stage"><div class="spr" id="spr" role="img" aria-label="Byte playing the selected animation"></div><div class="floor" aria-hidden="true"></div></div>
+      <div class="readout"><span class="px" id="rd-name" data-px="IDLE" data-s="3" aria-hidden="true"></span><span id="rd-frame" class="mono" aria-live="off">FRAME 1 / 4</span></div>
+      <div class="ctrls">
+        <button type="button" class="btn" id="b-play" aria-pressed="true">Pause</button>
+        <button type="button" class="btn ghost" id="b-flip" aria-pressed="false">Face left</button>
+        <button type="button" class="btn ghost" id="b-step">Next frame</button>
+      </div>
+    </div>
+    <div class="anim-col">
+      <div class="anims" id="anims" role="tablist" aria-label="Animations"></div>
+      <div class="strip" id="strip" aria-label="Frames of this animation"></div>
+    </div>
+  </div>
+</section>
+
+<section id="sheet" class="wrap">
+  <p class="eyebrow">Sprite sheet</p>
+  <h2>Nine rows, 40 frames</h2>
+  <p class="sub">One transparent PNG. Rows run top to bottom in the order shown, and each frame is a 32 pixel square scaled up four times so it stays crisp. Click a row to play it.</p>
+  <div class="sheet-card">
+    <div class="sheet-head"><div class="mini head-byte" data-row="0" data-n="4" data-fps="5" data-size="64" aria-hidden="true"></div><span class="px" data-px="BYTE" data-s="5" aria-hidden="true"></span><span class="count">9 animations · 40 frames</span></div>
+    <div class="sheet" id="sheet-wrap">
+      <div class="sheet-rows" id="sheet-rows"></div>
+      <img class="sheet-img" src="/img/gamehub/sheet.png" alt="Byte sprite sheet, nine rows of animation frames" width="768" height="1152">
+    </div>
+  </div>
+</section>
+
+<section id="loot" class="wrap">
+  <p class="eyebrow">Loot</p>
+  <h2>Things to pick up</h2>
+  <p class="sub">Eight 16 pixel icons for rewards, deals and drops, one PNG each. Grab one and Byte celebrates.</p>
+  <div class="loot-row" id="loot-row"></div>
+  <p class="pickup" id="pickup" aria-live="polite">Nothing picked up yet.</p>
+</section>
+
+<section id="motion" class="wrap">
+  <p class="eyebrow">In motion</p>
+  <h2>The animated versions</h2>
+  <p class="sub">Ready-made looping GIFs for the animations you'll use most.</p>
+  <div class="gifs">
+    <figure><img src="/img/gamehub/idle.gif" alt="Idle animation" width="256" height="256"><figcaption>Idle</figcaption></figure>
+    <figure><img src="/img/gamehub/run.gif" alt="Run animation" width="256" height="256"><figcaption>Run</figcaption></figure>
+    <figure><img src="/img/gamehub/jump.gif" alt="Jump animation" width="256" height="256"><figcaption>Jump</figcaption></figure>
+    <figure><img src="/img/gamehub/zap.gif" alt="Zap attack animation" width="256" height="256"><figcaption>Zap</figcaption></figure>
+    <figure><img src="/img/gamehub/hurt.gif" alt="Hurt animation" width="256" height="256"><figcaption>Hurt</figcaption></figure>
+    <figure><img src="/img/gamehub/cheer.gif" alt="Cheer animation" width="256" height="256"><figcaption>Cheer</figcaption></figure>
+  </div>
+</section>
+
+<section id="files" class="wrap">
+  <p class="eyebrow">Files</p>
+  <h2>Specs and downloads</h2>
+  <div class="files">
+    <div class="card">
+      <h3>Specs</h3>
+      <ul class="specs">
+        <li>Frame size: 32 × 32 px</li>
+        <li>Loot icons: 16 × 16 px art, saved at 96 × 96, one PNG each</li>
+        <li>Faces right, flip it for left</li>
+        <li>Transparent PNG, scale with nearest neighbor</li>
+        <li>Sheet rows match the order above</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Download</h3>
+      <ul class="dl">
+        <li><a href="/img/gamehub/sheet.png" download>Sprite sheet <small>PNG · 768 × 1152</small></a></li>
+        <li><a href="/img/gamehub/loot/coin.png" download>Coin <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/loot/freebie.png" download>Freebie <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/loot/deal-tag.png" download>Deal tag <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/loot/game-key.png" download>Game key <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/loot/heart.png" download>Heart <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/loot/controller.png" download>Controller <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/loot/trophy.png" download>Trophy <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/loot/xp-gem.png" download>XP gem <small>PNG · 96 × 96</small></a></li>
+        <li><a href="/img/gamehub/idle.gif" download>Idle <small>GIF</small></a></li>
+        <li><a href="/img/gamehub/run.gif" download>Run <small>GIF</small></a></li>
+        <li><a href="/img/gamehub/jump.gif" download>Jump <small>GIF</small></a></li>
+        <li><a href="/img/gamehub/zap.gif" download>Zap <small>GIF</small></a></li>
+        <li><a href="/img/gamehub/hurt.gif" download>Hurt <small>GIF</small></a></li>
+        <li><a href="/img/gamehub/cheer.gif" download>Cheer <small>GIF</small></a></li>
+      </ul>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="wrap foot"><span>GameHub · Steam Value Checker</span><a href="/">Home ↗</a></footer>
+<script src="/gamehub.js" defer></script>
+<script src="/motion.js" defer></script>
+</body>
+</html>
