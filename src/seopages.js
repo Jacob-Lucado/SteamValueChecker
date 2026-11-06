@@ -196,6 +196,7 @@ export function renderSeoPage(slug, { origin, invite = null } = {}) {
 <meta name="theme-color" content="#0f1724">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="stylesheet" href="/seo.css">
+<link rel="stylesheet" href="/scrollbar.css">
 <link rel="stylesheet" href="/motion.css">
 <script src="/theme.js"></script>
 ${ld.map(o => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`).join("\n")}

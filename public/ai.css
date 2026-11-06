@@ -1,4 +1,4 @@
-:root{--bg:#07060f;--ink:#f3f1ff;--mute:#a9a3c8;--line:rgba(167,139,250,.18);--glass:rgba(24,20,48,.62);--v:#8b5cf6;--c:#22d3ee;--p:#f472b6;--g:#4ade80;--y:#fbbf24;--r:20px}
+:root{color-scheme:dark;--sb-a:#8b5cf6;--sb-b:#22d3ee;--sb-track:rgba(7,6,15,.7);--bg:#07060f;--ink:#f3f1ff;--mute:#a9a3c8;--line:rgba(167,139,250,.18);--glass:rgba(24,20,48,.62);--v:#8b5cf6;--c:#22d3ee;--p:#f472b6;--g:#4ade80;--y:#fbbf24;--r:20px}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;overflow-x:hidden}

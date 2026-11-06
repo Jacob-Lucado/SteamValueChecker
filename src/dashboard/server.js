@@ -146,6 +146,7 @@ const FILES = {
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
     "/BingSiteAuth.xml": ["BingSiteAuth.xml", "application/xml; charset=utf-8"],
     "/seo.css": ["seo.css", "text/css; charset=utf-8"],
+    "/scrollbar.css": ["scrollbar.css", "text/css; charset=utf-8"],
     "/motion.css": ["motion.css", "text/css; charset=utf-8"],
     "/motion.js": ["motion.js", "text/javascript; charset=utf-8"],
     "/tools/timestamp.js": ["tools/timestamp.js", "text/javascript; charset=utf-8"],

@@ -1,5 +1,6 @@
 /* Steam Value Checker dashboard. Colors are variables so they are easy to retheme. */
 :root {
+  --sb-a: #7c6cff; --sb-b: #4da3ff; --sb-track: rgba(15, 23, 36, .55);
   --bg: #0f1724;
   --bg-glow: #17304d;
   --nav: rgba(15, 23, 36, .82);
@@ -28,6 +29,7 @@
   color-scheme: dark;
 }
 :root[data-theme="light"] {
+  --sb-a: #6a55ec; --sb-b: #165fc0; --sb-track: rgba(20, 40, 80, .07);
   --bg: #e4eaf3;
   --bg-glow: #cbd9ec;
   --nav: rgba(228, 234, 243, .88);
@@ -622,12 +624,7 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .bug-card .row { align-items: center; }
 .bug-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* Scrollbars that match the rest of the site */
-* { scrollbar-width: thin; scrollbar-color: rgba(120, 150, 190, .45) transparent; }
-*::-webkit-scrollbar { width: 10px; height: 10px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: rgba(120, 150, 190, .35); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
-*::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; border: 2px solid transparent; }
+/* Scrollbars come from scrollbar.css, in this page's accent colours. */
 /* Long lists scroll inside their panel instead of stretching the page */
 .scroll-y { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .scroll-y.tall { max-height: 520px; }

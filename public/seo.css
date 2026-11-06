@@ -1,12 +1,14 @@
-:root{--bg:#0f1724;--panel:#162134;--line:rgba(148,176,214,.18);--text:#cdd9e8;--muted:#8fa2ba;--white:#f4f8fd;--accent:#4da3ff;--accent2:#7c6cff}
-:root[data-theme="light"]{--bg:#e9eef6;--panel:#f6f9fd;--line:rgba(20,40,80,.18);--text:#22324a;--muted:#4a5c75;--white:#0a1424;--accent:#165fc0;--accent2:#6a55ec}
+:root{color-scheme:dark;--sb-a:#7c6cff;--sb-b:#4da3ff;--sb-track:rgba(15,23,36,.6);--bg:#0f1724;--panel:#162134;--line:rgba(148,176,214,.18);--text:#cdd9e8;--muted:#8fa2ba;--white:#f4f8fd;--accent:#4da3ff;--accent2:#7c6cff}
+:root[data-theme="light"]{color-scheme:light;--sb-a:#6a55ec;--sb-b:#165fc0;--sb-track:rgba(20,40,80,.07);--bg:#e9eef6;--panel:#f6f9fd;--line:rgba(20,40,80,.18);--text:#22324a;--muted:#4a5c75;--white:#0a1424;--accent:#165fc0;--accent2:#6a55ec}
 *{box-sizing:border-box}
 body{margin:0;background:radial-gradient(900px 420px at 15% -5%,rgba(124,108,255,.22),transparent 60%),radial-gradient(800px 400px at 100% 0,rgba(34,211,238,.12),transparent 60%),var(--bg);color:var(--text);font:17px/1.65 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
 a{color:var(--accent)}a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
 .wrap{max-width:860px;margin:0 auto;padding:0 20px}
-.top{border-bottom:1px solid var(--line);background:rgba(15,23,36,.35);backdrop-filter:blur(10px)}
-.top .wrap{max-width:1100px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-height:62px}
+.top{border-bottom:1px solid var(--line);background:rgba(15,23,36,.55);backdrop-filter:blur(10px)}
+:root[data-theme="light"] .top{background:rgba(246,249,253,.72)}
+.top .wrap{max-width:1100px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-height:62px;padding-top:10px;padding-bottom:10px;row-gap:4px}
 .brand{display:flex;align-items:center;gap:10px;color:var(--white);text-decoration:none;font-weight:800}
+.top nav{display:flex;flex-wrap:wrap;gap:2px 0}
 .top nav a{color:var(--muted);text-decoration:none;margin-left:18px;font-weight:600;font-size:15px}.top nav a:hover{color:var(--white)}
 .crumbs{margin:26px 0 6px;font-size:14px;color:var(--muted)}.crumbs a{color:var(--muted)}
 h1{font-size:clamp(32px,5vw,50px);line-height:1.08;letter-spacing:-.025em;color:var(--white);margin:0 0 16px}

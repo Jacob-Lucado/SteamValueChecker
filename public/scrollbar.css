@@ -1,0 +1,14 @@
+/* Scroll bars in the colours of whatever page they are on. Each page sets --sb-a and --sb-b (its two accent colours) and its
+   background; this file turns them into the bar. Chrome, Edge, Safari and Opera get a gradient thumb, Firefox a plain one. */
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+  *::-webkit-scrollbar { width: 12px; height: 12px; }
+  *::-webkit-scrollbar-track { background: var(--sb-track, rgba(127, 140, 170, .08)); }
+  *::-webkit-scrollbar-corner { background: transparent; }
+  *::-webkit-scrollbar-thumb { border-radius: 12px; border: 3px solid transparent; background: linear-gradient(180deg, var(--sb-a, #7c6cff), var(--sb-b, #4da3ff)) padding-box; min-height: 48px; min-width: 48px; }
+  *::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--sb-b, #4da3ff), var(--sb-a, #7c6cff)) padding-box; border-width: 2px; }
+  *::-webkit-scrollbar-thumb:active { filter: brightness(1.15); }
+}
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--sb-a, #7c6cff) 70%, var(--sb-b, #4da3ff)) var(--sb-track, rgba(127, 140, 170, .08)); }
+}
