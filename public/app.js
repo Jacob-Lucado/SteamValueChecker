@@ -334,7 +334,7 @@
 
     const sec = (cls, ...kids) => h("section", { class: "lx-sec " + cls }, ...kids);
     const head = (kicker, title, sub) => h("div", { class: "lx-head" }, h("div", { class: "lx-kick", text: kicker }), h("h2", { text: title }), sub && h("p", { class: "lx-lede", text: sub }));
-    const stat = (label, value) => value && h("div", { class: "lp-stat" }, h("div", { class: "v", text: value }), h("div", { class: "k", text: label }));
+    const stat = (label, value) => { if (!value) return value; const v = h("div", { class: "v", text: value }), num = Number(String(value).replace(/,/g, "")); if (Number.isFinite(num) && num > 0) v.setAttribute("data-count", String(num)); return h("div", { class: "lp-stat" }, v, h("div", { class: "k", text: label })); };
 
     // The features, by area. Tabs switch the grid under them.
     const AREAS = [

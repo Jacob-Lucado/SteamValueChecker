@@ -730,6 +730,8 @@ test("the page has share-preview tags with the real address, plus robots and sit
         for (const href of [...html.matchAll(/href="(\/[a-z-]+)"/g)].map(m => m[1])) if (href !== "/") assert.ok([...seoSlugs().map(x => "/" + x), "/ai", "/grabber", "/terms", "/privacy"].some(x => href.startsWith(x)) || href === "/auth", `${slug} links to ${href}`);
     }
     assert.equal((await t.request("/seo.css", { raw: true })).status, 200);
+    for (const f of ["/motion.css", "/motion.js"]) assert.equal((await t.request(f, { raw: true })).status, 200, f);
+    for (const page of ["/", "/ai", "/grabber", "/steam-id-finder"]) { const h = await (await t.request(page, { raw: true })).text(); assert.ok(h.includes("/motion.js") && h.includes("/motion.css"), page + " has the motion layer"); }
     for (const f of ["timestamp", "steamid", "refund", "sales"]) assert.equal((await t.request(`/tools/${f}.js`, { raw: true })).status, 200, f);
     const sid = await t.request("/api/steamid?q=" + encodeURIComponent("[U:1:24691]"), { raw: true });
     assert.notEqual(sid.status, 500);

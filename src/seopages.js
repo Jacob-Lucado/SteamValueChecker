@@ -196,6 +196,7 @@ export function renderSeoPage(slug, { origin, invite = null } = {}) {
 <meta name="theme-color" content="#0f1724">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="stylesheet" href="/seo.css">
+<link rel="stylesheet" href="/motion.css">
 <script src="/theme.js"></script>
 ${ld.map(o => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`).join("\n")}
 </head>
@@ -215,6 +216,7 @@ ${p.sections.map(([h, body]) => `<section><h2>${esc(h)}</h2>${body.length > 1 &&
 </main>
 <footer class="foot wrap"><span>Prices by <a href="https://isthereanydeal.com" rel="noopener noreferrer">IsThereAnyDeal</a>. Not affiliated with Valve, Steam or IsThereAnyDeal.</span>
 <span>${seoSlugs().map(s => `<a href="/${s}">${esc(NAV_LABEL[s])}</a>`).join(" · ")} · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></span></footer>
+<script src="/motion.js" defer></script>
 ${p.script ? `<script src="${p.script}" defer></script>` : ""}${p.dynamic ? `<script src="/tools/sales.js" defer></script>` : ""}
 </body>
 </html>

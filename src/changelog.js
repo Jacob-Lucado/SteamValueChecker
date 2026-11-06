@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.42", date: "2026-11-05", title: "A livelier site", items: [
+        "**Smooth scrolling** with a mouse wheel, and in-page links glide to their section.",
+        "**Pages move:** headlines and buttons arrive one after another, cards fade up as you scroll to them, numbers count up, and there is a progress bar along the top.",
+        "**Going between pages is a transition**, not a hard cut, and cards glow where your pointer is. All of it switches off if your device is set to reduce motion."
+    ] },
     { version: "2026.11.41", date: "2026-11-05", title: "Server wrapped", items: [
         "**Your server's year in one picture:** `/leaderboard` has a new pick, Server wrapped. It shows hours played together, the games your server actually played, who put in the most time and how many games got finished. It only counts members who turned on `/alerts share`, so post it and let people see what joining adds."
     ] },
