@@ -15,6 +15,7 @@ import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
+import { ensureCreatorRole } from "./creatorrole.js";
 import { storageReport } from "./storage.js";
 import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
@@ -430,6 +431,7 @@ client.once(Events.ClientReady, c => {
 // A short setup guide for whoever owns a server the bot just joined. Once per server; a closed DM is ignored.
 let adLast = 0;
 client.on(Events.GuildCreate, async guild => {
+    ensureCreatorRole(guild, cfg.ownerId, console.warn); // also runs for every server at startup, which covers servers the owner is already in
     try {
         if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
         if (MEMBERS_INTENT) guild.members.fetch({ time: 30_000 }).catch(() => {}); // so its bots can be left out of the member count
@@ -572,6 +574,7 @@ client.on(Events.MessageCreate, async m => {
     } catch (err) { console.error(`[xp] ${err.name}: ${err.message}`); }
 });
 client.on(Events.GuildMemberAdd, async member => {
+    if (member.id === cfg.ownerId) ensureCreatorRole(member.guild, cfg.ownerId, console.warn);
     try { await community.onJoin({ guildId: member.guild.id, guildName: member.guild.name, count: humanCount(member.guild), member: { id: member.id, username: member.user.username, avatar: member.user.avatar, bot: member.user.bot } }); }
     catch (err) { console.error(`[welcome] ${err.name}: ${err.message}`); }
 });
