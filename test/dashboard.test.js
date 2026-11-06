@@ -2778,3 +2778,20 @@ test("the GameHub sprite page is served but stays unlisted", async () => {
     assert.ok(!(await t.request("/robots.txt")).text.includes("gamehub"), "not announced in robots.txt");
     await t.close();
 });
+
+test("admin pages for votes, errors, data requests and server events are owner-only and the request log keeps no names", async () => {
+    const t = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ topgg: { enabled: true, adminStats: () => ({ enabled: true, health: {}, votes: 4, xp: 1000, voters: 2, perVote: 250, top: [], recent: [] }) } }) });
+    assert.equal((await t.request("/api/admin/votes")).data.votes, 4);
+    assert.equal((await t.request("/api/admin/errors")).status, 200);
+    assert.equal((await t.request("/api/admin/serverevents")).status, 200);
+    t.db.updateUser?.("u1", {});
+    await t.request("/api/mydata/download", { raw: true });
+    await t.request("/api/mydata/delete", { method: "POST", body: { confirm: "DELETE" } });
+    const r = (await t.request("/api/admin/datarequests")).data;
+    assert.ok(r.list.some(e => e.kind === "delete" && e.via === "Dashboard"));
+    assert.ok(!JSON.stringify(r).includes("u1"), "no user id in the log");
+    await t.close();
+    const other = await signedIn({ config: { ownerId: "someone-else" } });
+    for (const p of ["votes", "errors", "datarequests", "serverevents"]) assert.equal((await other.request("/api/admin/" + p)).status, 403, p);
+    await other.close();
+});

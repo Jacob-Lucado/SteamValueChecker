@@ -2,6 +2,7 @@
 // in every server where they already have XP. The token comes from the TOPGG_TOKEN secret and is never written anywhere else.
 export const TOPGG_API = "https://top.gg/api/v1/projects/@me";
 export const VOTE_XP = 250;                     // per vote; a weekend vote counts double on Top.gg's side, so it pays double here too
+import { pushEvent, readEvents } from "./adminlog.js";
 const SEEN_KEEP_MS = 3 * 86400_000;
 
 export function createTopgg({ token, db, reward, notify = async () => {}, fetchImpl = globalThis.fetch, now = () => Date.now(), log = () => {} } = {}) {
@@ -56,6 +57,9 @@ export function createTopgg({ token, db, reward, notify = async () => {}, fetchI
         const xp = VOTE_XP * weight;
         let servers = 0;
         try { servers = await reward(id, xp); } catch (e) { log(`Vote reward failed: ${e.message}`); }
+        db.setMeta("topgg:stat:votes", String((Number(db.getMeta("topgg:stat:votes")) || 0) + 1));
+        db.setMeta("topgg:stat:xp", String((Number(db.getMeta("topgg:stat:xp")) || 0) + xp * servers));
+        pushEvent(db, "topgg:recent", { id, at, xp, servers, weight }, 30);
         await notify(id, { xp, servers, total: total + 1, expiresAt: Date.parse(v.expires_at) || null }).catch(() => {});
         return 1;
     }
@@ -75,5 +79,16 @@ export function createTopgg({ token, db, reward, notify = async () => {}, fetchI
         return base;
     }
 
-    return { poll, status, health: () => ({ enabled, ...state }), enabled };
+    /** Numbers for the admin page: totals since tracking began, the most loyal voters and the latest votes. */
+    function adminStats() {
+        const top = db.listMetaPrefix("topgg:votes:").map(r => ({ id: r.key.slice("topgg:votes:".length), votes: Number(r.value) || 0 })).filter(r => r.votes > 0).sort((a, b) => b.votes - a.votes).slice(0, 10);
+        return {
+            enabled, health: { lastOkAt: state.lastOkAt, lastError: state.lastError },
+            votes: Number(db.getMeta("topgg:stat:votes")) || 0, xp: Number(db.getMeta("topgg:stat:xp")) || 0,
+            voters: db.listMetaPrefix("topgg:votes:").filter(r => Number(r.value) > 0).length,
+            perVote: VOTE_XP, top, recent: readEvents(db, "topgg:recent", 15)
+        };
+    }
+
+    return { poll, status, adminStats, health: () => ({ enabled, ...state }), enabled };
 }

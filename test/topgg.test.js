@@ -64,3 +64,15 @@ test("topgg: the bonus lands in every server where the voter already has XP and 
     assert.equal(db.getXp("G3", "u1").xp, 10);
     assert.equal(db.getXp("G1", "other").xp, 10);
 });
+
+test("topgg: admin stats add up votes, xp and top voters", async () => {
+    const t = rig([{ cursor: "c1", data: [vote("1111111111", "2026-11-05T10:00:00Z"), vote("1111111111", "2026-11-05T10:30:00Z"), vote("2222222222", "2026-11-05T10:05:00Z", 2)] }, { cursor: "c1", data: [] }]);
+    await t.tg.poll();
+    const s = t.tg.adminStats();
+    assert.equal(s.votes, 3);
+    assert.equal(s.voters, 2);
+    assert.equal(s.xp, (VOTE_XP + VOTE_XP + VOTE_XP * 2) * 2); // the fake reward reports 2 servers
+    assert.deepEqual(s.top[0], { id: "1111111111", votes: 2 });
+    assert.equal(s.recent.length, 3);
+    assert.equal(s.recent[0].id, "2222222222"); // newest first
+});

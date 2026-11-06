@@ -3869,11 +3869,11 @@
   // ---------- the admin panel (admin.html): a sidebar app around the same pages as adminView ----------
   const ADMIN_NAV = [
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
-    ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."]]],
+    ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."]]],
     ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
-    ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
+    ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
   const ADMIN_PAGES = Object.fromEntries(ADMIN_NAV.flatMap(([, items]) => items.map(([id, title, icon, sub]) => [id, { title, icon, sub }])));
   let adminCtx = null, adminCtxAt = 0, adminTimer = 0;
@@ -4050,6 +4050,8 @@
     const draw = nodes => body.replaceChildren(...nodes);
     const fail = e => body.replaceChildren(h("div", { class: "notice warn", text: e.message || "Something went wrong." }));
     if (page === "system") return void adminSystem(body, fail);
+    if (page === "votes") return void adminVotes(body, fail);
+    if (page === "datareq") return void adminDataReq(body, fail);
     if (page === "audit") return void adminAudit(body);
     if (page === "account") return void adminAccount(body, fail);
     adminContext().then(ctx => {
@@ -4089,6 +4091,14 @@
       const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
       const lagBad = p.lagMs > 100;
       const st = await api("/api/admin/storage").catch(() => null);
+      const [eg, se] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null)]);
+      const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
+      const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
+        eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
+          h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
+      const srvPanel = se && h("div", { class: "panel" }, h("h3", { text: "Server joins and leaves" }),
+        se.list.length ? h("table", {}, h("thead", {}, h("tr", {}, ["", "Server", "Members", "When"].map(c => h("th", { text: c })))),
+          h("tbody", {}, se.list.map(e => h("tr", {}, h("td", { text: e.kind === "join" ? "➕ Joined" : "➖ Left" }), h("td", {}, h("b", { text: e.name }), h("div", { class: "muted small", text: e.id })), h("td", { text: e.members != null ? String(e.members) : "–" }), h("td", { text: ago(e.at) }))))) : h("p", { class: "muted", text: "Nothing since this feature started. You also get a DM each time the bot is added or removed." }));
       const fmt = n => n >= 1024 ? (n / 1024).toFixed(2) + " GB" : n > 0 && n < 0.1 ? "under 0.1 MB" : n + " MB";
       const storagePanel = st && h("div", { class: "panel" }, h("h3", { text: "Storage" }),
         st.volume ? h("div", { class: "grid four" },
@@ -4102,6 +4112,8 @@
           tile("Memory", p.rssMb + " MB", `${p.heapMb} MB of ${p.heapLimitMb} MB heap`), tile("Event loop lag", p.lagMs + " ms", lagBad ? "Slow: something is blocking" : "Healthy")),
         h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
         storagePanel,
+        errPanel,
+        srvPanel,
         h("div", { class: "panel" }, h("h3", { text: "Background jobs" }),
           sys.jobs && sys.jobs.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Job", "Last run", "Took", "Result", "Failures"].map(c => h("th", { text: c })))),
             h("tbody", {}, sys.jobs.map(j => {
@@ -4117,6 +4129,36 @@
       adminTimer = setTimeout(() => draw().catch(() => {}), 10_000);
     };
     try { await draw(); } catch (e) { fail(e); }
+  }
+
+  async function adminVotes(body, fail) {
+    try {
+      const v = await api("/api/admin/votes");
+      if (!v.enabled) return body.replaceChildren(h("div", { class: "notice warn", text: "Top.gg isn't connected. Add the TOPGG_TOKEN secret on Fly and restart." }));
+      const tile = (k, val, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(val) }), sub && h("div", { class: "s", text: sub }));
+      const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : d < 3600 ? Math.round(d / 60) + " min ago" : d < 86400 ? Math.round(d / 3600) + " h ago" : Math.round(d / 86400) + " d ago"; };
+      const ok = v.health.lastOkAt;
+      body.replaceChildren(
+        h("div", { class: "grid four" }, tile("Votes counted", v.votes.toLocaleString(), "Since tracking began"), tile("People who voted", v.voters.toLocaleString(), "All time"), tile("XP paid out", v.xp.toLocaleString(), `${v.perVote} per vote, double on weekends`),
+          tile("Top.gg check", v.health.lastError ? "Failing" : ok ? "Working" : "Waiting", v.health.lastError ? "Last error: " + v.health.lastError : ok ? "Last check " + ago(ok) : "Runs every few minutes")),
+        h("div", { class: "grid two" },
+          h("div", { class: "panel" }, h("h3", { text: "Top voters" }),
+            v.top.length ? h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Discord ID" }), h("th", { text: "Votes" })])), h("tbody", {}, v.top.map(t => h("tr", {}, h("td", { text: t.id }), h("td", { text: String(t.votes) }))))) : h("p", { class: "muted", text: "No votes yet." })),
+          h("div", { class: "panel" }, h("h3", { text: "Latest votes" }),
+            v.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Voter", "XP"].map(c => h("th", { text: c })))), h("tbody", {}, v.recent.map(r => h("tr", {}, h("td", { text: ago(r.at) }), h("td", { text: r.id }), h("td", { text: `${r.xp}${r.servers ? " × " + r.servers + (r.servers === 1 ? " server" : " servers") : " (no XP yet)"}` }))))) : h("p", { class: "muted", text: "Nothing yet." }))));
+    } catch (e) { fail(e); }
+  }
+
+  async function adminDataReq(body, fail) {
+    try {
+      const r = await api("/api/admin/datarequests");
+      const tile = (k, val, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(val) }), sub && h("div", { class: "s", text: sub }));
+      body.replaceChildren(
+        h("div", { class: "grid four" }, tile("Exports, 30 days", r.month.export), tile("Deletions, 30 days", r.month.delete), tile("Logged in all", r.list.length, "Newest 100 kept")),
+        h("div", { class: "panel" }, h("h3", { text: "Requests" }),
+          r.list.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Request", "From"].map(c => h("th", { text: c })))), h("tbody", {}, r.list.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString() }), h("td", { text: e.kind === "delete" ? "🗑️ Deleted their data" : "📦 Exported their data" }), h("td", { text: e.via }))))) : h("p", { class: "muted", text: "Nobody has asked yet." }),
+          h("p", { class: "muted small", text: "Requests are handled the moment they are made, so this is a record, not a queue. It keeps no names or IDs, so deleting someone's data never leaves a trace of who they were." })));
+    } catch (e) { fail(e); }
   }
 
   async function adminAudit(body) {

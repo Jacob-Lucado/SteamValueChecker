@@ -15,6 +15,7 @@ import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
+import { pushEvent } from "./adminlog.js";
 import { ensureCreatorRole } from "./creatorrole.js";
 import { storageReport } from "./storage.js";
 import { createEpicSoon } from "./epicsoon.js";
@@ -430,6 +431,18 @@ client.once(Events.ClientReady, c => {
 // If the bot is removed from a server, forget that server's alert channel.
 // A short setup guide for whoever owns a server the bot just joined. Once per server; a closed DM is ignored.
 let adLast = 0;
+// A heads-up for the owner whenever the bot is added to or removed from a server, and a short history for the admin Servers page.
+client.on(Events.GuildCreate, async guild => {
+    try {
+        if (isHidden(guild.id) || !guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return;
+        const key = `joinalert:${guild.id}:${guild.joinedTimestamp}`;
+        if (db.getMeta(key)) return;
+        db.setMeta(key, "1");
+        const members = humanCount(guild);
+        pushEvent(db, "adminlog:servers", { kind: "join", at: Date.now(), id: guild.id, name: guild.name, members }, 60);
+        if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { embeds: [{ color: 0x57f287, title: "New server", description: `The bot was added to **${guild.name}**.`, fields: [{ name: "Members", value: String(members), inline: true }, { name: "Servers now", value: String(client.guilds.cache.size), inline: true }], footer: { text: `Server ${guild.id}` }, timestamp: new Date().toISOString() }] }).catch(() => {});
+    } catch (err) { console.error(`[join-alert] ${err.message}`); }
+});
 client.on(Events.GuildCreate, async guild => {
     ensureCreatorRole(guild, cfg.ownerId, console.warn); // also runs for every server at startup, which covers servers the owner is already in
     try {
@@ -468,7 +481,7 @@ client.on(Events.VoiceStateUpdate, (oldS, newS) => {
     } catch (err) { console.error(`[music] ${err.message}`); }
 });
 client.once(Events.ClientReady, () => { setTimeout(() => music?.autoBoot().catch(err => console.error(`[music] ${err.message}`)), 8000).unref?.(); }); // rejoin Auto DJ channels that have people in them after a restart
-client.on(Events.GuildDelete, guild => { music?.onBotDisconnected(guild.id); if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
+client.on(Events.GuildDelete, guild => { if (guild.available !== false && !isHidden(guild.id)) { try { pushEvent(db, "adminlog:servers", { kind: "leave", at: Date.now(), id: guild.id, name: guild.name ?? "a server", members: null }, 60); if (cfg.ownerId) discord.sendDm(cfg.ownerId, { embeds: [{ color: 0xed4245, title: "Server left", description: `The bot is no longer in **${guild.name ?? guild.id}**.`, fields: [{ name: "Servers now", value: String(client.guilds.cache.size), inline: true }], timestamp: new Date().toISOString() }] }).catch(() => {}); } catch { /* the alert is a nicety */ } } music?.onBotDisconnected(guild.id); if (guild.available !== false) { db.clearGuildChannel(guild.id); db.forgetCommunityGuild(guild.id); } });
 
 // The AI companion. Only answers in servers where a manager turned it on, in the channel they picked (or any channel).
 const rt = createRuntimeCfg(db, { ...(cfg.aiModel ? { ai_model: cfg.aiModel } : {}), ...(PROVIDER_IDS.includes(cfg.aiProvider) ? { ai_provider: cfg.aiProvider } : {}), ai_daily_cap: cfg.aiDailyCap });

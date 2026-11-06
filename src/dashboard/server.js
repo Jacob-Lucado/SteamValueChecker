@@ -3,6 +3,7 @@
 
 import { roleIds } from "../gwroles.js";
 import { VOTE_XP } from "../topgg.js";
+import { pushEvent, readEvents, groupErrors } from "../adminlog.js";
 import { aiStats, aiUsedToday } from "../aichat.js";
 import { sampleAlert, SAMPLE_KINDS } from "../samples.js";
 import http from "node:http";
@@ -3189,6 +3190,23 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             return { rows, more: rows.length === 50 };
         },
         // How the bot itself is doing right now: process, memory, sign-ins and the event loop.
+        "GET /api/admin/votes": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            return topgg ? topgg.adminStats() : { enabled: false };
+        },
+        "GET /api/admin/errors": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            return { groups: logs ? groupErrors(logs.recent({ level: "error", limit: 400 })) : [], available: Boolean(logs) };
+        },
+        "GET /api/admin/datarequests": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            const list = readEvents(db, "adminlog:datareq", 100), since = now() - 30 * 86400_000;
+            return { list, month: { export: list.filter(r => r.kind === "export" && r.at > since).length, delete: list.filter(r => r.kind === "delete" && r.at > since).length } };
+        },
+        "GET /api/admin/serverevents": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            return { list: readEvents(db, "adminlog:servers", 30) };
+        },
         "GET /api/admin/storage": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -3616,7 +3634,9 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         "POST /api/mydata/delete": async (req, body) => {
             const s = session(req);
             if (body.confirm !== "DELETE") throw new HttpError(400, "Type DELETE to confirm.");
-            return { deleted: db.deleteUser(s.userId) };
+            const deleted = db.deleteUser(s.userId);
+            pushEvent(db, "adminlog:datareq", { kind: "delete", via: "Dashboard", at: now() }, 100);
+            return { deleted };
         }
     };
 
@@ -4000,6 +4020,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 const s = session(req);
                 const data = exportJson(db, s.userId);
                 if (!data) throw new HttpError(404, "Nothing is stored about you.");
+                pushEvent(db, "adminlog:datareq", { kind: "export", via: "Dashboard", at: now() }, 100);
                 return send(res, 200, data, {
                     "Content-Type": "application/json; charset=utf-8",
                     "Content-Disposition": 'attachment; filename="my-steam-value-checker-data.json"',

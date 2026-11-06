@@ -16,6 +16,7 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
 import { LANGS, languageDone } from "./i18n.js";
 import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
+import { pushEvent } from "./adminlog.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
 import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed, ownersEmbed } from "./render.js";
@@ -915,6 +916,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
         if (i.options.getSubcommand() === "export") {
             const json = exportJson(db, i.user.id);
             if (!json) return eph(i, "Nothing is stored about you.");
+            pushEvent(db, "adminlog:datareq", { kind: "export", via: "Discord", at: Date.now() }, 100);
             return i.reply({
                 content: "Everything stored about you:",
                 files: [new AttachmentBuilder(Buffer.from(json, "utf8"), { name: "my-steam-value-checker-data.json" })],
@@ -939,6 +941,7 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
             });
             if (b.customId === "md_confirm") {
                 db.deleteUser(i.user.id);
+                pushEvent(db, "adminlog:datareq", { kind: "delete", via: "Discord", at: Date.now() }, 100);
                 await b.update({ content: "Deleted. The bot no longer stores anything about you.", components: [] });
             } else {
                 await b.update({ content: "Cancelled. Nothing was deleted.", components: [] });
