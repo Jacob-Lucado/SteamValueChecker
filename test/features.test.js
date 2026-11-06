@@ -811,7 +811,7 @@ test("help is a set of pages that name every command, and the registered command
         assert.ok((e.description ?? "").length <= 4096 && e.fields.every(f => f.value.length <= 1024 && f.name.length <= 256), `help page ${p.key} has a field that is too long`);
     }
     const { hubCommands, commands } = await import("../src/commands.js");
-    assert.ok(hubCommands.length <= 13, `${hubCommands.length} commands is not minimal`);
+    assert.ok(hubCommands.length <= 14, `${hubCommands.length} commands is not minimal`);
     for (const j of hubCommands) {
         assert.ok(text.includes("/" + j.name), "help is missing /" + j.name);
         const subs = (j.options ?? []).filter(o => o.type === 1 || o.type === 2);

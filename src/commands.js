@@ -830,9 +830,9 @@ const HUBS = [
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
     { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
-    { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "vote", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
+    { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];
-const KEEP = ["help", "dashboard", "alerts", "language", "mod", "music", "play", "player"];
+const KEEP = ["help", "dashboard", "alerts", "language", "vote", "mod", "music", "play", "player"];
 const KINDS = { everywhere, serverOnly, serverOrDm };
 const byName = new Map(commands.map(c => [c.name, c]));
 

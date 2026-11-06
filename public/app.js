@@ -500,7 +500,7 @@
           ...[["", "Giveaway ends", "Winners are drawn and announced"], ["", "Claim prize", "The key is sent by DM"], ["", "Confirm it worked", "The winner presses one button"], ["", "Vouch posted", "In your vouches channel"]]
             .map(([i, t, s]) => h("div", { class: "lp-flow-step" }, h("span", { class: "lp-flow-icon", text: i }), h("div", {}, h("b", { text: t }), h("div", { class: "muted small", text: s })))))),
 
-      fanaticalCard(), voteCard(),
+      fanaticalCard(),
 
       h("section", { class: "lx-sec lp-trust" },
         head("Your data", "Yours, and you can leave", null),
@@ -601,7 +601,7 @@
         h("div", { class: "row" }, field("Region", region), field("Stores for “cheapest”", stores), field("Sort", sort)),
         h("p", { class: "muted small", text: "Never paste game keys. Anything that looks like a key is ignored." }),
         run),
-      fanaticalCard(),
+      fanaticalCard(), voteCard(),
       results);
   }
 
