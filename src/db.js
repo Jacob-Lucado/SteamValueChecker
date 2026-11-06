@@ -823,6 +823,11 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         run("DELETE FROM status_events WHERE id NOT IN (SELECT id FROM status_events ORDER BY id DESC LIMIT 200)");
     };
     const statusEvents = (limit = 20) => all("SELECT at, component, state, note FROM status_events ORDER BY id DESC LIMIT ?", limit).map(clean);
+    /** The biggest tables and indexes by bytes on disk, for the admin storage panel. */
+    const tableSizes = (limit = 10) => {
+        try { return all("SELECT COALESCE(NULLIF(t.tbl_name, ''), d.name) AS name, SUM(d.pgsize) AS bytes FROM dbstat d LEFT JOIN sqlite_schema t ON t.name = d.name GROUP BY 1 ORDER BY 2 DESC LIMIT ?", limit).map(r => ({ name: r.name, bytes: Number(r.bytes) })); }
+        catch { return []; } // a build without dbstat just shows no table list
+    };
     const getMeta = key => get("SELECT value FROM status_meta WHERE key = ?", key)?.value ?? null;
     const bumpMeta = key => run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", key);
     const listMetaPrefix = prefix => all("SELECT key, value FROM status_meta WHERE key LIKE ? ESCAPE '\\'", prefix.replace(/[%_\\]/g, c => "\\" + c) + "%");
@@ -843,6 +848,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

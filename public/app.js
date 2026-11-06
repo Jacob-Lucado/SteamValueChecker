@@ -4088,10 +4088,20 @@
       const up = s => { const d = Math.floor(s / 86400), hr = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d}d ${hr}h` : hr ? `${hr}h ${m}m` : `${m}m`; };
       const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
       const lagBad = p.lagMs > 100;
+      const st = await api("/api/admin/storage").catch(() => null);
+      const fmt = n => n >= 1024 ? (n / 1024).toFixed(2) + " GB" : n > 0 && n < 0.1 ? "under 0.1 MB" : n + " MB";
+      const storagePanel = st && h("div", { class: "panel" }, h("h3", { text: "Storage" }),
+        st.volume ? h("div", { class: "grid four" },
+          tile("Disk used", st.volume.pct + "%", `${fmt(st.volume.usedMb)} of ${fmt(st.volume.totalMb)}`),
+          tile("Free space", fmt(st.volume.freeMb), st.volume.pct >= 85 ? "Running low: extend the volume" : st.volume.pct >= 70 ? "Getting full, plan to extend" : "Plenty of room"),
+          tile("Database", fmt(st.dbMb), st.walMb ? fmt(st.walMb) + " in the write log" : "Write log is empty"),
+          tile("Backups", fmt(st.backupsMb), st.backupCount + (st.backupCount === 1 ? " file" : " files"))) : h("p", { class: "muted", text: "Disk size isn't available on this host." }),
+        st.tables.length ? h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Biggest tables" }), h("th", { text: "Size" })])), h("tbody", {}, st.tables.map(t => h("tr", {}, h("td", { text: t.name }), h("td", { text: fmt(t.mb) }))))) : null);
       body.replaceChildren(
         h("div", { class: "grid four" }, tile("Uptime", up(p.uptimeS), b.version ? "Version " + b.version : p.node), tile("Discord ping", b.pingMs != null ? b.pingMs + " ms" : "–", b.servers != null ? b.servers + " servers" : null),
           tile("Memory", p.rssMb + " MB", `${p.heapMb} MB of ${p.heapLimitMb} MB heap`), tile("Event loop lag", p.lagMs + " ms", lagBad ? "Slow: something is blocking" : "Healthy")),
         h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
+        storagePanel,
         h("div", { class: "panel" }, h("h3", { text: "Background jobs" }),
           sys.jobs && sys.jobs.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Job", "Last run", "Took", "Result", "Failures"].map(c => h("th", { text: c })))),
             h("tbody", {}, sys.jobs.map(j => {

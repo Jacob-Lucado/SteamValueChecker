@@ -237,7 +237,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -3189,6 +3189,11 @@ export function createDashboard({ topgg = null, twitchReply = false, trivia = nu
             return { rows, more: rows.length === 50 };
         },
         // How the bot itself is doing right now: process, memory, sign-ins and the event loop.
+        "GET /api/admin/storage": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            return storage ? await storage() : { volume: null, dbMb: 0, walMb: 0, backupsMb: 0, backupCount: 0, tables: [] };
+        },
         "GET /api/admin/system": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -3943,13 +3948,13 @@ export function createDashboard({ topgg = null, twitchReply = false, trivia = nu
                 return await serveProfileShare(res, url.pathname.split("/")[2].toLowerCase());
             }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
+            // Typed with capitals (/GameHub) is still the same page.
+            if (req.method === "GET" && /^\/gamehub\/?$/i.test(url.pathname) && url.pathname !== "/gamehub") return await serveFile(res, "/gamehub");
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             if (req.method === "GET" && url.pathname === "/robots.txt") {
                 return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
-            // Typed with capitals (/GameHub) is still the same page.
-            if (req.method === "GET" && /^\/gamehub\/?$/i.test(url.pathname) && url.pathname !== "/gamehub") return await serveFile(res, "/gamehub");
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();
                 return send(res, 200, `Contact: https://x.com/twit_user69\nExpires: ${expires}\nPreferred-Languages: en\nCanonical: ${origin}/.well-known/security.txt\nPolicy: ${origin}/privacy.html\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" });

@@ -2101,6 +2101,7 @@ test("admin panel: own address, sign-in handoff, audit trail, system page, and n
         const cb = await o.request(`/auth/callback?code=good&state=${new URL(l.headers.get("location")).searchParams.get("state")}`);
         assert.equal(cb.headers.get("location"), "https://admin.bot.example/");
         assert.ok(cb.set.some(c => /^svc_session=/.test(c) && /Domain=bot\.example/.test(c)), "session cookie is shared across the domain");
+        assert.equal((await o.request("/api/admin/storage")).status, 200);
         const sys = await o.request("/api/admin/system");
         assert.equal(sys.status, 200);
         assert.ok(sys.data.process.rssMb > 0);
@@ -2110,7 +2111,7 @@ test("admin panel: own address, sign-in handoff, audit trail, system page, and n
     } finally { await o.close(); }
     const other = await signedIn({ config: { ownerId: "someone-else" } });
     try {
-        for (const p of ["/api/admin/audit", "/api/admin/system"]) assert.equal((await other.request(p)).status, 403, p);
+        for (const p of ["/api/admin/audit", "/api/admin/system", "/api/admin/storage"]) assert.equal((await other.request(p)).status, 403, p);
     } finally { await other.close(); }
 });
 

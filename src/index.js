@@ -15,6 +15,7 @@ import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
+import { storageReport } from "./storage.js";
 import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
 import { humanCount, warmMembers } from "./members.js";
@@ -946,7 +947,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;
