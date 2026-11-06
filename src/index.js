@@ -163,6 +163,7 @@ console.log(CONTENT_INTENT ? "[ai] Message Content intent is on: \"Hey AI\" and 
 console.log(cfg.anthropicKey ? "[ai] The bot has its own AI key." : "[ai] No bot AI key: the bot answers common questions itself, and servers can bring their own key.");
 console.log(MEMBERS_INTENT ? "[community] Server Members intent is on: welcome messages and invite tracking are active." : "[community] Server Members intent is off: turn it on in the Developer Portal (Bot > Privileged Gateway Intents) for welcome messages and invite tracking.");
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : []), ...(CONTENT_INTENT ? [GatewayIntentBits.MessageContent] : [])] });
+client.setMaxListeners(30); // each feature adds its own startup listener, and there are now more than the default ten
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
