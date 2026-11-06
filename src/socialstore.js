@@ -105,6 +105,7 @@ export const ITEMS_PER_DAY = 60;
 export const REPORTS_TO_HIDE = 3;
 export const MAX_FOLLOWING = 500;
 export const EVENT_KEEP_MS = 90 * 86400_000;
+export const IMAGE_KEEP_MS = 180 * 86400_000; // post text stays, but the pictures are the heavy part, so they go after about six months
 const HOUR = 3600_000, DAY = 86400_000;
 
 /** Visible authors only: a page that is on, not blocked, and not set to keep its activity to itself (posts are always the author's choice). */
@@ -436,6 +437,7 @@ export function socialStore({ run, get, all, now, clean = x => x }) {
         run("DELETE FROM feed_reactions WHERE feed_id NOT IN (SELECT id FROM feed)");
         run("DELETE FROM feed_reports WHERE feed_id NOT IN (SELECT id FROM feed)");
         run("DELETE FROM feed_images WHERE feed_id NOT IN (SELECT id FROM feed)");
+        run("DELETE FROM feed_images WHERE at < ?", t - IMAGE_KEEP_MS);
     }
     /** Everything a member left behind goes when they delete their data. */
     function forgetSocialUser(id) {

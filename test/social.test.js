@@ -161,3 +161,14 @@ test("weekly digest: only people who asked, only when there is news, once a week
     assert.equal(digestLine({ kind: "post", body: "x".repeat(300), author: "b" }, () => "Bea").length < 140, true);
     assert.ok(digestEmbed({ counts: { finished: 1 }, items: [], people: 1 }, () => "x", null).title);
 });
+
+test("old post pictures are cleared after about six months but the post text stays", () => {
+    const { db, tick } = rig();
+    const p = db.createPost("a", { body: "look at this", hasImage: true });
+    const imageId = db.addPostImage(p.id, "a", "image/png", Buffer.from("x"));
+    db.pruneFeed();
+    assert.ok(db.getPostImage(imageId), "a fresh picture is kept");
+    tick(181 * 86400_000);
+    db.pruneFeed();
+    assert.equal(db.getPostImage(imageId), null, "an old picture is gone");
+});

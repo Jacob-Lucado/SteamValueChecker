@@ -2,7 +2,8 @@
 export const CHANGELOG = [
     { version: "2026.11.44", date: "2026-11-05", title: "Vote for the bot, get XP", items: [
         "**Top.gg votes pay out:** vote for the bot on Top.gg and you get 250 bonus XP in every server where you already have XP, double on weekends. Use `/vote` or the dashboard card.",
-        "You also get a short thank-you DM with when you can vote again."
+        "You also get a short thank-you DM with when you can vote again.",
+        "**Housekeeping:** pictures on feed posts are cleared after about six months to keep storage small. The post text stays."
     ] },
     { version: "2026.11.43", date: "2026-11-05", title: "Giveaway roles and more free games", items: [
         "**Pick who can enter a giveaway:** require one role, any of several, or all of them, and require Steam Verified so only members who proved their Steam account can enter. Works on server, stream and network giveaways.",
