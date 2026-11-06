@@ -123,6 +123,7 @@ If this policy changes, the date above will be updated.
 - **Invites and referrals:** which invite you joined with, who it belonged to, and when you joined and left, so inviters can be credited. Shown as counts and names of inviters in that server. Your own invite link is stored if you make one with `/server invites link`.
 - **Welcome and leave notes:** the bot posts your name and avatar link in the server's welcome channel when you join, and optionally when you leave.
 - **Emoji import:** the bot downloads the emoji or image you ask it to add from Discord's own servers and uploads it to your server. Nothing is kept.
+- **Top.gg votes:** if you vote for the bot on Top.gg, your Discord ID, the time of the vote and a running count of your votes are kept so the bonus XP is paid once. `/me mydata delete` removes them.
 - **Control:** `/me mydata export` includes this data and `/me mydata delete` removes your XP, joins and links (invites you made stay as counts without your name). If the bot leaves a server, that server's community data is deleted.
 - **Cross-server giveaways:** the post shows the host (the bot owner or a partner) and the partner's public links, and optional steps such as following an account. The bot cannot see whether you did them.
 

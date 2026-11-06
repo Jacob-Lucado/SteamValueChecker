@@ -2753,3 +2753,12 @@ test("page background: reading the Steam profile page", async () => {
     assert.equal(safeSteamUrl("http://cdn.steamstatic.com/x.jpg"), null, "https only");
     assert.equal(sniffImage(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'></svg>")), null, "SVG is not accepted");
 });
+
+test("the Top.gg vote card route says when voting is off", async () => {
+    const t = await setup();
+    await t.signIn();
+    const r = await t.request("/api/topgg");
+    assert.equal(r.status, 200);
+    assert.equal(r.data.enabled, false);
+    await t.close();
+});

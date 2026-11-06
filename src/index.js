@@ -14,6 +14,7 @@ import { loadConfig } from "./config.js";
 import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
+import { createTopgg, VOTE_XP } from "./topgg.js";
 import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
 import { humanCount, warmMembers } from "./members.js";
@@ -211,6 +212,16 @@ const notifier = createNotifier({ db, discord });
 // Community features (welcome, XP, invites, emoji) use the bot's REST helper, the same one the dashboard uses.
 const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.dashboard?.clientSecret ?? "", botToken: cfg.token, redirectUri: "http://localhost/unused" });
 const community = createCommunity({ db, api: botRest, renderCard: renderWelcomeCard, dm: (id, p) => discord.sendDm(id, p), dashboardUrl: cfg.dashboard?.publicUrl ?? null, ownerId: cfg.ownerId });
+// Top.gg votes: thank each voter with bonus XP. Needs the TOPGG_TOKEN secret; without it this stays quiet.
+const topgg = createTopgg({
+    token: process.env.TOPGG_TOKEN, db, log: m => console.log(`[topgg] ${m}`),
+    reward: (userId, xp) => community.grantBonusXp(userId, xp),
+    notify: async (userId, v) => {
+        const when = v.expiresAt ? ` You can vote again <t:${Math.floor(v.expiresAt / 1000)}:R>.` : "";
+        const got = v.servers ? `You just got **+${v.xp} XP** in ${v.servers} server${v.servers === 1 ? "" : "s"}.` : "Chat in a server with levels turned on and your next vote will pay out there.";
+        await discord.sendDm(userId, { embeds: [{ color: 0xff9800, title: "Thanks for the vote!", description: `${got}${when}`, footer: { text: `Votes so far: ${v.total}` } }] });
+    }
+});
 const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
 const modUi = createModHandlers({ db, mod: moderation });
 const streamGw = createStreamGiveaways({ db, giveaways: () => giveaways });
@@ -604,8 +615,8 @@ const status = createStatusMonitor({
             staleAfter(beat.alerts, cfg.checkEveryMinutes * 60_000) ? { state: "degraded", detail: "The last check is overdue" } : { state: "operational" } },
         ...(giveaways ? { giveaways: { name: "Giveaway engine", desc: "Ends giveaways on time and delivers prize keys", critical: false, check: () =>
             staleAfter(beat.giveaways, 60_000) ? { state: "degraded", detail: "The last run is overdue" } : { state: "operational" } } } : {}),
-        freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games and Steam news", critical: false, check: () => {
-            const bad = [["Amazon Luna", luna.health()], ["GamerPower", gamerPower.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
+        freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games, Steam news and Top.gg votes", critical: false, check: () => {
+            const bad = [["Amazon Luna", luna.health()], ["GamerPower", gamerPower.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()], ["Top.gg votes", topgg.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
             return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${h.lastError})`).join(" or ")}` } : { state: "operational" };
         } },
         golive: { name: "Go-live detection", desc: "Noticing when linked Twitch, Kick and YouTube streamers go live", critical: false, check: () => {
@@ -629,6 +640,12 @@ client.once(Events.ClientReady, () => { // notice when linked streamers go live 
     let busy = false;
     const tick = () => { if (busy) return; busy = true; streamWatch.tick().catch(e => console.log(`[stream watch] ${e.message}`)).finally(() => { busy = false; }); };
     setTimeout(tick, 75_000).unref?.(); setInterval(tick, CHECK_EVERY_MS).unref?.();
+});
+client.once(Events.ClientReady, () => { // Top.gg votes, checked every three minutes
+    if (!topgg.enabled) return;
+    let busy = false;
+    const tick = () => { if (busy) return; busy = true; topgg.poll().catch(e => console.log(`[topgg] ${e.message}`)).finally(() => { busy = false; }); };
+    setTimeout(tick, 45_000).unref?.(); setInterval(tick, 3 * 60_000).unref?.();
 });
 client.once(Events.ClientReady, () => { // squad-up posts: two or more members in the same game (checked every three minutes)
     if (!nowPlaying.enabled) return;
@@ -890,6 +907,13 @@ async function onInteraction(i, again = false) {
             case "mydata": return await handlers.handleMyData(i);
             case "help": return await i.reply({ ...helpPayload("start"), flags: MessageFlags.Ephemeral });
             case "dashboard": case "dash": return await i.reply(dashPayload(cfg.dashboard?.publicUrl ?? null, i.options.getString("page")));
+            case "vote": {
+                const st = await topgg.status(i.user.id), id = client.user?.id ?? cfg.clientId, url = `https://top.gg/bot/${id}/vote`;
+                const line = !topgg.enabled ? "Voting isn't switched on yet."
+                    : st.voted ? `You already voted. You can vote again <t:${Math.floor(st.nextAt / 1000)}:R>.` : "You can vote right now.";
+                return await i.reply({ flags: MessageFlags.Ephemeral, embeds: [{ color: 0xff9800, title: "Vote for Steam Value Checker", description: `Every vote on Top.gg pays out **${VOTE_XP} XP** in every server where you already have XP (double on weekends, when Top.gg counts votes twice). Voting also helps other gamers find the bot.\n\n${line}`, footer: { text: st.votes ? `You have voted ${st.votes} time${st.votes === 1 ? "" : "s"} here.` : "Takes about ten seconds." } }],
+                    components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel("Vote on Top.gg").setStyle(ButtonStyle.Link).setURL(url))] });
+            }
             case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
             case "privacy": { const base = cfg.dashboard?.publicUrl?.replace(/\/$/, ""); return await embedReply(i, base ? `${PRIVACY}\n\nFull text: [Privacy Policy](${base}/privacy.html) · [Terms of Service](${base}/terms.html)` : PRIVACY); }
         } })();
@@ -921,7 +945,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

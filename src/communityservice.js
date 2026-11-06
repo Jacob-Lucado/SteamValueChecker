@@ -153,5 +153,16 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         return "granted";
     }
 
-    return { grantVerified, onMessage, onVoiceMinute, rankOf, refreshInvites, cacheInvite, dropInvite, attribute, onJoin, onLeave, inviteLinkFor, inviteSummary, syncLevelRoles, checkRewards, _invites: invites, xpForNext };
+    /** Bonus XP in every server where the person already has some, for a Top.gg vote. Returns how many servers got it. */
+    async function grantBonusXp(userId, amount) {
+        let n = 0;
+        for (const guildId of db.xpGuildsOf(userId)) {
+            const r = db.addXp(guildId, userId, amount);
+            if (r.after > r.before) await syncLevelRoles(guildId, userId, r.after);
+            n++;
+        }
+        return n;
+    }
+
+    return { grantBonusXp, grantVerified, onMessage, onVoiceMinute, rankOf, refreshInvites, cacheInvite, dropInvite, attribute, onJoin, onLeave, inviteLinkFor, inviteSummary, syncLevelRoles, checkRewards, _invites: invites, xpForNext };
 }

@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.44", date: "2026-11-05", title: "Vote for the bot, get XP", items: [
+        "**Top.gg votes pay out:** vote for the bot on Top.gg and you get 250 bonus XP in every server where you already have XP, double on weekends. Use `/bot vote` or the dashboard card.",
+        "You also get a short thank-you DM with when you can vote again."
+    ] },
     { version: "2026.11.43", date: "2026-11-05", title: "Giveaway roles and more free games", items: [
         "**Pick who can enter a giveaway:** require one role, any of several, or all of them, and require Steam Verified so only members who proved their Steam account can enter. Works on server, stream and network giveaways.",
         "**Override roles:** members with your booster role (or any role you choose) skip every requirement. **Bonus roles** decide who gets extra entries, and you can pick several.",

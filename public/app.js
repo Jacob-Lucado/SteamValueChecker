@@ -139,6 +139,20 @@
     return box;
   }
 
+  // A small thank-you card for Top.gg votes. It only shows once the bot has a Top.gg token, and fills in after the page loads.
+  function voteCard() {
+    const box = h("div");
+    if (!state.me) return box;
+    api("/api/topgg").then(v => {
+      if (!v || !v.enabled) return;
+      box.replaceChildren(h("a", { class: "card-link", href: safeHref(v.url), target: "_blank", rel: "noopener noreferrer" },
+        h("span", { class: "icon", text: "🗳️" }),
+        h("span", {}, h("strong", { text: "Vote for the bot on Top.gg" }),
+          h("span", { class: "muted", text: v.voted ? `Thanks, you voted. You can vote again ${new Date(v.nextAt).toLocaleString()}.` : `Every vote gives you ${v.xp} bonus XP in each server where you already have XP.` }))));
+    }).catch(() => {});
+    return box;
+  }
+
   const fanaticalCard = () => state.cfg && h("a", { class: "card-link", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer" },
     h("span", { class: "icon", text: "🔑" }),
     h("span", {}, h("strong", { text: "FanaticalGrabber" }),
@@ -486,7 +500,7 @@
           ...[["", "Giveaway ends", "Winners are drawn and announced"], ["", "Claim prize", "The key is sent by DM"], ["", "Confirm it worked", "The winner presses one button"], ["", "Vouch posted", "In your vouches channel"]]
             .map(([i, t, s]) => h("div", { class: "lp-flow-step" }, h("span", { class: "lp-flow-icon", text: i }), h("div", {}, h("b", { text: t }), h("div", { class: "muted small", text: s })))))),
 
-      fanaticalCard(),
+      fanaticalCard(), voteCard(),
 
       h("section", { class: "lx-sec lp-trust" },
         head("Your data", "Yours, and you can leave", null),
