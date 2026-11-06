@@ -8,6 +8,7 @@ import { gameNight } from "../gamenight.js";
 import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
 import { randomBytes, createHash } from "node:crypto";
+import { indexNowKey } from "../indexnow.js";
 import { SEO_PAGES, seoSlugs, renderSeoPage } from "../seopages.js";
 import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -3887,6 +3888,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
             }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
+            if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             if (req.method === "GET" && url.pathname === "/robots.txt") {
                 return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
