@@ -1524,10 +1524,10 @@
     const shrink = file => new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file), im = new Image();
       im.onload = () => {
-        const k = Math.min(1, 1920 / im.width), c = document.createElement("canvas"); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+        const k = Math.min(1, 1600 / im.width), c = document.createElement("canvas"); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
         c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-        let q = 0.85, out = c.toDataURL("image/jpeg", q);
-        while (out.length > 1_550_000 && q > 0.4) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+        let q = 0.8, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 500_000 && q > 0.45) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
         out.length > 1_550_000 ? reject(new Error("That picture is too big even after shrinking it. Try a smaller one.")) : resolve(out);
       };
       im.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file is not a picture this browser can open.")); };
@@ -6822,18 +6822,19 @@
   }
 
   /** The box for writing a post or a reply. */
-  /** Shrinks a chosen picture to something light before it is sent: at most 1600 px wide, as a JPEG. Resolves a data: address. */
+  /** Shrinks a chosen picture to something light before it is sent: at most 1280 px on the long side, as a JPEG of roughly 250 KB. Resolves a data: address. */
   function shrinkPicture(file) {
     return new Promise((resolve, reject) => {
       if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return reject(new Error("Pick a JPEG, PNG or WebP picture."));
       const url = URL.createObjectURL(file), img = new Image();
       img.onload = () => {
-        const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+        const k = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement("canvas");
         c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(url);
-        let q = 0.85, out = c.toDataURL("image/jpeg", q);
-        while (out.length > 1_500_000 && q > 0.4) { q -= 0.15; out = c.toDataURL("image/jpeg", q); }
+        // aim for about 250 KB: plenty for a feed post, and it keeps the database small
+        let q = 0.8, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 340_000 && q > 0.45) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
         out.length > 1_500_000 ? reject(new Error("That picture is too big. Try a smaller one.")) : resolve(out);
       };
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file could not be read as a picture.")); };
