@@ -2766,6 +2766,8 @@ test("the Top.gg vote card route says when voting is off", async () => {
 test("the GameHub sprite page is served but stays unlisted", async () => {
     const t = await setup();
     const page = await t.request("/gamehub");
+    assert.equal((await t.request("/GameHub")).status, 200, "capitalised path still works");
+    assert.ok((await t.request("/GameHub")).text.includes("Byte"), "serves the sprite page, not the home page");
     assert.equal(page.status, 200);
     assert.match(page.text, /<meta name="robots" content="noindex, nofollow">/);
     const head = await fetch(t.base + "/gamehub");
