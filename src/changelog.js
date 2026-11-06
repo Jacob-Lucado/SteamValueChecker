@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.41", date: "2026-11-05", title: "Server wrapped", items: [
+        "**Your server's year in one picture:** `/leaderboard` has a new pick, Server wrapped. It shows hours played together, the games your server actually played, who put in the most time and how many games got finished. It only counts members who turned on `/alerts share`, so post it and let people see what joining adds."
+    ] },
     { version: "2026.11.40", date: "2026-11-05", title: "Free tools on the website", items: [
         "**Discord timestamp generator:** pick a date, time and zone and copy a code that shows in everyone's own time zone.",
         "**Steam ID finder:** paste a profile link, custom name or any kind of Steam ID and get every format.",

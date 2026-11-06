@@ -612,6 +612,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         `SELECT u.discord_id, SUM(p.minutes) AS minutes FROM users u JOIN playtime_log p ON p.discord_id = u.discord_id
           WHERE u.share = 1 AND u.guild_id = ? AND p.day >= ? GROUP BY u.discord_id HAVING minutes > 0 ORDER BY minutes DESC`, guildId, fromDay).map(clean);
 
+    /** Time tracked per game since a day by members who opted in: minutes, how many members played it. For the server wrapped picture. */
+    const sharedGameHours = (guildId, fromDay) => all(
+        `SELECT p.itad_id AS itad_id, MIN(p.title) AS title, SUM(p.minutes) AS minutes, COUNT(DISTINCT p.discord_id) AS players
+           FROM users u JOIN playtime_log p ON p.discord_id = u.discord_id
+          WHERE u.share = 1 AND u.guild_id = ? AND p.day >= ? GROUP BY p.itad_id HAVING minutes > 0 ORDER BY minutes DESC`, guildId, fromDay).map(clean);
+
     // ---------- server settings: free game feed and stats ----------
     const setFreeFeed = (guildId, on) => run("UPDATE guilds SET free_feed = ? WHERE guild_id = ?", on ? 1 : 0, guildId).changes > 0;
     const setHotMin = (guildId, min) => run("UPDATE guilds SET hot_min = ? WHERE guild_id = ?", min, guildId).changes > 0;
@@ -830,7 +836,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
-        countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours,
+        countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()

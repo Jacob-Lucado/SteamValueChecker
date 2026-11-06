@@ -34,6 +34,7 @@ import { friendDeals, friendRows, saveFriend, birthdayEmbed } from "./friends.js
 import { spendSummary, regionCurrency } from "./spend.js";
 import { trophyCase } from "./badges.js";
 import { addBundle, bundleView } from "./bundles.js";
+import { buildServerWrapped, renderServerWrapped } from "./serverwrapped.js";
 import { importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, LibraryError, playNext, serverStats, trendSummary } from "./library.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "./serverlist.js";
 import { readUpload } from "./upload.js";
@@ -740,6 +741,15 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
     async function handleLeaderboard(i) {
         try {
             const board = i.options.getString("board"), guild = await homeGuild(i);
+            if (board === "wrapped") {
+                const data = buildServerWrapped(db, guild);
+                if (!data) return void await eph(i, "Nothing to show yet. Wrapped uses hours tracked this year by members who turned on `/alerts share`, so once a few people have linked Steam and opted in it fills up.");
+                await i.deferReply();
+                const names = new Map();
+                await Promise.all([...new Set(data.mvp.map(p => p.discord_id))].map(async id => { try { const u = await i.client.users.fetch(id); names.set(id, u.globalName ?? u.username); } catch { names.set(id, "a member"); } }));
+                const png = await renderServerWrapped(data, { guildName: i.guild?.name ?? "Your server", nameOf: id => names.get(id) ?? "a member" });
+                return void await i.editReply({ content: `**${i.guild?.name ?? "Your server"}: ${data.year} wrapped.** Want to be in it? Turn on \`/alerts share\` and link Steam.`, files: [{ attachment: Buffer.from(png), name: "server-wrapped.png", description: `Server wrapped ${data.year}` }], allowedMentions: { parse: [] } });
+            }
             const finished = board === "finished", extra = EXTRA_BOARDS[board];
             const entries = finished ? finishedLeague(db, guild) : extra ? extraBoard(db, guild, board) : leaderboard(db, guild);
             const footer = board === "hours" ? "Only members who opted in. Counts hours tracked since they linked Steam." : "Only members who opted in.";
