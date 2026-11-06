@@ -17,7 +17,7 @@ test("gamerpower: keeps live PC games, drops DLC, phone and console offers and e
         row(), row({ id: 2, type: "DLC" }), row({ id: 3, platforms: "iOS" }), row({ id: 4, platforms: "Xbox One" }),
         row({ id: 5, end_date: "2026-11-03 10:00:00" }), row({ id: 6, status: "Expired" }), row({ id: 7, end_date: "N/A", platforms: "PC, Steam", title: "Some Game Giveaway" }), row({ id: 8, open_giveaway_url: "http://x" }), row({ id: 10, title: "Foo Playtest Steam", platforms: "PC, Steam" }), row({ id: 11, platforms: "PC, itch.io" })
     ], NOW);
-    assert.deepEqual(list.map(g => [g.id, g.title, g.shop]), [["gp:1", "Highway Driving", "Epic Games Store"], ["gp:7", "Some Game", "Steam"]]);
+    assert.deepEqual(list.map(g => [g.id, g.title, g.shop]), [["gp:1", "Highway Driving", "Epic Games Store"], ["gp:7", "Some Game", "Steam"], ["gp:11", "Highway Driving", "itch.io"]]);
     assert.equal(list[0].expiry, Date.parse("2026-11-08T23:59:00Z"));
     assert.equal(list[1].expiry, null);
 });
@@ -49,4 +49,15 @@ test("the same game from two sources shows once, with the store name tidied", as
     ]);
     assert.deepEqual(out.map(g => g.id), ["a", "c", "e", "f"]);
     assert.equal(out[0].title, "Sorry We're Closed"); assert.equal(out[0].shop, "Epic Games Store");
+});
+
+test("gamerpower: covers Humble, EA, itch.io and Prime Gaming offers too", () => {
+    const list = parseGamerPower([
+        row({ id: 21, platforms: "PC, Humble Store", title: "Humble Pick Giveaway" }),
+        row({ id: 22, platforms: "PC, EA app", title: "Ea Pick Giveaway" }),
+        row({ id: 23, platforms: "PC, itch.io", title: "Itch Pick Giveaway" }),
+        row({ id: 24, platforms: "PC, Prime Gaming", title: "Prime Pick Giveaway" }),
+        row({ id: 25, platforms: "Android, Amazon", title: "Phone Pick Giveaway" }),
+    ], NOW);
+    assert.deepEqual(list.map(g => g.shop), ["Humble Store", "EA app", "itch.io", "Prime Gaming"]);
 });

@@ -6,6 +6,7 @@ const GREEN = 0x57f287;
 const GREY = 0x8b95a5;
 const RED = 0xed4245;
 import { isVideoLink } from "./gwparse.js";
+import { roleIds } from "./gwroles.js";
 import { crossServerParts, stepParts, stepRows } from "./gwpartner.js";
 import { kindInfo, isCode, theme } from "./prizes.js";
 const GALLERY_URL = "https://store.steampowered.com/";
@@ -29,10 +30,15 @@ export function prizeSummary(keys) {
 function requirements(g) {
     const r = [];
     if (g.require_boost) r.push("Server boosters only");
-    if (g.require_role_id) r.push(`Must have ${role(g.require_role_id)}`);
+    if (g.require_steam) r.push("Must be Steam Verified");
+    const need = roleIds(g.require_role_id);
+    if (need.length) r.push(need.length === 1 ? `Must have ${role(need[0])}` : `Must have ${g.require_all ? "all of" : "one of"}: ${need.map(role).join(", ")}`);
     if (g.min_account_days) r.push(`Discord account at least ${g.min_account_days} days old`);
     if (g.min_member_days) r.push(`⏳ In this server at least ${g.min_member_days} days`);
-    if (g.bonus_role_id && g.bonus_entries > 1) r.push(`${role(g.bonus_role_id)} get ${g.bonus_entries} entries`);
+    const bonus = roleIds(g.bonus_role_id);
+    if (bonus.length && g.bonus_entries > 1) r.push(`${bonus.map(role).join(", ")} get ${g.bonus_entries} entries`);
+    const skip = roleIds(g.override_role_id);
+    if (skip.length) r.push(`${skip.map(role).join(", ")} skip these requirements`);
     return r;
 }
 

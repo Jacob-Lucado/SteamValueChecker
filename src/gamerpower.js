@@ -3,7 +3,8 @@
 // the last good list if the site is down. Every failure is quiet: the other sources keep working.
 export const GP_API = "https://www.gamerpower.com/api/giveaways?sort-by=date";
 
-const STORES = [[/epic games/i, "Epic Games Store"], [/steam/i, "Steam"], [/gog/i, "GOG"], [/ubisoft/i, "Ubisoft"], [/battle\.net/i, "Battle.net"]];
+const STORES = [[/epic games/i, "Epic Games Store"], [/steam/i, "Steam"], [/gog/i, "GOG"], [/ubisoft/i, "Ubisoft"], [/battle\.net/i, "Battle.net"],
+    [/humble/i, "Humble Store"], [/\b(ea app|origin|ea play)\b/i, "EA app"], [/itch\.?io/i, "itch.io"], [/prime gaming|amazon/i, "Prime Gaming"]];
 const httpsUrl = u => { try { return new URL(String(u)).protocol === "https:" ? String(u) : null; } catch { return null; } };
 
 /** "Highway Driving (Epic Games) Giveaway" becomes "Highway Driving". */

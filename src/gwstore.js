@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS giveaways (
     ended_at         INTEGER,
     leftover_notified INTEGER NOT NULL DEFAULT 0,
     require_boost    INTEGER NOT NULL DEFAULT 0,
+    require_steam    INTEGER NOT NULL DEFAULT 0,
+    override_role_id TEXT,
+    require_all      INTEGER NOT NULL DEFAULT 0,
     starts_at        INTEGER,
     duration_ms      INTEGER
 );
@@ -102,13 +105,19 @@ CREATE TABLE IF NOT EXISTS giveaway_settings (
 const GIVEAWAY_FIELDS = [
     "guild_id", "channel_id", "host_id", "title", "description", "game_title", "image_url", "thumbnail_url", "color", "button_label",
     "ping_role_id", "require_role_id", "bonus_role_id", "bonus_entries", "min_account_days", "min_member_days", "claim_hours",
-    "vouch_channel_id", "ends_at", "gallery", "require_boost", "starts_at", "duration_ms", "status", "host_name", "host_kind", "host_links", "host_logo", "steps", "is_global"
+    "vouch_channel_id", "ends_at", "gallery", "require_boost", "require_steam", "override_role_id", "require_all", "starts_at", "duration_ms", "status", "host_name", "host_kind", "host_links", "host_logo", "steps", "is_global"
 ];
 
 export function giveawayStore({ db, run, get, all, clean, now }) {
     // Rows handed out never carry the encrypted key unless asked for.
     const KEY_COLS = "id, giveaway_id, position, label, kind, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, (key_enc IS NOT NULL) AS has_key";
 
+    const RULE_COLS = ["require_role_id", "require_all", "override_role_id", "bonus_role_id", "bonus_entries", "require_steam"];
+    /** Changes who may enter a giveaway. Only the rule columns can be set here. */
+    const setGiveawayRules = (id, patch) => {
+        const keys = Object.keys(patch).filter(k => RULE_COLS.includes(k));
+        if (keys.length) run(`UPDATE giveaways SET ${keys.map(k => `${k} = ?`).join(", ")} WHERE id = ?`, ...keys.map(k => patch[k] ?? null), id);
+    };
     const getGiveaway = id => clean(get("SELECT * FROM giveaways WHERE id = ?", id));
     const listGiveaways = (guildId, { limit = 25 } = {}) =>
         all("SELECT * FROM giveaways WHERE guild_id = ? ORDER BY (status = 'active') DESC, created_at DESC LIMIT ?", guildId, limit).map(clean);
@@ -125,7 +134,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
             const cols = GIVEAWAY_FIELDS;
             const r = run(
                 `INSERT INTO giveaways (${cols.join(", ")}, created_at) VALUES (${cols.map(() => "?").join(", ")}, ?)`,
-                ...cols.map(c => g[c] ?? (c === "bonus_entries" ? 1 : c === "claim_hours" ? 48 : c === "min_account_days" || c === "min_member_days" || c === "require_boost" || c === "is_global" ? 0 : c === "status" ? "active" : null)), now()
+                ...cols.map(c => g[c] ?? (c === "bonus_entries" ? 1 : c === "claim_hours" ? 48 : c === "min_account_days" || c === "min_member_days" || c === "require_boost" || c === "require_steam" || c === "require_all" || c === "is_global" ? 0 : c === "status" ? "active" : null)), now()
             );
             const id = Number(r.lastInsertRowid);
             keys.forEach((k, i) => run("INSERT INTO giveaway_keys (giveaway_id, position, label, key_enc, kind) VALUES (?,?,?,?,?)", id, i + 1, k.label, k.enc, k.kind ?? "key"));
@@ -258,7 +267,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     return {
         markSoon, unmarkSoon, soonIds, listSoon,
         listTemplates, saveTemplate, removeTemplate, prizesFor,
-        getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
+        setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,
         listKeys, getKey, getKeyEnc, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,

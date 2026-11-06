@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.43", date: "2026-11-05", title: "Giveaway roles and more free games", items: [
+        "**Pick who can enter a giveaway:** require one role, any of several, or all of them, and require Steam Verified so only members who proved their Steam account can enter. Works on server, stream and network giveaways.",
+        "**Override roles:** members with your booster role (or any role you choose) skip every requirement. **Bonus roles** decide who gets extra entries, and you can pick several.",
+        "**Change the rules after launch** with `/giveaway rules`, or from the dashboard.",
+        "**More free games:** Humble, EA app, itch.io and Prime Gaming freebies now show up next to Steam, Epic, GOG and Ubisoft."
+    ] },
     { version: "2026.11.42", date: "2026-11-05", title: "A livelier site", items: [
         "**Smooth scrolling** with a mouse wheel, and in-page links glide to their section.",
         "**Pages move:** headlines and buttons arrive one after another, cards fade up as you scroll to them, numbers count up, and there is a progress bar along the top.",

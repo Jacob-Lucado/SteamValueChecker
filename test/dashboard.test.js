@@ -655,6 +655,14 @@ test("giveaways page: managers only, validated, and keys never come back", async
     assert.deepEqual([saved.data.settings.vouch_channel_id, saved.data.settings.manager_role_id], ["c2", "r1"]);
     assert.equal((await t.request("/api/giveaways/setup", { method: "POST", body: { guild_id: "g-admin", vouch_channel_id: "zzz" } })).status, 400);
 
+    // rules can be changed while it runs: several roles, an override role and Steam Verified
+    const rules = await t.request("/api/giveaways/rules", { method: "POST", body: { guild_id: "g-admin", id: made.data.id, require_role_ids: "r1,r2", require_all: true, override_role_ids: "r3", bonus_role_ids: "r4", bonus_entries: 5, steam_verified: true } });
+    assert.equal(rules.status, 200, rules.text);
+    const after = (await t.request(`/api/giveaways/info?guild=g-admin&id=${made.data.id}`)).data;
+    assert.ok(after, "info still loads");
+    assert.equal((await t.request("/api/giveaways/rules", { method: "POST", body: { guild_id: "g-member", id: made.data.id, clear: true } })).status, 403);
+    assert.equal((await t.request("/api/giveaways/rules", { method: "POST", body: { guild_id: "g-admin", id: 9999, clear: true } })).status, 404);
+
     const cancel = await t.request("/api/giveaways/cancel", { method: "POST", body: { guild_id: "g-admin", id: made.data.id } });
     assert.equal(cancel.data.unused, 2);
     assert.match(JSON.stringify(dms), /AAAAA-BBBBB/); // unused keys go to the host's DMs, never to the dashboard

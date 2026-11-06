@@ -120,6 +120,25 @@
     return s;
   }
 
+  // Pick any number of roles: chosen ones show as chips you can click away, and `.value` is a comma list of ids (like a text field).
+  function roleMulti(roles) {
+    const chosen = [], box = h("div", { class: "rm" }), add = h("select", { "aria-label": "Add a role" });
+    const draw = () => {
+      const chips = chosen.map(id => {
+        const r = (roles || []).find(x => x.id === id), b = h("button", { type: "button", class: "rm-chip", title: "Remove", text: (r ? r.name : id) + " ×" });
+        b.addEventListener("click", () => { chosen.splice(chosen.indexOf(id), 1); draw(); });
+        return b;
+      });
+      add.replaceChildren(h("option", { value: "", text: chosen.length ? "Add another role…" : "Add a role…" }), ...(roles || []).filter(r => !chosen.includes(r.id)).map(r => h("option", { value: r.id, text: r.name })));
+      add.value = "";
+      box.replaceChildren(...chips, add);
+    };
+    add.addEventListener("change", () => { if (add.value && chosen.length < 10) chosen.push(add.value); draw(); });
+    Object.defineProperty(box, "value", { get: () => chosen.join(","), set: v => { chosen.splice(0, chosen.length, ...String(v || "").split(",").filter(Boolean)); draw(); } });
+    draw();
+    return box;
+  }
+
   const fanaticalCard = () => state.cfg && h("a", { class: "card-link", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer" },
     h("span", { class: "icon", text: "🔑" }),
     h("span", {}, h("strong", { text: "FanaticalGrabber" }),
@@ -3536,6 +3555,7 @@
       const gLabel = h("input", { type: "text", maxlength: "40", placeholder: "Enter giveaway", "aria-label": "Enter button text" });
       const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: gImage.value, thumb: gThumb.value, color: gColor.value, label: gLabel.value.trim(), length: length.value.trim(), host: "you" }));
       for (const el of [title, desc, keys, gImage, gThumb, gColor, gLabel, length]) el.addEventListener("input", gp.paint);
+      const steamOnly = h("input", { type: "checkbox" });
       const who = select([["both", "Every server's giveaway channel and DMs"], ["channels", "Server giveaway channels only"], ["dm", "DMs only"]], "both");
       const confirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
       const go = h("button", { class: "btn red", type: "button", text: "Start the giveaway" });
@@ -3582,7 +3602,7 @@
         if (info.list.some(g => g.spread && !g.spread.done) && document.body.contains(box)) timer = setTimeout(() => refresh().catch(() => {}), 2500);
       }
       go.addEventListener("click", () => busy(go, async () => {
-        const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, image: gImage.value, thumbnail: gThumb.value, color: gColor.value, button_label: gLabel.value, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value,
+        const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, image: gImage.value, thumbnail: gThumb.value, color: gColor.value, button_label: gLabel.value, steam_verified: steamOnly.checked, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value,
           host: hostKind.value === "partner" ? { kind: "partner", name: pName.value, logo: pLogo.value, links: [["Website", pWeb.value], ["Discord", pDiscord.value], ["X", pX.value], ["", pOther.value]].filter(l => l[1].trim()).map(l => ({ label: l[0], url: l[1] })) } : { kind: "network" },
           steps: stepList.map(e => ({ kind: e.sel.value, url: e.url.value, label: e.label.value })) });
         toast(`Your giveaway is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. Sending it out to ${r.total} more place${r.total === 1 ? "" : "s"}.`, "ok");
@@ -3596,6 +3616,7 @@
             h("p", { class: "muted small", text: `One giveaway, shown in every server's giveaway channel (or its alert channel if none is set) and in DMs. Entries from everywhere count together, and winners are drawn once. It is posted in ${info.destinations.length} server${info.destinations.length === 1 ? "" : "s"} and ${info.dm} member DM${info.dm === 1 ? "" : "s"}. Winners claim their key by DM.` }),
             info.destinations.length ? null : h("div", { class: "notice warn", text: "No server has a giveaway or alert channel yet. Set one on the Giveaways page (Server settings) first." }),
             field("Title", title), field("Game (for the artwork)", game), field("Description", desc),
+            h("label", { class: "check" }, steamOnly, " Only Steam Verified members can enter (checked on their account, so it works in every server)"),
             field("Prizes (one per line)", keys), prizeButtons(keys, gp.paint),
             h("p", { class: "muted small", text: "Game keys, Nitro links and gift card codes are handed out by the Claim button. Money and other prizes have no code: you get a DM when a winner claims one and you send it yourself." }),
             h("h4", { text: "Look" }),
@@ -4264,7 +4285,7 @@
           api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })),
           api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))
         ]);
-        holder.replaceChildren(giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways), setupPanel(ch.channels, ro.roles, list.settings));
+        holder.replaceChildren(giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways, ro.roles), setupPanel(ch.channels, ro.roles, list.settings));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
@@ -4296,9 +4317,10 @@
       const auto = h("input", { type: "checkbox", checked: true });
       const color = text("#5865F2", 8), label = text("Enter giveaway", 40);
       const claim = text("48", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
-      const reqRole = roleSel(), bonusRole = roleSel(), pingRole = roleSel();
+      const reqRole = roleMulti(roles), bonusRole = roleMulti(roles), overRole = roleMulti(roles), pingRole = roleSel();
+      const reqAll = select([["any", "Any one of them"], ["all", "All of them"]], "any");
       const steps = stepsEditor(stepKinds);
-      const boosters = h("input", { type: "checkbox" });
+      const boosters = h("input", { type: "checkbox" }), steamV = h("input", { type: "checkbox" });
       const startIn = text("Start later, e.g. 2h or 1d (blank = now)", 20), rounds = text("1", 2, "number"), repeatEvery = text("e.g. 7d", 20);
       const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
       for (const el of [keys, game, image]) el.addEventListener("input", refreshPreview);
@@ -4306,7 +4328,7 @@
       for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
       auto.addEventListener("change", () => { previewKey = ""; refreshPreview(); });
       // Templates keep everything except the prize keys.
-      const FIELDS = { title, length, game, desc, image, thumb, auto, color, label, claim, acct, memb, bonusN, reqRole, bonusRole, pingRole, vouchSel, boosters, startIn, rounds, repeatEvery, chSel };
+      const FIELDS = { title, length, game, desc, image, thumb, auto, color, label, claim, acct, memb, bonusN, reqRole, reqAll, overRole, bonusRole, pingRole, vouchSel, boosters, startIn, rounds, repeatEvery, chSel };
       const grab = () => Object.fromEntries(Object.entries(FIELDS).map(([k, el]) => [k, el.type === "checkbox" ? el.checked : el.value]));
       const apply = data => { for (const [k, el] of Object.entries(FIELDS)) if (data[k] !== undefined) { if (el.type === "checkbox") el.checked = Boolean(data[k]); else el.value = data[k]; } previewKey = ""; refreshPreview(); gp.paint(); };
       let tpls = [];
@@ -4323,8 +4345,8 @@
           guild_id: guild.value, channel_id: chSel.value, title: title.value, length: length.value, game: game.value, description: desc.value,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
           claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN),
-          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value,
-          boosters: boosters.checked, start_in: startIn.value, rounds: num(rounds), repeat_every: repeatEvery.value, steps: steps.get()
+          require_role_ids: reqRole.value, require_all: reqAll.value === "all", override_role_ids: overRole.value, bonus_role_ids: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value,
+          boosters: boosters.checked, steam_verified: steamV.checked, start_in: startIn.value, rounds: num(rounds), repeat_every: repeatEvery.value, steps: steps.get()
         });
         keys.value = "";
         toast(r.rounds > 1 ? `Series created: ${r.rounds} rounds scheduled.` : r.scheduled ? `Giveaway #${r.id} is scheduled.` : `Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.`, "ok");
@@ -4350,16 +4372,34 @@
         h("p", { class: "muted small", text: "Ask people to do something first, like following you on X or Twitch, joining a Discord or wishlisting a game. Each step shows on the post as a numbered line and a link button. Discord can't check these, so it works on trust and winners may be checked." }),
         steps.el,
         h("details", { class: "more" }, h("summary", { text: "Rules, schedule and more (all optional)" }),
-          h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN)),
+          h("div", { class: "row" }, field("Roles needed to enter (pick as many as you like)", reqRole), field("Entrants need", reqAll)),
+          h("div", { class: "row" }, field("Skip every rule with this role (like Booster)", overRole)),
+          h("div", { class: "row" }, field("Roles that get extra entries", bonusRole), field("Bonus entries (2-10)", bonusN)),
           h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),
           h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb)),
           h("label", { class: "check" }, boosters, "Only server boosters can enter"),
+          h("label", { class: "check" }, steamV, "Only Steam Verified members can enter"),
           h("h4", { text: "Schedule" }),
           h("div", { class: "row" }, field("Start in", startIn), field("Rounds (prizes are split across them)", rounds), field("Repeat every", repeatEvery))),
         h("p"), create);
     }
 
-    function giveawayTable(rows) {
+    // Change who can enter a giveaway that is already running. Blank pickers keep what is set; "Remove all rules" wipes them.
+    function rulesEditor(g, roles, into) {
+      const req = roleMulti(roles), over = roleMulti(roles), bonus = roleMulti(roles);
+      const mode = select([["any", "Any one of them"], ["all", "All of them"]], "any");
+      const extra = h("input", { type: "number", min: "2", max: "10", placeholder: "Extra entries (2-10)" });
+      const steam = h("input", { type: "checkbox" });
+      const save = h("button", { class: "btn blue small", type: "button", text: "Save rules" }), wipe = h("button", { class: "btn red small", type: "button", text: "Remove all rules" });
+      const send = (b, extraBody, msg) => busy(b, async () => { await api("/api/giveaways/rules", { guild_id: guild.value, id: g.id, ...extraBody }); toast(msg, "ok"); into.replaceChildren(); });
+      save.addEventListener("click", () => send(save, { require_role_ids: req.value, require_all: mode.value === "all", override_role_ids: over.value, bonus_role_ids: bonus.value, bonus_entries: extra.value || undefined, steam_verified: steam.checked ? true : undefined }, "Rules updated. The giveaway message now shows them."));
+      wipe.addEventListener("click", () => send(wipe, { clear: true }, "All rules removed."));
+      into.replaceChildren(h("div", { class: "panel" }, h("h4", { text: `Rules for #${g.id} (only what you fill in is added)` }),
+        field("Roles needed to enter", req), field("Entrants need", mode), field("Skip every rule with this role", over), field("Roles that get extra entries", bonus), field("Bonus entries", extra),
+        h("label", { class: "check" }, steam, "Only Steam Verified members can enter"), h("div", { class: "row" }, save, wipe)));
+    }
+
+    function giveawayTable(rows, roles = []) {
       const detail = h("div");
       const act = (text, cls, path, bodyExtra, done) => {
         const b = h("button", { class: "btn small " + cls, text });
@@ -4373,6 +4413,7 @@
           h("td", { class: "num live-entries", "data-gid": String(g.id), text: String(g.entries) }), h("td", { class: "num", text: `${g.redeemed}/${g.prizes}` }),
           h("td", { text: g.status === "active" ? new Date(g.ends_at).toLocaleString() : g.status === "scheduled" ? "Starts " + new Date(g.starts_at).toLocaleString() : "" }),
           h("td", { class: "actions" }, details,
+            g.status === "active" && !g.is_global ? (() => { const r = h("button", { class: "btn gray small", type: "button", text: "Rules" }); r.addEventListener("click", () => rulesEditor(g, roles, detail)); return r; })() : null,
             g.status === "active" ? act("End now", "blue", "/api/giveaways/end", { id: g.id }, r => `Ended. ${r.winners} winner${r.winners === 1 ? "" : "s"} drawn.`) : null,
             g.status === "active" || g.status === "scheduled" ? act("Cancel", "red", "/api/giveaways/cancel", { id: g.id }, () => "Cancelled. Unused keys were sent to you by DM.") : null,
             g.status === "ended" ? act("Draw for open prizes", "gray", "/api/giveaways/reroll", { id: g.id }, r => `Drew ${r.winners} new winner${r.winners === 1 ? "" : "s"}.`) : null));
@@ -6211,9 +6252,10 @@
       const image = text("Your own image, GIF or video link, https (optional)", 500), thumb = text("Your own small picture or GIF link, https (optional)", 500);
       const auto = h("input", { type: "checkbox", checked: true }), color = text("#9146ff", 8), label = text("Enter giveaway", 40);
       const claim = text("24", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
-      const boosters = h("input", { type: "checkbox" });
+      const boosters = h("input", { type: "checkbox" }), steamV = h("input", { type: "checkbox" });
       const roles = d.roles || null, roleSel = () => select([["", "None"], ...(roles || []).map(r => [r.id, r.name])], "");
-      const reqRole = roleSel(), bonusRole = roleSel(), pingRole = roleSel();
+      const reqRole = roleMulti(roles || []), bonusRole = roleMulti(roles || []), overRole = roleMulti(roles || []), pingRole = roleSel();
+      const reqAll = select([["any", "Any one of them"], ["all", "All of them"]], "any");
       const prefill = d.link && /twitch/i.test(d.link.platform) ? [{ kind: "follow_twitch", url: d.link.url }] : d.link && /youtube/i.test(d.link.platform) ? [{ kind: "youtube", url: d.link.url }] : [];
       const steps = stepsEditor(d.stepKinds || [], { prefill });
       const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), length: length.value.trim(), host: "you" }));
@@ -6226,8 +6268,8 @@
         const r = await post("/api/streams/giveaway", {
           keys: keys.value, game: game.value, title: title.value, description: desc.value, length: length.value, end_with_stream: endWith.checked,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
-          claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN), boosters: boosters.checked,
-          require_role_id: reqRole.value, bonus_role_id: bonusRole.value, ping_role_id: pingRole.value, steps: steps.get(), chat_enter: chatOn.checked, chat_invite: chatInvite.value
+          claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN), boosters: boosters.checked, steam_verified: steamV.checked,
+          require_role_ids: reqRole.value, require_all: reqAll.value === "all", override_role_ids: overRole.value, bonus_role_ids: bonusRole.value, ping_role_id: pingRole.value, steps: steps.get(), chat_enter: chatOn.checked, chat_invite: chatInvite.value
         });
         keys.value = "";
         toast(`Giveaway posted in the live channel with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.${r.endsWithStream ? " It draws when you end your stream." : ""}${r.chat ? (r.chatReplies ? " Viewers can type !enter in your chat." : " Linked viewers can type !enter in your chat (the bot can't answer in chat until a Twitch bot login is set).") : ""}`, "ok");
@@ -6257,7 +6299,8 @@
         h("details", { class: "more" }, h("summary", { text: "Rules (all optional)" }),
           h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb), field("Hours to claim", claim)),
           h("label", { class: "check" }, boosters, " Only server boosters can enter"),
-          roles ? h("div", { class: "row" }, field("Must have role", reqRole), field("Bonus-entry role", bonusRole), field("Bonus entries (2-10)", bonusN), field("Ping role", pingRole)) : h("p", { class: "muted small", text: "Role rules and pings are set by a server manager." })),
+          h("label", { class: "check" }, steamV, " Only Steam Verified members can enter"),
+          roles ? h("div", {}, h("div", { class: "row" }, field("Roles needed to enter (pick as many as you like)", reqRole), field("Entrants need", reqAll)), h("div", { class: "row" }, field("Skip every rule with this role (like Booster)", overRole)), h("div", { class: "row" }, field("Roles that get extra entries", bonusRole), field("Bonus entries (2-10)", bonusN), field("Ping role", pingRole))) : h("p", { class: "muted small", text: "Role rules and pings are set by a server manager." })),
         h("p"), h("div", { class: "row" }, go));
     }
     async function load() {

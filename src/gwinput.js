@@ -3,6 +3,7 @@
 import { UserError } from "./errors.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "./gwparse.js";
 import { parseSteps, StepError } from "./gwpartner.js";
+import { roleIds } from "./gwroles.js";
 
 const text = v => (v === null || v === undefined || v === "" ? null : String(v));
 const int = v => (v === null || v === undefined || v === "" ? undefined : Number(v));
@@ -21,11 +22,11 @@ export function giveawayInput(body, { channelIds = [], defaults = {} } = {}) {
         input: {
             title: text(body.title) ?? defaults.title, duration_ms: parseDuration(text(body.length) ?? defaults.length ?? "24h"),
             game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
-            color: parseColor(body.color), button_label: text(body.button_label), ping_role_id: id(body.ping_role_id), require_role_id: id(body.require_role_id),
-            bonus_role_id: id(body.bonus_role_id), bonus_entries: int(body.bonus_entries), claim_hours: int(body.claim_hours),
+            color: parseColor(body.color), button_label: text(body.button_label), ping_role_id: id(body.ping_role_id), require_role_ids: roleIds(body.require_role_ids ?? body.require_role_id), require_all: body.require_all === true || body.require_all === "all",
+            bonus_role_ids: roleIds(body.bonus_role_ids ?? body.bonus_role_id), override_role_ids: roleIds(body.override_role_ids ?? body.override_role_id), bonus_entries: int(body.bonus_entries), claim_hours: int(body.claim_hours),
             min_account_days: int(body.min_account_days), min_member_days: int(body.min_member_days),
             vouch_channel_id: channelIds.includes(body.vouch_channel_id) ? body.vouch_channel_id : null,
-            auto_image: body.auto_image !== false, keys, require_boost: Boolean(body.boosters), steps,
+            auto_image: body.auto_image !== false, keys, require_boost: Boolean(body.boosters), require_steam: Boolean(body.steam_verified), steps,
             start_in_ms: text(body.start_in) ? parseDuration(text(body.start_in), { min: 0 }) : 0,
             rounds: int(body.rounds) ?? 1, repeat_ms: text(body.repeat_every) ? parseDuration(text(body.repeat_every)) : null
         }

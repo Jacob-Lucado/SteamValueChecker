@@ -498,7 +498,13 @@ pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-
 @media (min-width: 641px) and (max-width: 1220px) {
   .brand span { display: none; }
   .topbar-inner { flex-wrap: nowrap; }
-  #nav { flex-wrap: nowrap; }
+  #nav { flex-wrap: nowrap; min-width: 0; }
+  #nav a { padding: 7px 7px; font-size: 13.5px; }
+  .user-chip .who { display: none; }
+}
+@media (min-width: 641px) and (max-width: 1090px) {
+  .topbar-inner { flex-wrap: wrap; }
+  #nav { flex: 1 1 100%; order: 3; flex-wrap: wrap; }
 }
 [hidden] { display: none !important; }
 
@@ -1579,3 +1585,9 @@ a.fd-name:hover { text-decoration: underline; }
 .seo-static p { margin: 0 0 12px; }
 .seo-static ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; }
 .foot-links { font-size: 13px; }
+
+/* Picking several roles: chosen ones are chips you can click away */
+.rm { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rm select { flex: 1 1 160px; min-width: 0; }
+.rm-chip { font: inherit; font-size: 13px; font-weight: 700; padding: 5px 11px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); cursor: pointer; }
+.rm-chip:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }

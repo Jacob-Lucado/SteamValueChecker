@@ -74,11 +74,12 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             game_title: game, description: o.getString("description"),
             image_url: parseImageUrl(o.getString("image"), "image"), thumbnail_url: parseImageUrl(o.getString("thumbnail"), "thumbnail"),
             color: parseColor(o.getString("color")), button_label: o.getString("buttonlabel"),
-            require_role_id: o.getRole("requirerole")?.id ?? null, bonus_role_id: o.getRole("bonusrole")?.id ?? null,
+            require_role_ids: [o.getRole("requirerole")?.id, o.getRole("requirerole2")?.id].filter(Boolean), override_role_ids: [o.getRole("overriderole")?.id].filter(Boolean),
+            bonus_role_ids: [o.getRole("bonusrole")?.id, o.getRole("bonusrole2")?.id].filter(Boolean),
             bonus_entries: o.getInteger("bonusentries") ?? 2, ping_role_id: o.getRole("pingrole")?.id ?? null,
             claim_hours: o.getInteger("claimhours") ?? 48, min_account_days: o.getInteger("accountage") ?? 0, min_member_days: o.getInteger("memberage") ?? 0,
             vouch_channel_id: textChannel(o.getChannel("vouchchannel"), "vouches channel"),
-            auto_image: !o.getBoolean("noautoimage"), require_boost: o.getBoolean("boosters") === true,
+            auto_image: !o.getBoolean("noautoimage"), require_boost: o.getBoolean("boosters") === true, require_steam: o.getBoolean("steamverified") === true,
             start_in_ms: o.getString("startin") ? parseDuration(o.getString("startin"), { min: 0 }) : 0,
             rounds: o.getInteger("rounds") ?? 1, repeat_ms: o.getString("repeatevery") ? parseDuration(o.getString("repeatevery")) : null
         };
@@ -112,6 +113,25 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
                 "Your keys are encrypted. The bot deletes each one once the winner confirms, and sends back any that go unused."
             ].filter(Boolean).join("\n"));
         } catch (err) { await failed(i, err); }
+    }
+
+    async function rules(i) {
+        needManager(i);
+        const g = giveawayIn(i, i.options.getString("giveaway", true));
+        const o = i.options, ids = names => names.map(n => o.getRole(n)?.id).filter(Boolean);
+        const patch = {
+            clear: o.getBoolean("clear") === true, require_role_ids: ids(["requirerole", "requirerole2"]), override_role_ids: ids(["overriderole"]), bonus_role_ids: ids(["bonusrole"]),
+            bonus_entries: o.getInteger("bonusentries") ?? undefined, require_all: o.getBoolean("needall") ?? undefined, require_steam: o.getBoolean("steamverified") ?? undefined
+        };
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        const row = await giveaways.updateRules(g.id, patch);
+        const lines = [];
+        const list = v => String(v ?? "").split(",").filter(Boolean).map(r => `<@&${r}>`).join(", ");
+        lines.push(row.require_role_id ? `Needs ${row.require_all ? "all of" : "one of"}: ${list(row.require_role_id)}` : "No role needed");
+        if (row.override_role_id) lines.push(`Skips every requirement: ${list(row.override_role_id)}`);
+        if (row.bonus_role_id) lines.push(`${row.bonus_entries} entries for: ${list(row.bonus_role_id)}`);
+        if (row.require_steam) lines.push("Steam Verified members only");
+        return i.editReply({ content: `Updated the rules for giveaway #${g.id}.\n${lines.join("\n")}`, allowedMentions: { parse: [] } });
     }
 
     async function manage(i, action) {
@@ -196,6 +216,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
                 case "reroll": return await manage(i, "reroll");
                 case "info": return await manage(i, "info");
                 case "replace": return await replace(i);
+                case "rules": return await rules(i);
                 case "list": return await list(i);
                 case "setup": return await setup(i);
             }

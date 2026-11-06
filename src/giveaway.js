@@ -10,6 +10,7 @@ import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
+import { roleIds, roleList, hasAnyRole, hasAllRoles } from "./gwroles.js";
 import { giveawayPayload, winnersPayload, confirmPayload, vouchPayload, leftoverMessage, hostNote } from "./gwrender.js";
 
 const CONFIRM_FIRST_MS = 10 * 60_000;
@@ -187,10 +188,10 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             guild_id: input.guild_id, channel_id: input.channel_id, host_id: input.host_id, title,
             description: cleanText(input.description, 1500), game_title: cleanText(input.game_title, 100),
             image_url: image, thumbnail_url: thumbnail, gallery, color: input.color ?? null, button_label: cleanText(input.button_label, 40),
-            ping_role_id: input.ping_role_id ?? db.getCommunity?.(input.guild_id)?.ping_giveaway ?? null, require_role_id: input.require_role_id ?? null, bonus_role_id: input.bonus_role_id ?? null,
+            ping_role_id: input.ping_role_id ?? db.getCommunity?.(input.guild_id)?.ping_giveaway ?? null, require_role_id: roleList(input.require_role_ids ?? input.require_role_id), bonus_role_id: roleList(input.bonus_role_ids ?? input.bonus_role_id), override_role_id: roleList(input.override_role_ids ?? input.override_role_id), require_all: input.require_all ? 1 : 0,
             bonus_entries: clampInt(input.bonus_entries, 1, 10, 1), min_account_days: clampInt(input.min_account_days, 0, 3650, 0),
             min_member_days: clampInt(input.min_member_days, 0, 3650, 0), claim_hours: clampInt(input.claim_hours, 1, 168, 48),
-            vouch_channel_id: input.vouch_channel_id ?? null, require_boost: input.require_boost ? 1 : 0, duration_ms: input.duration_ms,
+            vouch_channel_id: input.vouch_channel_id ?? null, require_boost: input.require_boost ? 1 : 0, require_steam: input.require_steam ? 1 : 0, duration_ms: input.duration_ms,
             is_global: input.is_global ? 1 : 0, host_name: input.host?.host_name ?? null, host_kind: input.host?.host_kind ?? null, host_links: input.host?.host_links ?? null, host_logo: input.host?.host_logo ?? null, steps: input.steps?.length ? JSON.stringify(input.steps) : null,
             status: startAt ? "scheduled" : "active", starts_at: startAt, ends_at: (startAt ?? now()) + input.duration_ms
         };
@@ -207,6 +208,25 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         return { id, ends_at: g.ends_at, prizes: input.keys.length, imageSource };
     }
 
+    // ---------- change the entry rules of a running giveaway ----------
+    /** patch: { clear, require_role_ids, require_all, override_role_ids, bonus_role_ids, bonus_entries, require_steam }. Only what is given changes. */
+    async function updateRules(id, patch) {
+        const g = must(id);
+        if (closed(g) || g.ends_at <= now()) throw new UserError("That giveaway has ended.");
+        if (g.is_global) throw new UserError("Cross-server giveaways can't be changed once they are out in other servers.");
+        const next = {};
+        if (patch.clear) Object.assign(next, { require_role_id: null, require_all: 0, require_steam: 0, override_role_id: null, bonus_role_id: null });
+        if (patch.require_role_ids?.length) next.require_role_id = roleList(patch.require_role_ids);
+        if (patch.require_all !== undefined) next.require_all = patch.require_all ? 1 : 0;
+        if (patch.override_role_ids?.length) next.override_role_id = roleList(patch.override_role_ids);
+        if (patch.bonus_role_ids?.length) next.bonus_role_id = roleList(patch.bonus_role_ids);
+        if (patch.bonus_entries) next.bonus_entries = clampInt(patch.bonus_entries, 1, 10, 2);
+        if (patch.require_steam !== undefined) next.require_steam = patch.require_steam ? 1 : 0;
+        db.setGiveawayRules(g.id, next);
+        await refresh(g.id);
+        return db.getGiveaway(g.id);
+    }
+
     // ---------- enter ----------
     /** who: { userId, roleIds, joinedAt, createdAt }. Pressing the button again leaves the giveaway. */
     async function enter(id, who) {
@@ -217,11 +237,21 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             db.removeEntry(g.id, who.userId);
             return { status: "left", total: entryCount(g.id) };
         }
-        if (g.require_boost && !who.boosting) throw new UserError("This giveaway is for server boosters only.");
-        if (g.require_role_id && !(who.roleIds ?? []).includes(g.require_role_id)) throw new UserError(`You need the <@&${g.require_role_id}> role to enter.`);
-        if (g.min_account_days && who.createdAt && (now() - who.createdAt) / 86400_000 < g.min_account_days) throw new UserError(`Your Discord account must be at least ${g.min_account_days} days old to enter.`);
-        if (g.min_member_days && who.joinedAt && (now() - who.joinedAt) / 86400_000 < g.min_member_days) throw new UserError(`You need to have been in this server for at least ${g.min_member_days} days to enter.`);
-        const entries = g.bonus_role_id && (who.roleIds ?? []).includes(g.bonus_role_id) ? g.bonus_entries : 1;
+        const have = who.roleIds ?? [];
+        // Someone with an override role (usually the booster role) skips every entry rule below.
+        if (!hasAnyRole(have, g.override_role_id)) {
+            if (g.require_boost && !who.boosting) throw new UserError("This giveaway is for server boosters only.");
+            // Steam Verified is about the person, not a server role, so it works the same in cross-server giveaways, in DMs and from Twitch chat.
+            if (g.require_steam && !db.getSteamLink(who.userId)?.verified) throw new UserError("This giveaway is for Steam Verified members. Sign in through Steam on the dashboard (or use `/me steam verify`), then press Enter again.");
+            const need = roleIds(g.require_role_id);
+            if (need.length && !(g.require_all ? hasAllRoles(have, need) : hasAnyRole(have, need))) {
+                const list = need.map(r => `<@&${r}>`).join(", ");
+                throw new UserError(need.length === 1 ? `You need the ${list} role to enter.` : g.require_all ? `You need all of these roles to enter: ${list}` : `You need one of these roles to enter: ${list}`);
+            }
+            if (g.min_account_days && who.createdAt && (now() - who.createdAt) / 86400_000 < g.min_account_days) throw new UserError(`Your Discord account must be at least ${g.min_account_days} days old to enter.`);
+            if (g.min_member_days && who.joinedAt && (now() - who.joinedAt) / 86400_000 < g.min_member_days) throw new UserError(`You need to have been in this server for at least ${g.min_member_days} days to enter.`);
+        }
+        const entries = hasAnyRole(have, g.bonus_role_id) ? g.bonus_entries : 1;
         db.addEntry(g.id, who.userId, entries);
         return { status: "entered", entries, total: entryCount(g.id), steps: stepsOf(g), hostName: g.host_name ?? null };
     }
@@ -485,5 +515,5 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         return done;
     }
 
-    return { spread, spreadStatus, create, launch, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, tick, refresh };
+    return { spread, spreadStatus, create, launch, updateRules, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, tick, refresh };
 }

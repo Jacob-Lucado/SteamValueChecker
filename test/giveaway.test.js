@@ -486,3 +486,39 @@ test("a giveaway nobody entered ends greyed out and says so", async () => {
     assert.match(e.author.name, /NO WINNER/); assert.equal(e.color, 0x8b95a5);
     assert.match(e.fields.find(f => /No winner/.test(f.name)).value, /Nobody entered/);
 });
+
+test("roles: any-of, all-of, override role, Steam Verified and several bonus roles", async () => {
+    const t = rig();
+    const any = (await t.make({ require_role_ids: ["R1", "R2"] })).id;
+    await assert.rejects(() => t.svc.enter(any, { userId: "a", roleIds: ["R9"] }), /role/);
+    assert.equal((await t.svc.enter(any, { userId: "a", roleIds: ["R2"] })).status, "entered");
+
+    const all = (await t.make({ require_role_ids: ["R1", "R2"], require_all: true })).id;
+    await assert.rejects(() => t.svc.enter(all, { userId: "b", roleIds: ["R1"] }), /role/);
+    assert.equal((await t.svc.enter(all, { userId: "b", roleIds: ["R1", "R2"] })).status, "entered");
+
+    // a booster skips every requirement, here a role and Steam Verified
+    const gated = (await t.make({ require_role_ids: ["R1"], require_steam: true, override_role_ids: ["BOOST"] })).id;
+    await assert.rejects(() => t.svc.enter(gated, { userId: "c", roleIds: ["R1"] }), /Steam Verified/);
+    assert.equal((await t.svc.enter(gated, { userId: "d", roleIds: ["BOOST"] })).status, "entered");
+    t.db.ensureUser("c", "G"); t.db.setSteamLink("c", "76561198000000001", { verified: true });
+    assert.equal((await t.svc.enter(gated, { userId: "c", roleIds: ["R1"] })).status, "entered");
+
+    // either of two bonus roles earns the extra entries
+    const bonus = (await t.make({ bonus_role_ids: ["B1", "B2"], bonus_entries: 4 })).id;
+    assert.equal((await t.svc.enter(bonus, { userId: "e", roleIds: ["B2"] })).entries, 4);
+    assert.equal((await t.svc.enter(bonus, { userId: "f", roleIds: [] })).entries, 1);
+});
+
+test("roles: updateRules changes a live giveaway and refuses ended ones", async () => {
+    const t = rig();
+    const { id } = await t.make({});
+    await t.svc.updateRules(id, { require_role_ids: ["R1"], require_all: true, bonus_role_ids: ["B1"], bonus_entries: 5, require_steam: true });
+    const g = t.db.getGiveaway(id);
+    assert.deepEqual([g.require_role_id, g.bonus_role_id, g.bonus_entries, g.require_all, g.require_steam], ["R1", "B1", 5, 1, 1]);
+    await t.svc.updateRules(id, { clear: true });
+    const c = t.db.getGiveaway(id);
+    assert.deepEqual([c.require_role_id, c.bonus_role_id, c.require_steam], [null, null, 0]);
+    t.advance(3 * HOUR); await t.svc.tick();
+    await assert.rejects(() => t.svc.updateRules(id, { require_steam: true }));
+});

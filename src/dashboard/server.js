@@ -1,6 +1,7 @@
 // Web dashboard: everything the slash commands do, in a browser. Uses Node's http module only.
 // Login is Discord OAuth2 (identify + guilds). Sessions live in memory, so a restart logs everyone out.
 
+import { roleIds } from "../gwroles.js";
 import { aiStats, aiUsedToday } from "../aichat.js";
 import { sampleAlert, SAMPLE_KINDS } from "../samples.js";
 import http from "node:http";
@@ -1164,7 +1165,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
                 return { ok: true, channelId: r.channelId, endsAt: r.endsAt, endsWithStream: true, prizes: 1 };
             }
             const form = { ...body };
-            if (!(isManager(g) || isOwner(s))) for (const k of ["require_role_id", "bonus_role_id", "ping_role_id", "vouch_channel_id"]) delete form[k]; // server rules are the managers' call
+            if (!(isManager(g) || isOwner(s))) for (const k of ["require_role_id", "require_role_ids", "require_all", "bonus_role_id", "bonus_role_ids", "override_role_id", "override_role_ids", "ping_role_id", "vouch_channel_id"]) delete form[k]; // server rules are the managers' call
             const r = await musicCall(async () => {
                 const { input } = giveawayInput(form, { defaults: { length: "1h", prize: "Prize" } });
                 // Chat entry: viewers type !enter in the streamer's Twitch chat. Needs their Twitch channel linked here, and a Discord invite to point newcomers at.
@@ -3107,6 +3108,16 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
         "POST /api/giveaways/end": async (req, body) => { const g = managerGuild(session(req), body.guild_id); needGiveaways(); const x = giveawayOf(g, body.id); const r = await giveaways.end(x.id); return { winners: r.winners.length, unused: r.unused }; },
         "POST /api/giveaways/cancel": async (req, body) => { const g = managerGuild(session(req), body.guild_id); needGiveaways(); const x = giveawayOf(g, body.id); return await giveaways.cancel(x.id); },
         "POST /api/giveaways/reroll": async (req, body) => { const g = managerGuild(session(req), body.guild_id); needGiveaways(); const x = giveawayOf(g, body.id); const r = await giveaways.reroll(x.id, { userId: body.user_id || null }); return { winners: r.winners.length }; },
+        "POST /api/giveaways/rules": async (req, body) => {
+            const g = managerGuild(session(req), body.guild_id); needGiveaways();
+            const x = giveawayOf(g, body.id);
+            const patch = { clear: body.clear === true, require_role_ids: roleIds(body.require_role_ids), override_role_ids: roleIds(body.override_role_ids), bonus_role_ids: roleIds(body.bonus_role_ids) };
+            if (body.require_all !== undefined) patch.require_all = body.require_all === true || body.require_all === "all";
+            if (body.bonus_entries !== undefined) patch.bonus_entries = Number(body.bonus_entries);
+            if (body.steam_verified !== undefined) patch.require_steam = body.steam_verified === true;
+            await giveaways.updateRules(x.id, patch);
+            return { ok: true };
+        },
         "POST /api/giveaways/replace": async (req, body) => {
             const g = managerGuild(session(req), body.guild_id); needGiveaways();
             const x = giveawayOf(g, body.id);
@@ -3399,7 +3410,7 @@ export function createDashboard({ twitchReply = false, trivia = null, emojigg = 
                     guild_id: home.guild_id, channel_id: home.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
                     game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
                     color: parseColor(body.color), button_label: text(body.button_label),
-                    claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true, is_global: true, host, steps
+                    claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true, is_global: true, host, steps, require_steam: Boolean(body.steam_verified)
                 });
                 const targets = db.broadcastTargets();
                 const sent = await giveaways.spread(r.id, {
