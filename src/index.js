@@ -17,6 +17,7 @@ import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
 import { pushEvent } from "./adminlog.js";
 import { createVoterRole } from "./voterrole.js";
+import { createOffsite, offsiteConfig } from "./offsite.js";
 import { runWatchdog } from "./watchdog.js";
 import { createCommandWatch } from "./cmdwatch.js";
 import { ensureCreatorRole } from "./creatorrole.js";
@@ -145,6 +146,7 @@ const cfg = loadConfig();
 const STARTED_AT = Date.now();
 const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version; } catch { return "1.0.0"; } })();
 // Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
+const offsite = createOffsite({ ...offsiteConfig(), secret: cfg.keySecret, db, log: t => console.log(`[offsite] ${t}`) });
 const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey, process.env.TOPGG_TOKEN] });
 logs.capture();
 const luna = createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) });
@@ -429,8 +431,16 @@ client.once(Events.ClientReady, c => {
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
             result.watchdog = await ops.job("watchdog", () => runWatchdog({ ops, logs, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }) }));
             ops.maintenanceDone(result);
-            try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }
+            let backedUp = null;
+            try { backedUp = runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep }); await ops.backupDone(backedUp); }
             catch (err) { await ops.backupDone(null, err); }
+            // Then the same file goes offsite (once per day; it skips what it already sent). A failure here only warns the owner.
+            if (offsite.enabled && backedUp?.file) {
+                result.offsite = await ops.job("offsite backup", async () => {
+                    try { return await offsite.upload(backedUp.file); }
+                    catch (err) { await ops.incident("offsite", `Steam Value Checker: the offsite backup could not be uploaded (${String(err.message).slice(0, 120)}). The local backup is fine.`); throw err; }
+                });
+            }
         },
         60 * 60_000,
         { onError: err => { console.error(`[maintenance] ${err.name}: ${err.message}`); ops.error("maintenance", err); } }
@@ -980,7 +990,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ commandWatch, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ offsite, commandWatch, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

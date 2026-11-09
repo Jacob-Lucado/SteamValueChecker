@@ -2821,3 +2821,18 @@ test("the shop site feed gives counts and the changelog to its own origin only",
     assert.equal(other.headers.get("access-control-allow-origin"), "https://jacob-lucado.github.io", "never echoes another origin");
     await t.close();
 });
+
+test("admin offsite backup routes: off by default, owner only, and verify reports the result", async () => {
+    const t = await signedIn({ config: { ownerId: "u1" } });
+    assert.equal((await t.request("/api/admin/offsite")).data.enabled, false);
+    assert.equal((await t.request("/api/admin/offsite/verify", { method: "POST", body: {} })).status, 400);
+    await t.close();
+    const on = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ offsite: { enabled: true, list: async () => [{ key: "backups/a.db.gz.enc", size: 2048, at: 1 }], verify: async () => ({ key: "backups/a.db.gz.enc", ok: true, users: 5, bytes: 4096 }) } }) });
+    const o = (await on.request("/api/admin/offsite")).data;
+    assert.equal(o.enabled, true); assert.equal(o.list.length, 1);
+    assert.equal((await on.request("/api/admin/offsite/verify", { method: "POST", body: {} })).data.ok, true);
+    await on.close();
+    const other = await signedIn({ config: { ownerId: "someone-else" } });
+    assert.equal((await other.request("/api/admin/offsite")).status, 403);
+    await other.close();
+});

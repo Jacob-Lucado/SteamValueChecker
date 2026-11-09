@@ -219,7 +219,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -3200,6 +3200,19 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         "GET /api/admin/commandwatch": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             return commandWatch ? commandWatch.report() : { threshold: 0, rows: [] };
+        },
+        "GET /api/admin/offsite": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            if (!offsite?.enabled) return { enabled: false };
+            let list = [], error = null;
+            try { list = (await offsite.list()).slice(-14).reverse(); } catch (e) { error = e.message; }
+            let last = null; try { last = JSON.parse(db.getMeta("offsite:last") || "null"); } catch { /* none yet */ }
+            return { enabled: true, list, last, error };
+        },
+        "POST /api/admin/offsite/verify": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!offsite?.enabled) throw new HttpError(400, "Offsite backups aren't set up.");
+            try { return await offsite.verify(); } catch (e) { throw new HttpError(400, e.message || "The check failed."); }
         },
         "GET /api/admin/storage": async (req) => {
             const s = session(req);

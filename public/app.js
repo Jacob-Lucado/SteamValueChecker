@@ -3462,6 +3462,28 @@
         h("div", { class: "panel" }, h("h3", { text: "Backup" }),
           h("p", { text: "Last backup: " + (hl.backup ? `${when(hl.backup.at)} (${hl.backup.ok ? "ok" : "FAILED"})` : "none yet") }),
           h("p", {}, h("a", { href: "/api/admin/backup", class: "btn gray small", download: "" }, "Download the latest backup"), h("span", { class: "muted small", text: "  (the whole database, including encrypted giveaway keys. Keep it private.)" }))),
+        (() => {
+          const box = h("div", { class: "panel" }, h("h3", { text: "Offsite backup" }), h("p", { class: "muted", text: "Checking…" }));
+          const size = n => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+          const load = async () => {
+            try {
+              const o = await api("/api/admin/offsite");
+              if (!o.enabled) return box.replaceChildren(h("h3", { text: "Offsite backup" }), h("p", { text: "Not set up. Right now the backups live on the same disk as the database, so losing that disk loses both." }),
+                h("p", { class: "muted small", text: "To switch it on, create a Tigris storage bucket from your Fly dashboard (Storage) and attach it to this app. Fly adds the access keys as secrets for you. Any other S3-style bucket works too, using the secrets BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_KEY and BACKUP_S3_SECRET. Restart the app afterwards." }));
+              const check = h("button", { class: "btn gray small", type: "button", text: "Test the newest copy" }), out = h("p", { class: "muted small" });
+              check.addEventListener("click", () => busy(check, async () => {
+                try { const r = await api("/api/admin/offsite/verify", {}); out.className = r.ok ? "" : "bad"; out.textContent = r.ok ? `Good: ${r.key.split("/").pop()} downloaded, opened and passed the integrity check (${Number(r.users).toLocaleString()} members, ${size(r.bytes)}).` : "The copy downloaded but failed the integrity check."; }
+                catch (e) { out.className = "bad"; out.textContent = e.message; }
+              }));
+              box.replaceChildren(h("h3", { text: "Offsite backup" }),
+                h("p", { text: o.last ? `Last upload: ${when(o.last.at)} · ${size(o.last.bytes)}${o.last.encrypted ? " · encrypted" : " · not encrypted (set KEY_ENCRYPTION_SECRET to encrypt)"}` : "Nothing uploaded yet. The next daily backup sends the first one." }),
+                o.error ? h("p", { class: "bad", text: "Could not read the bucket: " + o.error }) : o.list.length ? h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Copy" }), h("th", { text: "Size" })])), h("tbody", {}, o.list.map(x => h("tr", {}, h("td", { text: x.key.split("/").pop() }), h("td", { text: size(x.size) }))))) : null,
+                h("p", {}, check), out);
+            } catch (e) { box.replaceChildren(h("h3", { text: "Offsite backup" }), h("p", { class: "bad", text: e.message })); }
+          };
+          load();
+          return box;
+        })(),
         h("div", { class: "panel" }, h("h3", { text: "Maintenance" }),
           h("p", { class: "muted small", text: "Members whose DMs failed 3 times in a row are skipped until they change something. This gives all of them another try." }), clear),
         logPanel()];
