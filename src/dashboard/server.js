@@ -220,7 +220,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -3971,6 +3971,14 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             const key = `${req.method} ${url.pathname}`;
             if (url.pathname.startsWith("/api/visits/")) return visits(req, res, url);
             if (url.pathname === "/api/public/site") return siteFeed(req, res);
+            // For Fly and uptime monitors. Plain /healthz says the process and database are fine. Adding ?strict=1 also needs the Discord connection up.
+            if (req.method === "GET" && url.pathname === "/healthz") {
+                let dbOk = true;
+                try { db.getMeta("health:probe"); } catch { dbOk = false; }
+                const discord = health ? Boolean(health()) : null;
+                const ok = dbOk && (url.searchParams.get("strict") !== "1" || discord !== false);
+                return send(res, ok ? 200 : 503, JSON.stringify({ ok, database: dbOk, discord }), { "Content-Type": "application/json", "Cache-Control": "no-store" });
+            }
 
             if (req.method === "GET" && /^\/(terms|privacy)(\.html)?$/.test(url.pathname)) {
                 const kind = url.pathname.slice(1).replace(/\.html$/, "");

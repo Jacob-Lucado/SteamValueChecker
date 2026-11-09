@@ -19,6 +19,8 @@ import { pushEvent } from "./adminlog.js";
 import { createVoterRole } from "./voterrole.js";
 import { createOffsite, offsiteConfig } from "./offsite.js";
 import { runWatchdog } from "./watchdog.js";
+import { runBootNotice } from "./bootnotice.js";
+import { groupErrors } from "./adminlog.js";
 import { runOwnerSummary, runReleaseNotes } from "./ownersummary.js";
 import { CHANGELOG, LATEST } from "./changelog.js";
 import { createCommandWatch } from "./cmdwatch.js";
@@ -522,6 +524,13 @@ const serverKey = gid => {
 };
 const aiTools = createAiTools({ db, itad, news, fx, lfg, calendar, dashUrl: cfg.dashboard?.publicUrl ?? null, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
 const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, configuredInvite: cfg.supportInvite, log: t => console.log(`[main server] ${t}`) });
+client.once(Events.ClientReady, () => { // a minute after start, tell the owner it came back and whether anything has gone wrong since
+    setTimeout(() => {
+        const errs = logs.recent({ level: "error", limit: 200 }).filter(l => l.at >= STARTED_AT);
+        runBootNotice({ db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), version: LATEST, servers: client.guilds.cache.size, errors: errs.length,
+            topError: groupErrors(errs, 1).map(g => `${g.where}: ${g.message} (${g.count})`)[0] ?? null }).catch(err => console.error(`[boot] ${err.message}`));
+    }, 60_000).unref?.();
+});
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
 voterRole = createVoterRole({ db, client, mainGuild, log: t => console.log(`[voter role] ${t}`) });
 setInterval(() => voterRole.sweep().catch(() => {}), 5 * 60_000).unref?.();
@@ -996,7 +1005,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ offsite, commandWatch, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ offsite, commandWatch, health: () => client.isReady(), leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;
