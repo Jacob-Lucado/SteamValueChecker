@@ -81,7 +81,7 @@ test("supporters: refunds take the days back, reminders go out once, revenue ski
     await sup.grant("u1", 30, "p1", "Square", 500);
     await sup.grant("u2", 90, "p2", "Square", 1200);
     await sup.grant("u3", 30, "gift", "Admin", 0);
-    assert.deepEqual(sup.revenue(), { total: 1700, count: 2, last30: 1700, count30: 2, refunded: 0 });
+    const rv = sup.revenue(); assert.deepEqual({ total: rv.total, count: rv.count, last30: rv.last30, count30: rv.count30, refunded: rv.refunded, refunds: rv.refunds }, { total: 1700, count: 2, last30: 1700, count30: 2, refunded: 0, refunds: 0 });
     const before = supporterUntil(db, "u1");
     await sup.refund("p1", 100);
     assert.equal(supporterUntil(db, "u1"), before, "a partial refund changes nothing");
@@ -152,4 +152,18 @@ test("supporters: the alert colour is a supporter perk, validated, and gone with
     await sup.grant("u3", 30, "pay_c3", "square", 500); // a paying founder keeps the perk after the pass ends
     sup.setAlertColor("u3", "#00ff00");
     assert.equal(alertColor(db, "u3", t + 400 * 86_400_000), 0x00ff00);
+});
+
+test("supporters: sales are grouped by month in Eastern time and founding spots are counted", async () => {
+    const { foundersTaken } = await import("../src/supporters.js");
+    const db = openDb(":memory:"); let t = Date.UTC(2026, 10, 9, 15);
+    const sup = createSupporters({ db, now: () => t });
+    await sup.grant("u1", 30, "m1", "square", 300);
+    t = Date.UTC(2026, 11, 1, 3); // still November 30th in Eastern time
+    await sup.grant("u2", 90, "m2", "square", 800, { giftFrom: "u1" });
+    t = Date.UTC(2026, 11, 15);
+    await sup.grant("u3", 30, "m3", "square", 300);
+    const r = sup.revenue();
+    assert.deepEqual(r.months.map(m => [m.month, m.count, m.cents]), [["2026-12", 1, 300], ["2026-11", 2, 1100]]);
+    assert.equal(r.gifts, 1); assert.equal(r.founders, 3); assert.equal(foundersTaken(db), 3); assert.equal(r.foundersMax, 50);
 });

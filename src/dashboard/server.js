@@ -46,7 +46,7 @@ import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
 import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
-import { supporterUntil, isSupporter, isFounder, wallName, alertColorHex, endOfDayEastern } from "../supporters.js";
+import { supporterUntil, isSupporter, isFounder, wallName, alertColorHex, foundersTaken, FOUNDERS_MAX, endOfDayEastern } from "../supporters.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -1157,7 +1157,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         // ----- supporter passes -----
         "GET /api/supporter": async (req) => {
             const s = session(req), until = supporterUntil(db, s.userId);
-            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST, founder: isFounder(db, s.userId), wall: wallName(db, s.userId), alert_color: alertColorHex(db, s.userId) };
+            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST, founder: isFounder(db, s.userId), wall: wallName(db, s.userId), alert_color: alertColorHex(db, s.userId), founding_left: Math.max(0, FOUNDERS_MAX - foundersTaken(db)) };
         },
         "GET /api/public/supporters": async () => ({ wall: supporters ? supporters.wall() : [] }),
         "POST /api/supporter/wall": async (req, body) => {

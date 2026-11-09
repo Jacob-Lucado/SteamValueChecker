@@ -32,6 +32,8 @@ export const supporterUntil = (db, userId) => Number(db.getMeta(UNTIL + userId))
 export const isSupporter = (db, userId, now = Date.now()) => supporterUntil(db, userId) > now;
 /** The first 50 people to have a paid pass are founding supporters for good, even after their pass ends. */
 export const isFounder = (db, userId) => Boolean(db.getMeta(FOUNDER + userId));
+/** How many founding spots are taken (the first 50 paid passes). */
+export const foundersTaken = db => db.listMetaPrefix(FOUNDER).filter(r => r.value).length;
 export const wallName = (db, userId) => db.getMeta(WALL + userId) || null;
 /** The colour a supporter picked for their own price alerts, as a number Discord understands. Null once the pass is over or if none is set. */
 export function alertColor(db, userId, now = Date.now()) {
@@ -203,13 +205,17 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
 
     /** What the Square passes have brought in. Gifts from the owner and refunded payments don't count. */
     function revenue() {
-        const out = { total: 0, count: 0, last30: 0, count30: 0, refunded: 0 };
+        const out = { total: 0, count: 0, last30: 0, count30: 0, refunded: 0, refunds: 0, gifts: 0, founders: foundersTaken(db), foundersMax: FOUNDERS_MAX, months: [] };
+        const by = new Map(), eastern = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit" });
+        const slot = at => { const k = eastern.format(new Date(at)).slice(0, 7); if (!by.has(k)) by.set(k, { month: k, cents: 0, count: 0, refunded: 0 }); return by.get(k); };
         for (const r of db.listMetaPrefix(PAID)) {
             const p = parse(r.value); if (!p || !(p.cents > 0)) continue;
-            if (p.refunded) { out.refunded += p.cents || 0; continue; }
-            out.total += p.cents; out.count++;
+            const m = slot(p.at);
+            if (p.refunded) { out.refunded += p.cents || 0; out.refunds++; m.refunded += p.cents; continue; }
+            out.total += p.cents; out.count++; m.cents += p.cents; m.count++; if (p.giftFrom) out.gifts++;
             if (now() - p.at <= 30 * DAY) { out.last30 += p.cents; out.count30++; }
         }
+        out.months = [...by.values()].sort((a, b) => b.month.localeCompare(a.month)).slice(0, 12);
         return out;
     }
 

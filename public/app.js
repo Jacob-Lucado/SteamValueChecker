@@ -4212,8 +4212,12 @@
         r.home && r.home.ok ? h("div", { class: "notice ok", text: `The Supporter role goes out in ${r.home.name}.` }) : null,
         r.enabled ? null : h("div", { class: "notice warn", text: "Square isn't connected, so members can't buy a pass. Add SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID and SQUARE_WEBHOOK_SIGNATURE_KEY as secrets on Fly and restart. You can still hand passes out below." }),
         r.revenue && h("div", { class: "grid four" },
-          ...[["Last 30 days", r.revenue.last30, r.revenue.count30 + " passes"], ["All time", r.revenue.total, r.revenue.count + " passes"], ["Refunded", r.revenue.refunded, "not counted above"]].map(([k, c, s]) =>
+          ...[["Last 30 days", r.revenue.last30, r.revenue.count30 + " passes"], ["All time", r.revenue.total, r.revenue.count + " passes"], ["Refunded", r.revenue.refunded, r.revenue.refunds + " refund" + (r.revenue.refunds === 1 ? "" : "s") + ", not counted above"]].map(([k, c, s]) =>
             h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: "$" + (c / 100).toFixed(2) }), h("div", { class: "s", text: s })))),
+        r.revenue && h("div", { class: "panel" }, h("h3", { text: "By month" }),
+          h("p", { class: "muted small", text: `${r.revenue.founders} of ${r.revenue.foundersMax} founding spots taken. ${r.revenue.gifts} of the paid passes were gifts. Months are Eastern time.` }),
+          r.revenue.months.length ? h("div", { class: "scroll-x" }, h("table", { class: "sup-table" }, h("thead", {}, h("tr", {}, ["Month", "Passes", "Sales", "Refunded"].map(c => h("th", { text: c })))),
+            h("tbody", {}, ...r.revenue.months.map(m => h("tr", {}, h("td", { text: m.month }), h("td", { text: String(m.count) }), h("td", { text: "$" + (m.cents / 100).toFixed(2) }), h("td", { text: m.refunded ? "$" + (m.refunded / 100).toFixed(2) : "-" })))))) : h("p", { class: "muted", text: "No paid passes yet." })),
         h("div", { class: "panel" }, h("h3", { text: "Give someone a pass" }),
           h("div", { class: "row" }, id, days, h("span", { class: "muted small", text: "days" }),
             h("button", { class: "btn blue", type: "button", text: "Give pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/grant", { user_id: id.value, days: Number(days.value) }); toast("Pass runs until " + when(x.until) + "." + (x.role && x.role !== "ok" ? " Role not given: " + (WHY[x.role] || x.role) : ""), x.role && x.role !== "ok" ? "warn" : "ok"); adminSupporters(body, fail); }) }))),
@@ -4859,6 +4863,7 @@
         s.founder ? h("p", {}, h("span", { class: "pf-badge founder", text: "✦ Founding supporter" }), " You were one of the first 50, so this stays on your profile for good.") : null,
         s.until ? h("p", {}, h("strong", { text: "You're a supporter until " + fmt(s.until) + "." }), " Buying another pass adds to the time you have left.") : null,
         h("p", { class: "muted", text: `A pass gives you a Supporter role in the Steam Value Checker server, a badge and glowing ring on your profile, three exclusive profile themes, 24 overlay slots instead of 12, your own colour on your price-alert cards and ${Math.round((s.boost - 1) * 100)}% more XP. Everything else stays free for everyone.` }),
+        s.enabled && !s.founder && s.founding_left > 0 ? h("p", { class: "muted small", text: s.founding_left === 50 ? "The first 50 paid passes earn a Founding supporter mark that never expires." : `${s.founding_left} of 50 Founding supporter spots left. It's a mark that never expires.` }) : null,
         s.enabled ? h("div", { class: "row" }, ...s.plans.map(p => h("button", { class: "btn blue", type: "button", text: `${p.name} · $${(p.cents / 100).toFixed(p.cents % 100 ? 2 : 0)}`, onclick: e => busy(e.currentTarget, async () => { const r = await api("/api/supporter/checkout", { plan: p.id }); location.href = r.url; }) }))) : null,
         s.enabled ? (() => {
           const to = h("input", { type: "text", placeholder: "Their page name or Discord ID", "aria-label": "Who to gift a pass to" });
