@@ -44,9 +44,9 @@ import { parseHost, stepsOf, parseSteps, StepError, STEP_KINDS } from "../gwpart
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
-import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS } from "../overlays.js";
+import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
-import { supporterUntil } from "../supporters.js";
+import { supporterUntil, isSupporter } from "../supporters.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -464,7 +464,9 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         let event; try { event = JSON.parse(raw); } catch { return json(res, 400, { error: "Bad request." }); }
         try {
             const paid = await square.paidPass(event);
-            if (paid) await supporters.grant(paid.userId, paid.plan.days, paid.paymentId, "Square");
+            if (paid) await supporters.grant(paid.userId, paid.plan.days, paid.paymentId, "Square", paid.plan.cents);
+            const back = square.refund(event);
+            if (back) await supporters.refund(back.paymentId, back.cents);
         } catch (err) { log(`[square] ${err.message}`); return json(res, 500, { error: "Try again." }); } // Square tries again later
         return json(res, 200, { ok: true });
     }
@@ -597,7 +599,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             slug: u.profile_slug ?? null, public: Boolean(u.profile_public), blocked, config: withDefaults(data),
             steamLinked: Boolean(db.getSteamLink(u.discord_id)),
             backgrounds: db.listProfileBgs(u.discord_id).map(b => ({ id: b.id, source: b.source, bytes: b.bytes, url: `/pbg/${b.id}?v=${b.created_at}` })), maxBackgrounds: MAX_BG_STORED, presets: PAGE_PRESETS,
-            choices: { themes: Object.entries(PROFILE_THEMES).map(([k, v]) => ({ key: k, bg: v.bg, accent: v.accent })), bgstyles: BG_STYLES, layouts: LAYOUTS, sections: Object.entries(SECTIONS), links: LINK_KIND_NAMES, titles },
+            choices: { themes: Object.entries(PROFILE_THEMES).map(([k, v]) => ({ key: k, bg: v.bg, accent: v.accent, locked: Boolean(v.supporter) && !isSupporter(db, u.discord_id, now()) })), bgstyles: BG_STYLES, layouts: LAYOUTS, sections: Object.entries(SECTIONS), links: LINK_KIND_NAMES, titles },
             profile: u.profile_slug ? await buildProfile({ db, itad, nowPlaying }, u, { owner: true, sameServer: true }) : null
         };
     }
@@ -1163,7 +1165,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         },
         "GET /api/admin/supporters": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
-            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], recent: supporters ? supporters.recent() : [], plans: PLANS };
+            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], recent: supporters ? supporters.recent() : [], revenue: supporters ? supporters.revenue() : null, plans: PLANS };
         },
         "POST /api/admin/supporters/grant": async (req, body) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
@@ -1188,7 +1190,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 if (action === "create") {
                     if (!OVERLAY_KINDS.includes(body.kind)) throw new HttpError(400, "Pick an overlay type.");
                     if (wants(body.kind, body.config) && !guildId) throw new HttpError(400, "Pick a server for this overlay.");
-                    return { token: db.createOv(s.userId, body.kind, { name: body.name, guildId, config: body.config }) };
+                    return { token: db.createOv(s.userId, body.kind, { name: body.name, guildId, config: body.config, max: isSupporter(db, s.userId, now()) ? MAX_SUPPORTER_OVERLAYS : undefined }) };
                 }
                 const mine = db.ovById(s.userId, String(body.token ?? ""));
                 if (!mine) throw new HttpError(404, "That overlay doesn't exist any more.");
@@ -2588,7 +2590,9 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         "POST /api/profile/page": async (req, body) => {
             const s = session(req); const u = userRow(s);
             const { data } = db.getProfileData(s.userId);
-            db.setProfileData(s.userId, cleanProfile(body ?? {}, data));
+            const next = cleanProfile(body ?? {}, data);
+            if (next.theme && PROFILE_THEMES[next.theme]?.supporter && next.theme !== data.theme && !isSupporter(db, s.userId, now())) throw new HttpError(403, "That theme is for supporters. You can get a pass on the Chip in page.");
+            db.setProfileData(s.userId, next);
             return await profileEditorPayload(db.getUser(s.userId));
         },
         // The picture behind the page: upload one (a few are kept), copy the Steam background, switch between them, or delete one.

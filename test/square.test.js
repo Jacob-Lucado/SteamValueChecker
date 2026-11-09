@@ -73,3 +73,23 @@ test("supporters: passes stack, a payment counts once, and the role comes and go
     db.ensureUser("u9", "Nine"); await sup.grant("u9", 5, "pay9"); db.deleteUser("u9");
     assert.equal(supporterUntil(db, "u9"), 0, "deleting someone's data ends their pass record");
 });
+
+test("supporters: refunds take the days back, reminders go out once, revenue skips refunds and gifts", async () => {
+    const db = openDb(":memory:"); let t = 5_000_000;
+    const sent = [];
+    const sup = createSupporters({ db, client: { guilds: { cache: { get: () => null } } }, mainGuild: { detect: () => null }, dm: async (id, p) => sent.push([id, p]), renewUrl: "https://x.test/#/tip", now: () => t });
+    await sup.grant("u1", 30, "p1", "Square", 500);
+    await sup.grant("u2", 90, "p2", "Square", 1200);
+    await sup.grant("u3", 30, "gift", "Admin", 0);
+    assert.deepEqual(sup.revenue(), { total: 1700, count: 2, last30: 1700, count30: 2, refunded: 0 });
+    const before = supporterUntil(db, "u1");
+    await sup.refund("p1", 100);
+    assert.equal(supporterUntil(db, "u1"), before, "a partial refund changes nothing");
+    await sup.refund("p1", 500);
+    assert.equal(isSupporter(db, "u1", t), false, "a full refund ends the pass");
+    await sup.refund("p1", 500);
+    assert.equal(sup.revenue().total, 1200); assert.equal(sup.revenue().refunded, 500);
+    t = supporterUntil(db, "u3") - 2 * 86_400_000;
+    const n = sent.length; await sup.remind(); await sup.remind();
+    assert.equal(sent.length - n, 1, "one reminder, not one per sweep");
+});

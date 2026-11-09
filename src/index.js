@@ -536,8 +536,8 @@ client.once(Events.ClientReady, () => { // a minute after start, tell the owner 
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
 voterRole = createVoterRole({ db, client, mainGuild, log: t => console.log(`[voter role] ${t}`) });
 setInterval(() => voterRole.sweep().catch(() => {}), 5 * 60_000).unref?.();
-const supporters = createSupporters({ db, client, mainGuild, dm: (id, p) => discord.sendDm(id, p), log: t => console.log(`[supporters] ${t}`) });
-setInterval(() => supporters.sweep().catch(() => {}), 15 * 60_000).unref?.();
+const supporters = createSupporters({ db, client, mainGuild, renewUrl: publicBase ? publicBase + "/#/tip" : null, dm: (id, p) => discord.sendDm(id, p), log: t => console.log(`[supporters] ${t}`) });
+setInterval(() => supporters.sweep().then(() => supporters.remind()).catch(() => {}), 15 * 60_000).unref?.();
 const square = createSquare({ ...squareConfig(), publicUrl: publicBase ?? "" });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
 const guideThrottle = createGuideThrottle();

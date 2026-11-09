@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 export const OVERLAY_KINDS = ["goal", "stats", "timer"];
 export const OVERLAY_FONTS = ["Inter", "System", "Georgia", "Mono"];
 export const MAX_OVERLAYS = 12;
+export const MAX_SUPPORTER_OVERLAYS = 24;
 
 export const streamOverlaySchema = `
 CREATE TABLE IF NOT EXISTS stream_overlays (
@@ -52,9 +53,9 @@ export function streamOverlayStore({ run, get, all, now }) {
         listOvs: userId => all("SELECT * FROM stream_overlays WHERE user_id = ? ORDER BY created", String(userId)).map(row),
         ovById: (userId, token) => row(get("SELECT * FROM stream_overlays WHERE token = ? AND user_id = ?", String(token), String(userId))),
         ovByToken: token => /^svcx_[A-Za-z0-9_-]{32}$/.test(String(token ?? "")) ? row(get("SELECT * FROM stream_overlays WHERE token = ?", String(token))) : null,
-        createOv(userId, kind, { name, guildId = null, config = {} } = {}) {
+        createOv(userId, kind, { name, guildId = null, config = {}, max = MAX_OVERLAYS } = {}) {
             if (!OVERLAY_KINDS.includes(kind)) throw new Error("Unknown overlay type.");
-            if (get("SELECT COUNT(*) AS n FROM stream_overlays WHERE user_id = ?", String(userId)).n >= MAX_OVERLAYS) throw new Error(`You can have up to ${MAX_OVERLAYS} overlays. Delete one first.`);
+            if (get("SELECT COUNT(*) AS n FROM stream_overlays WHERE user_id = ?", String(userId)).n >= max) throw new Error(`You can have up to ${max} overlays. Delete one first.${max === MAX_OVERLAYS ? " Supporters get more." : ""}`);
             const token = "svcx_" + randomBytes(24).toString("base64url");
             run("INSERT INTO stream_overlays (token, user_id, kind, name, guild_id, config, value, created) VALUES (?,?,?,?,?,?,0,?)", token, String(userId), kind, text(name, kind === "goal" ? "Goal" : kind === "stats" ? "Server stats" : "Timer", 40), guildId, JSON.stringify(cleanConfig(kind, config)), now());
             return token;

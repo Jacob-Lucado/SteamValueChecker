@@ -79,7 +79,7 @@ test("the Discord theme choices match the real themes", async () => {
     const { hubCommands } = await import("../src/commands.js");
     const me = hubCommands.find(c => c.name === "me");
     const look = me.options.find(o => o.name === "profile").options.find(o => o.name === "look");
-    assert.deepEqual(look.options.find(o => o.name === "theme").choices.map(c => c.value).sort(), Object.keys(PROFILE_THEMES).sort());
+    assert.deepEqual(look.options.find(o => o.name === "theme").choices.map(c => c.value).sort(), Object.keys(PROFILE_THEMES).filter(k => !PROFILE_THEMES[k].supporter).sort(), "supporter themes are picked on the dashboard, where the lock can be explained");
 });
 
 test("/me profile: small changes save, mistakes are explained, nothing is lost", async () => {

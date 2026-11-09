@@ -2,7 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.46", date: "2026-11-08", title: "A page to chip in", items: [
         "**Overlay studio:** build goal bars, server stats and timers for OBS under Streamers, with a live preview and your own colours, font and size. Each has its own private link.",
-        "**Supporter passes:** pay once through Square for 1, 3 or 12 months and get a Supporter role in the server, a profile badge and 25% more XP. Everything else stays free.",
+        "**Supporter passes:** pay once through Square for 1, 3 or 12 months and get a Supporter role in the server, a glowing profile badge, three exclusive profile themes, 24 overlay slots and 25% more XP. Refunds are handled automatically and you get a heads-up DM before a pass runs out. Everything else stays free.",
         "**Chip in:** a new tab under Help, and a button on `/bot about`, for anyone who wants to help with the hosting costs. Everything stays free either way.",
         "**Library value badge:** if your profile's Library value section is public, it now has a small image link you can paste into a bio or signature." ] },
     { version: "2026.11.45", date: "2026-11-08", title: "Co-op finder, library value and wrapped", items: [

@@ -42,6 +42,7 @@ test("overlay store: private per person, a new link kills the old one, and a cap
     assert.equal(db.ovByToken("nonsense"), null);
     for (let i = 1; i < MAX_OVERLAYS; i++) db.createOv("a", "timer");
     assert.throws(() => db.createOv("a", "timer"), /up to 12/);
+    db.createOv("a", "timer", { max: 24 });
     assert.throws(() => db.createOv("a", "bogus"), /Unknown/);
     db.removeUserOvs("a"); assert.equal(db.listOvs("a").length, 0);
 });

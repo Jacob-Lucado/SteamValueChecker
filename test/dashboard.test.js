@@ -2922,6 +2922,16 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         const adm = (await o.request("/api/admin/supporters")).data;
         assert.deepEqual(adm.active.map(a => a.id).sort(), ["123456789", "222222222"]);
         assert.ok(adm.recent.length >= 2);
+        assert.equal(adm.revenue.total, 300, "the paid pass counts, the gifted one doesn't");
+        const theme = async k => (await o.request("/api/profile/page", { method: "POST", body: { theme: k } }));
+        assert.equal((await theme("galaxy")).status, 403, "supporter themes are locked for everyone else");
+        assert.equal((await o.request("/api/profile/page")).data.choices.themes.find(x => x.key === "galaxy").locked, true);
+        assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "555555555", days: 5 } })).status, 200);
+        assert.equal((await theme("galaxy")).status, 200);
+        const refund = JSON.stringify({ type: "refund.updated", data: { object: { refund: { id: "R1", payment_id: "PAY1", status: "COMPLETED", amount_money: { amount: 300 } } } } });
+        assert.equal((await hook(refund)).status, 200);
+        assert.equal(isSupporter(o.db, "123456789"), false, "a full refund ends the pass");
+        assert.equal((await o.request("/api/admin/supporters")).data.revenue.total, 0);
     } finally { await o.close(); }
     const off = await signedIn();
     try {

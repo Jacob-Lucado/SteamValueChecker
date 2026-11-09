@@ -12,7 +12,10 @@ import { channelUrl } from "./streamwatch.js";
 
 // ---------------------------------------------------------------- looks
 const EXTRA = { light: ["#f3f5fa", "#3b6df0"], mono: ["#121212", "#e6e6e6"], rose: ["#2a1420", "#ff6fa5"], ocean: ["#0f2231", "#43c6e8"] };
-export const PROFILE_THEMES = Object.fromEntries(Object.entries({ ...THEMES, ...EXTRA }).map(([k, [bg, accent]]) => [k, { bg, accent, light: k === "light" }]));
+// Three themes that only supporters can pick. Someone whose pass ends keeps their choice saved but sees the default until they renew.
+const SUPPORTER_EXTRA = { aurora: ["#0b1f2a", "#7cf2c6"], dusk: ["#2b1226", "#ffb454"], galaxy: ["#140f30", "#b794ff"] };
+export const PROFILE_THEMES = Object.fromEntries([...Object.entries({ ...THEMES, ...EXTRA }).map(([k, [bg, accent]]) => [k, { bg, accent, light: k === "light" }]),
+    ...Object.entries(SUPPORTER_EXTRA).map(([k, [bg, accent]]) => [k, { bg, accent, light: false, supporter: true }])]);
 export const BG_STYLES = ["plain", "gradient", "dots", "grid"];
 export const LAYOUTS = ["classic", "wide", "compact"];
 export const VISIBILITY = ["public", "server", "hidden"];
@@ -186,7 +189,9 @@ function pageBgFor(db, owner, bg) {
 
 export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewer, { viewerId = null, draft = null } = {}) {
     const cfg = withDefaults(draft ?? db.getProfileData(owner.discord_id).data);
-    const theme = PROFILE_THEMES[cfg.theme];
+    const supporter = isSupporter(db, owner.discord_id);
+    const themeKey = PROFILE_THEMES[cfg.theme]?.supporter && !supporter ? "night" : cfg.theme;
+    const theme = PROFILE_THEMES[themeKey];
     const lib = db.listLibrary(owner.discord_id);
     const items = db.listItems(owner.discord_id);
     const known = new Map([...lib, ...items].map(x => [x.itad_id, x]));
@@ -245,9 +250,9 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
     const song = cfg.song && canSee("public", viewer) ? { provider: cfg.song.provider, title: cfg.song.title || "", embed: songEmbed(cfg.song), stream: cfg.song.provider === "radio" ? cfg.song.id : null, link: cfg.song.provider === "radio" ? null : songLink(cfg.song) } : null;
     return {
         enter: Boolean(song && cfg.enter),
-        supporter: isSupporter(db, owner.discord_id),
+        supporter,
         slug: owner.profile_slug, name: cfg.name || owner.profile_slug, bio: cfg.bio, avatar: cfg.avatar && steam?.avatar ? steam.avatar : null,
-        theme: { key: cfg.theme, bg: theme.bg, accent: cfg.accent ?? theme.accent, light: theme.light, bgstyle: cfg.bgstyle, layout: cfg.layout },
+        theme: { key: themeKey, bg: theme.bg, accent: cfg.accent ?? theme.accent, light: theme.light, bgstyle: cfg.bgstyle, layout: cfg.layout },
         banner: { kind: cfg.banner, art: bannerGame },
         pagebg: pageBgFor(db, owner, cfg.pagebg),
         links: cfg.links.map(l => ({ kind: l.kind, label: LINK_KINDS[l.kind]?.label ?? l.kind, url: l.url })),

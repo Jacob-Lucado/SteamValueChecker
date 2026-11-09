@@ -1614,3 +1614,9 @@ a.fd-name:hover { text-decoration: underline; }
 @media (max-width: 820px) { .ovs { grid-template-columns: minmax(0, 1fr); } .ovs-side { position: static; } .ovs-row { grid-template-columns: minmax(0, 1fr); } }
 
 .pf-badge { display: inline-block; margin-top: .35rem; padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700; color: #fff; background: linear-gradient(135deg, #eb459e, #a855f7); }
+
+.pf-avatar.sup { box-shadow: 0 0 0 3px #eb459e, 0 0 20px 4px rgba(168, 85, 247, .55); animation: pf-glow 3.2s ease-in-out infinite; }
+@keyframes pf-glow { 50% { box-shadow: 0 0 0 3px #a855f7, 0 0 28px 6px rgba(235, 69, 158, .55); } }
+@media (prefers-reduced-motion: reduce) { .pf-avatar.sup { animation: none; } }
+.pf-swatch.locked { opacity: .45; cursor: not-allowed; }
+.pf-swatch.locked::before { content: "🔒"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 14px; }

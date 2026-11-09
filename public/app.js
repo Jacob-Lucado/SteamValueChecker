@@ -1307,7 +1307,7 @@
       // Steam's header is only 460 wide and looks soft stretched across the page. The hero is much larger; where a game has none, the header underneath shows instead.
       const hero = p.banner.art.replace(/\/art\/header\/(\d+)\.jpg$/, "/art/hero/$1.jpg").replace(/\/header\.jpg(\?.*)?$/, "/library_hero.jpg");
       banner.style.backgroundImage = hero !== p.banner.art ? `url("${hero}"), url("${p.banner.art}")` : `url("${p.banner.art}")`; }
-    const avatar = httpsOnly(p.avatar) ? h("img", { class: "pf-avatar", src: p.avatar, alt: "" }) : h("div", { class: "pf-avatar init", text: (p.name || "?").slice(0, 1).toUpperCase() });
+    const avatar = httpsOnly(p.avatar) ? h("img", { class: "pf-avatar" + (p.supporter ? " sup" : ""), src: p.avatar, alt: "" }) : h("div", { class: "pf-avatar init" + (p.supporter ? " sup" : ""), text: (p.name || "?").slice(0, 1).toUpperCase() });
     const head = h("div", { class: "pf-head" }, avatar,
       h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug }), p.supporter ? h("span", { class: "pf-badge", title: "Supports Steam Value Checker", text: "★ Supporter" }) : null),
       h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
@@ -1442,9 +1442,9 @@
     // look
     const themeBox = h("div", { class: "pf-swatches" });
     const drawThemes = () => themeBox.replaceChildren(...d.choices.themes.map(t => {
-      const b = h("button", { type: "button", class: "pf-swatch" + (cfg.theme === t.key ? " on" : ""), title: t.key, "aria-label": t.key + " theme", "aria-pressed": String(cfg.theme === t.key) });
+      const b = h("button", { type: "button", class: "pf-swatch" + (cfg.theme === t.key ? " on" : "") + (t.locked ? " locked" : ""), title: t.locked ? t.key + " (supporters only)" : t.key, "aria-label": t.key + " theme", "aria-pressed": String(cfg.theme === t.key) });
       b.style.background = t.bg; b.style.borderColor = t.accent; b.style.setProperty("--dot", t.accent);
-      b.addEventListener("click", () => { cfg.theme = t.key; drawThemes(); changed(); });
+      b.addEventListener("click", () => { if (t.locked) return toast("That theme is for supporters. You can get a pass on the Chip in page (Help menu).", "warn"); cfg.theme = t.key; drawThemes(); changed(); });
       return b;
     }));
     drawThemes();
@@ -4191,10 +4191,13 @@
   async function adminSupporters(body, fail) {
     try {
       const r = await api("/api/admin/supporters");
-      const when = ms => new Date(ms).toLocaleDateString();
+      const when = ms => new Date(ms).toLocaleDateString("en-US", { timeZone: "America/New_York" });
       const id = h("input", { type: "text", placeholder: "Discord ID", inputmode: "numeric" }), days = h("input", { type: "number", min: "1", max: "3660", value: "30", class: "ovs-cur" });
       body.replaceChildren(
         r.enabled ? null : h("div", { class: "notice warn", text: "Square isn't connected, so members can't buy a pass. Add SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID and SQUARE_WEBHOOK_SIGNATURE_KEY as secrets on Fly and restart. You can still hand passes out below." }),
+        r.revenue && h("div", { class: "grid four" },
+          ...[["Last 30 days", r.revenue.last30, r.revenue.count30 + " passes"], ["All time", r.revenue.total, r.revenue.count + " passes"], ["Refunded", r.revenue.refunded, "not counted above"]].map(([k, c, s]) =>
+            h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: "$" + (c / 100).toFixed(2) }), h("div", { class: "s", text: s })))),
         h("div", { class: "panel" }, h("h3", { text: "Give someone a pass" }),
           h("div", { class: "row" }, id, days, h("span", { class: "muted small", text: "days" }),
             h("button", { class: "btn blue", type: "button", text: "Give pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/grant", { user_id: id.value, days: Number(days.value) }); toast("Pass runs until " + when(x.until) + ".", "ok"); adminSupporters(body, fail); }) }))),
@@ -4202,7 +4205,7 @@
           h("div", { class: "panel" }, h("h3", { text: "Active passes" }),
             r.active.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Discord ID", "Until"].map(c => h("th", { text: c })))), h("tbody", {}, r.active.map(a => h("tr", {}, h("td", { text: a.id }), h("td", { text: when(a.until) }))))) : h("div", { class: "empty", text: "No active passes." })),
           h("div", { class: "panel" }, h("h3", { text: "Latest" }),
-            r.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Who", "Days", "Via"].map(c => h("th", { text: c })))), h("tbody", {}, r.recent.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString() }), h("td", { text: e.id }), h("td", { text: String(e.days) }), h("td", { text: e.via }))))) : h("div", { class: "empty", text: "Nothing yet." }))));
+            r.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Who", "Days", "Via"].map(c => h("th", { text: c })))), h("tbody", {}, r.recent.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString("en-US", { timeZone: "America/New_York" }) }), h("td", { text: e.id }), h("td", { text: String(e.days) }), h("td", { text: e.via }))))) : h("div", { class: "empty", text: "Nothing yet." }))));
     } catch (e) { fail(e); }
   }
 
@@ -4796,7 +4799,7 @@
       box.replaceChildren(h("h3", { text: "Supporter pass" }),
         routeText().includes("thanks=1") ? h("div", { class: "notice ok", text: "Thank you! Your pass shows up within a minute or two, and the bot will DM you when it does." }) : null,
         s.until ? h("p", {}, h("strong", { text: "You're a supporter until " + fmt(s.until) + "." }), " Buying another pass adds to the time you have left.") : null,
-        h("p", { class: "muted", text: `A pass gives you a Supporter role in the Steam Value Checker server, a badge on your profile and ${Math.round((s.boost - 1) * 100)}% more XP. Everything else stays free for everyone.` }),
+        h("p", { class: "muted", text: `A pass gives you a Supporter role in the Steam Value Checker server, a badge and glowing ring on your profile, three exclusive profile themes, 24 overlay slots instead of 12 and ${Math.round((s.boost - 1) * 100)}% more XP. Everything else stays free for everyone.` }),
         s.enabled ? h("div", { class: "row" }, ...s.plans.map(p => h("button", { class: "btn blue", type: "button", text: `${p.name} · $${(p.cents / 100).toFixed(p.cents % 100 ? 2 : 0)}`, onclick: e => busy(e.currentTarget, async () => { const r = await api("/api/supporter/checkout", { plan: p.id }); location.href = r.url; }) }))) : null,
         s.enabled ? h("p", { class: "muted small", text: "Checkout is handled by Square. The bot never sees your card." }) : null);
     } catch { /* the pass is optional, so the rest of the page stands on its own */ }

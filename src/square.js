@@ -64,5 +64,13 @@ export function createSquare({ accessToken, locationId, signatureKey, sandbox = 
         return { userId: m[1], plan, paymentId: String(pay.id) };
     }
 
-    return { enabled, checkout, verify, paidPass, notificationUrl };
+    /** A finished refund, as the payment it undoes and how much came back. Square puts both in the call itself. */
+    function refund(event) {
+        if (!event || (event.type !== "refund.created" && event.type !== "refund.updated")) return null;
+        const r = event.data?.object?.refund;
+        if (!r || r.status !== "COMPLETED" || !r.payment_id) return null;
+        return { paymentId: String(r.payment_id), cents: Number(r.amount_money?.amount ?? 0) };
+    }
+
+    return { enabled, checkout, verify, paidPass, refund, notificationUrl };
 }
