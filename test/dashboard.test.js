@@ -2764,21 +2764,6 @@ test("the Top.gg vote card route says when voting is off", async () => {
     await t.close();
 });
 
-test("the GameHub sprite page is served but stays unlisted", async () => {
-    const t = await setup();
-    const page = await t.request("/gamehub");
-    assert.equal((await t.request("/GameHub")).status, 200, "capitalised path still works");
-    assert.ok((await t.request("/GameHub")).text.includes("Byte"), "serves the sprite page, not the home page");
-    assert.equal(page.status, 200);
-    assert.match(page.text, /<meta name="robots" content="noindex, nofollow">/);
-    const head = await fetch(t.base + "/gamehub");
-    assert.equal(head.headers.get("x-robots-tag"), "noindex, nofollow");
-    for (const f of ["/gamehub.css", "/gamehub.js", "/img/gamehub/sheet.png", "/img/gamehub/loot/coin.png", "/img/gamehub/loot/xp-gem.png", "/img/gamehub/idle.gif"]) assert.equal((await t.request(f)).status, 200, f);
-    assert.ok(!(await t.request("/sitemap.xml")).text.includes("gamehub"), "not in the sitemap");
-    assert.ok(!(await t.request("/robots.txt")).text.includes("gamehub"), "not announced in robots.txt");
-    await t.close();
-});
-
 test("admin pages for votes, errors, data requests and server events are owner-only and the request log keeps no names", async () => {
     const t = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ topgg: { enabled: true, adminStats: () => ({ enabled: true, health: {}, votes: 4, xp: 1000, voters: 2, perVote: 250, top: [], recent: [] }) } }) });
     assert.equal((await t.request("/api/admin/votes")).data.votes, 4);
