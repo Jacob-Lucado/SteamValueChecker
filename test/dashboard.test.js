@@ -3023,7 +3023,7 @@ test("bundle landing page: shows the bundle, counts visits, redirects only to kn
     const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", ...opts });
     const page = await get(`/b/${a.id}`), html = await page.text();
     assert.equal(page.status, 200); assert.match(html, /Indie &lt;Legends&gt; Bundle/, "the title is escaped"); assert.ok(!/<Legends>/.test(html));
-    assert.match(html, /Taking you to Humble Bundle in 6 seconds/); assert.match(html, new RegExp(`/b/${a.id}/go`)); assert.match(html, /noscript/); assert.match(html, /Never miss a bundle/);
+    assert.match(html, /Taking you to Humble Bundle in 6 seconds/); assert.match(html, new RegExp(`/b/${a.id}/go`)); assert.match(html, /noscript/); assert.match(html, /Found a good one/);
     assert.match(page.headers.get("x-robots-tag"), /noindex/); assert.ok(!/<style|style="|<script>/i.test(html), "nothing inline, so the CSP holds");
     assert.equal(o.db.getMeta(`bundlevisit:${a.id}`), "1");
     const go = await get(`/b/${a.id}/go`); assert.equal(go.status, 302); assert.equal(go.headers.get("location"), "https://www.humblebundle.com/games/legends"); assert.equal(o.db.getMeta(`bundlego:${a.id}`), "1");
@@ -3062,5 +3062,28 @@ test("deal pages: free games get a landing page and counted redirect, and every 
         assert.match(bundleFeedEmbed({ id: 7, store: "humble", title: "B", url: "https://www.humblebundle.com/x", games: [] }).embeds[0].url, /\/b\/7$/);
     } finally { configureDeals(null); }
     assert.equal(dealUrl({ url: "https://a.example/x" }), "https://a.example/x");
+    await o.close();
+});
+
+test("every store link in any message goes through a landing page that shows what was clicked", async () => {
+    const { configureDeals } = await import("../src/deallinks.js");
+    const { brandPayload } = await import("../src/brand.js");
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    configureDeals({ base: "https://steamvaluechecker.com", make: d => `https://steamvaluechecker.com/d/${o.db.upsertDeal(d)}` });
+    try {
+        const p = brandPayload({
+            content: "Try [Hades](https://store.steampowered.com/app/1145360/) and [a blog](https://example.com/x)",
+            embeds: [{ title: "🔥 Hades is 50% off", url: "https://store.steampowered.com/app/1145360/", description: "Roguelike. See [GOG](https://www.gog.com/game/hades)", fields: [{ name: "Price", value: "**$12.49**" }] }],
+            components: [{ type: 1, components: [{ type: 2, style: 5, label: "Steam page", url: "https://store.steampowered.com/app/1145360/" }, { type: 2, style: 5, label: "Support", url: "https://discord.gg/abc" }] }]
+        });
+        const e = p.embeds[0];
+        assert.match(e.url, /^https:\/\/steamvaluechecker\.com\/d\/\d+$/); assert.equal(p.components[0].components[0].url, e.url, "the same link, the same page");
+        assert.equal(p.components[0].components[1].url, "https://discord.gg/abc"); assert.match(e.description, /\]\(https:\/\/steamvaluechecker\.com\/d\/\d+\)/);
+        assert.match(p.content, /\(https:\/\/steamvaluechecker\.com\/d\/\d+\)/); assert.match(p.content, /\(https:\/\/example\.com\/x\)/, "not a store, untouched");
+        const id = e.url.split("/").pop(), html = await (await fetch(o.base + `/d/${id}`)).text();
+        assert.match(html, /Hades is 50% off/); assert.match(html, /\$12\.49/); assert.match(html, /Roguelike/); assert.ok(!/FREE ·/.test(html), "a sale isn't labelled free");
+        assert.match(html, /While you wait/); assert.match(html, /Take me there/);
+        assert.match(html, /og:image" content="[^"]*\/d\/\d+\/img/);
+    } finally { configureDeals(null); }
     await o.close();
 });

@@ -31,7 +31,7 @@ export function dealStore({ run, get, all, now }) {
             return have.id;
         }
         const r = run("INSERT INTO deal_pages (key, kind, title, shop, url, image, price, games, blurb, expiry, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            String(key).slice(0, 200), kind === "bundle" ? "bundle" : "free", clip(title, 200), clip(shop, 60), String(url).slice(0, 1000), clip(image, 1000), clip(price, 60), g, clip(blurb, 300), Number.isFinite(expiry) ? expiry : null, now());
+            String(key).slice(0, 200), kind === "bundle" ? "bundle" : kind === "deal" ? "deal" : "free", clip(title, 200), clip(shop, 60), String(url).slice(0, 1000), clip(image, 1000), clip(price, 60), g, clip(blurb, 300), Number.isFinite(expiry) ? expiry : null, now());
         if (Math.random() < 0.02) pruneDeals();
         return Number(r.lastInsertRowid);
     }

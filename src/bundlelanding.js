@@ -40,16 +40,15 @@ export function dealDestination(url) {
 function modelOf(kind, r, now) {
     if (kind === "bundle") {
         const store = BUNDLE_STORES[r.store] ?? { name: r.store ?? "the store", emoji: "📦" };
-        return { path: "b", id: r.id, free: false, storeName: store.name, emoji: store.emoji ?? "📦", title: r.title, price: r.price, count: r.game_count ?? (r.games?.length || null), games: r.games ?? [], expires: r.expires_at, ended: Boolean(r.expires_at && r.expires_at <= now) || r.status === "expired", dest: bundleDestination(r.url), picture: r.image, blurb: null };
+        return { path: "b", kind: "bundle", id: r.id, free: false, storeName: store.name, emoji: store.emoji ?? "📦", title: r.title, price: r.price, count: r.game_count ?? (r.games?.length || null), games: r.games ?? [], expires: r.expires_at, ended: Boolean(r.expires_at && r.expires_at <= now) || r.status === "expired", dest: bundleDestination(r.url), picture: r.image, blurb: null };
     }
     const shop = r.shop || "the store";
-    return { path: "d", id: r.id, free: r.kind !== "bundle", storeName: shop, emoji: r.kind === "bundle" ? "📦" : "🎁", title: r.title, price: r.kind === "bundle" ? r.price : "Free", count: r.games?.length || null, games: r.games ?? [], expires: r.expiry, ended: Boolean(r.expiry && r.expiry <= now), dest: dealDestination(r.url), picture: r.image, blurb: r.blurb };
+    return { path: "d", kind: r.kind, id: r.id, free: r.kind === "free", storeName: shop, emoji: r.kind === "bundle" ? "📦" : r.kind === "deal" ? "🏷️" : "🎁", title: r.title, price: r.kind === "free" ? "Free" : r.price, count: r.games?.length || null, games: r.games ?? [], expires: r.expiry, ended: Boolean(r.expiry && r.expiry <= now), dest: dealDestination(r.url), picture: r.image, blurb: r.blurb };
 }
 
 function page(m, { origin, inviteUrl, supportUrl, now }) {
     const hasPicture = Boolean(safePictureUrl(m.picture));
-    const noun = m.free ? "free game" : "bundle";
-    const title = m.free ? `${m.title} is free on ${m.storeName}` : `${m.title} | ${m.storeName} bundle`;
+        const title = m.free ? `${m.title} is free on ${m.storeName}` : m.kind === "bundle" ? `${m.title} | ${m.storeName} bundle` : `${m.title} on ${m.storeName}`;
     const desc = `${m.free ? "Free to keep. " : m.price ? m.price + ". " : ""}${m.count && !m.free ? m.count + " games. " : ""}${endsText(m.expires, now, m.free)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
     const base = `${origin}/${m.path}/${m.id}`, go = `${base}/go`, local = `/${m.path}/${m.id}`;
     const games = m.games.slice(0, 10), more = (m.count ?? games.length) - games.length;
@@ -92,16 +91,25 @@ ${games.length && !m.free ? `<ul class="games">${games.map(g => `<li>${esc(g)}</
 ${redirect ? `<div class="redirect" id="go" data-seconds="${REDIRECT_SECONDS}" data-url="${esc(go)}">
 <p><span id="goText">Taking you to ${esc(m.storeName)} in ${REDIRECT_SECONDS} seconds…</span></p>
 <div class="bar"><i></i></div>
-<div class="actions"><a class="btn main" href="${esc(go)}">${m.free ? "Claim it now" : "Go to the bundle now"}</a><button class="btn" id="stay" type="button">Stay on this page</button></div>
+<div class="actions"><a class="btn main" href="${esc(go)}">${m.free ? "Claim it now" : m.kind === "bundle" ? "Go to the bundle now" : "Take me there"}</a><button class="btn" id="stay" type="button">Stay on this page</button></div>
 </div>` : m.dest && !m.ended ? `<div class="actions"><a class="btn main" href="${esc(go)}">See it on ${esc(m.storeName)}</a></div>` : `<div class="actions"><a class="btn main" href="/">See what's on now</a></div>`}
 </div>
 </article>
-<section class="cta">
-<h2>${m.free ? "Never miss a free game" : "Never miss a bundle"}</h2>
-<p>Steam Value Checker is a free Discord bot. It shares every free game as it drops, posts new bundles from Humble, Fanatical, IndieGala and Steam to your server, pings you when a game on your wishlist goes on sale, and builds a profile card with what your library is worth.</p>
+<section class="promo">
+<span class="spark">✨ While you wait</span>
+<h2>${m.free ? "That one's free. Want to never miss the next?" : "Found a good one? There's a lot more where that came from."}</h2>
+<p class="lead">Steam Value Checker is a free Discord bot that watches every store for you, so the best stuff finds you instead of the other way around.</p>
+<div class="tiles">
+<div class="tile"><b>🎁 Free games</b><span>Posted the moment they drop on Epic, Steam, GOG and Prime</span></div>
+<div class="tile"><b>📦 Bundles</b><span>Humble, Fanatical, IndieGala and Steam, with end dates</span></div>
+<div class="tile"><b>🔔 Price alerts</b><span>A ping when a game on your wishlist hits its lowest price</span></div>
+<div class="tile"><b>💰 Library worth</b><span>A shareable profile card showing what your collection is worth</span></div>
+</div>
+<div class="mock" aria-hidden="true"><div class="mockbar"><i></i><i></i><i></i><span>Your dashboard</span></div>
+<div class="mockrow"><div><b>$4,212</b><span>Library worth</span></div><div><b>312</b><span>Games</span></div><div><b>7</b><span>Free right now</span></div><div><b>-85%</b><span>Best wishlist deal</span></div></div></div>
 <div class="actions">
-${inviteUrl ? `<a class="btn main" href="${esc(inviteUrl)}">Add the bot to Discord, free</a>` : ""}
-<a class="btn" href="/">See everything it does</a>
+${inviteUrl ? `<a class="btn main big" href="${esc(inviteUrl)}">Add the bot to Discord, free</a>` : ""}
+<a class="btn" href="/">Open the dashboard</a>
 ${supportUrl ? `<a class="btn" href="${esc(supportUrl)}">Join the community</a>` : ""}
 </div>
 </section>

@@ -39,3 +39,24 @@ h2 { margin: 0 0 8px; color: var(--white); font-size: 21px; }
 .foot a { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .bar i { animation-duration: 6s; } }
 @media (max-width: 480px) { .body { padding: 18px 16px 20px; } .btn { width: 100%; } }
+
+.promo { margin-top: 22px; padding: 26px 24px; border-radius: 20px; border: 1px solid rgba(124, 140, 255, .35); background: radial-gradient(520px 220px at 85% -20%, rgba(124, 140, 255, .28), transparent), linear-gradient(160deg, #1a2a46, #141f33); box-shadow: 0 18px 50px rgba(40, 60, 140, .25); }
+.promo .spark { display: inline-block; font-size: 13px; font-weight: 700; color: #fff; padding: 3px 12px; border-radius: 999px; background: linear-gradient(90deg, #7c8cff, #4da3ff, #7c8cff); background-size: 200% 100%; animation: shine 3.5s linear infinite; }
+.promo h2 { margin: 12px 0 8px; font-size: clamp(21px, 4.5vw, 27px); line-height: 1.25; }
+.promo .lead { margin: 0 0 18px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.tile { background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.tile b { display: block; color: var(--white); margin-bottom: 2px; }
+.tile span { font-size: 14px; color: var(--muted); }
+.mock { border: 1px solid var(--line); border-radius: 14px; background: #0f1724; margin-bottom: 20px; overflow: hidden; }
+.mockbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .03); font-size: 12px; color: var(--muted); }
+.mockbar i { width: 9px; height: 9px; border-radius: 50%; background: #3a4a63; }
+.mockbar span { margin-left: 8px; }
+.mockrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); }
+.mockrow div { background: #121c2e; padding: 14px 12px; }
+.mockrow b { display: block; font-size: 22px; color: var(--white); }
+.mockrow span { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.btn.big { min-height: 48px; font-size: 16px; }
+@keyframes shine { to { background-position: -200% 0; } }
+@media (max-width: 480px) { .tiles { grid-template-columns: 1fr; } .mockrow { grid-template-columns: 1fr 1fr; } }
+@media (prefers-reduced-motion: reduce) { .promo .spark { animation: none; } }

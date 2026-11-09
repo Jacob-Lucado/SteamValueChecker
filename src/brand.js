@@ -1,3 +1,4 @@
+import { linkPayload } from "./deallinks.js";
 // One look for everything the bot says. Individual commands still choose their own colours and fields; this fills in what they left out:
 // a colour, the bot's name and logo in the footer, and a proper card instead of bare text. It never overwrites anything a command set.
 export const BRAND_COLOR = 0xff9800;
@@ -33,7 +34,7 @@ export function brandPayload(payload, opts = {}) {
         const { content, ...rest } = out;
         out = { ...rest, embeds: [brandEmbed(noteOf(content), opts)] };
     }
-    return out;
+    return linkPayload(out);
 }
 
 /** Makes every reply to this interaction go through the brand. Safe to call once per interaction. */
