@@ -117,3 +117,17 @@ test("profile art: games without a stored Steam id get one looked up, so the Ste
     assert.equal(p.sections.find(s => s.key === "favorites").games[0].art, "https://cdn.akamai.steamstatic.com/steam/apps/1234567/header.jpg");
     assert.equal(db.listItems("o")[0].appid, 1234567);
 });
+
+test("the library value section shows the newest snapshot and stays out when there is none", async () => {
+    const db = openDb(":memory:");
+    db.ensureUser("o", "g1"); db.setProfile("o", { slug: "owner", isPublic: true });
+    db.setProfileData("o", cleanProfile({ sections: [{ key: "value", vis: "public" }] }));
+    const deps = { db, itad: { getPrices: async () => new Map() } };
+    const none = await buildProfile(deps, db.getUser("o"), { owner: false, sameServer: false });
+    assert.ok(!none.sections.some(s => s.key === "value"));
+    db.upsertSnapshot("o", { games: 120, paid: 900.4, msrp: 4800.6, msrp_paid: 2000, cheapest: 800 });
+    const withIt = await buildProfile(deps, db.getUser("o"), { owner: false, sameServer: false });
+    const v = withIt.sections.find(s => s.key === "value");
+    assert.equal(v.games, 120); assert.equal(v.worth, 4801); assert.equal(v.paid, 900);
+    assert.equal(v.saved, 1100);
+});

@@ -19,7 +19,7 @@ function wrap(text, size, maxW, maxLines) {
 }
 
 const SECTION_LIMIT = 7; // keeps the picture a sensible height
-const TITLES = { favorites: "FAVORITE GAMES", wishlist: "WISHLIST", recent: "RECENTLY FINISHED", nowplaying: "PLAYING NOW", trophies: "TROPHIES", achievements: "RAREST ACHIEVEMENTS", activity: "RECENT ACTIVITY", steam: "STEAM STATS", streams: "STREAMING", posts: "LATEST POSTS" };
+const TITLES = { favorites: "FAVORITE GAMES", wishlist: "WISHLIST", recent: "RECENTLY FINISHED", nowplaying: "PLAYING NOW", trophies: "TROPHIES", achievements: "RAREST ACHIEVEMENTS", activity: "RECENT ACTIVITY", steam: "STEAM STATS", value: "LIBRARY VALUE", streams: "STREAMING", posts: "LATEST POSTS" };
 
 /** Pictures the card needs, by address, so they can be fetched once and put in as data. */
 export function cardPictures(profile) {
@@ -104,6 +104,10 @@ export function profileCardSvg(profile, pics = {}) {
         } else if (s.key === "steam") {
             const stats = [[s.games, "Steam games"], [s.hours, "Hours played"], [s.library, "In the library"], [s.finished, "Finished"]];
             card(130, yy => { body.push(label(TITLES.steam, yy)); stats.forEach(([n, l], i) => { const x = PAD + i * 270; body.push(`<text x="${x}" y="${yy + 92}" font-size="40" font-weight="700" fill="${ink}">${esc(Number(n ?? 0).toLocaleString("en-US"))}</text><text x="${x}" y="${yy + 118}" font-size="19" fill="${sub}">${esc(l)}</text>`); }); });
+        } else if (s.key === "value") {
+            const usd = n => "$" + Number(n).toLocaleString("en-US");
+            const stats = [[usd(s.worth), "Library worth"], [usd(s.paid), "Actually paid"], [usd(s.saved), "Saved"], [Number(s.games).toLocaleString("en-US"), "Games counted"]];
+            card(130, yy => { body.push(label(TITLES.value, yy)); stats.forEach(([n, l], i) => { const x = PAD + i * 270; body.push(`<text x="${x}" y="${yy + 92}" font-size="40" font-weight="700" fill="${ink}">${esc(n)}</text><text x="${x}" y="${yy + 118}" font-size="20" fill="${sub}">${esc(l)}</text>`); }); });
         } else if (s.key === "achievements") {
             const top = (s.top ?? []).slice(0, 8);
             card(150, yy => { body.push(label(TITLES.achievements, yy), `<text x="${W - PAD}" y="${yy + 40}" text-anchor="end" font-size="20" fill="${sub}">${esc(Number(s.done ?? 0).toLocaleString("en-US"))} unlocked · ${esc(s.rare ?? 0)} rare</text>`); top.forEach((a, i) => body.push(image(a.icon, PAD + i * 134, yy + 60, 82, 82, 10))); });

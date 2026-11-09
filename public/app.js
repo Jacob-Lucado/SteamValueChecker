@@ -1102,7 +1102,7 @@
 
   // ---------- full profiles ----------
   const PF_VIS = { public: "Public", server: "Server only", hidden: "Hidden" };
-  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming", guestbook: "Guestbook" };
+  const PF_TITLE = { about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished", posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", value: "Library value", streams: "Streaming", guestbook: "Guestbook" };
   const httpsOnly = u => (/^https:\/\//i.test(u || "") ? u : "");
 
   /** The profile song: a play button that loads the official player when pressed (browsers block sound that starts alone). */
@@ -1366,6 +1366,11 @@
       } else if (s.key === "steam") {
         const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: Number(n).toLocaleString() }), h("span", { text: l }));
         inner = h("div", { class: "pf-stats" }, stat(s.games, "Steam games"), stat(s.hours, "Hours played"), stat(s.library, "In the library"), stat(s.finished, "Finished"));
+      } else if (s.key === "value") {
+        const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: n }), h("span", { text: l }));
+        const usd = n => "$" + Number(n).toLocaleString();
+        inner = h("div", {}, h("div", { class: "pf-stats" }, stat(usd(s.worth), "Library worth"), stat(usd(s.paid), "Actually paid"), stat(usd(s.saved), "Saved"), stat(Number(s.games).toLocaleString(), "Games counted")),
+          h("p", { class: "muted small", text: "Worth is the full price of every game. Updated " + s.day + "." }));
       } else if (s.key === "streams") {
         inner = h("div", {}, h("div", { class: "pf-links" }, ext(s.url, (s.platform === "twitch" ? "Twitch" : s.platform === "kick" ? "Kick" : "YouTube") + ": " + s.handle, "pf-chip"), s.live ? h("span", { class: "chip warn", text: "LIVE NOW" }) : null),
           s.live ? h("p", { class: "muted small", text: s.live.title + (s.live.game ? " · " + s.live.game : "") }) : null);

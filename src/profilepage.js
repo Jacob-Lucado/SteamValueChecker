@@ -17,9 +17,9 @@ export const LAYOUTS = ["classic", "wide", "compact"];
 export const VISIBILITY = ["public", "server", "hidden"];
 export const SECTIONS = {
     about: "About me", favorites: "Favorite games", nowplaying: "Playing now", wishlist: "Wishlist", recent: "Recently finished",
-    posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", streams: "Streaming", guestbook: "Guestbook"
+    posts: "Latest posts", trophies: "Trophies", achievements: "Rarest achievements", activity: "Recent activity", steam: "Steam stats", value: "Library value", streams: "Streaming", guestbook: "Guestbook"
 };
-export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["posts", "public"], ["trophies", "hidden"], ["achievements", "public"], ["activity", "public"], ["guestbook", "public"], ["steam", "hidden"], ["streams", "hidden"]]
+export const DEFAULT_SECTIONS = [["about", "public"], ["favorites", "public"], ["wishlist", "public"], ["recent", "hidden"], ["nowplaying", "hidden"], ["posts", "public"], ["trophies", "hidden"], ["achievements", "public"], ["activity", "public"], ["guestbook", "public"], ["steam", "hidden"], ["value", "hidden"], ["streams", "hidden"]]
     .map(([key, vis]) => ({ key, vis }));
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -229,6 +229,10 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
                 if (r?.games.length) sections.push({ key: "activity", vis: s.vis, hours2w: Math.round(r.minutes2w / 6) / 10, games: r.games.map(g => ({ title: g.title, art: steamArt(g.appid), hours: Math.round((g.minutes ?? 0) / 6) / 10, hours2w: Math.round((g.min_2w ?? 0) / 6) / 10, last: g.last_played, done: g.ach_done ?? 0, total: g.ach_total ?? 0, unlocks: g.unlocks })) });
             } else if (s.key === "steam") {
                 if (steam) sections.push({ key: "steam", vis: s.vis, games: steam.games ?? lib.length, hours: Math.round((steam.minutes ?? 0) / 60), library: lib.length, finished: lib.filter(x => x.status === "finished").length });
+            } else if (s.key === "value") {
+                // The newest daily snapshot: what the games would cost at full price, what was actually paid, and what that saved.
+                const snap = db.listSnapshots(owner.discord_id, 1)[0];
+                if (snap && snap.games > 0 && snap.msrp > 0) sections.push({ key: "value", vis: s.vis, games: snap.games, worth: Math.round(snap.msrp), paid: Math.round(snap.paid), saved: Math.max(0, Math.round(snap.msrp_paid ?? 0) - Math.round(snap.paid)), day: snap.day });
             } else if (s.key === "streams") {
                 const l = owner.guild_id ? db.getStreamLink(owner.guild_id, owner.discord_id) : null;
                 const live = owner.guild_id ? db.getStreamLive(owner.guild_id, owner.discord_id) : null;
