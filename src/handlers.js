@@ -52,10 +52,12 @@ export { UserError };
 const PAGE_TIMEOUT_MS = 10 * 60_000;
 const COOLDOWNS = { import: 60_000, view: 10_000, add: 3_000, lib: 10_000 };
 const lastRun = new Map();
+const OWNER = { id: null };
 
 const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
 
 function cooldown(i, key) {
+    if (OWNER.id && i.user.id === OWNER.id) return () => {}; // the bot owner never waits
     const k = `${key}:${i.user.id}`;
     const wait = COOLDOWNS[key] - (Date.now() - (lastRun.get(k) ?? 0));
     if (wait > 0) throw new UserError(`Slow down a little. Try again in ${Math.ceil(wait / 1000)}s.`);
@@ -95,7 +97,8 @@ export function gameTitleFromText(text) {
     return t.length >= 2 ? t : null;
 }
 
-export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
+    OWNER.id = ownerId ? String(ownerId) : null;
+export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = null, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
     // ---------- /me wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");

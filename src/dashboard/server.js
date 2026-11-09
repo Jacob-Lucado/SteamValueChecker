@@ -2729,6 +2729,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             const owner = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
             if (!owner) throw new HttpError(404, "No profile with that name.");
+            if (body.action === "hide" && owner.discord_id === config.ownerId) throw new HttpError(400, "You can't hide your own page.");
             if (body.action === "dismiss") db.clearProfileReports(owner.profile_slug);
             else db.blockProfile(owner.discord_id, body.action === "hide");
             return { ok: true };
@@ -4138,7 +4139,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 if (!r.ok) throw new HttpError(429, `Too many requests. Try again in ${r.retryAfterS}s.`);
             } else if (url.pathname.startsWith("/api/")) {
                 const sid = cookies(req)[COOKIE];
-                const r = apiLimit.hit(sessions.has(sid) ? `s:${sid}` : `ip:${clientIp(req)}`);
+                const r = sessions.get(sid)?.userId === config.ownerId && config.ownerId ? { ok: true } : apiLimit.hit(sessions.has(sid) ? `s:${sid}` : `ip:${clientIp(req)}`);
                 if (!r.ok) throw new HttpError(429, `Too many requests. Try again in ${r.retryAfterS}s.`);
             }
             if (key === "GET /auth/login" && onMusicHost(req)) return send(res, 302, "", { Location: `${origin}/auth/login?next=music` });

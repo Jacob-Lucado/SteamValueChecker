@@ -204,7 +204,7 @@ for (const json of hubCommands.filter(c => HUB_MENUS.includes(c.name))) {
     panels.register("lib", { ...libraryPanel({ db }), back: back("me", meJson, "library") });
     panels.register("strm", { ...streamPanel({ db, replay: runFromPanel }), back: back("server", srvJson, "stream") });
 }
-const handlers = createHandlers({ panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
+const handlers = createHandlers({ ownerId: cfg.ownerId, panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const profileUi = createProfileHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
@@ -539,7 +539,7 @@ setInterval(() => voterRole.sweep().catch(() => {}), 5 * 60_000).unref?.();
 const supporters = createSupporters({ db, client, mainGuild, renewUrl: publicBase ? publicBase + "/#/tip" : null, dm: (id, p) => discord.sendDm(id, p), log: t => console.log(`[supporters] ${t}`) });
 setInterval(() => supporters.sweep().then(() => supporters.remind()).catch(() => {}), 15 * 60_000).unref?.();
 const square = createSquare({ ...squareConfig(), publicUrl: publicBase ?? "" });
-const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
+const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), ownerId: cfg.ownerId, log: t => console.error(`[ai] ${t}`) });
 const guideThrottle = createGuideThrottle();
 /** A how-to question gets a step by step guide from the bot itself. Returns true when it answered. */
 async function guideReply(m, c) {

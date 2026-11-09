@@ -1012,3 +1012,15 @@ test("server digest has a group buy section for games several sharing members wa
     assert.match(f.value, /Wanted Game.*2 members/);
     assert.ok(!f.value.includes("Solo Game"), "only games two or more want");
 });
+
+test("the bot owner is never held back by the AI cooldown, caps or blocks", async () => {
+    const { createAiChat } = await import("../src/aichat.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:");
+    const rt = { get: k => ({ ai_enabled: true, ai_cooldown: 600, ai_history: 0, ai_max_question: 500 })[k], isServerBlocked: () => true, isUserBlocked: () => true };
+    const ai = createAiChat({ db, key: null, rt, lite: async () => "hi", ownerId: "42", log: () => {} });
+    const a = await ai.answer({ guildId: "g", userId: "42", question: "hello" });
+    const b = await ai.answer({ guildId: "g", userId: "42", question: "hello again" });
+    assert.equal(a.ok, true); assert.equal(b.ok, true, "no cooldown for the owner");
+    assert.equal((await ai.answer({ guildId: "g", userId: "7", question: "hello" })).reason, "blocked", "everyone else is still blocked");
+});

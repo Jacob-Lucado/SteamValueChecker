@@ -95,7 +95,7 @@ function addStat(db, now, add) {
  * `rt` is the runtime settings (src/runtimecfg.js), read on every question so a change in the admin panel applies at once.
  * `defaults` are only used when no settings object is given (tests).
  */
-export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, lite = null, isMain = () => false, isPlus = () => false, fetchFn = fetch, now = Date.now, log = () => {} }) {
+export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, lite = null, isMain = () => false, isPlus = () => false, ownerId = null, fetchFn = fetch, now = Date.now, log = () => {} }) {
     const lastAt = new Map(); // user -> when they last asked
     const available = Boolean(key);
 
@@ -145,15 +145,16 @@ export function createAiChat({ db, key, rt, tools = null, keyFor = () => null, l
         const own = asOwn(keyFor(guildId));
         if (!available && !own && !lite) return { ok: false, reason: "off" };
         if (!rt.get("ai_enabled")) return { ok: false, reason: "paused" };
-        if (rt.isServerBlocked(guildId) || rt.isUserBlocked(userId)) return { ok: false, reason: "blocked" };
-        const t = now(), cooldown = rt.get("ai_cooldown") * 1000;
+        const boss = Boolean(ownerId) && String(userId) === String(ownerId); // the bot owner is never held back by blocks, cooldowns or caps
+        if (!boss && (rt.isServerBlocked(guildId) || rt.isUserBlocked(userId))) return { ok: false, reason: "blocked" };
+        const t = now(), cooldown = boss ? 0 : rt.get("ai_cooldown") * 1000;
         if (t - (lastAt.get(userId) ?? 0) < cooldown) return { ok: false, reason: "cooldown" };
         if (!available && !own) { // no AI key yet: the bot answers the common questions itself
             lastAt.set(userId, t);
             try { const cards = []; const text = await lite({ question, userId, guildId, cards }); addStat(db, now(), { liteAnswers: 1 }); return { ok: true, lite: true, cards, text: String(text).replace(/@(everyone|here)/gi, "@\u200b$1").slice(0, MAX_REPLY) }; }
             catch (e) { log(`lite answer failed: ${e?.message}`); return { ok: false, reason: "error" }; }
         }
-        if (!spend(guildId, Boolean(own))) return { ok: false, reason: "cap" };
+        if (!boss && !spend(guildId, Boolean(own))) return { ok: false, reason: "cap" };
         lastAt.set(userId, t);
         if (lastAt.size > 5000) for (const [u, at] of lastAt) if (t - at > cooldown) lastAt.delete(u);
         const keep = rt.get("ai_history");
