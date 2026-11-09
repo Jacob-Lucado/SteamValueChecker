@@ -17,6 +17,7 @@ import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
 import { pushEvent } from "./adminlog.js";
 import { createVoterRole } from "./voterrole.js";
+import { runWatchdog } from "./watchdog.js";
 import { createCommandWatch } from "./cmdwatch.js";
 import { ensureCreatorRole } from "./creatorrole.js";
 import { storageReport } from "./storage.js";
@@ -426,6 +427,7 @@ client.once(Events.ClientReady, c => {
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
+            result.watchdog = await ops.job("watchdog", () => runWatchdog({ ops, logs, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }) }));
             ops.maintenanceDone(result);
             try { await ops.backupDone(runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep })); }
             catch (err) { await ops.backupDone(null, err); }
