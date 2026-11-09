@@ -219,7 +219,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -3197,6 +3197,10 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             return { list: readEvents(db, "adminlog:servers", 30) };
         },
+        "GET /api/admin/commandwatch": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            return commandWatch ? commandWatch.report() : { threshold: 0, rows: [] };
+        },
         "GET /api/admin/storage": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -3303,7 +3307,8 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             const byId = new Map(live.map(g => [g.id, g]));
             // Every server the bot is in, with what has been set up there. Servers that never set anything are still listed.
             const rows = new Map(ins.servers.filter(r => !isHidden(r.id)).map(r => [r.id, r]));
-            const servers = [...new Set([...live.map(g => g.id), ...rows.keys()])].map(id => ({ id, name: byId.get(id)?.name ?? null, members: byId.get(id)?.members ?? null, tracked: rows.get(id)?.members ?? 0, channel: rows.has(id), freeFeed: Boolean(rows.get(id)?.free_feed), groupMin: rows.get(id)?.group_min ?? 0, digest: Boolean(rows.get(id)?.weekly_digest), inServer: guildList ? byId.has(id) : null }))
+            const blocked = new Map(db.blockedGuilds().map(b => [b.id, b]));
+            const servers = [...new Set([...live.map(g => g.id), ...rows.keys(), ...blocked.keys()])].map(id => ({ blocked: blocked.has(id) ? blocked.get(id).reason || "blocked" : null, id, name: byId.get(id)?.name ?? null, members: byId.get(id)?.members ?? null, tracked: rows.get(id)?.members ?? 0, channel: rows.has(id), freeFeed: Boolean(rows.get(id)?.free_feed), groupMin: rows.get(id)?.group_min ?? 0, digest: Boolean(rows.get(id)?.weekly_digest), inServer: guildList ? byId.has(id) : null }))
                 .sort((a, b) => (b.members ?? 0) - (a.members ?? 0) || b.tracked - a.tracked);
             return { ...ins, servers, bot: { version: info?.version ?? null, uptime: info?.uptime ?? null, pingMs: info?.pingMs ?? null, servers: info?.servers ?? null, rssMb: Math.round(mem.rss / 1048576), node: process.version } };
         },
@@ -3393,6 +3398,25 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 log(`Bot owner started broadcast #${r.id} to ${audience} (${r.total} recipient${r.total === 1 ? "" : "s"})`);
                 return { ...r, current: broadcaster().current() };
             } catch (e) { undo(); if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+        },
+
+        "POST /api/admin/server/leave": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const id = String(body.id ?? "");
+            if (!/^\d{5,25}$/.test(id)) throw new HttpError(400, "Pick a server first.");
+            const block = Boolean(body.block);
+            if (block) db.blockGuild(id, String(body.reason ?? ""));
+            let left = false;
+            if (leaveGuild) { try { left = await leaveGuild(id); } catch (e) { if (!block) throw new HttpError(400, e.message || "Could not leave that server."); } }
+            log(`Bot owner ${block ? "blocked" : "left"} server ${id}`);
+            return { left: Boolean(left), blocked: block };
+        },
+
+        "POST /api/admin/server/unblock": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            return { unblocked: db.unblockGuild(String(body.id ?? "")) };
         },
 
         "POST /api/admin/server/invite": async (req, body) => {

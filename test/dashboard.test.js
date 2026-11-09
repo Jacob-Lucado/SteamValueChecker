@@ -2769,6 +2769,7 @@ test("admin pages for votes, errors, data requests and server events are owner-o
     assert.equal((await t.request("/api/admin/votes")).data.votes, 4);
     assert.equal((await t.request("/api/admin/errors")).status, 200);
     assert.equal((await t.request("/api/admin/serverevents")).status, 200);
+    assert.deepEqual((await t.request("/api/admin/commandwatch")).data.rows, []);
     t.db.updateUser?.("u1", {});
     await t.request("/api/mydata/download", { raw: true });
     await t.request("/api/mydata/delete", { method: "POST", body: { confirm: "DELETE" } });
@@ -2777,7 +2778,7 @@ test("admin pages for votes, errors, data requests and server events are owner-o
     assert.ok(!JSON.stringify(r).includes("u1"), "no user id in the log");
     await t.close();
     const other = await signedIn({ config: { ownerId: "someone-else" } });
-    for (const p of ["votes", "errors", "datarequests", "serverevents"]) assert.equal((await other.request("/api/admin/" + p)).status, 403, p);
+    for (const p of ["votes", "errors", "datarequests", "serverevents", "commandwatch"]) assert.equal((await other.request("/api/admin/" + p)).status, 403, p);
     await other.close();
 });
 
@@ -2789,4 +2790,21 @@ test("the co-op lookup lists owners in a server the member is in", async () => {
     assert.equal((await t.request("/api/coop?guild=g-member&game=")).status, 400);
     assert.equal((await t.request("/api/coop?guild=nope&game=Hades")).status >= 400, true);
     await t.close();
+});
+
+test("the owner can make the bot leave a server and block it, then unblock it", async () => {
+    const left = [];
+    const t = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ leaveGuild: async id => { left.push(id); return true; } }) });
+    const r = await t.request("/api/admin/server/leave", { method: "POST", body: { id: "123456789012345", block: true, reason: "spam" } });
+    assert.equal(r.status, 200); assert.equal(r.data.blocked, true);
+    assert.deepEqual(left, ["123456789012345"]);
+    assert.equal(t.db.isGuildBlocked("123456789012345"), true);
+    assert.equal(t.db.blockedGuilds()[0].reason, "spam");
+    assert.equal((await t.request("/api/admin/server/leave", { method: "POST", body: { id: "abc" } })).status, 400);
+    assert.equal((await t.request("/api/admin/server/unblock", { method: "POST", body: { id: "123456789012345" } })).data.unblocked, true);
+    assert.equal(t.db.isGuildBlocked("123456789012345"), false);
+    await t.close();
+    const other = await signedIn({ config: { ownerId: "someone-else" } });
+    assert.equal((await other.request("/api/admin/server/leave", { method: "POST", body: { id: "123456789012345" } })).status, 403);
+    await other.close();
 });

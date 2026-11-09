@@ -3371,7 +3371,10 @@
             const a = h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer", text: r.url });
             out.replaceChildren("One use, expires in an hour: ", a);
           }));
-          return h("div", {}, b, out);
+          const act = (label, body, ask) => { const x = h("button", { class: "btn gray small", type: "button", text: label }); x.addEventListener("click", () => { if (ask && !confirm(ask)) return; busy(x, async () => { await api(body.path, body.data); toast("Done.", "ok"); route(); }); }); return x; };
+          const acts = g.blocked ? [h("span", { class: "chip warn", text: "Blocked" }), act("Unblock", { path: "/api/admin/server/unblock", data: { id: g.id } })]
+            : g.inServer === false ? [] : [act("Leave", { path: "/api/admin/server/leave", data: { id: g.id } }, `Make the bot leave ${g.name || g.id}? It can be invited back.`), act("Leave and block", { path: "/api/admin/server/leave", data: { id: g.id, block: true } }, `Leave ${g.name || g.id} and block it? If someone invites the bot back it will leave again until you unblock it.`)];
+          return h("div", { class: "row" }, b, ...acts, out);
         })())))))) : h("p", { class: "muted", text: "No servers yet." }))];
 
     const members = () => {
@@ -4096,11 +4099,16 @@
       const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
       const lagBad = p.lagMs > 100;
       const st = await api("/api/admin/storage").catch(() => null);
-      const [eg, se] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null)]);
+      const [eg, se, cw] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null)]);
       const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
       const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
         eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
           h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
+      const cwPanel = cw && h("div", { class: "panel" }, h("h3", { text: "Busiest users" }),
+        cw.rows.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Discord ID", "Last hour", "Last 24 h", "Most used", ""].map(c => h("th", { text: c })))),
+          h("tbody", {}, cw.rows.map(r => h("tr", {}, h("td", { text: r.id }), h("td", {}, h("b", { text: String(r.hour), class: r.heavy ? "bad" : "" })), h("td", { text: String(r.day) }), h("td", { text: r.top }),
+            h("td", {}, (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Restrict" }); b.addEventListener("click", () => { if (confirm("Cut " + r.id + " off from the bot and dashboard? You can undo it on the People page.")) busy(b, async () => { await api("/api/admin/ban", { id: r.id, ban: true, reason: "Too many commands" }); toast("Restricted.", "ok"); }); }); return b; })()))))) : h("p", { class: "muted", text: "No commands since the bot started." }),
+        h("p", { class: "muted small", text: `Counts reset when the bot restarts. ${cw.threshold} or more in an hour is flagged.` }));
       const srvPanel = se && h("div", { class: "panel" }, h("h3", { text: "Server joins and leaves" }),
         se.list.length ? h("table", {}, h("thead", {}, h("tr", {}, ["", "Server", "Members", "When"].map(c => h("th", { text: c })))),
           h("tbody", {}, se.list.map(e => h("tr", {}, h("td", { text: e.kind === "join" ? "➕ Joined" : "➖ Left" }), h("td", {}, h("b", { text: e.name }), h("div", { class: "muted small", text: e.id })), h("td", { text: e.members != null ? String(e.members) : "–" }), h("td", { text: ago(e.at) }))))) : h("p", { class: "muted", text: "Nothing since this feature started. You also get a DM each time the bot is added or removed." }));
@@ -4118,6 +4126,7 @@
         h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
         storagePanel,
         errPanel,
+        cwPanel,
         srvPanel,
         h("div", { class: "panel" }, h("h3", { text: "Background jobs" }),
           sys.jobs && sys.jobs.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Job", "Last run", "Took", "Result", "Failures"].map(c => h("th", { text: c })))),

@@ -16,6 +16,7 @@ import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
 import { pushEvent } from "./adminlog.js";
+import { createCommandWatch } from "./cmdwatch.js";
 import { ensureCreatorRole } from "./creatorrole.js";
 import { storageReport } from "./storage.js";
 import { createEpicSoon } from "./epicsoon.js";
@@ -437,7 +438,7 @@ let adLast = 0;
 // A heads-up for the owner whenever the bot is added to or removed from a server, and a short history for the admin Servers page.
 client.on(Events.GuildCreate, async guild => {
     try {
-        if (isHidden(guild.id) || !guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return;
+        if (isHidden(guild.id) || db.isGuildBlocked(guild.id) || !guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return;
         const key = `joinalert:${guild.id}:${guild.joinedTimestamp}`;
         if (db.getMeta(key)) return;
         db.setMeta(key, "1");
@@ -446,7 +447,10 @@ client.on(Events.GuildCreate, async guild => {
         if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { embeds: [{ color: 0x57f287, title: "New server", description: `The bot was added to **${guild.name}**.`, fields: [{ name: "Members", value: String(members), inline: true }, { name: "Servers now", value: String(client.guilds.cache.size), inline: true }], footer: { text: `Server ${guild.id}` }, timestamp: new Date().toISOString() }] }).catch(() => {});
     } catch (err) { console.error(`[join-alert] ${err.message}`); }
 });
+// A server the owner has blocked: leave again right away, before anything else reacts to the join.
+client.on(Events.GuildCreate, guild => { if (db.isGuildBlocked(guild.id)) guild.leave().catch(err => console.warn(`[blocked-server] ${err.message}`)); });
 client.on(Events.GuildCreate, async guild => {
+    if (db.isGuildBlocked(guild.id)) return;
     ensureCreatorRole(guild, cfg.ownerId, console.warn); // also runs for every server at startup, which covers servers the owner is already in
     try {
         if (!guild.joinedTimestamp || Date.now() - guild.joinedTimestamp > 5 * 60_000) return; // GuildCreate also fires for every server at startup
@@ -778,6 +782,7 @@ async function handleValue(i) {
     }
 }
 
+const commandWatch = createCommandWatch();
 async function onInteraction(i, again = false) {
     if (!again) brandInteraction(i, brandOpts);
     // Restricted people get nothing from the bot (the owner can't be locked out).
@@ -786,6 +791,7 @@ async function onInteraction(i, again = false) {
         return;
     }
     if (i.user?.id && db.getUser(i.user.id)) db.touchUser(i.user.id);
+    if (!again && i.isChatInputCommand?.()) commandWatch.note(i.user?.id, i.commandName + (i.options.getSubcommand(false) ? " " + i.options.getSubcommand(false) : ""));
     // "/me wishlist add" arrives as the old "/me wishlist add" from here on, so every handler stays as it was.
     if (i.isChatInputCommand() || i.isAutocomplete()) {
         const route = legacyRoute(i.commandName, i.options.getSubcommandGroup(false), i.options.getSubcommand(false));
@@ -967,7 +973,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ commandWatch, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

@@ -823,6 +823,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         run("DELETE FROM status_events WHERE id NOT IN (SELECT id FROM status_events ORDER BY id DESC LIMIT 200)");
     };
     const statusEvents = (limit = 20) => all("SELECT at, component, state, note FROM status_events ORDER BY id DESC LIMIT ?", limit).map(clean);
+    /** Servers the owner has cut off: the bot leaves them and leaves again if it is ever re-invited. Kept in status_meta as guildblock:<id>. */
+    const blockGuild = (id, reason = "") => setMeta(`guildblock:${id}`, JSON.stringify({ reason: String(reason).slice(0, 200), at: now() }));
+    const unblockGuild = id => run("DELETE FROM status_meta WHERE key = ?", `guildblock:${id}`).changes > 0;
+    const isGuildBlocked = id => Boolean(id) && Boolean(getMeta(`guildblock:${id}`));
+    const blockedGuilds = () => listMetaPrefix("guildblock:").map(r => { let v = {}; try { v = JSON.parse(r.value); } catch { /* an old or hand-edited row */ } return { id: r.key.slice("guildblock:".length), reason: v.reason ?? "", at: v.at ?? 0 }; });
+
     /** The biggest tables and indexes by bytes on disk, for the admin storage panel. */
     const tableSizes = (limit = 10) => {
         try { return all("SELECT COALESCE(NULLIF(t.tbl_name, ''), d.name) AS name, SUM(d.pgsize) AS bytes FROM dbstat d LEFT JOIN sqlite_schema t ON t.name = d.name GROUP BY 1 ORDER BY 2 DESC LIMIT ?", limit).map(r => ({ name: r.name, bytes: Number(r.bytes) })); }
@@ -848,6 +854,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }
