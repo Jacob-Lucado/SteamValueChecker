@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { createXPoster, oauthHeader, freeGameText, DEFAULT_DAILY } from "../src/xposter.js";
+import { createXPoster, oauthHeader, freeGameText, bundleText, DEFAULT_DAILY } from "../src/xposter.js";
 
 const ENV = { X_API_KEY: "k", X_API_SECRET: "s", X_ACCESS_TOKEN: "t", X_ACCESS_SECRET: "ts" };
 const game = (id, extra = {}) => ({ id, title: "Cool Game", shop: "Epic Games", url: "https://store.epicgames.com/x", type: "game", expiry: Date.UTC(2026, 10, 12, 15), ...extra });
@@ -179,3 +179,11 @@ test("auto free-game posts link through the site's landing page when it's set up
     try { await x.tick([game("a", { art: null })]); } finally { configureDeals(null); }
     assert.match(sent[0].text, /Claim it: https:\/\/steamvaluechecker\.com\/d\/\d+/); assert.ok(!sent[0].text.includes("epicgames"));
 });
+
+test("bundle posts are spaced out and only say 'including' when games are left out", () => {
+    const b = { title: "Both", storeName: "Steam", price: "$14", gameCount: 2, games: ["Alpha", "Beta"], url: "https://steamvaluechecker.com/b/1" };
+    const t = freeBundle(b);
+    assert.match(t, /^📦 New bundle: Both \(Steam\)\n\n💰 \$14\n🎮 2 games: Alpha and Beta\n\nhttps:\/\/steamvaluechecker\.com\/b\/1\n\n#/); assert.ok(!/like|including/.test(t));
+    assert.match(freeBundle({ ...b, gameCount: 9, games: ["A", "B", "C"] }), /9 games, including A, B, C/);
+});
+function freeBundle(b) { return bundleText(b, { link: true }); }

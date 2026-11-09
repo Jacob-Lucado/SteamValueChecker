@@ -44,16 +44,20 @@ export function hashtagsFor(shop, title, pool = DEFAULT_TAGS, max = 4) {
 /** A bundle as a post: plain text unless `link` is set, because a link makes X charge about thirteen times more. */
 export function bundleText(b, { tags = DEFAULT_TAGS, link = false, now = Date.now() } = {}) {
     const store = b.storeName ?? b.store ?? "", count = b.gameCount ?? b.games?.length ?? 0;
-    const lines = [`📦 New bundle: ${String(b.title).slice(0, 90)}${store ? ` (${store})` : ""}`];
+    const head = `📦 New bundle: ${String(b.title).slice(0, 90)}${store ? ` (${store})` : ""}`;
+    const lines = [];
     if (b.price) lines.push(`💰 ${String(b.price).slice(0, 60)}`);
-    const games = (b.games ?? []).slice(0, 3);
-    if (count) lines.push(`🎮 ${count} games${games.length ? `, like ${games.join(", ")}` : ""}`);
+    const games = (b.games ?? []).slice(0, 3), all = count && games.length >= count; // every game fits in the list, so don't say "like"
+    const named = games.length > 1 ? `${games.slice(0, -1).join(", ")} and ${games[games.length - 1]}` : games[0];
+    if (count) lines.push(`🎮 ${count} game${count === 1 ? "" : "s"}${games.length ? (all ? `: ${named}` : `, including ${games.join(", ")}`) : ""}`);
     if (b.expiresAt && b.expiresAt > now) lines.push(`⏳ Ends ${new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }).format(new Date(b.expiresAt))}`);
-    const tail = `\n\n${link && b.url ? b.url : "Link in bio."}\n${hashtagsFor(store, b.title, tags.filter(t => !/^#(free\w*|giveaway)$/i.test(t)))}`; // a bundle isn't free or a giveaway
-    let text = lines.join("\n") + tail;
-    for (let i = 1; xLength(text) > 280 && i < lines.length; i++) { // drop the extras, longest first, until it fits
-        const j = lines.findIndex(l => l.startsWith("🎮")); if (j > 0) lines.splice(j, 1); else lines.pop();
-        text = lines.join("\n") + tail;
+    // a blank line between the headline, the details, the link and the hashtags, so it reads cleanly in the feed
+    const tail = `\n\n${link && b.url ? b.url : "Link in bio."}\n\n${hashtagsFor(store, b.title, tags.filter(t => !/^#(free\w*|giveaway)$/i.test(t)))}`; // a bundle isn't free or a giveaway
+    const build = () => head + (lines.length ? "\n\n" + lines.join("\n") : "") + tail;
+    let text = build();
+    for (let i = 0; xLength(text) > 280 && lines.length; i++) { // drop the extras, longest first, until it fits
+        const j = lines.findIndex(l => l.startsWith("🎮")); if (j >= 0) lines.splice(j, 1); else lines.pop();
+        text = build();
     }
     return text;
 }
