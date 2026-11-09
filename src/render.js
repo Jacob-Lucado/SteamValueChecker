@@ -6,6 +6,7 @@ import { pagedPayload } from "./pager.js";
 import { protonLabel } from "./proton.js";
 import { reviewLine } from "./reviews.js";
 import { tr } from "./i18n.js";
+import { dealUrl } from "./deallinks.js";
 export const ROWS_PER_PAGE = 15;
 const COLOR = 0xff9800;
 
@@ -336,7 +337,7 @@ export function bundleEmbed({ item, bundle }) {
     if (bundle.shop) fields.push({ name: "Store", value: bundle.shop, inline: true });
     if (bundle.price !== undefined) fields.push({ name: "From", value: money(bundle.price, bundle.currency ?? "USD"), inline: true });
     if (bundle.expiry) fields.push({ name: "Ends", value: stamp(bundle.expiry), inline: true });
-    return { color: PURPLE, title: `${item.title} is in a bundle`, url: safeUrl(bundle.url), thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields, footer: { text: "Bundle alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
+    return { color: PURPLE, title: `${item.title} is in a bundle`, url: safeUrl(dealUrl({ key: `bundle:${bundle.id ?? bundle.url}`, kind: "bundle", title: bundle.title, shop: bundle.shop, url: bundle.url, image: artUrl(item), price: bundle.price !== undefined ? money(bundle.price, bundle.currency ?? "USD") : null, games: [item.title], expiry: bundle.expiry })), thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields, footer: { text: "Bundle alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
 }
 
 /** A watched game is being given away. */
@@ -344,7 +345,7 @@ export function giveawayEmbed({ item, giveaway }) {
     const fields = [{ name: "Giveaway", value: giveaway.title.slice(0, 200), inline: true }];
     if (giveaway.shop) fields.push({ name: "Where", value: giveaway.shop, inline: true });
     if (giveaway.expiry) fields.push({ name: "Ends", value: stamp(giveaway.expiry), inline: true });
-    return { color: GREEN, title: `🎁 ${item.title} is free right now`, url: safeUrl(giveaway.url), thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields, footer: { text: "Giveaway alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
+    return { color: GREEN, title: `🎁 ${item.title} is free right now`, url: safeUrl(dealUrl({ key: `free:${giveaway.id ?? giveaway.url}`, kind: "free", title: item.title, shop: giveaway.shop, url: giveaway.url, image: artUrl(item), expiry: giveaway.expiry })), thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields, footer: { text: "Giveaway alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" } };
 }
 
 /** A watched game joined a subscription (Game Pass, Prime Gaming...), or is about to leave one. */
@@ -668,12 +669,14 @@ export function freeGamesPayload(shop, games, { pager = null } = {}) {
     const list = games.filter(g => safeUrl(g.url)).slice(0, MAX_FREE_PER_MESSAGE);
     if (!list.length) return null;
     const big = list.length <= 3 || Boolean(pager); // full-width pictures for a few games, small ones when there are many
+    // each game's link goes through its page on the site, which counts the visit and sends the person on to the store
+    const claim = list.map(g => safeUrl(dealUrl({ key: `free:${g.id ?? g.url}`, kind: "free", title: g.title, shop, url: g.url, image: freeArt(g), expiry: g.expiry, blurb: g.blurb })) ?? g.url);
     const embeds = list.map((g, n) => {
         const art = freeArt(g);
         const dlc = g.type === "dlc" || /\b(dlc|soundtrack|add-?on|season pass)\b/i.test(g.title ?? "");
         const own = !dlc || !g.base ? "" : g.baseOwned === true ? `\n🟢 You own the base game (${g.base.name})` : g.baseOwned === false ? `\n🔴 You don't own the base game (${g.base.name})` : `\n🧩 DLC for ${g.base.name}`;
         return {
-            color: dlc && g.baseOwned === false ? 0xed4245 : GREEN, title: `${dlc ? "🧩" : "🎁"} ${g.title}`.slice(0, 256), url: safeUrl(g.url),
+            color: dlc && g.baseOwned === false ? 0xed4245 : GREEN, title: `${dlc ? "🧩" : "🎁"} ${g.title}`.slice(0, 256), url: safeUrl(claim[n]),
             description: `## FREE${dlc ? " DLC" : ""}  •  ${shopIcon(shop)} ${shop}\n${g.expiry ? `Claim it ${stamp(g.expiry)} or it's gone.` : "Free to keep while the offer lasts."}${g.store ? `\n🎟️ Delivered through ${g.store}` : ""}${g.blurb ? `\n*${g.blurb}*` : ""}${own}`,
             fields: [
                 { name: "Store", value: `${shopIcon(shop)} ${shop}`, inline: true },
@@ -687,12 +690,12 @@ export function freeGamesPayload(shop, games, { pager = null } = {}) {
     });
     const link = (label, url) => ({ type: 2, style: 5, label: label.slice(0, 80), url: safeUrl(url) });
     const row = list.length === 1
-        ? [link("Claim game", list[0].url)]
-        : [{ type: 2, style: 1, label: `Claim all (${list.length})`, custom_id: FREE_CLAIM_ALL_ID }, ...list.slice(0, 4).map(g => link(`Claim ${g.title}`, g.url))];
+        ? [link("Claim game", claim[0])]
+        : [{ type: 2, style: 1, label: `Claim all (${list.length})`, custom_id: FREE_CLAIM_ALL_ID }, ...list.slice(0, 4).map((g, n) => link(`Claim ${g.title}`, claim[n]))];
     const content = list.length === 1 ? `Free game on ${shop}` : `${list.length} free games on ${shop}`;
     if (pager && list.length > 1) {
         // one game per page: "Claim all" stays on every page, plus this game's own claim link
-        return pagedPayload(pager, { content, pages: list.map((g, n) => ({ embed: embeds[n], label: g.title, rows: [{ type: 1, components: [row[0], link(`Claim ${g.title}`, g.url)] }] })) });
+        return pagedPayload(pager, { content, pages: list.map((g, n) => ({ embed: embeds[n], label: g.title, rows: [{ type: 1, components: [row[0], link(`Claim ${g.title}`, claim[n])] }] })) });
     }
     return { content, embeds, components: [{ type: 1, components: row }] };
 }

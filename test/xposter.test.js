@@ -168,3 +168,14 @@ test("a manual post can use a bundle's picture, and a scheduled one keeps its ow
     assert.deepEqual(seen, ["upload:" + Buffer.from("pic").toString("base64"), "post+pic"]); assert.equal(x.status().history[0].media, true);
     assert.equal(db.getMeta("xposter:qimg:" + q.key), "", "the stored picture is cleared once it has gone out");
 });
+
+test("auto free-game posts link through the site's landing page when it's set up", async () => {
+    const { configureDeals } = await import("../src/deallinks.js");
+    const db = openDb(":memory:"), sent = [];
+    const fetchImpl = async (u, o) => { if (String(u).includes("/2/tweets")) sent.push(JSON.parse(o.body)); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: { id: "1" } }), text: async () => "" }; };
+    const x = createXPoster({ env: ENV, db, fetchImpl, now: () => Date.UTC(2026, 10, 9, 15), log() {} });
+    x.setSettings({ enabled: true });
+    configureDeals({ base: "https://steamvaluechecker.com", make: d => `https://steamvaluechecker.com/d/${db.upsertDeal(d)}` });
+    try { await x.tick([game("a", { art: null })]); } finally { configureDeals(null); }
+    assert.match(sent[0].text, /Claim it: https:\/\/steamvaluechecker\.com\/d\/\d+/); assert.ok(!sent[0].text.includes("epicgames"));
+});

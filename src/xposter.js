@@ -1,6 +1,7 @@
 // Posts the free games the bot finds to the project's X account. X charges for every post it takes through the API
 // (about 1.5 cents for plain text, and about 20 cents once a post has a link in it), so this only ever posts plain text,
 // at most a few a day, and does nothing until the owner switches it on and has added the four keys.
+import { dealUrl } from "./deallinks.js";
 import { createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -236,7 +237,9 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         if (!g) return { skipped: "nothing" };
         db.setMeta(SEEN + g.id, String(now())); // marked first, so a failure can't turn into a loop of retries that each cost money
         try {
-            const text = freeGameText(g, now(), tags(), { link: linksOn() });
+            // the link goes through our own page on the site, which counts the visit and then sends people on to the store
+            const linked = linksOn() ? { ...g, url: dealUrl({ key: `free:${g.id ?? g.url}`, kind: "free", title: g.title, shop: g.shop, url: g.url, image: g.art, expiry: g.expiry }) } : g;
+            const text = freeGameText(linked, now(), tags(), { link: linksOn() });
             let mediaIds = [];
             try { const pic = await pictureFor(g.art); if (pic) mediaIds = [await uploadImage(pic)]; db.setMeta(IMGERR, ""); }
             catch (err) { db.setMeta(IMGERR, JSON.stringify({ at: now(), message: err.message })); log(`posting without a picture: ${err.message}`); } // better a post without a picture than no post

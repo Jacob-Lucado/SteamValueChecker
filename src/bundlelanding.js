@@ -22,25 +22,38 @@ export const safePictureUrl = url => {
     try { const u = new URL(String(url)); return u.protocol === "https:" && /\.[a-z]{2,}$/i.test(u.hostname) && !/^\d+\.\d+\.\d+\.\d+$/.test(u.hostname) ? u.href : null; } catch { return null; }
 };
 
-const endsText = (ms, now) => {
-    if (!ms) return "No end date listed, so grab it while it lasts";
-    if (ms <= now) return "This bundle has ended";
+const endsText = (ms, now, free = false) => {
+    if (!ms) return free ? "Free for now, so claim it while it lasts" : "No end date listed, so grab it while it lasts";
+    if (ms <= now) return free ? "This offer has ended" : "This bundle has ended";
     const left = ms - now, d = Math.floor(left / 86_400_000), h = Math.floor(left % 86_400_000 / 3_600_000);
     const when = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(ms));
-    return `Ends ${when} Eastern${d > 0 ? ` (${d} day${d === 1 ? "" : "s"} left)` : h > 0 ? ` (${h} hour${h === 1 ? "" : "s"} left)` : " (less than an hour left)"}`;
+    return `${free ? "Claim it by" : "Ends"} ${when} Eastern${d > 0 ? ` (${d} day${d === 1 ? "" : "s"} left)` : h > 0 ? ` (${h} hour${h === 1 ? "" : "s"} left)` : " (less than an hour left)"}`;
 };
 
-/** The whole page. `b` is the stored bundle row (games as an array). */
-export function renderBundleLanding(b, { origin, inviteUrl = null, supportUrl = null, now = Date.now(), hasPicture = false } = {}) {
-    const store = BUNDLE_STORES[b.store] ?? { name: b.store ?? "the store", emoji: "📦" };
-    const dest = bundleDestination(b.url), ended = Boolean(b.expires_at && b.expires_at <= now) || b.status === "expired";
-    const count = b.game_count ?? (b.games?.length || null);
-    const title = `${b.title} | ${store.name} bundle`;
-    const desc = `${b.price ? b.price + ". " : ""}${count ? count + " games. " : ""}${endsText(b.expires_at, now)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
-    const go = `${origin}/b/${b.id}/go`, page = `${origin}/b/${b.id}`;
-    const games = (b.games ?? []).slice(0, 10);
-    const more = (count ?? games.length) - games.length;
-    const redirect = dest && !ended;
+/** Free games and the like: any public https address from our own feeds, never an IP address or a local name. */
+export function dealDestination(url) {
+    const u = safePictureUrl(url); // same rules: https, a real hostname
+    return u ?? null;
+}
+
+/** Bundle row or free-game row to one shape for the page. */
+function modelOf(kind, r, now) {
+    if (kind === "bundle") {
+        const store = BUNDLE_STORES[r.store] ?? { name: r.store ?? "the store", emoji: "📦" };
+        return { path: "b", id: r.id, free: false, storeName: store.name, emoji: store.emoji ?? "📦", title: r.title, price: r.price, count: r.game_count ?? (r.games?.length || null), games: r.games ?? [], expires: r.expires_at, ended: Boolean(r.expires_at && r.expires_at <= now) || r.status === "expired", dest: bundleDestination(r.url), picture: r.image, blurb: null };
+    }
+    const shop = r.shop || "the store";
+    return { path: "d", id: r.id, free: r.kind !== "bundle", storeName: shop, emoji: r.kind === "bundle" ? "📦" : "🎁", title: r.title, price: r.kind === "bundle" ? r.price : "Free", count: r.games?.length || null, games: r.games ?? [], expires: r.expiry, ended: Boolean(r.expiry && r.expiry <= now), dest: dealDestination(r.url), picture: r.image, blurb: r.blurb };
+}
+
+function page(m, { origin, inviteUrl, supportUrl, now }) {
+    const hasPicture = Boolean(safePictureUrl(m.picture));
+    const noun = m.free ? "free game" : "bundle";
+    const title = m.free ? `${m.title} is free on ${m.storeName}` : `${m.title} | ${m.storeName} bundle`;
+    const desc = `${m.free ? "Free to keep. " : m.price ? m.price + ". " : ""}${m.count && !m.free ? m.count + " games. " : ""}${endsText(m.expires, now, m.free)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
+    const base = `${origin}/${m.path}/${m.id}`, go = `${base}/go`, local = `/${m.path}/${m.id}`;
+    const games = m.games.slice(0, 10), more = (m.count ?? games.length) - games.length;
+    const redirect = Boolean(m.dest) && !m.ended;
     const head = `<!doctype html>
 <html lang="en">
 <head>
@@ -50,13 +63,13 @@ export function renderBundleLanding(b, { origin, inviteUrl = null, supportUrl = 
 <meta name="description" content="${esc(desc)}">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#0f1724">
-<link rel="canonical" href="${esc(page)}">
+<link rel="canonical" href="${esc(base)}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steam Value Checker">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
-<meta property="og:url" content="${esc(page)}">
-${hasPicture ? `<meta property="og:image" content="${esc(page)}/img">\n<meta name="twitter:card" content="summary_large_image">` : `<meta property="og:image" content="${esc(origin)}/banner.png">\n<meta name="twitter:card" content="summary">`}
+<meta property="og:url" content="${esc(base)}">
+${hasPicture ? `<meta property="og:image" content="${esc(base)}/img">\n<meta name="twitter:card" content="summary_large_image">` : `<meta property="og:image" content="${esc(origin)}/banner.png">\n<meta name="twitter:card" content="summary">`}
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="stylesheet" href="/go.css">
 ${redirect ? `<noscript><meta http-equiv="refresh" content="${REDIRECT_SECONDS};url=${esc(go)}"></noscript>` : ""}
@@ -65,26 +78,27 @@ ${redirect ? `<noscript><meta http-equiv="refresh" content="${REDIRECT_SECONDS};
 <header class="top"><a class="brand" href="/"><img src="/logo.png" alt="" width="30" height="30"><span>Steam Value Checker</span></a></header>
 <main class="wrap">
 <article class="card">
-${hasPicture ? `<img class="pic" src="/b/${b.id}/img" alt="" width="460" height="215">` : ""}
+${hasPicture ? `<img class="pic" src="${local}/img" alt="" width="460" height="215">` : ""}
 <div class="body">
-<span class="pill">${esc(store.emoji ?? "📦")} ${esc(store.name)}</span>
-<h1>${esc(b.title)}</h1>
+<span class="pill">${esc(m.emoji)} ${m.free ? "FREE · " : ""}${esc(m.storeName)}</span>
+<h1>${esc(m.title)}</h1>
 <div class="facts">
-${b.price ? `<div><b>${esc(b.price)}</b><span>Price</span></div>` : ""}
-${count ? `<div><b>${esc(count)}</b><span>Games</span></div>` : ""}
+${m.price ? `<div><b>${esc(m.price)}</b><span>Price</span></div>` : ""}
+${m.count && !m.free ? `<div><b>${esc(m.count)}</b><span>Games</span></div>` : ""}
 </div>
-${games.length ? `<ul class="games">${games.map(g => `<li>${esc(g)}</li>`).join("")}${more > 0 ? `<li class="more">and ${more} more</li>` : ""}</ul>` : ""}
-<p class="ends${ended ? " over" : ""}">${esc(endsText(b.expires_at, now))}</p>
+${m.blurb ? `<p class="blurb">${esc(m.blurb)}</p>` : ""}
+${games.length && !m.free ? `<ul class="games">${games.map(g => `<li>${esc(g)}</li>`).join("")}${more > 0 ? `<li class="more">and ${more} more</li>` : ""}</ul>` : ""}
+<p class="ends${m.ended ? " over" : ""}">${esc(endsText(m.expires, now, m.free))}</p>
 ${redirect ? `<div class="redirect" id="go" data-seconds="${REDIRECT_SECONDS}" data-url="${esc(go)}">
-<p><span id="goText">Taking you to ${esc(store.name)} in ${REDIRECT_SECONDS} seconds…</span></p>
+<p><span id="goText">Taking you to ${esc(m.storeName)} in ${REDIRECT_SECONDS} seconds…</span></p>
 <div class="bar"><i></i></div>
-<div class="actions"><a class="btn main" href="${esc(go)}">Go to the bundle now</a><button class="btn" id="stay" type="button">Stay on this page</button></div>
-</div>` : dest ? `<div class="actions"><a class="btn main" href="${esc(go)}">See it on ${esc(store.name)}</a></div>` : `<div class="actions"><a class="btn main" href="/">See what's on now</a></div>`}
+<div class="actions"><a class="btn main" href="${esc(go)}">${m.free ? "Claim it now" : "Go to the bundle now"}</a><button class="btn" id="stay" type="button">Stay on this page</button></div>
+</div>` : m.dest && !m.ended ? `<div class="actions"><a class="btn main" href="${esc(go)}">See it on ${esc(m.storeName)}</a></div>` : `<div class="actions"><a class="btn main" href="/">See what's on now</a></div>`}
 </div>
 </article>
 <section class="cta">
-<h2>Never miss a bundle</h2>
-<p>Steam Value Checker is a free Discord bot. It posts new bundles from Humble, Fanatical, IndieGala and Steam to your server, pings you when a game on your wishlist goes on sale, shares every free game as it drops, and builds a profile card with what your library is worth.</p>
+<h2>${m.free ? "Never miss a free game" : "Never miss a bundle"}</h2>
+<p>Steam Value Checker is a free Discord bot. It shares every free game as it drops, posts new bundles from Humble, Fanatical, IndieGala and Steam to your server, pings you when a game on your wishlist goes on sale, and builds a profile card with what your library is worth.</p>
 <div class="actions">
 ${inviteUrl ? `<a class="btn main" href="${esc(inviteUrl)}">Add the bot to Discord, free</a>` : ""}
 <a class="btn" href="/">See everything it does</a>
@@ -97,6 +111,15 @@ ${redirect ? '<script src="/go.js" defer></script>' : ""}
 </body>
 </html>`;
     return head + "\n" + body;
+}
+
+/** A bundle from the feed (`b` is the stored row, games as an array). */
+export function renderBundleLanding(b, { origin, inviteUrl = null, supportUrl = null, now = Date.now(), hasPicture = false } = {}) {
+    return page(modelOf("bundle", hasPicture ? b : { ...b, image: null }, now), { origin, inviteUrl, supportUrl, now });
+}
+/** A free game or other deal from `deal_pages`. */
+export function renderDealLanding(d, { origin, inviteUrl = null, supportUrl = null, now = Date.now(), hasPicture = true } = {}) {
+    return page(modelOf("deal", hasPicture ? d : { ...d, image: null }, now), { origin, inviteUrl, supportUrl, now });
 }
 
 /** A friendly page when the link is old or the bundle is gone. */

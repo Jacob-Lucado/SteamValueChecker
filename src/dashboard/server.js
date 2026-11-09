@@ -25,7 +25,7 @@ import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
 import * as xposterText from "../xposter.js";
-import { renderBundleLanding, renderBundleGone, bundleDestination, safePictureUrl } from "../bundlelanding.js";
+import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl } from "../bundlelanding.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
 import { compareGiftRegions } from "../giftregion.js";
@@ -4108,19 +4108,22 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
     const bundlePics = new Map(); // id -> { at, buf, type }
     const bump = key => { try { db.setMeta(key, String((Number(db.getMeta(key)) || 0) + 1)); } catch { /* a missed count isn't worth failing the page */ } };
     const bundleFor = id => { const b = db.getFeedBundle(id); return b && !b.adult ? b : null; };
-    async function serveBundlePage(res, id, part) {
-        const b = bundleFor(id);
-        if (!b) return send(res, 404, renderBundleGone({ origin }), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
+    /** One handler for both kinds of page. `kind` is "b" (a bundle from the feed) or "d" (a free game or other deal). */
+    async function serveLanding(res, kind, id, part) {
+        const gone = status => send(res, status, renderBundleGone({ origin }), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
+        const row = kind === "b" ? bundleFor(id) : db.getDeal(id);
+        if (!row) return gone(404);
+        const dest = kind === "b" ? bundleDestination(row.url) : dealDestination(row.url);
+        const ended = kind === "b" ? Boolean(row.expires_at && row.expires_at <= Date.now()) || row.status === "expired" : Boolean(row.expiry && row.expiry <= Date.now());
         if (part === "go") {
-            const dest = bundleDestination(b.url);
-            if (!dest) return send(res, 404, renderBundleGone({ origin }), { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" });
-            bump(`bundlego:${id}`);
+            if (!dest) return gone(404);
+            bump(`${kind === "b" ? "bundlego" : "dealgo"}:${id}`);
             return send(res, 302, "", { Location: dest, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
         }
+        const src = safePictureUrl(row.image), picKey = kind + id;
         if (part === "img") {
-            const src = safePictureUrl(b.image);
             if (!src) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
-            let hit = bundlePics.get(id);
+            let hit = bundlePics.get(picKey);
             if (!hit || Date.now() - hit.at > 6 * 3_600_000) {
                 try {
                     const r = await imageFetch(src, { headers: { Accept: "image/*" }, signal: AbortSignal.timeout(10_000) });
@@ -4129,14 +4132,15 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                     if (!buf || !buf.length || buf.length > 4_000_000) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
                     hit = { at: Date.now(), buf, type };
                 } catch { return send(res, 404, "Not found", { "Content-Type": "text/plain" }); }
-                bundlePics.set(id, hit);
-                if (bundlePics.size > 60) bundlePics.delete(bundlePics.keys().next().value);
+                bundlePics.set(picKey, hit);
+                if (bundlePics.size > 80) bundlePics.delete(bundlePics.keys().next().value);
             }
             return send(res, 200, hit.buf, { "Content-Type": hit.type, "Cache-Control": "public, max-age=3600" });
         }
-        bump(`bundlevisit:${id}`);
-        const html = renderBundleLanding(b, { origin, hasPicture: Boolean(safePictureUrl(b.image)), inviteUrl: config.clientId ? botInviteUrl(config.clientId) : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null });
-        return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
+        bump(`${kind === "b" ? "bundlevisit" : "dealvisit"}:${id}`);
+        const opts = { origin, hasPicture: Boolean(src), inviteUrl: config.clientId ? botInviteUrl(config.clientId) : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null };
+        void ended; // the page works the ended state out itself
+        return send(res, 200, kind === "b" ? renderBundleLanding(row, opts) : renderDealLanding(row, opts), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
     }
     const shareCache = new Map(); // slug -> { at, png }
     async function serveProfileShare(res, slug) {
@@ -4290,7 +4294,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 const name = withDefaults(db.getProfileData(owner.discord_id).data).name || owner.profile_slug;
                 return send(res, 200, valueBadgeSvg({ name, ...v }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
             }
-            if (req.method === "GET" && /^\/b\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, id, , part] = /^\/b\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveBundlePage(res, Number(id), part); }
+            if (req.method === "GET" && /^\/[bd]\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, kind, id, , part] = /^\/([bd])\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveLanding(res, kind, Number(id), part); }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });

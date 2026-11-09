@@ -3036,3 +3036,31 @@ test("bundle landing page: shows the bundle, counts visits, redirects only to kn
     assert.equal((await get("/go.css")).status, 200); assert.equal((await get("/go.js")).status, 200);
     await o.close();
 });
+
+test("deal pages: free games get a landing page and counted redirect, and every post link goes through it", async () => {
+    const { configureDeals, dealUrl } = await import("../src/deallinks.js");
+    const { freeGamesPayload } = await import("../src/render.js");
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", ...opts });
+    const id = o.db.upsertDeal({ key: "free:g1", kind: "free", title: "Cool <Game>", shop: "Epic Games", url: "https://store.epicgames.com/p/cool", expiry: Date.now() + 86_400_000 * 2 });
+    assert.equal(o.db.upsertDeal({ key: "free:g1", kind: "free", title: "Cool <Game>", shop: "Epic Games", url: "https://store.epicgames.com/p/cool" }), id, "same game, same page");
+    const bad = o.db.upsertDeal({ key: "free:bad", kind: "free", title: "Nope", shop: "X", url: "javascript:alert(1)" });
+    assert.equal(bad, null);
+    const page = await get(`/d/${id}`), html = await page.text();
+    assert.equal(page.status, 200); assert.match(html, /Cool &lt;Game&gt;/); assert.ok(!/<Game>/.test(html)); assert.match(html, /Claim it now/); assert.match(html, new RegExp(`/d/${id}/go`));
+    assert.ok(!/<style|style="|<script>/i.test(html)); assert.equal(o.db.getMeta(`dealvisit:${id}`), "1");
+    const go = await get(`/d/${id}/go`); assert.equal(go.status, 302); assert.equal(go.headers.get("location"), "https://store.epicgames.com/p/cool"); assert.equal(o.db.getMeta(`dealgo:${id}`), "1");
+    assert.equal((await get("/d/99999")).status, 404);
+    // with the linker on, bot posts point at the page; without it they fall back to the store
+    const g = { id: "g1", title: "Cool Game", url: "https://store.epicgames.com/p/cool", expiry: Date.now() + 1e8 };
+    assert.equal(freeGamesPayload("Epic Games", [g]).embeds[0].url, g.url);
+    configureDeals({ base: "https://steamvaluechecker.com", make: d => `https://steamvaluechecker.com/d/${o.db.upsertDeal(d)}` });
+    try {
+        const p = freeGamesPayload("Epic Games", [g]);
+        assert.match(p.embeds[0].url, /\/d\/\d+$/); assert.match(p.components[0].components[0].url, /\/d\/\d+$/);
+        const { bundleFeedEmbed } = await import("../src/bundlefeed.js");
+        assert.match(bundleFeedEmbed({ id: 7, store: "humble", title: "B", url: "https://www.humblebundle.com/x", games: [] }).embeds[0].url, /\/b\/7$/);
+    } finally { configureDeals(null); }
+    assert.equal(dealUrl({ url: "https://a.example/x" }), "https://a.example/x");
+    await o.close();
+});

@@ -19,6 +19,7 @@ h2 { margin: 0 0 8px; color: var(--white); font-size: 21px; }
 .facts span { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .games { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .games li { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px; font-size: 14px; }
+.blurb { margin: 0 0 14px; }
 .games li.more { color: var(--muted); background: transparent; }
 .ends { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
 .ends.over { color: #ff8a8a; }

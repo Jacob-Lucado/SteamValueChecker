@@ -1,4 +1,5 @@
 // The bundle feed: one post per bundle per server, greyed out when the bundle ends. Same rhythm as the game code posts.
+import { bundlePageUrl } from "./deallinks.js";
 import { fetchAllBundles, BUNDLE_STORES, BUNDLE_STORE_KEYS } from "./bundlefeedsource.js";
 
 const sleepDefault = ms => new Promise(r => setTimeout(r, ms));
@@ -29,17 +30,18 @@ export function bundleFeedEmbed(b, { expired = false } = {}) {
         fields.push({ name: "Featured games", value: shown.join("\n") + (more > 0 ? `\n*and ${more} more*` : ""), inline: false });
     }
     fields.push({ name: expired ? "Status" : "Ends", value: expired ? "This bundle has ended" : b.expires_at ? `<t:${unix(b.expires_at)}:F> (<t:${unix(b.expires_at)}:R>)` : "No end date listed, so grab it while it lasts", inline: false });
+    const page = b.id ? bundlePageUrl(b.id) : null; // goes through the site first, which counts the visit and then sends people on to the store
     const embed = {
         color: expired ? GREY : store.color,
         author: { name: `${store.emoji} ${store.name} · ${expired ? "bundle ended" : "new bundle"}` },
         title: expired ? `Ended: ${b.title}` : b.title,
-        url: b.url,
+        url: page ?? b.url,
         description: expired ? undefined : `${count ? `**${count} games**` : "A new game bundle"} just went up on ${store.name}. Tiers and prices are on the store page.`,
         fields,
         image: b.image ? { url: b.image } : undefined,
         footer: { text: expired ? "Steam Value Checker · bundle ended" : "Steam Value Checker · bundle prices and end dates can change" }
     };
-    const buttons = [{ type: 2, style: 5, label: `Get it on ${store.name}`, url: b.url }, { type: 2, style: 5, label: "All bundles", url: store.home }];
+    const buttons = [{ type: 2, style: 5, label: `Get it on ${store.name}`, url: page ?? b.url }, { type: 2, style: 5, label: "All bundles", url: store.home }];
     return { embeds: [embed], components: expired ? [] : [{ type: 1, components: buttons }], allowed_mentions: { parse: [] } };
 }
 
