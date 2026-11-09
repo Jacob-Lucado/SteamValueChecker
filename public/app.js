@@ -4125,6 +4125,8 @@
 
   async function adminSystem(body, fail) {
     const draw = async () => {
+      // don't redraw under someone who is typing in a box on this page
+      if (body.children.length && body.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type !== "checkbox") { adminTimer = setTimeout(() => draw().catch(() => {}), 10_000); return; }
       const sys = await api("/api/admin/system");
       if (!document.body.contains(body)) return;
       const p = sys.process, b = sys.bot || {};
@@ -4153,10 +4155,29 @@
           tile("Database", fmt(st.dbMb), st.walMb ? fmt(st.walMb) + " in the write log" : "Write log is empty"),
           tile("Backups", fmt(st.backupsMb), st.backupCount + (st.backupCount === 1 ? " file" : " files"))) : h("p", { class: "muted", text: "Disk size isn't available on this host." }),
         st.tables.length ? h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Biggest tables" }), h("th", { text: "Size" })])), h("tbody", {}, st.tables.map(t => h("tr", {}, h("td", { text: t.name }), h("td", { text: fmt(t.mb) }))))) : null);
+      const xs = await api("/api/admin/xposter").catch(() => null);
+      const xPanel = xs && (() => {
+        const note = h("p", { class: "muted small", text: "" });
+        const state = !xs.configured ? "The four X keys aren't set in Fly yet." : xs.enabled ? `On. ${xs.postedToday} of ${xs.daily} posted today.${xs.lastAt ? " Last one " + ago(xs.lastAt) + "." : ""}` : "Off. Nothing is being posted.";
+        const save = async patch => { try { await api("/api/admin/xposter", patch); toast("Saved.", "ok"); await draw(); } catch (e) { toast(e.message); } };
+        const on = h("input", { type: "checkbox" }); on.checked = xs.enabled; on.disabled = !xs.configured; on.addEventListener("change", () => save({ enabled: on.checked }));
+        const per = h("input", { type: "number", min: "1", max: String(xs.maxDaily), value: String(xs.daily), style: "width:90px;flex:none" });
+        const chk = h("button", { class: "btn gray small", type: "button", text: "Check the keys" });
+        chk.addEventListener("click", async () => { try { const r = await api("/api/admin/xposter/check", {}); note.textContent = "Connected" + (r.username ? " as @" + r.username : "") + "."; } catch (e) { note.textContent = e.message; } });
+        const sv = h("button", { class: "btn gray small", type: "button", text: "Save" }); sv.addEventListener("click", () => save({ daily: Number(per.value) }));
+        return h("div", { class: "panel" }, h("h3", { text: "Posting to X" }),
+          h("p", { class: "muted", text: "Posts each new free game to the project's X account as plain text, spaced out, with no link so X doesn't bill it as a link post." }),
+          h("p", { text: state }),
+          xs.error && h("p", { class: "bad", text: "Last problem: " + xs.error.message }),
+          h("label", { class: "check" }, on, " Post free games to X"),
+          h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
+          h("p", { class: "muted small", text: `X charges about 1.5 cents a post, so ${xs.daily} a day is roughly $${xs.monthlyCost.toFixed(2)} a month.` }), note);
+      })();
       body.replaceChildren(
         h("div", { class: "grid four" }, tile("Uptime", up(p.uptimeS), b.version ? "Version " + b.version : p.node), tile("Discord ping", b.pingMs != null ? b.pingMs + " ms" : "–", b.servers != null ? b.servers + " servers" : null),
           tile("Memory", p.rssMb + " MB", `${p.heapMb} MB of ${p.heapLimitMb} MB heap`), tile("Event loop lag", p.lagMs + " ms", lagBad ? "Slow: something is blocking" : "Healthy")),
         h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
+        xPanel,
         storagePanel,
         errPanel,
         cwPanel,

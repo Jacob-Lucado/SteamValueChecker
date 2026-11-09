@@ -227,7 +227,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -1528,6 +1528,25 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (db.getMusicSettings(g.id).autodj) music.autoJoin(g.id).catch(() => {});
             const { autodj_playlist: _skip, ...settings } = db.getMusicSettings(g.id);
             return { settings, note, count: db.getAutoPlaylist(g.id).length };
+        },
+        "GET /api/admin/xposter": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            return xposter.status();
+        },
+        "POST /api/admin/xposter": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            if (body.enabled && !xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET).");
+            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
+        },
+        "POST /api/admin/xposter/check": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            try { return { ok: true, ...(await xposter.check()) }; } catch (e) { throw new HttpError(400, e.message); }
         },
         "GET /api/admin/music": async (req) => {
             const s = session(req);

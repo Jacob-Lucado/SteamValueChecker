@@ -108,6 +108,7 @@ import { createTicketHandlers } from "./tickethandlers.js";
 import { createCodeHandlers } from "./codeshandlers.js";
 import { runCodes } from "./codes.js";
 import { runBundleFeed } from "./bundlefeed.js";
+import { createXPoster } from "./xposter.js";
 import { createBundleFeedHandlers } from "./bundlefeedhandlers.js";
 import { createDropHandlers } from "./dropshandlers.js";
 import { runDrops } from "./drops.js";
@@ -539,6 +540,9 @@ voterRole = createVoterRole({ db, client, mainGuild, log: t => console.log(`[vot
 setInterval(() => voterRole.sweep().catch(() => {}), 5 * 60_000).unref?.();
 const supporters = createSupporters({ db, client, mainGuild, renewUrl: publicBase ? publicBase + "/#/tip" : null, publicUrl: publicBase ?? null, dm: (id, p) => discord.sendDm(id, p), log: t => console.log(`[supporters] ${t}`) });
 setInterval(() => supporters.sweep().then(() => supporters.remind()).catch(() => {}), 15 * 60_000).unref?.();
+// Free games to the project's X account. Off until the owner turns it on in the admin panel and the four X keys are set.
+const xposter = createXPoster({ db, log: m => console.log(`[x] ${m}`) });
+setTimeout(() => setInterval(() => { if (xposter.status().enabled) ops.job("x posts", async () => xposter.tick(await itad.getGiveawayList())).catch(() => {}); }, 20 * 60_000).unref?.(), 5 * 60_000).unref?.();
 const square = createSquare({ ...squareConfig(), publicUrl: publicBase ?? "" });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), ownerId: cfg.ownerId, log: t => console.error(`[ai] ${t}`) });
 const guideThrottle = createGuideThrottle();
@@ -1021,7 +1025,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;
