@@ -6,7 +6,7 @@ import { THEMES } from "./cardprefs.js";
 import { artUrl, steamArt } from "./render.js";
 import { publicWishlist, fillAppIds } from "./profile.js";
 import { cleanPageBg, defaultPageBg } from "./profilebg.js";
-import { isSupporter } from "./supporters.js";
+import { isSupporter, isFounder } from "./supporters.js";
 import { trophyCase } from "./badges.js";
 import { channelUrl } from "./streamwatch.js";
 
@@ -190,7 +190,7 @@ function pageBgFor(db, owner, bg) {
 export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewer, { viewerId = null, draft = null } = {}) {
     const cfg = withDefaults(draft ?? db.getProfileData(owner.discord_id).data);
     const supporter = isSupporter(db, owner.discord_id);
-    const themeKey = PROFILE_THEMES[cfg.theme]?.supporter && !supporter ? "night" : cfg.theme;
+    const themeKey = PROFILE_THEMES[cfg.theme]?.supporter && !supporter && !draft ? "night" : cfg.theme; // the owner's own editor preview may show a locked theme
     const theme = PROFILE_THEMES[themeKey];
     const lib = db.listLibrary(owner.discord_id);
     const items = db.listItems(owner.discord_id);
@@ -250,7 +250,7 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
     const song = cfg.song && canSee("public", viewer) ? { provider: cfg.song.provider, title: cfg.song.title || "", embed: songEmbed(cfg.song), stream: cfg.song.provider === "radio" ? cfg.song.id : null, link: cfg.song.provider === "radio" ? null : songLink(cfg.song) } : null;
     return {
         enter: Boolean(song && cfg.enter),
-        supporter,
+        supporter, founder: isFounder(db, owner.discord_id),
         slug: owner.profile_slug, name: cfg.name || owner.profile_slug, bio: cfg.bio, avatar: cfg.avatar && steam?.avatar ? steam.avatar : null,
         theme: { key: themeKey, bg: theme.bg, accent: cfg.accent ?? theme.accent, light: theme.light, bgstyle: cfg.bgstyle, layout: cfg.layout },
         banner: { kind: cfg.banner, art: bannerGame },

@@ -12,7 +12,8 @@ import { enrichFree, withOwnership } from "./freeinfo.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
 import { gameNight, gameNightEmbed, gameNightButtons, pickGame, pollOptions, pollState, castVote, pollEmbed, pollButtons } from "./gamenight.js";
-import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID } from "./render.js";
+import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID, STORY_ID } from "./render.js";
+import { dealFromEmbed, renderStory } from "./dealstory.js";
 import { LANGS, languageDone } from "./i18n.js";
 import { LATEST, changelogEmbed } from "./changelog.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
@@ -243,6 +244,16 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             if (kind === SNOOZE_ID) {
                 db.snoozeItem(item.id, Date.now() + 7 * 86400_000);
                 return await eph(i, `Okay. I will not alert you about **${item.title}** for 7 days.`);
+            }
+            if (kind === STORY_ID) {
+                const deal = dealFromEmbed(i.message?.embeds?.[0]?.data ?? i.message?.embeds?.[0]);
+                if (!deal) return await eph(i, "I can only make a picture from a sale alert.");
+                const w = 15_000 - (Date.now() - (lastRun.get("story:" + i.user.id) ?? 0));
+                if (w > 0) return await eph(i, `Give it ${Math.ceil(w / 1000)}s, then try again.`);
+                lastRun.set("story:" + i.user.id, Date.now());
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                const png = await renderStory(deal);
+                return await i.editReply({ content: "Here you go. Save it and post it anywhere.", files: [{ attachment: Buffer.from(png), name: "deal.png", description: `${deal.game} for ${deal.price}` }] });
             }
             if (kind === BELOW_ID) {
                 return await i.showModal({ custom_id: `${BELOW_MODAL_ID}:${item.id}`, title: "Only alert below a price", components: [
@@ -1024,7 +1035,9 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             const page = await publicWishlist(db, itad, them.profile_slug);
             if (!page) return void await i.editReply(`${name} hasn't shared a wishlist page.`);
             const link = publicUrl ? `${publicUrl}/u/${page.slug}` : null;
-            await i.editReply({ embeds: [i.commandName === CONTEXT_GIFTS ? giftIdeasEmbed(name, page, link) : contextWishlistEmbed(name, page, link)] });
+            const mine = new Set(db.listItems(i.user.id).map(x => x.itad_id));
+            const both = i.user.id === target.id ? [] : page.games.filter(g => mine.has(g.id));
+            await i.editReply({ embeds: [i.commandName === CONTEXT_GIFTS ? giftIdeasEmbed(name, page, link) : contextWishlistEmbed(name, page, link, both)] });
         } catch (err) { await failed(i, "context menu", err); }
     }
 

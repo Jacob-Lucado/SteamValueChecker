@@ -122,7 +122,7 @@ const GREEN = 0x57f287;
 export const safeUrl = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : undefined);
 
 export const STOP_ID = "alert_stop";
-export const SNOOZE_ID = "alert_snooze", BELOW_ID = "alert_below", BELOW_MODAL_ID = "alert_m_below";
+export const SNOOZE_ID = "alert_snooze", BELOW_ID = "alert_below", BELOW_MODAL_ID = "alert_m_below", STORY_ID = "alert_story";
 export { steamArt };
 export const itadArt = id => `https://assets.isthereanydeal.com/${encodeURIComponent(id)}/banner400.jpg`;
 /** Game art for an alert: Steam's header when the Steam id is known, otherwise IsThereAnyDeal's banner. */
@@ -192,7 +192,8 @@ export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null
     const rowsFor = (h, one) => [alertButtons(h.item, h.now, { single: one, lang }),
         ...(one && h.item.id != null ? [{ type: 1, components: [
             { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${h.item.id}` },
-            { type: 2, style: 2, label: tr(lang, "Only below a price…"), custom_id: `${BELOW_ID}:${h.item.id}` }] }] : [])].filter(Boolean);
+            { type: 2, style: 2, label: tr(lang, "Only below a price…"), custom_id: `${BELOW_ID}:${h.item.id}` },
+            { type: 2, style: 2, label: "Share this deal", custom_id: `${STORY_ID}:${h.item.id}` }] }] : [])].filter(Boolean);
     const content = single ? undefined : `${hits.length} games on your wishlist hit your alert.`;
     // With a store to keep them in, several games become one card you page through, each with its own full set of buttons.
     if (pager && !single) return pagedPayload(pager, { content, pages: hits.map(h => ({ embed: embedFor(h, true), rows: rowsFor(h, true), label: h.item.title })) });
@@ -387,13 +388,14 @@ export function checkEmbed(title, now, verdict, advice = null, subs = [], review
 }
 
 /** A member's shared wishlist as a short card: the best deals first. `page` is publicWishlist()'s result. */
-export function contextWishlistEmbed(name, page, link = null) {
+export function contextWishlistEmbed(name, page, link = null, both = []) {
     const games = page.games ?? [];
     if (!games.length) return { color: COLOR, title: `${name}'s wishlist`, description: "Nothing on it yet.", url: safeUrl(link) ?? undefined };
     const line = g => `• **${g.title}**: ${g.price != null ? `${money(g.price, g.currency)}${g.shop ? ` at ${g.shop}` : ""}${g.discount > 0 ? ` (${g.discount}% off)` : ""}` : "no price yet"}${g.claim ? " 🎁 someone's on it" : ""}`;
     const onSale = games.filter(g => g.discount > 0).length;
+    const shared = both.length ? [{ name: `🤝 You both want ${both.length === 1 ? "this" : both.length}`, value: both.slice(0, 6).map(g => `• **${g.title}**${g.price != null ? `: ${money(g.price, g.currency)}${g.discount > 0 ? ` (${g.discount}% off)` : ""}` : ""}`).join("\n").slice(0, 1000) + (both.length > 6 ? `\n…and ${both.length - 6} more` : ""), inline: false }] : [];
     return {
-        color: COLOR, title: `${name}'s wishlist`, url: safeUrl(link) ?? undefined,
+        color: COLOR, title: `${name}'s wishlist`, url: safeUrl(link) ?? undefined, fields: shared,
         description: `${games.length} game${games.length === 1 ? "" : "s"}${onSale ? `, ${onSale} on sale right now` : ""}. Best deals first:\n${games.slice(0, 8).map(line).join("\n")}${games.length > 8 ? `\n…and ${games.length - 8} more` : ""}`.slice(0, 4000),
         footer: { text: "Shared by them with /me publicpage  •  Prices by IsThereAnyDeal" }
     };

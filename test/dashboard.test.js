@@ -2919,6 +2919,12 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         assert.equal((await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "bogus" } })).status, 400);
         assert.equal((await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "m1" }, headers: { Origin: "https://evil.example" } })).status, 403);
 
+        const nobody = await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "m1", gift_to: "999999999" } });
+        assert.equal(nobody.status, 404, "gifts only go to people the bot knows");
+        o.db.ensureUser("777777777"); 
+        assert.equal((await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "m1", gift_to: "777777777" } })).data.url, "https://square.link/u/xyz");
+        assert.equal((await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "m1", gift_to: "555555555" } })).status, 400, "gifting yourself is pointless");
+        assert.equal((await o.request("/api/supporter/wall", { method: "POST", body: { name: "Sam" } })).status, 403, "the wall is for supporters");
         assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "x", days: 5 } })).status, 400);
         assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "222222222", days: 5 } })).status, 200);
         const adm = (await o.request("/api/admin/supporters")).data;
@@ -2930,6 +2936,8 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         assert.equal((await o.request("/api/profile/page")).data.choices.themes.find(x => x.key === "galaxy").locked, true);
         assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "555555555", days: 5 } })).status, 200);
         assert.equal((await theme("galaxy")).status, 200);
+        assert.equal((await o.request("/api/supporter/wall", { method: "POST", body: { name: "Sam" } })).data.wall, "Sam");
+        assert.deepEqual((await o.request("/api/public/supporters")).data.wall.map(w => w.name), ["Sam"]);
         const refund = JSON.stringify({ type: "refund.updated", data: { object: { refund: { id: "R1", payment_id: "PAY1", status: "COMPLETED", amount_money: { amount: 300 } } } } });
         assert.equal((await hook(refund)).status, 200);
         assert.equal(isSupporter(o.db, "123456789"), false, "a full refund ends the pass");

@@ -8,11 +8,18 @@ const UNTIL = "supporter:";
 const PAID = "supporterpay:";
 const DAY = 86_400_000;
 const REMIND = "supporterremind:";
+const LAST = "supporterlast:";
+const WALL = "supporterwall:";
+const FOUNDER = "supporterfounder:";
+export const FOUNDERS_MAX = 50;
 const REMIND_BEFORE_MS = 3 * DAY;
 const parse = v => { try { const o = JSON.parse(v); return o && typeof o === "object" ? o : null; } catch { return null; } };
 
 export const supporterUntil = (db, userId) => Number(db.getMeta(UNTIL + userId)) || 0;
 export const isSupporter = (db, userId, now = Date.now()) => supporterUntil(db, userId) > now;
+/** The first 50 people to have a paid pass are founding supporters for good, even after their pass ends. */
+export const isFounder = (db, userId) => Boolean(db.getMeta(FOUNDER + userId));
+export const wallName = (db, userId) => db.getMeta(WALL + userId) || null;
 export const xpBoost = (db, userId, now = Date.now()) => (isSupporter(db, userId, now) ? SUPPORTER_XP_BOOST : 1);
 
 export function createSupporters({ db, client = null, mainGuild = null, dm = null, renewUrl = null, now = () => Date.now(), log = () => {} }) {
@@ -41,16 +48,19 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
     }
 
     /** Adds days to a person's pass (from today, or from the end of the one they have). Safe to call twice for the same payment. `cents` is what they paid, 0 for a gift. */
-    async function grant(userId, days, paymentId, via = "Square", cents = 0) {
+    async function grant(userId, days, paymentId, via = "Square", cents = 0, { giftFrom = null } = {}) {
         if (db.getMeta(PAID + paymentId)) return { duplicate: true };
         const d = Math.max(1, Math.min(3660, Math.round(Number(days) || 0)));
         const start = Math.max(now(), supporterUntil(db, userId)), until = start + d * DAY;
-        db.setMeta(PAID + paymentId, JSON.stringify({ at: now(), userId, days: d, cents: Math.max(0, Math.round(Number(cents) || 0)), via }));
+        db.setMeta(PAID + paymentId, JSON.stringify({ at: now(), userId, days: d, cents: Math.max(0, Math.round(Number(cents) || 0)), via, giftFrom }));
+        const founding = cents > 0 && !isFounder(db, userId) && db.listMetaPrefix(FOUNDER).filter(r => r.value).length < FOUNDERS_MAX;
+        if (founding) db.setMeta(FOUNDER + userId, String(now()));
         db.setMeta(UNTIL + userId, String(until));
         pushEvent(db, "adminlog:supporters", { id: userId, days: d, via, at: now() }, 100);
         await syncRole(userId, true);
-        try { await dm?.(userId, { embeds: [{ color: 0xeb459e, title: "Thank you! 💖", description: `Your supporter pass runs until <t:${Math.floor(until / 1000)}:D>. You've got the Supporter role in our server, a badge and glow on your profile, three extra profile themes, more overlay slots and a little extra XP. Everything else stays free for everyone.` }] }); } catch { /* DMs may be closed */ }
-        return { duplicate: false, until };
+        try { await dm?.(userId, { embeds: [{ color: 0xeb459e, title: "Thank you! 💖", description: `${giftFrom ? `<@${giftFrom}> gifted you a supporter pass. ` : ""}Your supporter pass runs until <t:${Math.floor(until / 1000)}:D>. ${founding ? "You're one of the first 50 supporters, so you keep a **Founding supporter** mark on your profile for good. " : ""}You've got the Supporter role in our server, a badge and glow on your profile, three extra profile themes, more overlay slots and a little extra XP. Everything else stays free for everyone.` }] }); } catch { /* DMs may be closed */ }
+        if (giftFrom) try { await dm?.(giftFrom, { embeds: [{ color: 0xeb459e, title: "Your gift is on its way 🎁", description: `<@${userId}> now has a supporter pass. Thank you for backing the bot.` }] }); } catch { /* DMs may be closed */ }
+        return { duplicate: false, until, founding };
     }
 
     /** A full refund takes back the days that payment bought. A partial one is left for the owner to sort out by hand. */
@@ -82,11 +92,12 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         let n = 0;
         for (const r of db.listMetaPrefix(UNTIL)) {
             const until = Number(r.value), left = until - now();
-            if (!until || left <= 0 || left > REMIND_BEFORE_MS || db.getMeta(REMIND + r.key.slice(UNTIL.length)) === String(until)) continue;
-            const id = r.key.slice(UNTIL.length);
-            db.setMeta(REMIND + id, String(until));
+            const id = r.key.slice(UNTIL.length), lastDay = left > 0 && left <= DAY;
+            if (!until || left <= 0 || left > REMIND_BEFORE_MS) continue;
+            if (lastDay ? db.getMeta(LAST + id) === String(until) : db.getMeta(REMIND + id) === String(until) || db.getMeta(LAST + id) === String(until)) continue;
+            db.setMeta(lastDay ? LAST + id : REMIND + id, String(until));
             try {
-                await dm?.(id, { embeds: [{ color: 0xeb459e, title: "Your supporter pass ends soon", description: `It runs out <t:${Math.floor(until / 1000)}:R>. Thanks for backing the bot. If you'd like to keep the role, badge and perks, you can add more time any time, and it stacks on top of what you have left.` }],
+                await dm?.(id, { embeds: [{ color: 0xeb459e, title: lastDay ? "Last day of your supporter pass" : "Your supporter pass ends soon", description: `It runs out <t:${Math.floor(until / 1000)}:R>. Thanks for backing the bot. If you'd like to keep the role, badge and perks, you can add more time any time, and it stacks on top of what you have left.` }],
                     components: renewUrl ? [{ type: 1, components: [{ type: 2, style: 5, label: "Add more time", url: renewUrl }] }] : [] });
                 n++;
             } catch { /* DMs may be closed; nothing else to try */ }
@@ -96,6 +107,24 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
 
     /** Someone with a pass joined the home server: give the role back. */
     const onJoin = userId => (isSupporter(db, userId, now()) ? syncRole(userId, true) : null);
+
+    /** Opt in to (or out of) the supporter wall. Only a short name they pick is shown, never their Discord account. */
+    function setWall(userId, name) {
+        const clean = String(name ?? "").replace(/<[^>]*>/g, "").replace(/[\u0000-\u001f<>@#`*_~|\\]/g, "").replace(/\s+/g, " ").trim().slice(0, 24);
+        db.setMeta(WALL + userId, clean);
+        return clean || null;
+    }
+
+    /** Active supporters and founders who chose to be shown, founders first. */
+    function wall() {
+        const out = [];
+        for (const r of db.listMetaPrefix(WALL)) {
+            const id = r.key.slice(WALL.length), name = r.value; if (!name) continue;
+            const founder = isFounder(db, id), active = isSupporter(db, id, now());
+            if (founder || active) out.push({ name, founder, active, since: Number(db.getMeta(FOUNDER + id)) || 0 });
+        }
+        return out.sort((a, b) => Number(b.founder) - Number(a.founder) || a.since - b.since || a.name.localeCompare(b.name));
+    }
 
     function list() {
         return db.listMetaPrefix(UNTIL).map(r => ({ id: r.key.slice(UNTIL.length), until: Number(r.value) })).filter(r => r.until > now()).sort((a, b) => b.until - a.until);
@@ -113,5 +142,5 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return out;
     }
 
-    return { grant, refund, sweep, remind, onJoin, list, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
+    return { grant, refund, sweep, remind, onJoin, list, setWall, wall, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
 }

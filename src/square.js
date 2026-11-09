@@ -8,7 +8,7 @@ export const PLANS = [
     { id: "y1", name: "12 months", days: 365, cents: 3000 }
 ];
 export const SUPPORTER_XP_BOOST = 1.25;
-const REF = /^svc:(\d{5,25}):(m1|m3|y1)$/;
+const REF = /^svc:(\d{5,25}):(m1|m3|y1)(?::g(\d{5,25}))?$/;
 const VERSION = "2024-07-17";
 
 export function squareConfig(env = process.env) {
@@ -27,14 +27,14 @@ export function createSquare({ accessToken, locationId, signatureKey, sandbox = 
     };
 
     /** A one-time checkout page for a pass. Returns the address to send the member to. */
-    async function checkout({ userId, planId, redirectUrl }) {
+    async function checkout({ userId, planId, redirectUrl, giftFrom = null }) {
         const plan = PLANS.find(p => p.id === planId);
         if (!enabled) throw new Error("Supporter passes aren't switched on yet.");
         if (!plan) throw new Error("Pick one of the passes.");
         if (!/^\d{5,25}$/.test(String(userId))) throw new Error("Sign in first.");
         const r = await call("POST", "/v2/online-checkout/payment-links", {
             idempotency_key: randomUUID(),
-            order: { location_id: locationId, reference_id: `svc:${userId}:${plan.id}`, line_items: [{ name: `Steam Value Checker supporter, ${plan.name}`, quantity: "1", base_price_money: { amount: plan.cents, currency: "USD" } }] },
+            order: { location_id: locationId, reference_id: `svc:${userId}:${plan.id}${giftFrom ? ":g" + giftFrom : ""}`, line_items: [{ name: `Steam Value Checker supporter${giftFrom ? " (gift)" : ""}, ${plan.name}`, quantity: "1", base_price_money: { amount: plan.cents, currency: "USD" } }] },
             checkout_options: { redirect_url: redirectUrl, ask_for_shipping_address: false }
         });
         const url = r?.payment_link?.url;
@@ -61,7 +61,7 @@ export function createSquare({ accessToken, locationId, signatureKey, sandbox = 
         const plan = PLANS.find(p => p.id === m[2]);
         const paid = Number(pay.total_money?.amount ?? pay.amount_money?.amount ?? 0);
         if (!plan || pay.amount_money?.currency !== "USD" || paid < plan.cents) return null;
-        return { userId: m[1], plan, paymentId: String(pay.id) };
+        return { userId: m[1], plan, paymentId: String(pay.id), giftFrom: m[3] ?? null };
     }
 
     /** A finished refund, as the payment it undoes and how much came back. Square puts both in the call itself. */

@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.47", date: "2026-11-09", title: "Every overlay in one studio", items: [
+        "**One Overlay studio:** now playing, giveaway, deals and cards now live next to goal bars, stats and timers, as tabs. The streamer hub and music page just point there.",
+        "**Share this deal:** sale alerts have a button that makes a tall picture of the deal, ready to post.",
+        "**Gift a pass:** buy a supporter pass for a friend from the Chip in page. The first 50 people with a paid pass get a Founding supporter mark for good, and supporters can opt into a thank-you wall.",
+        "**Server rivalries:** servers with the weekly digest on get paired once a month and compared on games finished per member.",
+        "**You both want:** right-click someone, choose See their wishlist, and the games on both your lists show up at the top.",
+        "**Smaller things:** Ctrl+K opens search on the dashboard, locked supporter themes can be previewed, and the owner is no longer held back by cooldowns or blocks." ] },
     { version: "2026.11.46", date: "2026-11-08", title: "A page to chip in", items: [
         "**Overlay studio:** build goal bars, server stats and timers for OBS under Streamers, with a live preview and your own colours, font and size. Each has its own private link.",
         "**Supporter passes:** pay once through Square for 1, 3 or 12 months and get a Supporter role in the server, a glowing profile badge, three exclusive profile themes, 24 overlay slots and 25% more XP. Refunds are handled automatically and you get a heads-up DM before a pass runs out. Everything else stays free.",

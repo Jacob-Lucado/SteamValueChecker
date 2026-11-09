@@ -1620,3 +1620,12 @@ a.fd-name:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) { .pf-avatar.sup { animation: none; } }
 .pf-swatch.locked { opacity: .45; cursor: not-allowed; }
 .pf-swatch.locked::before { content: "🔒"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 14px; }
+
+.pf-badge.founder { background: linear-gradient(90deg, #f5b942, #ff7a59); color: #2b1400; }
+.pass-gift, .pass-wall-opt { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, rgba(128,128,128,.25)); }
+.pass-gift h4, .pass-wall-opt h4 { margin: 0 0 4px; }
+.pass-wall-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.ovs-tabs { margin: 0 0 14px; }
+.ovs-tabs .chip-btn.on { color: var(--on-accent, #06121f); }
+.pass-wall { margin-top: 18px; }

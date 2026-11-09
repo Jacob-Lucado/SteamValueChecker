@@ -38,7 +38,7 @@ test("square: only a completed, correctly paid pass counts, and the order is rea
     const ev = (over = {}) => ({ type: "payment.updated", data: { object: { payment: { id: "P1", status: "COMPLETED", order_id: "O1", amount_money: { amount: 300, currency: "USD" }, ...over } } } });
     const order = (over = {}) => ({ order: { id: "O1", location_id: "L1", reference_id: "svc:123456789012345678:m1", ...over } });
     const run = async (event, o) => mk(reply(200, o ?? order())).paidPass(event);
-    assert.deepEqual(await run(ev()), { userId: "123456789012345678", plan: PLANS[0], paymentId: "P1" });
+    assert.deepEqual(await run(ev()), { userId: "123456789012345678", plan: PLANS[0], paymentId: "P1", giftFrom: null });
     assert.equal(await run(ev({ status: "APPROVED" })), null, "not finished");
     assert.equal(await run(ev({ amount_money: { amount: 100, currency: "USD" } })), null, "paid too little");
     assert.equal(await run(ev({ amount_money: { amount: 300, currency: "EUR" } })), null);
@@ -92,4 +92,27 @@ test("supporters: refunds take the days back, reminders go out once, revenue ski
     t = supporterUntil(db, "u3") - 2 * 86_400_000;
     const n = sent.length; await sup.remind(); await sup.remind();
     assert.equal(sent.length - n, 1, "one reminder, not one per sweep");
+});
+
+test("supporters: gifts thank both people, the first 50 paying supporters are founders, the wall is opt-in, and the last day gets its own nudge", async () => {
+    const { isFounder, FOUNDERS_MAX } = await import("../src/supporters.js");
+    const db = openDb(":memory:"); let t = 9_000_000;
+    const sent = [];
+    const sup = createSupporters({ db, client: { guilds: { cache: { get: () => null } } }, mainGuild: { detect: () => null }, dm: async (id, p) => sent.push([id, p.embeds[0].title, p.embeds[0].description]), now: () => t });
+    const g = await sup.grant("200000001", 30, "g1", "Square gift", 300, { giftFrom: "100000009" });
+    assert.equal(g.founding, true); assert.equal(isFounder(db, "200000001"), true);
+    assert.ok(sent.some(([id, , d]) => id === "200000001" && /gifted you/.test(d)), "the friend is told who it's from");
+    assert.ok(sent.some(([id, title]) => id === "100000009" && /gift/i.test(title)), "the buyer gets a receipt DM");
+    await sup.grant("200000002", 30, "free", "Owner", 0);
+    assert.equal(isFounder(db, "200000002"), false, "a free pass isn't a founding one");
+    for (let i = 0; i < FOUNDERS_MAX; i++) await sup.grant("3000000" + String(i).padStart(2, "0"), 30, "f" + i, "Square", 300);
+    assert.equal(db.listMetaPrefix("supporterfounder:").length, FOUNDERS_MAX, "never more than 50");
+    assert.deepEqual(sup.wall(), []);
+    assert.equal(sup.setWall("200000001", "  <b>Sam</b> @everyone "), "Sam everyone", "mentions and markup are stripped");
+    assert.equal(sup.wall().length, 1);
+    sup.setWall("200000001", ""); assert.equal(sup.wall().length, 0, "clearing the name leaves the wall");
+    t = supporterUntil(db, "200000001") - 2 * 86_400_000; sent.length = 0;
+    await sup.remind(); assert.equal(sent.filter(([id]) => id === "200000001").length, 1);
+    t += 86_400_000 + 1000; await sup.remind(); await sup.remind();
+    assert.equal(sent.filter(([id, title]) => id === "200000001" && /Last day/.test(title)).length, 1, "one more on the last day, not one per sweep");
 });

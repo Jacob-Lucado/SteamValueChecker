@@ -1309,7 +1309,7 @@
       banner.style.backgroundImage = hero !== p.banner.art ? `url("${hero}"), url("${p.banner.art}")` : `url("${p.banner.art}")`; }
     const avatar = httpsOnly(p.avatar) ? h("img", { class: "pf-avatar" + (p.supporter ? " sup" : ""), src: p.avatar, alt: "" }) : h("div", { class: "pf-avatar init" + (p.supporter ? " sup" : ""), text: (p.name || "?").slice(0, 1).toUpperCase() });
     const head = h("div", { class: "pf-head" }, avatar,
-      h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug }), p.supporter ? h("span", { class: "pf-badge", title: "Supports Steam Value Checker", text: "★ Supporter" }) : null),
+      h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug }), p.supporter ? h("span", { class: "pf-badge", title: "Supports Steam Value Checker", text: "★ Supporter" }) : null, p.founder ? h("span", { class: "pf-badge founder", title: "One of the first 50 supporters", text: "✦ Founding supporter" }) : null),
       h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
     root.append(banner, head);
     if (social && !preview) root.append(pfSocial(p, social));
@@ -1434,17 +1434,18 @@
     cfg.song = songToLink(cfg.song);
     const pv = h("div", { class: "pf-preview" });
     let dirty = false, timer = null;
+    let tryTheme = null; // a supporter theme someone is only looking at: shown in the preview, never saved
     const payload = () => ({ ...cfg, links: cfg.links.filter(l => l.url.trim()), favorites: cfg.favorites, song: cfg.song && cfg.song.url ? cfg.song : null });
     const draw = profile => { pv.replaceChildren(profile ? renderProfile(profile, { preview: true }) : h("p", { class: "muted", text: "Nothing to preview yet." })); };
-    const refresh = () => { clearTimeout(timer); timer = setTimeout(async () => { try { draw((await api("/api/profile/preview", payload())).profile); } catch (e) { pv.prepend(h("div", { class: "notice warn", text: e.message })); } }, 450); };
+    const refresh = () => { clearTimeout(timer); timer = setTimeout(async () => { try { draw((await api("/api/profile/preview", tryTheme ? { ...payload(), theme: tryTheme } : payload())).profile); } catch (e) { pv.prepend(h("div", { class: "notice warn", text: e.message })); } }, 450); };
     const changed = () => { dirty = true; saveBtn.disabled = false; refresh(); };
 
     // look
     const themeBox = h("div", { class: "pf-swatches" });
     const drawThemes = () => themeBox.replaceChildren(...d.choices.themes.map(t => {
-      const b = h("button", { type: "button", class: "pf-swatch" + (cfg.theme === t.key ? " on" : "") + (t.locked ? " locked" : ""), title: t.locked ? t.key + " (supporters only)" : t.key, "aria-label": t.key + " theme", "aria-pressed": String(cfg.theme === t.key) });
+      const b = h("button", { type: "button", class: "pf-swatch" + ((tryTheme || cfg.theme) === t.key ? " on" : "") + (t.locked ? " locked" : ""), title: t.locked ? t.key + " (supporters only)" : t.key, "aria-label": t.key + " theme", "aria-pressed": String(cfg.theme === t.key) });
       b.style.background = t.bg; b.style.borderColor = t.accent; b.style.setProperty("--dot", t.accent);
-      b.addEventListener("click", () => { if (t.locked) return toast("That theme is for supporters. You can get a pass on the Chip in page (Help menu).", "warn"); cfg.theme = t.key; drawThemes(); changed(); });
+      b.addEventListener("click", () => { if (t.locked) { tryTheme = t.key; drawThemes(); refresh(); return toast("Previewing " + t.key + ". It's for supporters, so it won't save without a pass (Chip in page, Help menu).", "warn"); } tryTheme = null; cfg.theme = t.key; drawThemes(); changed(); });
       return b;
     }));
     drawThemes();
@@ -4797,12 +4798,28 @@
       if (!box || (!s.enabled && !s.until)) return;
       const fmt = ms => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
       box.replaceChildren(h("h3", { text: "Supporter pass" }),
-        routeText().includes("thanks=1") ? h("div", { class: "notice ok", text: "Thank you! Your pass shows up within a minute or two, and the bot will DM you when it does." }) : null,
+        routeText().includes("thanks=gift") ? h("div", { class: "notice ok", text: "Thank you! Your gift is on its way. They get a DM when it lands, and so do you." }) : routeText().includes("thanks=1") ? h("div", { class: "notice ok", text: "Thank you! Your pass shows up within a minute or two, and the bot will DM you when it does." }) : null,
+        s.founder ? h("p", {}, h("span", { class: "pf-badge founder", text: "✦ Founding supporter" }), " You were one of the first 50, so this stays on your profile for good.") : null,
         s.until ? h("p", {}, h("strong", { text: "You're a supporter until " + fmt(s.until) + "." }), " Buying another pass adds to the time you have left.") : null,
         h("p", { class: "muted", text: `A pass gives you a Supporter role in the Steam Value Checker server, a badge and glowing ring on your profile, three exclusive profile themes, 24 overlay slots instead of 12 and ${Math.round((s.boost - 1) * 100)}% more XP. Everything else stays free for everyone.` }),
         s.enabled ? h("div", { class: "row" }, ...s.plans.map(p => h("button", { class: "btn blue", type: "button", text: `${p.name} · $${(p.cents / 100).toFixed(p.cents % 100 ? 2 : 0)}`, onclick: e => busy(e.currentTarget, async () => { const r = await api("/api/supporter/checkout", { plan: p.id }); location.href = r.url; }) }))) : null,
-        s.enabled ? h("p", { class: "muted small", text: "Checkout is handled by Square. The bot never sees your card." }) : null);
+        s.enabled ? (() => {
+          const to = h("input", { type: "text", placeholder: "Their page name or Discord ID", "aria-label": "Who to gift a pass to" });
+          const plan = select(s.plans.map(p => [p.id, `${p.name} · $${(p.cents / 100).toFixed(p.cents % 100 ? 2 : 0)}`]), s.plans[0].id);
+          return h("div", { class: "pass-gift" }, h("h4", { text: "Gift a pass 🎁" }), h("p", { class: "muted small", text: "Treat a friend. They get the role and perks, and a DM saying it's from you." }),
+            h("div", { class: "row" }, to, plan, h("button", { class: "btn gray", type: "button", text: "Gift it", onclick: e => busy(e.currentTarget, async () => { try { const r = await api("/api/supporter/checkout", { plan: plan.value, gift_to: to.value }); location.href = r.url; } catch (err) { toast(err.message, "error"); } }) })));
+        })() : null,
+        s.enabled ? h("p", { class: "muted small", text: "Checkout is handled by Square. The bot never sees your card." }) : null,
+        (s.until || s.founder) ? (() => {
+          const nm = h("input", { type: "text", maxlength: "24", value: s.wall || "", placeholder: "A name to show, like Jacob" });
+          return h("div", { class: "pass-wall-opt" }, h("h4", { text: "Supporter wall" }), h("p", { class: "muted small", text: "Want to be thanked in public? Pick a name and you'll show up below. It never links to your Discord. Clear it to leave." }),
+            h("div", { class: "row" }, nm, h("button", { class: "btn gray", type: "button", text: "Save", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/wall", { name: nm.value }); toast(nm.value.trim() ? "You're on the wall." : "Removed from the wall.", "ok"); tipView(); } catch (err) { toast(err.message, "error"); } }) })));
+        })() : null);
     } catch { /* the pass is optional, so the rest of the page stands on its own */ }
+    try {
+      const w = (await api("/api/public/supporters")).wall;
+      if (w.length) document.getElementById("supporter-box")?.after(h("div", { class: "panel pass-wall" }, h("h3", { text: "Thank you to" }), h("div", { class: "pass-wall-list" }, ...w.map(x => h("span", { class: "pf-badge" + (x.founder ? " founder" : ""), title: x.founder ? "Founding supporter" : "Supporter", text: (x.founder ? "✦ " : "★ ") + x.name })))));
+    } catch { /* the wall is a nicety */ }
   }
 
   // Goal bars, server stats and timers for OBS, each with its own link and look, and a live preview that follows every change.
@@ -4890,9 +4907,47 @@
             h("button", { type: "button", class: "btn gray", text: "Delete", onclick: e => busy(e.currentTarget, async () => { if (!confirm("Delete this overlay? Its link stops working.")) return; try { await api("/api/overlays", { action: "delete", token: o.token }); await reload(d.overlays.find(x => x.token !== o.token)?.token ?? null); } catch (err) { toast(err.message, "error"); } }) }))));
       refresh();
     }
-    app.replaceChildren(pageHead("Overlay studio", "Build a goal bar, server stats or a timer, style it, and paste its link into OBS as a Browser source."),
-      h("div", { class: "ovs" }, h("div", { class: "panel ovs-side" }, h("h3", { text: "Your overlays" }), list), editor));
-    paintList(); paintEditor();
+    const mine = h("div", { class: "ovs" }, h("div", { class: "panel ovs-side" }, h("h3", { text: "Your overlays" }), list), editor);
+    const TABS = [["mine", "Goal bars, stats and timers", () => mine], ["np", "Now playing", nowPlayingOverlayPanel], ["gw", "Giveaway", giveawayOverlayPanel], ["cards", "Deals and cards", streamCardPanel]];
+    let tab = "mine"; try { tab = localStorage.getItem("svc_ovs_tab") || "mine"; } catch { /* fine */ }
+    if (!TABS.some(t => t[0] === tab)) tab = "mine";
+    const tabs = h("div", { class: "chips ovs-tabs", role: "tablist" }), stage = h("div");
+    const show = key => {
+      tab = key; try { localStorage.setItem("svc_ovs_tab", key); } catch { /* fine */ }
+      tabs.replaceChildren(...TABS.map(([k, label]) => h("button", { type: "button", role: "tab", class: "chip-btn" + (k === key ? " on" : ""), "aria-selected": String(k === key), text: label, onclick: () => show(k) })));
+      stage.replaceChildren(TABS.find(t => t[0] === key)[2]());
+    };
+    app.replaceChildren(pageHead("Overlay studio", "Every overlay for OBS in one place. Pick one, style it, and paste its link in as a Browser source."), tabs, stage);
+    paintList(); paintEditor(); show(tab);
+  }
+
+  /** The now-playing card for OBS, with a server picker. Same panel the music page used to carry. */
+  function nowPlayingOverlayPanel() {
+    const servers = state.me.servers.filter(g => g.bot !== false);
+    if (!servers.length) return h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." });
+    const guild = serverPicker(servers, currentParam());
+    const box = h("div"), wrap = h("div");
+    let ov = null, data = null, viz = null, vizGuild = "", ovBox = null;
+    guild.addEventListener("change", () => { data = null; if (ov) ov.reload(); });
+    const alive = () => wrap.isConnected && currentView() === "overlays";
+    async function poll() {
+      if (!alive()) { viz?.close(); viz = null; return; }
+      try { data = await api("/api/music?guild=" + encodeURIComponent(guild.value)); } catch { data = null; }
+      if (ov && data?.access?.canStream) {
+        ovBox.hidden = false; ov.update();
+        if (!viz || vizGuild !== guild.value) { viz?.close(); vizGuild = guild.value; viz = window.EventSource ? new EventSource("/api/music/viz?guild=" + encodeURIComponent(guild.value)) : null; if (viz) viz.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.p) ov.viz(m); } catch { /* ignore */ } }; }
+        box.replaceChildren();
+      } else if (ovBox) { ovBox.hidden = true; box.replaceChildren(h("div", { class: "notice", text: "You need permission to stream in this server to use this overlay. Ask a server manager, or pick another server." })); }
+      setTimeout(poll, 3000);
+    }
+    (async () => {
+      try { await overlayAssets(); } catch { box.replaceChildren(h("div", { class: "notice warn", text: "The overlay couldn't load. Refresh and try again." })); return; }
+      ov = window.SvcOverlayPanel({ api, toast, getData: () => data, getGuild: () => guild.value, storeKey: "svc_music_ov" });
+      ovBox = h("div", { class: "panel" }, h("h3", { text: "Now playing overlay" }), ov.el);
+      wrap.append(ovBox); poll();
+    })();
+    wrap.prepend(servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null, box);
+    return wrap;
   }
 
   async function supportView() {
@@ -5091,24 +5146,12 @@
     const body = h("div");
     let timer = 0, tick = 0, built = false, cur = null;
     const stop = () => { clearTimeout(timer); clearInterval(tick); };
-    const closeViz = () => { if (ovViz) { ovViz.close(); ovViz = null; } };
     const alive = () => currentView() === "music" && document.body.contains(body);
     // The OBS overlay panel lives on this page (same panel as the music studio's Stream tab). It follows what is actually playing.
-    let ov = null, ovBox = null, ovLoading = false, ovViz = null;
-    const loadOnce = (tag, attrs) => new Promise((res, rej) => { const e = document.createElement(tag); Object.assign(e, attrs); e.onload = res; e.onerror = rej; document.head.append(e); });
+    let streamNote = null;
     function streamPanel(d) {
-      if (!d.access?.canStream) { if (ovBox) ovBox.hidden = true; return; }
-      if (!ov) {
-        if (ovLoading) return; ovLoading = true;
-        Promise.all([window.SvcOverlayPanel ? 0 : loadOnce("script", { src: "/overlayui.js" }), document.querySelector('link[href="/overlayui.css"]') ? 0 : loadOnce("link", { rel: "stylesheet", href: "/overlayui.css" })])
-          .then(() => { ov = window.SvcOverlayPanel({ api, toast, getData: () => cur, getGuild: () => pick.value, storeKey: "svc_music_ov" }); ovBox = h("div", { class: "panel" }, h("h3", { text: "Stream overlay for OBS" }), ov.el); if (alive()) { body.append(ovBox); streamPanel(cur); } })
-          .catch(() => { ovLoading = false; });
-        return;
-      }
-      if (!ovBox.isConnected) body.append(ovBox);
-      ovBox.hidden = false; ov.update();
-      if (!ovViz && window.EventSource) { ovViz = new EventSource("/api/music/viz?guild=" + encodeURIComponent(pick.value)); ovViz.dataset = pick.value; ovViz.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.p) ov.viz(m); } catch { /* ignore */ } }; }
-      else if (ovViz && ovViz.dataset !== pick.value) { ovViz.close(); ovViz = null; ov.reload(); streamPanel(d); }
+      if (!d.access?.canStream) return;
+      if (!streamNote?.isConnected) { streamNote = h("div", { class: "notice" }, "The OBS overlay for what's playing moved to the ", h("a", { href: "#/overlays", text: "Overlay studio" }), "."); body.append(streamNote); }
     }
     const syncers = []; // little functions that re-check what the person is allowed to do after every refresh
     const typing = box => box && box.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
@@ -5119,7 +5162,7 @@
       try { d = await api("/api/music?guild=" + encodeURIComponent(pick.value)); } catch (e) { return body.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
       cur = d;
       if (rebuild || !built) { built = true; build(d); } else update(d);
-      clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); else { closeViz(); ov?.destroy(); ov = ovBox = null; ovLoading = false; } }, 3000);
+      clearTimeout(timer); timer = setTimeout(() => { if (alive()) load(false); }, 3000);
     }
     const bigLink = () => { const base = state.cfg?.musicUrl || "/music"; const q = base + (base.includes("?") ? "&" : "?") + "guild=" + encodeURIComponent(pick.value); big.href = q; };
     bigLink();
@@ -5382,9 +5425,10 @@
   document.addEventListener("keydown", e => {
     const t = e.target, typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
     if (e.key === "Escape") return closeSearch();
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k" && state.me && !/^\/admin/.test(location.pathname)) { e.preventDefault(); return openSearch(); }
     if (typing || e.ctrlKey || e.metaKey || e.altKey || !state.me) return;
     if (e.key === "/") { e.preventDefault(); return openSearch(); }
-    if (e.key === "?") return toast("Keys: / search · g then w wishlist, l library, a alerts, s servers, n notifications, h help", "ok");
+    if (e.key === "?") return toast("Keys: / or Ctrl+K search · g then w wishlist, l library, a alerts, s servers, n notifications, h help", "ok");
     if (gPending) { gPending = false; const dest = { w: "wishlist", l: "library", a: "alerts", s: "servers", n: "notifications", h: "help", t: "support", v: "value" }[e.key]; if (dest) navigate("/" + dest); return; }
     if (e.key === "g") { gPending = true; setTimeout(() => { gPending = false; }, 1200); }
   });
@@ -6480,24 +6524,7 @@
     if (!opts.into) app.replaceChildren(pageHead("Streams", "Link your channel and the bot posts when you go live, by itself. Choose whether you get pinged when others do, and set up your OBS overlay. In Discord: /server stream."), holder);
     if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
     const guild = opts.guild ?? serverPicker(servers, currentParam());
-    guild.addEventListener("change", () => { musicData = null; if (ov) ov.reload(); load(); });
-    // the OBS overlay panel, fed by what is actually playing (same panel as the music page and the studio)
-    let ov = null, ovBox = null, musicData = null, ovViz = null, ovVizGuild = "";
-    const alive = () => currentView() === (opts.into ? "streamer" : "streams") && holder.isConnected;
-    async function pollMusic() {
-      if (!alive()) { if (ovViz) { ovViz.close(); ovViz = null; } return; }
-      try { musicData = await api("/api/music?guild=" + encodeURIComponent(guild.value)); } catch { musicData = null; }
-      if (ov && musicData?.access?.canStream) {
-        ovBox.hidden = false; ov.update();
-        if (!ovViz || ovVizGuild !== guild.value) { ovViz?.close(); ovVizGuild = guild.value; ovViz = window.EventSource ? new EventSource("/api/music/viz?guild=" + encodeURIComponent(guild.value)) : null; if (ovViz) ovViz.onmessage = ev => { try { const m = JSON.parse(ev.data); if (m.p) ov.viz(m); } catch { /* ignore */ } }; }
-      } else if (ovBox) ovBox.hidden = true;
-      setTimeout(pollMusic, 3000);
-    }
-    async function mountOverlay(into) {
-      try { await overlayAssets(); } catch { return; }
-      if (!ov) { ov = window.SvcOverlayPanel({ api, toast, getData: () => musicData, getGuild: () => guild.value, storeKey: "svc_music_ov" }); ovBox = h("div", { class: "panel" }, h("h3", { text: "Stream overlay for OBS" }), ov.el); pollMusic(); }
-      into.append(ovBox);
-    }
+    guild.addEventListener("change", () => { load(); });
     /** The giveaway tool for streamers: the same options as a server giveaway, plus drawing when the stream ends. */
     function streamGiveawayPanel(d, unset, post, run) {
       const text = (ph, max, type = "text") => h("input", { type, placeholder: ph, maxlength: String(max) });
@@ -6622,7 +6649,7 @@
         gwPanel = streamGiveawayPanel(d, unset, post, run);
       }
       holder.replaceChildren(...[picker, liveList, linkPanel, goPanel, gwPanel, pingPanel, settings].filter(Boolean));
-      if (d.can.go) mountOverlay(holder);
+      if (d.can.go) holder.append(h("div", { class: "notice" }, "Your OBS overlays (now playing, giveaway, deals and cards) live in the ", h("a", { href: "#/overlays", text: "Overlay studio" }), " now."));
     }
     load();
   }
@@ -6780,9 +6807,9 @@
     const jump = (id, label) => h("a", { class: "chip-btn", href: "#/streamer", text: label, onclick: e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); } });
     app.replaceChildren(pageHead("Streamer hub", "Everything for streamers in one place: announce when you go live, the overlays for OBS, your gift-me wishlist, and who else is streaming. In Discord: /server stream."),
       h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null,
-        h("div", { class: "chips" }, jump("sh-live", "Go live and pings"), jump("sh-gwoverlay", "Giveaway overlay"), jump("sh-cards", "Deals overlay"), jump("sh-gift", "Gift me page"), jump("sh-roster", "Who is live"))),
+        h("div", { class: "chips" }, jump("sh-live", "Go live and pings"), jump("sh-gift", "Gift me page"), jump("sh-roster", "Who is live"))),
       h("div", { class: "notice" }, h("b", { text: "What these need: " }), "your Discord sign-in with the bot in your server. The Playing now card, !game and Now playing also need Steam linked (Steam page) and Game details set to Public. The browser extension features (spotlight, wishlist from a store page) need the extension linked with the bot: ", h("a", { href: "#/library", text: "Library, Connect the extension" }), "."),
-      goBox, giveawayOverlayPanel(), streamCardPanel(), h("div", { id: "sh-gift" }, publicPagePanel()),
+      goBox, h("div", { class: "panel" }, h("h3", { text: "Overlays for OBS" }), h("p", { class: "muted", text: "Now playing, giveaway, deals and cards, goal bars, server stats and timers are all in one place now." }), h("a", { class: "btn blue", href: "#/overlays", text: "Open the Overlay studio" })), h("div", { id: "sh-gift" }, publicPagePanel()),
       h("div", { class: "panel" }, h("h3", { text: "Discord commands" }), h("p", { class: "muted small", text: "/server stream link links your Twitch, Kick or YouTube channel. /server stream live, title and game post or update a go-live message. /server stream end closes it. /server stream ping turns the go-live pings on or off for you. /alerts share and /server nowplaying let friends see you in a game." })),
       rosterBox);
     if (!servers.length) { goBox.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet, so go-live posts are off. The overlay and gift page below still work. Add the bot from the Servers page." })); rosterBox.remove(); return; }

@@ -67,6 +67,7 @@ import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
 import { runServerWrapped } from "./serverwrapped.js";
+import { runRivalries } from "./rivalry.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runSocialDigest } from "./socialdigest.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
@@ -419,6 +420,7 @@ client.once(Events.ClientReady, c => {
             result.yearly = await ops.job("year in games", () => runYearInGames({ db, notifier, render: (userId, name) => renderRecap({ db, userId, name }) }));
             result.serverWrapped = await ops.job("server wrapped", () => runServerWrapped({ db, notifier, log, guildName: id => client.guilds.cache.get(id)?.name,
                 nameOfMany: async ids => { const m = new Map(); await Promise.all([...new Set(ids)].map(async id => { try { const u = await client.users.fetch(id); m.set(id, u.globalName ?? u.username); } catch { m.set(id, "a member"); } })); return m; } }));
+            result.rivalry = await ops.job("server rivalries", () => runRivalries({ db, notifier, log, guildName: id => client.guilds.cache.get(id)?.name }));
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
             result.free = await ops.job("free games", () => runFreeGames({ db, itad, notifier, log }));
             result.news = await ops.job("news", () => runNews({ db, news, notifier, log }));
@@ -845,7 +847,7 @@ async function onInteraction(i, again = false) {
         return;
     }
     if ((i.isButton() || i.isAnySelectMenu?.() || i.isModalSubmit()) && i.customId.startsWith(PANEL_PREFIX)) return panels.handle(i);
-    if ((i.isButton() && /^alert_(snooze|below):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
+    if ((i.isButton() && /^alert_(snooze|below|story):/.test(i.customId)) || (i.isModalSubmit() && i.customId.startsWith("alert_m_below:"))) return handlers.handleAlertButton(i);
     if ((i.isStringSelectMenu() && i.customId === "help_pick") || isHelpNav(i)) return handleHelpPick(i);
     if ((i.isButton() && i.customId === `${GUIDE_BUTTON}list`) || (i.isStringSelectMenu() && i.customId === `${GUIDE_BUTTON}pick`)) return handleGuideInteraction(i, { publicUrl: cfg.dashboard?.publicUrl ?? null });
     if (i.isButton() && i.customId.startsWith(AI_PREFIX)) return handleAiButton(i, { db, itad });

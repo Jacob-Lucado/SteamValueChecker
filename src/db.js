@@ -618,6 +618,11 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         `SELECT u.discord_id, SUM(p.minutes) AS minutes FROM users u JOIN playtime_log p ON p.discord_id = u.discord_id
           WHERE u.share = 1 AND u.guild_id = ? AND p.day >= ? GROUP BY u.discord_id HAVING minutes > 0 ORDER BY minutes DESC`, guildId, fromDay).map(clean);
 
+    /** Hours tracked between two days (YYYY-MM-DD, end exclusive) by members who opted in, and how many members shared at all. For server rivalries. */
+    const sharedHoursBetween = (guildId, fromDay, toDay) => get(
+        `SELECT COALESCE((SELECT SUM(p.minutes) FROM users u JOIN playtime_log p ON p.discord_id = u.discord_id WHERE u.share = 1 AND u.guild_id = ?1 AND p.day >= ?2 AND p.day < ?3), 0) AS minutes,
+                (SELECT COUNT(*) FROM users u WHERE u.share = 1 AND u.guild_id = ?1) AS members`, guildId, fromDay, toDay);
+
     /** Time tracked per game since a day by members who opted in: minutes, how many members played it. For the server wrapped picture. */
     const sharedGameHours = (guildId, fromDay) => all(
         `SELECT p.itad_id AS itad_id, MIN(p.title) AS title, SUM(p.minutes) AS minutes, COUNT(DISTINCT p.discord_id) AS players
@@ -808,7 +813,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link", "stream_card", "stream_overlays"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             run("DELETE FROM status_meta WHERE key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\'", `topgg:votes:${discordId}`, `topgg:seen:${discordId}:%`, `voterrole:${discordId}`);
-            run("DELETE FROM status_meta WHERE key = ?", `supporter:${discordId}`);
+            for (const k of ["supporter:", "supporterwall:", "supporterfounder:", "supporterremind:", "supporterlast:"]) run("DELETE FROM status_meta WHERE key = ?", k + discordId);
             run("DELETE FROM twitch_link WHERE discord_id = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");
@@ -855,7 +860,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
-        countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedGameHours,
+        countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
         blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()

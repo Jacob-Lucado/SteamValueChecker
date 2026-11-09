@@ -46,7 +46,7 @@ import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
 import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
-import { supporterUntil, isSupporter } from "../supporters.js";
+import { supporterUntil, isSupporter, isFounder, wallName } from "../supporters.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -464,7 +464,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         let event; try { event = JSON.parse(raw); } catch { return json(res, 400, { error: "Bad request." }); }
         try {
             const paid = await square.paidPass(event);
-            if (paid) await supporters.grant(paid.userId, paid.plan.days, paid.paymentId, "Square", paid.plan.cents);
+            if (paid) await supporters.grant(paid.userId, paid.plan.days, paid.paymentId, paid.giftFrom ? "Square gift" : "Square", paid.plan.cents, { giftFrom: paid.giftFrom });
             const back = square.refund(event);
             if (back) await supporters.refund(back.paymentId, back.cents);
         } catch (err) { log(`[square] ${err.message}`); return json(res, 500, { error: "Try again." }); } // Square tries again later
@@ -1154,13 +1154,28 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         // ----- supporter passes -----
         "GET /api/supporter": async (req) => {
             const s = session(req), until = supporterUntil(db, s.userId);
-            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST };
+            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST, founder: isFounder(db, s.userId), wall: wallName(db, s.userId) };
+        },
+        "GET /api/public/supporters": async () => ({ wall: supporters ? supporters.wall() : [] }),
+        "POST /api/supporter/wall": async (req, body) => {
+            const s = session(req);
+            if (!supporters) throw new HttpError(404, "Not found.");
+            if (!isSupporter(db, s.userId, now()) && !isFounder(db, s.userId)) throw new HttpError(403, "The wall is for supporters.");
+            return { wall: supporters.setWall(s.userId, body.on === false ? "" : body.name) };
         },
         "POST /api/supporter/checkout": async (req, body) => {
             const s = session(req);
             if (!square?.enabled) throw new HttpError(404, "Supporter passes aren't switched on yet.");
             if (!checkoutLimit.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            try { return { url: await square.checkout({ userId: s.userId, planId: String(body.plan ?? ""), redirectUrl: `${origin}/#/tip?thanks=1` }) }; }
+            let target = s.userId, giftFrom = null;
+            const to = String(body.gift_to ?? "").trim().replace(/^@/, "").toLowerCase();
+            if (to) {
+                const hit = /^\d{5,25}$/.test(to) ? db.getUser(to) : db.getProfileBySlug(to);
+                if (!hit) throw new HttpError(404, "I couldn't find anyone by that page name or ID. They need to have used the bot or turned on their profile page.");
+                if (hit.discord_id === s.userId) throw new HttpError(400, "That's you. Use the normal buttons to buy a pass for yourself.");
+                target = hit.discord_id; giftFrom = s.userId;
+            }
+            try { return { url: await square.checkout({ userId: target, planId: String(body.plan ?? ""), redirectUrl: `${origin}/#/tip?thanks=${giftFrom ? "gift" : "1"}`, giftFrom }) }; }
             catch (e) { log(`[square] ${e.message}`); throw new HttpError(400, /Pick one|Sign in|switched on/.test(e.message) ? e.message : "Couldn't open the checkout page. Try again in a minute."); }
         },
         "GET /api/admin/supporters": async (req) => {
