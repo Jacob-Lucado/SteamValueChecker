@@ -3013,3 +3013,26 @@ test("every admin route turns a signed-in non-owner away", async () => {
     await t.close();
     assert.deepEqual(open, [], "these admin routes answer someone who is not the owner");
 });
+
+test("bundle landing page: shows the bundle, counts visits, redirects only to known stores, serves the picture from our own address", async () => {
+    const png = new Uint8Array([137, 80, 78, 71]).buffer;
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { imageFetch: async u => (u === "https://cdn.humble.test/pic.png" ? { ok: true, headers: { get: () => "image/png" }, arrayBuffer: async () => png } : { ok: false }) } });
+    const mk = (n, over = {}) => ({ key: "humble:b" + n, store: "humble", title: "Indie <Legends> Bundle", url: "https://www.humblebundle.com/games/legends", image: "https://cdn.humble.test/pic.png", games: ["Hades Clone", "Pixel Quest"], gameCount: 9, price: "$12", expiresAt: Date.now() + 5 * 86_400_000, seenAt: Date.now(), ...over });
+    o.db.upsertFeedBundle(mk(1)); o.db.upsertFeedBundle(mk(2, { url: "https://evil.example/steal", image: null })); o.db.upsertFeedBundle(mk(3, { adult: true }));
+    const [a, b, c] = o.db.listFeedBundles({ status: "active", limit: 10 }).sort((x, y) => x.key.localeCompare(y.key));
+    const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", ...opts });
+    const page = await get(`/b/${a.id}`), html = await page.text();
+    assert.equal(page.status, 200); assert.match(html, /Indie &lt;Legends&gt; Bundle/, "the title is escaped"); assert.ok(!/<Legends>/.test(html));
+    assert.match(html, /Taking you to Humble Bundle in 6 seconds/); assert.match(html, new RegExp(`/b/${a.id}/go`)); assert.match(html, /noscript/); assert.match(html, /Never miss a bundle/);
+    assert.match(page.headers.get("x-robots-tag"), /noindex/); assert.ok(!/<style|style="|<script>/i.test(html), "nothing inline, so the CSP holds");
+    assert.equal(o.db.getMeta(`bundlevisit:${a.id}`), "1");
+    const go = await get(`/b/${a.id}/go`); assert.equal(go.status, 302); assert.equal(go.headers.get("location"), "https://www.humblebundle.com/games/legends"); assert.equal(o.db.getMeta(`bundlego:${a.id}`), "1");
+    const bad = await get(`/b/${b.id}/go`); assert.equal(bad.status, 404, "a link to some other site is never followed");
+    assert.ok(!/Taking you to/.test(await (await get(`/b/${b.id}`)).text()), "and the page doesn't auto-redirect to it either");
+    const img = await get(`/b/${a.id}/img`); assert.equal(img.status, 200); assert.equal(img.headers.get("content-type"), "image/png");
+    assert.equal((await get(`/b/${b.id}/img`)).status, 404, "no picture, no image");
+    assert.equal((await get(`/b/${c.id}`)).status, 404, "adult bundles have no page"); assert.equal((await get("/b/99999")).status, 404);
+    assert.match(await (await get("/b/99999")).text(), /isn't here any more/);
+    assert.equal((await get("/go.css")).status, 200); assert.equal((await get("/go.js")).status, 200);
+    await o.close();
+});

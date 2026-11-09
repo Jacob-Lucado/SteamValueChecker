@@ -25,6 +25,7 @@ import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
 import * as xposterText from "../xposter.js";
+import { renderBundleLanding, renderBundleGone, bundleDestination, safePictureUrl } from "../bundlelanding.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
 import { compareGiftRegions } from "../giftregion.js";
@@ -168,6 +169,8 @@ const FILES = {
     ...Object.fromEntries(Object.keys(SEO_PAGES).map(slug => [`/${slug}`, [`seo/${slug}.html`, "text/html; charset=utf-8"]])),
     "/ai": ["ai.html", "text/html; charset=utf-8"],
     "/ai.css": ["ai.css", "text/css; charset=utf-8"],
+    "/go.css": ["go.css", "text/css; charset=utf-8"],
+    "/go.js": ["go.js", "text/javascript; charset=utf-8"],
     "/ai.js": ["ai.js", "text/javascript; charset=utf-8"],
     "/ai-ad-hero.png": ["ai-ad-hero.png", "image/png"],
     "/img/x-post.jpg": ["img/x-post.jpg", "image/jpeg"],
@@ -230,7 +233,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -1550,7 +1553,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             const link = url.searchParams.get("link") !== "0", tags = xposter.tags();
-            return { bundles: db.listFeedBundles({ status: "active", limit: 8, adult: false }).map(bundleFeedView).map(b => ({ id: b.id, title: b.title, storeName: b.storeName, price: b.price, expiresAt: b.expiresAt, gameCount: b.gameCount, posted: xposter.bundlePosted(b.id), text: xposterText.bundleText(b, { tags, link }) })) };
+            return { bundles: db.listFeedBundles({ status: "active", limit: 8, adult: false }).map(bundleFeedView).map(b => ({ id: b.id, title: b.title, storeName: b.storeName, price: b.price, expiresAt: b.expiresAt, gameCount: b.gameCount, posted: xposter.bundlePosted(b.id), text: xposterText.bundleText({ ...b, url: `${origin}/b/${b.id}` }, { tags, link }), visits: Number(db.getMeta(`bundlevisit:${b.id}`)) || 0, clicks: Number(db.getMeta(`bundlego:${b.id}`)) || 0 })) };
         },
         "POST /api/admin/xposter/post": async (req, body) => {
             const s = session(req);
@@ -4101,6 +4104,40 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         }
         return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
     }
+    // ---------- the page a bundle post on X links to ----------
+    const bundlePics = new Map(); // id -> { at, buf, type }
+    const bump = key => { try { db.setMeta(key, String((Number(db.getMeta(key)) || 0) + 1)); } catch { /* a missed count isn't worth failing the page */ } };
+    const bundleFor = id => { const b = db.getFeedBundle(id); return b && !b.adult ? b : null; };
+    async function serveBundlePage(res, id, part) {
+        const b = bundleFor(id);
+        if (!b) return send(res, 404, renderBundleGone({ origin }), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
+        if (part === "go") {
+            const dest = bundleDestination(b.url);
+            if (!dest) return send(res, 404, renderBundleGone({ origin }), { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" });
+            bump(`bundlego:${id}`);
+            return send(res, 302, "", { Location: dest, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
+        }
+        if (part === "img") {
+            const src = safePictureUrl(b.image);
+            if (!src) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+            let hit = bundlePics.get(id);
+            if (!hit || Date.now() - hit.at > 6 * 3_600_000) {
+                try {
+                    const r = await imageFetch(src, { headers: { Accept: "image/*" }, signal: AbortSignal.timeout(10_000) });
+                    const type = String(r.headers?.get?.("content-type") ?? "").split(";")[0].trim().toLowerCase();
+                    const buf = r.ok && /^image\/(png|jpe?g|webp|gif)$/.test(type) ? Buffer.from(await r.arrayBuffer()) : null;
+                    if (!buf || !buf.length || buf.length > 4_000_000) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+                    hit = { at: Date.now(), buf, type };
+                } catch { return send(res, 404, "Not found", { "Content-Type": "text/plain" }); }
+                bundlePics.set(id, hit);
+                if (bundlePics.size > 60) bundlePics.delete(bundlePics.keys().next().value);
+            }
+            return send(res, 200, hit.buf, { "Content-Type": hit.type, "Cache-Control": "public, max-age=3600" });
+        }
+        bump(`bundlevisit:${id}`);
+        const html = renderBundleLanding(b, { origin, hasPicture: Boolean(safePictureUrl(b.image)), inviteUrl: config.clientId ? botInviteUrl(config.clientId) : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null });
+        return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
+    }
     const shareCache = new Map(); // slug -> { at, png }
     async function serveProfileShare(res, slug) {
         const owner = publicOwner(slug);
@@ -4253,6 +4290,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 const name = withDefaults(db.getProfileData(owner.discord_id).data).name || owner.profile_slug;
                 return send(res, 200, valueBadgeSvg({ name, ...v }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
             }
+            if (req.method === "GET" && /^\/b\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, id, , part] = /^\/b\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveBundlePage(res, Number(id), part); }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });

@@ -4226,15 +4226,15 @@
       const fresh = bl.bundles.filter(b => !b.posted);
       const newest = h("button", { class: "btn green small", type: "button", text: "Post the newest", disabled: !xs.configured || !fresh.length }); if (fresh.length) newest.addEventListener("click", () => postBundle(fresh[0], newest));
       const bundles = h("div", { class: "panel" }, h("h3", { text: "Latest bundles" }),
-        h("p", { class: "muted", text: "The newest bundles the bot has found. Each one goes out with its own picture and its link. Post one as is, or send it to the box above to reword it first." }),
+        h("p", { class: "muted", text: "The newest bundles the bot has found. Each one goes out with its own picture and a link to a page on the site that shows the bundle and sends people on to the store after a few seconds. Post one as is, or send it to the box above to reword it first." }),
         h("div", { class: "row" }, newest, h("label", { class: "check" }, linkBox, ` Include the bundle's link (about ${money(xs.linkCost)} each instead of ${money(xs.plainCost)})`)),
-        bl.bundles.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Bundle", "Store", "Price", "Ends", ""].map(c => h("th", { text: c })))),
+        bl.bundles.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Bundle", "Store", "Price", "Ends", "Visits", ""].map(c => h("th", { text: c })))),
           h("tbody", {}, bl.bundles.map(b => {
             const go = h("button", { class: "btn gray small", type: "button", text: "Post to X", disabled: !xs.configured }); go.addEventListener("click", () => postBundle(b, go));
             const ed = h("button", { class: "btn gray small", type: "button", text: "Edit first" });
             ed.addEventListener("click", () => { draft.text = b.text; draft.bundleId = b.id; draft.image = null; draft.imageName = ""; pic.value = ""; text.value = b.text; refresh(); text.scrollIntoView({ behavior: "smooth", block: "center" }); text.focus(); });
             return h("tr", {}, h("td", {}, h("b", { text: b.title }), b.gameCount ? h("div", { class: "muted small", text: b.gameCount + " games" }) : null), h("td", { text: b.storeName }), h("td", { text: b.price || "–" }),
-              h("td", { text: b.expiresAt ? when(b.expiresAt) : "–" }), h("td", {}, b.posted ? h("span", { class: "muted", text: "Posted ✓ " }) : null, go, " ", ed));
+              h("td", { text: b.expiresAt ? when(b.expiresAt) : "–" }), h("td", { text: b.visits ? `${b.visits} (${b.clicks} went on)` : "–" }), h("td", {}, b.posted ? h("span", { class: "muted", text: "Posted ✓ " }) : null, go, " ", ed));
           }))) : h("p", { class: "muted", text: "No active bundles right now." }));
 
       // ----- schedule -----
