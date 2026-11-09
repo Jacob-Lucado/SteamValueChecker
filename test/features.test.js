@@ -991,3 +991,22 @@ test("wishlist auto-sync: refreshes people who imported before, drops what they 
     await runWishlistAutoSync({ db, itad: {}, importWishlist: imp, now: t + 3600_000 });
     assert.equal(reads.length, 0, "not again within twelve hours, even for the private one");
 });
+
+test("server digest has a group buy section for games several sharing members want, even at full price", async () => {
+    const { buildServerDigest } = await import("../src/serverdigest.js");
+    const t = rig({});
+    t.db.setGuildChannel("g1", "c1", "u1");
+    for (const id of ["a", "b", "c"]) { t.db.ensureUser(id, "g1"); t.db.updateUser(id, { share: 1 }); }
+    t.db.ensureUser("p", "g1");
+    t.db.addItems("a", [{ itad_id: "x", title: "Wanted Game" }]);
+    t.db.addItems("b", [{ itad_id: "x", title: "Wanted Game" }, { itad_id: "y", title: "Solo Game" }]);
+    t.db.addItems("p", [{ itad_id: "x", title: "Wanted Game" }, { itad_id: "z", title: "Private Pair" }]);
+    t.db.addItems("c", [{ itad_id: "z", title: "Private Pair" }]);
+    const full = { deals: [{ price: { amount: 20, currency: "USD" }, regular: { amount: 20 }, cut: 0, shop: { name: "Steam" }, url: "https://x.example" }], bundles: [], history: [] };
+    const itad = { getPrices: async ids => new Map(ids.map(id => [id, full])), getGiveawayList: async () => [] };
+    const embed = await buildServerDigest({ itad, db: t.db, guildId: "g1", guildName: "S", now: Date.UTC(2026, 0, 9) });
+    const f = embed.fields.find(x => x.name === "Wanted by several members");
+    assert.ok(f, "section is there");
+    assert.match(f.value, /Wanted Game.*2 members/);
+    assert.ok(!f.value.includes("Solo Game"), "only games two or more want");
+});

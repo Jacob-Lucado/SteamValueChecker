@@ -21,11 +21,16 @@ export async function buildServerDigest({ db, itad, guildId, guildName = "this s
     if (watched.length) {
         try {
             const prices = await itad.getPrices(watched.map(w => w.itad_id), "US");
-            const deals = watched.map(w => ({ ...w, cur: current(summarize(prices.get(w.itad_id))), cur_c: summarize(prices.get(w.itad_id)).currency }))
-                .filter(w => w.cur.discount >= 0.2 && w.cur.price !== null)
+            const priced = watched.map(w => ({ ...w, cur: current(summarize(prices.get(w.itad_id))), cur_c: summarize(prices.get(w.itad_id)).currency }));
+            const deals = priced.filter(w => w.cur.discount >= 0.2 && w.cur.price !== null)
                 .sort((a, b) => b.cur.discount - a.cur.discount || b.watchers - a.watchers).slice(0, 5);
             if (deals.length) fields.push({ name: "Cheap among what members watch", value: deals.map(d =>
                 `• **${d.title}** ${money(d.cur.price, d.cur_c)} (-${Math.round(d.cur.discount * 100)}%)${d.watchers > 1 ? ` · ${d.watchers} members` : ""}`).join("\n") });
+            // Group buy radar: games several members want, even when they aren't on sale yet, so a group can pick one and wait for the price together.
+            const shown = new Set(deals.map(d => d.itad_id));
+            const wanted = priced.filter(w => w.watchers >= 2 && !shown.has(w.itad_id)).sort((a, b) => b.watchers - a.watchers).slice(0, 3);
+            if (wanted.length) fields.push({ name: "Wanted by several members", value: wanted.map(w =>
+                `• **${w.title}** · ${w.watchers} members${w.cur.price !== null ? ` · now ${money(w.cur.price, w.cur_c)}` : ""}`).join("\n") + "\nGood ones to grab as a group when the price drops." });
         } catch { /* skip this section */ }
     }
     try {
