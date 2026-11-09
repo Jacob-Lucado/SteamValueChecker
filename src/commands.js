@@ -722,6 +722,7 @@ const promos = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("news").setDescription("Managers: also post giveaway and code news")
         .addBooleanOption(o => o.setName("on").setDescription("On or off (leave empty to see the setting)")));
 
+const supporterCmd = new SlashCommandBuilder().setName("supporter").setDescription("Your supporter pass and what it gives you");
 const changelog = new SlashCommandBuilder().setName("changelog").setDescription("What is new in the bot");
 
 const support = new SlashCommandBuilder()
@@ -821,7 +822,7 @@ const playerCmd = new SlashCommandBuilder()
     .setDescription("Open the big music player for this server");
 
 export const commands = [
-    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, vote, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
+    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, supporterCmd, mydata, help, about, vote, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
     ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, coop, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
@@ -835,7 +836,7 @@ const HUBS = [
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
     { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "coop", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
-    { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
+    { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "supporter", "bug", "grabberad"], groups: ["support", "feature"] }
 ];
 const KEEP = ["help", "dashboard", "alerts", "language", "vote", "mod", "music", "play", "player"];
 const KINDS = { everywhere, serverOnly, serverOrDm };

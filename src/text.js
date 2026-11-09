@@ -83,7 +83,7 @@ export const HELP_PAGES = [
         description: "Questions, problems and ideas.",
         fields: [
             { name: "Help", value: "`/bot support` `open` / `mine` / `setup` asks the team. `/bot bug` reports a problem to the bot owner. `/bot feature` `request` / `list` / `vote` for ideas." },
-            { name: "About", value: "`/bot status` shows bot health. `/bot changelog` shows what is new. `/bot about` and `/bot privacy` explain what it does with your data. `/bot grabberad` is for the owner." },
+            { name: "About", value: "`/bot status` shows bot health. `/bot changelog` shows what is new. `/bot supporter` shows your supporter pass and what it gives you. `/bot about` and `/bot privacy` explain what it does with your data. `/bot grabberad` is for the owner." },
             { name: "Website", value: "`/dashboard` links the dashboard, and opens a page if you pick one." },
             { name: "Vote", value: "`/vote` takes you to Top.gg. Each vote gives you bonus XP in your servers." }
         ] }

@@ -87,3 +87,12 @@ test("the new embeds stay inside Discord's size limits even with long names", ()
     const games = Array.from({ length: 30 }, (_, i) => ({ id: "g" + i, title: long, price: 1.5, currency: "USD", discount: 10 }));
     check(contextWishlistEmbed(long, { games }, null, games));
 });
+
+test("the supporter card says what a member has and stays inside limits", async () => {
+    const { supporterEmbed } = await import("../src/render.js");
+    const on = supporterEmbed({ active: true, until: Date.now() + 864e5, founder: true, wall: "x".repeat(60), boost: 1.25 }, "https://example.com/");
+    assert.match(on.description, /active until <t:\d+:D>/); assert.match(on.description, /example\.com\/#\/tip/); assert.match(on.fields[0].value, /25% more XP/);
+    assert.ok(on.fields.every(f => f.value.length <= 1024));
+    const none = supporterEmbed({ active: false, until: 0, founder: false, wall: null, boost: 1.25 });
+    assert.match(none.description, /don't have a pass/); assert.doesNotMatch(none.description, /http/);
+});

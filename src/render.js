@@ -200,6 +200,18 @@ export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null
     return { content, embeds: hits.map(h => embedFor(h, single)), components: single ? rowsFor(hits[0], true) : hits.map(h => alertButtons(h.item, h.now, { single, lang })).filter(Boolean) };
 }
 
+/** What a member's supporter pass is and does. Same card whether or not they have one, so it doubles as the pitch. */
+export function supporterEmbed({ active, until, founder, wall, boost }, publicUrl = null) {
+    const perks = ["A Supporter role and badge", "Three extra profile themes and a glow", "24 overlays instead of 12", `${Math.round((boost - 1) * 100)}% more XP`, "Your own colour on your price-alert cards", "Gift a pass to a friend"];
+    const when = until ? `<t:${Math.floor(until / 1000)}:D>` : null;
+    const state = active ? `Your pass is active until ${when}.` : founder ? "Your pass has ended, but you stay a founding supporter." : "You don't have a pass yet.";
+    const fields = [{ name: "What you get", value: perks.map(p => `• ${p}`).join("\n"), inline: false }];
+    if (founder) fields.push({ name: "Founding supporter 🌟", value: "You were one of the first 50. That mark and your alert colour are yours for good.", inline: false });
+    if (wall) fields.push({ name: "On the supporter wall as", value: wall.slice(0, 24), inline: true });
+    const url = publicUrl ? `${String(publicUrl).replace(/\/+$/, "")}/#/tip` : null;
+    return { color: active || founder ? 0xf5b942 : COLOR, title: "Supporter pass", description: `${state}${url ? `\n\n[${active ? "Manage or extend it" : "Get a pass"}](${url})` : ""}`, fields, footer: { text: "Nothing in the bot is locked behind it. It just helps keep it running." } };
+}
+
 export const WISHLIST_PER_PAGE = 15;
 
 /** Wishlist overview table: one line per game with current price and discount. */

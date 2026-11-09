@@ -963,6 +963,7 @@ async function onInteraction(i, again = false) {
             case "mod": return await modUi.handleCommand(i);
             case "community": case "rank": case "levels": case "leaderboardrefresh": case "invites": case "emoji": return await communityUi.handleCommand(i);
             case "changelog": return await handlers.handleChangelog(i);
+            case "supporter": return await handlers.handleSupporter(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
             case "serverstats": return await handlers.handleServerStats(i);

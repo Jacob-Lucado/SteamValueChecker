@@ -16,6 +16,8 @@ import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID, STORY_ID } from "./render.js";
 import { dealFromEmbed, renderStory } from "./dealstory.js";
 import { LANGS, languageDone } from "./i18n.js";
 import { LATEST, changelogEmbed } from "./changelog.js";
+import { supporterUntil, isFounder, wallName } from "./supporters.js";
+import { SUPPORTER_XP_BOOST } from "./square.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { pushEvent } from "./adminlog.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
@@ -23,7 +25,7 @@ import { newsPayload } from "./render.js";
 import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed, ownersEmbed, coopEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
 import { steamReviews } from "./reviews.js";
-import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
+import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed, supporterEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
 import { current, dealVerdict } from "./alerts.js";
@@ -340,6 +342,12 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             db.setMeta(`poll:${i.message.id}`, JSON.stringify(state));
             return await i.update({ embeds: [pollEmbed(state)], components: pollButtons(state.options) });
         } catch (err) { return eph(i, "I could not record that vote. Try again."); }
+    }
+
+    async function handleSupporter(i) {
+        db.ensureUser(i.user.id, i.guildId);
+        const until = supporterUntil(db, i.user.id), active = until > Date.now(), founder = isFounder(db, i.user.id);
+        return i.reply({ embeds: [supporterEmbed({ active, until, founder, wall: wallName(db, i.user.id), boost: SUPPORTER_XP_BOOST }, publicUrl)], flags: MessageFlags.Ephemeral });
     }
 
     async function handleChangelog(i) {
@@ -1072,5 +1080,5 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         } catch (err) { await failed(i, "message menu", err); }
     }
 
-    return { handleCoop, handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleCoop, handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleSupporter, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }
