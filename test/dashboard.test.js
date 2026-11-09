@@ -3033,6 +3033,7 @@ test("bundle landing page: shows the bundle, counts visits, redirects only to kn
     assert.equal((await get(`/b/${b.id}/img`)).status, 404, "no picture, no image");
     assert.equal((await get(`/b/${c.id}`)).status, 404, "adult bundles have no page"); assert.equal((await get("/b/99999")).status, 404);
     assert.match(await (await get("/b/99999")).text(), /isn't here any more/);
+    assert.match(html, /name="twitter:image" content="[^"]*\/b\/\d+\/img"/); assert.match(html, /og:image:alt" content="Indie &lt;Legends&gt; Bundle"/); assert.match(html, /name="twitter:card" content="summary_large_image"/); assert.match(html, /name="twitter:title"/);
     assert.equal((await get("/go.css")).status, 200); assert.equal((await get("/go.js")).status, 200);
     await o.close();
 });

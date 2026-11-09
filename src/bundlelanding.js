@@ -49,7 +49,7 @@ function modelOf(kind, r, now) {
 function page(m, { origin, inviteUrl, supportUrl, now }) {
     const hasPicture = Boolean(safePictureUrl(m.picture));
         const title = m.free ? `${m.title} is free on ${m.storeName}` : m.kind === "bundle" ? `${m.title} | ${m.storeName} bundle` : `${m.title} on ${m.storeName}`;
-    const desc = `${m.free ? "Free to keep. " : m.price ? m.price + ". " : ""}${m.count && !m.free ? m.count + " games. " : ""}${endsText(m.expires, now, m.free)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
+    const desc = `${m.free ? "Free to keep. " : m.price ? m.price + ". " : ""}${m.count && !m.free ? m.count + " games" + (m.games.length ? ", including " + m.games.slice(0, 3).join(", ") : "") + ". " : ""}${endsText(m.expires, now, m.free)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
     const base = `${origin}/${m.path}/${m.id}`, go = `${base}/go`, local = `/${m.path}/${m.id}`;
     const games = m.games.slice(0, 10), more = (m.count ?? games.length) - games.length;
     const redirect = Boolean(m.dest) && !m.ended;
@@ -68,7 +68,9 @@ function page(m, { origin, inviteUrl, supportUrl, now }) {
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${esc(base)}">
-${hasPicture ? `<meta property="og:image" content="${esc(base)}/img">\n<meta name="twitter:card" content="summary_large_image">` : `<meta property="og:image" content="${esc(origin)}/banner.png">\n<meta name="twitter:card" content="summary">`}
+${hasPicture ? `<meta property="og:image" content="${esc(base)}/img">\n<meta property="og:image:secure_url" content="${esc(base)}/img">\n<meta property="og:image:alt" content="${esc(m.title)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:image" content="${esc(base)}/img">\n<meta name="twitter:image:alt" content="${esc(m.title)}">` : `<meta property="og:image" content="${esc(origin)}/banner.png">\n<meta name="twitter:card" content="summary">\n<meta name="twitter:image" content="${esc(origin)}/banner.png">`}
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(desc)}">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="stylesheet" href="/go.css">
 ${redirect ? `<noscript><meta http-equiv="refresh" content="${REDIRECT_SECONDS};url=${esc(go)}"></noscript>` : ""}
