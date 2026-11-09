@@ -2,6 +2,7 @@
 // a badge on the profile page and a bit more XP, for as long as the pass lasts. Nothing in the bot is locked behind it.
 import { pushEvent, readEvents } from "./adminlog.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "./square.js";
+import { supporterThanks } from "./render.js";
 
 export const SUPPORTER_ROLE = "Supporter";
 const UNTIL = "supporter:";
@@ -44,7 +45,7 @@ export function alertColor(db, userId, now = Date.now()) {
 export const alertColorHex = (db, userId) => db.getMeta(COLOR + userId) || null;
 export const xpBoost = (db, userId, now = Date.now()) => (isSupporter(db, userId, now) ? SUPPORTER_XP_BOOST : 1);
 
-export function createSupporters({ db, client = null, mainGuild = null, dm = null, renewUrl = null, now = () => Date.now(), log = () => {} }) {
+export function createSupporters({ db, client = null, mainGuild = null, dm = null, renewUrl = null, publicUrl = null, now = () => Date.now(), log = () => {} }) {
     const guild = () => { const id = mainGuild?.detect?.() ?? null; return id ? client?.guilds.cache.get(id) ?? null : null; };
 
     async function roleIn(g, create) {
@@ -81,7 +82,14 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         pushEvent(db, "adminlog:supporters", { id: userId, days: d, via, at: now() }, 100);
         const role = await syncRole(userId, true);
         if (role !== "ok") log(`Supporter role for ${userId} not given: ${role}`);
-        try { await dm?.(userId, { embeds: [{ color: 0xeb459e, title: "Thank you! 💖", description: `${giftFrom ? `<@${giftFrom}> gifted you a supporter pass. ` : ""}Your supporter pass runs until <t:${Math.floor(until / 1000)}:D>. ${founding ? "You're one of the first 50 supporters, so you keep a **Founding supporter** mark on your profile for good. " : ""}You've got the Supporter role in our server, a badge and glow on your profile, three extra profile themes, more overlay slots and a little extra XP. Everything else stays free for everyone.` }] }); } catch { /* DMs may be closed */ }
+        try {
+            const me = db.getUser?.(userId), base = publicUrl ? String(publicUrl).replace(/\/+$/, "") : null;
+            await dm?.(userId, supporterThanks({
+                until, founding, giftFrom, role, boost: SUPPORTER_XP_BOOST,
+                tipUrl: renewUrl, inviteUrl: mainGuild?.inviteUrl?.() ?? null,
+                profileUrl: base && me?.profile_slug && me.profile_public ? `${base}/u/${me.profile_slug}` : null
+            }));
+        } catch { /* DMs may be closed */ }
         if (giftFrom) try { await dm?.(giftFrom, { embeds: [{ color: 0xeb459e, title: "Your gift is on its way 🎁", description: `<@${userId}> now has a supporter pass. Thank you for backing the bot.` }] }); } catch { /* DMs may be closed */ }
         return { duplicate: false, until, founding, role };
     }

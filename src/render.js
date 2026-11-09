@@ -212,6 +212,44 @@ export function supporterEmbed({ active, until, founder, wall, boost }, publicUr
     return { color: active || founder ? 0xf5b942 : COLOR, title: "Supporter pass", description: `${state}${url ? `\n\n[${active ? "Manage or extend it" : "Get a pass"}](${url})` : ""}`, fields, footer: { text: "Nothing in the bot is locked behind it. It just helps keep it running." } };
 }
 
+/**
+ * The DM someone gets right after a pass is paid for or handed out: what they have, until when, and where to make it theirs.
+ * `role` is how the Supporter role went ("ok", "not-a-member", ...), so someone outside the server is told how to get it.
+ */
+export function supporterThanks({ until, founding = false, giftFrom = null, role = "ok", boost = 1.25, tipUrl = null, profileUrl = null, inviteUrl = null }) {
+    const when = `<t:${Math.floor(until / 1000)}:D>`, left = `<t:${Math.floor(until / 1000)}:R>`;
+    const intro = giftFrom ? `<@${giftFrom}> gifted you a supporter pass, and it's now active. Enjoy it!` : "Your supporter pass is active, and it means a lot. Thanks for helping keep the bot running.";
+    const perks = [
+        role === "ok" ? "🎖️ **Supporter role** in our server" : role === "not-a-member" ? "🎖️ **Supporter role**, waiting for you in our server" : "🎖️ **Supporter role** in our server",
+        "✨ **Badge and glow** on your profile page",
+        "🎨 **Three extra profile themes**",
+        "🧩 **24 overlay slots** instead of 12",
+        `⚡ **${Math.round((boost - 1) * 100)}% more XP**`,
+        "🖌️ **Your own colour** on your price-alert cards"
+    ];
+    const fields = [
+        { name: "Active until", value: `${when}\n${left}`, inline: true },
+        { name: "Status", value: founding ? "🌟 Founding supporter" : "💖 Supporter", inline: true },
+        { name: "What you get", value: perks.join("\n"), inline: false }
+    ];
+    if (founding) fields.push({ name: "Founding supporter 🌟", value: "You're one of the first 50 supporters, so that mark stays on your profile for good, even after your pass ends.", inline: false });
+    const todo = [];
+    if (tipUrl) todo.push(`🖌️ [Pick your alert colour and a name for the supporter wall](${tipUrl})`);
+    if (profileUrl) todo.push(`🎨 [Try your new themes on your profile page](${profileUrl})`);
+    else todo.push("🎨 Switch your profile page on to show off the badge and themes");
+    todo.push("🎁 Know someone who'd like one? You can gift a pass from the same page.");
+    if (role === "not-a-member" && inviteUrl) todo.unshift(`🎖️ [Join the server](${inviteUrl}) and your role is given as soon as you're in`);
+    fields.push({ name: "Make it yours", value: todo.join("\n"), inline: false });
+    const row = [];
+    if (tipUrl) row.push({ type: 2, style: 5, label: "Customise", emoji: { name: "🖌️" }, url: tipUrl });
+    if (profileUrl) row.push({ type: 2, style: 5, label: "My profile", emoji: { name: "✨" }, url: profileUrl });
+    if (inviteUrl) row.push({ type: 2, style: 5, label: role === "not-a-member" ? "Join the server" : "Our server", emoji: { name: "💬" }, url: inviteUrl });
+    return {
+        embeds: [{ color: founding ? 0xf5b942 : 0xeb459e, title: founding ? "Thank you, founding supporter! 🌟" : "Thank you! 💖", description: intro, fields, footer: { text: "Everything else in the bot stays free for everyone." } }],
+        components: row.length ? [{ type: 1, components: row }] : []
+    };
+}
+
 export const WISHLIST_PER_PAGE = 15;
 
 /** Wishlist overview table: one line per game with current price and discount. */

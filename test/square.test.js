@@ -167,3 +167,19 @@ test("supporters: sales are grouped by month in Eastern time and founding spots 
     assert.deepEqual(r.months.map(m => [m.month, m.count, m.cents]), [["2026-12", 1, 300], ["2026-11", 2, 1100]]);
     assert.equal(r.gifts, 1); assert.equal(r.founders, 3); assert.equal(foundersTaken(db), 3); assert.equal(r.foundersMax, 50);
 });
+
+test("the thank-you DM lists the perks, links to the tip page and profile, and tells outsiders how to get the role", async () => {
+    const db = openDb(":memory:"); const t = 1_000_000, sent = [];
+    db.ensureUser("300000001"); db.setProfile("300000001", { slug: "sam", isPublic: true });
+    const g = { members: { me: { permissions: { has: () => true }, roles: { highest: { position: 9 } } }, fetch: async () => null }, roles: { fetch: async () => [{ name: "Supporter", position: 1, id: "r1" }] } };
+    const sup = createSupporters({ db, client: { guilds: { cache: { get: () => g } } }, mainGuild: { detect: () => "G", inviteUrl: () => "https://discord.gg/abc" }, dm: async (id, p) => sent.push(p), renewUrl: "https://x.test/#/tip", publicUrl: "https://x.test", now: () => t });
+    await sup.grant("300000001", 30, "thx1", "Square", 300);
+    const p = sent[0], e = p.embeds[0], text = JSON.stringify(e);
+    assert.match(e.title, /founding supporter/i);
+    assert.ok(e.fields.some(f => f.name === "What you get" && /Supporter role/.test(f.value)));
+    assert.match(text, /https:\/\/x\.test\/#\/tip/); assert.match(text, /https:\/\/x\.test\/u\/sam/);
+    assert.match(text, /Join the server/, "not in the server, so they're told how to get the role");
+    const urls = p.components[0].components.map(c => c.url);
+    assert.deepEqual(urls, ["https://x.test/#/tip", "https://x.test/u/sam", "https://discord.gg/abc"]);
+    assert.ok(e.fields.every(f => f.value.length <= 1024) && text.length < 3000);
+});
