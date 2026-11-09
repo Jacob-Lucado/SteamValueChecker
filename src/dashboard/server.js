@@ -1576,6 +1576,20 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             const link = url.searchParams.get("link") !== "0", tags = xposter.tags();
             return { bundles: db.listFeedBundles({ status: "active", limit: 8, adult: false }).map(bundleFeedView).map(b => ({ id: b.id, title: b.title, storeName: b.storeName, price: b.price, expiresAt: b.expiresAt, gameCount: b.gameCount, posted: xposter.bundlePosted(b.id), text: xposterText.bundleText({ ...b, url: `${origin}/b/${b.id}` }, { tags, link }), visits: Number(db.getMeta(`bundlevisit:${b.id}`)) || 0, clicks: Number(db.getMeta(`bundlego:${b.id}`)) || 0 })) };
         },
+        "GET /api/admin/xposter/free": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            const link = url.searchParams.get("link") !== "0", tags = xposter.tags();
+            let list = [];
+            try { list = await itad.getGiveawayList(); } catch { /* shown as an empty list */ }
+            const games = list.filter(g => g.type !== "dlc" && /^https:\/\//.test(g.url ?? "") && g.title).sort((a, b) => (a.expiry ?? Infinity) - (b.expiry ?? Infinity)).slice(0, 12);
+            return { games: games.map(g => {
+                const page = link ? db.upsertDeal({ key: `free:${g.id ?? g.url}`, kind: "free", title: g.title, shop: g.shop, url: g.url, image: freeArt(g), expiry: g.expiry }) : null;
+                const text = xposterText.freeGameText({ ...g, url: page ? `${origin}/d/${page}` : g.url }, Date.now(), tags, { link });
+                return { id: String(g.id), title: g.title, shop: g.shop, expiry: g.expiry, posted: xposter.freePosted(g.id), text, visits: page ? Number(db.getMeta(`dealvisit:${page}`)) || 0 : 0, clicks: page ? Number(db.getMeta(`dealgo:${page}`)) || 0 : 0 };
+            }) };
+        },
         "POST /api/admin/xposter/post": async (req, body) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
@@ -1585,7 +1599,9 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 const text = String(body.text ?? ""), image = body.image ? String(body.image) : null;
                 if (body.at) { const item = xposter.schedule({ text, at: Number(body.at), image }); return { ok: true, scheduled: item }; }
                 const bundle = body.bundle_id ? db.getFeedBundle(body.bundle_id) : null; // the picture comes from our own record of the bundle, never an address sent from the page
-                return { ok: true, ...(await xposter.manual({ text, image, imageUrl: bundle?.image ?? null, bundleId: bundle ? String(bundle.id) : null })) };
+                let free = null; // same for a free game: it's looked up in the bot's own list, and its picture comes from there
+                if (body.free_id) free = (await itad.getGiveawayList().catch(() => [])).find(g => String(g.id) === String(body.free_id)) ?? null;
+                return { ok: true, ...(await xposter.manual({ text, image, imageUrl: bundle?.image ?? (free ? freeArt(free) : null) ?? null, bundleId: bundle ? String(bundle.id) : null, freeId: free ? String(free.id) : null })) };
             } catch (e) { if (e.user || e.status) throw new HttpError(400, e.message); throw e; }
         },
         "POST /api/admin/xposter/unschedule": async (req, body) => {

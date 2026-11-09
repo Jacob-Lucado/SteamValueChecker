@@ -3133,3 +3133,17 @@ test("each public page has its own title, description, picture and questions, an
     const map = (await o.request("/sitemap.xml")).text; for (const k of ["support", "help", "about"]) assert.match(map, new RegExp(`/${k}<`));
     await o.close();
 });
+
+test("admin X page lists the free games, builds each post with its landing link, and marks hand-posted games as done", async () => {
+    const posted = [];
+    const xposter = { configured: () => true, tags: () => ["#PCGaming"], freePosted: id => id === "2", bundlePosted: () => false, status: () => ({}), manual: async a => { posted.push(a); return { id: "1" }; } };
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { xposter } });
+    const rr = await o.request("/api/admin/xposter/free"); const r = rr.data;
+    assert.equal(r.games.length, 2); const a = r.games.find(g => g.id === "1");
+    assert.match(a.text, /Free right now: Alpha/); assert.match(a.text, /\/d\/\d+/); assert.ok(!a.text.includes("e.example/a"), "the post links to our page, not the store");
+    assert.equal(r.games.find(g => g.id === "2").posted, true);
+    assert.ok(!(await o.request("/api/admin/xposter/free?link=0")).data.games[0].text.includes("/d/"), "links off means the store's own link");
+    await o.request("/api/admin/xposter/post", { method: "POST", body: { text: a.text, free_id: "1" } });
+    assert.equal(posted[0].freeId, "1");
+    await o.close();
+});

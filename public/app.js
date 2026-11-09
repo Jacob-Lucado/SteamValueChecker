@@ -4161,10 +4161,11 @@
     const xLen = t => { let n = 0; for (const ch of t.replace(LINK, () => "x".repeat(23))) { const cp = ch.codePointAt(0); n += cp <= 4351 || (cp >= 8192 && cp <= 8205) || (cp >= 8208 && cp <= 8223) || (cp >= 8242 && cp <= 8247) ? 1 : 2; } return n; };
     const hasLink = t => { LINK.lastIndex = 0; return LINK.test(t); };
     const when = at => new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    let draft = { text: "", image: null, imageName: "", at: "", bundleId: null }, bundleLink = true;
+    let draft = { text: "", image: null, imageName: "", at: "", bundleId: null }, bundleLink = true, freeLink = true;
     const draw = async () => {
       const xs = await api("/api/admin/xposter");
       const bl = await api("/api/admin/xposter/bundles?link=" + (bundleLink ? 1 : 0)).catch(() => ({ bundles: [] }));
+      const fl = await api("/api/admin/xposter/free?link=" + (freeLink ? 1 : 0)).catch(() => ({ games: [] }));
       if (!document.body.contains(body)) return;
       const save = async patch => { try { await api("/api/admin/xposter", patch); toast("Saved.", "ok"); await draw(); } catch (e) { toast(e.message); } };
 
@@ -4265,6 +4266,26 @@
               h("td", { text: b.expiresAt ? when(b.expiresAt) : "–" }), h("td", { text: b.visits ? `${b.visits} (${b.clicks} went on)` : "–" }), h("td", {}, b.posted ? h("span", { class: "muted", text: "Posted ✓ " }) : null, go, " ", ed));
           }))) : h("p", { class: "muted", text: "No active bundles right now." }));
 
+      // ----- free games right now -----
+      const postFree = (g, btn) => busy(btn, async () => {
+        if (!confirm(`Post "${g.title}" to X now?`)) return;
+        try { await api("/api/admin/xposter/post", { text: g.text, free_id: g.id }); toast("Posted.", "ok"); await draw(); } catch (e) { toast(e.message); }
+      });
+      const freeBox = h("input", { type: "checkbox" }); freeBox.checked = freeLink; freeBox.addEventListener("change", () => { freeLink = freeBox.checked; draw(); });
+      const freshFree = fl.games.filter(g => !g.posted);
+      const newestFree = h("button", { class: "btn green small", type: "button", text: "Post the soonest to end", disabled: !xs.configured || !freshFree.length }); if (freshFree.length) newestFree.addEventListener("click", () => postFree(freshFree[0], newestFree));
+      const freeGames = h("div", { class: "panel" }, h("h3", { text: "Free games right now" }),
+        h("p", { class: "muted", text: "Every game that's free to keep at the moment, soonest to end first. Each one goes out with a link to its page on the site, which shows the game's picture and sends people on to the store. Games you post here are skipped by the automatic posts." }),
+        h("div", { class: "row" }, newestFree, h("label", { class: "check" }, freeBox, ` Include the game's link (about ${money(xs.linkCost)} each instead of ${money(xs.plainCost)})`)),
+        fl.games.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Game", "Store", "Ends", "Visits", ""].map(c => h("th", { text: c })))),
+          h("tbody", {}, fl.games.map(g => {
+            const go = h("button", { class: "btn gray small", type: "button", text: "Post to X", disabled: !xs.configured }); go.addEventListener("click", () => postFree(g, go));
+            const ed = h("button", { class: "btn gray small", type: "button", text: "Edit first" });
+            ed.addEventListener("click", () => { draft.text = g.text; draft.bundleId = null; draft.image = null; draft.imageName = ""; pic.value = ""; text.value = g.text; refresh(); text.scrollIntoView({ behavior: "smooth", block: "center" }); });
+            return h("tr", {}, h("td", {}, h("b", { text: g.title })), h("td", { text: g.shop }), h("td", { text: g.expiry ? when(g.expiry) : "–" }), h("td", { text: g.visits ? `${g.visits} (${g.clicks} went on)` : "–" }),
+              h("td", {}, g.posted ? h("span", { class: "muted small", text: "Already posted " }) : null, go, " ", ed));
+          }))) : h("p", { class: "muted", text: "No free games right now." }));
+
       // ----- schedule -----
       const queue = h("div", { class: "panel" }, h("h3", { text: "Scheduled" }),
         xs.queue.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Post", ""].map(c => h("th", { text: c })))),
@@ -4281,7 +4302,7 @@
             return h("tr", {}, h("td", { text: when(x.at) }), h("td", { text: (kinds[x.kind] || x.kind) + (x.media ? " + picture" : "") }), h("td", { text: x.text.length > 110 ? x.text.slice(0, 110) + "…" : x.text }),
               h("td", {}, x.id && h("a", { href: "https://x.com/i/status/" + x.id, target: "_blank", rel: "noopener", text: "View" }), " ", x.id && del));
           })))) : h("p", { class: "muted", text: "Nothing posted yet." }));
-      body.replaceChildren(status, composer, bundles, queue, hist);
+      body.replaceChildren(status, composer, freeGames, bundles, queue, hist);
     };
     try { await draw(); } catch (e) { fail(e); }
   }

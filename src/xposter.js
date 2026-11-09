@@ -2,6 +2,7 @@
 // (about 1.5 cents for plain text, and about 20 cents once a post has a link in it), so this only ever posts plain text,
 // at most a few a day, and does nothing until the owner switches it on and has added the four keys.
 import { dealUrl } from "./deallinks.js";
+import { freeArt } from "./render.js";
 import { createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -94,7 +95,7 @@ export function freeGameText(g, now = Date.now(), tags = DEFAULT_TAGS, { link = 
     const left = g.expiry && g.expiry > now ? g.expiry - now : null;
     const when = left === null ? "" : left < 36 * 3_600_000 ? `\n⏳ Ends ${left < 3_600_000 ? "within the hour" : `in about ${Math.round(left / 3_600_000)} hours`}.` : `\n⏳ Ends ${new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }).format(new Date(g.expiry))}.`;
     let title = String(g.title).slice(0, 110);
-    const make = () => `🎁 Free right now: ${title}${shop}${when}\n\nKeep it forever once you claim it. Our Discord bot posts every free game as it drops.\n\n${link && g.url ? `Claim it: ${g.url}` : "Link in bio."}\n${hashtagsFor(g.shop, g.title, tags)}`;
+    const make = () => `🎁 Free right now: ${title}${shop}${when}\n\nKeep it forever once you claim it. Our Discord bot posts every free game as it drops.\n\n${link && g.url ? `Claim it: ${g.url}` : "Link in bio."}\n\n${hashtagsFor(g.shop, g.title, tags)}`;
     let text = make();
     while (xLength(text) > 280 && title.length > 20) { title = title.slice(0, -10).trimEnd() + "…"; text = make(); }
     return text;
@@ -176,7 +177,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         return t;
     }
     /** A post the owner wrote. Not held to the daily limit of the automatic ones, but to a sane one of its own. */
-    async function manual({ text, image = null, imageUrl = null, kind = "manual", bundleId = null }) {
+    async function manual({ text, image = null, imageUrl = null, kind = "manual", bundleId = null, freeId = null }) {
         const t = checkText(text);
         const key = MANUAL + dayOf(now()), used = Number(db.getMeta(key)) || 0;
         if (used >= MAX_MANUAL_PER_DAY) throw Object.assign(new Error(`That's ${MAX_MANUAL_PER_DAY} manual posts today. Try again tomorrow.`), { user: true });
@@ -184,7 +185,8 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         const mediaIds = pic ? [await uploadImage(pic)] : []; // if the picture fails, the post doesn't go out without it
         const r = await post(t, mediaIds);
         db.setMeta(key, String(used + 1));
-        record({ id: r.id, text: t, at: now(), kind: bundleId ? "bundle" : kind, media: mediaIds.length > 0 });
+        record({ id: r.id, text: t, at: now(), kind: bundleId ? "bundle" : freeId ? "auto" : kind, media: mediaIds.length > 0 });
+        if (freeId) db.setMeta(SEEN + freeId, String(now())); // so the automatic posts never repeat a game you posted by hand
         if (bundleId) db.setMeta(BUNDLEDONE + bundleId, String(now()));
         return { id: r.id, cost: hasLink(t) ? COST_LINK_POST : COST_PER_POST };
     }
@@ -246,10 +248,10 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         db.setMeta(SEEN + g.id, String(now())); // marked first, so a failure can't turn into a loop of retries that each cost money
         try {
             // the link goes through our own page on the site, which counts the visit and then sends people on to the store
-            const linked = linksOn() ? { ...g, url: dealUrl({ key: `free:${g.id ?? g.url}`, kind: "free", title: g.title, shop: g.shop, url: g.url, image: g.art, expiry: g.expiry }) } : g;
+            const linked = linksOn() ? { ...g, url: dealUrl({ key: `free:${g.id ?? g.url}`, kind: "free", title: g.title, shop: g.shop, url: g.url, image: freeArt(g), expiry: g.expiry }) } : g;
             const text = freeGameText(linked, now(), tags(), { link: linksOn() });
             let mediaIds = [];
-            try { const pic = hasCardLink(text) ? null : await pictureFor(g.art); if (pic) mediaIds = [await uploadImage(pic)]; db.setMeta(IMGERR, ""); }
+            try { const pic = hasCardLink(text) ? null : await pictureFor(freeArt(g)); if (pic) mediaIds = [await uploadImage(pic)]; db.setMeta(IMGERR, ""); }
             catch (err) { db.setMeta(IMGERR, JSON.stringify({ at: now(), message: err.message })); log(`posting without a picture: ${err.message}`); } // better a post without a picture than no post
             const r = await post(text, mediaIds);
             db.setMeta(LAST, String(now())); db.setMeta(DAYKEY + dayOf(now()), String(postedToday() + 1)); db.setMeta(ERR, "");
@@ -276,6 +278,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         if (n !== undefined) { const v = Math.round(Number(n)); if (!(v >= 1 && v <= MAX_DAILY)) throw Object.assign(new Error(`Posts per day must be between 1 and ${MAX_DAILY}.`), { user: true }); db.setMeta(CAP, String(v)); }
         return status();
     }
+    const freePosted = id => Boolean(db.getMeta(SEEN + id));
     const bundlePosted = id => Boolean(db.getMeta(BUNDLEDONE + id));
-    return { bundlePosted, tags, configured, post, check, tick, status, setSettings, manual, schedule, unschedule, flush, remove, uploadImage };
+    return { freePosted, bundlePosted, tags, configured, post, check, tick, status, setSettings, manual, schedule, unschedule, flush, remove, uploadImage };
 }
