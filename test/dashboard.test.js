@@ -2886,3 +2886,46 @@ test("overlay studio: build a goal bar, the OBS page reads it by link only, and 
         assert.match((await fetch(o.base + "/ov")).headers.get("content-security-policy"), /frame-ancestors 'self'/);
     } finally { await o.close(); }
 });
+
+test("supporter passes: Square's signed callback grants one, a forged one doesn't, and the checkout and admin pages work", async () => {
+    const { createHmac } = await import("node:crypto");
+    const { createSquare } = await import("../src/square.js");
+    const { createSupporters, isSupporter } = await import("../src/supporters.js");
+    const HOOK = "https://svc.example/api/square/webhook", KEY = "k-123456";
+    const sign = b => createHmac("sha256", KEY).update(HOOK + b).digest("base64");
+    const fake = async url => /payment-links/.test(url)
+        ? { ok: true, status: 200, json: async () => ({ payment_link: { url: "https://square.link/u/xyz" } }) }
+        : { ok: true, status: 200, json: async () => ({ order: { id: "O9", location_id: "L1", reference_id: "svc:123456789:m1" } }) };
+    const square = createSquare({ accessToken: "t", locationId: "L1", signatureKey: KEY, webhookUrl: HOOK, fetch: fake });
+    const login = async () => ({ user: { id: "555555555", username: "jacob", global_name: "Jacob", avatar: null }, guilds: [] });
+    const o = await signedIn({ config: { ownerId: "555555555" }, restExtra: { login }, extra: db => ({ square, supporters: createSupporters({ db }) }) });
+    try {
+        const hook = (body, sig) => fetch(o.base + "/api/square/webhook", { method: "POST", headers: { "Content-Type": "application/json", "x-square-hmacsha256-signature": sig ?? sign(body) }, body });
+        const evt = JSON.stringify({ type: "payment.updated", data: { object: { payment: { id: "PAY1", status: "COMPLETED", order_id: "O9", amount_money: { amount: 300, currency: "USD" } } } } });
+        assert.equal((await hook(evt, "forged")).status, 403);
+        assert.equal(isSupporter(o.db, "123456789"), false);
+        assert.equal((await hook(evt)).status, 200);
+        assert.equal(isSupporter(o.db, "123456789"), true);
+        const until = o.db.getMeta("supporter:123456789");
+        assert.equal((await hook(evt)).status, 200);
+        assert.equal(o.db.getMeta("supporter:123456789"), until, "the same payment twice adds nothing");
+        assert.equal((await hook("not json")).status, 400);
+
+        const me = (await o.request("/api/supporter")).data;
+        assert.equal(me.enabled, true); assert.equal(me.plans.length, 3); assert.equal(me.until, null, "this signed-in member has no pass");
+        assert.equal((await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "m1" } })).data.url, "https://square.link/u/xyz");
+        assert.equal((await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "bogus" } })).status, 400);
+        assert.equal((await o.request("/api/supporter/checkout", { method: "POST", body: { plan: "m1" }, headers: { Origin: "https://evil.example" } })).status, 403);
+
+        assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "x", days: 5 } })).status, 400);
+        assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "222222222", days: 5 } })).status, 200);
+        const adm = (await o.request("/api/admin/supporters")).data;
+        assert.deepEqual(adm.active.map(a => a.id).sort(), ["123456789", "222222222"]);
+        assert.ok(adm.recent.length >= 2);
+    } finally { await o.close(); }
+    const off = await signedIn();
+    try {
+        assert.equal((await fetch(off.base + "/api/square/webhook", { method: "POST", body: "{}" })).status, 404, "nothing to call when Square isn't set up");
+        assert.equal((await off.request("/api/supporter")).data.enabled, false);
+    } finally { await off.close(); }
+});

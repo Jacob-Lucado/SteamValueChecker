@@ -808,6 +808,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link", "stream_card", "stream_overlays"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             run("DELETE FROM status_meta WHERE key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\'", `topgg:votes:${discordId}`, `topgg:seen:${discordId}:%`, `voterrole:${discordId}`);
+            run("DELETE FROM status_meta WHERE key = ?", `supporter:${discordId}`);
             run("DELETE FROM twitch_link WHERE discord_id = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");

@@ -3,6 +3,7 @@
 import { welcomeDmPayload, messageXp, XP_COOLDOWN_MS, VOICE_XP, rolesForLevel, welcomePayload, findUsedInvite, levelFromXp, xpForNext, bar } from "./community.js";
 
 import { isHidden } from "./hidden.js";
+import { xpBoost } from "./supporters.js";
 
 export const BETA_ROLE = "Beta Tester", BETA_COLOR = 0x2ecc71;
 const avatarOf = u => (u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null);
@@ -25,7 +26,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         if (now() - (last.get(key) ?? 0) < XP_COOLDOWN_MS) return null;
         last.set(key, now());
         if (last.size > 50_000) for (const k of [...last.keys()].slice(0, 10_000)) last.delete(k);
-        const r = db.addXp(guildId, userId, messageXp(c.xp_mult, rng), { message: true });
+        const r = db.addXp(guildId, userId, Math.round(messageXp(c.xp_mult, rng) * xpBoost(db, userId, now())), { message: true });
         if (r.after > r.before) { await syncLevelRoles(guildId, userId, r.after); bump(guildId, "level_ups"); return { leveled: true, level: r.after, xp: r.xp }; }
         return { leveled: false, level: r.after, xp: r.xp };
     }
@@ -35,7 +36,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         const c = db.getCommunity(guildId);
         if (!c.xp_on) return;
         for (const id of userIds) {
-            const r = db.addXp(guildId, id, Math.round(VOICE_XP * c.xp_mult), { voiceMinutes: 1 });
+            const r = db.addXp(guildId, id, Math.round(VOICE_XP * c.xp_mult * xpBoost(db, id, now())), { voiceMinutes: 1 });
             if (r.after > r.before) await syncLevelRoles(guildId, id, r.after);
         }
     }

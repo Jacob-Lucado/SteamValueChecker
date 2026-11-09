@@ -10,7 +10,7 @@ import http from "node:http";
 import { gameNight } from "../gamenight.js";
 import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { indexNowKey } from "../indexnow.js";
 import { SEO_PAGES, seoSlugs, seoIsLive, renderSeoPage } from "../seopages.js";
 import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
@@ -45,6 +45,8 @@ import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
 import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS } from "../overlays.js";
+import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
+import { supporterUntil } from "../supporters.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -224,7 +226,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -450,6 +452,23 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         return { slug: u?.profile_slug ?? null, name: data.name || u?.profile_slug || "Someone", avatar: data.avatar && link?.avatar ? link.avatar : null };
     };
     /** Every server the bot is in that has not opted out, as the community directory lists them. */
+    // Square calls this when a payment finishes. It isn't a browser, so it skips the dashboard's request checks and proves itself with a signature instead.
+    async function squareWebhook(req, res) {
+        if (!square?.enabled || !supporters) return json(res, 404, { error: "Not found." });
+        const raw = await new Promise((resolve, reject) => {
+            const chunks = []; let size = 0;
+            req.on("data", c => { size += c.length; if (size > 200_000) { reject(new HttpError(413, "Too large.")); req.destroy(); } else chunks.push(c); });
+            req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8"))); req.on("error", reject);
+        });
+        if (!square.verify(raw, req.headers["x-square-hmacsha256-signature"])) return json(res, 403, { error: "Bad signature." });
+        let event; try { event = JSON.parse(raw); } catch { return json(res, 400, { error: "Bad request." }); }
+        try {
+            const paid = await square.paidPass(event);
+            if (paid) await supporters.grant(paid.userId, paid.plan.days, paid.paymentId, "Square");
+        } catch (err) { log(`[square] ${err.message}`); return json(res, 500, { error: "Try again." }); } // Square tries again later
+        return json(res, 200, { ok: true });
+    }
+    const checkoutLimit = createLimiter({ windowMs: 60_000, max: 6, now });
     const directory = () => (guildList ? guildList() : []).filter(g => !isHidden(g.id) && db.guildSocial(g.id).listed).map(g => ({ id: g.id, name: g.name, members: g.members ?? null }));
     /** "all" or one listed server id. Returns the guild ids to filter by. */
     const serverFilter = (_sess, which) => {
@@ -1129,6 +1148,31 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (body.clear) { if (!mod) throw new HttpError(403, "Only DJs, moderators and managers can clear the chat."); chat.clear(g.id); return { ok: true }; }
             if (!chat.remove(g.id, body.id, { by: s.userId, mod })) throw new HttpError(403, "You can only remove your own messages.");
             return { ok: true };
+        },
+        // ----- supporter passes -----
+        "GET /api/supporter": async (req) => {
+            const s = session(req), until = supporterUntil(db, s.userId);
+            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST };
+        },
+        "POST /api/supporter/checkout": async (req, body) => {
+            const s = session(req);
+            if (!square?.enabled) throw new HttpError(404, "Supporter passes aren't switched on yet.");
+            if (!checkoutLimit.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            try { return { url: await square.checkout({ userId: s.userId, planId: String(body.plan ?? ""), redirectUrl: `${origin}/#/tip?thanks=1` }) }; }
+            catch (e) { log(`[square] ${e.message}`); throw new HttpError(400, /Pick one|Sign in|switched on/.test(e.message) ? e.message : "Couldn't open the checkout page. Try again in a minute."); }
+        },
+        "GET /api/admin/supporters": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], recent: supporters ? supporters.recent() : [], plans: PLANS };
+        },
+        "POST /api/admin/supporters/grant": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            const id = String(body.user_id ?? "").trim();
+            if (!/^\d{5,25}$/.test(id)) throw new HttpError(400, "Paste the person's Discord ID (digits only).");
+            const days = Number(body.days);
+            if (!supporters || !Number.isFinite(days) || days < 1 || days > 3660) throw new HttpError(400, "Pick between 1 and 3660 days.");
+            const r = await supporters.grant(id, days, "manual:" + randomUUID(), "Owner");
+            return { until: r.until };
         },
         // ----- overlay studio: goal bars, server stats and timers, each with its own link and look -----
         "GET /api/overlays": async (req) => {
@@ -4262,6 +4306,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (key === "POST /api/admin/login") { checkWrite(req); return json(res, 200, adminPasswordLogin(req, res, await readJson(req, 5_000))); }
             if (key === "GET /api/music/viz") return vizStream(req, res, url);
             if (key === "GET /api/overlay/stream") return overlayStream(req, res, url);
+            if (key === "POST /api/square/webhook") return await squareWebhook(req, res);
             if (key === "GET /api/streamcard/text") return await streamCardText(req, res, url);
             const handler = routes[key];
             // Dashboard pages have clean addresses (/wishlist, /servers/123). Opening one directly, or reloading it, gets the app.

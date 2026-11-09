@@ -1309,7 +1309,7 @@
       banner.style.backgroundImage = hero !== p.banner.art ? `url("${hero}"), url("${p.banner.art}")` : `url("${p.banner.art}")`; }
     const avatar = httpsOnly(p.avatar) ? h("img", { class: "pf-avatar", src: p.avatar, alt: "" }) : h("div", { class: "pf-avatar init", text: (p.name || "?").slice(0, 1).toUpperCase() });
     const head = h("div", { class: "pf-head" }, avatar,
-      h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug })),
+      h("div", { class: "pf-who" }, h("h1", { text: p.name }), h("div", { class: "muted small", text: "@" + p.slug }), p.supporter ? h("span", { class: "pf-badge", title: "Supports Steam Value Checker", text: "★ Supporter" }) : null),
       h("div", { class: "pf-actions" }, p.owner && !preview ? h("a", { class: "btn gray small", href: "#/profile", text: "Edit profile" }) : null, !p.owner && !preview ? pfReport(p.slug) : null));
     root.append(banner, head);
     if (social && !preview) root.append(pfSocial(p, social));
@@ -3902,7 +3902,7 @@
   const ADMIN_NAV = [
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
     ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."]]],
-    ["People", [["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
+    ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
     ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
@@ -4084,6 +4084,7 @@
     if (page === "system") return void adminSystem(body, fail);
     if (page === "votes") return void adminVotes(body, fail);
     if (page === "datareq") return void adminDataReq(body, fail);
+    if (page === "supporters") return void adminSupporters(body, fail);
     if (page === "audit") return void adminAudit(body);
     if (page === "account") return void adminAccount(body, fail);
     adminContext().then(ctx => {
@@ -4184,6 +4185,24 @@
             v.top.length ? h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Discord ID" }), h("th", { text: "Votes" })])), h("tbody", {}, v.top.map(t => h("tr", {}, h("td", { text: t.id }), h("td", { text: String(t.votes) }))))) : h("p", { class: "muted", text: "No votes yet." })),
           h("div", { class: "panel" }, h("h3", { text: "Latest votes" }),
             v.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Voter", "XP"].map(c => h("th", { text: c })))), h("tbody", {}, v.recent.map(r => h("tr", {}, h("td", { text: ago(r.at) }), h("td", { text: r.id }), h("td", { text: `${r.xp}${r.servers ? " × " + r.servers + (r.servers === 1 ? " server" : " servers") : " (no XP yet)"}` }))))) : h("p", { class: "muted", text: "Nothing yet." }))));
+    } catch (e) { fail(e); }
+  }
+
+  async function adminSupporters(body, fail) {
+    try {
+      const r = await api("/api/admin/supporters");
+      const when = ms => new Date(ms).toLocaleDateString();
+      const id = h("input", { type: "text", placeholder: "Discord ID", inputmode: "numeric" }), days = h("input", { type: "number", min: "1", max: "3660", value: "30", class: "ovs-cur" });
+      body.replaceChildren(
+        r.enabled ? null : h("div", { class: "notice warn", text: "Square isn't connected, so members can't buy a pass. Add SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID and SQUARE_WEBHOOK_SIGNATURE_KEY as secrets on Fly and restart. You can still hand passes out below." }),
+        h("div", { class: "panel" }, h("h3", { text: "Give someone a pass" }),
+          h("div", { class: "row" }, id, days, h("span", { class: "muted small", text: "days" }),
+            h("button", { class: "btn blue", type: "button", text: "Give pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/grant", { user_id: id.value, days: Number(days.value) }); toast("Pass runs until " + when(x.until) + ".", "ok"); adminSupporters(body, fail); }) }))),
+        h("div", { class: "grid two" },
+          h("div", { class: "panel" }, h("h3", { text: "Active passes" }),
+            r.active.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Discord ID", "Until"].map(c => h("th", { text: c })))), h("tbody", {}, r.active.map(a => h("tr", {}, h("td", { text: a.id }), h("td", { text: when(a.until) }))))) : h("div", { class: "empty", text: "No active passes." })),
+          h("div", { class: "panel" }, h("h3", { text: "Latest" }),
+            r.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Who", "Days", "Via"].map(c => h("th", { text: c })))), h("tbody", {}, r.recent.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString() }), h("td", { text: e.id }), h("td", { text: String(e.days) }), h("td", { text: e.via }))))) : h("div", { class: "empty", text: "Nothing yet." }))));
     } catch (e) { fail(e); }
   }
 
@@ -4761,13 +4780,26 @@
       h("div", { class: "panel" },
         h("p", { text: "I make Steam Value Checker and FanaticalGrabber on my own and pay for the hosting out of pocket. Tips go toward the server bill and the time I spend fixing things. Nothing is locked behind them, and nobody gets treated differently for giving." }),
         tip ? h("p", {}, ext("https://www.paypal.com/paypalme/Lucadosus", "Chip in on PayPal", "btn blue")) : null,
+        h("div", { id: "supporter-box" }),
         h("h3", { text: "Other ways to help" }),
         h("ul", {},
           h("li", { text: "Add Steam Value Checker to a server and tell friends who buy too many bundles." }),
           h("li", { text: "Vote for the bot on Top.gg. Voting is free, and it earns you bonus XP in your servers." }),
           h("li", {}, "Send me a bug or an idea on ", ext("https://x.com/twit_user69", "X"), ". I read all of them.")),
         h("h3", { text: "Good to know" }),
-        h("p", { class: "muted", text: "The button opens PayPal, which handles the payment. This dashboard doesn't take payments or see any payment details. A tip is a gift, not a purchase, and it doesn't buy a feature or a promise of support." })));
+        h("p", { class: "muted", text: "The PayPal button opens PayPal, which handles the payment. This dashboard never sees any payment details. A tip is a gift, not a purchase, and it doesn't buy a feature or a promise of support." })));
+    if (!state.me) return;
+    try {
+      const s = await api("/api/supporter"), box = document.getElementById("supporter-box");
+      if (!box || (!s.enabled && !s.until)) return;
+      const fmt = ms => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+      box.replaceChildren(h("h3", { text: "Supporter pass" }),
+        routeText().includes("thanks=1") ? h("div", { class: "notice ok", text: "Thank you! Your pass shows up within a minute or two, and the bot will DM you when it does." }) : null,
+        s.until ? h("p", {}, h("strong", { text: "You're a supporter until " + fmt(s.until) + "." }), " Buying another pass adds to the time you have left.") : null,
+        h("p", { class: "muted", text: `A pass gives you a Supporter role in the Steam Value Checker server, a badge on your profile and ${Math.round((s.boost - 1) * 100)}% more XP. Everything else stays free for everyone.` }),
+        s.enabled ? h("div", { class: "row" }, ...s.plans.map(p => h("button", { class: "btn blue", type: "button", text: `${p.name} · $${(p.cents / 100).toFixed(p.cents % 100 ? 2 : 0)}`, onclick: e => busy(e.currentTarget, async () => { const r = await api("/api/supporter/checkout", { plan: p.id }); location.href = r.url; }) }))) : null,
+        s.enabled ? h("p", { class: "muted small", text: "Checkout is handled by Square. The bot never sees your card." }) : null);
+    } catch { /* the pass is optional, so the rest of the page stands on its own */ }
   }
 
   // Goal bars, server stats and timers for OBS, each with its own link and look, and a live preview that follows every change.

@@ -20,6 +20,8 @@ import { createVoterRole } from "./voterrole.js";
 import { createOffsite, offsiteConfig } from "./offsite.js";
 import { runWatchdog } from "./watchdog.js";
 import { runBootNotice } from "./bootnotice.js";
+import { createSquare, squareConfig } from "./square.js";
+import { createSupporters } from "./supporters.js";
 import { groupErrors } from "./adminlog.js";
 import { runOwnerSummary, runReleaseNotes } from "./ownersummary.js";
 import { CHANGELOG, LATEST } from "./changelog.js";
@@ -534,6 +536,9 @@ client.once(Events.ClientReady, () => { // a minute after start, tell the owner 
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
 voterRole = createVoterRole({ db, client, mainGuild, log: t => console.log(`[voter role] ${t}`) });
 setInterval(() => voterRole.sweep().catch(() => {}), 5 * 60_000).unref?.();
+const supporters = createSupporters({ db, client, mainGuild, dm: (id, p) => discord.sendDm(id, p), log: t => console.log(`[supporters] ${t}`) });
+setInterval(() => supporters.sweep().catch(() => {}), 15 * 60_000).unref?.();
+const square = createSquare({ ...squareConfig(), publicUrl: publicBase ?? "" });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
 const guideThrottle = createGuideThrottle();
 /** A how-to question gets a step by step guide from the bot itself. Returns true when it answered. */
@@ -627,6 +632,7 @@ client.on(Events.MessageCreate, async m => {
 });
 client.on(Events.GuildMemberAdd, async member => {
     if (member.id === cfg.ownerId) ensureCreatorRole(member.guild, cfg.ownerId, console.warn);
+    if (member.guild.id === mainGuild.detect?.()) supporters.onJoin(member.id);
     try { await community.onJoin({ guildId: member.guild.id, guildName: member.guild.name, count: humanCount(member.guild), member: { id: member.id, username: member.user.username, avatar: member.user.avatar, bot: member.user.bot } }); }
     catch (err) { console.error(`[welcome] ${err.name}: ${err.message}`); }
 });
@@ -1005,7 +1011,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ offsite, commandWatch, health: () => client.isReady(), leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;
