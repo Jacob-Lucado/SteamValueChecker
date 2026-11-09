@@ -15,6 +15,18 @@ export const FOUNDERS_MAX = 50;
 const REMIND_BEFORE_MS = 3 * DAY;
 const parse = v => { try { const o = JSON.parse(v); return o && typeof o === "object" ? o : null; } catch { return null; } };
 
+/** The last minute of a calendar day (YYYY-MM-DD) in Eastern time, as a timestamp. Null for anything that isn't a real date. */
+export function endOfDayEastern(str) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(str ?? "")); if (!m) return null;
+    const [y, mo, d] = [+m[1], +m[2], +m[3]];
+    for (const off of [4, 5]) { // EDT, then EST
+        const t = Date.UTC(y, mo - 1, d, 23, 59) + off * 3600_000;
+        const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(t)).map(x => [x.type, x.value]));
+        if (+p.year === y && +p.month === mo && +p.day === d && +p.hour === 23 && +p.minute === 59) return t;
+    }
+    return null;
+}
+
 export const supporterUntil = (db, userId) => Number(db.getMeta(UNTIL + userId)) || 0;
 export const isSupporter = (db, userId, now = Date.now()) => supporterUntil(db, userId) > now;
 /** The first 50 people to have a paid pass are founding supporters for good, even after their pass ends. */
@@ -106,6 +118,26 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return n;
     }
 
+    /** Everyone the owner might want to touch: live passes, founders whose pass ended, and anyone on the wall. */
+    function everyone() {
+        const ids = new Set([...db.listMetaPrefix(UNTIL), ...db.listMetaPrefix(FOUNDER), ...db.listMetaPrefix(WALL)].map(r => r.key.split(":")[1]));
+        return [...ids].filter(Boolean).map(id => ({ id, until: supporterUntil(db, id), active: isSupporter(db, id, now()), founder: isFounder(db, id), wall: wallName(db, id) ?? "" }))
+            .filter(r => r.until || r.founder || r.wall).sort((a, b) => Number(b.active) - Number(a.active) || b.until - a.until);
+    }
+
+    /** Owner edits. Setting a time in the past (or nothing) ends the pass and takes the role back. Returns where the pass stands. */
+    async function setUntil(userId, ms, why = "Owner edit") {
+        const until = Number(ms) > now() ? Math.round(Number(ms)) : 0;
+        db.setMeta(UNTIL + userId, until ? String(until) : "");
+        pushEvent(db, "adminlog:supporters", { id: userId, days: until ? Math.round((until - now()) / DAY) : 0, via: until ? why : "Ended by owner", at: now() }, 100);
+        const role = await syncRole(userId, Boolean(until));
+        if (role !== "ok") log(`Supporter role for ${userId} not synced: ${role}`);
+        return { until: until || null, role };
+    }
+    const addDays = (userId, days, why) => setUntil(userId, Math.max(now(), supporterUntil(db, userId)) + Math.round(Number(days) || 0) * DAY, why);
+    const remove = userId => setUntil(userId, 0);
+    function setFounder(userId, on) { db.setMeta(FOUNDER + userId, on ? String(now()) : ""); return Boolean(on); }
+
     /** Where the role stands right now: which server it goes in, and whether the bot is able to hand it out. */
     async function homeStatus() {
         const id = mainGuild?.detect?.() ?? null;
@@ -165,5 +197,5 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return out;
     }
 
-    return { grant, refund, sweep, remind, onJoin, homeStatus, resync, list, setWall, wall, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
+    return { grant, refund, sweep, remind, onJoin, homeStatus, resync, everyone, setUntil, addDays, remove, setFounder, list, setWall, wall, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
 }

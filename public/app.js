@@ -4212,9 +4212,27 @@
         h("div", { class: "panel" }, h("h3", { text: "Give someone a pass" }),
           h("div", { class: "row" }, id, days, h("span", { class: "muted small", text: "days" }),
             h("button", { class: "btn blue", type: "button", text: "Give pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/grant", { user_id: id.value, days: Number(days.value) }); toast("Pass runs until " + when(x.until) + "." + (x.role && x.role !== "ok" ? " Role not given: " + (WHY[x.role] || x.role) : ""), x.role && x.role !== "ok" ? "warn" : "ok"); adminSupporters(body, fail); }) }))),
+        h("div", { class: "panel" }, h("h3", { text: "Supporters" }),
+          h("div", { class: "row" }, h("button", { class: "btn gray small", type: "button", text: "Re-send roles", title: "Give the Supporter role to everyone with a live pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/resync", {}); const bad = Object.entries(x.problems); toast(bad.length ? `${x.ok} done. Not given: ` + bad.map(([k, n]) => `${n} (${(WHY[k] || k).split(".")[0]})`).join("; ") : `Role sent to ${x.ok}.`, bad.length ? "warn" : "ok"); }) }),
+            h("span", { class: "muted small", text: "Dates are Eastern time and end at 11:59 pm. Everything here is saved to the audit log." })),
+          r.everyone.length ? h("div", { class: "scroll-x" }, h("table", { class: "sup-table" }, h("thead", {}, h("tr", {}, ["Discord ID", "Status", "Pass ends", "Add or remove days", "Founder", "Wall name", ""].map(c => h("th", { text: c })))),
+            h("tbody", {}, r.everyone.map(a => {
+              const call = (body, msg) => api("/api/admin/supporters/edit", { id: a.id, ...body }).then(x => { toast(msg + (x && x.role && x.role !== "ok" ? " Role not changed: " + (WHY[x.role] || x.role).split(".")[0] + "." : ""), x && x.role && x.role !== "ok" ? "warn" : "ok"); adminSupporters(body_, fail); }).catch(err => toast(err.message, "error"));
+              const body_ = body;
+              const date = h("input", { type: "date", value: a.until ? new Date(a.until).toLocaleDateString("en-CA", { timeZone: "America/New_York" }) : "", "aria-label": "Pass ends" });
+              const days = h("input", { type: "number", value: "30", class: "ovs-cur", "aria-label": "Days to add" });
+              const founder = h("input", { type: "checkbox", checked: a.founder, "aria-label": "Founding supporter" });
+              const wall = h("input", { type: "text", maxlength: "24", value: a.wall, placeholder: "not shown", "aria-label": "Wall name" });
+              return h("tr", {}, h("td", { text: a.id }), h("td", {}, h("span", { class: "pf-badge" + (a.active ? "" : " off"), text: a.active ? "Active" : "Ended" })),
+                h("td", {}, h("div", { class: "row" }, date, h("button", { class: "btn gray small", type: "button", text: "Set", onclick: e => busy(e.currentTarget, () => call({ action: "set_until", date: date.value }, "Pass end date saved.")) }))),
+                h("td", {}, h("div", { class: "row" }, days, h("button", { class: "btn gray small", type: "button", text: "Apply", onclick: e => busy(e.currentTarget, () => call({ action: "add_days", days: Number(days.value) }, "Days changed.")) }))),
+                h("td", {}, (() => { founder.addEventListener("change", () => call({ action: "founder", on: founder.checked }, founder.checked ? "Marked as a founder." : "Founder mark removed.")); return founder; })()),
+                h("td", {}, h("div", { class: "row" }, wall, h("button", { class: "btn gray small", type: "button", text: "Save", onclick: e => busy(e.currentTarget, () => call({ action: "wall", name: wall.value }, wall.value.trim() ? "Wall name saved." : "Taken off the wall.")) }))),
+                h("td", {}, h("div", { class: "row" },
+                  h("button", { class: "btn gray small", type: "button", text: "Re-send role", onclick: e => busy(e.currentTarget, () => call({ action: "resync" }, "Role re-sent.")) }),
+                  a.active ? h("button", { class: "btn red small", type: "button", text: "End pass", onclick: e => busy(e.currentTarget, async () => { if (!confirm("End this pass now and take the Supporter role back?")) return; await call({ action: "remove" }, "Pass ended."); }) }) : null)));
+            })))) : h("div", { class: "empty", text: "No supporters yet." })),
         h("div", { class: "grid two" },
-          h("div", { class: "panel" }, h("h3", { text: "Active passes" }), h("button", { class: "btn gray small", type: "button", text: "Re-send roles", title: "Give the Supporter role to everyone with a live pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/resync", {}); const bad = Object.entries(x.problems); toast(bad.length ? `${x.ok} done. Not given: ` + bad.map(([k, n]) => `${n} (${(WHY[k] || k).split(".")[0]})`).join("; ") : `Role sent to ${x.ok}.`, bad.length ? "warn" : "ok"); }) }),
-            r.active.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Discord ID", "Until"].map(c => h("th", { text: c })))), h("tbody", {}, r.active.map(a => h("tr", {}, h("td", { text: a.id }), h("td", { text: when(a.until) }))))) : h("div", { class: "empty", text: "No active passes." })),
           h("div", { class: "panel" }, h("h3", { text: "Latest" }),
             r.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Who", "Days", "Via"].map(c => h("th", { text: c })))), h("tbody", {}, r.recent.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString("en-US", { timeZone: "America/New_York" }) }), h("td", { text: e.id }), h("td", { text: String(e.days) }), h("td", { text: e.via }))))) : h("div", { class: "empty", text: "Nothing yet." }))));
     } catch (e) { fail(e); }

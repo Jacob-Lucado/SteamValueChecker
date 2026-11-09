@@ -2892,7 +2892,7 @@ test("overlay studio: build a goal bar, the OBS page reads it by link only, and 
 test("supporter passes: Square's signed callback grants one, a forged one doesn't, and the checkout and admin pages work", async () => {
     const { createHmac } = await import("node:crypto");
     const { createSquare } = await import("../src/square.js");
-    const { createSupporters, isSupporter } = await import("../src/supporters.js");
+    const { createSupporters, isSupporter, supporterUntil } = await import("../src/supporters.js");
     const HOOK = "https://svc.example/api/square/webhook", KEY = "k-123456";
     const sign = b => createHmac("sha256", KEY).update(HOOK + b).digest("base64");
     const fake = async url => /payment-links/.test(url)
@@ -2936,8 +2936,26 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         assert.equal((await o.request("/api/profile/page")).data.choices.themes.find(x => x.key === "galaxy").locked, true);
         assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "555555555", days: 5 } })).status, 200);
         assert.equal((await theme("galaxy")).status, 200);
+        const ed = body => o.request("/api/admin/supporters/edit", { method: "POST", body: { id: "222222222", ...body } });
+        const before = supporterUntil(o.db, "222222222");
+        assert.ok((await ed({ action: "add_days", days: 10 })).data.until - before >= 10 * 86_400_000 - 1000, "days can be added");
+        const cut = (await ed({ action: "add_days", days: -10 })).data.until;
+        assert.ok(Math.abs(cut - before) < 2000, "and taken away");
+        assert.equal((await ed({ action: "add_days", days: 0 })).status, 400);
+        const future = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
+        const setRes = await ed({ action: "set_until", date: future }); const set = setRes.data.until;
+        assert.ok(set > before + 40 * 86_400_000, "an exact end date can be set");
+        assert.equal((await ed({ action: "set_until", date: "nope" })).status, 400);
+        assert.equal((await ed({ action: "founder", on: true })).data.founder, true);
+        assert.equal((await ed({ action: "wall", name: "Pat" })).data.wall, "Pat");
+        const row = (await o.request("/api/admin/supporters")).data.everyone.find(r => r.id === "222222222");
+        assert.deepEqual({ founder: row.founder, wall: row.wall, active: row.active }, { founder: true, wall: "Pat", active: true });
+        await ed({ action: "remove" });
+        assert.equal(isSupporter(o.db, "222222222"), false, "ending a pass takes it away");
+        assert.equal((await o.request("/api/admin/supporters")).data.everyone.find(r => r.id === "222222222").active, false, "but they stay listed for editing");
+        assert.equal((await o.request("/api/admin/supporters/edit", { method: "POST", body: { id: "x", action: "remove" } })).status, 400);
         assert.equal((await o.request("/api/supporter/wall", { method: "POST", body: { name: "Sam" } })).data.wall, "Sam");
-        assert.deepEqual((await o.request("/api/public/supporters")).data.wall.map(w => w.name), ["Sam"]);
+        assert.deepEqual((await o.request("/api/public/supporters")).data.wall.map(w => w.name), ["Pat", "Sam"], "founders first, even after their pass ended");
         const refund = JSON.stringify({ type: "refund.updated", data: { object: { refund: { id: "R1", payment_id: "PAY1", status: "COMPLETED", amount_money: { amount: 300 } } } } });
         assert.equal((await hook(refund)).status, 200);
         assert.equal(isSupporter(o.db, "123456789"), false, "a full refund ends the pass");

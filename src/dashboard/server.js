@@ -46,7 +46,7 @@ import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
 import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
-import { supporterUntil, isSupporter, isFounder, wallName } from "../supporters.js";
+import { supporterUntil, isSupporter, isFounder, wallName, endOfDayEastern } from "../supporters.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -1180,7 +1180,32 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         },
         "GET /api/admin/supporters": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
-            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], recent: supporters ? supporters.recent() : [], revenue: supporters ? supporters.revenue() : null, home: supporters ? await supporters.homeStatus() : null, plans: PLANS };
+            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], everyone: supporters ? supporters.everyone() : [], recent: supporters ? supporters.recent() : [], revenue: supporters ? supporters.revenue() : null, home: supporters ? await supporters.homeStatus() : null, plans: PLANS };
+        },
+        // Full edit of one supporter: pass end date, add or take away days, end it, founding mark, wall name, resend the role.
+        "POST /api/admin/supporters/edit": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!supporters) throw new HttpError(404, "Not found.");
+            const id = String(body.id ?? "").trim();
+            if (!/^\d{5,25}$/.test(id)) throw new HttpError(400, "That doesn't look like a Discord ID.");
+            switch (body.action) {
+                case "set_until": {
+                    const ms = endOfDayEastern(body.date);
+                    if (ms === null) throw new HttpError(400, "Pick a date.");
+                    if (ms - Date.now() > 3660 * 86_400_000) throw new HttpError(400, "That's more than ten years out.");
+                    return await supporters.setUntil(id, ms);
+                }
+                case "add_days": {
+                    const d = Math.round(Number(body.days));
+                    if (!Number.isFinite(d) || d === 0 || Math.abs(d) > 3660) throw new HttpError(400, "Pick a number of days between -3660 and 3660.");
+                    return await supporters.addDays(id, d);
+                }
+                case "remove": return await supporters.remove(id);
+                case "founder": return { founder: supporters.setFounder(id, body.on !== false) };
+                case "wall": return { wall: supporters.setWall(id, body.name) };
+                case "resync": return { role: (await supporters.setUntil(id, supporterUntil(db, id) || 0, "Role re-sent")).role };
+                default: throw new HttpError(400, "Unknown action.");
+            }
         },
         "POST /api/admin/supporters/resync": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
