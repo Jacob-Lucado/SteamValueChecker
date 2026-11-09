@@ -1655,3 +1655,6 @@ a.fd-name:hover { text-decoration: underline; }
 .adm-attn-list li { padding: 8px 12px; border-radius: 10px; background: var(--panel-2, rgba(128,128,128,.12)); border-left: 4px solid #f5b942; }
 .adm-attn-list li.bad { border-left-color: #ed4245; }
 .adm-attn-list a { color: inherit; text-decoration: none; font-weight: 600; }
+
+.pass-wall-opt input[type="color"] { flex: 0 0 64px !important; width: 64px !important; min-width: 0; height: 40px; padding: 3px; border-radius: 10px; cursor: pointer; }
+.pass-wall-opt:last-child { margin-bottom: 22px; }
