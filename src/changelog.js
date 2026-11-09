@@ -1,5 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.46", date: "2026-11-08", title: "A page to chip in", items: [
+        "**Chip in:** a new tab under Help, and a button on `/bot about`, for anyone who wants to help with the hosting costs. Everything stays free either way." ] },
     { version: "2026.11.45", date: "2026-11-08", title: "Co-op finder, library value and wrapped", items: [
         "**Find your co-op group:** `/server coop` takes a game and shows who in the server owns it, split into people already playing and people who haven't started. Turn on ping to invite them. There's a matching box on the dashboard's Game night page.",
         "**Library value on your profile:** a new profile section shows what your library is worth, what you paid and what you saved. It's off until you turn it on in the profile editor.",

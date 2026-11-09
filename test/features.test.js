@@ -564,6 +564,8 @@ test("about: duration format, live numbers and the embed", async () => {
     assert.equal(e.author.icon_url, "https://bot.example/creator.png");
     assert.ok(e.fields.some(f => f.name.includes("Servers") && f.value === "**2**"));
     assert.deepEqual(p.components[0].components.map(c => c.label), ["Created by Jacob Lucado", "Dashboard", "FanaticalGrabber"]);
+    const tipped = aboutPayload(info, { about: "Hello", tipUrl: "https://example.com/support.html" });
+    assert.equal(tipped.components[0].components.at(-1).label, "Chip in");
     // without a Discord client (nothing connected yet) the numbers are blank, not wrong
     assert.equal(collectAbout({ client: null, db, cfg, startedAt: 0 }).servers, null);
 });

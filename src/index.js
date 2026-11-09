@@ -19,6 +19,8 @@ import { pushEvent } from "./adminlog.js";
 import { createVoterRole } from "./voterrole.js";
 import { createOffsite, offsiteConfig } from "./offsite.js";
 import { runWatchdog } from "./watchdog.js";
+import { runOwnerSummary, runReleaseNotes } from "./ownersummary.js";
+import { CHANGELOG, LATEST } from "./changelog.js";
 import { createCommandWatch } from "./cmdwatch.js";
 import { ensureCreatorRole } from "./creatorrole.js";
 import { storageReport } from "./storage.js";
@@ -31,7 +33,7 @@ import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
 import { collectAbout } from "./about.js";
-import { FANATICAL_GRABBER_URL, EXTENSION_STORE_URL, REGIONS } from "./constants.js";
+import { SUPPORT_PAGE_URL, FANATICAL_GRABBER_URL, EXTENSION_STORE_URL, REGIONS } from "./constants.js";
 import { readFileSync } from "node:fs";
 import { ABOUT, PRIVACY, quickStart } from "./text.js";
 import { helpPayload, handleHelpPick, configureHelp, isHelpNav } from "./helpui.js";
@@ -430,6 +432,10 @@ client.once(Events.ClientReady, c => {
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
             try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
             result.watchdog = await ops.job("watchdog", () => runWatchdog({ ops, logs, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }) }));
+            result.ownerSummary = await ops.job("owner summary", () => runOwnerSummary({ db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), gather: async () => ({
+                servers: client.guilds.cache.size, errors: logs.recent({ level: "error", limit: 500 }).filter(l => l.at >= Date.now() - 7 * 86_400_000).length,
+                diskPct: (await storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }))?.volume?.pct ?? null }) }));
+            result.releaseNotes = await ops.job("release notes", () => runReleaseNotes({ db, channelId: process.env.RELEASE_CHANNEL_ID, version: LATEST, entry: CHANGELOG[0], sendChannel: (id, p) => discord.sendChannel(id, p) }));
             ops.maintenanceDone(result);
             let backedUp = null;
             try { backedUp = runBackup({ db, dir: cfg.backupDir, keep: cfg.backupKeep }); await ops.backupDone(backedUp); }
@@ -959,7 +965,7 @@ async function onInteraction(i, again = false) {
                 return await i.reply({ flags: MessageFlags.Ephemeral, embeds: [{ color: 0xff9800, title: "Vote for Steam Value Checker", description: `Every vote on Top.gg pays out **${VOTE_XP} XP** in every server where you already have XP (double on weekends, when Top.gg counts votes twice). Voting also helps other gamers find the bot.\n\n${line}`, footer: { text: st.votes ? `You have voted ${st.votes} time${st.votes === 1 ? "" : "s"} here.` : "Takes about ten seconds." } }],
                     components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel("Vote on Top.gg").setStyle(ButtonStyle.Link).setURL(url))] });
             }
-            case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL }));
+            case "about": return await i.reply(aboutPayload(aboutInfo(), { about: ABOUT, fanaticalUrl: FANATICAL_GRABBER_URL, tipUrl: SUPPORT_PAGE_URL }));
             case "privacy": { const base = cfg.dashboard?.publicUrl?.replace(/\/$/, ""); return await embedReply(i, base ? `${PRIVACY}\n\nFull text: [Privacy Policy](${base}/privacy.html) · [Terms of Service](${base}/terms.html)` : PRIVACY); }
         } })();
         if (showTip && (i.replied || i.deferred)) {

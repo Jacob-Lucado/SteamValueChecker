@@ -613,7 +613,7 @@ export function extrasButtons(hits) {
 const num = n => (n === null || n === undefined ? "-" : Number(n).toLocaleString("en-US"));
 
 /** The /bot about card: creator credit with logo, live numbers, banner and link buttons. */
-export function aboutPayload(info, { about, fanaticalUrl = null } = {}) {
+export function aboutPayload(info, { about, fanaticalUrl = null, tipUrl = null } = {}) {
     const c = info.creator;
     const stat = (icon, name, value) => ({ name: `${icon} ${name}`, value: `**${value}**`, inline: true });
     const fields = [
@@ -642,6 +642,7 @@ export function aboutPayload(info, { about, fanaticalUrl = null } = {}) {
     if (safeUrl(info.dashboardUrl)) row.push(linkButton("Dashboard", info.dashboardUrl));
     if (safeUrl(info.userInstallUrl)) row.push(linkButton("Add to your account", info.userInstallUrl));
     if (safeUrl(fanaticalUrl)) row.push(linkButton("FanaticalGrabber", fanaticalUrl));
+    if (safeUrl(tipUrl)) row.push(linkButton("Chip in", tipUrl));
     return { embeds: [embed], components: row.length ? [{ type: 1, components: row }] : [] };
 }
 
