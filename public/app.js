@@ -185,12 +185,12 @@
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
     { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["streams", "Go live"], ["streamers", "Who is live"]] },
     { id: "account", label: "Account", pages: [["profile", "My profile"], ["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
-    { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
+    { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["tip", "Chip in"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
   ];
   // Pages that are not tabs themselves but belong to a section: one game's page sits under Deals.
   const HUB_ALIAS = { g: "deals" };
-  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "feed", "discover", "communities"]);
+  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "tip", "feed", "discover", "communities"]);
   function pageVisible(id) {
     const me = state.me;
     if (id === "home" && me) return false; // the logo already goes home when signed in
@@ -314,7 +314,6 @@
     bar.replaceChildren(...(tabs.length < 2 ? [] : [
       ...tabs.map(([id, text]) => h("a", { href: "#/" + id, class: "hubtab" + (view === id ? " active" : ""), "aria-current": view === id ? "page" : null }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
       here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null,
-      here.id === "help" && state.cfg && state.cfg.tipUrl ? ext(state.cfg.tipUrl, "Support the project ↗", "hubtab") : null,
       here.id === "help" ? h("a", { class: "hubtab", href: "/ai", text: "AI companion (beta)" }) : null].filter(Boolean)));
     // On a narrow screen this row scrolls sideways, so bring the page you're on into view.
     const cur = bar.querySelector(".hubtab.active");
@@ -4753,6 +4752,22 @@
     box.className = "";
   }
 
+  // The same words as the Support page on the shop site.
+  async function tipView() {
+    const tip = state.cfg && state.cfg.tipUrl;
+    app.replaceChildren(pageHead("Support the project", "Both tools are free, and they stay free. If one saved you money or time, you can chip in."),
+      h("div", { class: "panel" },
+        h("p", { text: "I make Steam Value Checker and FanaticalGrabber on my own and pay for the hosting out of pocket. Tips go toward the server bill and the time I spend fixing things. Nothing is locked behind them, and nobody gets treated differently for giving." }),
+        tip ? h("p", {}, ext("https://www.paypal.com/paypalme/Lucadosus", "Chip in on PayPal", "btn blue")) : null,
+        h("h3", { text: "Other ways to help" }),
+        h("ul", {},
+          h("li", { text: "Add Steam Value Checker to a server and tell friends who buy too many bundles." }),
+          h("li", { text: "Vote for the bot on Top.gg. Voting is free, and it earns you bonus XP in your servers." }),
+          h("li", {}, "Send me a bug or an idea on ", ext("https://x.com/twit_user69", "X"), ". I read all of them.")),
+        h("h3", { text: "Good to know" }),
+        h("p", { class: "muted", text: "The button opens PayPal, which handles the payment. This dashboard doesn't take payments or see any payment details. A tip is a gift, not a purchase, and it doesn't buy a feature or a promise of support." })));
+  }
+
   async function supportView() {
     const id = currentParam();
     if (id) return ticketThread(id);
@@ -7243,7 +7258,7 @@
       h("div", { class: "muted small" }, feedAgo(x.at), x.game ? " · " + x.game : "", Object.entries(x.reactions || {}).map(([e, n]) => ` · ${e} ${n}`).join(""), x.replies ? ` · ${x.replies} ${x.replies === 1 ? "reply" : "replies"}` : ""))));
   }
 
-  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
+  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
@@ -7253,7 +7268,7 @@
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else delete document.documentElement.dataset.area;
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
