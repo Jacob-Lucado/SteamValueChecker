@@ -97,8 +97,8 @@ export function gameTitleFromText(text) {
     return t.length >= 2 ? t : null;
 }
 
-    OWNER.id = ownerId ? String(ownerId) : null;
 export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = null, publicUrl = null, getStatus = () => null, getAbout = () => null, news: newsSource = createNews() }) {
+    OWNER.id = ownerId ? String(ownerId) : null;
     // ---------- /me wishlist ----------
     async function wishlistImport(i, user) {
         const undo = cooldown(i, "import");

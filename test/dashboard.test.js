@@ -2608,7 +2608,9 @@ test("profiles: editor saves and validates, visitors only get what is switched o
         assert.equal((await post("/api/public/profile/report", { slug, reason: "Pretending to be someone" })).status, 200);
         const rep = (await o.request("/api/admin/profiles")).data.reports;
         assert.equal(rep.length, 1); assert.equal(rep[0].slug, slug);
-        assert.equal((await o.request("/api/admin/profiles", { method: "POST", body: { slug, action: "hide" } })).status, 200);
+        assert.equal((await o.request("/api/admin/profiles", { method: "POST", body: { slug, action: "hide" } })).status, 400, "the bot owner's own page can't be hidden");
+        o.db.getUser("u1") && o.db.setMeta("test:ownerprofile", "1");
+        o.db.blockProfile("u1", true);
         assert.equal((await fetch(o.base + "/api/public/profile?slug=" + slug)).status, 404, "a hidden profile is gone for visitors");
         assert.doesNotMatch(await (await fetch(o.base + "/u/" + slug)).text(), /Jacob on Steam/, "and its preview stops showing the bio");
         await o.request("/api/admin/profiles", { method: "POST", body: { slug, action: "show" } });
