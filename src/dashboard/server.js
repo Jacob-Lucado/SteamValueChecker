@@ -20,7 +20,7 @@ import { join as joinPath } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
+import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, SUPPORT_PAGE_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
@@ -732,7 +732,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         },
         "GET /api/config": async () => ({
             notice: rt && rt.get("notice_text") ? { text: rt.get("notice_text"), level: rt.get("notice_level") } : null,
-            regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL,
+            regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL, tipUrl: SUPPORT_PAGE_URL,
             siteUrl: origin, musicUrl: musicOrigin ? musicOrigin + "/" : origin + "/music",
             help: HELP, about: ABOUT, extension: { latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST },
             privacy: PRIVACY.split("\n").filter(l => !/github\.com/i.test(l)).join("\n"), maxUploadChars: MAX_UPLOAD_CHARS,

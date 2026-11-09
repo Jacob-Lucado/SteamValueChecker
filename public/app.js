@@ -314,6 +314,7 @@
     bar.replaceChildren(...(tabs.length < 2 ? [] : [
       ...tabs.map(([id, text]) => h("a", { href: "#/" + id, class: "hubtab" + (view === id ? " active" : ""), "aria-current": view === id ? "page" : null }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
       here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null,
+      here.id === "help" && state.cfg && state.cfg.tipUrl ? ext(state.cfg.tipUrl, "Support the project ↗", "hubtab") : null,
       here.id === "help" ? h("a", { class: "hubtab", href: "/ai", text: "AI companion (beta)" }) : null].filter(Boolean)));
     // On a narrow screen this row scrolls sideways, so bring the page you're on into view.
     const cur = bar.querySelector(".hubtab.active");

@@ -107,6 +107,7 @@ test("the app asks for sign-in, and the config carries the FanaticalGrabber link
     assert.equal((await t.request("/api/wishlist")).status, 401);
     const c = await t.request("/api/config");
     assert.equal(c.data.fanaticalUrl, "https://steamvaluechecker.com/grabber");
+    assert.match(c.data.tipUrl, /^https:\/\/.+support\.html$/);
     assert.match(c.data.inviteUrl, /client_id=123/);
     assert.ok(c.data.regions.length >= 6);
     await t.close();
