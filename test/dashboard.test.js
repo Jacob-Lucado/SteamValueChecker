@@ -2987,3 +2987,19 @@ test("admin panel: reported profile pages can be hidden, restored and dismissed,
         assert.equal((await o.request("/api/admin/profiles")).data.reports.length, 0);
     } finally { await o.close(); }
 });
+
+test("every admin route turns a signed-in non-owner away", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../src/dashboard/server.js", import.meta.url), "utf8");
+    const routes = [...new Set([...src.matchAll(/^\s*"(GET|POST) (\/api\/admin\/[A-Za-z0-9_./-]+)":/gm)].map(m => [m[1], m[2]].join(" ")))];
+    assert.ok(routes.length > 40, "found the routes");
+    const t = await signedIn();
+    const open = [];
+    for (const r of routes) {
+        const [method, path] = r.split(" ");
+        const res = await t.request(path, method === "POST" ? { method: "POST", body: {} } : {});
+        if (res.status !== 403) open.push(`${r} -> ${res.status}`);
+    }
+    await t.close();
+    assert.deepEqual(open, [], "these admin routes answer someone who is not the owner");
+});

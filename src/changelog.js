@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.48", date: "2026-11-09", title: "Bundle pictures and supporter touches", items: [
+        "**Bundle pictures:** Steam bundles in the bundles channel show their banner again, and bundles without one use a screenshot of the first game.",
+        "**Adult bundles:** they're left out by default. Server managers can switch them on with `/server promos bundles adult:true` or from the Game bundles panel on the dashboard.",
+        "**More free games:** IndieGala giveaways now show up with the other freebies.",
+        "**Supporters:** pick your own colour for your price-alert cards on the Chip in page, and `/bot supporter` shows your pass and what it gives you. The page also says how many founding spots are left." ] },
     { version: "2026.11.47", date: "2026-11-09", title: "Every overlay in one studio", items: [
         "**One Overlay studio:** now playing, giveaway, deals and cards now live next to goal bars, stats and timers, as tabs. The streamer hub and music page just point there.",
         "**Share this deal:** sale alerts have a button that makes a tall picture of the deal, ready to post.",

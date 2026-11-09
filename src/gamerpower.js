@@ -4,7 +4,7 @@
 export const GP_API = "https://www.gamerpower.com/api/giveaways?sort-by=date";
 
 const STORES = [[/epic games/i, "Epic Games Store"], [/steam/i, "Steam"], [/gog/i, "GOG"], [/ubisoft/i, "Ubisoft"], [/battle\.net/i, "Battle.net"],
-    [/humble/i, "Humble Store"], [/\b(ea app|origin|ea play)\b/i, "EA app"], [/itch\.?io/i, "itch.io"], [/prime gaming|amazon/i, "Prime Gaming"]];
+    [/humble/i, "Humble Store"], [/\b(ea app|origin|ea play)\b/i, "EA app"], [/itch\.?io/i, "itch.io"], [/prime gaming|amazon/i, "Prime Gaming"], [/indie\s?gala/i, "IndieGala"]];
 const httpsUrl = u => { try { return new URL(String(u)).protocol === "https:" ? String(u) : null; } catch { return null; } };
 
 /** "Highway Driving (Epic Games) Giveaway" becomes "Highway Driving". */
@@ -21,7 +21,8 @@ export function parseGamerPower(json, now = Date.now()) {
     for (const g of Array.isArray(json) ? json : []) {
         if (!g?.id || g.status !== "Active" || !/^(game|early access)$/i.test(g.type ?? "")) continue;
         const platforms = String(g.platforms ?? "");
-        const shop = STORES.find(([re]) => re.test(platforms))?.[1];
+        // IndieGala keys are listed as plain "DRM-Free", so the store is only named in the title.
+        const shop = STORES.find(([re]) => re.test(platforms))?.[1] ?? STORES.find(([re]) => re.test(g.title ?? ""))?.[1];
         if (!shop || /\b(ios|android|xbox|playstation|switch)\b/i.test(platforms) && !/pc/i.test(platforms)) continue;
         const end = endMs(g.end_date);
         if (end !== null && end <= now) continue;

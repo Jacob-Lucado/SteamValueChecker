@@ -1030,3 +1030,15 @@ test("no slash command is close to Discord's character budget, so adding an opti
     const count = o => { let n = (o.name?.length ?? 0) + (o.description?.length ?? 0); for (const c of o.choices ?? []) n += String(c.name).length + (typeof c.value === "string" ? c.value.length : 0); for (const x of o.options ?? []) n += count(x); return n; };
     for (const c of hubCommands) assert.ok(count(c) <= 7900, `/${c.name} uses ${count(c)} of Discord's 8000 characters`);
 });
+
+test("GamerPower: IndieGala giveaways are kept even though the list only calls them DRM-Free, and mobile or tests are not", async () => {
+    const { parseGamerPower } = await import("../src/gamerpower.js");
+    const base = { status: "Active", type: "Game", end_date: "2099-01-01 00:00:00", open_giveaway_url: "https://www.gamerpower.com/open/x", image: "https://img.example/x.jpg" };
+    const out = parseGamerPower([
+        { ...base, id: 1, title: "Last Room (IndieGala) Giveaway", platforms: "PC, DRM-Free" },
+        { ...base, id: 2, title: "Some Game (IndieGala) Giveaway", platforms: "Android, iOS" },
+        { ...base, id: 3, title: "Unknown Store Game Giveaway", platforms: "PC, DRM-Free" },
+        { ...base, id: 4, title: "Dual Chroma (itch.io) Giveaway", platforms: "PC, Itch.io, DRM-Free" }
+    ]);
+    assert.deepEqual(out.map(x => [x.title, x.shop]), [["Last Room", "IndieGala"], ["Dual Chroma", "itch.io"]]);
+});
