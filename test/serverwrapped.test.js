@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { buildServerWrapped, renderServerWrapped } from "../src/serverwrapped.js";
+import { buildServerWrapped, renderServerWrapped, runServerWrapped } from "../src/serverwrapped.js";
 
 function seed(clockRef) {
     const db = openDb(":memory:", { now: () => clockRef.t });
@@ -40,4 +40,22 @@ test("server wrapped draws a picture", async () => {
     assert.equal(png.subarray(1, 4).toString(), "PNG");
     if (process.env.WRAPPED_OUT) (await import("node:fs")).writeFileSync(process.env.WRAPPED_OUT, png);
     db.close();
+});
+
+test("the yearly wrapped post goes out once, from December 26, only to servers with the digest on", async () => {
+    const clock = { t: Date.UTC(2026, 2, 1) };
+    const db = seed(clock);
+    db.setGuildChannel("g1", "chan", "u");
+    db.setWeeklyDigest("g1", true);
+    const posts = [];
+    const notifier = { postGuild: async (id, p) => { posts.push([id, p]); return true; } };
+    const render = async () => Buffer.from("png");
+    const at = (m, d) => () => Date.UTC(2026, m, d, 12);
+    assert.equal((await runServerWrapped({ db, notifier, render, now: at(11, 20) })).posted, 0, "too early");
+    assert.equal(posts.length, 0);
+    const first = await runServerWrapped({ db, notifier, render, now: at(11, 27), guildName: () => "Game Junkies", nameOfMany: async () => new Map([["c", "Cee"]]) });
+    assert.equal(first.posted, 1);
+    assert.match(posts[0][1].content, /Game Junkies: 2026 wrapped/);
+    assert.equal(posts[0][1].files[0].name, "server-wrapped.png");
+    assert.equal((await runServerWrapped({ db, notifier, render, now: at(11, 28) })).posted, 0, "not twice");
 });

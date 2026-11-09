@@ -32,3 +32,25 @@ export async function renderServerWrapped(data, { guildName = "Your server", nam
         foot: "Only members who opted in with /alerts share are counted."
     }, { fetchImpl });
 }
+
+/** Posts each opted-in server's wrapped picture once, from December 26 to the end of the year. The weekly digest switch is the opt-in. */
+export async function runServerWrapped({ db, notifier, nameOfMany, guildName = () => null, now = () => Date.now(), render = renderServerWrapped, log = () => {} }) {
+    const stats = { posted: 0, skipped: 0 };
+    const d = new Date(now());
+    if (d.getUTCMonth() !== 11 || d.getUTCDate() < 26) return stats;
+    const year = d.getUTCFullYear();
+    for (const g of db.guildsWithDigest()) {
+        const key = `wrapped:${year}`;
+        if (db.guildHasSeen(g.guild_id, key)) continue;
+        try {
+            const data = buildServerWrapped(db, g.guild_id, now());
+            if (!data) { db.guildMarkSeen(g.guild_id, key); stats.skipped++; continue; }
+            const names = nameOfMany ? await nameOfMany(data.mvp.map(p => p.discord_id)) : new Map();
+            const name = guildName(g.guild_id) ?? "Your server";
+            const png = await render(data, { guildName: name, nameOf: id => names.get(id) ?? "a member" });
+            const ok = await notifier.postGuild(g.guild_id, { content: `**${name}: ${year} wrapped.** Want to be in it next year? Turn on \`/alerts share\` and link Steam.`, files: [{ attachment: Buffer.from(png), name: "server-wrapped.png", description: `Server wrapped ${year}` }] });
+            if (ok) { db.guildMarkSeen(g.guild_id, key); stats.posted++; }
+        } catch (err) { log(`server wrapped failed: ${err.code ?? err.name}`); }
+    }
+    return stats;
+}

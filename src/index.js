@@ -56,6 +56,7 @@ import { BG_INACTIVE_MS } from "./profilebg.js";
 import { createNotifier } from "./notify.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
+import { runServerWrapped } from "./serverwrapped.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
 import { runSocialDigest } from "./socialdigest.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
@@ -403,6 +404,8 @@ client.once(Events.ClientReady, c => {
             result.digest = await ops.job("feed digest", () => runSocialDigest({ db, notifier, dashboardUrl: cfg.dashboard?.publicUrl ?? null }));
             result.nudge = await ops.job("backlog pick", () => runBacklogNudge({ db, notifier }));
             result.yearly = await ops.job("year in games", () => runYearInGames({ db, notifier, render: (userId, name) => renderRecap({ db, userId, name }) }));
+            result.serverWrapped = await ops.job("server wrapped", () => runServerWrapped({ db, notifier, log, guildName: id => client.guilds.cache.get(id)?.name,
+                nameOfMany: async ids => { const m = new Map(); await Promise.all([...new Set(ids)].map(async id => { try { const u = await client.users.fetch(id); m.set(id, u.globalName ?? u.username); } catch { m.set(id, "a member"); } })); return m; } }));
             result.releases = await ops.job("releases", () => runReleases({ db, itad, notifier, log, stillUpcoming: steamStillUpcoming }));
             result.free = await ops.job("free games", () => runFreeGames({ db, itad, notifier, log }));
             result.news = await ops.job("news", () => runNews({ db, news, notifier, log }));
