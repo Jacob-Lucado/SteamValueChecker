@@ -183,3 +183,22 @@ test("the thank-you DM lists the perks, links to the tip page and profile, and t
     assert.deepEqual(urls, ["https://x.test/#/tip", "https://x.test/u/sam", "https://discord.gg/abc"]);
     assert.ok(e.fields.every(f => f.value.length <= 1024) && text.length < 3000);
 });
+
+test("reminders, gift receipts, vote thanks, idea updates and mod notices are all proper embeds", async () => {
+    const { supporterReminder, giftSentEmbed, voteThanksEmbed, ideaStatusEmbed, modNoticeEmbed } = await import("../src/render.js");
+    const all = [
+        supporterReminder({ until: 5_000_000, lastDay: true, founder: true, tipUrl: "https://x.test/#/tip" }),
+        giftSentEmbed({ to: "42", until: 5_000_000, tipUrl: "https://x.test/#/tip" }),
+        voteThanksEmbed({ got: "You just got **+50 XP**.", expiresAt: 9_000_000, total: 3, voteUrl: "https://top.gg/bot/1/vote" }),
+        ideaStatusEmbed({ title: "Dark mode", status: "shipped", label: "Shipped", note: "Out now", url: "https://x.test/#/requests" }),
+        modNoticeEmbed({ verb: "timed out", server: "Test", reason: "spam", extra: " for 10 minutes" })
+    ];
+    for (const p of all) {
+        const e = p.embeds[0];
+        assert.ok(e.title && e.description !== undefined || e.fields?.length, "has a title and body");
+        assert.ok(e.fields?.length >= 2, "laid out in fields");
+        assert.ok(e.fields.every(f => f.name && f.value && f.value.length <= 1024));
+    }
+    assert.equal(all[0].components[0].components[0].url, "https://x.test/#/tip");
+    assert.match(all[4].embeds[0].title, /timed out in Test/);
+});

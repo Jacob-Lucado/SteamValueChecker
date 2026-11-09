@@ -1522,7 +1522,7 @@ test("up for giveaway: only the member's server staff can mark a wishlist game, 
 
 test("feature requests: members suggest and vote, only the owner changes status, the requester is messaged", async () => {
     const dms = [];
-    const o = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ dm: async (id, p) => { dms.push([id, p.embeds[0].description]); } }) });
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ dm: async (id, p) => { dms.push([id, p.embeds[0].fields.map(f => f.value).join("\n")]); } }) });
     const req = (path, body) => o.request(path, { method: "POST", body });
     assert.equal((await req("/api/requests", { title: "ab" })).status, 400, "too short");
     o.db.ensureUser("u2");

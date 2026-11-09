@@ -2,6 +2,8 @@
 // so the rules are the same everywhere: nobody can act on themselves, the owner, the bot or someone above them, every action
 // becomes a numbered case, and every case is posted to the server's mod log.
 
+import { modNoticeEmbed } from "./render.js";
+
 export class ModError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
 export const ACTIONS = {
@@ -92,7 +94,7 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
     }
     const tell = async (userId, guild, verb, reason, extra = "") => {
         if (!dm) return false;
-        try { await dm(userId, { content: `You were ${verb} in **${guild?.name ?? "a server"}**${extra}.${reason ? `\nReason: ${reason}` : ""}`, allowed_mentions: { parse: [] } }); return true; } catch { return false; }
+        try { await dm(userId, modNoticeEmbed({ verb, server: guild?.name ?? "a server", reason, extra })); return true; } catch { return false; }
     };
     const discordFail = (e, what) => {
         if (e instanceof ModError) throw e;

@@ -2,7 +2,7 @@
 // a badge on the profile page and a bit more XP, for as long as the pass lasts. Nothing in the bot is locked behind it.
 import { pushEvent, readEvents } from "./adminlog.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "./square.js";
-import { supporterThanks } from "./render.js";
+import { supporterThanks, supporterReminder, giftSentEmbed } from "./render.js";
 
 export const SUPPORTER_ROLE = "Supporter";
 const UNTIL = "supporter:";
@@ -90,7 +90,7 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
                 profileUrl: base && me?.profile_slug && me.profile_public ? `${base}/u/${me.profile_slug}` : null
             }));
         } catch { /* DMs may be closed */ }
-        if (giftFrom) try { await dm?.(giftFrom, { embeds: [{ color: 0xeb459e, title: "Your gift is on its way 🎁", description: `<@${userId}> now has a supporter pass. Thank you for backing the bot.` }] }); } catch { /* DMs may be closed */ }
+        if (giftFrom) try { await dm?.(giftFrom, giftSentEmbed({ to: userId, until, tipUrl: renewUrl })); } catch { /* DMs may be closed */ }
         return { duplicate: false, until, founding, role };
     }
 
@@ -128,8 +128,7 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
             if (lastDay ? db.getMeta(LAST + id) === String(until) : db.getMeta(REMIND + id) === String(until) || db.getMeta(LAST + id) === String(until)) continue;
             db.setMeta(lastDay ? LAST + id : REMIND + id, String(until));
             try {
-                await dm?.(id, { embeds: [{ color: 0xeb459e, title: lastDay ? "Last day of your supporter pass" : "Your supporter pass ends soon", description: `It runs out <t:${Math.floor(until / 1000)}:R>. Thanks for backing the bot. If you'd like to keep the role, badge and perks, you can add more time any time, and it stacks on top of what you have left.` }],
-                    components: renewUrl ? [{ type: 1, components: [{ type: 2, style: 5, label: "Add more time", url: renewUrl }] }] : [] });
+                await dm?.(id, supporterReminder({ until, lastDay, founder: isFounder(db, id), tipUrl: renewUrl }));
                 n++;
             } catch { /* DMs may be closed; nothing else to try */ }
         }

@@ -44,7 +44,7 @@ test("a warning becomes case 1, is logged, messaged to the member and counted", 
     const { mod, calls, dms, db } = rig();
     const r = await mod.warn({ guildId: "G", actorId: MOD, userId: USER, reason: "  spamming \n links " });
     assert.equal(r.case.case_no, 1); assert.equal(r.case.reason, "spamming links"); assert.equal(r.warnings, 1);
-    assert.equal(dms[0].id, USER); assert.match(dms[0].p.content, /warned in \*\*Test\*\*/);
+    assert.equal(dms[0].id, USER); assert.match(dms[0].p.embeds[0].title, /warned in Test/);
     const log = calls.find(c => c.t === "log");
     assert.equal(log.c, "LOG"); assert.match(log.p.embeds[0].title, /Case #1/); assert.deepEqual(log.p.allowed_mentions, { parse: [] });
     assert.equal((await mod.warn({ guildId: "G", actorId: MOD, userId: USER })).case.case_no, 2);
@@ -77,7 +77,7 @@ test("timeout length is checked and sent to Discord as a date; kick and ban mess
     await mod.untimeout({ guildId: "G", actorId: MOD, userId: USER });
     assert.equal(calls.filter(c => c.t === "timeout").pop().until, null);
     await mod.kick({ guildId: "G", actorId: MOD, userId: USER, reason: "bye" });
-    assert.ok(calls.some(c => c.t === "kick")); assert.ok(dms.some(d => /kicked/.test(d.p.content)));
+    assert.ok(calls.some(c => c.t === "kick")); assert.ok(dms.some(d => /kicked/.test(d.p.embeds[0].title)));
     const b = await mod.ban({ guildId: "G", actorId: MOD, userId: USER, deleteDays: 99 });
     assert.equal(calls.find(c => c.t === "ban").deleteSeconds, 7 * 86400, "capped at 7 days");
     assert.equal(b.case.action, "ban");

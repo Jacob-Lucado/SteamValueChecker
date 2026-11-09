@@ -81,7 +81,7 @@ import { calendarEntries, toIcs, KINDS } from "../calendar.js";
 import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
 import { createLimiter } from "../ratelimit.js";
 import { setProfile, publicWishlist } from "../profile.js";
-import { artUrl, steamArt } from "../render.js";
+import { artUrl, steamArt, ideaStatusEmbed } from "../render.js";
 import { REACTIONS } from "../socialstore.js";
 import { isSoundcloudUrl } from "../musicsource.js";
 import { CATEGORIES } from "../stations.js";
@@ -3756,8 +3756,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             let notified = false;
             if (body.notify !== false && status !== r.status && r.user_id !== s.userId) {
                 try {
-                    await dm(r.user_id, { embeds: [{ color: status === "rejected" ? 0xed4245 : status === "shipped" ? 0x57f287 : 0x5865f2, title: `Your idea: ${r.title}`.slice(0, 250),
-                        description: `Status: **${REQUEST_STATUSES[status]}**${note ? `\n\n${note}` : ""}`, footer: { text: "Steam Value Checker feature requests" } }] });
+                    await dm(r.user_id, ideaStatusEmbed({ title: r.title, status, label: REQUEST_STATUSES[status], note, url: config.publicUrl ? `${config.publicUrl}/#/requests` : null }));
                     notified = true;
                 } catch { /* DMs closed: the status is still saved and visible on the page */ }
             }

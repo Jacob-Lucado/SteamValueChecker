@@ -250,6 +250,60 @@ export function supporterThanks({ until, founding = false, giftFrom = null, role
     };
 }
 
+/** The one nudge before a pass ends. `lastDay` is the final-day version. */
+export function supporterReminder({ until, lastDay = false, founder = false, tipUrl = null }) {
+    const ts = Math.floor(until / 1000);
+    const losing = ["🎖️ Supporter role", "✨ Badge and glow on your profile", "🎨 Three extra profile themes", "🧩 24 overlay slots", "⚡ Bonus XP", "🖌️ Your alert colour"];
+    const fields = [
+        { name: lastDay ? "Ends" : "Ends on", value: `<t:${ts}:F>\n<t:${ts}:R>`, inline: true },
+        { name: "Stacks on top", value: "Anything you add is tacked on after the time you have left, so nothing is wasted.", inline: true },
+        { name: "What goes when it ends", value: losing.join("\n"), inline: false }
+    ];
+    if (founder) fields.push({ name: "Founding supporter 🌟", value: "Your founding mark stays on your profile for good, pass or no pass.", inline: false });
+    return {
+        embeds: [{ color: lastDay ? 0xed4245 : 0xf5b942, title: lastDay ? "⏳ Last day of your supporter pass" : "⏳ Your supporter pass ends soon", description: "Thanks for backing the bot, it really does keep it going. If you'd like to keep everything above, you can add more time whenever you like.", fields, footer: { text: "No subscription, nothing renews by itself." } }],
+        components: tipUrl ? [{ type: 1, components: [{ type: 2, style: 5, label: "Add more time", emoji: { name: "💖" }, url: tipUrl }] }] : []
+    };
+}
+
+/** Sent to whoever bought a gift pass, once it has landed. */
+export function giftSentEmbed({ to, until, tipUrl = null }) {
+    return {
+        embeds: [{ color: 0xeb459e, title: "Your gift has landed 🎁", description: `<@${to}> now has a supporter pass. Thank you for backing the bot, and for being kind to a friend.`, fields: [{ name: "Their pass runs until", value: `<t:${Math.floor(until / 1000)}:D>`, inline: true }, { name: "What they got", value: "🎖️ Role · ✨ Badge · 🎨 Themes · ⚡ XP", inline: true }], footer: { text: "They've been sent a DM about it too." } }],
+        components: tipUrl ? [{ type: 1, components: [{ type: 2, style: 5, label: "Gift another", emoji: { name: "🎁" }, url: tipUrl }] }] : []
+    };
+}
+
+/** The DM after a Top.gg vote. */
+export function voteThanksEmbed({ got, expiresAt = null, total = 0, voteUrl = null }) {
+    const fields = [{ name: "Your reward", value: got, inline: false }];
+    if (expiresAt) fields.push({ name: "Vote again", value: `<t:${Math.floor(expiresAt / 1000)}:R>`, inline: true });
+    if (total) fields.push({ name: "Votes so far", value: String(total), inline: true });
+    return {
+        embeds: [{ color: 0xff9800, title: "Thanks for the vote! 🗳️", description: "Every vote helps more people find the bot.", fields }],
+        components: voteUrl && !expiresAt ? [{ type: 1, components: [{ type: 2, style: 5, label: "Vote on Top.gg", url: voteUrl }] }] : []
+    };
+}
+
+/** The DM when the owner changes the status of someone's feature request. */
+export function ideaStatusEmbed({ title, status, label, note = "", url = null }) {
+    const icon = { shipped: "🚀", rejected: "❌", planned: "🗓️", in_development: "🛠️", duplicate: "🔁", on_hold: "⏸️" }[status] ?? "🔎";
+    const fields = [{ name: "Status", value: `${icon} **${label}**`, inline: true }];
+    if (note) fields.push({ name: "A note from the owner", value: String(note).slice(0, 1000), inline: false });
+    return {
+        embeds: [{ color: status === "rejected" ? 0xed4245 : status === "shipped" ? 0x57f287 : 0x5865f2, title: `💡 ${String(title).slice(0, 240)}`, description: status === "shipped" ? "Your idea is live. Thanks for suggesting it!" : "There's an update on your idea.", fields, footer: { text: "Steam Value Checker feature requests" } }],
+        components: url ? [{ type: 1, components: [{ type: 2, style: 5, label: "See your idea", emoji: { name: "💡" }, url }] }] : []
+    };
+}
+
+/** The DM someone gets when a moderator acts on them. */
+export function modNoticeEmbed({ verb, server, reason = "", extra = "" }) {
+    const icon = { warned: "⚠️", "timed out": "⏳", kicked: "👢", banned: "🔨" }[verb] ?? "🛡️";
+    const fields = [{ name: "Server", value: String(server).slice(0, 100), inline: true }, { name: "Action", value: `${icon} ${verb[0].toUpperCase()}${verb.slice(1)}${extra}`, inline: true }];
+    if (reason) fields.push({ name: "Reason", value: String(reason).slice(0, 1000), inline: false });
+    return { embeds: [{ color: verb === "warned" ? 0xf5b942 : 0xed4245, title: `You were ${verb} in ${String(server).slice(0, 100)}`, fields, footer: { text: "Questions about this go to the server's moderators, not the bot." } }], allowed_mentions: { parse: [] } };
+}
+
 export const WISHLIST_PER_PAGE = 15;
 
 /** Wishlist overview table: one line per game with current price and discount. */

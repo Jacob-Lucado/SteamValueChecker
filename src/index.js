@@ -35,7 +35,7 @@ import { renderWelcomeCard, renderRecap } from "./cardimg.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
-import { pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
+import { voteThanksEmbed, pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
 import { collectAbout } from "./about.js";
 import { SUPPORT_PAGE_URL, FANATICAL_GRABBER_URL, EXTENSION_STORE_URL, REGIONS } from "./constants.js";
 import { readFileSync } from "node:fs";
@@ -235,10 +235,9 @@ const topgg = createTopgg({
     token: process.env.TOPGG_TOKEN, db, log: m => console.log(`[topgg] ${m}`),
     reward: (userId, xp) => community.grantBonusXp(userId, xp),
     notify: async (userId, v) => {
-        const when = v.expiresAt ? ` You can vote again <t:${Math.floor(v.expiresAt / 1000)}:R>.` : "";
         const got = v.servers ? `You just got **+${v.xp} XP** in ${v.servers} server${v.servers === 1 ? "" : "s"}.` : "Chat in a server with levels turned on and your next vote will pay out there.";
         voterRole?.grant(userId, v.expiresAt);
-        await discord.sendDm(userId, { embeds: [{ color: 0xff9800, title: "Thanks for the vote!", description: `${got}${when}`, footer: { text: `Votes so far: ${v.total}` } }] });
+        await discord.sendDm(userId, voteThanksEmbed({ got, expiresAt: v.expiresAt, total: v.total, voteUrl: `https://top.gg/bot/${client.user?.id ?? cfg.clientId}/vote` }));
     }
 });
 const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
