@@ -148,7 +148,6 @@ const cfg = loadConfig();
 const STARTED_AT = Date.now();
 const VERSION = (() => { try { return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version; } catch { return "1.0.0"; } })();
 // Recent log lines for the dashboard's Admin page. Errors are also kept in a file so crashes survive a restart.
-const offsite = createOffsite({ ...offsiteConfig(), secret: cfg.keySecret, db, log: t => console.log(`[offsite] ${t}`) });
 const logs = createLogBuffer({ file: join(dirname(cfg.dbPath), "errors.jsonl"), secrets: [cfg.token, cfg.itadKey, cfg.keySecret, cfg.dashboard?.clientSecret, cfg.steamApiKey, process.env.TOPGG_TOKEN] });
 logs.capture();
 const luna = createLuna({ enabled: process.env.LUNA_CLAIMS !== "off", log: m => console.log(`[luna] ${m}`) });
@@ -177,6 +176,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 client.setMaxListeners(30); // each feature adds its own startup listener, and there are now more than the default ten
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
+const offsite = createOffsite({ ...offsiteConfig(), secret: cfg.keySecret, db, log: t => console.log(`[offsite] ${t}`) });
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
 setInterval(() => { try { db.purgeHiddenGuilds(); } catch { /* try again next time */ } }, 30 * 60_000).unref();
 const nowPlaying = createNowPlaying({ apiKey: cfg.steamApiKey });
