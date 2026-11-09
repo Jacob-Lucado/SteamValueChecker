@@ -83,3 +83,20 @@ test("export and delete remove everything about a user", () => {
     assert.equal(db.countItems("u1"), 0);
     assert.equal(db.exportUser("u1"), null);
 });
+
+test("a supporter's data is in their export, and deleting them keeps the payment as an unnamed entry", async () => {
+    const { createSupporters } = await import("../src/supporters.js");
+    const db = openDb(":memory:");
+    db.ensureUser("500000001");
+    const sup = createSupporters({ db });
+    await sup.grant("500000001", 30, "pay-x", "Square", 300);
+    sup.setWall("500000001", "Sam");
+    db.createOv("500000001", "timer");
+    const ex = db.exportUser("500000001");
+    assert.equal(ex.supporter.wall_name, "Sam"); assert.equal(ex.supporter.founder, true); assert.equal(ex.supporter.payments[0].cents, 300);
+    assert.equal(ex.overlays.length, 1);
+    db.deleteUser("500000001");
+    assert.equal(sup.wall().length, 0); assert.equal(db.listOvs("500000001").length, 0);
+    assert.equal(sup.revenue().total, 300, "the sale still counts for the books");
+    assert.ok(!db.getMeta("supporterpay:pay-x").includes("500000001"), "but it no longer says who paid");
+});

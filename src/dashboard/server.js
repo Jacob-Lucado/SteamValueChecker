@@ -121,6 +121,7 @@ const FILES = {
     "/i18n.js": ["i18n.js", "text/javascript; charset=utf-8"],
     "/style.css": ["style.css", "text/css; charset=utf-8"],
     "/logo.png": ["logo.png", "image/png"],
+    "/favicon.ico": ["logo.png", "image/png"], // browsers and link previews ask for this by name
     "/creator.png": ["creator.png", "image/png"],
     "/creator-bg.webp": ["creator-bg.webp", "image/webp"],
     "/banner.png": ["banner.png", "image/png"],

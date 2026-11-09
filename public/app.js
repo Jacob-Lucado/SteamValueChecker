@@ -3277,7 +3277,7 @@
     const out = h("pre", { class: "logbox", text: "Loading…" });
     const level = select([["error", "Errors and crashes"], ["warn", "Errors and warnings"], ["activity", "Activity (what was done, restarts)"], ["all", "Everything"]], "error");
     const LABEL = { error: "ERROR", warn: "WARN", activity: "ACTION", info: "INFO" };
-    const fmt = l => `${new Date(l.at).toLocaleString()}  ${(LABEL[l.level] ?? l.level.toUpperCase()).padEnd(6)} ${l.earlier ? "(earlier run) " : ""}${l.text}`;
+    const fmt = l => `${new Date(l.at).toLocaleString()}  ${(LABEL[l.level] ?? String(l.level ?? "info").toUpperCase()).padEnd(6)} ${l.earlier ? "(earlier run) " : ""}${l.text}`;
     let lastText = "";
     async function load() {
       out.textContent = "Loading…";

@@ -793,7 +793,14 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId) };
+        return { user: u, community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId), overlays: streamOverlays.listOvs(discordId).map(o => ({ name: o.name, kind: o.kind, created: o.created })), supporter: supporterExport(discordId) };
+    }
+
+    /** Pass, founder mark, wall name and what was paid, for the data export. Payment records are kept as accounting entries without a name after deletion. */
+    function supporterExport(discordId) {
+        const until = Number(getMeta(`supporter:${discordId}`)) || null, founder = Boolean(getMeta(`supporterfounder:${discordId}`)), wall = getMeta(`supporterwall:${discordId}`) || null;
+        const payments = listMetaPrefix("supporterpay:").map(r => { try { return JSON.parse(r.value); } catch { return null; } }).filter(p => p && p.userId === String(discordId)).map(p => ({ at: p.at, days: p.days, cents: p.cents, via: p.via, gift_from_someone: Boolean(p.giftFrom), refunded: Boolean(p.refunded) }));
+        return until || founder || wall || payments.length ? { pass_ends: until, founder, wall_name: wall, payments } : null;
     }
 
     function deleteUser(discordId) {
@@ -814,6 +821,10 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             run("DELETE FROM status_meta WHERE key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\'", `topgg:votes:${discordId}`, `topgg:seen:${discordId}:%`, `voterrole:${discordId}`);
             for (const k of ["supporter:", "supporterwall:", "supporterfounder:", "supporterremind:", "supporterlast:"]) run("DELETE FROM status_meta WHERE key = ?", k + discordId);
+            // Payments stay as accounting entries (amount and date) but lose the person they belonged to.
+            for (const r of all("SELECT key, value FROM status_meta WHERE key LIKE ?", "supporterpay:%")) {
+                try { const p = JSON.parse(r.value); if (p.userId === String(discordId) || p.giftFrom === String(discordId)) { if (p.userId === String(discordId)) p.userId = ""; if (p.giftFrom === String(discordId)) p.giftFrom = null; run("UPDATE status_meta SET value = ? WHERE key = ?", JSON.stringify(p), r.key); } } catch { /* an old-style record has nothing to clear */ }
+            }
             run("DELETE FROM twitch_link WHERE discord_id = ?", discordId);
             const r = run("DELETE FROM users WHERE discord_id = ?", discordId);
             db.exec("COMMIT");

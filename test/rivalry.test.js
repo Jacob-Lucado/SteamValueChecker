@@ -75,3 +75,15 @@ test("the wishlist card lists what you both want", () => {
     assert.match(e.fields[0].name, /both want/); assert.match(e.fields[0].value, /Celeste/);
     assert.deepEqual(contextWishlistEmbed("Sam", page, null).fields, [], "nothing extra when there's no overlap");
 });
+
+test("the new embeds stay inside Discord's size limits even with long names", () => {
+    const long = "x".repeat(200);
+    const check = e => {
+        const total = [e.title, e.description, e.footer?.text, ...(e.fields ?? []).flatMap(f => [f.name, f.value])].join("").length;
+        assert.ok((e.title ?? "").length <= 256 && (e.description ?? "").length <= 4096 && (e.footer?.text ?? "").length <= 2048 && (e.fields ?? []).length <= 25 && total <= 6000, "an embed is over a Discord limit");
+        for (const f of e.fields ?? []) assert.ok(f.name.length <= 256 && f.value.length <= 1024, "a field is too long");
+    };
+    check(rivalryEmbed({ name: long.slice(0, 100), t: { finished: 1e6, hours: 1e6, members: 999 } }, { name: long.slice(0, 100), t: { finished: 1, hours: 1, members: 3 } }, "tie", "October 2026"));
+    const games = Array.from({ length: 30 }, (_, i) => ({ id: "g" + i, title: long, price: 1.5, currency: "USD", discount: 10 }));
+    check(contextWishlistEmbed(long, { games }, null, games));
+});

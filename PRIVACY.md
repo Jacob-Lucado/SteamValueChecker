@@ -1,6 +1,6 @@
 # Privacy Policy: Steam Value Checker
 
-Last updated: October 26, 2026 (wishlist alerts added)
+Last updated: November 9, 2026 (supporter passes, overlays and server rivalries added)
 
 Steam Value Checker is a Discord bot that prices a list of games and, if you choose, watches your wishlist and tells you when a game goes on sale. This page explains what it does with your data.
 
@@ -117,6 +117,15 @@ If this policy changes, the date above will be updated.
 - **One-off watches:** a game added with `/games watch` is stored like a wishlist game and removed after its alert or after 30 days.
 - **Server stats:** numbers for members who opted in with `/alerts share`. Counts and totals only; nobody is named for what they want.
 - **Status history:** the bot stores per-day uptime counts and a short log of outages. Nothing about people.
+
+## Supporter passes and overlays
+
+- **Supporter passes:** a pass is a one-time payment made on Square's own checkout page. The bot never sees your card or any payment details. Square tells the bot that a payment was made, for how much, and which Discord account the pass is for. The bot keeps that (your Discord ID, the amount, the date and how many days it bought) to run the pass, handle refunds and keep a record of sales. If you delete your data with `/me mydata delete`, the payment stays as an entry with an amount and a date and nothing that says who you are.
+- **Gifts:** if someone gifts you a pass, the bot stores that it was a gift and who it came from long enough to send the thank-you messages. Deleting either person's data clears that link.
+- **Founding supporter and the supporter wall:** the first 50 people with a paid pass get a Founding supporter mark. The thank-you wall on the Chip in page only shows a name you type in yourself, and only if you choose to be on it. It is never linked to your Discord account, and you can clear it any time.
+- **Overlay studio:** each overlay you make (goal bar, server stats, timer) is stored with its settings and a private link. Anyone who has the link can see that overlay and nothing else, so treat it like a password. Making a new link stops the old one working. Overlays are deleted with your data.
+- **Server rivalries:** servers with the weekly digest on are compared once a month using totals only (games finished and hours among members who opted in with `/alerts share`). The other server sees the totals and the server name, never a member's name or library.
+- **Wishlist match:** when you look at someone's public wishlist page in Discord, the bot compares it with your own list for that moment and shows the games you both want. Nothing is stored.
 
 ## Community features (servers that use them)
 - **XP and levels:** per server, your Discord ID with your XP, level, a count of counted messages and minutes in voice. Message text is never read or stored; the bot only notes that you sent one. Shown on `/server rank`, `/server levels` and the dashboard to people in that server.

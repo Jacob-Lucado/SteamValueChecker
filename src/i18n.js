@@ -13,6 +13,7 @@ const ROWS = {
     "Stop watching": ["Dejar de seguir", "Ne plus suivre", "Nicht mehr beobachten", "Parar de seguir", "Smetti di seguire", "Перестать следить", "Przestań obserwować", "Takibi bırak", "ウォッチをやめる", "추적 중지", "停止关注"],
     "Snooze 7 days": ["Posponer 7 días", "Reporter 7 jours", "7 Tage pausieren", "Adiar 7 dias", "Posticipa 7 giorni", "Отложить на 7 дней", "Odłóż na 7 dni", "7 gün ertele", "7日間スヌーズ", "7일간 미루기", "推迟 7 天"],
     "Only below a price…": ["Solo bajo un precio…", "Seulement sous un prix…", "Nur unter einem Preis…", "Só abaixo de um preço…", "Solo sotto un prezzo…", "Только ниже цены…", "Tylko poniżej ceny…", "Yalnızca bir fiyatın altında…", "指定価格以下のみ…", "특정 가격 이하일 때만…", "仅低于某价格时…"],
+    "Share this deal": ["Compartir esta oferta", "Partager cette offre", "Dieses Angebot teilen", "Compartilhar esta oferta", "Condividi questa offerta", "Поделиться скидкой", "Udostępnij tę ofertę", "Bu fırsatı paylaş", "このセールを共有", "이 할인 공유하기", "分享此优惠"],
     "Steam page": ["Página de Steam", "Page Steam", "Steam-Seite", "Página da Steam", "Pagina Steam", "Страница в Steam", "Strona Steam", "Steam sayfası", "Steamのページ", "Steam 페이지", "Steam 页面"],
     "Price history": ["Historial de precios", "Historique des prix", "Preisverlauf", "Histórico de preços", "Storico prezzi", "История цен", "Historia cen", "Fiyat geçmişi", "価格履歴", "가격 기록", "价格历史"],
     "View deal": ["Ver oferta", "Voir l'offre", "Angebot ansehen", "Ver oferta", "Vedi offerta", "Открыть скидку", "Zobacz ofertę", "Fırsata git", "セールを見る", "할인 보기", "查看优惠"],

@@ -1024,3 +1024,9 @@ test("the bot owner is never held back by the AI cooldown, caps or blocks", asyn
     assert.equal(a.ok, true); assert.equal(b.ok, true, "no cooldown for the owner");
     assert.equal((await ai.answer({ guildId: "g", userId: "7", question: "hello" })).reason, "blocked", "everyone else is still blocked");
 });
+
+test("no slash command is close to Discord's character budget, so adding an option can't silently break registration", async () => {
+    const { hubCommands } = await import("../src/commands.js");
+    const count = o => { let n = (o.name?.length ?? 0) + (o.description?.length ?? 0); for (const c of o.choices ?? []) n += String(c.name).length + (typeof c.value === "string" ? c.value.length : 0); for (const x of o.options ?? []) n += count(x); return n; };
+    for (const c of hubCommands) assert.ok(count(c) <= 7900, `/${c.name} uses ${count(c)} of Discord's 8000 characters`);
+});

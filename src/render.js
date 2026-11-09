@@ -193,7 +193,7 @@ export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null
         ...(one && h.item.id != null ? [{ type: 1, components: [
             { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${h.item.id}` },
             { type: 2, style: 2, label: tr(lang, "Only below a price…"), custom_id: `${BELOW_ID}:${h.item.id}` },
-            { type: 2, style: 2, label: "Share this deal", custom_id: `${STORY_ID}:${h.item.id}` }] }] : [])].filter(Boolean);
+            { type: 2, style: 2, label: tr(lang, "Share this deal"), custom_id: `${STORY_ID}:${h.item.id}` }] }] : [])].filter(Boolean);
     const content = single ? undefined : `${hits.length} games on your wishlist hit your alert.`;
     // With a store to keep them in, several games become one card you page through, each with its own full set of buttons.
     if (pager && !single) return pagedPayload(pager, { content, pages: hits.map(h => ({ embed: embedFor(h, true), rows: rowsFor(h, true), label: h.item.title })) });

@@ -1,6 +1,6 @@
 # Terms of Service: Steam Value Checker
 
-Last updated: October 26, 2026
+Last updated: November 9, 2026
 
 By using Steam Value Checker ("the bot") you agree to these terms.
 
@@ -14,6 +14,7 @@ By using Steam Value Checker ("the bot") you agree to these terms.
 8. **Wishlist alerts.** If you use `/me wishlist`, you agree that the bot stores the data listed in [PRIVACY.md](PRIVACY.md) and sends you alerts by direct message, or in a server's alert channel as described there. You can stop at any time with `/alerts pause` or `/me mydata delete`. Alerts are best effort: they can be late, missed or wrong, and a price may be gone by the time you click. Do not rely on them for time-critical purchases.
 9. **Server admins.** An alert channel posts members' alerts, including game names, to everyone who can see it. Choose it with that in mind.
 10. **Privacy.** See [PRIVACY.md](PRIVACY.md).
-11. **Changes.** These terms may be updated. Continued use means you accept the updated terms.
+11. **Supporter passes.** A pass is a one-time payment, not a subscription, and nothing renews by itself. It adds a Supporter role, a profile badge and a few extras for the time it covers, and everything else in the bot stays free either way. Payments are handled by Square. A full refund through Square ends the days that payment bought. If something goes wrong with a payment, contact me and I'll sort it out. A pass can't be transferred, and I can end one early if the account is used to break these terms.
+12. **Changes.** These terms may be updated. Continued use means you accept the updated terms.
 
 Contact: [Jacob Lucado on X](https://x.com/twit_user69).
