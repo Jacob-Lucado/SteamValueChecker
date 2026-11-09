@@ -304,7 +304,7 @@
       if (!pages.length) return null;
       const unread = state.me ? (group.id === "account" ? state.me.unread : group.id === "admin" ? state.me.bugsNew : 0) : 0;
       const active = group === here;
-      return h("a", { href: "#/" + pages[0][0], class: active ? "active" : "", "data-pages": pages.map(p => p[0]).join(" "), "aria-current": active ? "page" : null }, navText(group.id, group.label), badge(unread));
+      return h("a", { href: group.id === "admin" && state.me && state.me.adminUrl ? state.me.adminUrl : "#/" + pages[0][0], class: active ? "active" : "", "data-pages": pages.map(p => p[0]).join(" "), "aria-current": active ? "page" : null }, navText(group.id, group.label), badge(unread));
     }).filter(Boolean));
     // The tabs for the section you are in (only when it has more than one page you can see).
     let bar = document.getElementById("hubbar");
@@ -3298,13 +3298,18 @@
       h("div", { class: "rule inline" }, level, refresh, copy, clear), out);
   }
 
-  async function adminView(opts = {}) {
-    const holder = h("div", { class: "muted", text: "Loading…" });
-    if (!opts.shell) app.replaceChildren(pageHead("Admin", "Only you, the bot owner, can see this."),
-      state.me && state.me.adminUrl ? h("div", { class: "notice" }, h("strong", { text: "There's a bigger admin panel now. " }), h("a", { href: state.me.adminUrl, text: "Open it" }), " for a sidebar, search (Ctrl+K), live system health and an audit log of what you do.") : null, holder);
+  /** Old links and bookmarks to #/admin land in the panel. */
+  function adminRedirect() {
+    app.replaceChildren(h("div", { class: "muted", text: "Opening the admin panel…" }));
+    location.replace((state.me && state.me.adminUrl) || "/admin");
+  }
+
+  /** The data and page builders the admin panel (admin.html) is made from. The old in-dashboard Admin page is gone: the Admin button opens the panel. */
+  async function adminView() {
+    const opts = { shell: true };
     let d, ins, bugData;
     try { [d, ins, bugData] = await Promise.all([api("/api/admin/stats"), api("/api/admin/insights"), api("/api/admin/bugs")]); }
-    catch (e) { if (opts.shell) throw e; holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
+    catch (e) { throw e; }
     const st = d.stats, hl = d.health || {}, bot = ins.bot || {};
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
     const when = t => (t ? new Date(t).toLocaleString() : "never");
@@ -3885,25 +3890,14 @@
       return [box];
     };
     const TABS = [["overview", "Overview", overview], ["bugs", "Bugs", bugs], ["requests", "Requests", requestsTab], ["gifts", "Gift marks", giftsTab], ["social", "Community", socialTab], ["music", "Music", musicTab], ["panels", "Panels", panelsTab], ["ai", "AI companion", aiTab], ["settings", "Bot settings", settingsTab], ["growth", "Growth", growth], ["features", "Usage", features], ["community", "Community", community], ["servers", "Servers", servers], ["members", "People", members], ["announce", "Announce", announce], ["giveaway", "Giveaway", giveaway], ["tools", "Tools and logs", tools]];
-    if (opts.shell) return { TABS, tile, table, when, n0, st, hl, bot, ins, bugData, sum, daily };
-    let current = "overview";
-    const tabBar = h("div", { class: "tabs" });
-    const body = h("div");
-    const show = () => {
-      tabBar.replaceChildren(...TABS.map(([id, label]) => h("button", { class: "tab" + (id === current ? " active" : ""), type: "button", onclick: () => { current = id; show(); } }, label, id === "bugs" && bugData.newCount ? h("span", { class: "badge-count", text: String(Math.min(99, bugData.newCount)) }) : null)));
-      body.replaceChildren(...TABS.find(t => t[0] === current)[2]());
-    };
-    holder.className = "";
-    holder.replaceChildren(tabBar, body);
-    show();
+    return { TABS, tile, table, when, n0, st, hl, bot, ins, bugData, sum, daily };
   }
-
 
   // ---------- the admin panel (admin.html): a sidebar app around the same pages as adminView ----------
   const ADMIN_NAV = [
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
-    ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."]]],
-    ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
+    ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."], ["panels", "Panel runs", "▤", "Which commands people run from menus and panels."]]],
+    ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["profiles", "Profile pages", "▭", "Reported profile pages, and a way to hide or restore one."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
     ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
@@ -3913,7 +3907,7 @@
 
   async function adminContext(force = false) {
     if (!force && adminCtx && Date.now() - adminCtxAt < 45_000) return adminCtx;
-    adminCtx = await adminView({ shell: true });
+    adminCtx = await adminView();
     adminCtxAt = Date.now();
     return adminCtx;
   }
@@ -4086,6 +4080,7 @@
     if (page === "votes") return void adminVotes(body, fail);
     if (page === "datareq") return void adminDataReq(body, fail);
     if (page === "supporters") return void adminSupporters(body, fail);
+    if (page === "profiles") return void adminProfiles(body, fail);
     if (page === "audit") return void adminAudit(body);
     if (page === "account") return void adminAccount(body, fail);
     adminContext().then(ctx => {
@@ -4096,12 +4091,22 @@
         const firstGrid = nodes.findIndex(n => n && n.classList && n.classList.contains("grid"));
         nodes.splice(firstGrid + 1, 0, ...adminTrends(ctx));
         nodes.unshift(adminQuick(ctx));
+        nodes.unshift(adminAttention());
       }
       draw(nodes);
     }).catch(fail);
   }
 
   /** One-click doors to the things you do most. */
+  /** What needs the owner right now. Fills in by itself; empty means all quiet. */
+  function adminAttention() {
+    const box = h("div", { class: "panel adm-attn" }, h("h3", { text: "Needs your attention" }), h("p", { class: "muted small", text: "Checking…" }));
+    api("/api/admin/attention").then(r => {
+      box.replaceChildren(h("h3", { text: "Needs your attention" }),
+        r.items.length ? h("ul", { class: "adm-attn-list" }, ...r.items.map(i => h("li", { class: i.level }, h("a", { href: i.href, text: i.text })))) : h("p", { class: "muted", text: "All quiet. Nothing is waiting on you." }));
+    }).catch(() => box.remove());
+    return box;
+  }
   function adminQuick(ctx) {
     const q = (href, title, text, extra = {}) => h("a", { href, ...extra }, h("b", { text: title }), h("span", { text }));
     return h("div", { class: "adm-quick" },
@@ -4214,6 +4219,7 @@
             h("button", { class: "btn blue", type: "button", text: "Give pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/grant", { user_id: id.value, days: Number(days.value) }); toast("Pass runs until " + when(x.until) + "." + (x.role && x.role !== "ok" ? " Role not given: " + (WHY[x.role] || x.role) : ""), x.role && x.role !== "ok" ? "warn" : "ok"); adminSupporters(body, fail); }) }))),
         h("div", { class: "panel" }, h("h3", { text: "Supporters" }),
           h("div", { class: "row" }, h("button", { class: "btn gray small", type: "button", text: "Re-send roles", title: "Give the Supporter role to everyone with a live pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/resync", {}); const bad = Object.entries(x.problems); toast(bad.length ? `${x.ok} done. Not given: ` + bad.map(([k, n]) => `${n} (${(WHY[k] || k).split(".")[0]})`).join("; ") : `Role sent to ${x.ok}.`, bad.length ? "warn" : "ok"); }) }),
+            h("button", { class: "btn gray small", type: "button", text: "Download CSV", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters.csv"); const a = h("a", { href: URL.createObjectURL(new Blob([x.csv], { type: "text/csv" })), download: "supporters.csv" }); document.body.append(a); a.click(); a.remove(); }) }),
             h("span", { class: "muted small", text: "Dates are Eastern time and end at 11:59 pm. Everything here is saved to the audit log." })),
           r.everyone.length ? h("div", { class: "scroll-x" }, h("table", { class: "sup-table" }, h("thead", {}, h("tr", {}, ["Discord ID", "Status", "Pass ends", "Add or remove days", "Founder", "Wall name", ""].map(c => h("th", { text: c })))),
             h("tbody", {}, r.everyone.map(a => {
@@ -4232,9 +4238,32 @@
                   h("button", { class: "btn gray small", type: "button", text: "Re-send role", onclick: e => busy(e.currentTarget, () => call({ action: "resync" }, "Role re-sent.")) }),
                   a.active ? h("button", { class: "btn red small", type: "button", text: "End pass", onclick: e => busy(e.currentTarget, async () => { if (!confirm("End this pass now and take the Supporter role back?")) return; await call({ action: "remove" }, "Pass ended."); }) }) : null)));
             })))) : h("div", { class: "empty", text: "No supporters yet." })),
+        h("div", { class: "panel" }, h("h3", { text: "Square activity" }), h("p", { class: "muted small", text: "Every call Square makes to the bot, newest first. If a payment never shows up here, Square isn't reaching it: check the webhook address and its events." }),
+          r.payments.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "What", "Details"].map(c => h("th", { text: c })))), h("tbody", {}, r.payments.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString("en-US", { timeZone: "America/New_York" }) }), h("td", {}, h("b", { class: /Rejected|Error/.test(e.what) ? "bad" : "", text: e.what })), h("td", { text: e.detail || "" }))))) : h("div", { class: "empty", text: "Nothing yet." })),
         h("div", { class: "grid two" },
           h("div", { class: "panel" }, h("h3", { text: "Latest" }),
             r.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Who", "Days", "Via"].map(c => h("th", { text: c })))), h("tbody", {}, r.recent.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString("en-US", { timeZone: "America/New_York" }) }), h("td", { text: e.id }), h("td", { text: String(e.days) }), h("td", { text: e.via }))))) : h("div", { class: "empty", text: "Nothing yet." }))));
+    } catch (e) { fail(e); }
+  }
+
+  /** Reported profile pages, plus a box to hide or restore any page by its name. */
+  async function adminProfiles(body, fail) {
+    try {
+      const r = await api("/api/admin/profiles");
+      const act = (slug, action, msg) => api("/api/admin/profiles", { slug, action }).then(() => { toast(msg, "ok"); adminProfiles(body, fail); }).catch(e => toast(e.message, "error"));
+      const slug = h("input", { type: "text", placeholder: "Page name, like jacob", autocapitalize: "none", "aria-label": "Page name" });
+      const ago = t => new Date(t).toLocaleString("en-US", { timeZone: "America/New_York" });
+      const bySlug = new Map(); for (const x of r.reports) { const e = bySlug.get(x.slug) ?? { slug: x.slug, hidden: x.hidden, reasons: [], last: 0 }; e.reasons.push(x.reason); e.last = Math.max(e.last, x.at); bySlug.set(x.slug, e); }
+      body.replaceChildren(
+        h("div", { class: "panel" }, h("h3", { text: `Reported pages (${bySlug.size})` }),
+          bySlug.size ? h("div", { class: "scroll-x" }, h("table", {}, h("thead", {}, h("tr", {}, ["Page", "Reports", "Latest", "What people said", ""].map(c => h("th", { text: c })))),
+            h("tbody", {}, [...bySlug.values()].sort((a, b) => b.last - a.last).map(x => h("tr", {}, h("td", {}, h("a", { href: "/u/" + encodeURIComponent(x.slug), target: "_blank", rel: "noopener", text: "@" + x.slug }), x.hidden ? h("span", { class: "pf-badge off", text: "Hidden" }) : null),
+              h("td", { text: String(x.reasons.length) }), h("td", { text: ago(x.last) }), h("td", { text: [...new Set(x.reasons)].slice(0, 3).join(" | ") }),
+              h("td", {}, h("div", { class: "row" }, x.hidden ? h("button", { class: "btn gray small", type: "button", text: "Show again", onclick: e => busy(e.currentTarget, () => act(x.slug, "show", "Page is visible again.")) }) : h("button", { class: "btn red small", type: "button", text: "Hide page", onclick: e => busy(e.currentTarget, () => act(x.slug, "hide", "Page hidden.")) }),
+                h("button", { class: "btn gray small", type: "button", text: "Dismiss", onclick: e => busy(e.currentTarget, () => act(x.slug, "dismiss", "Reports cleared.")) })))))))) : h("div", { class: "empty", text: "No reports. Nice." })),
+        h("div", { class: "panel" }, h("h3", { text: "Hide or restore a page by name" }),
+          h("div", { class: "row" }, slug, h("button", { class: "btn red small", type: "button", text: "Hide", onclick: e => busy(e.currentTarget, () => act(slug.value.trim().replace(/^@/, "").toLowerCase(), "hide", "Page hidden.")) }), h("button", { class: "btn gray small", type: "button", text: "Show", onclick: e => busy(e.currentTarget, () => act(slug.value.trim().replace(/^@/, "").toLowerCase(), "show", "Page is visible again.")) })),
+          h("p", { class: "muted small", text: "A hidden page shows a not-found message to visitors. The owner can still see and edit it." })));
     } catch (e) { fail(e); }
   }
 
@@ -7440,7 +7469,7 @@
       h("div", { class: "muted small" }, feedAgo(x.at), x.game ? " · " + x.game : "", Object.entries(x.reactions || {}).map(([e, n]) => ` · ${e} ${n}`).join(""), x.replies ? ` · ${x.replies} ${x.replies === 1 ? "reply" : "replies"}` : ""))));
   }
 
-  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
+  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

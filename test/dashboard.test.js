@@ -2930,6 +2930,11 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         const adm = (await o.request("/api/admin/supporters")).data;
         assert.deepEqual(adm.active.map(a => a.id).sort(), ["123456789", "222222222"]);
         assert.ok(adm.recent.length >= 2);
+        assert.ok(adm.payments.some(p => p.what === "Paid"), "Square's calls are logged for the owner");
+        const csv = (await o.request("/api/admin/supporters.csv")).data.csv;
+        assert.match(csv, /^discord_id,status,pass_ends,founder,wall_name/); assert.match(csv, /123456789/);
+        const attn = (await o.request("/api/admin/attention")).data.items;
+        assert.ok(Array.isArray(attn), "the needs-attention list loads");
         assert.equal(adm.revenue.total, 300, "the paid pass counts, the gifted one doesn't");
         const theme = async k => (await o.request("/api/profile/page", { method: "POST", body: { theme: k } }));
         assert.equal((await theme("galaxy")).status, 403, "supporter themes are locked for everyone else");
@@ -2966,4 +2971,19 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         assert.equal((await fetch(off.base + "/api/square/webhook", { method: "POST", body: "{}" })).status, 404, "nothing to call when Square isn't set up");
         assert.equal((await off.request("/api/supporter")).data.enabled, false);
     } finally { await off.close(); }
+});
+
+test("admin panel: reported profile pages can be hidden, restored and dismissed, and the attention list counts them", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    try {
+        o.db.ensureUser("u2"); o.db.setProfile("u2", { slug: "pat", isPublic: true });
+        o.db.addProfileReport("pat", "Pretending to be someone");
+        assert.ok((await o.request("/api/admin/attention")).data.items.some(i => /reported profile/.test(i.text)));
+        assert.equal((await o.request("/api/admin/profiles", { method: "POST", body: { slug: "pat", action: "hide" } })).status, 200);
+        assert.equal((await o.request("/api/admin/profiles")).data.reports[0].hidden, true);
+        assert.equal((await o.request("/api/admin/profiles", { method: "POST", body: { slug: "pat", action: "show" } })).status, 200);
+        assert.equal((await o.request("/api/admin/profiles")).data.reports[0].hidden, false);
+        assert.equal((await o.request("/api/admin/profiles", { method: "POST", body: { slug: "pat", action: "dismiss" } })).status, 200);
+        assert.equal((await o.request("/api/admin/profiles")).data.reports.length, 0);
+    } finally { await o.close(); }
 });

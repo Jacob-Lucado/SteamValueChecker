@@ -460,14 +460,16 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             req.on("data", c => { size += c.length; if (size > 200_000) { reject(new HttpError(413, "Too large.")); req.destroy(); } else chunks.push(c); });
             req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8"))); req.on("error", reject);
         });
-        if (!square.verify(raw, req.headers["x-square-hmacsha256-signature"])) return json(res, 403, { error: "Bad signature." });
+        const note = (what, detail = "") => { try { pushEvent(db, "adminlog:square", { at: now(), what, detail: String(detail).slice(0, 160) }, 60); } catch { /* the log is a nicety */ } };
+        if (!square.verify(raw, req.headers["x-square-hmacsha256-signature"])) { note("Rejected", "The signature didn't match. Check the signature key and the webhook address."); return json(res, 403, { error: "Bad signature." }); }
         let event; try { event = JSON.parse(raw); } catch { return json(res, 400, { error: "Bad request." }); }
         try {
             const paid = await square.paidPass(event);
-            if (paid) await supporters.grant(paid.userId, paid.plan.days, paid.paymentId, paid.giftFrom ? "Square gift" : "Square", paid.plan.cents, { giftFrom: paid.giftFrom });
+            if (paid) { const g = await supporters.grant(paid.userId, paid.plan.days, paid.paymentId, paid.giftFrom ? "Square gift" : "Square", paid.plan.cents, { giftFrom: paid.giftFrom }); note(g.duplicate ? "Paid (already counted)" : "Paid", `${paid.plan.name} for ${paid.userId}${paid.giftFrom ? " (gift)" : ""}${g.role && g.role !== "ok" ? ", role not given: " + g.role : ""}`); }
             const back = square.refund(event);
-            if (back) await supporters.refund(back.paymentId, back.cents);
-        } catch (err) { log(`[square] ${err.message}`); return json(res, 500, { error: "Try again." }); } // Square tries again later
+            if (back) { const r = await supporters.refund(back.paymentId, back.cents); note(r.ignored ? "Refund ignored" : "Refunded", r.partial ? "A partial refund: change the pass by hand if you want." : r.ignored ? "No matching pass." : `Payment ${back.paymentId}`); }
+            if (!paid && !back) note("Other event", String(event?.type ?? "unknown"));
+        } catch (err) { log(`[square] ${err.message}`); note("Error", err.message); return json(res, 500, { error: "Try again." }); } // Square tries again later
         return json(res, 200, { ok: true });
     }
     const checkoutLimit = createLimiter({ windowMs: 60_000, max: 6, now });
@@ -1180,7 +1182,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         },
         "GET /api/admin/supporters": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
-            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], everyone: supporters ? supporters.everyone() : [], recent: supporters ? supporters.recent() : [], revenue: supporters ? supporters.revenue() : null, home: supporters ? await supporters.homeStatus() : null, plans: PLANS };
+            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], everyone: supporters ? supporters.everyone() : [], payments: readEvents(db, "adminlog:square", 20), recent: supporters ? supporters.recent() : [], revenue: supporters ? supporters.revenue() : null, home: supporters ? await supporters.homeStatus() : null, plans: PLANS };
         },
         // Full edit of one supporter: pass end date, add or take away days, end it, founding mark, wall name, resend the role.
         "POST /api/admin/supporters/edit": async (req, body) => {
@@ -1206,6 +1208,32 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 case "resync": return { role: (await supporters.setUntil(id, supporterUntil(db, id) || 0, "Role re-sent")).role };
                 default: throw new HttpError(400, "Unknown action.");
             }
+        },
+        "GET /api/admin/supporters.csv": async (req, _b, url) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+            const rows = (supporters ? supporters.everyone() : []).map(r => [r.id, r.active ? "active" : "ended", r.until ? new Date(r.until).toISOString() : "", r.founder ? "yes" : "", r.wall].map(q).join(","));
+            return { csv: ["discord_id,status,pass_ends,founder,wall_name", ...rows].join("\n") };
+        },
+        // One glance at what needs the owner: new reports, failing jobs, a full disk, a payment or role problem.
+        "GET /api/admin/attention": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            const items = [];
+            const add = (level, text, href) => items.push({ level, text, href });
+            const newBugs = db.countNewBugs(Number(db.getMeta("bugs_seen") ?? 0));
+            if (newBugs) add("warn", `${newBugs} new bug report${newBugs === 1 ? "" : "s"}`, "#/bugs");
+            const prof = db.listProfileReports();
+            if (prof.length) add("warn", `${prof.length} reported profile${prof.length === 1 ? "" : "s"} to look at`, "#/profiles");
+            const gifts = db.listGiftReports?.() ?? [];
+            if (gifts.length) add("warn", `${gifts.length} reported gift mark${gifts.length === 1 ? "" : "s"}`, "#/gifts");
+            const posts = db.listReports?.() ?? [];
+            if (posts.length) add("warn", `${posts.length} reported post${posts.length === 1 ? "" : "s"}`, "#/social");
+            const failing = ops ? Object.entries(ops.snapshot()?.jobs ?? {}).filter(([, j]) => j.lastError) : [];
+            if (failing.length) add("bad", `${failing.length} background job${failing.length === 1 ? " is" : "s are"} failing: ${failing.slice(0, 3).map(([n]) => n).join(", ")}`, "#/system");
+            try { const st = storage ? await storage() : null; if (st?.volume?.pct >= 80) add(st.volume.pct >= 90 ? "bad" : "warn", `The disk is ${st.volume.pct}% full`, "#/system"); } catch { /* skip */ }
+            if (supporters) { try { const h = await supporters.homeStatus(); if (!h.ok) add("warn", "The Supporter role can't be given right now", "#/supporters"); } catch { /* skip */ } }
+            if (health && !health()) add("bad", "The bot isn't connected to Discord", "#/system");
+            return { items };
         },
         "POST /api/admin/supporters/resync": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
