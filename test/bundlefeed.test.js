@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { parseHumbleList, parseHumbleDetail, parseFanatical, parseIndieGala, parseSteamBundlePage, parseIndieGalaDetail, parseItadIndex, parseItadDetail, fetchFanatical, fetchAllBundles } from "../src/bundlefeedsource.js";
+import { parseHumbleList, parseHumbleDetail, parseFanatical, parseIndieGala, parseSteamBundlePage, parseIndieGalaDetail, parseItadIndex, parseItadDetail, fetchFanatical, fetchAllBundles, adultBundle } from "../src/bundlefeedsource.js";
 import { bundleFeedEmbed, runBundleFeed, applyBundleFeedSettings, describeStores } from "../src/bundlefeed.js";
 import { TEMPLATE, ADDED_LATER } from "../src/community.js";
 
@@ -133,4 +133,11 @@ test("a Steam bundle uses its own banner, and only falls back to a game's header
     assert.equal(parseSteamBundlePage(`<meta property="og:title" content="Pitch on Steam"><div data-ds-appid="5168120"></div><img src="${shot}">`, 2, NOW).image, shot);
     const bare = `<meta property="og:title" content="Pack on Steam"><div data-ds-appid="111"></div>`;
     assert.match(parseSteamBundlePage(bare, 1, NOW).image, /apps\/111\/header\.jpg/);
+});
+
+test("adult bundles are kept out of the feed, ordinary ones are not", () => {
+    assert.equal(adultBundle({ title: "Hentai Balloons 2 Bundle", games: [] }), true);
+    assert.equal(adultBundle({ title: "Cozy Pack", games: ["Naughty Waifu NSFW Edition"] }), true);
+    assert.equal(adultBundle({ title: "Uncensored Stories", games: [] }), true);
+    for (const t of ["Essex Strategy Bundle", "Sussex Racing", "Humble Sci-Fi Exposure Bundle", "Dark Fantasy Collection", "Mature Horror Bundle"]) assert.equal(adultBundle({ title: t, games: ["Doom"] }), false, t);
 });
