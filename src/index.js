@@ -15,7 +15,7 @@ import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
-import { pushEvent } from "./adminlog.js";
+import { pushEvent, readEvents } from "./adminlog.js";
 import { createVoterRole } from "./voterrole.js";
 import { createOffsite, offsiteConfig } from "./offsite.js";
 import { runWatchdog } from "./watchdog.js";
@@ -326,7 +326,7 @@ let bundlesBusy = false;
 const pollBundles = async ({ deep = false } = {}) => {
     if (bundlesBusy) return null;
     bundlesBusy = true;
-    try { return await runBundleFeed({ db, api: botRest, deep, log: m => console.log(`[bundles] ${m}`) }); } finally { bundlesBusy = false; }
+    try { const r = await runBundleFeed({ db, api: botRest, deep, log: m => console.log(`[bundles] ${m}`) }); beat.bundles = Date.now(); beat.bundleError = r?.feedError ?? null; return r; } finally { bundlesBusy = false; }
 };
 const bundleUi = createBundleFeedHandlers({ db, runNow: pollBundles });
 let dropsBusy = false;
@@ -658,7 +658,7 @@ setInterval(async () => {
 }, 60_000).unref();
 
 const reply = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
-const beat = { alerts: null, giveaways: null }; // when each background job last finished, for the status page
+const beat = { alerts: null, giveaways: null, bundles: null, bundleError: null }; // when each background job last finished, for the status page
 const staleAfter = (at, everyMs) => (at === null ? Date.now() - STARTED_AT > everyMs * 3 : Date.now() - at > everyMs * 3);
 const status = createStatusMonitor({
     db, log: m => console.warn(`[status] ${m}`),
@@ -684,6 +684,14 @@ const status = createStatusMonitor({
             const bad = [["Amazon Luna", luna.health()], ["GamerPower", gamerPower.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()], ["Top.gg votes", topgg.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
             return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${h.lastError})`).join(" or ")}` } : { state: "operational" };
         } },
+        bundlefeed: { name: "Bundle feed", desc: "Humble, Fanatical, IndieGala and Steam bundles posted to servers", critical: false, check: () => {
+            if (staleAfter(beat.bundles, 30 * 60_000)) return { state: "degraded", detail: "The last check is overdue" };
+            return beat.bundleError ? { state: "degraded", detail: `Can't read ${String(beat.bundleError).slice(0, 120)}` } : { state: "operational" };
+        } },
+        ...(square?.enabled ? { payments: { name: "Supporter payments", desc: "Square checkout and the webhook that hands out passes", critical: false, check: () => {
+            const last = readEvents(db, "adminlog:square", 20).find(e => /^(Paid|Rejected|Refunded|Error)/.test(e.what));
+            return last && /^(Rejected|Error)/.test(last.what) ? { state: "degraded", detail: "Square's last call was turned away. Check the webhook key and address" } : { state: "operational" };
+        } } } : {}),
         golive: { name: "Go-live detection", desc: "Noticing when linked Twitch, Kick and YouTube streamers go live", critical: false, check: () => {
             const h = streamWatch.health();
             if (!h.linked) return { state: "operational" };
