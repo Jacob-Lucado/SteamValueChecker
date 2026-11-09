@@ -1317,6 +1317,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 live: db.listStreamLive(g.id).map(r => ({ userId: r.user_id, title: r.title, url: r.url, game: r.game, since: r.started, mine: r.user_id === s.userId })),
                 can: { go: canStreamIn(c, { roleIds, isManager: isManager(g), isBotOwner: isOwner(s) }), manage: mgr },
                 optedIn: streams ? await streams.optedIn(g.id, s.userId) : null,
+                links: db.getStreamLinks(g.id, s.userId).map(l => ({ platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) })),
                 link: (l => (l ? { platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) } : null))(db.getStreamLink(g.id, s.userId)),
                 watch: watchable(process.env),
                 chatReplies: Boolean(twitchReply), stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint }))
@@ -1349,7 +1350,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 // Chat entry: viewers type !enter in the streamer's Twitch chat. Needs their Twitch channel linked here, and a Discord invite to point newcomers at.
                 let chat = null;
                 if (body.chat_enter) {
-                    if (db.getStreamLink(g.id, s.userId)?.platform !== "twitch") throw new UserError("Link your Twitch channel first (the Your channel box above), so I know which chat to listen to.");
+                    if (!db.getStreamLink(g.id, s.userId, "twitch")) throw new UserError("Link your Twitch channel first (the Your channel box above), so I know which chat to listen to.");
                     let invite = null;
                     if (String(body.chat_invite ?? "").trim()) { try { invite = parseSteps([{ kind: "join_discord", url: body.chat_invite }])[0].url; } catch (e) { if (e instanceof StepError) throw new UserError("The Discord link for chat must be an invite, like https://discord.gg/yourserver."); throw e; } }
                     chat = { invite };
@@ -1363,14 +1364,15 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             const s = session(req); const g = musicMember(s, url.searchParams.get("guild"));
             const live = new Map(db.listStreamLive(g.id).map(r => [r.user_id, r]));
             const watch = watchable(process.env);
-            const people = (await Promise.all(db.listStreamLinks(g.id).map(async l => {
+            const people = (await Promise.all([...new Map(db.listStreamLinks(g.id).map(l => [l.user_id, l])).values()].map(async l => { // one card per person, however many channels they linked
                 const m = await remember("smem:" + g.id + ":" + l.user_id, 10 * 60_000, () => rest.getMember(g.id, l.user_id)).catch(() => undefined);
                 if (m === null) return null; // left the server
                 const u = m?.user ?? {};
                 const avatar = m?.avatar ? `https://cdn.discordapp.com/guilds/${g.id}/users/${l.user_id}/avatars/${m.avatar}.png?size=96` : u.avatar ? `https://cdn.discordapp.com/avatars/${l.user_id}/${u.avatar}.png?size=96` : null;
                 const row = live.get(l.user_id);
                 return { userId: l.user_id, name: m?.nick || u.global_name || u.username || "Streamer", avatar, platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle).replace(/\/live$/, ""), checked: Boolean(watch[l.platform]), mine: l.user_id === s.userId,
-                    live: row ? { title: row.title, game: row.game, url: row.url, since: row.started } : null };
+                    channels: db.getStreamLinks(g.id, l.user_id).map(x => ({ platform: x.platform, handle: x.handle, url: channelUrl(x.platform, x.handle).replace(/\/live$/, ""), checked: Boolean(watch[x.platform]) })),
+                    live: row ? { title: row.title, game: row.game, url: row.url, since: row.started, also: row.also ?? [] } : null };
             }))).filter(Boolean);
             people.sort((a, b) => Number(Boolean(b.live)) - Number(Boolean(a.live)) || a.name.localeCompare(b.name));
             return { guild: { id: g.id, name: g.name }, people, liveChannel: db.getCommunity(g.id).live_channel ? true : false, now: now() };
@@ -1381,12 +1383,13 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!db.getCommunity(g.id).live_channel) throw new HttpError(400, "This server has no live channel yet. A manager can pick one below.");
             let ch; try { ch = parseChannel(body.channel); } catch (e) { throw new HttpError(400, e.message); }
             db.setStreamLink(g.id, s.userId, { platform: ch.platform, handle: ch.handle, via: isOwner(s) ? "owner" : isManager(g) ? "manager" : "role", added: now() });
-            return { link: { platform: ch.platform, handle: ch.handle, url: channelUrl(ch.platform, ch.handle) }, watch: watchable(process.env) };
+            return { link: { platform: ch.platform, handle: ch.handle, url: channelUrl(ch.platform, ch.handle) }, links: db.getStreamLinks(g.id, s.userId).map(l => ({ platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) })), watch: watchable(process.env) };
         },
         "POST /api/streams/unlink": async (req, body) => {
             const s = session(req); const g = musicMember(s, body.guild_id);
-            db.removeStreamLink(g.id, s.userId);
-            return { ok: true };
+            const site = ["twitch", "kick", "youtube"].includes(body.platform) ? body.platform : null;
+            db.removeStreamLink(g.id, s.userId, site);
+            return { ok: true, links: db.getStreamLinks(g.id, s.userId).map(l => ({ platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) })) };
         },
         "POST /api/streams/end": async (req, body) => {
             const s = session(req); const g = musicMember(s, body.guild_id);

@@ -18,12 +18,13 @@ export function cleanStreamUrl(raw) {
 const siteName = url => { const h = new URL(url).hostname.replace(/^www\./, ""); return /twitch/.test(h) ? "Twitch" : /youtu/.test(h) ? "YouTube" : /kick/.test(h) ? "Kick" : /tiktok/.test(h) ? "TikTok" : /facebook|fb\.watch/.test(h) ? "Facebook" : /trovo/.test(h) ? "Trovo" : /rumble/.test(h) ? "Rumble" : "X"; };
 const ago = ms => { const m = Math.max(1, Math.round(ms / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
 
-export function livePayload({ userId, name, avatarUrl = null, title, url, game = null, pingRole = null, ping = false }) {
+export function livePayload({ userId, name, avatarUrl = null, title, url, game = null, pingRole = null, ping = false, also = [] }) {
+    const others = (also ?? []).filter(u => u !== url).slice(0, 3);
     return {
         content: ping && pingRole ? `<@&${pingRole}>` : undefined,
         embeds: [{ color: 0x9146ff, author: { name: `${name} is live`, ...(avatarUrl ? { icon_url: avatarUrl } : {}) }, title: clip(title, 120) || "Live now", url,
-            description: `<@${userId}> just went live on **${siteName(url)}**${game ? ` playing **${clip(game, 60)}**` : ""}. Come hang out!`, footer: { text: "🔴 Live now" }, timestamp: new Date().toISOString() }],
-        components: [{ type: 1, components: [{ type: 2, style: 5, label: "Watch the stream", url }] }],
+            description: `<@${userId}> just went live on **${siteName(url)}**${others.length ? ` (and ${others.map(u => `**${siteName(u)}**`).join(", ")})` : ""}${game ? ` playing **${clip(game, 60)}**` : ""}. Come hang out!`, footer: { text: "🔴 Live now" }, timestamp: new Date().toISOString() }],
+        components: [{ type: 1, components: [{ type: 2, style: 5, label: others.length ? `Watch on ${siteName(url)}` : "Watch the stream", url }, ...others.map(u => ({ type: 2, style: 5, label: `Watch on ${siteName(u)}`, url: u }))] }],
         allowed_mentions: { parse: [], roles: ping && pingRole ? [pingRole] : [], users: [userId] }
     };
 }
@@ -38,15 +39,16 @@ export function createStreams({ db, api, now = () => Date.now(), onEnd = null })
     const settings = guildId => db.getCommunity(guildId);
 
     /** `who` is { id, name, avatarUrl }. Returns { posted, pinged }. */
-    async function goLive(guildId, who, { title, url, game = null, auto = false }) {
+    async function goLive(guildId, who, { title, url, game = null, auto = false, also = [] }) {
         const c = settings(guildId);
         if (!c.live_channel) throw new UserError("This server has no stream channel yet. A manager can pick one with `/server stream setup` or on the dashboard's Streams page.");
         const link = cleanStreamUrl(url);
+        const more = [...new Set((also ?? []).map(u => { try { return cleanStreamUrl(u); } catch { return null; } }).filter(u => u && u !== link))].slice(0, 3);
         const t = clip(title, 120) || "Live now", g = clip(game, 60) || null;
         const existing = db.getStreamLive(guildId, who.id);
         const quiet = existing || now() - db.lastStreamPing(guildId, who.id) < PING_COOLDOWN_MS;
         const ping = Boolean(c.ping_stream) && !quiet;
-        const payload = livePayload({ userId: who.id, name: who.name, avatarUrl: who.avatarUrl, title: t, url: link, game: g, pingRole: c.ping_stream, ping });
+        const payload = livePayload({ userId: who.id, name: who.name, avatarUrl: who.avatarUrl, title: t, url: link, game: g, pingRole: c.ping_stream, ping, also: more });
         let messageId = existing?.message_id ?? null;
         if (messageId) { try { await api.editMessage(existing.channel_id, messageId, payload); } catch { messageId = null; } }
         if (!messageId) {
@@ -55,7 +57,7 @@ export function createStreams({ db, api, now = () => Date.now(), onEnd = null })
             catch (e) { if (e?.status === 403 || e?.status === 404) throw new UserError("I can't post in the stream channel. Give me View Channel, Send Messages and Embed Links there."); throw e; }
             messageId = m?.id ?? null;
         }
-        db.setStreamLive(guildId, who.id, { title: t, url: link, game: g, started: existing?.started ?? now(), channelId: c.live_channel, messageId, auto });
+        db.setStreamLive(guildId, who.id, { title: t, url: link, game: g, started: existing?.started ?? now(), channelId: c.live_channel, messageId, auto, also: more });
         if (ping) db.markStreamPing(guildId, who.id, now());
         return { posted: true, pinged: ping, edited: Boolean(existing), channelId: c.live_channel };
     }

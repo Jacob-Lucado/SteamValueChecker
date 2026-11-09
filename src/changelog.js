@@ -3,6 +3,7 @@ export const CHANGELOG = [
     { version: "2026.11.48", date: "2026-11-09", title: "Bundle pictures and supporter touches", items: [
         "**Bundle pictures:** Steam bundles in the bundles channel show their banner again, and bundles without one use a screenshot of the first game.",
         "**Adult bundles:** they're left out by default. Server managers can switch them on with `/server promos bundles adult:true` or from the Game bundles panel on the dashboard.",
+        "**Several streaming sites at once:** link your Twitch, Kick and YouTube channels together. The bot notices when you go live on any of them and makes one post that links to each, and it only closes the post once all of them are offline.",
         "**More free games:** IndieGala giveaways now show up with the other freebies.",
         "**Supporters:** pick your own colour for your price-alert cards on the Chip in page, and `/bot supporter` shows your pass and what it gives you. The page also says how many founding spots are left." ] },
     { version: "2026.11.47", date: "2026-11-09", title: "Every overlay in one studio", items: [

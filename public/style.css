@@ -1658,3 +1658,10 @@ a.fd-name:hover { text-decoration: underline; }
 
 .pass-wall-opt input[type="color"] { flex: 0 0 64px !important; width: 64px !important; min-width: 0; height: 40px; padding: 3px; border-radius: 10px; cursor: pointer; }
 .pass-wall-opt:last-child { margin-bottom: 22px; }
+
+.sr-pills { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.sr-id .sr-chan { display: block; }
+.sr-watchrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.stream-link-row { align-items: center; gap: 10px; margin-bottom: 6px; }
+.stream-link-row > * { flex: 0 0 auto !important; }
+.stream-link-row .muted { flex: 1 1 auto !important; }

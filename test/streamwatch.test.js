@@ -41,8 +41,8 @@ function rig({ live = new Map(), roles = ["sr"] } = {}) {
     db.setCommunity("g", { live_channel: "live", ping_stream: "ping", streamer_role_id: "sr" });
     const streams = createStreams({ db, api, now: () => t });
     const state = { live };
-    const checkers = { twitch: async () => { if (down) throw new Error("api down"); return state.live; } };
-    const env = { TWITCH_CLIENT_ID: "a", TWITCH_CLIENT_SECRET: "b" };
+    const checkers = { twitch: async () => { if (down) throw new Error("api down"); return state.live; }, kick: async () => { if (state.kickDown) throw new Error("kick down"); return state.kick ?? new Map(); } };
+    const env = { TWITCH_CLIENT_ID: "a", TWITCH_CLIENT_SECRET: "b", KICK_CLIENT_ID: "c", KICK_CLIENT_SECRET: "d" };
     const logs = [];
     const watch = createStreamWatch({ db, streams, api, checkers, env, now: () => t, log: m => logs.push(m), access: async l => { const c = db.getCommunity(l.guild_id); const m = await api.getMember(); return l.via !== "role" || m.roles.includes(c.streamer_role_id); } });
     return { db, sent, edits, watch, state, logs, setDown: v => { down = v; }, setRoles: r => { roles.splice(0, roles.length, ...r); }, tick: ms => { t += ms; } };
@@ -100,4 +100,54 @@ test("a manager can switch the automatic posts off for their server and back on"
     assert.equal(r.db.getCommunity("g").stream_auto, 0);
     r.db.setCommunity("g", { stream_auto: 1 });
     assert.equal((await r.watch.tick()).live, 1); assert.equal(r.sent.length, 1);
+});
+
+test("a streamer with several channels gets one post, linking every site they are live on, and it only closes when all of them are offline", async () => {
+    const r = rig();
+    r.db.setStreamLink("g", "u1", { platform: "twitch", handle: "alpha", via: "role", added: 1 });
+    r.db.setStreamLink("g", "u1", { platform: "kick", handle: "alpha_k", via: "role", added: 2 });
+    assert.equal(r.db.getStreamLinks("g", "u1").length, 2); assert.equal(r.db.getStreamLink("g", "u1").platform, "twitch"); assert.equal(r.db.getStreamLink("g", "u1", "kick").handle, "alpha_k");
+    r.state.kick = new Map([["alpha_k", { title: "Kick stream", game: "Celeste", url: "https://kick.com/alpha_k" }]]);
+    assert.equal((await r.watch.tick()).live, 1, "live on Kick alone is enough");
+    assert.equal(r.sent.length, 1); assert.equal(r.db.getStreamLive("g", "u1").url, "https://kick.com/alpha_k");
+    r.state.live = new Map([["alpha", { title: "Twitch stream", game: "Celeste", url: "https://twitch.tv/alpha" }]]);
+    await r.watch.tick();
+    assert.equal(r.sent.length, 1, "going live on a second site edits the one post"); assert.equal(r.edits.length, 1);
+    assert.equal(r.db.getStreamLive("g", "u1").url, "https://kick.com/alpha_k", "the post keeps the site it already showed");
+    assert.deepEqual(r.db.getStreamLive("g", "u1").also, ["https://twitch.tv/alpha"]);
+    const buttons = r.edits[0].p.components[0].components; assert.deepEqual(buttons.map(b => b.url), ["https://kick.com/alpha_k", "https://twitch.tv/alpha"]);
+    assert.match(r.edits[0].p.embeds[0].description, /Kick.*Twitch/);
+    r.state.kick = new Map(); await r.watch.tick();
+    assert.ok(r.db.getStreamLive("g", "u1"), "still live on Twitch");
+    assert.equal(r.db.getStreamLive("g", "u1").url, "https://twitch.tv/alpha", "the post moves to the site that is still live");
+    r.state.live = new Map(); await r.watch.tick();
+    assert.equal((await r.watch.tick()).ended, 1, "closed after two checks with every site offline");
+    // a site that can't be checked right now never closes the post
+    r.state.kick = new Map([["alpha_k", { title: "Again", game: "", url: "https://kick.com/alpha_k" }]]); await r.watch.tick();
+    r.state.kick = new Map(); r.state.kickDown = true;
+    await r.watch.tick(); await r.watch.tick(); await r.watch.tick();
+    assert.ok(r.db.getStreamLive("g", "u1"), "Kick is down, so we can't say they stopped");
+});
+
+test("one channel per site: linking a second Twitch channel replaces the first, and unlinking can target one site", () => {
+    const r = rig();
+    r.db.setStreamLink("g", "u1", { platform: "twitch", handle: "one", via: "role", added: 1 });
+    r.db.setStreamLink("g", "u1", { platform: "kick", handle: "k", via: "role", added: 2 });
+    r.db.setStreamLink("g", "u1", { platform: "twitch", handle: "two", via: "role", added: 3 });
+    assert.deepEqual(r.db.getStreamLinks("g", "u1").map(l => [l.platform, l.handle]), [["twitch", "two"], ["kick", "k"]]);
+    assert.equal(r.db.removeStreamLink("g", "u1", "twitch"), true); assert.deepEqual(r.db.getStreamLinks("g", "u1").map(l => l.platform), ["kick"]);
+    r.db.removeStreamLink("g", "u1"); assert.equal(r.db.getStreamLinks("g", "u1").length, 0);
+});
+
+test("an older database with one channel per streamer is rebuilt without losing anyone's link", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const { mkdtempSync } = await import("node:fs"); const { tmpdir } = await import("node:os"); const { join } = await import("node:path");
+    const file = join(mkdtempSync(join(tmpdir(), "svc-mig-")), "old.db");
+    const old = new DatabaseSync(file);
+    old.exec("CREATE TABLE stream_link (guild_id TEXT NOT NULL, user_id TEXT NOT NULL, platform TEXT NOT NULL, handle TEXT NOT NULL, via TEXT NOT NULL DEFAULT 'role', added INTEGER NOT NULL, PRIMARY KEY (guild_id, user_id));");
+    old.exec("INSERT INTO stream_link VALUES ('g','u1','twitch','alpha','role',5)"); old.close();
+    const db = openDb(file);
+    assert.deepEqual(db.getStreamLinks("g", "u1").map(l => [l.platform, l.handle, l.added]), [["twitch", "alpha", 5]]);
+    db.setStreamLink("g", "u1", { platform: "youtube", handle: "@alpha", via: "role", added: 6 });
+    assert.equal(db.getStreamLinks("g", "u1").length, 2, "the new key allows a second site");
 });

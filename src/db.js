@@ -336,6 +336,14 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "lb_at", "INTEGER");
     for (const c of ["streamer_role_id", "live_channel", "ping_stream", "meme_channel"]) addColumn("community", c, "TEXT");
     addColumn("stream_live", "auto", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("stream_live", "also", "TEXT");
+    // One channel per site per streamer (it used to be one channel in total): rebuild the table with the wider key, keeping every row.
+    if (db.prepare("PRAGMA table_info(stream_link)").all().filter(c => c.pk).length < 3) {
+        db.exec(`BEGIN; ALTER TABLE stream_link RENAME TO stream_link_old;
+            CREATE TABLE stream_link (guild_id TEXT NOT NULL, user_id TEXT NOT NULL, platform TEXT NOT NULL, handle TEXT NOT NULL, via TEXT NOT NULL DEFAULT 'role', added INTEGER NOT NULL, PRIMARY KEY (guild_id, user_id, platform));
+            INSERT INTO stream_link (guild_id, user_id, platform, handle, via, added) SELECT guild_id, user_id, platform, handle, via, added FROM stream_link_old;
+            DROP TABLE stream_link_old; COMMIT;`);
+    }
     addColumn("community", "stream_auto", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_on", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_hours", "INTEGER NOT NULL DEFAULT 1"); addColumn("community", "meme_at", "INTEGER");
     for (const c of ["ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_bundles", "ping_promos"]) addColumn("community", c, "TEXT");
     addColumn("promo_codes", "added_at", "INTEGER");

@@ -240,9 +240,9 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
                 const snap = db.listSnapshots(owner.discord_id, 1)[0];
                 if (snap && snap.games > 0 && snap.msrp > 0) sections.push({ key: "value", vis: s.vis, games: snap.games, worth: Math.round(snap.msrp), paid: Math.round(snap.paid), saved: Math.max(0, Math.round(snap.msrp_paid ?? 0) - Math.round(snap.paid)), day: snap.day });
             } else if (s.key === "streams") {
-                const l = owner.guild_id ? db.getStreamLink(owner.guild_id, owner.discord_id) : null;
+                const mine = owner.guild_id ? db.getStreamLinks(owner.guild_id, owner.discord_id) : [], l = mine[0];
                 const live = owner.guild_id ? db.getStreamLive(owner.guild_id, owner.discord_id) : null;
-                if (l) sections.push({ key: "streams", vis: s.vis, platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle).replace(/\/live$/, ""), live: live ? { title: live.title, game: live.game ?? null } : null });
+                if (l) sections.push({ key: "streams", vis: s.vis, platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle).replace(/\/live$/, ""), channels: mine.map(c => ({ platform: c.platform, handle: c.handle, url: channelUrl(c.platform, c.handle).replace(/\/live$/, "") })), live: live ? { title: live.title, game: live.game ?? null } : null });
             }
         } catch { /* one broken section should not take the page down */ }
     }

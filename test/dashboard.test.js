@@ -2365,6 +2365,16 @@ test("streams: only streamers, mods and managers get the overlay and go-live; an
         assert.deepEqual(roster.people.map(p => [p.userId, p.platform, p.handle, Boolean(p.live)]), [["u1", "twitch", "jacob_tv", true], ["other1", "kick", "otherguy", false]], "live streamers come first");
         assert.equal(roster.people[0].url, "https://twitch.tv/jacob_tv"); assert.equal(roster.people[0].mine, true); assert.equal(roster.people[0].live.game, "Overwatch");
         assert.equal((await o.request("/api/streams/roster?guild=g-nobody")).status >= 400, true, "not a member: no roster");
+        // a second site: one person in the roster with both channels, and a single site can be removed on its own
+        const second = await link({ channel: "https://kick.com/Jacob_Kick" });
+        assert.equal(second.status, 200); assert.deepEqual(second.data.links.map(l => l.platform), ["twitch", "kick"]);
+        page = (await o.request("/api/streams?guild=g-member")).data; assert.deepEqual(page.links.map(l => l.handle), ["jacob_tv", "jacob_kick"]); assert.equal(page.link.platform, "twitch");
+        o.db.setStreamLive("g-member", "u1", { title: "Ranked", url: "https://twitch.tv/jacob_tv", game: "Overwatch", started: 1, channelId: "c1", messageId: "m", auto: true, also: ["https://kick.com/jacob_kick"] });
+        const roster2 = (await o.request("/api/streams/roster?guild=g-member")).data;
+        assert.deepEqual(roster2.people.map(p => p.userId), ["u1", "other1"], "still one card per person");
+        assert.deepEqual(roster2.people[0].channels.map(c => c.platform), ["twitch", "kick"]); assert.deepEqual(roster2.people[0].live.also, ["https://kick.com/jacob_kick"]);
+        const one = await o.request("/api/streams/unlink", { method: "POST", body: { guild_id: "g-member", platform: "twitch" } });
+        assert.deepEqual(one.data.links.map(l => l.platform), ["kick"]);
         o.db.endStreamLive("g-member", "u1");
         assert.equal((await o.request("/api/streams/unlink", { method: "POST", body: { guild_id: "g-member" } })).status, 200); assert.ok(!o.db.getStreamLink("g-member", "u1"));
 

@@ -1374,7 +1374,7 @@
           p.owner && p.slug ? h("label", { class: "muted small" }, "Badge image link for your bio or signature ",
             h("input", { type: "text", readonly: "readonly", value: location.origin + "/u/" + p.slug + "/badge.svg", onfocus: e => e.target.select() })) : null);
       } else if (s.key === "streams") {
-        inner = h("div", {}, h("div", { class: "pf-links" }, ext(s.url, (s.platform === "twitch" ? "Twitch" : s.platform === "kick" ? "Kick" : "YouTube") + ": " + s.handle, "pf-chip"), s.live ? h("span", { class: "chip warn", text: "LIVE NOW" }) : null),
+        inner = h("div", {}, h("div", { class: "pf-links" }, ...(s.channels && s.channels.length ? s.channels : [s]).map(c => ext(c.url, (c.platform === "twitch" ? "Twitch" : c.platform === "kick" ? "Kick" : "YouTube") + ": " + c.handle, "pf-chip")), s.live ? h("span", { class: "chip warn", text: "LIVE NOW" }) : null),
           s.live ? h("p", { class: "muted small", text: s.live.title + (s.live.game ? " · " + s.live.game : "") }) : null);
       } else if (s.key === "wishlist") {
         inner = s.games.length ? wishSlider(s.games, g => h("div", { class: "free-card pf-slide" },
@@ -6611,11 +6611,12 @@
       const roles = d.roles || null, roleSel = () => select([["", "None"], ...(roles || []).map(r => [r.id, r.name])], "");
       const reqRole = roleMulti(roles || []), bonusRole = roleMulti(roles || []), overRole = roleMulti(roles || []), pingRole = roleSel();
       const reqAll = select([["any", "Any one of them"], ["all", "All of them"]], "any");
-      const prefill = d.link && /twitch/i.test(d.link.platform) ? [{ kind: "follow_twitch", url: d.link.url }] : d.link && /youtube/i.test(d.link.platform) ? [{ kind: "youtube", url: d.link.url }] : [];
+      const tw = (d.links || []).find(l => l.platform === "twitch"), yt = (d.links || []).find(l => l.platform === "youtube");
+      const prefill = tw ? [{ kind: "follow_twitch", url: tw.url }] : yt ? [{ kind: "youtube", url: yt.url }] : [];
       const steps = stepsEditor(d.stepKinds || [], { prefill });
       const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), length: length.value.trim(), host: "you" }));
       for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
-      const isTwitch = Boolean(d.link && /twitch/i.test(d.link.platform));
+      const isTwitch = Boolean(tw);
       const chatOn = h("input", { type: "checkbox", id: "sgw-chat", disabled: !isTwitch }), chatInvite = text("https://discord.gg/yourserver", 120, "url");
       const go = h("button", { class: "btn blue", type: "button", text: "🎁 Start the giveaway", disabled: unset });
       go.addEventListener("click", () => run(go, async () => {
@@ -6684,15 +6685,21 @@
       let linkPanel = null;
       if (d.can.go) {
         const NAMES = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
-        const url = h("input", { type: "url", placeholder: "https://twitch.tv/yourname", maxlength: "200", value: d.link ? d.link.url.replace(/\/live$/, "") : "", "aria-label": "Your channel link" });
-        const save = h("button", { class: "btn blue", type: "button", text: d.link ? "Update link" : "Link my channel", disabled: unset });
+        const links = d.links || [];
+        const url = h("input", { type: "url", placeholder: "https://twitch.tv/yourname", maxlength: "200", "aria-label": "Add a channel link" });
+        const save = h("button", { class: "btn blue", type: "button", text: links.length ? "Add this channel" : "Link my channel", disabled: unset });
         save.addEventListener("click", () => run(save, () => post("/api/streams/link", { channel: url.value }), "Linked. I'll post when you go live."));
-        const off = d.link ? h("button", { class: "btn gray", type: "button", text: "Unlink" }) : null;
-        off?.addEventListener("click", () => run(off, () => post("/api/streams/unlink", {}), "Unlinked."));
-        const note = d.link ? (d.watch[d.link.platform] ? `Linked to ${NAMES[d.link.platform]} (${d.link.handle}). I check every couple of minutes. When you go live I post in the live channel and ping the people who opted in, and I close the post when you finish.` : `Linked to ${NAMES[d.link.platform]} (${d.link.handle}), but this bot can't check ${NAMES[d.link.platform]} automatically yet. Use Go live below when you start.`)
-          : "Link your Twitch, Kick or YouTube channel once and I'll notice when you go live, so you never have to post it yourself.";
-        linkPanel = h("div", { class: "panel" }, h("h3", { text: "Your channel" }), unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
-          h("p", { class: "muted small", text: note }), field("Channel link (Twitch, Kick or YouTube)", url), h("div", { class: "row" }, save, off));
+        const rows = links.map(l => {
+          const gone = h("button", { class: "btn gray small", type: "button", text: "Remove", "aria-label": "Remove " + NAMES[l.platform] });
+          gone.addEventListener("click", () => run(gone, () => post("/api/streams/unlink", { platform: l.platform }), "Removed " + NAMES[l.platform] + "."));
+          return h("div", { class: "row stream-link-row" }, h("strong", { text: NAMES[l.platform] }), h("a", { href: l.url.replace(/\/live$/, ""), target: "_blank", rel: "noopener", text: l.handle }),
+            h("span", { class: "muted small", text: d.watch[l.platform] ? "checked every couple of minutes" : "can't be checked on this bot yet" }), gone);
+        });
+        const note = links.length
+          ? (links.length > 1 ? "I watch all of these. If you're live on more than one, there's a single post that links to each." : "I check every couple of minutes. When you go live I post in the live channel and ping the people who opted in, and I close the post when you finish.") + " You can link one channel on each site."
+          : "Link your Twitch, Kick and YouTube channels and I'll notice when you go live on any of them, so you never have to post it yourself.";
+        linkPanel = h("div", { class: "panel" }, h("h3", { text: links.length > 1 ? "Your channels" : "Your channel" }), unset ? h("div", { class: "notice warn", text: "No live channel is set yet." + (d.can.manage ? " Pick one in the settings below." : " Ask a manager.") }) : null,
+          h("p", { class: "muted small", text: note }), ...rows, field(links.length ? "Add another channel (Twitch, Kick or YouTube)" : "Channel link (Twitch, Kick or YouTube)", url), h("div", { class: "row" }, save));
       }
 
       let goPanel;
@@ -6902,8 +6909,10 @@
     guild.addEventListener("change", () => { data = null; load(); });
     function draw() {
       const all = data.people, liveN = all.filter(p => p.live).length;
-      const list = all.filter(p => (st.show === "all" || (st.show === "live") === Boolean(p.live)) && (st.site === "all" || p.platform === st.site));
-      const sites = [...new Set(all.map(p => p.platform))];
+      const chans = p => (p.channels && p.channels.length ? p.channels : [{ platform: p.platform, handle: p.handle, url: p.url, checked: p.checked }]);
+      const list = all.filter(p => (st.show === "all" || (st.show === "live") === Boolean(p.live)) && (st.site === "all" || chans(p).some(c => c.platform === st.site)));
+      const sites = [...new Set(all.flatMap(p => chans(p).map(c => c.platform)))];
+      const siteOf = u => /twitch/.test(u) ? "Twitch" : /kick/.test(u) ? "Kick" : /youtu/.test(u) ? "YouTube" : "stream";
       const card = p => {
         const live = p.live;
         const av = h("div", { class: "sr-av" + (live ? " live" : "") }, p.avatar ? h("img", { src: p.avatar, alt: "", width: "56", height: "56", referrerpolicy: "no-referrer", loading: "lazy" }) : h("span", { text: p.name.slice(0, 1).toUpperCase() }));
@@ -6911,11 +6920,11 @@
           live ? h("div", { class: "sr-banner" }, h("span", { class: "sr-dot" }), "LIVE NOW", h("span", { class: "sr-since", text: " · " + ago(data.now - live.since) })) : null,
           h("div", { class: "sr-top" }, av,
             h("div", { class: "sr-id" }, h("strong", { text: p.name + (p.mine ? " (you)" : "") }),
-              h("a", { class: "sr-chan", href: p.url, target: "_blank", rel: "noopener noreferrer", text: SITE[p.platform] + " · " + p.handle + " ↗" })),
-            h("span", { class: "sr-pill " + p.platform, text: SITE[p.platform] })),
+              ...chans(p).map(c => h("a", { class: "sr-chan", href: c.url, target: "_blank", rel: "noopener noreferrer", text: SITE[c.platform] + " · " + c.handle + " ↗" }))),
+            h("span", { class: "sr-pills" }, ...chans(p).map(c => h("span", { class: "sr-pill " + c.platform, text: SITE[c.platform] })))),
           live ? h("div", { class: "sr-live" }, h("div", { class: "sr-title", text: live.title }), live.game ? h("div", { class: "sr-game", text: "🎮 " + live.game }) : null)
-            : h("div", { class: "sr-off" }, h("span", { class: "sr-dot off" }), p.checked ? "Offline" : "Not checked automatically"),
-          live ? h("a", { class: "btn green small sr-watch", href: live.url, target: "_blank", rel: "noopener noreferrer", text: "Watch the stream" }) : null);
+            : h("div", { class: "sr-off" }, h("span", { class: "sr-dot off" }), chans(p).some(c => c.checked) ? "Offline" : "Not checked automatically"),
+          live ? h("div", { class: "sr-watchrow" }, h("a", { class: "btn green small sr-watch", href: live.url, target: "_blank", rel: "noopener noreferrer", text: (live.also || []).length ? "Watch on " + siteOf(live.url) : "Watch the stream" }), ...(live.also || []).map(u => h("a", { class: "btn gray small sr-watch", href: u, target: "_blank", rel: "noopener noreferrer", text: "Watch on " + siteOf(u) }))) : null);
       };
       holder.replaceChildren(
         servers.length > 1 && !opts.guild ? h("div", { class: "panel" }, field("Server", guild)) : null,

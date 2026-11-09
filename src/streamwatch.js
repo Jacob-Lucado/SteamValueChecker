@@ -100,6 +100,8 @@ export function createStreamWatch({ db, streams, api, checkers = createCheckers(
     async function tick() {
         const off = new Map(); // servers where a manager switched the automatic posts off
         const links = db.allStreamLinks().filter(l => { if (!off.has(l.guild_id)) off.set(l.guild_id, db.getCommunity(l.guild_id)?.stream_auto === 0); return !off.get(l.guild_id); });
+        const people = new Map(); // "guild:user" -> every channel that person linked there
+        for (const l of links) { const k = `${l.guild_id}:${l.user_id}`; if (!people.has(k)) people.set(k, []); people.get(k).push(l); }
         health.linked = links.length; health.lastTickAt = now(); health.failed = [];
         if (!links.length) return { live: 0, ended: 0 };
         const bySite = {};
@@ -110,22 +112,29 @@ export function createStreamWatch({ db, streams, api, checkers = createCheckers(
         }
         health.failed = [...failed];
         let started = 0, ended = 0;
-        for (const l of links) {
-            if (!can[l.platform] || failed.has(l.platform)) continue; // can't tell: leave things as they are
-            const key = `${l.guild_id}:${l.user_id}`, hit = liveBy[l.platform]?.get(l.handle.toLowerCase()), row = db.getStreamLive(l.guild_id, l.user_id);
+        for (const [key, mine] of people) {
+            const [guildId, userId] = key.split(":");
+            const checkable = mine.filter(l => can[l.platform] && !failed.has(l.platform));
+            if (!checkable.length) continue; // can't tell: leave things as they are
+            const hits = checkable.map(l => ({ l, hit: liveBy[l.platform]?.get(l.handle.toLowerCase()) })).filter(x => x.hit);
+            const row = db.getStreamLive(guildId, userId);
             try {
-                if (hit) {
+                if (hits.length) {
                     misses.delete(key);
-                    if (access && !(await access(l))) { db.removeStreamLink(l.guild_id, l.user_id); log(`removed ${key}: no longer allowed to stream there`); continue; }
-                    const same = row && row.title === (clip(hit.title, 120) || "Live now") && (row.game ?? "") === (clip(hit.game, 60) || "") && row.url === hit.url;
+                    if (access && !(await access(mine[0]))) { db.removeStreamLink(guildId, userId); log(`removed ${key}: no longer allowed to stream there`); continue; }
+                    // Live on several sites at once: one post, headed by the site it already shows so a second one going live doesn't swap it, with the others as extra buttons.
+                    const main = (row && hits.find(x => x.hit.url === row.url) || hits[0]).hit;
+                    const also = hits.map(x => x.hit.url).filter(u => u !== main.url);
+                    const same = row && row.title === (clip(main.title, 120) || "Live now") && (row.game ?? "") === (clip(main.game, 60) || "") && row.url === main.url && JSON.stringify(row.also ?? []) === JSON.stringify(also);
                     if (same) continue;
-                    if (row && !row.auto && row.url !== hit.url) continue; // they posted a different stream by hand: leave it
-                    const name = (await api.memberName?.(l.guild_id, l.user_id).catch(() => null)) || "Someone";
-                    await streams.goLive(l.guild_id, { id: l.user_id, name, avatarUrl: null }, { title: hit.title, url: hit.url, game: hit.game, auto: true });
+                    if (row && !row.auto && row.url !== main.url) continue; // they posted a different stream by hand: leave it
+                    const name = (await api.memberName?.(guildId, userId).catch(() => null)) || "Someone";
+                    await streams.goLive(guildId, { id: userId, name, avatarUrl: null }, { title: main.title, url: main.url, game: main.game, auto: true, also });
                     if (!row) started++;
                 } else if (row?.auto) {
+                    if (checkable.length < mine.length) continue; // a channel we can't check right now might still be live
                     const n = (misses.get(key) ?? 0) + 1; misses.set(key, n);
-                    if (n >= OFFLINE_MISSES) { misses.delete(key); const name = (await api.memberName?.(l.guild_id, l.user_id).catch(() => null)) || "Someone"; await streams.endLive(l.guild_id, { id: l.user_id, name }); ended++; }
+                    if (n >= OFFLINE_MISSES) { misses.delete(key); const name = (await api.memberName?.(guildId, userId).catch(() => null)) || "Someone"; await streams.endLive(guildId, { id: userId, name }); ended++; }
                 } else misses.delete(key);
             } catch (e) { log(`${key}: ${e.message}`); }
         }
