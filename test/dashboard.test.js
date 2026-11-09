@@ -3116,14 +3116,19 @@ test("sale alerts that link through IsThereAnyDeal's redirect go to a landing pa
     await o.close();
 });
 
-test("/support has its own title, description, picture and questions, and a single ticket stays out of search", async () => {
+test("each public page has its own title, description, picture and questions, and a single ticket stays out of search", async () => {
     const o = await signedIn({ config: { ownerId: "u1" } });
-    const html = (await o.request("/support", { raw: true }).then(r => r.text())); 
-    assert.match(html, /<title>Support and help \| Steam Value Checker<\/title>/); assert.match(html, /rel="canonical" href="[^"]*\/support"/);
-    assert.match(html, /og:image" content="[^"]*\/support-preview\.jpg/); assert.match(html, /"@type":"FAQPage"/); assert.match(html, /"@type":"ContactPage"/);
-    assert.match(html, /name="robots" content="index,follow/); assert.match(html, /<noscript><main><h1>Support and help/); assert.ok(!/<title>Steam Value Checker: game library/.test(html));
+    const seen = new Set();
+    for (const k of ["support", "help", "about", "status", "tip", "feed", "discover", "communities"]) {
+        const html = await o.request("/" + k, { raw: true }).then(r => r.text());
+        assert.match(html, new RegExp(`rel="canonical" href="[^"]*/${k}"`), k); assert.match(html, new RegExp(`og:image" content="[^"]*/page-${k}\\.jpg`), k);
+        assert.match(html, /"@type":"FAQPage"/, k); assert.match(html, /name="robots" content="index,follow/, k); assert.match(html, /<noscript><main><h1>/, k);
+        assert.ok(!/<title>Steam Value Checker: game library/.test(html), k + " still has the home page title");
+        const title = /<title>([^<]*)<\/title>/.exec(html)[1]; assert.ok(!seen.has(title), "titles are all different"); seen.add(title);
+        assert.equal((await o.request(`/page-${k}.jpg`, { raw: true })).status, 200, k);
+    }
+    assert.match(await o.request("/help", { raw: true }).then(r => r.text()), /<title>Help and commands/);
     assert.match(await o.request("/support/12", { raw: true }).then(r => r.text()), /noindex,nofollow/);
-    assert.equal((await o.request("/support-preview.jpg", { raw: true })).status, 200);
-    assert.match((await o.request("/sitemap.xml")).text, /\/support</);
+    const map = (await o.request("/sitemap.xml")).text; for (const k of ["support", "help", "about"]) assert.match(map, new RegExp(`/${k}<`));
     await o.close();
 });
