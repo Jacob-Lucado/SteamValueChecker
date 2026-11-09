@@ -183,7 +183,10 @@ export function parseSteamBundlePage(html, id, now = Date.now()) {
     const games = [...new Set([...src.matchAll(/class="tab_item_name">([^<]+)/g)].map(m => text(m[1])))];
     const final = text(/bundle_final_price_with_discount">([^<]*)/i.exec(src)?.[1]);
     const off = /bundle_discount">\s*-?(\d+)%/i.exec(src)?.[1];
-    return tidy({ store: "steam", id: String(id), title, url: steamBundleUrl(id), image: apps[0] ? STEAM_APP_IMG(apps[0]) : null, games, gameCount: apps.length || games.length || null,
+    // The bundle's own banner first. Newer games no longer have a plain /apps/<id>/header.jpg, so that is only the last resort.
+    const own = /https:\/\/[\w.-]+\/store_item_assets\/steam\/bundles\/\d+\/[\w]+\/[0-9a-f]{40}\/header\.jpg(?:\?t=\d+)?/i.exec(src)?.[0]
+        ?? /<meta property="og:image" content="(https:\/\/[^"]+)"/i.exec(src)?.[1];
+    return tidy({ store: "steam", id: String(id), title, url: steamBundleUrl(id), image: own ?? (apps[0] ? STEAM_APP_IMG(apps[0]) : null), games, gameCount: apps.length || games.length || null,
         price: final ? (off && off !== "0" ? `${final} (${off}% off)` : final) : null, kind: "fixed" }, now);
 }
 let steamTop = 0, steamSeen = 0;

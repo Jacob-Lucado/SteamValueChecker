@@ -121,3 +121,14 @@ test("fanatical turning the server away (403) falls back to IsThereAnyDeal's bun
     assert.equal(list[0].title, "Build Your Own Slayer Bundle");
     assert.equal(list[0].price, "Pick and mix");
 });
+
+test("a Steam bundle uses its own banner, and only falls back to a game's header when the page has none", () => {
+    const own = "https://shared.fastly.steamstatic.com/store_item_assets/steam/bundles/97302/uwy3prwwzsd3l9lv/120f0dbb557c93e926037db5d52c06baa377cdee/header.jpg?t=1793965825";
+    const page = `<meta property="og:title" content="Save 16% on Alien Algorithm on Steam"><meta property="og:image" content="https://shared.fastly.steamstatic.com/store_item_assets/steam/bundles/97302/uwy3prwwzsd3l9lv/f9652a0f3abfab10e9172146938d7b21cc447095/header_ratio.jpg?t=1">
+        <img src="${own}"><div data-ds-appid="111"></div><div class="tab_item_name">Tube2K</div>`;
+    assert.equal(parseSteamBundlePage(page, 97302, NOW).image, own);
+    const noBanner = page.replace(`<img src="${own}">`, "");
+    assert.match(parseSteamBundlePage(noBanner, 97302, NOW).image, /header_ratio\.jpg/);
+    const bare = `<meta property="og:title" content="Pack on Steam"><div data-ds-appid="111"></div>`;
+    assert.match(parseSteamBundlePage(bare, 1, NOW).image, /apps\/111\/header\.jpg/);
+});
