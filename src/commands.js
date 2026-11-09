@@ -156,7 +156,7 @@ const calendarCmd = new SlashCommandBuilder()
             { name: "No reminder", value: 0 }, { name: "15 minutes before", value: 15 }, { name: "1 hour before", value: 60 }, { name: "1 day before", value: 1440 })))
     .addSubcommand(s => s.setName("remove").setDescription("Remove a server event (managers)")
         .addIntegerOption(o => o.setName("id").setDescription("The event number from /server calendar view").setRequired(true).setMinValue(1)))
-    .addSubcommand(s => s.setName("feed").setDescription("A private link to show this calendar in Google, Apple or Outlook")
+    .addSubcommand(s => s.setName("feed").setDescription("A private link for Google, Apple or Outlook calendars")
         .addStringOption(o => o.setName("action").setDescription("What to do (default: make a link)").addChoices(
             { name: "Make a new link", value: "new" }, { name: "Turn the link off", value: "off" })));
 
@@ -305,7 +305,7 @@ const redeem = new SlashCommandBuilder()
 
 const compare = new SlashCommandBuilder()
     .setName("compare")
-    .setDescription("Compare libraries with a friend: shared games and who owns what")
+    .setDescription("Compare libraries with a friend: shared games")
     .addUserOption(o => o.setName("friend").setDescription("Someone in this server who turned on /alerts share").setRequired(true))
     .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel (default: only you see it)"));
 
@@ -432,10 +432,10 @@ const santaCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("create").setDescription("Managers: start a Secret Santa")
         .addNumberOption(o => o.setName("budget").setDescription("Spend limit per gift, in your store's currency").setRequired(true).setMinValue(1).setMaxValue(1000))
         .addStringOption(o => o.setName("title").setDescription("A name for it (default: Secret Santa)").setMaxLength(80)))
-    .addSubcommand(s => s.setName("join").setDescription("Join the Secret Santa. Shares your wishlist with whoever draws you"))
+    .addSubcommand(s => s.setName("join").setDescription("Join the Secret Santa (shares your wishlist with your giver)"))
     .addSubcommand(s => s.setName("leave").setDescription("Leave the Secret Santa before names are drawn"))
     .addSubcommand(s => s.setName("status").setDescription("The budget and who is in"))
-    .addSubcommand(s => s.setName("ideas").setDescription("Who you're buying for and what fits their wishlist and budget"))
+    .addSubcommand(s => s.setName("ideas").setDescription("Who you're buying for and what fits their wishlist"))
     .addSubcommand(s => s.setName("draw").setDescription("Managers: draw names and DM everyone"))
     .addSubcommand(s => s.setName("reveal").setDescription("Managers: show who had who and wrap it up"));
 
@@ -499,8 +499,13 @@ const mydata = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("export").setDescription("Download your stored data"))
     .addSubcommand(s => s.setName("delete").setDescription("Delete your wishlist and settings"));
 
+const coop = new SlashCommandBuilder().setName("coop")
+    .setDescription("Who here owns a game? Gets a group going")
+    .addStringOption(o => o.setName("game").setDescription("Game name").setRequired(true).setMaxLength(100))
+    .addBooleanOption(o => o.setName("ping").setDescription("Post here and ping the owners"));
+
 const gamenight = new SlashCommandBuilder().setName("gamenight")
-    .setDescription("What your voice channel can play together, and what to buy together")
+    .setDescription("What your voice channel can play or buy together")
     .addChannelOption(o => o.setName("channel").setDescription("A voice channel (default: the one you are in)").addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice))
     .addBooleanOption(o => o.setName("post").setDescription("Show it in this channel (default: only you)"));
 
@@ -586,25 +591,25 @@ const memesCmd = new SlashCommandBuilder()
 
 const streamCmd = new SlashCommandBuilder()
     .setName("stream")
-    .setDescription("Tell the server you're live, and choose whether to get pinged")
+    .setDescription("Tell the server you're live, or choose pings")
     .addSubcommand(s => s.setName("live").setDescription("Announce your stream in the live channel")
         .addStringOption(o => o.setName("link").setDescription("Your stream address, like https://twitch.tv/yourname").setRequired(true).setMaxLength(300))
         .addStringOption(o => o.setName("title").setDescription("What you're streaming").setMaxLength(120))
         .addStringOption(o => o.setName("game").setDescription("The game").setMaxLength(60)))
-    .addSubcommand(s => s.setName("link").setDescription("Link your Twitch, Kick or YouTube so I post when you go live")
+    .addSubcommand(s => s.setName("link").setDescription("Link Twitch, Kick or YouTube so I post when you go live")
         .addStringOption(o => o.setName("channel").setDescription("Your channel link, like https://twitch.tv/yourname").setRequired(true).setMaxLength(200)))
     .addSubcommand(s => s.setName("unlink").setDescription("Stop posting when you go live"))
     .addSubcommand(s => s.setName("end").setDescription("Mark your stream as finished"))
     .addSubcommand(s => s.setName("ping").setDescription("Get pinged when someone here goes live, or stop")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off (leave empty to switch)")))
     .addSubcommand(s => s.setName("list").setDescription("Who is live right now"))
-    .addSubcommand(s => s.setName("giveaway").setDescription("Give a key to your viewers, drawn when your stream ends (you must be live)")
+    .addSubcommand(s => s.setName("giveaway").setDescription("Give a key to viewers, drawn when your stream ends")
         .addStringOption(o => o.setName("game").setDescription("Which game the key is for").setRequired(true).setMaxLength(80))
         .addStringOption(o => o.setName("key").setDescription("The key. Only the winner ever sees it").setRequired(true).setMaxLength(200))
         .addIntegerOption(o => o.setName("minutes").setDescription("Longest it runs if you stay live (default 60)").setMinValue(5).setMaxValue(720)))
-    .addSubcommand(s => s.setName("chat").setDescription("Get chat commands (!deals, !free, !wishlist) for your stream bot")
+    .addSubcommand(s => s.setName("chat").setDescription("Chat commands (!deals, !free, !wishlist) for your stream bot")
         .addStringOption(o => o.setName("bot").setDescription("Which chat bot (default: all)").addChoices({ name: "Nightbot", value: "nightbot" }, { name: "StreamElements", value: "streamelements" }, { name: "Streamlabs Cloudbot", value: "streamlabs" }, { name: "Fossabot", value: "fossabot" })))
-    .addSubcommand(s => s.setName("setup").setDescription("Managers: pick the streamer role, live channel and ping role")
+    .addSubcommand(s => s.setName("setup").setDescription("Managers: streamer role, live channel and ping role")
         .addRoleOption(o => o.setName("streamerrole").setDescription("People with this role can announce streams"))
         .addChannelOption(o => o.setName("channel").setDescription("Where go-live posts appear").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
         .addRoleOption(o => o.setName("pingrole").setDescription("The opt-in role that gets pinged"))
@@ -817,7 +822,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, mydata, help, about, vote, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, coop, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -828,7 +833,7 @@ export const commands = [
 const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
-    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
+    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "coop", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "bug", "grabberad"], groups: ["support", "feature"] }
 ];

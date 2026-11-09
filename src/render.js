@@ -407,6 +407,17 @@ export function ownersEmbed(name, owners) {
     return { color: COLOR, title: `Who owns ${name}?`, description: `${owners.length} member${owners.length === 1 ? "" : "s"} in this server:\n${lines.join("\n")}${owners.length > 15 ? `\n…and ${owners.length - 15} more.` : ""}`, footer: { text: "Only members who share their library are counted" } };
 }
 
+/** /coop: the owners of a game, split into people who already play it and people who never opened it. */
+export function coopEmbed(name, owners, { ping = false } = {}) {
+    if (!owners.length) return { color: COLOR, title: `Co-op: ${name}`, description: "Nobody here who shares their library owns it yet. Members opt in with `/alerts share`." };
+    const playing = owners.filter(o => (o.minutes ?? 0) >= 60), fresh = owners.filter(o => (o.minutes ?? 0) < 60);
+    const list = (rows, f) => rows.slice(0, 12).map(f).join("\n") + (rows.length > 12 ? `\n...and ${rows.length - 12} more` : "");
+    const fields = [];
+    if (playing.length) fields.push({ name: `Already playing (${playing.length})`, value: list(playing, o => `<@${o.discord_id}> · ${Math.round(o.minutes / 60)}h`) });
+    if (fresh.length) fields.push({ name: `Own it, haven't started (${fresh.length})`, value: list(fresh, o => `<@${o.discord_id}>`) });
+    return { color: COLOR, title: `Co-op: ${name}`, description: `${owners.length} ${owners.length === 1 ? "member owns" : "members own"} it. ${owners.length >= 2 ? "Enough for a group." : "Need one more to make a group."}`, fields, footer: { text: ping ? "Pinged because the host asked." : "Only you can see this. Run it again with ping on to invite them." } };
+}
+
 /** Right-click "Play together": shared games that work for two. */
 export function playTogetherEmbed(name, r) {
     if (!r.shared) return { color: COLOR, title: `Play together with ${name}`, description: "You don't own any of the same games yet." };

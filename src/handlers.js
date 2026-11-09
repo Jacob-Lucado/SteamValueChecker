@@ -19,7 +19,7 @@ import { parseTrigger, describeTrigger } from "./alerts.js";
 import { pushEvent } from "./adminlog.js";
 import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
-import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed, ownersEmbed } from "./render.js";
+import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed, ownersEmbed, coopEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
 import { steamReviews } from "./reviews.js";
 import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed } from "./render.js";
@@ -256,6 +256,22 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
 
     /** Ids of the people in a voice channel right now (bots left out). Needs the GuildVoiceStates intent. */
     const inVoice = (guild, channelId) => [...guild.voiceStates.cache.values()].filter(v => v.channelId === channelId && !v.member?.user?.bot).map(v => v.id);
+
+    async function handleCoop(i) {
+        if (!i.inGuild()) return eph(i, "Use this in a server, so I know whose libraries to look at.");
+        const ping = Boolean(i.options.getBoolean("ping"));
+        await i.deferReply(ping ? {} : { flags: MessageFlags.Ephemeral });
+        try {
+            db.ensureUser(i.user.id, i.guildId);
+            const title = i.options.getString("game", true);
+            const [hit] = await itad.lookupTitles([title]);
+            if (!hit?.id) throw new UserError(`I could not find a game called ${title}.`);
+            const name = hit.approx ? hit.matched : title;
+            const owners = db.ownersOf(i.guildId, hit.id);
+            const mentions = ping ? owners.slice(0, 12).map(o => `<@${o.discord_id}>`).join(" ") : "";
+            await i.editReply({ content: ping && mentions ? `${i.user} wants a ${name} group: ${mentions}` : undefined, embeds: [coopEmbed(name, owners, { ping })], allowedMentions: ping ? { users: [i.user.id, ...owners.slice(0, 12).map(o => o.discord_id)] } : { parse: [] } });
+        } catch (err) { await failed(i, "coop", err); }
+    }
 
     async function handleGameNight(i) {
         if (!i.inGuild()) return eph(i, "Use this in a server, from a voice channel.");
@@ -1040,5 +1056,5 @@ export function createHandlers({ panels, db, itad, nowPlaying = null, publicUrl 
         } catch (err) { await failed(i, "message menu", err); }
     }
 
-    return { handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleCoop, handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

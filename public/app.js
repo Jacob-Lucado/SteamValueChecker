@@ -5253,6 +5253,18 @@
     const people = h("div", { class: "chips" });
     app.replaceChildren(pageHead("Game night", "Pick who is playing. See what everyone owns, who is missing a game, and what is worth buying together. Only members who opted in with /alerts share are listed."),
       h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, people, out));
+    // One game: who in the server owns it, to get a co-op group going.
+    const coopIn = h("input", { type: "text", maxlength: "100", placeholder: "A game's name", "aria-label": "Game name" }), coopOut = h("div");
+    const coopGo = h("button", { class: "btn blue small", type: "button", text: "Find owners" });
+    const coopRun = () => busy(coopGo, async () => {
+      coopOut.replaceChildren();
+      const d = await api(`/api/coop?guild=${encodeURIComponent(guild.value)}&game=${encodeURIComponent(coopIn.value)}`);
+      coopOut.replaceChildren(d.owners.length ? h("div", {}, h("p", { text: `${d.owners.length} ${d.owners.length === 1 ? "member owns" : "members own"} ${d.game}:` }), h("ul", {}, d.owners.map(o => h("li", { text: `${o.name} · ${o.hours ? o.hours + "h played" : "hasn't started"}` }))))
+        : h("p", { class: "muted", text: "Nobody here who shares their library owns it yet." }));
+    }).catch(e => toast(e.message, "error"));
+    coopGo.addEventListener("click", coopRun);
+    coopIn.addEventListener("keydown", e => { if (e.key === "Enter") coopRun(); });
+    app.append(h("div", { class: "panel" }, h("h3", { text: "Who owns a game?" }), h("div", { class: "row" }, coopIn, coopGo), coopOut));
     const picked = new Set();
     async function loadMembers() {
       picked.clear(); out.replaceChildren(); people.replaceChildren(h("span", { class: "muted", text: "Loading…" }));

@@ -908,6 +908,7 @@ async function onInteraction(i, again = false) {
                 } catch (e) { return await eph(e.userFacing || e.name === "UserError" ? e.message : "I could not start that."); }
             }
             case "gamenight": return await handlers.handleGameNight(i);
+            case "coop": return await handlers.handleCoop(i);
             case "lfg": return await lfgUi.handleCommand(i);
             case "stream": return await streamUi.handleCommand(i);
             case "memes": return await memeUi.handleCommand(i);

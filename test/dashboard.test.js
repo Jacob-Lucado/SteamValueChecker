@@ -2780,3 +2780,13 @@ test("admin pages for votes, errors, data requests and server events are owner-o
     for (const p of ["votes", "errors", "datarequests", "serverevents"]) assert.equal((await other.request("/api/admin/" + p)).status, 403, p);
     await other.close();
 });
+
+test("the co-op lookup lists owners in a server the member is in", async () => {
+    const t = await signedIn({ extra: () => ({ itad: { lookupTitles: async () => [{ id: "g1id", approx: false }] } }) });
+    const none = await t.request("/api/coop?guild=g-member&game=Hades");
+    assert.equal(none.status, 200);
+    assert.deepEqual(none.data.owners, []);
+    assert.equal((await t.request("/api/coop?guild=g-member&game=")).status, 400);
+    assert.equal((await t.request("/api/coop?guild=nope&game=Hades")).status >= 400, true);
+    await t.close();
+});

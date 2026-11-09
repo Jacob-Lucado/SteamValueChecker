@@ -2289,6 +2289,15 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             return { ok: true };
         },
 
+        "GET /api/coop": async (req, _b, url) => {
+            const s = session(req); const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
+            const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
+            if (!title) throw new HttpError(400, "Type a game name first.");
+            const [hit] = await itad.lookupTitles([title]);
+            if (!hit?.id) throw new HttpError(404, `I could not find a game called ${title}.`);
+            const owners = await Promise.all(db.ownersOf(g.id, hit.id).map(async o => ({ name: (await rest.memberName(g.id, o.discord_id)) || "Member " + o.discord_id.slice(-4), hours: Math.round((o.minutes ?? 0) / 60) })));
+            return { game: hit.approx ? hit.matched : title, owners };
+        },
         "POST /api/gamenight": async (req, body) => {
             const s = session(req); const g = guildFor(s, String(body.guild_id));
             const allowed = new Set(db.sharingMembers(g.id));
