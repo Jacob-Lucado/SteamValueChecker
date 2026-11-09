@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.45", date: "2026-11-08", title: "Co-op finder, library value and wrapped", items: [
+        "**Find your co-op group:** `/server coop` takes a game and shows who in the server owns it, split into people already playing and people who haven't started. Turn on ping to invite them. There's a matching box on the dashboard's Game night page.",
+        "**Library value on your profile:** a new profile section shows what your library is worth, what you paid and what you saved. It's off until you turn it on in the profile editor.",
+        "**Server wrapped posts itself:** from December 26, servers with the weekly digest on get their year in one picture without anyone running a command.",
+        "**Group buy radar:** the Friday digest now lists games several members want, even before they go on sale.",
+        "**Top Voter role:** vote for the bot on Top.gg and you get the Top Voter role in the support server for as long as the vote counts."
+    ] },
     { version: "2026.11.44", date: "2026-11-05", title: "Vote for the bot, get XP", items: [
         "**Top.gg votes pay out:** vote for the bot on Top.gg and you get 250 bonus XP in every server where you already have XP, double on weekends. Use `/vote` or the dashboard card.",
         "You also get a short thank-you DM with when you can vote again.",

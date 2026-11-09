@@ -2808,3 +2808,16 @@ test("the owner can make the bot leave a server and block it, then unblock it", 
     assert.equal((await other.request("/api/admin/server/leave", { method: "POST", body: { id: "123456789012345" } })).status, 403);
     await other.close();
 });
+
+test("the shop site feed gives counts and the changelog to its own origin only", async () => {
+    const t = await signedIn({ extra: () => ({ botInfo: () => ({ servers: 3, gamesWatched: 322, alerts24h: 33, members: 999, secret: "x" }) }) });
+    const r = await fetch(t.base + "/api/public/site", { headers: { Origin: "https://jacob-lucado.github.io" } });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get("access-control-allow-origin"), "https://jacob-lucado.github.io");
+    const d = await r.json();
+    assert.deepEqual(d.stats, { servers: 3, gamesWatched: 322, alerts24h: 33 });
+    assert.ok(d.changelog.length > 0 && d.changelog[0].items.length > 0);
+    const other = await fetch(t.base + "/api/public/site", { headers: { Origin: "https://evil.example" } });
+    assert.equal(other.headers.get("access-control-allow-origin"), "https://jacob-lucado.github.io", "never echoes another origin");
+    await t.close();
+});

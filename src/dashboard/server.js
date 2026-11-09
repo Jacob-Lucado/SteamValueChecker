@@ -3910,6 +3910,19 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
     const ONLINE_MS = 75_000;
     const online = site => { const present = presentFor(site), t = now(); for (const [k, at] of present) if (t - at > ONLINE_MS) present.delete(k); return present.size; };
     const markPresent = (site, id) => { const present = presentFor(site); if (/^[a-z0-9]{8,32}$/i.test(id ?? "") && (present.size < 5000 || present.has(id))) present.set(id, now()); };
+    // Read-only numbers and the changelog for the LucadoServices shop site on GitHub Pages. Counts only, nothing about any person.
+    const SHOP_ORIGINS = ["https://jacob-lucado.github.io"];
+    function siteFeed(req, res) {
+        const allowed = SHOP_ORIGINS.includes(req.headers.origin) ? req.headers.origin : SHOP_ORIGINS[0];
+        const cors = { "Access-Control-Allow-Origin": allowed, "Vary": "Origin", "Cross-Origin-Resource-Policy": "cross-origin" };
+        if (req.method === "OPTIONS") return send(res, 204, "", { ...cors, "Access-Control-Allow-Methods": "GET", "Access-Control-Max-Age": "86400" });
+        if (req.method !== "GET") throw new HttpError(405, "Not allowed.");
+        const info = botInfo ? botInfo() : null;
+        return json(res, 200, {
+            stats: info ? { servers: info.servers ?? null, gamesWatched: info.gamesWatched ?? null, alerts24h: info.alerts24h ?? null } : null,
+            changelog: CHANGELOG.slice(0, 12).map(e => ({ version: e.version, date: e.date, title: e.title, items: e.items }))
+        }, { ...cors, "Cache-Control": "public, max-age=300" });
+    }
     function visits(req, res, url) {
         const [site, action] = url.pathname.slice("/api/visits/".length).split("/");
         const sites = VISIT_SITES[site];
@@ -3943,6 +3956,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             const url = new URL(req.url, origin);
             const key = `${req.method} ${url.pathname}`;
             if (url.pathname.startsWith("/api/visits/")) return visits(req, res, url);
+            if (url.pathname === "/api/public/site") return siteFeed(req, res);
 
             if (req.method === "GET" && /^\/(terms|privacy)(\.html)?$/.test(url.pathname)) {
                 const kind = url.pathname.slice(1).replace(/\.html$/, "");
