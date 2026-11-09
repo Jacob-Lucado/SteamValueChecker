@@ -16,6 +16,7 @@ import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
 import { pushEvent } from "./adminlog.js";
+import { createVoterRole } from "./voterrole.js";
 import { createCommandWatch } from "./cmdwatch.js";
 import { ensureCreatorRole } from "./creatorrole.js";
 import { storageReport } from "./storage.js";
@@ -219,12 +220,14 @@ const notifier = createNotifier({ db, discord });
 const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.dashboard?.clientSecret ?? "", botToken: cfg.token, redirectUri: "http://localhost/unused" });
 const community = createCommunity({ db, api: botRest, renderCard: renderWelcomeCard, dm: (id, p) => discord.sendDm(id, p), dashboardUrl: cfg.dashboard?.publicUrl ?? null, ownerId: cfg.ownerId });
 // Top.gg votes: thank each voter with bonus XP. Needs the TOPGG_TOKEN secret; without it this stays quiet.
+let voterRole = null; // made once the main server helper exists, a few lines further down
 const topgg = createTopgg({
     token: process.env.TOPGG_TOKEN, db, log: m => console.log(`[topgg] ${m}`),
     reward: (userId, xp) => community.grantBonusXp(userId, xp),
     notify: async (userId, v) => {
         const when = v.expiresAt ? ` You can vote again <t:${Math.floor(v.expiresAt / 1000)}:R>.` : "";
         const got = v.servers ? `You just got **+${v.xp} XP** in ${v.servers} server${v.servers === 1 ? "" : "s"}.` : "Chat in a server with levels turned on and your next vote will pay out there.";
+        voterRole?.grant(userId, v.expiresAt);
         await discord.sendDm(userId, { embeds: [{ color: 0xff9800, title: "Thanks for the vote!", description: `${got}${when}`, footer: { text: `Votes so far: ${v.total}` } }] });
     }
 });
@@ -502,6 +505,8 @@ const serverKey = gid => {
 const aiTools = createAiTools({ db, itad, news, fx, lfg, calendar, dashUrl: cfg.dashboard?.publicUrl ?? null, nameOf: id => client.users.cache.get(id)?.displayName ?? null });
 const mainGuild = createMainGuild({ db, client, configuredId: cfg.mainGuildId, configuredInvite: cfg.supportInvite, log: t => console.log(`[main server] ${t}`) });
 client.once(Events.ClientReady, () => { mainGuild.detect(); mainGuild.ensureInvite().catch(() => {}); });
+voterRole = createVoterRole({ db, client, mainGuild, log: t => console.log(`[voter role] ${t}`) });
+setInterval(() => voterRole.sweep().catch(() => {}), 5 * 60_000).unref?.();
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), log: t => console.error(`[ai] ${t}`) });
 const guideThrottle = createGuideThrottle();
 /** A how-to question gets a step by step guide from the bot itself. Returns true when it answered. */
