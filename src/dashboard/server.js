@@ -43,6 +43,7 @@ import { connectionPayload } from "../linkedroles.js";
 import { parseHost, stepsOf, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
+import { valueBadgeSvg } from "../valuebadge.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -4007,6 +4008,15 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}\/og\.png$/i.test(url.pathname)) {
                 if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
                 return await serveProfileShare(res, url.pathname.split("/")[2].toLowerCase());
+            }
+            if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}\/badge\.svg$/i.test(url.pathname)) {
+                if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const slug = url.pathname.split("/")[2].toLowerCase(), owner = publicOwner(slug);
+                // Only when the member has turned the Library value section on for everyone; otherwise it looks like any missing page.
+                const v = owner && (await buildProfile({ db, itad, nowPlaying }, owner, { owner: false, sameServer: false })).sections?.find(s => s.key === "value");
+                if (!v) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+                const name = withDefaults(db.getProfileData(owner.discord_id).data).name || owner.profile_slug;
+                return send(res, 200, valueBadgeSvg({ name, ...v }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
             }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);

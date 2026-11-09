@@ -2591,6 +2591,16 @@ test("profiles: editor saves and validates, visitors only get what is switched o
         const pic = await fetch(o.base + "/u/" + slug + "/og.png"); const bytes = Buffer.from(await pic.arrayBuffer());
         assert.equal(pic.status, 200); assert.equal(pic.headers.get("content-type"), "image/png"); assert.equal(bytes.subarray(1, 4).toString(), "PNG");
         assert.equal((await fetch(o.base + "/u/nobody-here/og.png")).status, 404);
+        assert.equal((await fetch(o.base + "/u/" + slug + "/badge.svg")).status, 404, "no badge while the value section is hidden");
+        {
+            const id = o.db.getProfileBySlug(slug).discord_id, was = o.db.getProfileData(id).data;
+            o.db.upsertSnapshot(id, { games: 50, paid: 100, msrp: 900, msrp_paid: 400, cheapest: 300 });
+            o.db.setProfileData(id, { ...was, sections: [...(was.sections || []).filter(s => s.key !== "value"), { key: "value", vis: "public" }] });
+            const b = await fetch(o.base + "/u/" + slug + "/badge.svg");
+            assert.equal(b.status, 200); assert.equal(b.headers.get("content-type"), "image/svg+xml; charset=utf-8");
+            assert.match(await b.text(), /\$900/);
+            o.db.setProfileData(id, was);
+        }
         assert.match(shell.headers.get("content-security-policy"), /frame-src[^;]*youtube-nocookie\.com[^;]*soundcloud\.com[^;]*spotify\.com/);
 
         const post = (path, b) => fetch(o.base + path, { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "dashboard" }, body: JSON.stringify(b) });

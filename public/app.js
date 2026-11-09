@@ -1370,7 +1370,9 @@
         const stat = (n, l) => h("div", { class: "pf-stat" }, h("b", { text: n }), h("span", { text: l }));
         const usd = n => "$" + Number(n).toLocaleString();
         inner = h("div", {}, h("div", { class: "pf-stats" }, stat(usd(s.worth), "Library worth"), stat(usd(s.paid), "Actually paid"), stat(usd(s.saved), "Saved"), stat(Number(s.games).toLocaleString(), "Games counted")),
-          h("p", { class: "muted small", text: "Worth is the full price of every game. Updated " + s.day + "." }));
+          h("p", { class: "muted small", text: "Worth is the full price of every game. Updated " + s.day + "." }),
+          p.owner && p.slug ? h("label", { class: "muted small" }, "Badge image link for your bio or signature ",
+            h("input", { type: "text", readonly: "readonly", value: location.origin + "/u/" + p.slug + "/badge.svg", onfocus: e => e.target.select() })) : null);
       } else if (s.key === "streams") {
         inner = h("div", {}, h("div", { class: "pf-links" }, ext(s.url, (s.platform === "twitch" ? "Twitch" : s.platform === "kick" ? "Kick" : "YouTube") + ": " + s.handle, "pf-chip"), s.live ? h("span", { class: "chip warn", text: "LIVE NOW" }) : null),
           s.live ? h("p", { class: "muted small", text: s.live.title + (s.live.game ? " · " + s.live.game : "") }) : null);
