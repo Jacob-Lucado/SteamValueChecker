@@ -55,3 +55,10 @@ test("a failed post is remembered, explained and not retried at a cost", async (
     assert.throws(() => x.setSettings({ daily: 99 }), /between 1 and/);
     assert.equal(x.status().monthlyCost, 0.9);
 });
+
+test("spaces and quote marks pasted around the keys are ignored", async () => {
+    const db = openDb(":memory:"); let header = "";
+    const x = createXPoster({ env: { X_API_KEY: ' "k" ', X_API_SECRET: "s\n", X_ACCESS_TOKEN: "t ", X_ACCESS_SECRET: "'ts'" }, db, fetchImpl: async (u, o) => { header = o.headers.Authorization; return { ok: true, json: async () => ({ data: { username: "x" } }) }; } });
+    await x.check();
+    assert.match(header, /oauth_consumer_key="k"/); assert.match(header, /oauth_token="t"/);
+});

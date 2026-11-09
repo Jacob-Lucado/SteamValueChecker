@@ -33,7 +33,9 @@ export function freeGameText(g, now = Date.now()) {
 }
 
 export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fetch, now = () => Date.now(), log = () => {} }) {
-    const keys = { apiKey: env.X_API_KEY, apiSecret: env.X_API_SECRET, accessToken: env.X_ACCESS_TOKEN, accessSecret: env.X_ACCESS_SECRET };
+    // pasted values often come with a space, a line break or quote marks stuck to them
+    const clean = v => String(v ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
+    const keys = { apiKey: clean(env.X_API_KEY), apiSecret: clean(env.X_API_SECRET), accessToken: clean(env.X_ACCESS_TOKEN), accessSecret: clean(env.X_ACCESS_SECRET) };
     const configured = () => Object.values(keys).every(v => String(v ?? "").trim());
     const enabled = () => db.getMeta(ON) === "1";
     const daily = () => Math.min(MAX_DAILY, Math.max(1, Number(db.getMeta(CAP)) || DEFAULT_DAILY));
@@ -44,7 +46,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
             const why = res.status === 402 || /credit|billing|payment/i.test(JSON.stringify(json)) ? "X says the account is out of credits. Add some in the X developer console."
-                : res.status === 401 ? "X rejected the keys. Check all four are right and the app has Read and write access."
+                : res.status === 401 ? "X rejected the keys. Check all four are copied right, and that the access token was made after the API key (regenerating the key kills the old token)."
                 : res.status === 403 ? "X refused it. The app needs Read and write access, and billing has to be switched on for the project."
                 : res.status === 429 ? "X is rate limiting this account. It will try again later."
                 : `X answered ${res.status}.`;
