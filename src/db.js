@@ -18,6 +18,7 @@ import { auditSchema, auditStore } from "./auditstore.js";
 import { adminLoginSchema, adminLoginStore } from "./adminlogin.js";
 import { overlaySchema, overlayStore } from "./overlaystore.js";
 import { streamCardSchema, streamCardStore } from "./streamcard.js";
+import { streamOverlaySchema, streamOverlayStore } from "./overlays.js";
 import { twitchLinkSchema, twitchLinkStore } from "./twitchlink.js";
 import { clubSchema, clubStore } from "./gameclub.js";
 import { santaSchema, santaStore } from "./santa.js";
@@ -187,6 +188,7 @@ ${auditSchema}
 ${adminLoginSchema}
 ${overlaySchema}
 ${streamCardSchema}
+${streamOverlaySchema}
 ${twitchLinkSchema}
 ${clubSchema}
 ${santaSchema}
@@ -366,6 +368,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const adminLogin = adminLoginStore({ run, get, now });
     const overlay = overlayStore({ run, get, all, now });
     const streamCard = streamCardStore({ run, get, now });
+    const streamOverlays = streamOverlayStore({ run, get, all, now });
     const twitchLink = twitchLinkStore({ run, get, now });
     const club = clubStore({ run, get, all });
     const santa = santaStore({ run, get, all, now });
@@ -802,7 +805,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             social.forgetSocialUser(discordId);
             requests.forgetRequestUser(discordId);
             community.forgetCommunityUser(discordId);
-            for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link", "stream_card"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
+            for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link", "stream_card", "stream_overlays"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             run("DELETE FROM status_meta WHERE key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\'", `topgg:votes:${discordId}`, `topgg:seen:${discordId}:%`, `voterrole:${discordId}`);
             run("DELETE FROM twitch_link WHERE discord_id = ?", discordId);
@@ -854,6 +857,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

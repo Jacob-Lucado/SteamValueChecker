@@ -2847,3 +2847,42 @@ test("admin offsite backup routes: off by default, owner only, and verify report
     assert.equal((await other.request("/api/admin/offsite")).status, 403);
     await other.close();
 });
+
+test("overlay studio: build a goal bar, the OBS page reads it by link only, and a new link kills the old one", async () => {
+    const o = await signedIn({ extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members: 321, boosts: 7 }] } });
+    try {
+        const mk = body => o.request("/api/overlays", { method: "POST", body });
+        assert.equal((await mk({ action: "create", kind: "bogus" })).status, 400);
+        assert.equal((await mk({ action: "create", kind: "stats" })).status, 400, "stats need a server");
+        assert.equal((await o.request("/api/overlays", { method: "POST", body: { action: "create", kind: "goal" }, headers: { Origin: "https://evil.example" } })).status, 403);
+        const made = (await mk({ action: "create", kind: "goal", name: "Subs", config: { target: 10, label: "Sub goal" } })).data.token;
+        let list = (await o.request("/api/overlays")).data;
+        assert.equal(list.overlays.length, 1); assert.match(list.overlays[0].url, /\/ov\?token=svcx_/);
+        assert.deepEqual(list.guilds.map(g => g.id), ["g-admin"]);
+        assert.equal((await mk({ action: "bump", token: made, by: 4 })).data.value, 4);
+        assert.equal((await mk({ action: "bump", token: made, by: -99 })).data.value, 0, "never below zero");
+        await mk({ action: "bump", token: made, by: 5 });
+
+        const data = async token => fetch(o.base + "/api/ov/data?token=" + token);
+        const ok = await data(made); assert.equal(ok.status, 200);
+        const j = await ok.json();
+        assert.equal(j.kind, "goal"); assert.equal(j.config.label, "Sub goal"); assert.equal(j.data.pct, 50);
+        assert.ok(!JSON.stringify(j).includes("u1"), "nothing about the owner");
+        assert.equal((await data("svcx_" + "a".repeat(32))).status, 404);
+
+        const stats = (await mk({ action: "create", kind: "stats", guild_id: "g-admin" })).data.token;
+        assert.deepEqual((await (await data(stats)).json()).data, { members: 321, boosts: 7 });
+        const members = (await mk({ action: "create", kind: "goal", guild_id: "g-admin", config: { source: "members", target: 642 } })).data.token;
+        assert.equal((await (await data(members)).json()).data.pct, 50);
+        assert.equal((await mk({ action: "create", kind: "goal", guild_id: "g-nope", config: { source: "members" } })).status >= 400, true);
+
+        assert.equal((await mk({ action: "save", token: made, name: "Renamed", config: { target: 20 } })).status, 200);
+        assert.equal((await (await data(made)).json()).data.pct, 25);
+        const next = (await mk({ action: "reset", token: made })).data.token;
+        assert.equal((await data(made)).status, 404); assert.equal((await data(next)).status, 200);
+        assert.equal((await mk({ action: "delete", token: next })).status, 200);
+        assert.equal((await data(next)).status, 404);
+        for (const path of ["/ov", "/ov.js", "/ov.css"]) assert.equal((await fetch(o.base + path)).status, 200, path);
+        assert.match((await fetch(o.base + "/ov")).headers.get("content-security-policy"), /frame-ancestors 'self'/);
+    } finally { await o.close(); }
+});

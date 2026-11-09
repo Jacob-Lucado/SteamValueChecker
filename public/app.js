@@ -183,7 +183,7 @@
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Play together", pages: [["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
-    { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["streams", "Go live"], ["streamers", "Who is live"]] },
+    { id: "streamer", label: "Streamers", pages: [["streamer", "Streamer hub"], ["overlays", "Overlay studio"], ["streams", "Go live"], ["streamers", "Who is live"]] },
     { id: "account", label: "Account", pages: [["profile", "My profile"], ["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["tip", "Chip in"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
     { id: "admin", label: "Admin", pages: [["admin", "Admin"]] }
@@ -4770,6 +4770,96 @@
         h("p", { class: "muted", text: "The button opens PayPal, which handles the payment. This dashboard doesn't take payments or see any payment details. A tip is a gift, not a purchase, and it doesn't buy a feature or a promise of support." })));
   }
 
+  // Goal bars, server stats and timers for OBS, each with its own link and look, and a live preview that follows every change.
+  async function overlaysView() {
+    app.replaceChildren(pageHead("Overlay studio", "Build a goal bar, server stats or a timer, style it, and paste its link into OBS as a Browser source."), h("div", { class: "muted", text: "Loading…" }));
+    let d;
+    try { d = await api("/api/overlays"); } catch (e) { return app.replaceChildren(pageHead("Overlay studio", ""), h("div", { class: "notice warn", text: e.message })); }
+    const KIND = { goal: ["Goal bar", "A progress bar toward a number you pick"], stats: ["Server stats", "Live member and boost counts"], timer: ["Timer", "Count down to a time, or count up from one"] };
+    let sel = d.overlays[0]?.token ?? null, draft = null, frameTimer = 0;
+    const list = h("div", { class: "ovs-list" }), editor = h("div", { class: "ovs-edit" });
+    const find = tok => d.overlays.find(o => o.token === tok);
+    const pad = v => String(v).padStart(2, "0");
+    const toLocal = ms => { const x = new Date(ms || Date.now() + 30 * 60_000); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`; };
+    const reload = async keep => { d = await api("/api/overlays"); if (keep !== undefined) sel = keep; paintList(); paintEditor(); };
+
+    function paintList() {
+      list.replaceChildren(
+        ...d.overlays.map(o => h("button", { type: "button", class: "ovs-item" + (o.token === sel ? " on" : ""), onclick: () => { sel = o.token; paintList(); paintEditor(); } },
+          h("strong", { text: o.name }), h("span", { class: "muted small", text: KIND[o.kind][0] }))),
+        d.overlays.length ? null : h("p", { class: "muted small", text: "Nothing yet. Add one below." }),
+        h("div", { class: "ovs-add" }, h("div", { class: "muted small", text: "Add an overlay" }),
+          ...d.kinds.map(k => h("button", { type: "button", class: "btn gray small", title: KIND[k][1], text: "+ " + KIND[k][0], onclick: e => busy(e.currentTarget, async () => {
+            const cfg = k === "timer" ? { at: Date.now() + 30 * 60_000 } : k === "goal" ? { target: 100 } : {};
+            try { const r = await api("/api/overlays", { action: "create", kind: k, guild_id: k === "stats" ? d.guilds[0]?.id : undefined, config: cfg }); await reload(r.token); }
+            catch (err) { toast(err.message, "error"); }
+          }) }))));
+    }
+
+    function paintEditor() {
+      const o = find(sel);
+      if (!o) { editor.replaceChildren(h("div", { class: "panel" }, h("p", { class: "muted", text: "Pick an overlay on the left, or add a new one." }))); return; }
+      draft = { name: o.name, guild_id: o.guild_id, config: { ...o.config }, value: o.value };
+      const c = draft.config;
+      const frame = h("iframe", { class: "ovs-frame", title: "Preview", loading: "lazy" });
+      const sample = () => ({ current: o.kind === "goal" && c.source === "manual" ? draft.value : Math.round(c.target * 0.6), members: 1280, boosts: 14 });
+      const refresh = () => { clearTimeout(frameTimer); frameTimer = setTimeout(() => { frame.src = "/ov?demo=1&k=" + o.kind + "&c=" + encodeURIComponent(JSON.stringify(c)) + "&v=" + encodeURIComponent(JSON.stringify(sample())); }, 120); };
+      const row = (label, input) => h("label", { class: "ovs-row" }, h("span", { text: label }), input);
+      const text = (key, max, ph) => { const i = h("input", { type: "text", maxlength: String(max), value: c[key] ?? "", placeholder: ph || "" }); i.addEventListener("input", () => { c[key] = i.value; refresh(); }); return i; };
+      const color = key => { const i = h("input", { type: "color", value: c[key] }); i.addEventListener("input", () => { c[key] = i.value; refresh(); }); return i; };
+      const range = (key, lo, hi, step = 1, unit = "") => { const out = h("span", { class: "muted small", text: c[key] + unit }); const i = h("input", { type: "range", min: String(lo), max: String(hi), step: String(step), value: String(c[key]) }); i.addEventListener("input", () => { c[key] = Number(i.value); out.textContent = i.value + unit; refresh(); }); return h("span", { class: "ovs-range" }, i, out); };
+      const check = (key, label) => { const i = h("input", { type: "checkbox", checked: Boolean(c[key]) }); i.addEventListener("change", () => { c[key] = i.checked; refresh(); }); return h("label", { class: "ovs-check" }, i, " " + label); };
+      const name = h("input", { type: "text", maxlength: "40", value: o.name }); name.addEventListener("input", () => { draft.name = name.value; });
+      const server = h("select"); server.append(h("option", { value: "", text: "No server" }), ...d.guilds.map(g => h("option", { value: g.id, text: g.name, selected: g.id === o.guild_id })));
+      server.addEventListener("change", () => { draft.guild_id = server.value || null; });
+      const needsServer = o.kind === "stats" || (o.kind === "goal" && c.source !== "manual");
+
+      const specific = [];
+      if (o.kind === "goal") {
+        const src = select([["manual", "A number I update myself"], ["members", "Server member count"], ["boosts", "Server boosts"]], c.source); src.addEventListener("change", () => { c.source = src.value; paintEditor(); });
+        const tgt = h("input", { type: "number", min: "1", value: String(c.target) }); tgt.addEventListener("input", () => { c.target = Math.max(1, Number(tgt.value) || 1); refresh(); });
+        specific.push(row("Label", text("label", 40, "Goal")), row("Counts", src), row("Target", tgt), row("Unit", text("unit", 12, "subs, $, boosts…")), row("When it's reached", text("doneText", 40, "Goal reached!")), check("showPercent", "Show the percentage"));
+        if (c.source === "manual") {
+          const cur = h("input", { type: "number", min: "0", value: String(o.value), class: "ovs-cur" });
+          const send = async (by, set) => { try { const r = set !== undefined ? (await api("/api/overlays", { action: "save", token: o.token, value: set }), { value: set }) : await api("/api/overlays", { action: "bump", token: o.token, by }); o.value = draft.value = r.value; cur.value = String(r.value); refresh(); } catch (e) { toast(e.message, "error"); } };
+          specific.push(h("div", { class: "ovs-bump" }, h("span", { class: "muted small", text: "Right now (changes show on stream within seconds)" }),
+            h("div", { class: "row" }, ...[-10, -1, 1, 10].map(n => h("button", { type: "button", class: "btn gray small", text: (n > 0 ? "+" : "") + n, onclick: () => send(n) })), cur,
+              h("button", { type: "button", class: "btn blue small", text: "Set", onclick: () => send(0, Math.max(0, Number(cur.value) || 0)) }))));
+        }
+      } else if (o.kind === "stats") {
+        specific.push(row("Heading", text("label", 40, "Optional")), check("showMembers", "Show members"), row("Members label", text("membersLabel", 20)), check("showBoosts", "Show boosts"), row("Boosts label", text("boostsLabel", 20)));
+      } else {
+        const mode = select([["countdown", "Count down to a time"], ["countup", "Count up from a time"]], c.mode); mode.addEventListener("change", () => { c.mode = mode.value; refresh(); });
+        const at = h("input", { type: "datetime-local", value: toLocal(c.at) }); at.addEventListener("input", () => { const ms = new Date(at.value).getTime(); if (Number.isFinite(ms)) { c.at = ms; refresh(); } });
+        const soon = h("div", { class: "ovs-bump" }, h("span", { class: "muted small", text: "Start from now" }), h("div", { class: "row" }, ...[[5, "5 min"], [15, "15 min"], [30, "30 min"], [60, "1 hour"]].map(([m, l]) => h("button", { type: "button", class: "btn gray small", text: "In " + l, onclick: () => { c.at = Date.now() + m * 60_000; c.mode = "countdown"; mode.value = "countdown"; at.value = toLocal(c.at); refresh(); } }))));
+        specific.push(row("Label", text("label", 40, "Starting soon")), row("Mode", mode), row("Time", at), soon, row("When it hits zero", text("endText", 40, "We're live!")));
+      }
+      const font = select(d.fonts.map(f => [f, f]), c.font); font.addEventListener("change", () => { c.font = font.value; refresh(); });
+      const url = h("input", { type: "text", readonly: "readonly", value: o.url, onfocus: e => e.target.select() });
+      const save = h("button", { type: "button", class: "btn blue", text: "Save", onclick: e => busy(e.currentTarget, async () => {
+        try { await api("/api/overlays", { action: "save", token: o.token, name: draft.name, guild_id: needsServer ? (draft.guild_id || undefined) : (draft.guild_id ?? null), config: c }); toast("Saved. The overlay updates within seconds.", "ok"); await reload(o.token); }
+        catch (err) { toast(err.message, "error"); }
+      }) });
+      editor.replaceChildren(
+        h("div", { class: "panel" }, h("h3", { text: KIND[o.kind][0] }), row("Name", name), needsServer ? row("Server", server) : null, ...specific),
+        h("div", { class: "panel" }, h("h3", { text: "Look" }),
+          h("div", { class: "ovs-grid" }, row("Accent", color("accent")), row("Text", color("text")), row("Muted text", color("muted")), row("Background", color("bg")), row("Border", color("border")), row("Font", font)),
+          row("Background opacity", range("bgOpacity", 0, 100, 1, "%")), row("Corner radius", range("radius", 0, 40, 1, "px")), row("Padding", range("padding", 4, 48, 1, "px")), row("Size", range("scale", 0.5, 3, 0.1, "×")),
+          row("Refresh every", range("refresh", 5, 120, 5, "s")), h("div", { class: "row" }, check("showBorder", "Border"), check("shadow", "Drop shadow"))),
+        h("div", { class: "panel" }, h("h3", { text: "Live preview" }), h("div", { class: "ovs-stage" }, frame),
+          o.kind !== "timer" && (o.kind === "stats" || c.source !== "manual") ? h("p", { class: "muted small", text: "The preview uses sample numbers. On stream it shows your real ones." }) : null),
+        h("div", { class: "panel" }, h("h3", { text: "OBS link" }), h("p", { class: "muted small", text: "In OBS: Sources, Add, Browser. Paste this as the URL, set the width and height to fit, and leave the background transparent. Keep the link private." }),
+          h("div", { class: "row" }, url, h("button", { type: "button", class: "btn gray", text: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(o.url); toast("Link copied.", "ok"); } catch { url.select(); toast("Select the link and copy it by hand.", "warn"); } } })),
+          h("div", { class: "row" }, save,
+            h("button", { type: "button", class: "btn gray", text: "New link", title: "The old link stops working", onclick: e => busy(e.currentTarget, async () => { if (!confirm("Make a new link? The old one stops working, so you'll need to paste the new one into OBS.")) return; try { const r = await api("/api/overlays", { action: "reset", token: o.token }); await reload(r.token); toast("New link made.", "ok"); } catch (err) { toast(err.message, "error"); } }) }),
+            h("button", { type: "button", class: "btn gray", text: "Delete", onclick: e => busy(e.currentTarget, async () => { if (!confirm("Delete this overlay? Its link stops working.")) return; try { await api("/api/overlays", { action: "delete", token: o.token }); await reload(d.overlays.find(x => x.token !== o.token)?.token ?? null); } catch (err) { toast(err.message, "error"); } }) }))));
+      refresh();
+    }
+    app.replaceChildren(pageHead("Overlay studio", "Build a goal bar, server stats or a timer, style it, and paste its link into OBS as a Browser source."),
+      h("div", { class: "ovs" }, h("div", { class: "panel ovs-side" }, h("h3", { text: "Your overlays" }), list), editor));
+    paintList(); paintEditor();
+  }
+
   async function supportView() {
     const id = currentParam();
     if (id) return ticketThread(id);
@@ -7260,7 +7350,7 @@
       h("div", { class: "muted small" }, feedAgo(x.at), x.game ? " · " + x.game : "", Object.entries(x.reactions || {}).map(([e, n]) => ` · ${e} ${n}`).join(""), x.replies ? ` · ${x.replies} ${x.replies === 1 ? "reply" : "replies"}` : ""))));
   }
 
-  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
+  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminView };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in

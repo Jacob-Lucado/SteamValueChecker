@@ -44,6 +44,7 @@ import { parseHost, stepsOf, parseSteps, StepError, STEP_KINDS } from "../gwpart
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
+import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS } from "../overlays.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -133,6 +134,9 @@ const FILES = {
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
     "/overlay": ["overlay.html", "text/html; charset=utf-8"],
+    "/ov": ["ov.html", "text/html; charset=utf-8"],
+    "/ov.css": ["ov.css", "text/css; charset=utf-8"],
+    "/ov.js": ["ov.js", "text/javascript; charset=utf-8"],
     "/streamcard": ["streamcard.html", "text/html; charset=utf-8"],
     "/streamcard.css": ["streamcard.css", "text/css; charset=utf-8"],
     "/streamcard.js": ["streamcard.js", "text/javascript; charset=utf-8"],
@@ -394,8 +398,8 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
             // The data and sign-in endpoints never belong in a search result, even if something links to them.
             ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music|overlay|streamcard|giveawayoverlay)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
-            "Content-Security-Policy": /^\/(overlay|giveawayoverlay)(\?|$)/.test(path) ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
-            ...(/^\/(overlay|giveawayoverlay)(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
+            "Content-Security-Policy": /^\/(overlay|giveawayoverlay|ov)(\?|$)/.test(path) ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
+            ...(/^\/(overlay|giveawayoverlay|ov)(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
             // The terms and privacy PDFs are shown in a frame on our own pages, so they may be framed by us and by no one else.
             ...(/^\/[a-z-]+\.pdf(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "frame-ancestors 'self'", "Content-Disposition": "inline" } : {}),
             ...headers
@@ -1125,6 +1129,44 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (body.clear) { if (!mod) throw new HttpError(403, "Only DJs, moderators and managers can clear the chat."); chat.clear(g.id); return { ok: true }; }
             if (!chat.remove(g.id, body.id, { by: s.userId, mod })) throw new HttpError(403, "You can only remove your own messages.");
             return { ok: true };
+        },
+        // ----- overlay studio: goal bars, server stats and timers, each with its own link and look -----
+        "GET /api/overlays": async (req) => {
+            const s = session(req);
+            const guilds = (await Promise.all(s.guilds.filter(g => botGuilds?.(g.id)).map(async g => (await mayStream(s, g)) ? { id: g.id, name: g.name } : null))).filter(Boolean);
+            return { overlays: db.listOvs(s.userId).map(o => ({ token: o.token, kind: o.kind, name: o.name, guild_id: o.guild_id, value: o.value, config: o.config, url: `${origin}/ov?token=${o.token}` })), kinds: OVERLAY_KINDS, fonts: OVERLAY_FONTS, guilds };
+        },
+        "POST /api/overlays": async (req, body) => {
+            const s = session(req), action = String(body.action ?? "");
+            const guildId = body.guild_id ? String((await streamAccess(s, body.guild_id)).id) : null;
+            const wants = (kind, cfg) => kind === "stats" || (kind === "goal" && ["members", "boosts"].includes(cfg?.source));
+            try {
+                if (action === "create") {
+                    if (!OVERLAY_KINDS.includes(body.kind)) throw new HttpError(400, "Pick an overlay type.");
+                    if (wants(body.kind, body.config) && !guildId) throw new HttpError(400, "Pick a server for this overlay.");
+                    return { token: db.createOv(s.userId, body.kind, { name: body.name, guildId, config: body.config }) };
+                }
+                const mine = db.ovById(s.userId, String(body.token ?? ""));
+                if (!mine) throw new HttpError(404, "That overlay doesn't exist any more.");
+                if (action === "save") {
+                    const cfg = body.config ?? mine.config;
+                    if (wants(mine.kind, cfg) && !(guildId ?? mine.guild_id)) throw new HttpError(400, "Pick a server for this overlay.");
+                    db.updateOv(s.userId, mine.token, { name: body.name, guildId: body.guild_id === undefined ? undefined : guildId, config: body.config, value: body.value });
+                    return { ok: true };
+                }
+                if (action === "bump") { db.updateOv(s.userId, mine.token, { value: Math.max(0, Number(mine.value) + Math.max(-1_000_000, Math.min(1_000_000, Number(body.by) || 0))) }); return { value: db.ovById(s.userId, mine.token).value }; }
+                if (action === "reset") return { token: db.resetOvToken(s.userId, mine.token) };
+                if (action === "delete") { db.removeOv(s.userId, mine.token); return { ok: true }; }
+            } catch (e) { if (e instanceof HttpError) throw e; throw new HttpError(400, e.message || "That didn't work."); }
+            throw new HttpError(400, "Unknown action.");
+        },
+        // What the OBS page asks for every few seconds. Only the chosen look and the numbers on screen, nothing about the owner.
+        "GET /api/ov/data": async (req, _b, url) => {
+            if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
+            const o = db.ovByToken(String(url.searchParams.get("token") ?? ""));
+            if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Overlay studio page.");
+            const g = o.guild_id && guildList ? guildList().find(x => x.id === o.guild_id) ?? null : null;
+            return { kind: o.kind, name: o.name, config: o.config, data: overlayData(o, g ? { members: g.members ?? null, boosts: g.boosts ?? null } : null, now()), now: now() };
         },
         // The OBS overlay link for a server. Only people with Manage Server can see or change it.
         "GET /api/music/overlay": async (req, _b, url) => {
