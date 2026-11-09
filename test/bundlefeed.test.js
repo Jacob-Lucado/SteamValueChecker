@@ -129,6 +129,8 @@ test("a Steam bundle uses its own banner, and only falls back to a game's header
     assert.equal(parseSteamBundlePage(page, 97302, NOW).image, own);
     const noBanner = page.replace(`<img src="${own}">`, "");
     assert.match(parseSteamBundlePage(noBanner, 97302, NOW).image, /header_ratio\.jpg/);
+    const shot = "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/5168120/" + "b".repeat(40) + "/ss_" + "b".repeat(40) + ".1920x1080.jpg?t=2";
+    assert.equal(parseSteamBundlePage(`<meta property="og:title" content="Pitch on Steam"><div data-ds-appid="5168120"></div><img src="${shot}">`, 2, NOW).image, shot);
     const bare = `<meta property="og:title" content="Pack on Steam"><div data-ds-appid="111"></div>`;
     assert.match(parseSteamBundlePage(bare, 1, NOW).image, /apps\/111\/header\.jpg/);
 });
