@@ -187,3 +187,24 @@ test("bundle posts are spaced out and only say 'including' when games are left o
     assert.match(freeBundle({ ...b, gameCount: 9, games: ["A", "B", "C"] }), /9 games, including A, B, C/);
 });
 function freeBundle(b) { return bundleText(b, { link: true }); }
+
+test("posts that link to our landing pages carry no uploaded picture, because the link card shows it", async () => {
+    const { configureDeals } = await import("../src/deallinks.js");
+    const db = openDb(":memory:"), calls = [];
+    const fetchImpl = async (u, o) => { calls.push(String(u)); if (String(u).includes("/2/media")) return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: { id: "m1" } }), text: async () => "" }; if (String(u).includes("/2/tweets")) return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: { id: "1" } }), text: async () => "" }; return { ok: true, status: 200, headers: { get: () => "image/png" }, arrayBuffer: async () => new Uint8Array(300).buffer, json: async () => ({}), text: async () => "" }; };
+    const x = createXPoster({ env: ENV, db, fetchImpl, now: () => Date.UTC(2026, 10, 9, 15), log() {} });
+    x.setSettings({ enabled: true });
+    configureDeals({ base: "https://steamvaluechecker.com", make: d => `https://steamvaluechecker.com/d/${db.upsertDeal(d)}` });
+    try { await x.tick([game("a", { art: "https://cdn.example.com/a.png" })]); } finally { configureDeals(null); }
+    assert.ok(!calls.some(u => u.includes("/2/media") || u.includes("cdn.example.com")), "no picture was fetched or uploaded");
+    assert.ok(calls.some(u => u.includes("/2/tweets")));
+    const h = x.status().history[0]; assert.equal(h.media, false); assert.match(h.text, /steamvaluechecker\.com\/d\/\d+/);
+    // a manual bundle post with its landing link: same
+    calls.length = 0;
+    await x.manual({ text: "New bundle\n\nhttps://steamvaluechecker.com/b/5", imageUrl: "https://cdn.example.com/b.png", bundleId: "5" });
+    assert.ok(!calls.some(u => u.includes("/2/media") || u.includes("cdn.example.com")));
+    // and without a landing link the picture is still attached
+    calls.length = 0;
+    await x.manual({ text: "New bundle\n\nLink in bio.", imageUrl: "https://cdn.example.com/b.png", bundleId: "6" });
+    assert.ok(calls.some(u => u.includes("/2/media")));
+});

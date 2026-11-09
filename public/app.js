@@ -4215,7 +4215,7 @@
         count.textContent = `${n} / 280`; count.className = n > 280 ? "bad small" : "muted small";
         cost.textContent = t ? `About ${money(hasLink(t) ? xs.linkCost : xs.plainCost)} on X${hasLink(t) ? " (it has a link)" : ""}.` : "";
         go.textContent = at.value ? "Schedule it" : "Post now"; go.disabled = !xs.configured || !t || n > 280;
-        preview.textContent = draft.image ? `Picture: ${draft.imageName}` : draft.bundleId ? "The bundle's own picture will be attached." : "No picture. Posts with one get noticed far more.";
+        preview.textContent = draft.image ? `Picture: ${draft.imageName}` : draft.bundleId ? (/steamvaluechecker\.com\/[bd]\/\d+/i.test(draft.text) ? "The link will show the bundle's picture as a big card." : "The bundle's own picture will be attached.") : "No picture. Posts with one get noticed far more.";
         draft.text = text.value; draft.at = at.value;
       };
       tpl.addEventListener("change", () => { const t = xs.templates.find(x => x.id === tpl.value); if (t) { draft.bundleId = null; text.value = t.text; if (!draft.image) { pic.value = GRAPHICS[0][0]; useGraphic(GRAPHICS[0][0]); } else refresh(); } });

@@ -100,6 +100,10 @@ export function freeGameText(g, now = Date.now(), tags = DEFAULT_TAGS, { link = 
     return text;
 }
 
+// A link to one of our landing pages becomes a big card on X, showing that page's own picture. So those posts carry the link and no
+// uploaded image: the card is the picture, and tapping it opens the page.
+export const hasCardLink = text => /https?:\/\/(?:www\.)?steamvaluechecker\.com\/[bd]\/\d+/i.test(String(text ?? ""));
+
 export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fetch, now = () => Date.now(), log = () => {} }) {
     // pasted values often come with a space, a line break or quote marks stuck to them
     const clean = v => String(v ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
@@ -176,7 +180,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         const t = checkText(text);
         const key = MANUAL + dayOf(now()), used = Number(db.getMeta(key)) || 0;
         if (used >= MAX_MANUAL_PER_DAY) throw Object.assign(new Error(`That's ${MAX_MANUAL_PER_DAY} manual posts today. Try again tomorrow.`), { user: true });
-        const pic = image || (imageUrl ? await pictureFor(imageUrl) : null);
+        const pic = image || (imageUrl && !hasCardLink(t) ? await pictureFor(imageUrl) : null); // a landing link brings its own card picture
         const mediaIds = pic ? [await uploadImage(pic)] : []; // if the picture fails, the post doesn't go out without it
         const r = await post(t, mediaIds);
         db.setMeta(key, String(used + 1));
@@ -245,7 +249,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
             const linked = linksOn() ? { ...g, url: dealUrl({ key: `free:${g.id ?? g.url}`, kind: "free", title: g.title, shop: g.shop, url: g.url, image: g.art, expiry: g.expiry }) } : g;
             const text = freeGameText(linked, now(), tags(), { link: linksOn() });
             let mediaIds = [];
-            try { const pic = await pictureFor(g.art); if (pic) mediaIds = [await uploadImage(pic)]; db.setMeta(IMGERR, ""); }
+            try { const pic = hasCardLink(text) ? null : await pictureFor(g.art); if (pic) mediaIds = [await uploadImage(pic)]; db.setMeta(IMGERR, ""); }
             catch (err) { db.setMeta(IMGERR, JSON.stringify({ at: now(), message: err.message })); log(`posting without a picture: ${err.message}`); } // better a post without a picture than no post
             const r = await post(text, mediaIds);
             db.setMeta(LAST, String(now())); db.setMeta(DAYKEY + dayOf(now()), String(postedToday() + 1)); db.setMeta(ERR, "");
