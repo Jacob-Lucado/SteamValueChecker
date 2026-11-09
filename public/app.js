@@ -4133,7 +4133,7 @@
     const xLen = t => { let n = 0; for (const ch of t.replace(LINK, () => "x".repeat(23))) { const cp = ch.codePointAt(0); n += cp <= 4351 || (cp >= 8192 && cp <= 8205) || (cp >= 8208 && cp <= 8223) || (cp >= 8242 && cp <= 8247) ? 1 : 2; } return n; };
     const hasLink = t => { LINK.lastIndex = 0; return LINK.test(t); };
     const when = at => new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    let draft = { text: "", image: null, imageName: "", at: "" }, bundleLink = false;
+    let draft = { text: "", image: null, imageName: "", at: "", bundleId: null }, bundleLink = true;
     const draw = async () => {
       const xs = await api("/api/admin/xposter");
       const bl = await api("/api/admin/xposter/bundles?link=" + (bundleLink ? 1 : 0)).catch(() => ({ bundles: [] }));
@@ -4147,6 +4147,7 @@
       const chk = h("button", { class: "btn gray small", type: "button", text: "Check the keys" });
       chk.addEventListener("click", () => busy(chk, async () => { try { const r = await api("/api/admin/xposter/check", {}); note.textContent = "Connected" + (r.username ? " as @" + r.username : "") + "."; } catch (e) { note.textContent = e.message; } }));
       const sv = h("button", { class: "btn gray small", type: "button", text: "Save" }); sv.addEventListener("click", () => save({ daily: Number(per.value) }));
+      const linksOn = h("input", { type: "checkbox" }); linksOn.checked = xs.links; linksOn.addEventListener("change", () => save({ links: linksOn.checked }));
       const tagsIn = h("input", { type: "text", value: xs.tags, class: "x-tags", placeholder: "#FreeGames #PCGaming …" });
       const tagsSave = h("button", { class: "btn gray small", type: "button", text: "Save tags" }); tagsSave.addEventListener("click", () => save({ tags: tagsIn.value }));
       const tagsReset = h("button", { class: "btn gray small", type: "button", text: "Reset" }); tagsReset.addEventListener("click", () => save({ tags: xs.defaultTags }));
@@ -4158,11 +4159,13 @@
           tile("Waiting", String(xs.queue.length), xs.queue.length ? "scheduled" : "nothing scheduled")),
         !xs.configured && h("p", { class: "bad", text: "The four X keys aren't set in Fly yet, so nothing can be posted." }),
         xs.error && h("p", { class: "bad", text: "Last problem: " + xs.error.message }),
+        xs.imageError && h("p", { class: "bad small", text: "Last automatic post went out without a picture: " + xs.imageError.message }),
         h("label", { class: "check" }, on, " Post new free games automatically"),
+        h("label", { class: "check" }, linksOn, " Put the game's link in automatic posts (about " + money(xs.linkCost) + " each instead of " + money(xs.plainCost) + ")"),
         h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
         h("div", { class: "row" }, h("label", { text: "Hashtags " }), tagsIn, tagsSave, tagsReset),
         h("p", { class: "muted small", text: "Each automatic post gets its store's own tag (like #EpicGames) plus up to three from this list, rotating so no two posts match. Bundles skip the free and giveaway ones. A few well-picked tags do better than a wall of them." }),
-        h("p", { class: "muted small", text: `Automatic posts are plain text with no link, spaced at least 3 hours apart. X charges about ${money(xs.plainCost)} for a plain post and about ${money(xs.linkCost)} for one with a link. ${xs.daily} a day is roughly ${money(xs.monthlyCost)} a month.` }), note);
+        h("p", { class: "muted small", text: `Automatic posts carry the game's cover art (or the logo when there isn't any) and are spaced at least 3 hours apart. X charges about ${money(xs.plainCost)} for a plain post and about ${money(xs.linkCost)} for one with a link. ${xs.daily} a day is roughly ${money(xs.monthlyCost)} a month at the current setting.` }), note);
 
       // ----- the composer -----
       const text = h("textarea", { rows: "7", placeholder: "Write a post, or start from one of the ready-made ones…", class: "x-text" }); text.value = draft.text;
@@ -4171,6 +4174,11 @@
       const count = h("span", { class: "muted small" }), cost = h("span", { class: "muted small" });
       const fileIn = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif" });
       const preview = h("div", { class: "muted small", text: "" });
+      const GRAPHICS = [["/img/x-post.jpg", "Project graphic"], ["/img/x-logo.jpg", "Logo"]];
+      const pic = h("select", {}, h("option", { value: "", text: "Pick a ready-made picture…" }), ...GRAPHICS.map(([u, n]) => h("option", { value: u, text: n })));
+      const setImage = (b64, name) => { draft.image = b64; draft.imageName = name; refresh(); };
+      const useGraphic = async url => { try { const blob = await (await fetch(url)).blob(); const r = new FileReader(); r.onload = () => setImage(String(r.result).split(",")[1], GRAPHICS.find(g => g[0] === url)?.[1] || "picture"); r.readAsDataURL(blob); } catch { toast("Couldn't load that picture."); } };
+      pic.addEventListener("change", () => { if (pic.value) { fileIn.value = ""; useGraphic(pic.value); } else setImage(null, ""); });
       const at = h("input", { type: "datetime-local" }); at.value = draft.at;
       const go = h("button", { class: "btn green", type: "button", text: "Post now" });
       const full = () => text.value.trim() + (addLink.checked && !hasLink(text.value) ? "\n\nsteamvaluechecker.com" : "");
@@ -4178,33 +4186,33 @@
         const t = full(), n = xLen(t);
         count.textContent = `${n} / 280`; count.className = n > 280 ? "bad small" : "muted small";
         cost.textContent = t ? `About ${money(hasLink(t) ? xs.linkCost : xs.plainCost)} on X${hasLink(t) ? " (it has a link)" : ""}.` : "";
-        go.textContent = at.value ? "Schedule it" : "Post now"; go.disabled = !xs.configured || !t || n > 280 || (at.value && draft.image);
-        preview.textContent = draft.image ? `Picture: ${draft.imageName}${at.value ? " (scheduled posts can't have a picture yet)" : ""}` : "";
+        go.textContent = at.value ? "Schedule it" : "Post now"; go.disabled = !xs.configured || !t || n > 280;
+        preview.textContent = draft.image ? `Picture: ${draft.imageName}` : draft.bundleId ? "The bundle's own picture will be attached." : "No picture. Posts with one get noticed far more.";
         draft.text = text.value; draft.at = at.value;
       };
-      tpl.addEventListener("change", () => { const t = xs.templates.find(x => x.id === tpl.value); if (t) { text.value = t.text; refresh(); } });
+      tpl.addEventListener("change", () => { const t = xs.templates.find(x => x.id === tpl.value); if (t) { draft.bundleId = null; text.value = t.text; if (!draft.image) { pic.value = GRAPHICS[0][0]; useGraphic(GRAPHICS[0][0]); } else refresh(); } });
       [text, addLink, at].forEach(el => el.addEventListener("input", refresh));
       fileIn.addEventListener("change", () => {
-        const f = fileIn.files?.[0]; if (!f) { draft.image = null; draft.imageName = ""; return refresh(); }
-        if (f.size > 5 * 1024 * 1024) { toast("Pictures can be 5 MB at most."); fileIn.value = ""; return; }
+        const f = fileIn.files?.[0]; pic.value = ""; if (!f) { draft.image = null; draft.imageName = ""; return refresh(); }
+        if (f.size > (at.value ? 2 : 5) * 1024 * 1024) { toast(`Pictures can be ${at.value ? 2 : 5} MB at most${at.value ? " on scheduled posts" : ""}.`); fileIn.value = ""; return; }
         const r = new FileReader(); r.onload = () => { draft.image = String(r.result).split(",")[1]; draft.imageName = f.name; refresh(); }; r.readAsDataURL(f);
       });
       go.addEventListener("click", () => busy(go, async () => {
         const t = full(), sched = at.value ? new Date(at.value).getTime() : null;
         if (!confirm(sched ? `Schedule this post for ${when(sched)}?` : "Post this to X now? It goes out right away.")) return;
         try {
-          await api("/api/admin/xposter/post", { text: t, ...(sched ? { at: sched } : {}), ...(!sched && draft.image ? { image: draft.image } : {}) });
-          toast(sched ? "Scheduled." : "Posted.", "ok"); draft = { text: "", image: null, imageName: "", at: "" }; await draw();
+          await api("/api/admin/xposter/post", { text: t, ...(sched ? { at: sched } : {}), ...(draft.image ? { image: draft.image } : {}), ...(!sched && draft.bundleId ? { bundle_id: draft.bundleId } : {}) });
+          toast(sched ? "Scheduled." : "Posted.", "ok"); draft = { text: "", image: null, imageName: "", at: "", bundleId: null }; await draw();
         } catch (e) { toast(e.message); }
       }));
       refresh();
       const composer = h("div", { class: "panel" }, h("h3", { text: "Write a post" }),
-        h("p", { class: "muted", text: "For ads, announcements and anything else you'd rather word yourself. Ready-made posts say \"link in bio\" because a link makes X charge about thirteen times more." }),
+        h("p", { class: "muted", text: "For ads, announcements and anything else you'd rather word yourself. Ready-made posts say \"link in bio\"; add the website link with the tickbox when you want people to click straight through." }),
         h("div", { class: "row" }, tpl),
         text,
         h("div", { class: "row", style: "justify-content:space-between" }, count, cost),
         h("label", { class: "check" }, addLink, " Add the website link"),
-        h("div", { class: "row" }, h("label", { text: "Picture " }), fileIn), preview,
+        h("div", { class: "row" }, h("label", { text: "Picture " }), pic, fileIn), preview,
         h("div", { class: "row" }, h("label", { text: "Send at " }), at, h("span", { class: "muted small", text: "Leave empty to post now. Scheduled posts go out within a few minutes of the time." })),
         h("div", { class: "row" }, go),
         h("p", { class: "muted small", text: "Pictures are uploaded when the post goes out. If X turns the picture down, nothing gets posted and you'll see why." }));
@@ -4218,13 +4226,13 @@
       const fresh = bl.bundles.filter(b => !b.posted);
       const newest = h("button", { class: "btn green small", type: "button", text: "Post the newest", disabled: !xs.configured || !fresh.length }); if (fresh.length) newest.addEventListener("click", () => postBundle(fresh[0], newest));
       const bundles = h("div", { class: "panel" }, h("h3", { text: "Latest bundles" }),
-        h("p", { class: "muted", text: "The newest bundles the bot has found. Post one as is, or send it to the box above to reword it first." }),
-        h("div", { class: "row" }, newest, h("label", { class: "check" }, linkBox, ` Include the bundle's link (about ${money(xs.linkCost)} instead of ${money(xs.plainCost)})`)),
+        h("p", { class: "muted", text: "The newest bundles the bot has found. Each one goes out with its own picture and its link. Post one as is, or send it to the box above to reword it first." }),
+        h("div", { class: "row" }, newest, h("label", { class: "check" }, linkBox, ` Include the bundle's link (about ${money(xs.linkCost)} each instead of ${money(xs.plainCost)})`)),
         bl.bundles.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Bundle", "Store", "Price", "Ends", ""].map(c => h("th", { text: c })))),
           h("tbody", {}, bl.bundles.map(b => {
             const go = h("button", { class: "btn gray small", type: "button", text: "Post to X", disabled: !xs.configured }); go.addEventListener("click", () => postBundle(b, go));
             const ed = h("button", { class: "btn gray small", type: "button", text: "Edit first" });
-            ed.addEventListener("click", () => { draft.text = b.text; text.value = b.text; refresh(); text.scrollIntoView({ behavior: "smooth", block: "center" }); text.focus(); });
+            ed.addEventListener("click", () => { draft.text = b.text; draft.bundleId = b.id; draft.image = null; draft.imageName = ""; pic.value = ""; text.value = b.text; refresh(); text.scrollIntoView({ behavior: "smooth", block: "center" }); text.focus(); });
             return h("tr", {}, h("td", {}, h("b", { text: b.title }), b.gameCount ? h("div", { class: "muted small", text: b.gameCount + " games" }) : null), h("td", { text: b.storeName }), h("td", { text: b.price || "–" }),
               h("td", { text: b.expiresAt ? when(b.expiresAt) : "–" }), h("td", {}, b.posted ? h("span", { class: "muted", text: "Posted ✓ " }) : null, go, " ", ed));
           }))) : h("p", { class: "muted", text: "No active bundles right now." }));

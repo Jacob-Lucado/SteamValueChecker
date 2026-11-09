@@ -2,11 +2,13 @@
 // (about 1.5 cents for plain text, and about 20 cents once a post has a link in it), so this only ever posts plain text,
 // at most a few a day, and does nothing until the owner switches it on and has added the four keys.
 import { createHmac, randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 export const X_POST_URL = "https://api.x.com/2/tweets";
 export const X_ME_URL = "https://api.x.com/2/users/me";
 export const X_MEDIA_URL = "https://api.x.com/2/media/upload";
 const ON = "xposter:on", CAP = "xposter:daily", LAST = "xposter:last", ERR = "xposter:error", DAYKEY = "xposter:day:", SEEN = "xposted:";
+const LINKS = "xposter:links", IMGERR = "xposter:imageerror", QIMG = "xposter:qimg:", FALLBACK_IMG = new URL("../public/icon-512.png", import.meta.url), MAX_QUEUE_IMAGE = 2 * 1024 * 1024;
 const BUNDLEDONE = "xposted:bundle:", HIST = "xposter:history", QUEUE = "xposter:queue", SPEND = "xposter:spend:", MANUAL = "xposter:manual:";
 export const DEFAULT_DAILY = 2, MAX_DAILY = 6, GAP_MS = 3 * 3_600_000, COST_PER_POST = 0.015, COST_LINK_POST = 0.20, MAX_MANUAL_PER_DAY = 20, MAX_QUEUED = 20, MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -81,13 +83,13 @@ export function oauthHeader({ method, url, keys, nonce = randomBytes(16).toStrin
 /** The day in Eastern time as YYYY-MM-DD, so "per day" means the owner's day. */
 const dayOf = ms => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(ms));
 
-/** Plain text only: no link, so X doesn't bill it as a link post. */
-export function freeGameText(g, now = Date.now(), tags = DEFAULT_TAGS) {
+/** The text of an automatic free-game post. With `link`, it has the claim link in it, which X bills as a link post. */
+export function freeGameText(g, now = Date.now(), tags = DEFAULT_TAGS, { link = false } = {}) {
     const shop = g.shop ? ` on ${g.shop}` : "";
     const left = g.expiry && g.expiry > now ? g.expiry - now : null;
     const when = left === null ? "" : left < 36 * 3_600_000 ? `\n⏳ Ends ${left < 3_600_000 ? "within the hour" : `in about ${Math.round(left / 3_600_000)} hours`}.` : `\n⏳ Ends ${new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }).format(new Date(g.expiry))}.`;
     let title = String(g.title).slice(0, 110);
-    const make = () => `🎁 Free right now: ${title}${shop}${when}\n\nKeep it forever once you claim it. Our Discord bot posts every free game as it drops. Link in bio.\n\n${hashtagsFor(g.shop, g.title, tags)}`;
+    const make = () => `🎁 Free right now: ${title}${shop}${when}\n\nKeep it forever once you claim it. Our Discord bot posts every free game as it drops.\n\n${link && g.url ? `Claim it: ${g.url}` : "Link in bio."}\n${hashtagsFor(g.shop, g.title, tags)}`;
     let text = make();
     while (xLength(text) > 280 && title.length > 20) { title = title.slice(0, -10).trimEnd() + "…"; text = make(); }
     return text;
@@ -101,6 +103,23 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
     const enabled = () => db.getMeta(ON) === "1";
     const daily = () => Math.min(MAX_DAILY, Math.max(1, Number(db.getMeta(CAP)) || DEFAULT_DAILY));
     const postedToday = () => Number(db.getMeta(DAYKEY + dayOf(now()))) || 0;
+    const linksOn = () => db.getMeta(LINKS) !== "0"; // links in automatic posts: on unless switched off
+    /** A picture from a web address, as base64. Only https, only real image types, 5 MB at most. */
+    async function imageFrom(url) {
+        if (!/^https:\/\//i.test(String(url ?? ""))) throw new Error("no picture address");
+        const res = await fetchImpl(url, { headers: { Accept: "image/*" }, signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) throw new Error(`the picture answered ${res.status}`);
+        const type = String(res.headers?.get?.("content-type") ?? "image/jpeg").split(";")[0].trim().toLowerCase();
+        if (!/^image\/(png|jpe?g|gif|webp)$/.test(type)) throw new Error("that isn't a picture X accepts");
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (!buf.length || buf.length > MAX_IMAGE_BYTES) throw new Error("the picture is empty or over 5 MB");
+        return buf.toString("base64");
+    }
+    /** The picture for a post: the one at `url`, or the project logo if there isn't one or it can't be fetched. */
+    async function pictureFor(url) {
+        try { return await imageFrom(url); } catch (err) { log(`picture fallback: ${err.message}`); }
+        try { return readFileSync(FALLBACK_IMG).toString("base64"); } catch { return null; }
+    }
     const tags = () => { try { const t = cleanTags(db.getMeta(TAGS) ?? ""); return t.length ? t : DEFAULT_TAGS; } catch { return DEFAULT_TAGS; } };
     const monthKey = () => dayOf(now()).slice(0, 7);
     const spendCents = () => Number(db.getMeta(SPEND + monthKey())) || 0;
@@ -148,11 +167,12 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         return t;
     }
     /** A post the owner wrote. Not held to the daily limit of the automatic ones, but to a sane one of its own. */
-    async function manual({ text, image = null, kind = "manual", bundleId = null }) {
+    async function manual({ text, image = null, imageUrl = null, kind = "manual", bundleId = null }) {
         const t = checkText(text);
         const key = MANUAL + dayOf(now()), used = Number(db.getMeta(key)) || 0;
         if (used >= MAX_MANUAL_PER_DAY) throw Object.assign(new Error(`That's ${MAX_MANUAL_PER_DAY} manual posts today. Try again tomorrow.`), { user: true });
-        const mediaIds = image ? [await uploadImage(image)] : []; // if the picture fails, the post doesn't go out without it
+        const pic = image || (imageUrl ? await pictureFor(imageUrl) : null);
+        const mediaIds = pic ? [await uploadImage(pic)] : []; // if the picture fails, the post doesn't go out without it
         const r = await post(t, mediaIds);
         db.setMeta(key, String(used + 1));
         record({ id: r.id, text: t, at: now(), kind: bundleId ? "bundle" : kind, media: mediaIds.length > 0 });
@@ -160,18 +180,20 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         return { id: r.id, cost: hasLink(t) ? COST_LINK_POST : COST_PER_POST };
     }
     /** Saves a post to go out later. Text only, and it goes within a few minutes of the time. */
-    function schedule({ text, at }) {
+    function schedule({ text, at, image = null }) {
         const t = checkText(text), when = Math.round(Number(at));
         if (!(when > now() + 30_000)) throw Object.assign(new Error("Pick a time in the future."), { user: true });
         if (when > now() + 60 * 86_400_000) throw Object.assign(new Error("That's more than 60 days away."), { user: true });
         const q = readList(db.getMeta(QUEUE));
         if (q.length >= MAX_QUEUED) throw Object.assign(new Error(`${MAX_QUEUED} posts are already waiting. Delete one first.`), { user: true });
-        const item = { key: `q${now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: t, at: when };
+        if (image && Buffer.byteLength(String(image), "base64") > MAX_QUEUE_IMAGE) throw Object.assign(new Error("A picture on a scheduled post can be 2 MB at most."), { user: true });
+        const item = { key: `q${now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: t, at: when, media: Boolean(image) };
+        if (image) db.setMeta(QIMG + item.key, String(image));
         db.setMeta(QUEUE, JSON.stringify([...q, item].sort((a, b) => a.at - b.at)));
         return item;
     }
     function unschedule(key) {
-        const q = readList(db.getMeta(QUEUE)); db.setMeta(QUEUE, JSON.stringify(q.filter(i => i.key !== key)));
+        const q = readList(db.getMeta(QUEUE)); db.setMeta(QUEUE, JSON.stringify(q.filter(i => i.key !== key))); db.setMeta(QIMG + key, "");
     }
     /** Sends whatever scheduled posts have come due. A failed one is dropped with a note, not retried. */
     async function flush() {
@@ -181,8 +203,12 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         db.setMeta(QUEUE, JSON.stringify(q.filter(i => i.at > now()))); // taken off the list first, so a failure can't repeat itself and cost money
         let sent = 0;
         for (const i of due) {
-            try { const r = await post(i.text); record({ id: r.id, text: i.text, at: now(), kind: "scheduled", media: false }); sent++; db.setMeta(ERR, ""); }
+            try {
+                const img = db.getMeta(QIMG + i.key), ids = img ? [await uploadImage(img)] : [];
+                const r = await post(i.text, ids); record({ id: r.id, text: i.text, at: now(), kind: "scheduled", media: ids.length > 0 }); sent++; db.setMeta(ERR, "");
+            }
             catch (err) { db.setMeta(ERR, JSON.stringify({ at: now(), message: `A scheduled post didn't go out: ${err.message}` })); log(`scheduled post failed: ${err.message}`); }
+            finally { db.setMeta(QIMG + i.key, ""); }
         }
         return { sent };
     }
@@ -210,10 +236,13 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         if (!g) return { skipped: "nothing" };
         db.setMeta(SEEN + g.id, String(now())); // marked first, so a failure can't turn into a loop of retries that each cost money
         try {
-            const text = freeGameText(g, now(), tags());
-            const r = await post(text);
+            const text = freeGameText(g, now(), tags(), { link: linksOn() });
+            let mediaIds = [];
+            try { const pic = await pictureFor(g.art); if (pic) mediaIds = [await uploadImage(pic)]; db.setMeta(IMGERR, ""); }
+            catch (err) { db.setMeta(IMGERR, JSON.stringify({ at: now(), message: err.message })); log(`posting without a picture: ${err.message}`); } // better a post without a picture than no post
+            const r = await post(text, mediaIds);
             db.setMeta(LAST, String(now())); db.setMeta(DAYKEY + dayOf(now()), String(postedToday() + 1)); db.setMeta(ERR, "");
-            record({ id: r.id, text, at: now(), kind: "auto", media: false });
+            record({ id: r.id, text, at: now(), kind: "auto", media: mediaIds.length > 0 });
             log(`posted ${g.title}`);
             return { posted: g.title, id: r.id };
         } catch (err) {
@@ -226,10 +255,11 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
     function status() {
         let err = null; try { err = db.getMeta(ERR) ? JSON.parse(db.getMeta(ERR)) : null; } catch { /* none */ }
         const d = daily();
-        return { configured: configured(), enabled: enabled(), daily: d, postedToday: postedToday(), lastAt: Number(db.getMeta(LAST)) || null, error: err, monthlyCost: Math.round(d * 30 * COST_PER_POST * 100) / 100, maxDaily: MAX_DAILY, tags: tags().join(" "), defaultTags: DEFAULT_TAGS.join(" "),
+        return { configured: configured(), enabled: enabled(), daily: d, postedToday: postedToday(), lastAt: Number(db.getMeta(LAST)) || null, error: err, links: linksOn(), imageError: (() => { try { return db.getMeta(IMGERR) ? JSON.parse(db.getMeta(IMGERR)) : null; } catch { return null; } })(), monthlyCost: Math.round(d * 30 * (linksOn() ? COST_LINK_POST : COST_PER_POST) * 100) / 100, maxDaily: MAX_DAILY, tags: tags().join(" "), defaultTags: DEFAULT_TAGS.join(" "),
             monthSpend: Math.round(spendCents()) / 100, history: readList(db.getMeta(HIST)), queue: readList(db.getMeta(QUEUE)), templates: TEMPLATES, manualToday: Number(db.getMeta(MANUAL + dayOf(now()))) || 0, manualMax: MAX_MANUAL_PER_DAY, linkCost: COST_LINK_POST, plainCost: COST_PER_POST };
     }
-    function setSettings({ enabled: on, daily: n, tags: tg } = {}) {
+    function setSettings({ enabled: on, daily: n, tags: tg, links: lk } = {}) {
+        if (lk !== undefined) db.setMeta(LINKS, lk ? "1" : "0");
         if (tg !== undefined) { const t = cleanTags(tg); db.setMeta(TAGS, t.join(" ")); }
         if (on !== undefined) db.setMeta(ON, on ? "1" : "0");
         if (n !== undefined) { const v = Math.round(Number(n)); if (!(v >= 1 && v <= MAX_DAILY)) throw Object.assign(new Error(`Posts per day must be between 1 and ${MAX_DAILY}.`), { user: true }); db.setMeta(CAP, String(v)); }

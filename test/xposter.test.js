@@ -51,9 +51,9 @@ test("a failed post is remembered, explained and not retried at a cost", async (
     x.setSettings({ enabled: true });
     const r = await x.tick([game("a")]);
     assert.match(r.error, /out of credits/); assert.match(x.status().error.message, /credits/);
-    assert.equal(calls, 1); await x.tick([game("a")]); assert.equal(calls, 1, "the same game isn't tried again");
+    assert.equal(calls, 2, "the picture, then the post"); await x.tick([game("a")]); assert.equal(calls, 2, "the same game isn't tried again");
     assert.throws(() => x.setSettings({ daily: 99 }), /between 1 and/);
-    assert.equal(x.status().monthlyCost, 0.9);
+    assert.equal(x.status().monthlyCost, 12, "2 a day with a link each");
 });
 
 test("spaces and quote marks pasted around the keys are ignored", async () => {
@@ -123,4 +123,48 @@ test("a posted bundle is remembered so the button can say so", async () => {
     assert.equal(x.bundlePosted("humble:1"), false);
     await x.manual({ text: "bundle post", bundleId: "humble:1" });
     assert.equal(x.bundlePosted("humble:1"), true); assert.equal(x.status().history[0].kind, "bundle");
+});
+
+test("automatic posts carry the game's picture and link, and fall back sensibly", async () => {
+    const db = openDb(":memory:"); let t = Date.UTC(2026, 10, 9, 15); const log = []; let artOk = true, uploadOk = true;
+    const x = createXPoster({ env: ENV, db, now: () => t, fetchImpl: async (u, o = {}) => {
+        if (u.startsWith("https://cdn.example/")) { log.push(["art", u]); return artOk ? { ok: true, headers: { get: () => "image/jpeg" }, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer } : { ok: false, status: 404 }; }
+        const body = JSON.parse(o.body); if (u.includes("media")) { log.push(["upload", body.media]); return uploadOk ? { ok: true, json: async () => ({ data: { id: "med1" } }) } : { ok: false, status: 400, json: async () => ({ detail: "nope" }) }; }
+        log.push(["post", body]); return { ok: true, json: async () => ({ data: { id: "888888" } }) };
+    } });
+    x.setSettings({ enabled: true });
+    await x.tick([game("a", { title: "Alpha", art: "https://cdn.example/a.jpg" })]);
+    assert.deepEqual(log.map(l => l[0]), ["art", "upload", "post"]);
+    assert.equal(log[1][1], Buffer.from([1, 2, 3]).toString("base64"), "the game's own art is what gets uploaded");
+    assert.deepEqual(log[2][1].media, { media_ids: ["med1"] }); assert.match(log[2][1].text, /Claim it: https:\/\/store\.epicgames\.com\/x/);
+    // no usable art: the logo goes up instead
+    log.length = 0; t += 4 * 3_600_000; artOk = false;
+    await x.tick([game("b", { title: "Beta", art: "https://cdn.example/b.jpg" })]);
+    assert.equal(log[1][0], "upload"); assert.ok(log[1][1].length > 1000, "the project logo, not nothing");
+    assert.deepEqual(log[2][1].media, { media_ids: ["med1"] });
+    // X turns pictures down: the post still goes out, and the page is told
+    log.length = 0; t += 24 * 3_600_000; uploadOk = false;
+    await x.tick([game("c", { title: "Gamma" })]);
+    assert.equal(log.at(-1)[1].media, undefined); assert.match(x.status().imageError.message, /nope/); assert.equal(x.status().history[0].media, false);
+    // links can be switched off
+    log.length = 0; t += 4 * 3_600_000; uploadOk = true; x.setSettings({ links: false });
+    await x.tick([game("d", { title: "Delta" })]);
+    assert.match(log.at(-1)[1].text, /Link in bio/); assert.ok(!/https:/.test(log.at(-1)[1].text)); assert.equal(x.status().monthlyCost, 0.9);
+});
+
+test("a manual post can use a bundle's picture, and a scheduled one keeps its own", async () => {
+    const db = openDb(":memory:"); let t = Date.UTC(2026, 10, 9, 15); const seen = [];
+    const x = createXPoster({ env: ENV, db, now: () => t, fetchImpl: async (u, o = {}) => {
+        if (u.startsWith("https://img.example/")) { seen.push("fetch"); return { ok: true, headers: { get: () => "image/png" }, arrayBuffer: async () => new Uint8Array([9, 9]).buffer }; }
+        const b = JSON.parse(o.body); seen.push(u.includes("media") ? "upload:" + b.media : b.media ? "post+pic" : "post"); return { ok: true, json: async () => ({ data: { id: "123456" } }) };
+    } });
+    await x.manual({ text: "bundle", imageUrl: "https://img.example/b.png", bundleId: "7" });
+    assert.deepEqual(seen, ["fetch", "upload:" + Buffer.from([9, 9]).toString("base64"), "post+pic"]);
+    await assert.rejects(x.manual({ text: "x", image: Buffer.alloc(6 * 1024 * 1024).toString("base64") }), /5 MB/);
+    seen.length = 0;
+    const q = x.schedule({ text: "later", at: t + 120_000, image: Buffer.from("pic").toString("base64") });
+    assert.equal(x.status().queue[0].media, true); assert.throws(() => x.schedule({ text: "big", at: t + 120_000, image: Buffer.alloc(3 * 1024 * 1024).toString("base64") }), /2 MB/);
+    t += 5 * 60_000; await x.flush();
+    assert.deepEqual(seen, ["upload:" + Buffer.from("pic").toString("base64"), "post+pic"]); assert.equal(x.status().history[0].media, true);
+    assert.equal(db.getMeta("xposter:qimg:" + q.key), "", "the stored picture is cleared once it has gone out");
 });

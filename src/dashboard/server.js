@@ -170,6 +170,8 @@ const FILES = {
     "/ai.css": ["ai.css", "text/css; charset=utf-8"],
     "/ai.js": ["ai.js", "text/javascript; charset=utf-8"],
     "/ai-ad-hero.png": ["ai-ad-hero.png", "image/png"],
+    "/img/x-post.jpg": ["img/x-post.jpg", "image/jpeg"],
+    "/img/x-logo.jpg": ["img/x-logo.jpg", "image/jpeg"],
     "/img/ai/history.png": ["img/ai/history.png", "image/png"],
     "/img/ai/compare.png": ["img/ai/compare.png", "image/png"],
     "/img/ai/library.png": ["img/ai/library.png", "image/png"],
@@ -1541,13 +1543,13 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             if (body.enabled && !xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET).");
-            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily, tags: body.tags }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
+            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily, tags: body.tags, links: body.links }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
         },
         "GET /api/admin/xposter/bundles": async (req, _b, url) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
-            const link = url.searchParams.get("link") === "1", tags = xposter.tags();
+            const link = url.searchParams.get("link") !== "0", tags = xposter.tags();
             return { bundles: db.listFeedBundles({ status: "active", limit: 8, adult: false }).map(bundleFeedView).map(b => ({ id: b.id, title: b.title, storeName: b.storeName, price: b.price, expiresAt: b.expiresAt, gameCount: b.gameCount, posted: xposter.bundlePosted(b.id), text: xposterText.bundleText(b, { tags, link }) })) };
         },
         "POST /api/admin/xposter/post": async (req, body) => {
@@ -1556,9 +1558,10 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             if (!xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first.");
             try {
-                const text = String(body.text ?? "");
-                if (body.at) { const item = xposter.schedule({ text, at: Number(body.at) }); return { ok: true, scheduled: item }; }
-                return { ok: true, ...(await xposter.manual({ text, image: body.image ? String(body.image) : null, bundleId: body.bundle_id ? String(body.bundle_id).slice(0, 80) : null })) };
+                const text = String(body.text ?? ""), image = body.image ? String(body.image) : null;
+                if (body.at) { const item = xposter.schedule({ text, at: Number(body.at), image }); return { ok: true, scheduled: item }; }
+                const bundle = body.bundle_id ? db.getFeedBundle(body.bundle_id) : null; // the picture comes from our own record of the bundle, never an address sent from the page
+                return { ok: true, ...(await xposter.manual({ text, image, imageUrl: bundle?.image ?? null, bundleId: bundle ? String(bundle.id) : null })) };
             } catch (e) { if (e.user || e.status) throw new HttpError(400, e.message); throw e; }
         },
         "POST /api/admin/xposter/unschedule": async (req, body) => {
