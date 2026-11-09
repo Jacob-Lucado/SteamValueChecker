@@ -57,10 +57,11 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         if (founding) db.setMeta(FOUNDER + userId, String(now()));
         db.setMeta(UNTIL + userId, String(until));
         pushEvent(db, "adminlog:supporters", { id: userId, days: d, via, at: now() }, 100);
-        await syncRole(userId, true);
+        const role = await syncRole(userId, true);
+        if (role !== "ok") log(`Supporter role for ${userId} not given: ${role}`);
         try { await dm?.(userId, { embeds: [{ color: 0xeb459e, title: "Thank you! 💖", description: `${giftFrom ? `<@${giftFrom}> gifted you a supporter pass. ` : ""}Your supporter pass runs until <t:${Math.floor(until / 1000)}:D>. ${founding ? "You're one of the first 50 supporters, so you keep a **Founding supporter** mark on your profile for good. " : ""}You've got the Supporter role in our server, a badge and glow on your profile, three extra profile themes, more overlay slots and a little extra XP. Everything else stays free for everyone.` }] }); } catch { /* DMs may be closed */ }
         if (giftFrom) try { await dm?.(giftFrom, { embeds: [{ color: 0xeb459e, title: "Your gift is on its way 🎁", description: `<@${userId}> now has a supporter pass. Thank you for backing the bot.` }] }); } catch { /* DMs may be closed */ }
-        return { duplicate: false, until, founding };
+        return { duplicate: false, until, founding, role };
     }
 
     /** A full refund takes back the days that payment bought. A partial one is left for the owner to sort out by hand. */
@@ -105,6 +106,28 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return n;
     }
 
+    /** Where the role stands right now: which server it goes in, and whether the bot is able to hand it out. */
+    async function homeStatus() {
+        const id = mainGuild?.detect?.() ?? null;
+        if (!id) return { ok: false, why: "no-home-server" };
+        const g = client?.guilds.cache.get(id);
+        if (!g) return { ok: false, why: "not-in-server", id };
+        try {
+            const me = g.members.me ?? await g.members.fetchMe();
+            if (!me.permissions.has("ManageRoles")) return { ok: false, why: "no-permission", id, name: g.name };
+            const role = (await g.roles.fetch()).find(r => r.name === SUPPORTER_ROLE);
+            if (role && role.position >= me.roles.highest.position) return { ok: false, why: "role-too-high", id, name: g.name };
+            return { ok: true, id, name: g.name, roleExists: Boolean(role) };
+        } catch (err) { return { ok: false, why: "failed", id, name: g.name, detail: err.message }; }
+    }
+
+    /** Gives the role to everyone with a live pass, for when it didn't land the first time. Says what happened to each. */
+    async function resync() {
+        const out = { ok: 0, problems: {} };
+        for (const a of list()) { const r = await syncRole(a.id, true); if (r === "ok") out.ok++; else out.problems[r] = (out.problems[r] ?? 0) + 1; }
+        return out;
+    }
+
     /** Someone with a pass joined the home server: give the role back. */
     const onJoin = userId => (isSupporter(db, userId, now()) ? syncRole(userId, true) : null);
 
@@ -142,5 +165,5 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return out;
     }
 
-    return { grant, refund, sweep, remind, onJoin, list, setWall, wall, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
+    return { grant, refund, sweep, remind, onJoin, homeStatus, resync, list, setWall, wall, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
 }

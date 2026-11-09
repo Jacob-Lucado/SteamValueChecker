@@ -1180,7 +1180,12 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         },
         "GET /api/admin/supporters": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
-            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], recent: supporters ? supporters.recent() : [], revenue: supporters ? supporters.revenue() : null, plans: PLANS };
+            return { enabled: Boolean(square?.enabled), active: supporters ? supporters.list() : [], recent: supporters ? supporters.recent() : [], revenue: supporters ? supporters.revenue() : null, home: supporters ? await supporters.homeStatus() : null, plans: PLANS };
+        },
+        "POST /api/admin/supporters/resync": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!supporters) throw new HttpError(404, "Not found.");
+            return await supporters.resync();
         },
         "POST /api/admin/supporters/grant": async (req, body) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
@@ -1189,7 +1194,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             const days = Number(body.days);
             if (!supporters || !Number.isFinite(days) || days < 1 || days > 3660) throw new HttpError(400, "Pick between 1 and 3660 days.");
             const r = await supporters.grant(id, days, "manual:" + randomUUID(), "Owner");
-            return { until: r.until };
+            return { until: r.until, role: r.role };
         },
         // ----- overlay studio: goal bars, server stats and timers, each with its own link and look -----
         "GET /api/overlays": async (req) => {

@@ -116,3 +116,21 @@ test("supporters: gifts thank both people, the first 50 paying supporters are fo
     t += 86_400_000 + 1000; await sup.remind(); await sup.remind();
     assert.equal(sent.filter(([id, title]) => id === "200000001" && /Last day/.test(title)).length, 1, "one more on the last day, not one per sweep");
 });
+
+test("supporters: when the role can't be given, it says why, and re-sending fixes it once the cause is gone", async () => {
+    const db = openDb(":memory:"); let canManage = false; const added = [];
+    const role = { id: "r1", name: SUPPORTER_ROLE, position: 1 };
+    const member = { roles: { cache: { has: () => false }, add: async r => added.push(r.id), remove: async () => {} } };
+    const roles = Object.assign([role], { find: f => [role].find(f) });
+    const g = { name: "Home", members: { me: { permissions: { has: () => canManage }, roles: { highest: { position: 10 } } }, fetch: async () => member }, roles: { fetch: async () => roles } };
+    const logs = [];
+    const sup = createSupporters({ db, client: { guilds: { cache: { get: () => g } } }, mainGuild: { detect: () => "G" }, log: t => logs.push(t) });
+    assert.equal((await sup.grant("u1", 30, "p1")).role, "no-permission");
+    assert.ok(logs.some(l => /not given: no-permission/.test(l)), "it's logged, not silent");
+    assert.equal((await sup.homeStatus()).why, "no-permission");
+    canManage = true;
+    assert.equal((await sup.homeStatus()).ok, true);
+    assert.deepEqual(await sup.resync(), { ok: 1, problems: {} }); assert.deepEqual(added, ["r1"]);
+    const none = createSupporters({ db, client: { guilds: { cache: { get: () => null } } }, mainGuild: { detect: () => null } });
+    assert.equal((await none.homeStatus()).why, "no-home-server");
+});

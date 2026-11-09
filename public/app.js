@@ -4193,17 +4193,27 @@
     try {
       const r = await api("/api/admin/supporters");
       const when = ms => new Date(ms).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      const WHY = {
+        "no-home-server": "I can't tell which server is your home server, because the bot is in more than one. On Fly, add a secret called MAIN_GUILD_ID with that server's ID (right-click the server with Developer Mode on, Copy Server ID), then restart.",
+        "not-in-server": "The bot isn't in your home server any more.",
+        "no-permission": "The bot doesn't have the Manage Roles permission in your home server. Turn it on for the bot's role in Server Settings, Roles.",
+        "role-too-high": "A role called Supporter exists but sits above the bot's own role. In Server Settings, Roles, drag the bot's role above Supporter.",
+        "not-a-member": "That person isn't in your home server. They get the role the moment they join.",
+        "failed": "Discord refused the change. Check the bot's role is above Supporter and try again."
+      };
       const id = h("input", { type: "text", placeholder: "Discord ID", inputmode: "numeric" }), days = h("input", { type: "number", min: "1", max: "3660", value: "30", class: "ovs-cur" });
       body.replaceChildren(
+        r.home && !r.home.ok ? h("div", { class: "notice warn" }, h("strong", { text: "The Supporter role can't be given right now. " }), WHY[r.home.why] || "Something is off with the home server.") : null,
+        r.home && r.home.ok ? h("div", { class: "notice ok", text: `The Supporter role goes out in ${r.home.name}.` }) : null,
         r.enabled ? null : h("div", { class: "notice warn", text: "Square isn't connected, so members can't buy a pass. Add SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID and SQUARE_WEBHOOK_SIGNATURE_KEY as secrets on Fly and restart. You can still hand passes out below." }),
         r.revenue && h("div", { class: "grid four" },
           ...[["Last 30 days", r.revenue.last30, r.revenue.count30 + " passes"], ["All time", r.revenue.total, r.revenue.count + " passes"], ["Refunded", r.revenue.refunded, "not counted above"]].map(([k, c, s]) =>
             h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: "$" + (c / 100).toFixed(2) }), h("div", { class: "s", text: s })))),
         h("div", { class: "panel" }, h("h3", { text: "Give someone a pass" }),
           h("div", { class: "row" }, id, days, h("span", { class: "muted small", text: "days" }),
-            h("button", { class: "btn blue", type: "button", text: "Give pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/grant", { user_id: id.value, days: Number(days.value) }); toast("Pass runs until " + when(x.until) + ".", "ok"); adminSupporters(body, fail); }) }))),
+            h("button", { class: "btn blue", type: "button", text: "Give pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/grant", { user_id: id.value, days: Number(days.value) }); toast("Pass runs until " + when(x.until) + "." + (x.role && x.role !== "ok" ? " Role not given: " + (WHY[x.role] || x.role) : ""), x.role && x.role !== "ok" ? "warn" : "ok"); adminSupporters(body, fail); }) }))),
         h("div", { class: "grid two" },
-          h("div", { class: "panel" }, h("h3", { text: "Active passes" }),
+          h("div", { class: "panel" }, h("h3", { text: "Active passes" }), h("button", { class: "btn gray small", type: "button", text: "Re-send roles", title: "Give the Supporter role to everyone with a live pass", onclick: e => busy(e.currentTarget, async () => { const x = await api("/api/admin/supporters/resync", {}); const bad = Object.entries(x.problems); toast(bad.length ? `${x.ok} done. Not given: ` + bad.map(([k, n]) => `${n} (${(WHY[k] || k).split(".")[0]})`).join("; ") : `Role sent to ${x.ok}.`, bad.length ? "warn" : "ok"); }) }),
             r.active.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Discord ID", "Until"].map(c => h("th", { text: c })))), h("tbody", {}, r.active.map(a => h("tr", {}, h("td", { text: a.id }), h("td", { text: when(a.until) }))))) : h("div", { class: "empty", text: "No active passes." })),
           h("div", { class: "panel" }, h("h3", { text: "Latest" }),
             r.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Who", "Days", "Via"].map(c => h("th", { text: c })))), h("tbody", {}, r.recent.map(e => h("tr", {}, h("td", { text: new Date(e.at).toLocaleString("en-US", { timeZone: "America/New_York" }) }), h("td", { text: e.id }), h("td", { text: String(e.days) }), h("td", { text: e.via }))))) : h("div", { class: "empty", text: "Nothing yet." }))));
