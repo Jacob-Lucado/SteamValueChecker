@@ -136,6 +136,7 @@ const FILES = {
     "/notice-dev.png": ["notice-dev.png", "image/png"],
     "/notice-thanks.png": ["notice-thanks.png", "image/png"],
     "/preview.jpg": ["preview.jpg", "image/jpeg"],
+    "/support-preview.jpg": ["support-preview.jpg", "image/jpeg"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
     "/overlay": ["overlay.html", "text/html; charset=utf-8"],
@@ -4116,6 +4117,37 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         }
         return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
     }
+    // /support is the help and tickets page. It gets its own title, description, preview picture and questions, so search results and link
+    // cards say what the page is for instead of repeating the home page. A single ticket (/support/12) is private and kept out of search.
+    const SUPPORT_FAQ = [
+        ["How do I get help with Steam Value Checker?", "Sign in on steamvaluechecker.com, open Support and start a ticket. A real person reads it and replies there and by Discord message."],
+        ["How do I report a bug?", "Open a ticket from the Support page and say what you did and what happened. Screenshots help. You can also use /bug in Discord."],
+        ["Can I suggest a feature?", "Yes. Send it as a ticket or use the idea command in Discord, and you'll get a message when its status changes."],
+        ["Is support free?", "Yes. The bot and its support are free for everyone."]
+    ];
+    async function serveSupportShell(res, ticket) {
+        const body = await loadFile("index.html");
+        if (!body) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+        let html = body.toString("utf8");
+        const title = "Support and help | Steam Value Checker", url = `${origin}/support`, img = `${origin}/support-preview.jpg?v=1`;
+        const desc = "Get help with the Steam Value Checker Discord bot: open a support ticket, report a bug or suggest a feature. A real person replies, and it's free.";
+        const set = (re, v) => { html = html.replace(re, `$1${escHtml(v).replace(/\$/g, "$$$$")}"`); };
+        set(/(<meta property="og:title" content=")[^"]*"/, title); set(/(<meta name="twitter:title" content=")[^"]*"/, "Support and help | Steam Value Checker");
+        set(/(<meta property="og:description" content=")[^"]*"/, desc); set(/(<meta name="twitter:description" content=")[^"]*"/, desc); set(/(<meta name="description" content=")[^"]*"/, desc);
+        set(/(<meta property="og:url" content=")[^"]*"/, url); set(/(<link rel="canonical" href=")[^"]*"/, url);
+        set(/(<meta property="og:image" content=")[^"]*"/, img); set(/(<meta name="twitter:image" content=")[^"]*"/, img);
+        set(/(<meta property="og:image:alt" content=")[^"]*"/, "Steam Value Checker support: get help, report a bug or suggest a feature");
+        set(/(<meta name="twitter:image:alt" content=")[^"]*"/, "Steam Value Checker support: get help, report a bug or suggest a feature");
+        const ld = [{ "@context": "https://schema.org", "@type": "ContactPage", name: title, url, description: desc, isPartOf: { "@type": "WebSite", name: "Steam Value Checker", url: origin }, image: img.replace(/\?.*/, "") },
+            { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: SUPPORT_FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) }];
+        html = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => ld.map(x => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("\n"))
+            .replace(/<meta property="og:image:type" content="[^"]*">/, '<meta property="og:image:type" content="image/jpeg">')
+            .replace(/<title>[^<]*<\/title>/, () => `<title>${escHtml(title)}</title>`)
+            .replace(/<meta name="robots" content="[^"]*">/, ticket ? '<meta name="robots" content="noindex,nofollow">' : '<meta name="robots" content="index,follow,max-image-preview:large">');
+        // the same answers as plain text, for anything that doesn't run the page's scripts
+        html = html.replace("</body>", () => `<noscript><main><h1>Support and help</h1><p>${escHtml(desc)}</p>${SUPPORT_FAQ.map(([q, a]) => `<h2>${escHtml(q)}</h2><p>${escHtml(a)}</p>`).join("")}</main></noscript>\n</body>`);
+        return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+    }
     // ---------- the page a bundle post on X links to ----------
     const bundlePics = new Map(); // id -> { at, buf, type }
     const bump = key => { try { db.setMeta(key, String((Number(db.getMeta(key)) || 0) + 1)); } catch { /* a missed count isn't worth failing the page */ } };
@@ -4317,10 +4349,11 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             }
             if (req.method === "GET" && /^\/[bd]\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, kind, id, , part] = /^\/([bd])\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveLanding(res, kind, Number(id), part, req); }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
+            if (req.method === "GET" && /^\/support(\/\d{1,9})?$/.test(url.pathname) && !onAdminHost(req) && !onMusicHost(req)) return await serveSupportShell(res, url.pathname !== "/support");
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\nAllow: /support\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();
@@ -4328,7 +4361,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
                 // Public pages only. The date is when the file behind each page last changed, so crawlers know what to revisit.
-                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"]];
+                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ["/support", "support-preview.jpg", "monthly", "0.6"], ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"]];
                 const day = f => { try { return statSync(f.startsWith("seo/") ? SEO_SRC : join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
                 const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
                 return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });

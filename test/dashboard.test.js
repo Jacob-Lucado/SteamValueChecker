@@ -3115,3 +3115,15 @@ test("sale alerts that link through IsThereAnyDeal's redirect go to a landing pa
     } finally { configureDeals(null); }
     await o.close();
 });
+
+test("/support has its own title, description, picture and questions, and a single ticket stays out of search", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const html = (await o.request("/support", { raw: true }).then(r => r.text())); 
+    assert.match(html, /<title>Support and help \| Steam Value Checker<\/title>/); assert.match(html, /rel="canonical" href="[^"]*\/support"/);
+    assert.match(html, /og:image" content="[^"]*\/support-preview\.jpg/); assert.match(html, /"@type":"FAQPage"/); assert.match(html, /"@type":"ContactPage"/);
+    assert.match(html, /name="robots" content="index,follow/); assert.match(html, /<noscript><main><h1>Support and help/); assert.ok(!/<title>Steam Value Checker: game library/.test(html));
+    assert.match(await o.request("/support/12", { raw: true }).then(r => r.text()), /noindex,nofollow/);
+    assert.equal((await o.request("/support-preview.jpg", { raw: true })).status, 200);
+    assert.match((await o.request("/sitemap.xml")).text, /\/support</);
+    await o.close();
+});
