@@ -43,7 +43,7 @@ export function bundleFeedEmbed(b, { expired = false } = {}) {
     return { embeds: [embed], components: expired ? [] : [{ type: 1, components: buttons }], allowed_mentions: { parse: [] } };
 }
 
-const wanted = (settings, b) => !settings.stores.length || settings.stores.includes(b.store);
+const wanted = (settings, b) => (!settings.stores.length || settings.stores.includes(b.store)) && (settings.adult || !b.adult);
 
 /** Newest-first active bundles this server should see and has not been sent yet. */
 export const pendingBundlesFor = (db, guildId, settings) => db.listFeedBundles({ status: "active", limit: 200 }).filter(b => wanted(settings, b) && !db.feedBundlePost(b.id, guildId));
@@ -104,6 +104,7 @@ export function applyBundleFeedSettings(db, guildId, body) {
     const patch = {};
     if (body.channel_id !== undefined) patch.channel_id = body.channel_id || null;
     if (body.role_id !== undefined) patch.role_id = body.role_id || null;
+    if (body.adult !== undefined) patch.adult = body.adult === true || body.adult === "true";
     if (body.stores !== undefined) {
         const stores = [...new Set((Array.isArray(body.stores) ? body.stores : []).map(String))];
         if (stores.some(s => !BUNDLE_STORE_KEYS.includes(s))) throw new Error("That is not a store I track bundles for.");

@@ -33,7 +33,7 @@ const tidy = (b, now) => {
         price: b.price ? clip(text(b.price), 80) : null, kind: b.kind ?? null, expiresAt: Number.isFinite(b.expiresAt) && b.expiresAt > 0 ? b.expiresAt : null, seenAt: now };
 };
 
-/** Adult bundles stay out of the feed: it goes into community channels people read at work and with their kids around. Titles and game names only, kept to words that are rarely a false alarm. */
+/** Adult bundles are only posted to servers that switch them on: the feed goes into community channels people read at work and with their kids around. Titles and game names only, kept to words that are rarely a false alarm. */
 const ADULT = /\b(hentai|nsfw|porn\w*|erotic\w*|uncensored|xxx|lewd|futanari|18\+|adults? only|strip ?(poker|club))\b|\bsex(y|ual)?\b/i;
 export const adultBundle = b => ADULT.test([b.title, ...(b.games ?? [])].join(" \n "));
 
@@ -245,7 +245,7 @@ export async function fetchAllBundles({ fetchImpl = globalThis.fetch, now = Date
         try {
             const list = await fn({ fetchImpl, now, timeoutMs, deep });
             if (!list.length && store !== "steam") throw new BundleFeedError("no bundles could be read from the page");
-            bundles.push(...list.filter(b => !adultBundle(b)));
+            bundles.push(...list.map(b => ({ ...b, adult: adultBundle(b) })));
             if (store !== "steam") complete.push(store); // Steam bundles never get an end date and a normal poll only looks at the newest ones
         } catch (err) { errors.push(`${BUNDLE_STORES[store].name}: ${err.message ?? err}`); }
     }));

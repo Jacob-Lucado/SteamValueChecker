@@ -10,17 +10,18 @@ export function createBundleFeedHandlers({ db, runNow = null }) {
     const summary = (gid, s = db.getBundleFeedSettings(gid)) => [
         s.channel_id ? `Bundles are posted in <#${s.channel_id}>.` : "No bundles channel yet. Pick one with `/server promos bundles channel:#channel`.",
         `Stores: ${describeStores(s.stores)}.`,
-        s.role_id ? `Pings <@&${s.role_id}>.` : "No role is pinged."
+        s.role_id ? `Pings <@&${s.role_id}>.` : "No role is pinged.",
+        s.adult ? "Adult bundles are included." : "Adult bundles are left out."
     ].join("\n");
 
     async function handle(i) {
         try {
             if (!i.inGuild()) throw new UserError("Use this in a server.");
-            const ch = i.options.getChannel("channel"), store = i.options.getString("store"), on = i.options.getBoolean("on"), role = i.options.getRole("role"), clear = i.options.getBoolean("clear");
+            const ch = i.options.getChannel("channel"), store = i.options.getString("store"), on = i.options.getBoolean("on"), role = i.options.getRole("role"), clear = i.options.getBoolean("clear"), adult = i.options.getBoolean("adult");
             const gid = i.guildId;
-            const changing = Boolean(ch || store || role || clear);
+            const changing = Boolean(ch || store || role || clear) || adult !== null;
             if (!changing) {
-                const latest = db.listFeedBundles({ status: "active", stores: db.getBundleFeedSettings(gid).stores, limit: 5 });
+                const latest = db.listFeedBundles({ status: "active", stores: db.getBundleFeedSettings(gid).stores, limit: 5, adult: db.getBundleFeedSettings(gid).adult });
                 const lines = latest.map(b => `**${BUNDLE_STORES[b.store]?.name ?? b.store}** · [${b.title}](${b.url})${b.expires_at ? ` · ends <t:${Math.floor(b.expires_at / 1000)}:R>` : ""}`);
                 return await eph(i, { embeds: [{ color: 0x4da3ff, title: "Game bundles", description: (lines.length ? lines.join("\n") : "No bundles are listed right now. New ones show up as soon as a store lists them.") + "\n\n" + summary(gid),
                     footer: { text: "Humble Bundle, Fanatical, IndieGala and Steam" } }] });
@@ -34,6 +35,7 @@ export function createBundleFeedHandlers({ db, runNow = null }) {
                 patch.channel_id = ch.id;
             }
             if (role) patch.role_id = role.id;
+            if (adult !== null) patch.adult = adult;
             if (store) {
                 const cur = db.getBundleFeedSettings(gid).stores, base = cur.length ? cur : BUNDLE_STORE_KEYS;
                 const next = on === false ? base.filter(k => k !== store) : [...new Set([...base, store])];

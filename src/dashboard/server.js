@@ -1001,7 +1001,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 throw err;
             }
             const settings = db.getBundleFeedSettings(g.id);
-            return { settings, channels, roles, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), latest: db.listFeedBundles({ status: "active", stores: settings.stores, limit: 6 }).map(bundleFeedView) };
+            return { settings, channels, roles, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), latest: db.listFeedBundles({ status: "active", stores: settings.stores, limit: 6, adult: settings.adult }).map(bundleFeedView) };
         },
         "POST /api/servers/bundles": async (req, body) => {
             const s = session(req);
@@ -1033,6 +1033,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 patch.role_id = body.role_id || null;
             }
             if (body.stores !== undefined) patch.stores = body.stores;
+            if (body.adult !== undefined) patch.adult = body.adult;
             let settings;
             try { settings = applyBundleFeedSettings(db, g.id, patch); } catch (err) { throw new HttpError(400, err.message); }
             if (patch.channel_id) bundleFeed?.poll?.().catch(() => {}); // post what is current right away

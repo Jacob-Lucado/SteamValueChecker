@@ -92,7 +92,7 @@ test("settings are validated, and picking every store means no filter", () => {
     const db = openDb(":memory:");
     assert.throws(() => applyBundleFeedSettings(db, "g1", { stores: ["gog"] }), /not a store/);
     assert.deepEqual(applyBundleFeedSettings(db, "g1", { stores: ["humble", "fanatical", "indiegala", "steam"] }).stores, []);
-    assert.deepEqual(applyBundleFeedSettings(db, "g1", { stores: ["steam"], channel_id: "c1", role_id: "r1" }), { guild_id: "g1", channel_id: "c1", role_id: "r1", stores: ["steam"] });
+    assert.deepEqual(applyBundleFeedSettings(db, "g1", { stores: ["steam"], channel_id: "c1", role_id: "r1" }), { guild_id: "g1", channel_id: "c1", role_id: "r1", stores: ["steam"], adult: false });
     assert.equal(describeStores(["steam", "humble"]), "Steam, Humble Bundle"); assert.equal(describeStores([]), "every store");
 });
 
@@ -140,4 +140,20 @@ test("adult bundles are kept out of the feed, ordinary ones are not", () => {
     assert.equal(adultBundle({ title: "Cozy Pack", games: ["Naughty Waifu NSFW Edition"] }), true);
     assert.equal(adultBundle({ title: "Uncensored Stories", games: [] }), true);
     for (const t of ["Essex Strategy Bundle", "Sussex Racing", "Humble Sci-Fi Exposure Bundle", "Dark Fantasy Collection", "Mature Horror Bundle"]) assert.equal(adultBundle({ title: t, games: ["Doom"] }), false, t);
+});
+
+test("adult bundles only go to servers that opted in, and the choice is saved like any other setting", async () => {
+    const db = openDb(":memory:", { now: () => NOW });
+    db.setBundleFeedSettings("g1", { channel_id: "c1" });
+    db.setBundleFeedSettings("g2", { channel_id: "c2" });
+    assert.equal(db.getBundleFeedSettings("g1").adult, false);
+    assert.equal(applyBundleFeedSettings(db, "g2", { adult: true }).adult, true);
+    const api = fakeApi();
+    const list = [rec(1), rec(2, { title: "Uncensored Stories", adult: true })];
+    await runBundleFeed({ db, api, fetchBundles: async () => ({ bundles: list, complete: ["humble"], errors: [] }), now: () => NOW, sleep: async () => {}, pace: 0 });
+    const titles = ch => api.sent.filter(s => s.ch === ch).map(s => s.p.embeds[0].title.replace(/^.*?· /, ""));
+    assert.equal(api.sent.filter(s => s.ch === "c1").length, 1, "the default server only gets the ordinary bundle");
+    assert.equal(api.sent.filter(s => s.ch === "c2").length, 2, "the opted-in server gets both");
+    assert.equal(db.listFeedBundles({ adult: false }).length, 1); assert.equal(db.listFeedBundles({}).length, 2);
+    assert.equal(applyBundleFeedSettings(db, "g2", { adult: false }).adult, false);
 });

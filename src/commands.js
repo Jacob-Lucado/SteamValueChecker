@@ -718,6 +718,7 @@ const promos = new SlashCommandBuilder()
         .addStringOption(o => o.setName("store").setDescription("Store to turn on or off").addChoices({ name: "Humble Bundle", value: "humble" }, { name: "Fanatical", value: "fanatical" }, { name: "IndieGala", value: "indiegala" }, { name: "Steam", value: "steam" }))
         .addBooleanOption(o => o.setName("on").setDescription("On (default) or off"))
         .addRoleOption(o => o.setName("role").setDescription("Role to ping"))
+        .addBooleanOption(o => o.setName("adult").setDescription("Include adult bundles (18+ servers only)"))
         .addBooleanOption(o => o.setName("clear").setDescription("Stop posting bundles")))
     .addSubcommand(s => s.setName("news").setDescription("Managers: also post giveaway and code news")
         .addBooleanOption(o => o.setName("on").setDescription("On or off (leave empty to see the setting)")));

@@ -2275,10 +2275,11 @@
           const role = select([["", "Nobody"], ...d.roles.filter(r => r.name !== "@everyone").map(r => ["" + r.id, r.name])], st.role_id || "");
           const picked = new Set(d.stores.filter(s => !st.stores.length || st.stores.includes(s.key)).map(s => s.key));
           const boxes = d.stores.map(x => { const c = h("input", { type: "checkbox", checked: picked.has(x.key) }); c.addEventListener("change", () => { c.checked ? picked.add(x.key) : picked.delete(x.key); }); return h("label", { class: "check" }, c, " ", x.name); });
+          const adult = h("input", { type: "checkbox", checked: Boolean(st.adult) });
           const save = h("button", { class: "btn green", text: "Save" });
           save.addEventListener("click", () => busy(save, async () => {
             if (!picked.size) throw new Error("Keep at least one store ticked, or pick no channel to turn this off.");
-            await api("/api/servers/bundles", { guild_id: g.id, channel_id: chan.value, role_id: role.value, stores: [...picked] });
+            await api("/api/servers/bundles", { guild_id: g.id, channel_id: chan.value, role_id: role.value, stores: [...picked], adult: adult.checked });
             toast(chan.value ? "Saved. New bundles will be posted there." : "Saved. Bundle posts are off for this server.", "ok");
           }));
           holder.className = "";
@@ -2286,6 +2287,7 @@
             h("p", { class: "muted", text: "New bundles from Humble, Fanatical, IndieGala and Steam, posted once each in the channel you pick, with the games inside and when it ends. When a bundle ends, its post is greyed out." }),
             field("Channel", chan), field("Ping this role for new bundles", role),
             h("div", {}, h("label", { text: "Stores" }), h("div", { class: "checks" }, boxes)),
+            h("div", {}, h("label", { class: "check" }, adult, " Include adult bundles"), h("p", { class: "muted small", text: "Off by default. Only turn this on if everyone in the server is 18 or older and the channel is marked age-restricted." })),
             h("div", { class: "row" }, save)));
         } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
       })();

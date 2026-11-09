@@ -44,21 +44,23 @@ export function bundleFeedStore({ run, get, all, clean, now }) {
 
     /** Adds a bundle, or refreshes what we know of one we have. Returns { id, isNew }. */
     function upsertFeedBundle(b) {
-        const t = now();
+        const t = now(), adult = b.adult ? 1 : 0;
         const have = get("SELECT id FROM feed_bundles WHERE key = ?", b.key);
         if (have) {
-            run("UPDATE feed_bundles SET last_seen = ?, title = ?, image = COALESCE(?, image), games = CASE WHEN ? > 0 THEN ? ELSE games END, game_count = COALESCE(?, game_count), price = COALESCE(?, price), expires_at = COALESCE(?, expires_at) WHERE id = ?",
-                t, b.title, b.image ?? null, b.games.length, JSON.stringify(b.games), b.gameCount ?? null, b.price ?? null, b.expiresAt ?? null, have.id);
+            run("UPDATE feed_bundles SET last_seen = ?, title = ?, image = COALESCE(?, image), games = CASE WHEN ? > 0 THEN ? ELSE games END, game_count = COALESCE(?, game_count), price = COALESCE(?, price), expires_at = COALESCE(?, expires_at), adult = ? WHERE id = ?",
+                t, b.title, b.image ?? null, b.games.length, JSON.stringify(b.games), b.gameCount ?? null, b.price ?? null, b.expiresAt ?? null, adult, have.id);
             return { id: Number(have.id), isNew: false };
         }
-        const r = run("INSERT INTO feed_bundles (key, store, title, url, image, games, game_count, price, kind, expires_at, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            b.key, b.store, b.title, b.url, b.image ?? null, JSON.stringify(b.games ?? []), b.gameCount ?? null, b.price ?? null, b.kind ?? null, b.expiresAt ?? null, b.seenAt ?? t, t);
+        const r = run("INSERT INTO feed_bundles (key, store, title, url, image, games, game_count, price, kind, expires_at, first_seen, last_seen, adult) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            b.key, b.store, b.title, b.url, b.image ?? null, JSON.stringify(b.games ?? []), b.gameCount ?? null, b.price ?? null, b.kind ?? null, b.expiresAt ?? null, b.seenAt ?? t, t, adult);
         return { id: Number(r.lastInsertRowid), isNew: true };
     }
     const getFeedBundle = id => row(get("SELECT * FROM feed_bundles WHERE id = ?", id));
-    function listFeedBundles({ status = null, stores = null, limit = 50 } = {}) {
+    /** `adult: false` leaves adult bundles out; leave it unset to get everything (the admin view). */
+    function listFeedBundles({ status = null, stores = null, limit = 50, adult } = {}) {
         const where = [], args = [];
         if (status) { where.push("status = ?"); args.push(status); }
+        if (adult === false) where.push("adult = 0");
         if (stores?.length) { where.push(`store IN (${stores.map(() => "?").join(",")})`); args.push(...stores); }
         return all(`SELECT * FROM feed_bundles ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY first_seen DESC, id DESC LIMIT ?`, ...args, Math.min(200, Math.max(1, limit))).map(row);
     }
@@ -91,13 +93,14 @@ export function bundleFeedStore({ run, get, all, clean, now }) {
     function getBundleFeedSettings(guildId) {
         const r = clean(get("SELECT * FROM feed_bundle_guilds WHERE guild_id = ?", guildId));
         const stores = r ? parse(r.stores, []).filter(s => BUNDLE_STORE_KEYS.includes(s)) : [];
-        return { guild_id: guildId, channel_id: r?.channel_id ?? null, role_id: r?.role_id ?? null, stores };
+        return { guild_id: guildId, channel_id: r?.channel_id ?? null, role_id: r?.role_id ?? null, stores, adult: Boolean(r?.adult) };
     }
     /** `stores` empty means every store. */
     function setBundleFeedSettings(guildId, patch) {
         run("INSERT OR IGNORE INTO feed_bundle_guilds (guild_id) VALUES (?)", guildId);
         if (patch.channel_id !== undefined) run("UPDATE feed_bundle_guilds SET channel_id = ? WHERE guild_id = ?", patch.channel_id, guildId);
         if (patch.role_id !== undefined) run("UPDATE feed_bundle_guilds SET role_id = ? WHERE guild_id = ?", patch.role_id, guildId);
+        if (patch.adult !== undefined) run("UPDATE feed_bundle_guilds SET adult = ? WHERE guild_id = ?", patch.adult ? 1 : 0, guildId);
         if (patch.stores !== undefined) run("UPDATE feed_bundle_guilds SET stores = ? WHERE guild_id = ?", JSON.stringify([...new Set(patch.stores)]), guildId);
         return getBundleFeedSettings(guildId);
     }
