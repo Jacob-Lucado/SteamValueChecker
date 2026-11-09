@@ -1535,6 +1535,18 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             const { autodj_playlist: _skip, ...settings } = db.getMusicSettings(g.id);
             return { settings, note, count: db.getAutoPlaylist(g.id).length };
         },
+        "GET /api/admin/traffic": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const { pages, days } = db.trafficReport();
+            const today = dayKey(), sum = (list, f) => list.reduce((n, x) => n + x[f], 0);
+            const last = days.slice(-14), week = days.slice(-7);
+            const top = pages.sort((a, b) => b.visits - a.visits || b.clicks - a.clicks).slice(0, 15).map(p => {
+                const row = p.path === "b" ? db.getFeedBundle(p.id) : db.getDeal(p.id);
+                return { ...p, title: row?.title ?? "(removed)", store: p.path === "b" ? row?.store ?? "" : row?.shop ?? "", kind: p.path === "b" ? "Bundle" : row?.kind === "free" ? "Free game" : "Deal", url: `${origin}/${p.path}/${p.id}` };
+            });
+            return { today: days.find(d => d.day === today) ?? { day: today, visits: 0, clicks: 0, previews: 0 }, week: { visits: sum(week, "visits"), clicks: sum(week, "clicks"), previews: sum(week, "previews") }, total: { visits: sum(pages, "visits"), clicks: sum(pages, "clicks") }, days: last, top };
+        },
         "GET /api/admin/xposter": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
@@ -4107,9 +4119,18 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
     // ---------- the page a bundle post on X links to ----------
     const bundlePics = new Map(); // id -> { at, buf, type }
     const bump = key => { try { db.setMeta(key, String((Number(db.getMeta(key)) || 0) + 1)); } catch { /* a missed count isn't worth failing the page */ } };
+    const dayKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date()); // YYYY-MM-DD, Eastern
+    const CRAWLER = /bot|crawl|spider|preview|discord|twitter|x\.com|facebook|slack|telegram|whatsapp|linkedin|embed|curl|python|node|go-http|headless/i;
+    /** Link-preview robots fetch the page when a post goes up; they're counted as previews (reach), not as visits (people). */
+    const countHit = (kind, id, req, part) => {
+        const day = dayKey();
+        if (part === "go") { bump(`${kind === "b" ? "bundlego" : "dealgo"}:${id}`); bump(`landday:${day}:g`); return; }
+        if (CRAWLER.test(String(req.headers?.["user-agent"] ?? ""))) { bump(`landday:${day}:p`); return; }
+        bump(`${kind === "b" ? "bundlevisit" : "dealvisit"}:${id}`); bump(`landday:${day}:v`);
+    };
     const bundleFor = id => { const b = db.getFeedBundle(id); return b && !b.adult ? b : null; };
     /** One handler for both kinds of page. `kind` is "b" (a bundle from the feed) or "d" (a free game or other deal). */
-    async function serveLanding(res, kind, id, part) {
+    async function serveLanding(res, kind, id, part, req) {
         const gone = status => send(res, status, renderBundleGone({ origin }), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
         const row = kind === "b" ? bundleFor(id) : db.getDeal(id);
         if (!row) return gone(404);
@@ -4117,7 +4138,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         const ended = kind === "b" ? Boolean(row.expires_at && row.expires_at <= Date.now()) || row.status === "expired" : Boolean(row.expiry && row.expiry <= Date.now());
         if (part === "go") {
             if (!dest) return gone(404);
-            bump(`${kind === "b" ? "bundlego" : "dealgo"}:${id}`);
+            countHit(kind, id, req, "go");
             return send(res, 302, "", { Location: dest, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
         }
         const src = safePictureUrl(row.image), picKey = kind + id;
@@ -4137,7 +4158,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             }
             return send(res, 200, hit.buf, { "Content-Type": hit.type, "Cache-Control": "public, max-age=3600" });
         }
-        bump(`${kind === "b" ? "bundlevisit" : "dealvisit"}:${id}`);
+        countHit(kind, id, req, "page");
         const opts = { origin, hasPicture: Boolean(src), inviteUrl: config.clientId ? botInviteUrl(config.clientId) : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null };
         void ended; // the page works the ended state out itself
         return send(res, 200, kind === "b" ? renderBundleLanding(row, opts) : renderDealLanding(row, opts), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
@@ -4294,7 +4315,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
                 const name = withDefaults(db.getProfileData(owner.discord_id).data).name || owner.profile_slug;
                 return send(res, 200, valueBadgeSvg({ name, ...v }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
             }
-            if (req.method === "GET" && /^\/[bd]\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, kind, id, , part] = /^\/([bd])\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveLanding(res, kind, Number(id), part); }
+            if (req.method === "GET" && /^\/[bd]\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, kind, id, , part] = /^\/([bd])\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveLanding(res, kind, Number(id), part, req); }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });

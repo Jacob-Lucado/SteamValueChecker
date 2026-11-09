@@ -42,5 +42,17 @@ export function dealStore({ run, get, all, now }) {
         const n = get("SELECT COUNT(*) AS n FROM deal_pages")?.n ?? 0;
         if (n > MAX_ROWS) run("DELETE FROM deal_pages WHERE id IN (SELECT id FROM deal_pages ORDER BY id LIMIT ?)", n - MAX_ROWS);
     }
-    return { upsertDeal, getDeal, pruneDeals };
+    /** Everything the landing pages have counted: per-page visits and clicks, plus per-day totals. Counters live in status_meta. */
+    function trafficReport() {
+        const rows = all("SELECT key, value FROM status_meta WHERE key LIKE 'dealvisit:%' OR key LIKE 'dealgo:%' OR key LIKE 'bundlevisit:%' OR key LIKE 'bundlego:%' OR key LIKE 'landday:%'");
+        const pages = new Map(), days = new Map();
+        for (const { key, value } of rows) {
+            const n = Number(value) || 0, [kind, a, b] = key.split(":");
+            if (kind === "landday") { const d = days.get(a) ?? { day: a, visits: 0, clicks: 0, previews: 0 }; d[b === "v" ? "visits" : b === "g" ? "clicks" : "previews"] += n; days.set(a, d); continue; }
+            const path = kind.startsWith("bundle") ? "b" : "d", id = Number(a), k = path + id, p = pages.get(k) ?? { path, id, visits: 0, clicks: 0 };
+            p[kind.endsWith("visit") ? "visits" : "clicks"] += n; pages.set(k, p);
+        }
+        return { pages: [...pages.values()], days: [...days.values()].sort((x, y) => x.day.localeCompare(y.day)) };
+    }
+    return { upsertDeal, getDeal, pruneDeals, trafficReport };
 }

@@ -3900,7 +3900,7 @@
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
     ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."], ["panels", "Panel runs", "▤", "Which commands people run from menus and panels."]]],
     ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["profiles", "Profile pages", "▭", "Reported profile pages, and a way to hide or restore one."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
-    ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."], ["xposts", "X posting", "✕", "Post to the project's X account: ads, scheduled posts and the automatic free-game posts."]]],
+    ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."], ["traffic", "Link traffic", "↗", "How many people open the bot's links and click through to the stores."], ["xposts", "X posting", "✕", "Post to the project's X account: ads, scheduled posts and the automatic free-game posts."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
     ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
@@ -4080,6 +4080,7 @@
     const fail = e => body.replaceChildren(h("div", { class: "notice warn", text: e.message || "Something went wrong." }));
     if (page === "system") return void adminSystem(body, fail);
     if (page === "xposts") return void adminXPosts(body, fail);
+    if (page === "traffic") return void adminTraffic(body, fail);
     if (page === "votes") return void adminVotes(body, fail);
     if (page === "datareq") return void adminDataReq(body, fail);
     if (page === "supporters") return void adminSupporters(body, fail);
@@ -4122,6 +4123,33 @@
     return [h("div", { class: "grid two" },
       h("div", { class: "panel" }, h("h3", { text: "New members per day" }), ctx.daily(ctx.ins.signups, "New members", "s0")),
       h("div", { class: "panel" }, h("h3", { text: "Alerts sent per day" }), ctx.daily(ctx.ins.alerts, "Alerts", "s1")))];
+  }
+
+  /** Every link the bot posts goes through a page on the site first. This shows how many people opened them and how many went on to the store. */
+  async function adminTraffic(body, fail) {
+    const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
+    let t;
+    try { t = await api("/api/admin/traffic"); } catch (e) { return fail(e); }
+    if (!document.body.contains(body)) return;
+    const rate = (c, v) => (v ? Math.round(c / v * 100) + "%" : "-");
+    const peak = Math.max(1, ...t.days.map(d => d.visits));
+    const bars = h("div", { class: "tr-bars" }, ...t.days.map(d => {
+      const bar = h("i", { title: `${d.day}: ${d.visits} visits, ${d.clicks} clicks` });
+      bar.style.height = Math.max(2, Math.round(d.visits / peak * 100)) + "%";
+      return h("div", { class: "tr-col" }, bar, h("span", { text: d.day.slice(5) }));
+    }));
+    body.replaceChildren(
+      h("div", { class: "panel" }, h("h3", { text: "At a glance" }),
+        h("div", { class: "grid four" },
+          tile("Visits today", t.today.visits, `${t.today.clicks} went on to the store`),
+          tile("Last 7 days", t.week.visits, `${t.week.clicks} clicks, ${rate(t.week.clicks, t.week.visits)} went through`),
+          tile("All time", t.total.visits, `${t.total.clicks} clicks`),
+          tile("Link previews", t.week.previews, "robots reading a post, this week")),
+        h("p", { class: "muted small", text: "A visit is a person opening one of the bot's links. Discord and X reading a link to build its preview is counted separately, so it doesn't inflate this." })),
+      h("div", { class: "panel" }, h("h3", { text: "Visits per day" }), t.days.length ? bars : h("p", { class: "muted", text: "Nothing yet. Counts start once the bot has posted a few links." })),
+      h("div", { class: "panel" }, h("h3", { text: "Most opened links" }),
+        t.top.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Page", "Type", "Store", "Visits", "Clicks", "Through", ""].map(c => h("th", { text: c })))),
+          h("tbody", {}, ...t.top.map(p => h("tr", {}, h("td", {}, h("b", { text: p.title })), h("td", { text: p.kind }), h("td", { text: p.store }), h("td", { text: String(p.visits) }), h("td", { text: String(p.clicks) }), h("td", { text: rate(p.clicks, p.visits) }), h("td", {}, h("a", { href: p.url, target: "_blank", rel: "noopener", text: "Open" })))))) : h("p", { class: "muted", text: "No visits yet." })));
   }
 
   /** The project's X account: automatic free-game posts, a composer for ads and announcements, a schedule and the recent posts. */

@@ -3020,7 +3020,7 @@ test("bundle landing page: shows the bundle, counts visits, redirects only to kn
     const mk = (n, over = {}) => ({ key: "humble:b" + n, store: "humble", title: "Indie <Legends> Bundle", url: "https://www.humblebundle.com/games/legends", image: "https://cdn.humble.test/pic.png", games: ["Hades Clone", "Pixel Quest"], gameCount: 9, price: "$12", expiresAt: Date.now() + 5 * 86_400_000, seenAt: Date.now(), ...over });
     o.db.upsertFeedBundle(mk(1)); o.db.upsertFeedBundle(mk(2, { url: "https://evil.example/steal", image: null })); o.db.upsertFeedBundle(mk(3, { adult: true }));
     const [a, b, c] = o.db.listFeedBundles({ status: "active", limit: 10 }).sort((x, y) => x.key.localeCompare(y.key));
-    const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", ...opts });
+    const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 Chrome/120" }, ...opts });
     const page = await get(`/b/${a.id}`), html = await page.text();
     assert.equal(page.status, 200); assert.match(html, /Indie &lt;Legends&gt; Bundle/, "the title is escaped"); assert.ok(!/<Legends>/.test(html));
     assert.match(html, /Taking you to Humble Bundle in 6 seconds/); assert.match(html, new RegExp(`/b/${a.id}/go`)); assert.match(html, /noscript/); assert.match(html, /Found a good one/);
@@ -3041,7 +3041,7 @@ test("deal pages: free games get a landing page and counted redirect, and every 
     const { configureDeals, dealUrl } = await import("../src/deallinks.js");
     const { freeGamesPayload } = await import("../src/render.js");
     const o = await signedIn({ config: { ownerId: "u1" } });
-    const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", ...opts });
+    const get = (path, opts = {}) => fetch(o.base + path, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 Chrome/120" }, ...opts });
     const id = o.db.upsertDeal({ key: "free:g1", kind: "free", title: "Cool <Game>", shop: "Epic Games", url: "https://store.epicgames.com/p/cool", expiry: Date.now() + 86_400_000 * 2 });
     assert.equal(o.db.upsertDeal({ key: "free:g1", kind: "free", title: "Cool <Game>", shop: "Epic Games", url: "https://store.epicgames.com/p/cool" }), id, "same game, same page");
     const bad = o.db.upsertDeal({ key: "free:bad", kind: "free", title: "Nope", shop: "X", url: "javascript:alert(1)" });
@@ -3085,5 +3085,18 @@ test("every store link in any message goes through a landing page that shows wha
         assert.match(html, /While you wait/); assert.match(html, /Take me there/);
         assert.match(html, /og:image" content="[^"]*\/d\/\d+\/img/);
     } finally { configureDeals(null); }
+    await o.close();
+});
+
+test("link traffic: people and link-preview robots are counted apart, and the admin page reports them", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const id = o.db.upsertDeal({ key: "free:t1", kind: "free", title: "Traffic Game", shop: "Epic Games", url: "https://store.epicgames.com/p/t" });
+    const hit = (path, ua) => fetch(o.base + path, { redirect: "manual", headers: { "User-Agent": ua } });
+    await hit(`/d/${id}`, "Mozilla/5.0 (Windows NT 10.0) Chrome/120"); await hit(`/d/${id}`, "Mozilla/5.0 (Windows NT 10.0) Chrome/120");
+    await hit(`/d/${id}`, "Mozilla/5.0 (compatible; Discordbot/2.0)"); await hit(`/d/${id}/go`, "Mozilla/5.0 Chrome/120");
+    const r = (await o.request("/api/admin/traffic")).data;
+    assert.equal(r.today.visits, 2); assert.equal(r.today.previews, 1); assert.equal(r.today.clicks, 1);
+    assert.equal(r.top[0].title, "Traffic Game"); assert.equal(r.top[0].visits, 2); assert.equal(r.top[0].kind, "Free game");
+    assert.equal(r.total.clicks, 1);
     await o.close();
 });
