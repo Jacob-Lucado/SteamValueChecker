@@ -3100,3 +3100,18 @@ test("link traffic: people and link-preview robots are counted apart, and the ad
     assert.equal(r.total.clicks, 1);
     await o.close();
 });
+
+test("sale alerts that link through IsThereAnyDeal's redirect go to a landing page too", async () => {
+    const { configureDeals } = await import("../src/deallinks.js");
+    const { brandPayload } = await import("../src/brand.js");
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    configureDeals({ base: "https://steamvaluechecker.com", make: d => `https://steamvaluechecker.com/d/${o.db.upsertDeal(d)}` });
+    try {
+        const u = "https://itad.link/abc123/";
+        const p = brandPayload({ embeds: [{ title: "Dead Island 2 - SoLA is 72% off", url: u, description: "$2.84 at **Fanatical** (you save $7.15)" }], components: [{ type: 1, components: [{ type: 2, style: 5, label: "Deal: Dead Island 2 - SoLA", url: u }, { type: 2, style: 5, label: "Price history", url: "https://isthereanydeal.com/game/x/history/" }] }] });
+        assert.match(p.embeds[0].url, /steamvaluechecker\.com\/d\/\d+$/); assert.equal(p.components[0].components[0].url, p.embeds[0].url);
+        assert.equal(p.components[0].components[1].url, "https://isthereanydeal.com/game/x/history/", "info pages stay direct");
+        const d = o.db.getDeal(Number(p.embeds[0].url.split("/").pop())); assert.equal(d.shop, "Fanatical"); assert.equal(d.url, u);
+    } finally { configureDeals(null); }
+    await o.close();
+});
