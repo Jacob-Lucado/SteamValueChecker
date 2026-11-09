@@ -102,3 +102,7 @@
 .adm.adm-bare .adm-main { align-items: center; justify-content: center; min-height: 100vh; }
 .adm.adm-bare .adm-content { max-width: none; padding: 24px; display: flex; justify-content: center; }
 .adm.adm-bare .adm-login { margin: 0; width: min(440px, 100%); }
+
+/* X posting page */
+.adm-content .x-num { flex: 0 0 90px !important; width: 90px !important; }
+.adm-content .x-text { width: 100%; resize: vertical; font-family: inherit !important; font-size: 15px; line-height: 1.45; }

@@ -62,3 +62,41 @@ test("spaces and quote marks pasted around the keys are ignored", async () => {
     await x.check();
     assert.match(header, /oauth_consumer_key="k"/); assert.match(header, /oauth_token="t"/);
 });
+
+test("manual posts: length rules, links cost more, pictures go first, history and spend are kept", async () => {
+    const { xLength, hasLink } = await import("../src/xposter.js");
+    assert.equal(xLength("hi 🎁 https://steamvaluechecker.com/x"), 29, "a link is 23 and an emoji is 2");
+    assert.equal(hasLink("Link in bio."), false); assert.equal(hasLink("see steamvaluechecker.com"), true);
+    const db = openDb(":memory:"); const calls = [];
+    const x = createXPoster({ env: ENV, db, fetchImpl: async (u, o) => { calls.push([o.method, u, o.body ? JSON.parse(o.body) : null]); return { ok: true, json: async () => (u.includes("media") ? { data: { id: "m1" } } : { data: { id: "123456" } }) }; } });
+    await assert.rejects(x.manual({ text: "  " }), /Write something/);
+    await assert.rejects(x.manual({ text: "a".repeat(281) }), /281 characters/);
+    const plain = await x.manual({ text: "Hello there" });
+    assert.equal(plain.cost, 0.015);
+    const withLink = await x.manual({ text: "Try it steamvaluechecker.com", image: Buffer.from("png").toString("base64") });
+    assert.equal(withLink.cost, 0.2);
+    assert.equal(calls[1][1].includes("media/upload"), true, "the picture is uploaded first");
+    assert.deepEqual(calls[2][2].media, { media_ids: ["m1"] });
+    const s = x.status();
+    assert.equal(s.history.length, 2); assert.equal(s.history[0].media, true); assert.equal(s.monthSpend, 0.22); assert.equal(s.manualToday, 2);
+    // a picture that X turns down means nothing is posted
+    const bad = createXPoster({ env: ENV, db: openDb(":memory:"), fetchImpl: async u => (u.includes("media") ? { ok: false, status: 400, json: async () => ({ detail: "Bad image" }) } : { ok: true, json: async () => ({ data: { id: "9" } }) }) });
+    await assert.rejects(bad.manual({ text: "hi", image: "AAAA" }), /Bad image/); assert.equal(bad.status().history.length, 0);
+    await x.remove("123456"); assert.equal(calls.at(-1)[0], "DELETE"); assert.equal(x.status().history.length, 0);
+    await assert.rejects(x.remove("abc"), /isn't a post id/);
+});
+
+test("scheduled posts go out once they're due, in order, and a failure isn't retried", async () => {
+    const db = openDb(":memory:"); let t = Date.UTC(2026, 10, 9, 15), fail = false; const sent = [];
+    const x = createXPoster({ env: ENV, db, now: () => t, fetchImpl: async (u, o) => { if (fail) return { ok: false, status: 402, json: async () => ({}) }; sent.push(JSON.parse(o.body).text); return { ok: true, json: async () => ({ data: { id: "55555" } }) }; } });
+    assert.throws(() => x.schedule({ text: "late", at: t - 1000 }), /future/);
+    const later = x.schedule({ text: "second", at: t + 3 * 3_600_000 }), first = x.schedule({ text: "first", at: t + 3_600_000 });
+    assert.deepEqual(x.status().queue.map(q => q.text), ["first", "second"], "kept in time order");
+    x.unschedule(later.key); assert.equal(x.status().queue.length, 1);
+    assert.deepEqual(await x.flush(), { sent: 0 });
+    t += 2 * 3_600_000; assert.deepEqual(await x.flush(), { sent: 1 }); assert.deepEqual(sent, ["first"]);
+    assert.equal(x.status().history[0].kind, "scheduled"); assert.equal(x.status().queue.length, 0);
+    x.schedule({ text: "broken", at: t + 120_000 }); t += 3 * 60_000; fail = true;
+    assert.deepEqual(await x.flush(), { sent: 0 }); assert.match(x.status().error.message, /scheduled post didn't go out/);
+    fail = false; assert.deepEqual(await x.flush(), { sent: 0 }, "it was taken off the list, so it isn't tried again");
+});

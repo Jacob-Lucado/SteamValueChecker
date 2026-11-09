@@ -3900,7 +3900,7 @@
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
     ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."], ["panels", "Panel runs", "▤", "Which commands people run from menus and panels."]]],
     ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["profiles", "Profile pages", "▭", "Reported profile pages, and a way to hide or restore one."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
-    ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."]]],
+    ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."], ["xposts", "X posting", "✕", "Post to the project's X account: ads, scheduled posts and the automatic free-game posts."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
     ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
@@ -4079,6 +4079,7 @@
     const draw = nodes => body.replaceChildren(...nodes);
     const fail = e => body.replaceChildren(h("div", { class: "notice warn", text: e.message || "Something went wrong." }));
     if (page === "system") return void adminSystem(body, fail);
+    if (page === "xposts") return void adminXPosts(body, fail);
     if (page === "votes") return void adminVotes(body, fail);
     if (page === "datareq") return void adminDataReq(body, fail);
     if (page === "supporters") return void adminSupporters(body, fail);
@@ -4123,6 +4124,106 @@
       h("div", { class: "panel" }, h("h3", { text: "Alerts sent per day" }), ctx.daily(ctx.ins.alerts, "Alerts", "s1")))];
   }
 
+  /** The project's X account: automatic free-game posts, a composer for ads and announcements, a schedule and the recent posts. */
+  async function adminXPosts(body, fail) {
+    const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
+    const money = n => (n > 0 && n < 0.1 ? (n * 100).toFixed(1).replace(/\.0$/, "") + " cents" : "$" + n.toFixed(2));
+    // what X counts: a link is 23, and emoji and most non-Latin characters count double
+    const LINK = /https?:\/\/\S+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|gg|tv|me|co|app|dev|xyz)\b(?:\/\S*)?/gi;
+    const xLen = t => { let n = 0; for (const ch of t.replace(LINK, () => "x".repeat(23))) { const cp = ch.codePointAt(0); n += cp <= 4351 || (cp >= 8192 && cp <= 8205) || (cp >= 8208 && cp <= 8223) || (cp >= 8242 && cp <= 8247) ? 1 : 2; } return n; };
+    const hasLink = t => { LINK.lastIndex = 0; return LINK.test(t); };
+    const when = at => new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    let draft = { text: "", image: null, imageName: "", at: "" };
+    const draw = async () => {
+      const xs = await api("/api/admin/xposter");
+      if (!document.body.contains(body)) return;
+      const save = async patch => { try { await api("/api/admin/xposter", patch); toast("Saved.", "ok"); await draw(); } catch (e) { toast(e.message); } };
+
+      // ----- status and the automatic posts -----
+      const note = h("p", { class: "muted small", text: "" });
+      const on = h("input", { type: "checkbox" }); on.checked = xs.enabled; on.disabled = !xs.configured; on.addEventListener("change", () => save({ enabled: on.checked }));
+      const per = h("input", { type: "number", min: "1", max: String(xs.maxDaily), value: String(xs.daily), class: "x-num" });
+      const chk = h("button", { class: "btn gray small", type: "button", text: "Check the keys" });
+      chk.addEventListener("click", () => busy(chk, async () => { try { const r = await api("/api/admin/xposter/check", {}); note.textContent = "Connected" + (r.username ? " as @" + r.username : "") + "."; } catch (e) { note.textContent = e.message; } }));
+      const sv = h("button", { class: "btn gray small", type: "button", text: "Save" }); sv.addEventListener("click", () => save({ daily: Number(per.value) }));
+      const status = h("div", { class: "panel" }, h("h3", { text: "Account and automatic posts" }),
+        h("div", { class: "grid four" },
+          tile("This month", money(xs.monthSpend), "about what X has charged"),
+          tile("Automatic today", `${xs.postedToday} of ${xs.daily}`, xs.enabled ? "free games" : "switched off"),
+          tile("Manual today", `${xs.manualToday} of ${xs.manualMax}`, "posts you wrote"),
+          tile("Waiting", String(xs.queue.length), xs.queue.length ? "scheduled" : "nothing scheduled")),
+        !xs.configured && h("p", { class: "bad", text: "The four X keys aren't set in Fly yet, so nothing can be posted." }),
+        xs.error && h("p", { class: "bad", text: "Last problem: " + xs.error.message }),
+        h("label", { class: "check" }, on, " Post new free games automatically"),
+        h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
+        h("p", { class: "muted small", text: `Automatic posts are plain text with no link, spaced at least 3 hours apart. X charges about ${money(xs.plainCost)} for a plain post and about ${money(xs.linkCost)} for one with a link. ${xs.daily} a day is roughly ${money(xs.monthlyCost)} a month.` }), note);
+
+      // ----- the composer -----
+      const text = h("textarea", { rows: "7", placeholder: "Write a post, or start from one of the ready-made ones…", class: "x-text" }); text.value = draft.text;
+      const tpl = h("select", {}, h("option", { value: "", text: "Start from…" }), ...xs.templates.map(t => h("option", { value: t.id, text: t.name })));
+      const addLink = h("input", { type: "checkbox" });
+      const count = h("span", { class: "muted small" }), cost = h("span", { class: "muted small" });
+      const fileIn = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif" });
+      const preview = h("div", { class: "muted small", text: "" });
+      const at = h("input", { type: "datetime-local" }); at.value = draft.at;
+      const go = h("button", { class: "btn green", type: "button", text: "Post now" });
+      const full = () => text.value.trim() + (addLink.checked && !hasLink(text.value) ? "\n\nsteamvaluechecker.com" : "");
+      const refresh = () => {
+        const t = full(), n = xLen(t);
+        count.textContent = `${n} / 280`; count.className = n > 280 ? "bad small" : "muted small";
+        cost.textContent = t ? `About ${money(hasLink(t) ? xs.linkCost : xs.plainCost)} on X${hasLink(t) ? " (it has a link)" : ""}.` : "";
+        go.textContent = at.value ? "Schedule it" : "Post now"; go.disabled = !xs.configured || !t || n > 280 || (at.value && draft.image);
+        preview.textContent = draft.image ? `Picture: ${draft.imageName}${at.value ? " (scheduled posts can't have a picture yet)" : ""}` : "";
+        draft.text = text.value; draft.at = at.value;
+      };
+      tpl.addEventListener("change", () => { const t = xs.templates.find(x => x.id === tpl.value); if (t) { text.value = t.text; refresh(); } });
+      [text, addLink, at].forEach(el => el.addEventListener("input", refresh));
+      fileIn.addEventListener("change", () => {
+        const f = fileIn.files?.[0]; if (!f) { draft.image = null; draft.imageName = ""; return refresh(); }
+        if (f.size > 5 * 1024 * 1024) { toast("Pictures can be 5 MB at most."); fileIn.value = ""; return; }
+        const r = new FileReader(); r.onload = () => { draft.image = String(r.result).split(",")[1]; draft.imageName = f.name; refresh(); }; r.readAsDataURL(f);
+      });
+      go.addEventListener("click", () => busy(go, async () => {
+        const t = full(), sched = at.value ? new Date(at.value).getTime() : null;
+        if (!confirm(sched ? `Schedule this post for ${when(sched)}?` : "Post this to X now? It goes out right away.")) return;
+        try {
+          await api("/api/admin/xposter/post", { text: t, ...(sched ? { at: sched } : {}), ...(!sched && draft.image ? { image: draft.image } : {}) });
+          toast(sched ? "Scheduled." : "Posted.", "ok"); draft = { text: "", image: null, imageName: "", at: "" }; await draw();
+        } catch (e) { toast(e.message); }
+      }));
+      refresh();
+      const composer = h("div", { class: "panel" }, h("h3", { text: "Write a post" }),
+        h("p", { class: "muted", text: "For ads, announcements and anything else you'd rather word yourself. Ready-made posts say \"link in bio\" because a link makes X charge about thirteen times more." }),
+        h("div", { class: "row" }, tpl),
+        text,
+        h("div", { class: "row", style: "justify-content:space-between" }, count, cost),
+        h("label", { class: "check" }, addLink, " Add the website link"),
+        h("div", { class: "row" }, h("label", { text: "Picture " }), fileIn), preview,
+        h("div", { class: "row" }, h("label", { text: "Send at " }), at, h("span", { class: "muted small", text: "Leave empty to post now. Scheduled posts go out within a few minutes of the time." })),
+        h("div", { class: "row" }, go),
+        h("p", { class: "muted small", text: "Pictures are uploaded when the post goes out. If X turns the picture down, nothing gets posted and you'll see why." }));
+
+      // ----- schedule -----
+      const queue = h("div", { class: "panel" }, h("h3", { text: "Scheduled" }),
+        xs.queue.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Post", ""].map(c => h("th", { text: c })))),
+          h("tbody", {}, xs.queue.map(q => { const b = h("button", { class: "btn gray small", type: "button", text: "Remove" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/xposter/unschedule", { key: q.key }); await draw(); })); return h("tr", {}, h("td", { text: when(q.at) }), h("td", { text: q.text.length > 120 ? q.text.slice(0, 120) + "…" : q.text }), h("td", {}, b)); })))
+          : h("p", { class: "muted", text: "Nothing is scheduled." }));
+
+      // ----- what went out -----
+      const kinds = { auto: "Free game", manual: "Manual", scheduled: "Scheduled" };
+      const hist = h("div", { class: "panel" }, h("h3", { text: "Recent posts" }),
+        xs.history.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["When", "Kind", "Post", ""].map(c => h("th", { text: c })))),
+          h("tbody", {}, xs.history.map(x => {
+            const del = h("button", { class: "btn gray small", type: "button", text: "Delete" });
+            del.addEventListener("click", () => busy(del, async () => { if (!confirm("Delete this post from X?")) return; try { await api("/api/admin/xposter/delete", { id: x.id }); toast("Deleted.", "ok"); await draw(); } catch (e) { toast(e.message); } }));
+            return h("tr", {}, h("td", { text: when(x.at) }), h("td", { text: (kinds[x.kind] || x.kind) + (x.media ? " + picture" : "") }), h("td", { text: x.text.length > 110 ? x.text.slice(0, 110) + "…" : x.text }),
+              h("td", {}, x.id && h("a", { href: "https://x.com/i/status/" + x.id, target: "_blank", rel: "noopener", text: "View" }), " ", x.id && del));
+          })))) : h("p", { class: "muted", text: "Nothing posted yet." }));
+      body.replaceChildren(status, composer, queue, hist);
+    };
+    try { await draw(); } catch (e) { fail(e); }
+  }
+
   async function adminSystem(body, fail) {
     const draw = async () => {
       // don't redraw under someone who is typing in a box on this page
@@ -4155,29 +4256,10 @@
           tile("Database", fmt(st.dbMb), st.walMb ? fmt(st.walMb) + " in the write log" : "Write log is empty"),
           tile("Backups", fmt(st.backupsMb), st.backupCount + (st.backupCount === 1 ? " file" : " files"))) : h("p", { class: "muted", text: "Disk size isn't available on this host." }),
         st.tables.length ? h("table", {}, h("thead", {}, h("tr", {}, [h("th", { text: "Biggest tables" }), h("th", { text: "Size" })])), h("tbody", {}, st.tables.map(t => h("tr", {}, h("td", { text: t.name }), h("td", { text: fmt(t.mb) }))))) : null);
-      const xs = await api("/api/admin/xposter").catch(() => null);
-      const xPanel = xs && (() => {
-        const note = h("p", { class: "muted small", text: "" });
-        const state = !xs.configured ? "The four X keys aren't set in Fly yet." : xs.enabled ? `On. ${xs.postedToday} of ${xs.daily} posted today.${xs.lastAt ? " Last one " + ago(xs.lastAt) + "." : ""}` : "Off. Nothing is being posted.";
-        const save = async patch => { try { await api("/api/admin/xposter", patch); toast("Saved.", "ok"); await draw(); } catch (e) { toast(e.message); } };
-        const on = h("input", { type: "checkbox" }); on.checked = xs.enabled; on.disabled = !xs.configured; on.addEventListener("change", () => save({ enabled: on.checked }));
-        const per = h("input", { type: "number", min: "1", max: String(xs.maxDaily), value: String(xs.daily), style: "width:90px;flex:none" });
-        const chk = h("button", { class: "btn gray small", type: "button", text: "Check the keys" });
-        chk.addEventListener("click", async () => { try { const r = await api("/api/admin/xposter/check", {}); note.textContent = "Connected" + (r.username ? " as @" + r.username : "") + "."; } catch (e) { note.textContent = e.message; } });
-        const sv = h("button", { class: "btn gray small", type: "button", text: "Save" }); sv.addEventListener("click", () => save({ daily: Number(per.value) }));
-        return h("div", { class: "panel" }, h("h3", { text: "Posting to X" }),
-          h("p", { class: "muted", text: "Posts each new free game to the project's X account as plain text, spaced out, with no link so X doesn't bill it as a link post." }),
-          h("p", { text: state }),
-          xs.error && h("p", { class: "bad", text: "Last problem: " + xs.error.message }),
-          h("label", { class: "check" }, on, " Post free games to X"),
-          h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
-          h("p", { class: "muted small", text: `X charges about 1.5 cents a post, so ${xs.daily} a day is roughly $${xs.monthlyCost.toFixed(2)} a month.` }), note);
-      })();
       body.replaceChildren(
         h("div", { class: "grid four" }, tile("Uptime", up(p.uptimeS), b.version ? "Version " + b.version : p.node), tile("Discord ping", b.pingMs != null ? b.pingMs + " ms" : "–", b.servers != null ? b.servers + " servers" : null),
           tile("Memory", p.rssMb + " MB", `${p.heapMb} MB of ${p.heapLimitMb} MB heap`), tile("Event loop lag", p.lagMs + " ms", lagBad ? "Slow: something is blocking" : "Healthy")),
         h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
-        xPanel,
         storagePanel,
         errPanel,
         cwPanel,

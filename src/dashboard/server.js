@@ -1542,6 +1542,29 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (body.enabled && !xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET).");
             try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
         },
+        "POST /api/admin/xposter/post": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            if (!xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first.");
+            try {
+                const text = String(body.text ?? "");
+                if (body.at) { const item = xposter.schedule({ text, at: Number(body.at) }); return { ok: true, scheduled: item }; }
+                return { ok: true, ...(await xposter.manual({ text, image: body.image ? String(body.image) : null })) };
+            } catch (e) { if (e.user || e.status) throw new HttpError(400, e.message); throw e; }
+        },
+        "POST /api/admin/xposter/unschedule": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            xposter.unschedule(String(body.key ?? "")); return { ok: true };
+        },
+        "POST /api/admin/xposter/delete": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            try { return await xposter.remove(String(body.id ?? "")); } catch (e) { if (e.user || e.status) throw new HttpError(400, e.message); throw e; }
+        },
         "POST /api/admin/xposter/check": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
@@ -4423,7 +4446,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             let body = {};
             if (req.method === "POST") {
                 checkWrite(req);
-                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/profile/background" || key === "POST /api/social/post" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
+                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 60_000 : key === "POST /api/admin/xposter/post" ? 7_200_000 : key === "POST /api/profile/background" || key === "POST /api/social/post" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
             }
             const out = await handler(req, body, url);
             if (req.method === "POST" && url.pathname.startsWith("/api/admin/")) auditAdmin(req, url.pathname, body);

@@ -542,7 +542,12 @@ const supporters = createSupporters({ db, client, mainGuild, renewUrl: publicBas
 setInterval(() => supporters.sweep().then(() => supporters.remind()).catch(() => {}), 15 * 60_000).unref?.();
 // Free games to the project's X account. Off until the owner turns it on in the admin panel and the four X keys are set.
 const xposter = createXPoster({ db, log: m => console.log(`[x] ${m}`) });
-setTimeout(() => setInterval(() => { if (xposter.status().enabled) ops.job("x posts", async () => xposter.tick(await itad.getGiveawayList())).catch(() => {}); }, 20 * 60_000).unref?.(), 5 * 60_000).unref?.();
+// every few minutes: send any scheduled posts that have come due, then the automatic free-game post if that's switched on
+setTimeout(() => setInterval(() => {
+    if (!xposter.configured()) return;
+    xposter.flush().catch(() => {});
+    if (xposter.status().enabled) ops.job("x posts", async () => xposter.tick(await itad.getGiveawayList())).catch(() => {});
+}, 3 * 60_000).unref?.(), 2 * 60_000).unref?.();
 const square = createSquare({ ...squareConfig(), publicUrl: publicBase ?? "" });
 const ai = createAiChat({ db, key: cfg.anthropicKey, rt, tools: aiTools, keyFor: serverKey, lite: q => liteAnswer({ ...q, tools: aiTools }), isMain: g => mainGuild.isMain(g), isPlus: g => Boolean(db.getCommunity(g)?.ai_plus), ownerId: cfg.ownerId, log: t => console.error(`[ai] ${t}`) });
 const guideThrottle = createGuideThrottle();
