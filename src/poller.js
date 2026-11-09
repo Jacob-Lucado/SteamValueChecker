@@ -2,6 +2,7 @@
 // One price lookup per game and region, no matter how many people watch it.
 
 import { summarize } from "./report.js";
+import { alertColor } from "./supporters.js";
 import { tasteProfile, matchScore } from "./taste.js";
 import { evaluate, describeTrigger, dealVerdict, meaningfulDrop } from "./alerts.js";
 import { protonTier } from "./proton.js";
@@ -90,7 +91,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 h.proton = await protonTier(h.item.appid).catch(() => null);
                 h.reviews = await steamReviews(h.item.appid).catch(() => null);
             }));
-            const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict, lang: user.lang, pager: db });
+            const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict, lang: user.lang, pager: db, color: alertColor(db, userId, now()) });
             const res = await notifier.deliver(user, payload, "alert");
             if (res.ok) {
                 stats.delivered += part.length;

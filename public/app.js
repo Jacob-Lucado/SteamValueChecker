@@ -4871,6 +4871,13 @@
           const nm = h("input", { type: "text", maxlength: "24", value: s.wall || "", placeholder: "A name to show, like Jacob" });
           return h("div", { class: "pass-wall-opt" }, h("h4", { text: "Supporter wall" }), h("p", { class: "muted small", text: "Want to be thanked in public? Pick a name and you'll show up below. It never links to your Discord. Clear it to leave." }),
             h("div", { class: "row" }, nm, h("button", { class: "btn gray", type: "button", text: "Save", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/wall", { name: nm.value }); toast(nm.value.trim() ? "You're on the wall." : "Removed from the wall.", "ok"); tipView(); } catch (err) { toast(err.message, "error"); } }) })));
+        })() : null,
+        (s.until || s.founder) ? (() => {
+          const pick = h("input", { type: "color", value: s.alert_color || "#57f287", "aria-label": "Alert colour" });
+          return h("div", { class: "pass-wall-opt" }, h("h4", { text: "Alert colour" }), h("p", { class: "muted small", text: "Your own price alerts from the bot get the colour you pick down the side of the card." }),
+            h("div", { class: "row" }, pick,
+              h("button", { class: "btn gray", type: "button", text: "Save", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/alertcolor", { color: pick.value }); toast("Your alerts will use that colour.", "ok"); } catch (err) { toast(err.message, "error"); } }) }),
+              h("button", { class: "btn gray", type: "button", text: "Back to the default", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/alertcolor", { color: "" }); toast("Back to the usual colours.", "ok"); tipView(); } catch (err) { toast(err.message, "error"); } }) })));
         })() : null);
     } catch { /* the pass is optional, so the rest of the page stands on its own */ }
     try {

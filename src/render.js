@@ -186,9 +186,9 @@ export function alertButtons(item, now, { single = true, lang = "en" } = {}) {
 }
 
 /** A whole alert message for one member: up to 5 games, each with its art and its own buttons. */
-export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null }) {
+export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null, color = null }) {
     const single = hits.length === 1;
-    const embedFor = (h, one) => alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: one ? "image" : "thumbnail", insight: h.insight ?? null, match: h.match ?? null, proton: h.proton ?? null, reviews: h.reviews ?? null });
+    const embedFor = (h, one) => ({ ...alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: one ? "image" : "thumbnail", insight: h.insight ?? null, match: h.match ?? null, proton: h.proton ?? null, reviews: h.reviews ?? null }), ...(color != null ? { color } : {}) });
     const rowsFor = (h, one) => [alertButtons(h.item, h.now, { single: one, lang }),
         ...(one && h.item.id != null ? [{ type: 1, components: [
             { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${h.item.id}` },

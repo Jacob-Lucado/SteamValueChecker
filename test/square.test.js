@@ -134,3 +134,22 @@ test("supporters: when the role can't be given, it says why, and re-sending fixe
     const none = createSupporters({ db, client: { guilds: { cache: { get: () => null } } }, mainGuild: { detect: () => null } });
     assert.equal((await none.homeStatus()).why, "no-home-server");
 });
+
+test("supporters: the alert colour is a supporter perk, validated, and gone with the pass", async () => {
+    const { alertColor, alertColorHex } = await import("../src/supporters.js");
+    const db = openDb(":memory:"); const t = 1_000_000;
+    const sup = createSupporters({ db, now: () => t });
+    await sup.grant("u1", 30, "pay_c1"); // a hand-out, so no founding mark
+    assert.equal(alertColor(db, "u1", t), null);
+    assert.equal(sup.setAlertColor("u1", "#FF8800"), "#ff8800");
+    assert.equal(alertColor(db, "u1", t), 0xff8800);
+    assert.throws(() => sup.setAlertColor("u1", "red"), /colour/);
+    assert.equal(alertColor(db, "u1", t + 400 * 86_400_000), null);
+    assert.equal(alertColor(db, "u2", t), null);
+    assert.equal(sup.setAlertColor("u1", ""), null);
+    assert.equal(alertColor(db, "u1", t), null);
+    assert.equal(alertColorHex(db, "u1"), null);
+    await sup.grant("u3", 30, "pay_c3", "square", 500); // a paying founder keeps the perk after the pass ends
+    sup.setAlertColor("u3", "#00ff00");
+    assert.equal(alertColor(db, "u3", t + 400 * 86_400_000), 0x00ff00);
+});

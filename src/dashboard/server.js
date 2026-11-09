@@ -46,7 +46,7 @@ import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
 import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
-import { supporterUntil, isSupporter, isFounder, wallName, endOfDayEastern } from "../supporters.js";
+import { supporterUntil, isSupporter, isFounder, wallName, alertColorHex, endOfDayEastern } from "../supporters.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
@@ -1157,7 +1157,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
         // ----- supporter passes -----
         "GET /api/supporter": async (req) => {
             const s = session(req), until = supporterUntil(db, s.userId);
-            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST, founder: isFounder(db, s.userId), wall: wallName(db, s.userId) };
+            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST, founder: isFounder(db, s.userId), wall: wallName(db, s.userId), alert_color: alertColorHex(db, s.userId) };
         },
         "GET /api/public/supporters": async () => ({ wall: supporters ? supporters.wall() : [] }),
         "POST /api/supporter/wall": async (req, body) => {
@@ -1165,6 +1165,12 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!supporters) throw new HttpError(404, "Not found.");
             if (!isSupporter(db, s.userId, now()) && !isFounder(db, s.userId)) throw new HttpError(403, "The wall is for supporters.");
             return { wall: supporters.setWall(s.userId, body.on === false ? "" : body.name) };
+        },
+        "POST /api/supporter/alertcolor": async (req, body) => {
+            const s = session(req);
+            if (!supporters) throw new HttpError(404, "Not found.");
+            if (!isSupporter(db, s.userId, now()) && !isFounder(db, s.userId)) throw new HttpError(403, "Alert colours are a supporter perk.");
+            try { return { alert_color: supporters.setAlertColor(s.userId, body.color) }; } catch (e) { throw new HttpError(400, e.message); }
         },
         "POST /api/supporter/checkout": async (req, body) => {
             const s = session(req);

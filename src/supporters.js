@@ -11,6 +11,7 @@ const REMIND = "supporterremind:";
 const LAST = "supporterlast:";
 const WALL = "supporterwall:";
 const FOUNDER = "supporterfounder:";
+const COLOR = "supporteralertcolor:";
 export const FOUNDERS_MAX = 50;
 const REMIND_BEFORE_MS = 3 * DAY;
 const parse = v => { try { const o = JSON.parse(v); return o && typeof o === "object" ? o : null; } catch { return null; } };
@@ -32,6 +33,13 @@ export const isSupporter = (db, userId, now = Date.now()) => supporterUntil(db, 
 /** The first 50 people to have a paid pass are founding supporters for good, even after their pass ends. */
 export const isFounder = (db, userId) => Boolean(db.getMeta(FOUNDER + userId));
 export const wallName = (db, userId) => db.getMeta(WALL + userId) || null;
+/** The colour a supporter picked for their own price alerts, as a number Discord understands. Null once the pass is over or if none is set. */
+export function alertColor(db, userId, now = Date.now()) {
+    if (!isSupporter(db, userId, now) && !isFounder(db, userId)) return null;
+    const hex = /^#[0-9a-f]{6}$/i.test(db.getMeta(COLOR + userId) ?? "") ? db.getMeta(COLOR + userId) : null;
+    return hex ? parseInt(hex.slice(1), 16) : null;
+}
+export const alertColorHex = (db, userId) => db.getMeta(COLOR + userId) || null;
 export const xpBoost = (db, userId, now = Date.now()) => (isSupporter(db, userId, now) ? SUPPORTER_XP_BOOST : 1);
 
 export function createSupporters({ db, client = null, mainGuild = null, dm = null, renewUrl = null, now = () => Date.now(), log = () => {} }) {
@@ -170,6 +178,14 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return clean || null;
     }
 
+    /** Save (or clear, with an empty value) the colour of a supporter's alert cards. Throws on anything that isn't a six-digit hex colour. */
+    function setAlertColor(userId, hex) {
+        const v = String(hex ?? "").trim().toLowerCase();
+        if (v && !/^#[0-9a-f]{6}$/.test(v)) throw new Error("Pick a colour like #ff8800.");
+        db.setMeta(COLOR + userId, v);
+        return v || null;
+    }
+
     /** Active supporters and founders who chose to be shown, founders first. */
     function wall() {
         const out = [];
@@ -197,5 +213,5 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return out;
     }
 
-    return { grant, refund, sweep, remind, onJoin, homeStatus, resync, everyone, setUntil, addDays, remove, setFounder, list, setWall, wall, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
+    return { grant, refund, sweep, remind, onJoin, homeStatus, resync, everyone, setUntil, addDays, remove, setFounder, list, setWall, setAlertColor, wall, revenue, recent: () => readEvents(db, "adminlog:supporters", 30), plans: PLANS };
 }

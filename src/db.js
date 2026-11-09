@@ -798,9 +798,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     /** Pass, founder mark, wall name and what was paid, for the data export. Payment records are kept as accounting entries without a name after deletion. */
     function supporterExport(discordId) {
-        const until = Number(getMeta(`supporter:${discordId}`)) || null, founder = Boolean(getMeta(`supporterfounder:${discordId}`)), wall = getMeta(`supporterwall:${discordId}`) || null;
+        const until = Number(getMeta(`supporter:${discordId}`)) || null, founder = Boolean(getMeta(`supporterfounder:${discordId}`)), wall = getMeta(`supporterwall:${discordId}`) || null, color = getMeta(`supporteralertcolor:${discordId}`) || null;
         const payments = listMetaPrefix("supporterpay:").map(r => { try { return JSON.parse(r.value); } catch { return null; } }).filter(p => p && p.userId === String(discordId)).map(p => ({ at: p.at, days: p.days, cents: p.cents, via: p.via, gift_from_someone: Boolean(p.giftFrom), refunded: Boolean(p.refunded) }));
-        return until || founder || wall || payments.length ? { pass_ends: until, founder, wall_name: wall, payments } : null;
+        return until || founder || wall || payments.length ? { pass_ends: until, founder, wall_name: wall, alert_color: color, payments } : null;
     }
 
     function deleteUser(discordId) {
@@ -820,7 +820,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             for (const t of ["stream_live", "stream_pinged", "stream_overlay", "stream_link", "stream_card", "stream_overlays"]) run(`DELETE FROM ${t} WHERE user_id = ?`, discordId);
             run("DELETE FROM server_list WHERE added_by = ?", discordId);
             run("DELETE FROM status_meta WHERE key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\' OR key LIKE ? ESCAPE '\\'", `topgg:votes:${discordId}`, `topgg:seen:${discordId}:%`, `voterrole:${discordId}`);
-            for (const k of ["supporter:", "supporterwall:", "supporterfounder:", "supporterremind:", "supporterlast:"]) run("DELETE FROM status_meta WHERE key = ?", k + discordId);
+            for (const k of ["supporter:", "supporterwall:", "supporteralertcolor:", "supporterfounder:", "supporterremind:", "supporterlast:"]) run("DELETE FROM status_meta WHERE key = ?", k + discordId);
             // Payments stay as accounting entries (amount and date) but lose the person they belonged to.
             for (const r of all("SELECT key, value FROM status_meta WHERE key LIKE ?", "supporterpay:%")) {
                 try { const p = JSON.parse(r.value); if (p.userId === String(discordId) || p.giftFrom === String(discordId)) { if (p.userId === String(discordId)) p.userId = ""; if (p.giftFrom === String(discordId)) p.giftFrom = null; run("UPDATE status_meta SET value = ? WHERE key = ?", JSON.stringify(p), r.key); } } catch { /* an old-style record has nothing to clear */ }
