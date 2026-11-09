@@ -4133,9 +4133,10 @@
     const xLen = t => { let n = 0; for (const ch of t.replace(LINK, () => "x".repeat(23))) { const cp = ch.codePointAt(0); n += cp <= 4351 || (cp >= 8192 && cp <= 8205) || (cp >= 8208 && cp <= 8223) || (cp >= 8242 && cp <= 8247) ? 1 : 2; } return n; };
     const hasLink = t => { LINK.lastIndex = 0; return LINK.test(t); };
     const when = at => new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    let draft = { text: "", image: null, imageName: "", at: "" };
+    let draft = { text: "", image: null, imageName: "", at: "" }, bundleLink = false;
     const draw = async () => {
       const xs = await api("/api/admin/xposter");
+      const bl = await api("/api/admin/xposter/bundles?link=" + (bundleLink ? 1 : 0)).catch(() => ({ bundles: [] }));
       if (!document.body.contains(body)) return;
       const save = async patch => { try { await api("/api/admin/xposter", patch); toast("Saved.", "ok"); await draw(); } catch (e) { toast(e.message); } };
 
@@ -4146,6 +4147,9 @@
       const chk = h("button", { class: "btn gray small", type: "button", text: "Check the keys" });
       chk.addEventListener("click", () => busy(chk, async () => { try { const r = await api("/api/admin/xposter/check", {}); note.textContent = "Connected" + (r.username ? " as @" + r.username : "") + "."; } catch (e) { note.textContent = e.message; } }));
       const sv = h("button", { class: "btn gray small", type: "button", text: "Save" }); sv.addEventListener("click", () => save({ daily: Number(per.value) }));
+      const tagsIn = h("input", { type: "text", value: xs.tags, class: "x-tags", placeholder: "#FreeGames #PCGaming …" });
+      const tagsSave = h("button", { class: "btn gray small", type: "button", text: "Save tags" }); tagsSave.addEventListener("click", () => save({ tags: tagsIn.value }));
+      const tagsReset = h("button", { class: "btn gray small", type: "button", text: "Reset" }); tagsReset.addEventListener("click", () => save({ tags: xs.defaultTags }));
       const status = h("div", { class: "panel" }, h("h3", { text: "Account and automatic posts" }),
         h("div", { class: "grid four" },
           tile("This month", money(xs.monthSpend), "about what X has charged"),
@@ -4156,6 +4160,8 @@
         xs.error && h("p", { class: "bad", text: "Last problem: " + xs.error.message }),
         h("label", { class: "check" }, on, " Post new free games automatically"),
         h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
+        h("div", { class: "row" }, h("label", { text: "Hashtags " }), tagsIn, tagsSave, tagsReset),
+        h("p", { class: "muted small", text: "Each automatic post gets its store's own tag (like #EpicGames) plus up to three from this list, rotating so no two posts match. Bundles skip the free and giveaway ones. A few well-picked tags do better than a wall of them." }),
         h("p", { class: "muted small", text: `Automatic posts are plain text with no link, spaced at least 3 hours apart. X charges about ${money(xs.plainCost)} for a plain post and about ${money(xs.linkCost)} for one with a link. ${xs.daily} a day is roughly ${money(xs.monthlyCost)} a month.` }), note);
 
       // ----- the composer -----
@@ -4203,6 +4209,26 @@
         h("div", { class: "row" }, go),
         h("p", { class: "muted small", text: "Pictures are uploaded when the post goes out. If X turns the picture down, nothing gets posted and you'll see why." }));
 
+      // ----- the latest bundles -----
+      const postBundle = (b, btn) => busy(btn, async () => {
+        if (!confirm(`Post "${b.title}" to X now?`)) return;
+        try { await api("/api/admin/xposter/post", { text: b.text, bundle_id: b.id }); toast("Posted.", "ok"); await draw(); } catch (e) { toast(e.message); }
+      });
+      const linkBox = h("input", { type: "checkbox" }); linkBox.checked = bundleLink; linkBox.addEventListener("change", () => { bundleLink = linkBox.checked; draw(); });
+      const fresh = bl.bundles.filter(b => !b.posted);
+      const newest = h("button", { class: "btn green small", type: "button", text: "Post the newest", disabled: !xs.configured || !fresh.length }); if (fresh.length) newest.addEventListener("click", () => postBundle(fresh[0], newest));
+      const bundles = h("div", { class: "panel" }, h("h3", { text: "Latest bundles" }),
+        h("p", { class: "muted", text: "The newest bundles the bot has found. Post one as is, or send it to the box above to reword it first." }),
+        h("div", { class: "row" }, newest, h("label", { class: "check" }, linkBox, ` Include the bundle's link (about ${money(xs.linkCost)} instead of ${money(xs.plainCost)})`)),
+        bl.bundles.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Bundle", "Store", "Price", "Ends", ""].map(c => h("th", { text: c })))),
+          h("tbody", {}, bl.bundles.map(b => {
+            const go = h("button", { class: "btn gray small", type: "button", text: "Post to X", disabled: !xs.configured }); go.addEventListener("click", () => postBundle(b, go));
+            const ed = h("button", { class: "btn gray small", type: "button", text: "Edit first" });
+            ed.addEventListener("click", () => { draft.text = b.text; text.value = b.text; refresh(); text.scrollIntoView({ behavior: "smooth", block: "center" }); text.focus(); });
+            return h("tr", {}, h("td", {}, h("b", { text: b.title }), b.gameCount ? h("div", { class: "muted small", text: b.gameCount + " games" }) : null), h("td", { text: b.storeName }), h("td", { text: b.price || "–" }),
+              h("td", { text: b.expiresAt ? when(b.expiresAt) : "–" }), h("td", {}, b.posted ? h("span", { class: "muted", text: "Posted ✓ " }) : null, go, " ", ed));
+          }))) : h("p", { class: "muted", text: "No active bundles right now." }));
+
       // ----- schedule -----
       const queue = h("div", { class: "panel" }, h("h3", { text: "Scheduled" }),
         xs.queue.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Post", ""].map(c => h("th", { text: c })))),
@@ -4210,7 +4236,7 @@
           : h("p", { class: "muted", text: "Nothing is scheduled." }));
 
       // ----- what went out -----
-      const kinds = { auto: "Free game", manual: "Manual", scheduled: "Scheduled" };
+      const kinds = { auto: "Free game", manual: "Manual", scheduled: "Scheduled", bundle: "Bundle" };
       const hist = h("div", { class: "panel" }, h("h3", { text: "Recent posts" }),
         xs.history.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["When", "Kind", "Post", ""].map(c => h("th", { text: c })))),
           h("tbody", {}, xs.history.map(x => {
@@ -4219,7 +4245,7 @@
             return h("tr", {}, h("td", { text: when(x.at) }), h("td", { text: (kinds[x.kind] || x.kind) + (x.media ? " + picture" : "") }), h("td", { text: x.text.length > 110 ? x.text.slice(0, 110) + "…" : x.text }),
               h("td", {}, x.id && h("a", { href: "https://x.com/i/status/" + x.id, target: "_blank", rel: "noopener", text: "View" }), " ", x.id && del));
           })))) : h("p", { class: "muted", text: "Nothing posted yet." }));
-      body.replaceChildren(status, composer, queue, hist);
+      body.replaceChildren(status, composer, bundles, queue, hist);
     };
     try { await draw(); } catch (e) { fail(e); }
   }

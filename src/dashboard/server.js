@@ -24,6 +24,7 @@ import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, SUPPORT_PAGE_URL, EXTENSIO
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
+import * as xposterText from "../xposter.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
 import { compareGiftRegions } from "../giftregion.js";
@@ -1540,7 +1541,14 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             if (body.enabled && !xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET).");
-            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
+            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily, tags: body.tags }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
+        },
+        "GET /api/admin/xposter/bundles": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            const link = url.searchParams.get("link") === "1", tags = xposter.tags();
+            return { bundles: db.listFeedBundles({ status: "active", limit: 8, adult: false }).map(bundleFeedView).map(b => ({ id: b.id, title: b.title, storeName: b.storeName, price: b.price, expiresAt: b.expiresAt, gameCount: b.gameCount, posted: xposter.bundlePosted(b.id), text: xposterText.bundleText(b, { tags, link }) })) };
         },
         "POST /api/admin/xposter/post": async (req, body) => {
             const s = session(req);
@@ -1550,7 +1558,7 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             try {
                 const text = String(body.text ?? "");
                 if (body.at) { const item = xposter.schedule({ text, at: Number(body.at) }); return { ok: true, scheduled: item }; }
-                return { ok: true, ...(await xposter.manual({ text, image: body.image ? String(body.image) : null })) };
+                return { ok: true, ...(await xposter.manual({ text, image: body.image ? String(body.image) : null, bundleId: body.bundle_id ? String(body.bundle_id).slice(0, 80) : null })) };
             } catch (e) { if (e.user || e.status) throw new HttpError(400, e.message); throw e; }
         },
         "POST /api/admin/xposter/unschedule": async (req, body) => {

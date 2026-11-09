@@ -106,3 +106,4 @@
 /* X posting page */
 .adm-content .x-num { flex: 0 0 90px !important; width: 90px !important; }
 .adm-content .x-text { width: 100%; resize: vertical; font-family: inherit !important; font-size: 15px; line-height: 1.45; }
+.adm-content .x-tags { flex: 1 1 300px; }

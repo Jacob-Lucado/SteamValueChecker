@@ -100,3 +100,27 @@ test("scheduled posts go out once they're due, in order, and a failure isn't ret
     assert.deepEqual(await x.flush(), { sent: 0 }); assert.match(x.status().error.message, /scheduled post didn't go out/);
     fail = false; assert.deepEqual(await x.flush(), { sent: 0 }, "it was taken off the list, so it isn't tried again");
 });
+
+test("hashtags: the store's own plus a rotating few, editable, and bundles skip the free ones", async () => {
+    const { hashtagsFor, bundleText, cleanTags, TEMPLATES, xLength, DEFAULT_TAGS } = await import("../src/xposter.js");
+    const t = hashtagsFor("Epic Games", "Cool Game"); assert.match(t, /^#EpicGames /); assert.ok(t.split(" ").length <= 4);
+    assert.notEqual(hashtagsFor("Steam", "Alpha"), hashtagsFor("Steam", "Zebra Run"), "the set changes from game to game");
+    assert.match(freeGameText(game("a"), Date.UTC(2026, 10, 9)), /#EpicGames/);
+    for (const tp of TEMPLATES) assert.ok(xLength(tp.text) <= 280 && /#\w+/.test(tp.text), tp.name + " fits and has tags");
+    const b = { title: "Big Indie Bundle", storeName: "Humble Bundle", price: "$12", gameCount: 9, games: ["A", "B", "C"], expiresAt: Date.UTC(2027, 0, 5), url: "https://www.humblebundle.com/x" };
+    const plain = bundleText(b, { tags: DEFAULT_TAGS, now: Date.UTC(2026, 10, 9) });
+    assert.match(plain, /#HumbleBundle/); assert.ok(!/#(FreeGames|Giveaway|Freebie)/i.test(plain), "a bundle isn't free"); assert.match(plain, /Link in bio/); assert.ok(!/https/.test(plain));
+    assert.match(bundleText(b, { link: true, now: Date.UTC(2026, 10, 9) }), /https:\/\/www\.humblebundle\.com\/x/);
+    assert.ok(xLength(bundleText({ ...b, title: "x".repeat(200), games: Array(3).fill("y".repeat(80)) })) <= 280);
+    assert.deepEqual(cleanTags("pcgaming, #Steam  GameDeals"), ["#pcgaming", "#Steam", "#GameDeals"]); assert.throws(() => cleanTags("bad tag!"), /can't be a hashtag/);
+    const db = openDb(":memory:"), x = createXPoster({ env: ENV, db });
+    x.setSettings({ tags: "#Indie #Deals" }); assert.deepEqual(x.tags(), ["#Indie", "#Deals"]); assert.equal(x.status().tags, "#Indie #Deals");
+    x.setSettings({ tags: "" }); assert.deepEqual(x.tags(), DEFAULT_TAGS, "empty goes back to the usual list");
+});
+
+test("a posted bundle is remembered so the button can say so", async () => {
+    const db = openDb(":memory:"); const x = createXPoster({ env: ENV, db, fetchImpl: async () => ({ ok: true, json: async () => ({ data: { id: "777777" } }) }) });
+    assert.equal(x.bundlePosted("humble:1"), false);
+    await x.manual({ text: "bundle post", bundleId: "humble:1" });
+    assert.equal(x.bundlePosted("humble:1"), true); assert.equal(x.status().history[0].kind, "bundle");
+});
