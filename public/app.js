@@ -119,6 +119,24 @@ window.SVC_SITE = envIn => {
   }
 
   // Runs an action with the button disabled; errors become toasts.
+  /** Prizes whose winner hasn't pressed Claim yet. Shown in the dashboard and in the admin panel, each with a Remind now button. */
+  function pendingPanel(pending, remind, reload) {
+    const rows = Array.isArray(pending) ? pending : [];
+    const words = ms => { const hrs = ms / 3600_000; return hrs < 1 ? "under an hour" : hrs < 48 ? `${Math.round(hrs)} h` : `${Math.round(hrs / 24)} days`; };
+    const panel = h("div", { class: "panel" }, h("h3", { text: "Waiting to be claimed" }));
+    if (!rows.length) { panel.append(h("p", { class: "muted small", text: "Nobody is sitting on an unclaimed prize right now. Winners get a DM when they're drawn, a reminder halfway and a last call near the end, and you get a message if one runs out." })); return panel; }
+    panel.append(h("p", { class: "muted small", text: "Winners who haven't pressed Claim prize. They're reminded halfway and near the end, and the prize is redrawn if time runs out. You can nudge anyone now." }));
+    panel.append(h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Prize", "Giveaway", "Winner", "Time left", "Reminders", ""].map(c => h("th", { text: c })))),
+      h("tbody", {}, rows.map(r => {
+        const b = h("button", { class: "btn gray small", type: "button", text: "Remind now" });
+        b.addEventListener("click", () => busy(b, async () => { await remind(r.key_id); toast("Reminder sent.", "ok"); if (reload) await reload(); }));
+        return h("tr", {}, h("td", {}, h("b", { text: r.prize })), h("td", { text: `#${r.giveaway_id} ${r.title}${r.server ? " · " + r.server : ""}` }),
+          h("td", { text: r.winner ? `${r.winner} (${r.winner_id})` : r.winner_id }), h("td", { class: r.left_ms < 6 * 3600_000 ? "warn-text" : "", text: words(r.left_ms) }),
+          h("td", { text: r.reminders ? String(r.reminders) : "none yet" }), h("td", {}, b));
+      })))));
+    return panel;
+  }
+
   async function busy(btn, fn) {
     const label = btn.textContent;
     btn.disabled = true;
@@ -1137,7 +1155,7 @@ window.SVC_SITE = envIn => {
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
         h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played, or when it drops below what I paid (that part needs the extension's purchase sync)"),
-        field("Playtests, demos and betas (Steam, Alpha Beta Gamer, GamerPower and itch.io)", playSel),
+        field("Playtests, demos and betas (Steam, Alpha Beta Gamer, Playtester, GamerPower and itch.io)", playSel),
         h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
         h("label", { class: "check" }, nowOn, "Show the game I am in on my server's Now playing board (needs Steam linked, library sharing and public game details)"),
@@ -1930,7 +1948,7 @@ window.SVC_SITE = envIn => {
     const onVis = () => { if (!alive()) return document.removeEventListener("visibilitychange", onVis); if (!document.hidden && Date.now() - loadedAt >= PLAYTEST_POLL_MS) load(false); };
     document.addEventListener("visibilitychange", onVis);
     const on = state.me && state.me.settings && state.me.settings.playtest;
-    app.replaceChildren(pageHead("Playtests", "Playtests, betas, demos and free weekends happening now. It reads the Steam announcements of games on your wishlist or in your library, and Alpha Beta Gamer, GamerPower, itch.io and Steam's new demos for games Steam news never mentions."),
+    app.replaceChildren(pageHead("Playtests", "Playtests, betas, demos and free weekends happening now. It reads the Steam announcements of games on your wishlist or in your library, and Alpha Beta Gamer, Playtester, GamerPower, itch.io and Steam's new demos for games Steam news never mentions."),
       h("div", { class: "panel" }, h("div", { class: "row free-bar" }, search,
         h("label", { class: "check" }, mineBox, " ", h("span", { text: "On my wishlist" })), h("label", { class: "check" }, ownBox, " ", h("span", { text: "Hide games I own" })), refreshBtn, stamp),
         h("p", { class: "muted small" }, on ? "Your playtest alerts are on. " : "Want a message when one shows up? ", h("a", { href: "#/alerts", text: on ? "Change them in Alert settings." : "Turn on playtest alerts." }))),
@@ -3755,6 +3773,7 @@ window.SVC_SITE = envIn => {
         const when = t => new Date(t).toLocaleString();
         list.replaceChildren(info.list.length ? table(["#", "Title", "Host", "Status", "Entries", "Shown in", "Ends"], info.list.map(g => [g.id, g.title, g.host || "-", g.status, g.entries,
           `${g.channels} server${g.channels === 1 ? "" : "s"}, ${g.dms} DM${g.dms === 1 ? "" : "s"}${g.spread && !g.spread.done ? ` (sending ${g.spread.sent + g.spread.failed}/${g.spread.total})` : g.spread && g.spread.failed ? ` (${g.spread.failed} failed)` : ""}`, when(g.ends_at)])) : h("p", { class: "muted", text: "No network-wide giveaways yet." }));
+        list.prepend(pendingPanel(info.pending, id => api("/api/admin/giveaways/remind", { key_id: id }), refresh));
         // End buttons sit under the table so the table helper stays plain text.
         const active = info.list.filter(g => g.status === "active");
         if (active.length) list.append(h("div", { class: "row" }, ...active.map(g => { const b = h("button", { class: "btn gray small", type: "button", text: `End #${g.id} now and draw` }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/admin/giveaways/end", { id: g.id }); toast(`Ended. ${r.winners} winner${r.winners === 1 ? "" : "s"} drawn.`, "ok"); await refresh(); })); return b; })));
@@ -4991,7 +5010,7 @@ window.SVC_SITE = envIn => {
           api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })),
           api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))
         ]);
-        holder.replaceChildren(giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways, ro.roles), setupPanel(ch.channels, ro.roles, list.settings));
+        holder.replaceChildren(pendingPanel(list.pending, id => api("/api/giveaways/remind", { guild_id: guild.value, key_id: id }), load), giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways, ro.roles), setupPanel(ch.channels, ro.roles, list.settings));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
@@ -6234,7 +6253,7 @@ window.SVC_SITE = envIn => {
     { nav: "Deals", title: "Deals, free games and codes", lead: "When you are not waiting on a specific game, these pages find something worth buying or claiming.",
       points: [["For you", "Current discounts ranked by your taste, library and wishlist."], ["Check a deal", "Price any game by region and see which bundles include it."], ["Sale planner", "During a Steam sale, set a budget and let the best savings fill your cart. Afterwards see what your alerts caught."], ["Free games", "Everything free right now on Steam, Epic, GOG and more, with store filters and a DLC tab."], ["Codes, promos and the calendar", "Working codes for popular games, key giveaways, release dates and sale dates in one place."]] },
     { nav: "Early access", title: "Playtests, demos and news", lead: "Hear about a game before it launches, or when something changes in one you already play.",
-      points: [["Playtest watcher", "Betas, demos, free weekends and sign-ups from Steam announcements, Alpha Beta Gamer, GamerPower and itch.io. Choose wishlist games only, or every one found."], ["News and patch notes", "Announcements for the Steam games you own or wishlist. Patch notes only, or everything."], ["DLC sales", "A heads-up when add-ons for games you really play are heavily discounted."], ["Release dates", "Told when a wishlist game gets a date, or when it moves."]] },
+      points: [["Playtest watcher", "Betas, demos, free weekends and sign-ups from Steam announcements, Alpha Beta Gamer, Playtester, GamerPower and itch.io. Choose wishlist games only, or every one found."], ["News and patch notes", "Announcements for the Steam games you own or wishlist. Patch notes only, or everything."], ["DLC sales", "A heads-up when add-ons for games you really play are heavily discounted."], ["Release dates", "Told when a wishlist game gets a date, or when it moves."]] },
     { nav: "Friends", title: "Friends, gifts and sharing", lead: "Games are better shared. None of this is on unless you turn it on.",
       points: [["Friends and gifts", "Save birthdays and public wishlist links, then see what is on sale for them before the day."], ["Your public page", "Share a wishlist page with a link. Friends can quietly claim a gift so nobody buys it twice, and the page uses your profile card colour."], ["Profile card", "A picture of your library with the stats and colours you choose, ready to post."], ["Compare libraries", "See what you and a friend both own, with hours side by side."]] },
     { nav: "Servers", title: "Servers and Discord", lead: "Add the bot to a server and it becomes a community toolkit. The dashboard is where managers run it.",

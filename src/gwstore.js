@@ -110,7 +110,7 @@ const GIVEAWAY_FIELDS = [
 
 export function giveawayStore({ db, run, get, all, clean, now }) {
     // Rows handed out never carry the encrypted key unless asked for.
-    const KEY_COLS = "id, giveaway_id, position, label, kind, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, (key_enc IS NOT NULL) AS has_key";
+    const KEY_COLS = "id, giveaway_id, position, label, kind, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, remind_stage, (key_enc IS NOT NULL) AS has_key";
 
     const RULE_COLS = ["require_role_id", "require_all", "override_role_id", "bonus_role_id", "bonus_entries", "require_steam"];
     /** Changes who may enter a giveaway. Only the rule columns can be set here. */
@@ -173,9 +173,15 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         return r ? { ...clean(r), has_key: Boolean(r.has_key) } : undefined;
     };
     const assignKey = (keyId, userId, deadline) => run(
-        "UPDATE giveaway_keys SET status = 'assigned', winner_id = ?, assigned_at = ?, deadline = ?, delivered_at = NULL, delivered_via = NULL, confirm_at = NULL, prompts = 0 WHERE id = ?",
+        "UPDATE giveaway_keys SET status = 'assigned', winner_id = ?, assigned_at = ?, deadline = ?, delivered_at = NULL, delivered_via = NULL, confirm_at = NULL, prompts = 0, remind_stage = 0 WHERE id = ?",
         userId, now(), deadline, keyId);
     const releaseKey = keyId => run("UPDATE giveaway_keys SET status = 'available', winner_id = NULL, deadline = NULL, assigned_at = NULL WHERE id = ?", keyId);
+    const setRemindStage = (keyId, stage) => run("UPDATE giveaway_keys SET remind_stage = ? WHERE id = ?", stage, keyId);
+    /** Prizes handed to a winner who hasn't pressed Claim yet, soonest deadline first. Optionally for one server. */
+    const pendingClaims = ({ guildId = null, limit = 100 } = {}) => all(
+        `SELECT k.id, k.giveaway_id, k.label, k.kind, k.winner_id, k.assigned_at, k.deadline, k.remind_stage, k.redraws, g.title, g.guild_id, g.is_global, g.claim_hours
+         FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id
+         WHERE k.status = 'assigned' AND k.winner_id IS NOT NULL ${guildId ? "AND g.guild_id = ?" : ""} ORDER BY k.deadline ASC LIMIT ?`, ...(guildId ? [guildId, limit] : [limit])).map(clean);
     const bumpRedraw = keyId => run("UPDATE giveaway_keys SET redraws = redraws + 1 WHERE id = ?", keyId);
     const markDelivered = (keyId, via, confirmAt) => run(
         "UPDATE giveaway_keys SET status = 'delivered', delivered_at = COALESCE(delivered_at, ?), delivered_via = ?, confirm_at = COALESCE(confirm_at, ?) WHERE id = ? AND status IN ('assigned','delivered','problem')",
@@ -269,7 +275,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         listTemplates, saveTemplate, removeTemplate, prizesFor,
         setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,
-        listKeys, getKey, getKeyEnc, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
+        listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,
         giveawayTotals, getGiveawaySettings, setGiveawaySettings, forgetGiveawayUser, hasGiveawayData
     };

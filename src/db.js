@@ -233,6 +233,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     for (const [c, d] of [["reply", "TEXT"], ["decided", "INTEGER"]]) addColumn("indie_keyreq", c, d);
     addColumn("community", "indie_dev_role", "TEXT");
     addColumn("social_prefs", "dm", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("giveaway_keys", "remind_stage", "INTEGER NOT NULL DEFAULT 0");
     addColumn("social_prefs", "guestbook", "INTEGER NOT NULL DEFAULT 1");
     addColumn("items", "priority", "INTEGER NOT NULL DEFAULT 0");
     addColumn("items", "release_at", "INTEGER");

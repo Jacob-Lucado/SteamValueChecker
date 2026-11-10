@@ -709,6 +709,15 @@ test("giveaways page: managers only, validated, and keys never come back", async
     const list = await t.request("/api/giveaways?guild=g-admin");
     assert.equal(list.data.giveaways[0].prizes, 2);
     assert.ok(!list.text.includes("AAAAA"));
+    // a winner who hasn't claimed shows up with time left, and the manager can nudge them
+    const waiting = t.db.listKeys(made.data.id)[0];
+    t.db.assignKey(waiting.id, "winner1", Date.now() + 3 * 3600_000);
+    const pend = (await t.request("/api/giveaways?guild=g-admin")).data.pending;
+    assert.equal(pend.length, 1); assert.equal(pend[0].prize, "Hades"); assert.equal(pend[0].winner_id, "winner1"); assert.ok(pend[0].left_ms > 0);
+    assert.ok(!JSON.stringify(pend).includes("AAAAA"));
+    assert.equal((await t.request("/api/giveaways/remind", { method: "POST", body: { guild_id: "g-admin", key_id: waiting.id } })).status, 200);
+    assert.ok(dms.some(d => d.u === "winner1" && /Claim prize/.test(JSON.stringify(d.p))), "the winner got the reminder with a Claim button");
+    assert.equal((await t.request("/api/giveaways/remind", { method: "POST", body: { guild_id: "g-admin", key_id: 999999 } })).status, 404);
     const info = await t.request(`/api/giveaways/info?guild=g-admin&id=${made.data.id}`);
     assert.deepEqual(info.data.keys.map(k => k.label), ["Hades", "Celeste"]);
     assert.ok(!info.text.includes("AAAAA") && !info.text.includes("CCCCC"));

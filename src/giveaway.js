@@ -11,7 +11,7 @@ import { UserError } from "./errors.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
 import { roleIds, roleList, hasAnyRole, hasAllRoles } from "./gwroles.js";
-import { giveawayPayload, winnersPayload, confirmPayload, vouchPayload, leftoverMessage, hostNote } from "./gwrender.js";
+import { giveawayPayload, winnersPayload, confirmPayload, vouchPayload, leftoverMessage, hostNote, winnerNudge, leftText } from "./gwrender.js";
 
 const CONFIRM_FIRST_MS = 10 * 60_000;
 const CONFIRM_REMINDER_MS = 24 * 3600_000;
@@ -309,6 +309,20 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         try { await discord.post(g.channel_id, { content: text, allowedMentions: { users: extra.users ?? [] }, components: extra.components }); } catch { /* the channel may be gone */ }
     }
 
+    /**
+     * Tells a winner about their prize by DM, with the Claim prize button in it: stage 0 when they are drawn, 1 halfway through the
+     * window, 2 near the end. If their DMs are closed it is posted in the giveaway channel with a mention instead.
+     */
+    async function nudgeWinner(g, k, stage) {
+        const key = db.getKey(k.id ?? k.keyId);
+        if (!key || key.status !== "assigned" || !key.winner_id) return false;
+        const payload = winnerNudge(g, key, { stage, left: (key.deadline ?? now()) - now() });
+        try { await discord.dm(key.winner_id, payload); return true; }
+        catch {
+            try { await discord.post(g.channel_id, { ...payload, content: `<@${key.winner_id}> ${stage === 0 ? "you won a prize" : "you haven't claimed your prize yet"}.`, allowedMentions: { users: [key.winner_id] } }); return true; } catch { return false; }
+        }
+    }
+
     /** Ends a giveaway: draws one winner per prize, posts the winners, and tells the host. */
     async function end(id, { by = null } = {}) {
         let g = must(id);
@@ -335,6 +349,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         } else {
             await announceNew(g, `**${g.title}** ended with no valid entries.`);
         }
+        for (const w of won) await nudgeWinner(g, w, 0);
         if (g.is_global) await closeMirrors(g, keys, won.length > 0);
         const unused = await returnUnused(g, ["available"], won.length ? "Fewer people entered than there were prizes, so these prizes had no winner." : "Nobody entered.");
         await dmHost(g, hostNote(g, `Ended${by ? "" : " on schedule"}: ${won.length} of ${keys.length} prizes have a winner (${entryCount(g.id)} entries).` +
@@ -377,6 +392,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         await refresh(g.id);
         const lines = won.map(w => `**${w.label}** → <@${w.userId}>`).join("\n");
         await announceNew(g, `🎉 New winner${won.length > 1 ? "s" : ""} for **${g.title}**${previous ? ` (<@${previous}> did not claim)` : ""}:\n${lines}\nPress **Claim prize** on the winners message above within ${g.claim_hours} hours.`, { users: won.map(w => w.userId) });
+        for (const w of won) await nudgeWinner(g, w, 0);
     }
 
     // ---------- cancel ----------
@@ -476,12 +492,18 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         db.releaseKey(k.id);
         if (k.redraws + 1 >= MAX_REDRAWS) {
             await refresh(g.id);
+            await dmHost(g, hostNote(g, `<@${previous}> never claimed **${k.label}**, and it has now been drawn ${MAX_REDRAWS} times without a taker. I've stopped redrawing. The key is still held safely: use the reroll command or the dashboard to pick again, or cancel to get it back.`));
             return;
         }
         const winner = await drawOne(g, k.id, holders(g.id));
-        if (!winner) { await refresh(g.id); return; }
+        if (!winner) {
+            await refresh(g.id);
+            await dmHost(g, hostNote(g, `<@${previous}> never claimed **${k.label}** and nobody else is left to draw. The key is still held safely: cancel the giveaway to get it back, or reroll if more people enter.`));
+            return;
+        }
         db.assignKey(k.id, winner, claimDeadline(g));
         await postReplacement(g, [{ keyId: k.id, label: k.label, userId: winner }], previous);
+        await dmHost(g, hostNote(g, `<@${previous}> never claimed **${k.label}** within ${g.claim_hours} hours, so I drew a new winner: <@${winner}>. They have ${g.claim_hours} hours.`));
     }
 
     async function sendPrompt(k) {
@@ -496,9 +518,41 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         db.setConfirmAt(k.id, k.prompts === 0 ? now() + CONFIRM_REMINDER_MS : null, k.prompts + 1);
     }
 
+    const HOUR = 3600_000;
+    /** Which reminder a waiting prize is due: 1 once half the window is gone (windows of 6 hours or more), 2 in the last quarter (at most the last 6 hours). */
+    function reminderDue(k) {
+        const total = (k.deadline ?? 0) - (k.assigned_at ?? 0), left = (k.deadline ?? 0) - now();
+        if (!(total > 0) || left <= 0) return 0;
+        if (k.remind_stage < 2 && left <= Math.min(6 * HOUR, total / 4)) return 2;
+        if (k.remind_stage < 1 && total >= 6 * HOUR && left <= total / 2) return 1;
+        return 0;
+    }
+
+    async function remindIfDue(k) {
+        const stage = reminderDue(k);
+        if (!stage) return false;
+        const g = db.getGiveaway(k.giveaway_id);
+        if (!g || g.status === "cancelled") return false;
+        db.setRemindStage(k.id, stage);
+        await nudgeWinner(g, k, stage);
+        if (stage === 2) await dmHost(g, hostNote(g, `<@${k.winner_id}> still hasn't claimed **${k.label}** and has ${leftText(k.deadline - now())} left. I've sent them a last reminder. If they don't claim in time I'll draw someone else and tell you.`));
+        return true;
+    }
+
+    /** The host (or the owner) nudges a slow winner right now. */
+    async function remind(keyId) {
+        const k = db.getKey(Number(keyId));
+        if (!k || k.status !== "assigned" || !k.winner_id) throw new UserError("That prize isn't waiting on a winner.");
+        const g = must(k.giveaway_id);
+        const left = (k.deadline ?? now()) - now(), total = (k.deadline ?? 0) - (k.assigned_at ?? 0);
+        const ok = await nudgeWinner(g, k, total > 0 && left <= total / 4 ? 2 : 1);
+        if (!ok) throw new UserError("I couldn't reach that winner by DM or in the giveaway channel.");
+        return { winner: k.winner_id, left };
+    }
+
     /** Run about once a minute. */
     async function tick() {
-        const done = { ended: 0, forfeited: 0, prompts: 0, purged: 0, started: 0 };
+        const done = { ended: 0, forfeited: 0, prompts: 0, purged: 0, started: 0, reminded: 0 };
         for (const g of db.dueScheduled(now())) {
             try { if (await launch(g.id)) done.started++; } catch (e) { log(`giveaway start failed: ${e?.name ?? "error"}`); }
         }
@@ -508,6 +562,9 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         for (const k of db.expiredClaims(now())) {
             try { await forfeit(k); done.forfeited++; } catch (e) { log(`forfeit failed: ${e?.name ?? "error"}`); }
         }
+        for (const k of db.pendingClaims({ limit: 500 })) {
+            try { if (await remindIfDue(k)) done.reminded++; } catch (e) { log(`claim reminder failed: ${e?.name ?? "error"}`); }
+        }
         for (const k of db.duePrompts(now())) {
             try { await sendPrompt(k); done.prompts++; } catch (e) { log(`prompt failed: ${e?.name ?? "error"}`); }
         }
@@ -515,5 +572,5 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         return done;
     }
 
-    return { spread, spreadStatus, create, launch, updateRules, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, tick, refresh };
+    return { spread, spreadStatus, create, launch, updateRules, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, remind, tick, refresh };
 }

@@ -363,7 +363,7 @@ export const ADDED_LATER = new Set(["requests", "honeypot", "codes", "bundles", 
 const INDIE_INTRO = { content: "Every Wednesday at noon Eastern one hand-picked indie game lands here, with the studio's pitch and a link to its page. Pick the **Indie pings** role in the roles channel to get pinged. Servers share the same weekly pick." };
 const INDIE_CHAT_INTRO = { content: "Got a hidden gem? Post it here. Indie developers can list their own game on the bot's indie page, get a verified studio badge and ask for a spot in the weekly spotlight. Pick the **Indie dev** role in the roles channel if you make games." };
 const SQUAD_INTRO = { content: "When two or more members who turned on `/server nowplaying join:true` are in the same game, a squad-up card is posted here. Pick the **Squad pings** role in the roles channel to get pinged. Check who is playing now with `/server nowplaying`." };
-const PLAYTEST_INTRO = { content: "Free playtests, betas and demos are posted here once each, found from Steam announcements, Alpha Beta Gamer, GamerPower and itch.io, and never twice. Pick the **Playtest pings** role in the roles channel to get pinged. Managers can change the channel or the role on the dashboard." };
+const PLAYTEST_INTRO = { content: "Free playtests, betas and demos are posted here once each, found from Steam announcements, Alpha Beta Gamer, Playtester, GamerPower and itch.io, and never twice. Pick the **Playtest pings** role in the roles channel to get pinged. Managers can change the channel or the role on the dashboard." };
 const channelKeys = () => TEMPLATE.categories.flatMap(c => [...(c.channels ?? []), ...(c.voice ?? [])].map(x => x.key));
 
 /** What a second run does: create only the template channels this server has never been given. */

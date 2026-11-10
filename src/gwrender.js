@@ -225,3 +225,28 @@ export function leftoverMessage(g, rows, why) {
 
 export const hostNote = (g, text) => ({ embeds: [{ color: COLOR, title: g.title, description: text.slice(0, 3900), url: safeUrl(messageLink(g)) }] });
 export const redColor = RED;
+
+/** "Time left" for a claim, in words people use: "about 20 hours", "under an hour". */
+export function leftText(ms) {
+    const h = Math.max(0, ms) / 3600_000;
+    if (h < 1) return "under an hour";
+    if (h < 36) return `about ${Math.round(h)} hour${Math.round(h) === 1 ? "" : "s"}`;
+    const d = Math.round(h / 24); return `about ${d} days`;
+}
+
+/**
+ * The private message a winner gets the moment they are drawn, and the nudges after it. `stage` 0 is the news, 1 the halfway reminder,
+ * 2 the last call. The Claim prize button works right here in the DM.
+ */
+export function winnerNudge(g, key, { stage = 0, left = 0 } = {}) {
+    const title = stage === 0 ? `🏆 You won: ${key.label}` : stage === 1 ? `⏰ Don't forget your prize: ${key.label}` : `⏳ Last call: ${key.label}`;
+    const body = stage === 0
+        ? `You won **${key.label}** in **${g.title}**! Press **Claim prize** below to get it. You have ${leftText(left)} before it goes to someone else.`
+        : stage === 1
+            ? `You haven't claimed **${key.label}** from **${g.title}** yet. Press **Claim prize** below. You have ${leftText(left)} left.`
+            : `**${key.label}** from **${g.title}** goes back to the draw in ${leftText(left)}. Press **Claim prize** below now so you don't lose it.`;
+    return {
+        embeds: [{ color: stage === 2 ? 0xf59e0b : GREEN, title, description: body, url: safeUrl(messageLink(g)), footer: { text: "Only you can claim this prize." } }],
+        components: [{ type: 1, components: [{ type: 2, style: 3, label: "Claim prize", emoji: { name: "🎁" }, custom_id: `${ID.claim}:${g.id}` }] }]
+    };
+}

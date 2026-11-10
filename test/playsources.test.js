@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { openDb } from "../src/db.js";
-import { cleanGame, kindFromText, kindGroup, parseGamerPower, parseItch, parseSteamDemos, dedupeItems, gameKeys, createPlaytestSources } from "../src/playsources.js";
+import { cleanGame, kindFromText, kindGroup, parseGamerPower, parseItch, parsePlaytester, parseSteamDemos, dedupeItems, gameKeys, createPlaytestSources } from "../src/playsources.js";
 import { runPlaytests, refreshPlaytestChannel, abgEmbed } from "../src/playtests.js";
 import { playtestBoard } from "../src/playboard.js";
 
@@ -57,19 +57,20 @@ test("sources: one failing source only costs itself, the lists are cached, and a
         if (k === "www.gamerpower.com") return { ok: true, json: async () => JSON.parse(F("gamerpower-beta.json")) };
         if (k === "itch.io") return { ok: true, text: async () => F("itch-playtest.xml") };
         if (k === "store.steampowered.com") return { ok: true, json: async () => JSON.parse(F("steam-demos.json")) };
+        if (k === "playtester.io") return { ok: true, text: async () => F("playtester.xml") };
         return { ok: true, text: async () => F("abg-feed.xml") };
     };
     const src = createPlaytestSources({ fetchImpl, now: () => t });
     const all = await src.latest();
     const by = s => all.filter(x => x.source === s).length;
-    assert.ok(by("abg") && by("gamerpower") && by("itch") && by("steamdemo"), "every source is in the merged list");
+    assert.ok(by("abg") && by("gamerpower") && by("itch") && by("steamdemo") && by("playtester"), "every source is in the merged list");
     assert.ok(all.every((x, i) => i === 0 || all[i - 1].date >= x.date), "newest first");
     await src.latest(); assert.equal(calls["itch.io"], 4, "remembered: one request per itch.io tag, once");
     t = 31 * 60_000; down.add("itch.io"); down.add("www.gamerpower.com");
     const partial = await src.latest();
     assert.ok(by("itch") && partial.some(x => x.source === "itch"), "the last good copy still serves while a site is down");
     const fresh = createPlaytestSources({ fetchImpl, now: () => t });
-    down.add("store.steampowered.com"); down.add("www.alphabetagamer.com");
+    down.add("store.steampowered.com"); down.add("www.alphabetagamer.com"); down.add("playtester.io");
     await assert.rejects(fresh.latest());
 });
 
@@ -148,4 +149,16 @@ test("itch.io: beta, alpha and demo tags are read too, and demos only count for 
     assert.deepEqual(urls.filter(u => u.includes("itch.io")).map(u => /tag-(\w+)\.xml/.exec(u)[1]).sort(), ["alpha", "beta", "demo", "playtest"]);
     assert.ok(items.some(x => x.source === "itch" && x.kind === "playtest"));
     assert.ok(items.filter(x => x.kind === "demo").every(x => x.wishlistOnly === true));
+});
+
+test("Playtester: its feed is read into the shared shape, and demos only count for wishlisted games", () => {
+    const items = parsePlaytester(F("playtester.xml"));
+    assert.equal(items.length, 12);
+    const zoom = items.find(x => x.game.startsWith("I got the ZOOMIES"));
+    assert.equal(zoom.kind, "beta"); assert.equal(zoom.sourceName, "Playtester"); assert.equal(zoom.url, "https://playtester.io/i-got-the-zoomies");
+    assert.match(zoom.image, /^https:\/\/cdn\.playtester\.io\/thumbnails\//); assert.ok(!zoom.wishlistOnly);
+    const demo = items.find(x => x.game === "Space Girl");
+    assert.equal(demo.kind, "demo"); assert.equal(demo.wishlistOnly, true); assert.equal(demo.label, "Demo");
+    assert.ok(items.every((x, i) => i === 0 || items[i - 1].date >= x.date), "newest first");
+    assert.deepEqual(parsePlaytester("nope"), []);
 });

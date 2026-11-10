@@ -784,6 +784,16 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         return g;
     }
     const needGiveaways = () => { if (!giveaways) throw new HttpError(503, "Giveaways are not set up on this bot. The owner needs to set KEY_ENCRYPTION_SECRET."); };
+    /** Prizes still waiting for their winner to press Claim, with the winner's name and time left, for the dashboard and the admin panel. */
+    const pendingClaimsFor = async (guildId = null) => {
+        const guildNames = new Map((guildList?.() ?? []).map(g => [g.id, g.name]));
+        const rows = db.pendingClaims({ guildId, limit: 100 });
+        return await Promise.all(rows.map(async k => {
+            const winner = db.getMeta?.("staffname:" + k.winner_id) || await remember("uname:" + k.winner_id, 6 * 3_600_000, async () => (await rest?.userName?.(k.winner_id)) ?? null).catch(() => null);
+            return { key_id: k.id, giveaway_id: k.giveaway_id, title: k.title, prize: k.label, winner_id: k.winner_id, winner: winner ? String(winner).slice(0, 60) : null, server: guildNames.get(k.guild_id) ?? null,
+                global: Boolean(k.is_global), deadline: k.deadline, left_ms: Math.max(0, (k.deadline ?? now()) - now()), reminders: k.remind_stage, redraws: k.redraws };
+        }));
+    };
     function giveawayOf(g, id) {
         const x = db.getGiveaway(Number(id));
         if (!x || x.guild_id !== g.id) throw new HttpError(404, "I can't find that giveaway.");
@@ -1360,6 +1370,13 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (gifts.length) add("warn", `${gifts.length} reported gift mark${gifts.length === 1 ? "" : "s"}`, "#/gifts");
             const posts = db.listReports?.() ?? [];
             if (posts.length) add("warn", `${posts.length} reported post${posts.length === 1 ? "" : "s"}`, "#/social");
+            try {
+                const waiting = db.pendingClaims({ limit: 200 });
+                if (waiting.length) {
+                    const soon = waiting.filter(k => (k.deadline ?? Infinity) - now() < 6 * 3600_000);
+                    add(soon.length ? "warn" : "info", `${waiting.length} giveaway prize${waiting.length === 1 ? " is" : "s are"} waiting for the winner to claim${soon.length ? `, ${soon.length} with under 6 hours left` : ""}`, "#/giveaway");
+                }
+            } catch { /* the giveaway tables may not exist on an old copy */ }
             const failing = ops ? Object.entries(ops.snapshot()?.jobs ?? {}).filter(([, j]) => j.lastError) : [];
             if (failing.length) add("bad", `${failing.length} background job${failing.length === 1 ? " is" : "s are"} failing: ${failing.slice(0, 3).map(([n]) => n).join(", ")}`, "#/system");
             try { const st = storage ? await storage() : null; if (st?.volume?.pct >= 80) add(st.volume.pct >= 90 ? "bad" : "warn", `The disk is ${st.volume.pct}% full`, "#/system"); } catch { /* skip */ }
@@ -3476,7 +3493,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 const keys = db.listKeys(x.id);
                 return { id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length };
             });
-            return { giveaways: rows, settings: db.getGiveawaySettings(g.id), max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
+            return { giveaways: rows, pending: await pendingClaimsFor(g.id), settings: db.getGiveawaySettings(g.id), max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
 
         "GET /api/giveaways/templates": async (req, _b, url) => {
@@ -3547,6 +3564,13 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (body.bonus_entries !== undefined) patch.bonus_entries = Number(body.bonus_entries);
             if (body.steam_verified !== undefined) patch.require_steam = body.steam_verified === true;
             await giveaways.updateRules(x.id, patch);
+            return { ok: true };
+        },
+        "POST /api/giveaways/remind": async (req, body) => {
+            const g = managerGuild(session(req), body.guild_id); needGiveaways();
+            const k = db.getKey(Number(body.key_id)), x = k && db.getGiveaway(k.giveaway_id);
+            if (!x || x.guild_id !== g.id) throw new HttpError(404, "That prize isn't in this server.");
+            try { await giveaways.remind(k.id); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
             return { ok: true };
         },
         "POST /api/giveaways/replace": async (req, body) => {
@@ -4471,7 +4495,14 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const dest = db.giveawayDestinations().map(d => ({ id: d.guild_id, name: names.get(d.guild_id) ?? d.guild_id, channel_id: d.channel_id }));
             const list = db.listGlobalGiveaways(15).map(g => ({ id: g.id, title: g.title, host: g.host_name ?? null, steps: g.steps ? JSON.parse(g.steps).length : 0, status: g.status, ends_at: g.ends_at, entries: db.countEntries(g.id), prizes: db.listKeys(g.id).length,
                 channels: db.listMirrors(g.id).filter(m => m.kind === "channel").length + 1, dms: db.listMirrors(g.id).filter(m => m.kind === "dm").length, spread: giveaways?.spreadStatus(g.id) ?? null }));
-            return { available: Boolean(giveaways), destinations: dest, dm: db.broadcastTargets().users.length, list, ownerName: config.creator?.name ?? "You", stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
+            return { available: Boolean(giveaways), pending: await pendingClaimsFor(null), destinations: dest, dm: db.broadcastTargets().users.length, list, ownerName: config.creator?.name ?? "You", stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
+        },
+        "POST /api/admin/giveaways/remind": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!giveaways) throw new HttpError(503, "Giveaways are not set up on this bot.");
+            try { await giveaways.remind(Number(body.key_id)); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+            return { ok: true };
         },
         "POST /api/admin/giveaways/create": async (req, body) => {
             const s = session(req);

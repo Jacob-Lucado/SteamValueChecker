@@ -489,7 +489,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                 db.updateUser(user.discord_id, { playtest: mode });
                 return eph(i, mode === 0 ? "Playtest and demo alerts are off." : mode === 1
                     ? "You will be told when a game on your wishlist (that you don't own) has a playtest, demo, beta or free weekend. It reads the game's Steam announcements and sites that list playtests (Alpha Beta Gamer, GamerPower, itch.io, Steam's new demos). Steam announcements need the game imported from Steam (`/me wishlist import`). Your first check is quiet."
-                    : "You will be told about every free playtest, beta and demo the bot finds, from Steam announcements for your wishlist games and from Alpha Beta Gamer, GamerPower and itch.io. Steam's new demos only count for games on your wishlist. Expect a few a day. Your first check is quiet, and `/alerts quiethours` still applies.");
+                    : "You will be told about every free playtest, beta and demo the bot finds, from Steam announcements for your wishlist games and from Alpha Beta Gamer, Playtester, GamerPower and itch.io. Steam's new demos only count for games on your wishlist. Expect a few a day. Your first check is quiet, and `/alerts quiethours` still applies.");
             }
             case "achievements": {
                 const on = i.options.getBoolean("enabled", true);

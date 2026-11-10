@@ -3,7 +3,7 @@
 //   { id, source, sourceName, game, type, kind, label?, url, date, summary, image, appid?, wishlistOnly? }
 // `kind` is one of signup, playtest, demo, alpha, beta (the same words the Alpha Beta Gamer reader uses).
 //
-// Sources: Alpha Beta Gamer (abgfeed.js), GamerPower's beta and playtest key listings, itch.io's playtest, beta, alpha and demo tags, and Steam's own
+// Sources: Alpha Beta Gamer (abgfeed.js), Playtester's feed, GamerPower's beta and playtest key listings, itch.io's playtest, beta, alpha and demo tags, and Steam's own
 // list of new demos. Steam gets dozens of demos a day, so those only count for games someone has on a wishlist (`wishlistOnly`).
 // Looked at and left out: BetaBound (gadgets and apps, not games), GamingOnLinux (about one relevant article in thirty), Reddit and
 // IndieDB (both refuse bots).
@@ -93,9 +93,29 @@ export function parseSteamDemos(json) {
     return out.sort((a, b) => b.date - a.date);
 }
 
+// ---------- Playtester: https://playtester.io/rss.xml ----------
+// A site that collects indie alphas, betas, playtests and demos across Steam and the consoles. Titles read "Game - Beta" or "Game - Demo".
+export const PLAYTESTER_URL = "https://playtester.io/rss.xml";
+export function parsePlaytester(xml) {
+    const out = [];
+    for (const m of String(xml ?? "").matchAll(/<item>([\s\S]*?)<\/item>/gi)) {
+        const it = m[1];
+        const raw = decodeEntities(tag(it, "title")).replace(/\s+/g, " ").trim();
+        const url = safeUrl(tag(it, "link").trim()), date = Date.parse(tag(it, "pubDate"));
+        if (!raw || !url || !Number.isFinite(date)) continue;
+        const cut = raw.lastIndexOf(" - "), game = (cut > 0 ? raw.slice(0, cut) : raw).trim().slice(0, 100), type = cut > 0 ? raw.slice(cut + 3).trim() : "";
+        const kind = kindFromText(type || raw);
+        const image = safeUrl(/<media:content[^>]+url="(https:\/\/[^"]+)"/i.exec(it)?.[1] ?? "");
+        const summary = decodeEntities(tag(it, "description").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 300);
+        // Like Steam's and itch.io's, the demos come by the dozen, so they only count for games someone has on a wishlist.
+        out.push({ id: `pt:${tag(it, "guid").trim() || url}`, source: "playtester", sourceName: "Playtester", game, type, kind, url, date, summary, image, ...(kind === "demo" ? { wishlistOnly: true, label: "Demo" } : {}) });
+    }
+    return out.sort((a, b) => b.date - a.date);
+}
+
 // ---------- the merge, and the filter against duplicates ----------
 /** Lower number wins when two sources list the same thing. Alpha Beta Gamer writes its own excerpt for each post, so it comes first. */
-const PRIORITY = { abg: 0, gamerpower: 1, itch: 2, steamdemo: 3 };
+const PRIORITY = { abg: 0, gamerpower: 1, playtester: 2, itch: 3, steamdemo: 4 };
 const SAME_WINDOW = 7 * DAY;
 
 /**
@@ -155,6 +175,7 @@ export function createPlaytestSources({ fetchImpl = globalThis.fetch, now = () =
             if (lists.every(r => r.status === "rejected")) throw lists[0].reason; // one tag failing only costs that tag
             return lists.flatMap(r => (r.status === "fulfilled" ? r.value : []));
         } }),
+        cached({ name: "Playtester", ttlMs, now, load: async () => parsePlaytester(await get(PLAYTESTER_URL, "text")) }),
         cached({ name: "Steam demos", ttlMs, now, load: async () => parseSteamDemos(await get(STEAM_DEMOS_URL, "json")) })
     ];
     async function latest() {

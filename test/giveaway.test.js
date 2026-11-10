@@ -522,3 +522,46 @@ test("roles: updateRules changes a live giveaway and refuses ended ones", async 
     t.advance(3 * HOUR); await t.svc.tick();
     await assert.rejects(() => t.svc.updateRules(id, { require_steam: true }));
 });
+
+test("winners are told by DM with a Claim button, reminded halfway and at the end, and the host hears about each step", async () => {
+    const t = rig();
+    const { id } = await t.make({ keys: [{ label: "Hades", key: "K1" }], claim_hours: 24 });
+    await t.enterAll(id, ["a", "b", "c", "d", "e"]);
+    t.advance(3 * HOUR);
+    await t.svc.tick();
+    const win = t.db.listKeys(id)[0].winner_id;
+    const toWin = () => t.dms.filter(d => d.userId === win);
+    assert.equal(toWin().length, 1, "told the moment they were drawn");
+    assert.match(toWin()[0].payload.embeds[0].title, /You won: Hades/);
+    assert.match(toWin()[0].payload.components[0].components[0].custom_id, /^gw_claim:/);
+
+    t.advance(13 * HOUR); // past half of 24 hours
+    assert.equal((await t.svc.tick()).reminded, 1);
+    assert.match(toWin().at(-1).payload.embeds[0].title, /Don't forget/);
+    assert.equal((await t.svc.tick()).reminded, 0, "only once per stage");
+
+    t.advance(8 * HOUR); // under 6 hours left
+    assert.equal((await t.svc.tick()).reminded, 1);
+    assert.match(toWin().at(-1).payload.embeds[0].title, /Last call/);
+    assert.ok(t.dms.some(d => d.userId === "host" && /still hasn't claimed/.test(d.payload.embeds[0].description)), "the host is told it is getting close");
+
+    t.advance(6 * HOUR); // the window is over
+    assert.equal((await t.svc.tick()).forfeited, 1);
+    const hostMsgs = t.dms.filter(d => d.userId === "host").map(d => d.payload.embeds[0].description);
+    assert.ok(hostMsgs.some(m => m.includes(`<@${win}> never claimed`) && /drew a new winner/.test(m)), "the host is told who was drawn instead");
+    const next = t.db.listKeys(id)[0].winner_id;
+    assert.notEqual(next, win);
+    assert.ok(t.dms.some(d => d.userId === next && /You won: Hades/.test(d.payload.embeds[0].title)), "the new winner is told too");
+});
+
+test("a host or the owner can nudge a slow winner right now", async () => {
+    const t = rig();
+    const { id } = await t.make({ keys: [{ label: "Hades", key: "K1" }], claim_hours: 24 });
+    await t.enterAll(id, ["a", "b", "c"]);
+    t.advance(3 * HOUR); await t.svc.tick();
+    const k = t.db.listKeys(id)[0], before = t.dms.length;
+    const r = await t.svc.remind(k.id);
+    assert.equal(r.winner, k.winner_id); assert.equal(t.dms.length, before + 1);
+    await t.svc.confirm; // sanity: the API exists next to remind
+    await assert.rejects(() => t.svc.remind(999), /isn't waiting/);
+});

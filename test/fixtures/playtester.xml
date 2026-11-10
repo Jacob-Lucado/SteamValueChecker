@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" 
+  xmlns:media="http://search.yahoo.com/mrss/" 
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Playtester</title>
+    <link>https://playtester.io</link>
+    <description>Discover alphas, betas, playtests, and demos for upcoming games</description>
+    <language>en</language>
+    <lastBuildDate>Tue, 10 Nov 2026 18:14:04 GMT</lastBuildDate>
+    <atom:link href="https://playtester.io/rss.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Space Girl - Demo</title>
+      <link>https://playtester.io/space-girl</link>
+      <description>A fast-paced movement shooter inspired by classic boomer shooters. Dash, master an arsenal of powerful weapons, uncover hidden secrets, and blast through hordes of enemies in a fast sci-fi adventure.</description>
+      <content:encoded><![CDATA[<p>A fast-paced movement shooter inspired by classic boomer shooters. Dash, master an arsenal of powerful weapons, uncover hidden secrets, and blast through hordes of enemies in a fast sci-fi adventure.</p><p><strong>Singleplayer, Action, Shooter, FPS, First-Person, Sci-fi, Female Protagonist</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/space-girl</guid>
+      <pubDate>Tue, 10 Nov 2026 18:14:04 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>Action</category>
+      <category>Shooter</category>
+      <category>FPS</category>
+      <category>First-Person</category>
+      <category>Sci-fi</category>
+      <category>Female Protagonist</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/space-girl.webp" type="image/webp" length="160708" />
+      <media:content url="https://cdn.playtester.io/thumbnails/space-girl.webp" medium="image" />
+    </item>
+    <item>
+      <title>I got the ZOOMIES!!!!!!!!!!!!!!!! - Beta</title>
+      <link>https://playtester.io/i-got-the-zoomies</link>
+      <description>CLAIM YOUR LEGIT PHONE!!!!! I got the ZOOMIES is a visually chaotic incremental game where your only goal is to zoom in... indefinitely!</description>
+      <content:encoded><![CDATA[<p>CLAIM YOUR LEGIT PHONE!!!!! I got the ZOOMIES is a visually chaotic incremental game where your only goal is to zoom in... indefinitely!</p><p><strong>Singleplayer, Simulation, Strategy, Clicker, Idler, Resource Management, Economy, Capitalism, Arcade, Automation, Funny, Retro</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/i-got-the-zoomies</guid>
+      <pubDate>Tue, 10 Nov 2026 18:02:34 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>Simulation</category>
+      <category>Strategy</category>
+      <category>Clicker</category>
+      <category>Idler</category>
+      <category>Resource Management</category>
+      <category>Economy</category>
+      <category>Capitalism</category>
+      <category>Arcade</category>
+      <category>Automation</category>
+      <category>Funny</category>
+      <category>Retro</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/i-got-the-zoomies.webp" type="image/webp" length="322714" />
+      <media:content url="https://cdn.playtester.io/thumbnails/i-got-the-zoomies.webp" medium="image" />
+    </item>
+    <item>
+      <title>Regret - Demo</title>
+      <link>https://playtester.io/regret</link>
+      <description>Regret is a stop-motion, top-down action roguelike where inventions from across history become your weapons. Battle through randomly generated dungeons in an entirely handmade world, craft powerful item combinations, and travel through time alone or with a friend in local co-op.</description>
+      <content:encoded><![CDATA[<p>Regret is a stop-motion, top-down action roguelike where inventions from across history become your weapons. Battle through randomly generated dungeons in an entirely handmade world, craft powerful item combinations, and travel through time alone or with a friend in local co-op.</p><p><strong>Multiplayer, Action, Adventure, Roguelike, Dungeon Crawler, Twin Stick Shooter, Crafting, Comedy</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/regret</guid>
+      <pubDate>Tue, 10 Nov 2026 17:52:53 GMT</pubDate>
+      <category>Multiplayer</category>
+      <category>Action</category>
+      <category>Adventure</category>
+      <category>Roguelike</category>
+      <category>Dungeon Crawler</category>
+      <category>Twin Stick Shooter</category>
+      <category>Crafting</category>
+      <category>Comedy</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/regret.webp" type="image/webp" length="335831" />
+      <media:content url="https://cdn.playtester.io/thumbnails/regret.webp" medium="image" />
+    </item>
+    <item>
+      <title>Adopt Me Please - Demo</title>
+      <link>https://playtester.io/adopt-me-please</link>
+      <description>Welcome to the Softlight Shelter. The animals are cute. The coffee is warm. Your job: vet the strays and find them a home. But keep your eyes open. Mimics are hiding in perfect pet disguises with Innocent eyes, waiting to get inside. Are you sheltering a pet... or a Mimic?</description>
+      <content:encoded><![CDATA[<p>Welcome to the Softlight Shelter. The animals are cute. The coffee is warm. Your job: vet the strays and find them a home. But keep your eyes open. Mimics are hiding in perfect pet disguises with Innocent eyes, waiting to get inside. Are you sheltering a pet... or a Mimic?</p><p><strong>Singleplayer, Simulation, Psychological Horror, Horror, Choices Matter, First-Person, Cozy, Multiple Endings, Story, Adventure, Atmospheric, Survival Horror</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/adopt-me-please</guid>
+      <pubDate>Tue, 10 Nov 2026 17:40:18 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>Simulation</category>
+      <category>Psychological Horror</category>
+      <category>Horror</category>
+      <category>Choices Matter</category>
+      <category>First-Person</category>
+      <category>Cozy</category>
+      <category>Multiple Endings</category>
+      <category>Story</category>
+      <category>Adventure</category>
+      <category>Atmospheric</category>
+      <category>Survival Horror</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/adopt-me-please.webp" type="image/webp" length="297145" />
+      <media:content url="https://cdn.playtester.io/thumbnails/adopt-me-please.webp" medium="image" />
+    </item>
+    <item>
+      <title>Moochy - Demo</title>
+      <link>https://playtester.io/moochy</link>
+      <description>The friend you co-signed for is standing at a slot machine. Pick up the hammer. A co-op first-person shooter for 1 to 4 players where health is money. Two friendships lost in testing. Shibal.</description>
+      <content:encoded><![CDATA[<p>The friend you co-signed for is standing at a slot machine. Pick up the hammer. A co-op first-person shooter for 1 to 4 players where health is money. Two friendships lost in testing. Shibal.</p><p><strong>Multiplayer, Online Co-op, Action, Roguelike, Shooter, FPS, Funny, Co-op, Cute, First-Person, Comedy, Gambling</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/moochy</guid>
+      <pubDate>Mon, 09 Nov 2026 23:09:57 GMT</pubDate>
+      <category>Multiplayer</category>
+      <category>Online Co-op</category>
+      <category>Action</category>
+      <category>Roguelike</category>
+      <category>Shooter</category>
+      <category>FPS</category>
+      <category>Funny</category>
+      <category>Co-op</category>
+      <category>Cute</category>
+      <category>First-Person</category>
+      <category>Comedy</category>
+      <category>Gambling</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/moochy.webp" type="image/webp" length="288810" />
+      <media:content url="https://cdn.playtester.io/thumbnails/moochy.webp" medium="image" />
+    </item>
+    <item>
+      <title>PLINKDOWN - Demo</title>
+      <link>https://playtester.io/plinkdown</link>
+      <description>It’s 1994 and Channel 9 is still on the air. Bounce orbs through peg boards, meet tonight’s quota, and spend what you earn at the Commissary between broadcasts. Every run goes deeper into a late-night show that should have stopped airing years ago.</description>
+      <content:encoded><![CDATA[<p>It’s 1994 and Channel 9 is still on the air. Bounce orbs through peg boards, meet tonight’s quota, and spend what you earn at the Commissary between broadcasts. Every run goes deeper into a late-night show that should have stopped airing years ago.</p><p><strong>Singleplayer, Roguelike, Horror, Deckbuilder, Psychological Horror, Puzzle, Arcade, Strategy, Dark Humor, Narrative, Dark, Atmospheric</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/plinkdown</guid>
+      <pubDate>Mon, 09 Nov 2026 22:59:18 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>Roguelike</category>
+      <category>Horror</category>
+      <category>Deckbuilder</category>
+      <category>Psychological Horror</category>
+      <category>Puzzle</category>
+      <category>Arcade</category>
+      <category>Strategy</category>
+      <category>Dark Humor</category>
+      <category>Narrative</category>
+      <category>Dark</category>
+      <category>Atmospheric</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/plinkdown.webp" type="image/webp" length="231278" />
+      <media:content url="https://cdn.playtester.io/thumbnails/plinkdown.webp" medium="image" />
+    </item>
+    <item>
+      <title>A Tale of Titans - Beta</title>
+      <link>https://playtester.io/a-tale-of-titans</link>
+      <description>An online co-op RPG where your build allows you to explore a dangerous, shared world. Learn skills from the foes you&apos;ve vanquished and stop the onslaught of the Titans.</description>
+      <content:encoded><![CDATA[<p>An online co-op RPG where your build allows you to explore a dangerous, shared world. Learn skills from the foes you&apos;ve vanquished and stop the onslaught of the Titans.</p><p><strong>Multiplayer, MMO, PvP, Online Co-op, Action, Adventure, RPG, Exploration, PvE, ARPG, Dark Fantasy, Magic, Medieval, Atmospheric</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/a-tale-of-titans</guid>
+      <pubDate>Mon, 09 Nov 2026 22:55:08 GMT</pubDate>
+      <category>Multiplayer</category>
+      <category>MMO</category>
+      <category>PvP</category>
+      <category>Online Co-op</category>
+      <category>Action</category>
+      <category>Adventure</category>
+      <category>RPG</category>
+      <category>Exploration</category>
+      <category>PvE</category>
+      <category>ARPG</category>
+      <category>Dark Fantasy</category>
+      <category>Magic</category>
+      <category>Medieval</category>
+      <category>Atmospheric</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/a-tale-of-titans.webp" type="image/webp" length="93612" />
+      <media:content url="https://cdn.playtester.io/thumbnails/a-tale-of-titans.webp" medium="image" />
+    </item>
+    <item>
+      <title>Heroes Never Die - Beta</title>
+      <link>https://playtester.io/heroes-never-die</link>
+      <description>Choose your hero, rally your troops, and carve a path through hordes of foul creatures in a fast-paced fusion of strategy and survivor gameplay. Grow your army as you march, change your tactics on the fly, and lead soldiers, goblins, minotaurs and more into glorious, chaotic battle.</description>
+      <content:encoded><![CDATA[<p>Choose your hero, rally your troops, and carve a path through hordes of foul creatures in a fast-paced fusion of strategy and survivor gameplay. Grow your army as you march, change your tactics on the fly, and lead soldiers, goblins, minotaurs and more into glorious, chaotic battle.</p><p><strong>Singleplayer, Action, Strategy, Roguelike, Bullet Hell, Base Building, Fantasy, Medieval</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/heroes-never-die</guid>
+      <pubDate>Mon, 09 Nov 2026 22:43:07 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>Action</category>
+      <category>Strategy</category>
+      <category>Roguelike</category>
+      <category>Bullet Hell</category>
+      <category>Base Building</category>
+      <category>Fantasy</category>
+      <category>Medieval</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/heroes-never-die.webp" type="image/webp" length="459107" />
+      <media:content url="https://cdn.playtester.io/thumbnails/heroes-never-die.webp" medium="image" />
+    </item>
+    <item>
+      <title>Guilded Fools - Beta</title>
+      <link>https://playtester.io/guilded-fools</link>
+      <description>Guilded Fools is a dark-comedy incremental game set inside a twisted stage play. Gather a cast of foolish heroes, customize their gear, channel eldritch powers and win over the crowd for a chance to escape.</description>
+      <content:encoded><![CDATA[<p>Guilded Fools is a dark-comedy incremental game set inside a twisted stage play. Gather a cast of foolish heroes, customize their gear, channel eldritch powers and win over the crowd for a chance to escape.</p><p><strong>Singleplayer, RPG, Strategy, Clicker, Idler, Resource Management, Management, Auto Battler, Dark, Dark Fantasy, Atmospheric</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/guilded-fools</guid>
+      <pubDate>Mon, 09 Nov 2026 22:30:33 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>RPG</category>
+      <category>Strategy</category>
+      <category>Clicker</category>
+      <category>Idler</category>
+      <category>Resource Management</category>
+      <category>Management</category>
+      <category>Auto Battler</category>
+      <category>Dark</category>
+      <category>Dark Fantasy</category>
+      <category>Atmospheric</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/guilded-fools.webp" type="image/webp" length="166167" />
+      <media:content url="https://cdn.playtester.io/thumbnails/guilded-fools.webp" medium="image" />
+    </item>
+    <item>
+      <title>Sigma Survivor - Demo</title>
+      <link>https://playtester.io/sigma-survivor</link>
+      <description>Sigma Survivor is a roguelike type game. Lead your hero and survive the whole round while enemies of every kind cross your path. Grab power-ups, take risks, play MINIGAMES, upgrade your character, and come back stronger with every run!</description>
+      <content:encoded><![CDATA[<p>Sigma Survivor is a roguelike type game. Lead your hero and survive the whole round while enemies of every kind cross your path. Grab power-ups, take risks, play MINIGAMES, upgrade your character, and come back stronger with every run!</p><p><strong>Multiplayer, PvP, Action, RPG, Roguelike, Bullet Heaven, Bullet Hell, Hack and Slash, ARPG, Retro, Arcade, Dark Fantasy</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/sigma-survivor</guid>
+      <pubDate>Mon, 09 Nov 2026 22:18:13 GMT</pubDate>
+      <category>Multiplayer</category>
+      <category>PvP</category>
+      <category>Action</category>
+      <category>RPG</category>
+      <category>Roguelike</category>
+      <category>Bullet Heaven</category>
+      <category>Bullet Hell</category>
+      <category>Hack and Slash</category>
+      <category>ARPG</category>
+      <category>Retro</category>
+      <category>Arcade</category>
+      <category>Dark Fantasy</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/sigma-survivor.webp" type="image/webp" length="209863" />
+      <media:content url="https://cdn.playtester.io/thumbnails/sigma-survivor.webp" medium="image" />
+    </item>
+    <item>
+      <title>Pony Island 2: Panda Circus - Beta</title>
+      <link>https://playtester.io/pony-island-2-panda-circus</link>
+      <description>Pony Island 2: Panda Circus is a phantasmagorical voyage through time, myth, divinity, and video games. Escape the lordly deities of the underworld with your soul, and your sanity, intact. This is not a game about ponies.</description>
+      <content:encoded><![CDATA[<p>Pony Island 2: Panda Circus is a phantasmagorical voyage through time, myth, divinity, and video games. Escape the lordly deities of the underworld with your soul, and your sanity, intact. This is not a game about ponies.</p><p><strong>Singleplayer, Adventure, Puzzle, Psychological Horror, First-Person, Horror, Atmospheric, Hacking, Dark, Inventory Management</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/pony-island-2-panda-circus</guid>
+      <pubDate>Mon, 09 Nov 2026 22:03:47 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>Adventure</category>
+      <category>Puzzle</category>
+      <category>Psychological Horror</category>
+      <category>First-Person</category>
+      <category>Horror</category>
+      <category>Atmospheric</category>
+      <category>Hacking</category>
+      <category>Dark</category>
+      <category>Inventory Management</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/pony-island-2-panda-circus.webp" type="image/webp" length="75151" />
+      <media:content url="https://cdn.playtester.io/thumbnails/pony-island-2-panda-circus.webp" medium="image" />
+    </item>
+    <item>
+      <title>Jackpot Dungeon - Beta</title>
+      <link>https://playtester.io/jackpot-dungeon</link>
+      <description>Gather your coins, come to Jackpot Dungeon and try to reach the bottom of the dungeon before you go broke! A slot-machine roguelike where gambling is your only weapon.</description>
+      <content:encoded><![CDATA[<p>Gather your coins, come to Jackpot Dungeon and try to reach the bottom of the dungeon before you go broke! A slot-machine roguelike where gambling is your only weapon.</p><p><strong>Singleplayer, Adventure, RPG, Strategy, Arcade, Roguelike, Dungeon Crawler, Turn-Based, Funny, Fantasy, Magic, Medieval</strong></p>]]></content:encoded>
+      <guid>https://playtester.io/jackpot-dungeon</guid>
+      <pubDate>Mon, 09 Nov 2026 21:51:33 GMT</pubDate>
+      <category>Singleplayer</category>
+      <category>Adventure</category>
+      <category>RPG</category>
+      <category>Strategy</category>
+      <category>Arcade</category>
+      <category>Roguelike</category>
+      <category>Dungeon Crawler</category>
+      <category>Turn-Based</category>
+      <category>Funny</category>
+      <category>Fantasy</category>
+      <category>Magic</category>
+      <category>Medieval</category>
+      <enclosure url="https://cdn.playtester.io/thumbnails/jackpot-dungeon.webp" type="image/webp" length="192667" />
+      <media:content url="https://cdn.playtester.io/thumbnails/jackpot-dungeon.webp" medium="image" />
+    </item>
+  </channel>
+</rss>
