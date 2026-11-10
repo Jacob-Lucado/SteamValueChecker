@@ -29,13 +29,13 @@ export function mdToHtml(md) {
     return out.join("\n");
 }
 
-const DOCS = { terms: { title: "Terms of Service", file: "TERMS.md" }, privacy: { title: "Privacy Policy", file: "PRIVACY.md" } };
+const DOCS = { terms: { title: "Terms of Service", file: "TERMS.md" }, privacy: { title: "Privacy Policy", file: "PRIVACY.md" }, licenses: { title: "Licenses", file: "LICENSES.md" } };
 
 export function legalPage(kind, origin) {
     const d = DOCS[kind]; if (!d) return null;
-    const body = mdToHtml(read(d.file).split("\n").filter(l => !/github\.com/i.test(l)).join("\n"));
+    const body = mdToHtml(read(d.file).split("\n").filter(l => kind === "licenses" || !/github\.com/i.test(l)).join("\n"));
     if (!body) return null;
-    const other = kind === "terms" ? ["privacy", "Privacy Policy"] : ["terms", "Terms of Service"];
+    const other = kind === "terms" ? ["privacy", "Privacy Policy"] : kind === "privacy" ? ["terms", "Terms of Service"] : ["terms", "Terms of Service"];
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -64,7 +64,7 @@ ${body}
 /** A self-contained, print-ready version of one document: the source for the PDF (scripts/legal-pdf.mjs). */
 export function legalPrintHtml(kind) {
     const d = DOCS[kind]; if (!d) return null;
-    const body = mdToHtml(read(d.file).split("\n").filter(l => !/github\.com/i.test(l)).join("\n"));
+    const body = mdToHtml(read(d.file).split("\n").filter(l => kind === "licenses" || !/github\.com/i.test(l)).join("\n"));
     if (!body) return null;
     return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${d.title} - Steam Value Checker</title>

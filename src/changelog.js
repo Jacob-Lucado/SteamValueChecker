@@ -1,12 +1,13 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
+        "**Buy links:** every Fortnite item has a Buy in the Fortnite shop button and a Copy link button, and the link opens Fortnite's shop with creator code LUCADO already applied.",
+        "**Treasure tab:** per-chest odds, the Treasure Hour boosts, and the weekly Treasure Hunters prizes, with this week highlighted.",
+        "**Licenses page:** credits for the services and data the site uses, trademark notes, and the license for every library it's built on. It's laid out like the terms and privacy pages, and linked from About and the footer." ] },
     { version: "2026.11.54", date: "2026-11-10", title: "Fortnite on the dashboard", items: [
         "**Fortnite page:** the item shop laid out the way the game shows it, with its sections, big and small tiles, rarity colors, V-Bucks prices, new, on sale and leaving soon badges, a countdown to the next shop, and a closer look at anything in it. You can search the shop and filter it by outfits, emotes, bundles, jam tracks and more.",
         "**Also there:** the latest Fortnite news, everything new in the latest update, the island map with its named places, and a search of every cosmetic that shows how often and when it was last in the shop. It's open to everyone, no sign-in needed.",
-        "**Creator code:** the Fortnite page shows creator code LUCADO with a copy button and checks that it's live.",
-        "**Emote previews:** emotes and other items that have a preview video show a Preview badge, and the closer look plays it right there. The ones without a video link to a YouTube search for it.",
-        "**Buy links:** every item has a Buy in the Fortnite shop button and a Copy link button, and the link opens Fortnite's shop with creator code LUCADO already applied.",
-        "**Treasure tab:** per-chest odds, the Treasure Hour boosts, and the weekly Treasure Hunters prizes, with this week highlighted." ] },
+        "**Creator code:** the Fortnite page shows creator code LUCADO with a copy button and checks that it's live." ] },
     { version: "2026.11.53", date: "2026-11-10", title: "Indie tools fixes", items: [
         "**Steam lookups:** pages that Steam's main lookup refuses, even though they're public, are now found through a second route, so \"no public store page\" should only show when the page really is hidden.",
         "**Names work too:** the tools that fill in from Steam and the rival comparison accept a game's name as well as a link, and more kinds of Steam links are understood.",

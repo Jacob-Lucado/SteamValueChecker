@@ -363,7 +363,8 @@ window.SVC_SITE = envIn => {
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
       ...(cr ? [h("a", { class: "copyright", href: safeHref(cr.url), target: "_blank", rel: "noopener noreferrer" },
-        h("img", { src: "/creator.png", alt: "", width: "22", height: "22" }), `© ${new Date().getFullYear()} ${cr.name}`)] : []));
+        h("img", { src: "/creator.png", alt: "", width: "22", height: "22" }), `© ${new Date().getFullYear()} ${cr.name}`)] : []),
+      h("a", { class: "copyright", href: "/licenses.html", text: "Licenses" }));
   }
 
   // ---------- landing ----------
@@ -5186,7 +5187,8 @@ window.SVC_SITE = envIn => {
             : h("p", { class: "muted", text: "Live numbers are not available right now." }),
           h("div", { class: "rule inline" },
             c && h("a", { class: "btn blue", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Created by " + c.name }),
-            h("a", { class: "btn gray", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer", text: "FanaticalGrabber" }))));
+            h("a", { class: "btn gray", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer", text: "FanaticalGrabber" }),
+            h("a", { class: "btn gray", href: "/licenses.html", text: "Licenses" }))));
     } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 

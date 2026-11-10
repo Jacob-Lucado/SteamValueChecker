@@ -7,7 +7,6 @@ const BASE = "https://fortnite-api.com";
 const MIN = 60_000;
 const TTL = { shop: 10 * MIN, news: 15 * MIN, map: 60 * MIN, fresh: 30 * MIN, status: 30 * MIN, search: 10 * MIN, stats: 5 * MIN };
 
-const ytId = v => (/^[\w-]{11}$/.test(String(v ?? "")) ? String(v) : null);
 const https = u => (typeof u === "string" && /^https:\/\//i.test(u) ? u : null);
 const clip = (t, n) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
@@ -29,14 +28,14 @@ export function slimEntry(e) {
     const art = https(e.newDisplayAsset?.renderImages?.[0]?.image) ?? https(e.bundle?.image) ?? https(first?.images?.featured) ?? https(first?.images?.icon) ?? https(track?.albumArt) ?? https(car?.images?.large) ?? https(inst?.images?.large) ?? https(first?.images?.smallIcon);
     const name = clip(e.bundle?.name ?? lead?.name ?? track?.title ?? e.devName, 80);
     const rarity = lead?.series?.value ? String(lead.series.backendValue ?? lead.series.value) : String(lead?.rarity?.value ?? "common");
-    const items = [...(e.brItems ?? []), ...(e.cars ?? []), ...(e.instruments ?? [])].map(i => ({ name: clip(i.name, 60), type: String(i.type?.displayValue ?? ""), art: https(i.images?.smallIcon ?? i.images?.small ?? i.images?.icon), video: ytId(i.showcaseVideo) })).slice(0, 12);
+    const items = [...(e.brItems ?? []), ...(e.cars ?? []), ...(e.instruments ?? [])].map(i => ({ name: clip(i.name, 60), type: String(i.type?.displayValue ?? ""), art: https(i.images?.smallIcon ?? i.images?.small ?? i.images?.icon), })).slice(0, 12);
     const tracks = (e.tracks ?? []).slice(0, 3).map(t => ({ title: clip(t.title, 60), artist: clip(t.artist, 60) }));
     return {
         id: String(e.offerId ?? e.devName ?? name), name, kind: kindOf(e), rarity, rarityName: clip(lead?.series?.value ?? lead?.rarity?.displayValue ?? "", 40),
         price: Number(e.finalPrice) || 0, regular: Number(e.regularPrice) || 0, art, size: /Size_(\d+)_x_(\d+)/.exec(e.tileSize ?? "") ? e.tileSize : "Size_1_x_1",
         section: clip(e.layout?.name ?? "", 60) || "Featured", rank: Number(e.layout?.rank) || 0, index: Number(e.layout?.index) || 0, sort: Number(e.sortPriority) || 0,
         out: e.outDate || null, in: e.inDate || null, giftable: Boolean(e.giftable), bundle: Boolean(e.bundle), bundleInfo: clip(e.bundle?.info, 40),
-        artist: track ? clip(track.artist, 60) : "", items, tracks, video: ytId(items.find(i => i.video)?.video),
+        artist: track ? clip(track.artist, 60) : "", items, tracks,
         set: clip(first?.set?.value, 60), intro: first?.introduction ? clip(first.introduction.text, 80) : "",
         colors: e.colors && typeof e.colors === "object" ? [e.colors.color1, e.colors.color3, e.colors.textBackgroundColor].filter(c => /^[0-9a-f]{6,8}$/i.test(c ?? "")).map(c => c.slice(0, 6)) : [],
         display: String(e.layout?.displayType ?? "tileGrid")
@@ -172,5 +171,5 @@ function slimCosmetic(c) {
     if (!c?.name) return null;
     const art = https(c.images?.icon) ?? https(c.images?.smallIcon);
     if (!art) return null;
-    return { id: String(c.id ?? c.name), video: ytId(c.showcaseVideo), name: clip(c.name, 80), type: String(c.type?.value ?? ""), typeName: clip(c.type?.displayValue, 30), rarity: String(c.series?.backendValue ?? c.rarity?.value ?? "common"), rarityName: clip(c.series?.value ?? c.rarity?.displayValue ?? "", 40), art, desc: clip(c.description, 160), set: clip(c.set?.value, 60), intro: clip(c.introduction?.text, 80), added: c.added ?? null, shopHistory: Array.isArray(c.shopHistory) ? c.shopHistory.length : 0, lastSeen: Array.isArray(c.shopHistory) && c.shopHistory.length ? c.shopHistory[c.shopHistory.length - 1] : null };
+    return { id: String(c.id ?? c.name), name: clip(c.name, 80), type: String(c.type?.value ?? ""), typeName: clip(c.type?.displayValue, 30), rarity: String(c.series?.backendValue ?? c.rarity?.value ?? "common"), rarityName: clip(c.series?.value ?? c.rarity?.displayValue ?? "", 40), art, desc: clip(c.description, 160), set: clip(c.set?.value, 60), intro: clip(c.introduction?.text, 80), added: c.added ?? null, shopHistory: Array.isArray(c.shopHistory) ? c.shopHistory.length : 0, lastSeen: Array.isArray(c.shopHistory) && c.shopHistory.length ? c.shopHistory[c.shopHistory.length - 1] : null };
 }

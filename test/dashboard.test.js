@@ -2186,7 +2186,7 @@ test("the terms and privacy policy are public pages on the bot's own site", asyn
     const { legalPage, mdToHtml } = await import("../src/legal.js");
     assert.match(mdToHtml("# T\n\n1. **Bold** [x](https://a.example) <b>\n- item"), /<h2>T<\/h2>[\s\S]*<strong>Bold<\/strong>[\s\S]*href="https:\/\/a.example"[\s\S]*&lt;b&gt;[\s\S]*<ul>\n<li>item/);
     assert.equal(mdToHtml("[bad](javascript:alert(1))").includes("href"), false);
-    for (const k of ["terms", "privacy"]) { const html = legalPage(k, "https://bot.example"); assert.match(html, /<title>/); assert.ok(!/github\.com/i.test(html)); assert.match(html, new RegExp(`canonical" href="https://bot.example/${k}.html"`)); }
+    for (const k of ["terms", "privacy", "licenses"]) { const html = legalPage(k, "https://bot.example"); assert.match(html, /<title>/); assert.ok(k === "licenses" ? !/Jacob-Lucado/i.test(html) : !/github\.com/i.test(html)); assert.match(html, new RegExp(`canonical" href="https://bot.example/${k}.html"`)); }
     assert.equal(legalPage("nope", "x"), null);
 });
 
@@ -3706,15 +3706,6 @@ test("fortnite: the shop is grouped into Fortnite's sections, in its order, with
     assert.equal(s.sections[1].entries[0].kind, "jamtrack"); assert.equal(s.sections[1].display, "expandableList"); assert.equal(s.sections[2].entries[0].size, "Size_2_x_1");
     await fn.shop(); assert.equal(calls.length, 1, "the second look comes from the cache");
     assert.ok(s.refreshAt > Date.now() && new Date(s.refreshAt).getUTCHours() === 0);
-});
-
-test("fortnite: emotes carry a preview video only when the id looks like a real YouTube id", async () => {
-    const { createFortnite } = await import("../src/fortnite.js");
-    const mk = id => async () => ({ ok: true, status: 200, json: async () => ({ data: { date: "2026-11-10T00:00:00Z", entries: [fnEntry({ brItems: [{ id: "EID_X", name: "Groove", type: { value: "emote", displayValue: "Emote" }, rarity: { value: "rare", displayValue: "Rare" }, images: { icon: "https://fortnite-api.com/i.png" }, showcaseVideo: id }] })] } }) });
-    const good = (await createFortnite({ fetchImpl: mk("ofXMzLds9rM") }).shop()).sections[0].entries[0];
-    assert.equal(good.video, "ofXMzLds9rM"); assert.equal(good.items[0].video, "ofXMzLds9rM");
-    const bad = (await createFortnite({ fetchImpl: mk('x"><script>') }).shop()).sections[0].entries[0];
-    assert.equal(bad.video, null); assert.equal(bad.items[0].video, null);
 });
 
 test("fortnite: a failing upstream serves the last good copy, and stats need a key", async () => {
