@@ -7817,7 +7817,7 @@
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else if (view === "indie") document.documentElement.dataset.area = "indie"; else delete document.documentElement.dataset.area;
-    if (window.IndieWaves) { if (view === "indie") window.IndieWaves.start(); else window.IndieWaves.stop(); }
+    if (window.IndieWaves) { if (view === "u") window.IndieWaves.stop(); else window.IndieWaves.start(); }
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }

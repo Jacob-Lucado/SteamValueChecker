@@ -1,5 +1,6 @@
-// The indie section's backdrop: a few glowing lines that roll slowly across the page, in the section's sunset colors.
-// It only runs while you're in the indie area, stands still if you've asked your device for less motion, and pauses in a background tab.
+// The site's backdrop: a few glowing lines that roll slowly behind every page. Their colors follow the area you're in
+// (cool blues on the main pages, sunset in the indie corner, Twitch purple, YouTube red and Kick green for streamers) and slide
+// from one set to the next when you move. It stands still if you've asked your device for less motion, and pauses in a background tab.
 (function (root) {
   "use strict";
   let canvas = null, ctx = null, raf = 0, t0 = 0, w = 0, h = 0, dpr = 1, still = false;
@@ -11,6 +12,9 @@
     { y: .87, amp: 42, len: 1.6, speed: .00028, phase: 5.8, hue: 318, width: 1.8 },
     { y: .44, amp: 28, len: 2.6, speed: -.0002, phase: 2.4, hue: 190, width: 1.4 }
   ];
+  const PALETTES = { main: [212, 256, 188, 232, 276, 172], indie: [22, 335, 282, 12, 318, 190], streamer: [270, 355, 145, 285, 8, 160] };
+  const now_ = L => L.cur === undefined ? (L.cur = L.hue) : L.cur;
+  const areaPal = () => PALETTES[document.documentElement.dataset.area] || PALETTES.main;
   const light = () => document.documentElement.dataset.theme === "light";
 
   function size() {
@@ -21,14 +25,16 @@
     ctx.clearRect(0, 0, w, h);
     const dark = !light(), step = w < 600 ? 10 : 6;
     ctx.globalCompositeOperation = dark ? "lighter" : "source-over";
-    for (const L of LINES) {
+    const pal = areaPal();
+    for (let i = 0; i < LINES.length; i++) {
+      const L = LINES[i], c0 = now_(L); let d = ((pal[i] - c0 + 540) % 360) - 180; L.cur = (c0 + (Math.abs(d) < .5 ? d : d * .04) + 360) % 360; L.hue = L.cur;
       const base = L.y * h, k = (Math.PI * 2 * L.len) / w, p = L.phase + (still ? 0 : (now - t0) * L.speed * 6);
       ctx.beginPath();
       for (let x = -10; x <= w + 10; x += step) {
         const y = base + Math.sin(x * k + p) * L.amp + Math.sin(x * k * 2.3 - p * 1.4) * (L.amp * .35) + Math.sin(x * k * .5 + p * .6) * (L.amp * .5);
         x === -10 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
-      const g = ctx.createLinearGradient(0, 0, w, 0), a = dark ? 0.9 : 0.55, l = dark ? 62 : 48;
+      const g = ctx.createLinearGradient(0, 0, w, 0), a = (dark ? 0.9 : 0.55) * (document.documentElement.dataset.area ? 1 : .75), l = dark ? 62 : 48;
       g.addColorStop(0, `hsla(${L.hue}, 100%, ${l}%, 0)`); g.addColorStop(.25, `hsla(${L.hue}, 100%, ${l}%, ${a})`); g.addColorStop(.75, `hsla(${(L.hue + 40) % 360}, 100%, ${l}%, ${a})`); g.addColorStop(1, `hsla(${(L.hue + 40) % 360}, 100%, ${l}%, 0)`);
       ctx.strokeStyle = g; ctx.lineWidth = L.width; ctx.lineJoin = "round";
       if (dark) { const w0 = ctx.lineWidth; ctx.globalAlpha = .18; ctx.lineWidth = w0 * 6; ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = w0; } // soft glow: a wide faint pass under the line, far cheaper than a real blur
