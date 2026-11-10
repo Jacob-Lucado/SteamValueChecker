@@ -7955,7 +7955,10 @@
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else if (view === "indie") document.documentElement.dataset.area = "indie"; else delete document.documentElement.dataset.area;
-    if (window.IndieWaves) { if (view === "u" || EMBED) window.IndieWaves.stop(); else window.IndieWaves.start(); }
+    // In a LucadoOS window the page draws its own waves (the desktop's sit behind the window), unless Personalize turned them off.
+    const wavesOn = () => { if (!EMBED) return true; try { return JSON.parse(localStorage.getItem("lucado-site-prefs") || "{}").waves !== false; } catch { return true; } };
+    if (window.IndieWaves) { if (view === "u" || !wavesOn()) window.IndieWaves.stop(); else window.IndieWaves.start(); }
+    if (EMBED && !window.__wavesWatch) { window.__wavesWatch = true; window.addEventListener("storage", e => { if (e.key === "lucado-site-prefs" && window.IndieWaves) wavesOn() ? window.IndieWaves.start() : window.IndieWaves.stop(); }); }
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
