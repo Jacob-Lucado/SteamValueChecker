@@ -35,7 +35,7 @@
       const src = `${WIDGET}/player/?url=${encodeURIComponent(t.embed)}&auto_play=true&color=%237c6cff&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false`;
       frame = h("iframe", { class: "rd-frame", src, title: t.title, allow: "autoplay; encrypted-media", scrolling: "no", frameborder: "no", width: "100%", height: isSet(t) ? "380" : "166" });
       frame.addEventListener("load", () => { try { frame.contentWindow.postMessage(JSON.stringify({ method: "addEventListener", value: "finish" }), WIDGET); } catch { /* the ready message covers it */ } });
-      const art = t.art ? h("img", { class: "rd-art", src: t.art.replace("-t500x500", "-t300x300"), alt: "" }) : h("div", { class: "rd-art rd-noart", text: "♪" });
+      const art = t.art ? h("img", { class: "rd-art", src: t.art, alt: "" }) : h("div", { class: "rd-art rd-noart", text: "♪" });
       stage.replaceChildren(h("div", { class: "rd-now" }, art, h("div", { class: "rd-meta" }, h("small", { class: "muted", text: "NOW PLAYING" }), h("b", { class: "rd-title", text: t.title }), h("span", { class: "muted", text: t.author }), h("small", { class: "muted", text: `Added by ${t.by}` }))),
         frame, controls(t));
       draw();
@@ -53,7 +53,7 @@
     function draw() {
       list.replaceChildren(...(tracks.length ? tracks.map((t, i) => {
         const row = h("div", { class: "rd-row" + (t.id === now ? " on" : ""), role: "listitem" },
-          t.art ? h("img", { src: t.art.replace("-t500x500", "-t100x100"), alt: "", width: "40", height: "40", loading: "lazy" }) : h("span", { class: "rd-thumb", text: "♪" }),
+          t.art ? h("img", { src: t.art, alt: "", width: "40", height: "40", loading: "lazy" }) : h("span", { class: "rd-thumb", text: "♪" }),
           h("button", { type: "button", class: "rd-pick", onclick: () => play(t.id) }, h("b", { text: t.title }), h("small", { class: "muted", text: `${t.author || "Unknown"} · ${t.by}${isSet(t) ? " · set" : ""}` })),
           t.mine || me.owner ? h("button", { type: "button", class: "rd-x", title: "Remove", "aria-label": "Remove " + t.title, text: "✕", onclick: async () => { try { await api("/api/admin/radio/remove", { id: t.id }); await load(); } catch (e) { toast(e.message); } } }) : null);
         return row;
