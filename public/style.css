@@ -1847,3 +1847,7 @@ a.fd-name:hover { text-decoration: underline; }
 .ix-frames { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .ix-frames figure { margin: 0; text-align: center; } .ix-frames canvas { width: 120px; height: auto; border-radius: 6px; border: 1px solid var(--line); }
 .ix-adm-report { padding: 10px 0; border-top: 1px solid var(--line); }
+
+/* the indie backdrop: sits behind everything and never takes a click */
+#ix-waves { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+:root[data-area="indie"] #app, :root[data-area="indie"] footer { position: relative; z-index: 1; }

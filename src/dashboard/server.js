@@ -154,6 +154,7 @@ const FILES = {
     "/page-indie-tools.jpg": ["page-indie-tools.jpg", "image/jpeg"],
     "/indiecalc.js": ["indiecalc.js", "text/javascript; charset=utf-8"],
     "/indietools.js": ["indietools.js", "text/javascript; charset=utf-8"],
+    "/indiewaves.js": ["indiewaves.js", "text/javascript; charset=utf-8"],
     "/indie.js": ["indie.js", "text/javascript; charset=utf-8"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
