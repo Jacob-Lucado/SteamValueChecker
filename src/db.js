@@ -821,7 +821,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         db.exec(`VACUUM INTO '${String(path).replace(/'/g, "''")}'`);
     }
 
-    // What the shareable profile card shows: platform names, colour, picture links and which stats. One small JSON blob per member.
+    // What the shareable profile card shows: platform names, color, picture links and which stats. One small JSON blob per member.
     const getCardPrefs = discordId => { try { return JSON.parse(get("SELECT prefs FROM card_prefs WHERE discord_id = ?", discordId)?.prefs ?? "{}"); } catch { return {}; } };
     const setCardPrefs = (discordId, prefs) => run("INSERT INTO card_prefs (discord_id, prefs) VALUES (?, ?) ON CONFLICT(discord_id) DO UPDATE SET prefs = excluded.prefs", discordId, JSON.stringify(prefs));
 

@@ -44,7 +44,7 @@ test("one store being down never hides the others, and the error is reported", a
     await assert.rejects(fetchAllBundles({ fetchImpl: async () => ({ ok: false, status: 500 }) }), /answered 500/);
 });
 
-test("the post: store, price, games, relative end time, and buttons; ended posts go grey without buttons", () => {
+test("the post: store, price, games, relative end time, and buttons; ended posts go gray without buttons", () => {
     const b = { store: "fanatical", title: "Build Your Own Resident Evil Bundle", url: "https://www.fanatical.com/en/bundle/x", game_count: 15, price: "Pick and mix", games: ["A", "B", "C", "D", "E", "F", "G", "H", "I"], expires_at: NOW + 86400_000, image: "https://i/x.jpg" };
     const p = bundleFeedEmbed(b), e = p.embeds[0];
     assert.match(e.author.name, /Fanatical · new bundle/); assert.equal(e.title, b.title); assert.match(e.description, /15 games/);
@@ -57,7 +57,7 @@ test("the post: store, price, games, relative end time, and buttons; ended posts
 function fakeApi() { const sent = [], edits = []; return { sent, edits, sendMessage: async (ch, p) => { sent.push({ ch, p }); return { id: "m" + sent.length }; }, editMessage: async (ch, id, p) => { edits.push({ ch, id, p }); } }; }
 const rec = (n, over = {}) => ({ key: `humble:b${n}`, store: "humble", title: "Bundle " + n, url: "https://www.humblebundle.com/games/b" + n, image: null, games: [], gameCount: 5, price: "$1", expiresAt: null, seenAt: NOW, ...over });
 
-test("posting: once per bundle per server, first run is capped, store filters apply, and a bundle that drops off the page is greyed out", async () => {
+test("posting: once per bundle per server, first run is capped, store filters apply, and a bundle that drops off the page is grayed out", async () => {
     const db = openDb(":memory:", { now: () => NOW });
     db.setBundleFeedSettings("g1", { channel_id: "c1" });
     db.setBundleFeedSettings("g2", { channel_id: "c2", stores: ["steam"] });
@@ -71,7 +71,7 @@ test("posting: once per bundle per server, first run is capped, store filters ap
     list = [rec(1), rec(2), rec(3), rec(4)]; list.push(rec(9));
     r = await run();
     assert.equal(r.expired, 1, "bundle 5 is no longer listed, so it has ended"); assert.equal(r.posted, 1);
-    assert.equal(api.edits.length, 1, "bundle 5 was one of the three posted, so its post is greyed out"); assert.match(api.edits[0].p.embeds[0].title, /^Ended: Bundle 5/);
+    assert.equal(api.edits.length, 1, "bundle 5 was one of the three posted, so its post is grayed out"); assert.match(api.edits[0].p.embeds[0].title, /^Ended: Bundle 5/);
     list = [rec(1), rec(2), rec(4), rec(9)];
     r = await run();
     assert.equal(api.edits.length, 2); assert.match(api.edits[1].p.embeds[0].title, /^Ended: Bundle 3/);

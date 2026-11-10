@@ -1,4 +1,4 @@
-// What a member's shareable profile card shows: the gaming names they add, the colour, picture links and which stats.
+// What a member's shareable profile card shows: the gaming names they add, the color, picture links and which stats.
 // Kept as one small JSON blob per member so the website and /me profilecard draw the same card.
 import { UserError } from "./errors.js";
 
@@ -37,7 +37,7 @@ export function mergePrefs(old = {}, patch = {}) {
         out.platforms = [...seen].slice(0, MAX_PLATFORMS).map(([id, name]) => ({ id, name }));
     }
     if (patch.theme !== undefined) {
-        if (!THEMES[patch.theme]) throw new UserError("Pick one of the card colours.");
+        if (!THEMES[patch.theme]) throw new UserError("Pick one of the card colors.");
         out.theme = patch.theme;
     }
     for (const k of ["avatar", "banner"]) {

@@ -84,7 +84,7 @@ export const GUIDES = [
         steps: [
             { text: "Turn it on and pick your link name.", cmd: "/me publicpage enabled:true" },
             { text: "Set your bio and display name.", cmd: "/me profile bio" },
-            { text: "Pick a look: theme, accent colour, background, layout.", cmd: "/me profile look" },
+            { text: "Pick a look: theme, accent color, background, layout.", cmd: "/me profile look" },
             { text: "Choose which sections people see in the dashboard editor." },
             { text: "Want it as a picture to post? Draw it as a card.", cmd: "/me profilecard" }
         ],

@@ -19,7 +19,7 @@ body { font-family: Inter, "Segoe UI", system-ui, -apple-system, "Helvetica Neue
 .ov.in.paused .card { filter: saturate(.55); }
 .ov.in.paused .art { filter: grayscale(.7) brightness(.8); }
 
-/* the card colour is its own layer so its opacity can be turned down without fading the words */
+/* the card color is its own layer so its opacity can be turned down without fading the words */
 .card::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--bg); opacity: var(--bgop, 1); pointer-events: none; }
 
 /* one shine sweeps across the card whenever the song changes */
@@ -82,7 +82,7 @@ body { font-family: Inter, "Segoe UI", system-ui, -apple-system, "Helvetica Neue
 .ov.in:not(.paused)[data-style="vinyl"] .art-wrap { animation-play-state: running; }
 .ov[data-style="vinyl"] .art-wrap .art { filter: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
-/* a glowing outline in the accent colour */
+/* a glowing outline in the accent color */
 .ov[data-style="neon"] .card { width: 470px; min-height: 108px; border-radius: 12px; border: 1.5px solid var(--accent); box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 0 18px -2px var(--accent), inset 0 0 22px -12px var(--accent); }
 .ov[data-style="neon"] { --bg: rgba(6, 9, 18, .88); } .ov[data-style="neon"][data-theme="light"] { --bg: rgba(255, 255, 255, .92); } .ov[data-style="neon"][data-theme="glass"] { --bg: rgba(6, 9, 18, .5); } .ov[data-style="neon"][data-theme="clear"] { --bg: transparent; }
 .ov[data-style="neon"] .art-wrap { width: 84px; height: 84px; border-radius: 8px; box-shadow: 0 0 14px -2px var(--accent); }

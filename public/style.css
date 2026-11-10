@@ -630,7 +630,7 @@ details.panel[open] > summary { margin-bottom: 10px; }
 .bug-card .row { align-items: center; }
 .bug-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* Scrollbars come from scrollbar.css, in this page's accent colours. */
+/* Scrollbars come from scrollbar.css, in this page's accent colors. */
 /* Long lists scroll inside their panel instead of stretching the page */
 .scroll-y { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .scroll-y.tall { max-height: 520px; }
@@ -784,7 +784,7 @@ details.paste summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .xp-card-main h3 { margin: 0 0 4px; }
 .xp-board td, .xp-board th { padding: 8px 10px; }
 
-/* The prize shop teaser: loud on purpose, in the dashboard's own colours */
+/* The prize shop teaser: loud on purpose, in the dashboard's own colors */
 .shop-soon { position: relative; overflow: hidden; text-align: center; padding: 28px 20px; border: 1px solid var(--accent-2);
   background: radial-gradient(circle at 50% -20%, var(--glow-2), transparent 60%), linear-gradient(160deg, var(--panel-2), var(--panel)); }
 .shop-soon::before { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, var(--soft-2) 50%, transparent 65%); transform: translateX(-100%); animation: shop-shine 3.6s ease-in-out infinite; pointer-events: none; }
@@ -1746,7 +1746,7 @@ a.fd-name:hover { text-decoration: underline; }
 .ix-done { padding: 28px 8px; } .ix-adm { display: flex; flex-direction: column; gap: 8px; } .ix-adm-head { display: flex; gap: 12px; align-items: center; } .ix-adm-head img { border-radius: 6px; max-width: 30%; height: auto; }
 @media (max-width: 640px) { .ix-teaser { padding: 16px; } .ix-stat b { font-size: 19px; } }
 
-/* Indie area: the same site in sunset arcade colours. Warm orange into hot pink, a faint pixel grid, and hard "cartridge" shadows. */
+/* Indie area: the same site in sunset arcade colors. Warm orange into hot pink, a faint pixel grid, and hard "cartridge" shadows. */
 :is(:root, .svc-root)[data-area="indie"] {
   --accent: #ff8a4c; --accent-2: #ff4fa3; --accent-hover: #ffa36f; --on-accent: #2a1005;
   --bg-glow: rgba(255, 120, 60, .26); --glow-2: rgba(255, 79, 163, .2); --hover-row: rgba(255, 138, 76, .08);

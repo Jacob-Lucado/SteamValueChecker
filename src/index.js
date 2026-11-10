@@ -320,7 +320,7 @@ const gwDiscord = {
     }
 };
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
-// every message the bot sends gets the same finish: colour, name and logo in the footer, bare text turned into a card
+// every message the bot sends gets the same finish: color, name and logo in the footer, bare text turned into a card
 // links to free games and bundles go through a page on the site first (it shows the deal, counts the visit, then sends people to the store)
 if (publicBase) configureDeals({ base: publicBase, make: deal => { const id = db.upsertDeal(deal); return id ? `${publicBase}/d/${id}` : null; } });
 configureArt({ base: publicBase, dir: join(dirname(cfg.dbPath), "art") });

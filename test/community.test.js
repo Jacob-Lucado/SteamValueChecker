@@ -40,7 +40,7 @@ function fakeApi({ channels = [], roles = [], deny = null } = {}) {
 }
 const noSleep = async () => {};
 
-test("a fresh server is recognised, a lived-in one is not", () => {
+test("a fresh server is recognized, a lived-in one is not", () => {
     const fresh = { channels: [{ id: "1", type: 4, name: "Text Channels" }, { id: "2", type: 0, name: "general" }, { id: "3", type: 4, name: "Voice Channels" }, { id: "4", type: 2, name: "General" }], roles: [{ id: "G", guild_id: "G", name: "@everyone" }], memberCount: 2 };
     assert.equal(isFreshGuild(fresh), true);
     assert.equal(isFreshGuild({ ...fresh, memberCount: 400 }), false);
@@ -529,7 +529,7 @@ test("announcement designer: validates, builds the embed, and only pings what wa
     assert.throws(() => buildAnnouncement({ title: "x", image: "http://insecure.test/a.png" }), /https/);
     assert.throws(() => buildAnnouncement({ title: "x", button_label: "Go" }), /button/);
     assert.throws(() => buildAnnouncement({ title: "x", ping: "role" }), /role/);
-    assert.throws(() => buildAnnouncement({ title: "x", color: "nope" }), /colour/);
+    assert.throws(() => buildAnnouncement({ title: "x", color: "nope" }), /color/);
     const a = buildAnnouncement({ title: "Hello", body: "World", color: "#ff0000", footer: "f", author: "a", ping: "role", role_id: "77", button_label: "Go", button_url: "https://x.test", thumbnail: "server",
         fields: [{ name: "n", value: "v", inline: true }, { name: "", value: "skip" }], timestamp: true }, { serverIcon: "https://i.test/i.png" });
     const e = a.payload.embeds[0];

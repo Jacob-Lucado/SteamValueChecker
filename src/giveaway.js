@@ -1,7 +1,7 @@
 // Giveaway logic with no Discord or HTTP code in it. Discord is passed in as `discord`:
 //   post(channelId, payload) -> { id }     edit(channelId, messageId, payload)     dm(userId, payload) throws on failure
 //   memberOk(guildId, userId) -> boolean (false only when the person has left)    findChannelByName(guildId, name) -> id | null
-// Prize keys are encrypted by the vault and wiped when the winner confirms, the giveaway is cancelled, or they go unused for too long.
+// Prize keys are encrypted by the vault and wiped when the winner confirms, the giveaway is canceled, or they go unused for too long.
 
 import { randomInt } from "node:crypto";
 import { steamArt } from "./art.js";
@@ -256,7 +256,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         return { status: "entered", entries, total: entryCount(g.id), steps: stepsOf(g), hostName: g.host_name ?? null };
     }
 
-    /** Posts a scheduled giveaway when its time comes. If the channel can't be used it is cancelled and the host gets the keys back. */
+    /** Posts a scheduled giveaway when its time comes. If the channel can't be used it is canceled and the host gets the keys back. */
     async function launch(id) {
         const g = must(id);
         if (g.status !== "scheduled") return false;
@@ -413,7 +413,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const g = must(id);
         if (!cancellable(g)) throw new UserError("That giveaway is already over.");
         db.setGiveawayStatus(g.id, "cancelled");
-        const unused = await returnUnused(g, ["available", "assigned"], "The giveaway was cancelled.");
+        const unused = await returnUnused(g, ["available", "assigned"], "The giveaway was canceled.");
         await refresh(g.id);
         return { unused };
     }

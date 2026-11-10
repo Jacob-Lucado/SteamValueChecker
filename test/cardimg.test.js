@@ -15,12 +15,12 @@ test("card prefs: platforms are validated, tidied and de-duplicated", () => {
     assert.equal(mergePrefs({}, { platforms: Array.from({ length: 40 }, (_, i) => ({ id: "steam", name: "n" + i })) }).platforms.length, 1);
 });
 
-test("card prefs: only the keys sent change; bad colours and links are refused", () => {
+test("card prefs: only the keys sent change; bad colors and links are refused", () => {
     const old = { theme: "night", platforms: [{ id: "steam", name: "me" }], avatar: "https://a.example/p.png" };
     const next = mergePrefs(old, { banner: "https://a.example/b.png", show: { badges: false, nonsense: false } });
     assert.equal(next.theme, "night"); assert.equal(next.avatar, "https://a.example/p.png"); assert.equal(next.banner, "https://a.example/b.png");
     assert.equal(next.show.badges, false); assert.equal(next.show.games, true); assert.equal("nonsense" in next.show, false);
-    assert.throws(() => mergePrefs({}, { theme: "neon" }), /colour/);
+    assert.throws(() => mergePrefs({}, { theme: "neon" }), /color/);
     assert.throws(() => mergePrefs({}, { avatar: "http://a.example/p.png" }), /https/);
     assert.equal(mergePrefs(old, { avatar: "" }).avatar, "");
     assert.deepEqual(viewPrefs({ theme: "bogus", avatar: "javascript:1" }).theme, "steam");

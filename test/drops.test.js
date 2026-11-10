@@ -66,7 +66,7 @@ test("promos: what a manager types is checked", () => {
     assert.throws(() => cleanDrop({ title: "x", code: "A", days: 999 }), /between 1 and 365/);
 });
 
-test("promos: the post shows the code and link, and greys out when it ends", () => {
+test("promos: the post shows the code and link, and grays out when it ends", () => {
     const d = { id: 1, title: "Game On key", source: "SteelSeries", code: "ABCD-1234", url: "https://example.com", note: "One per account", expires_at: NOW + 86400_000 };
     const live = dropEmbed(d);
     assert.match(live.embeds[0].description, /ABCD-1234/);

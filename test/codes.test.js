@@ -132,7 +132,7 @@ test("codes: the game filter, the ping role and servers without a channel", asyn
     assert.deepEqual(sent[0].payload.allowed_mentions, { roles: ["r1"] });
 });
 
-test("codes: when a code ends its post is edited once, greyed out, with no buttons", async () => {
+test("codes: when a code ends its post is edited once, grayed out, with no buttons", async () => {
     const db = openDb(":memory:");
     db.setCodeSettings("g1", { channel_id: "c1" });
     const { api, edits } = fakeApi();

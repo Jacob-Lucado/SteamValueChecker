@@ -17,7 +17,7 @@ function color(v) {
     if (v === undefined || v === null || v === "") return COLORS.blue;
     if (COLORS[v]) return COLORS[v];
     const m = /^#?([0-9a-f]{6})$/i.exec(String(v).trim());
-    if (!m) throw new UserError("Pick a colour like #4d8cff.");
+    if (!m) throw new UserError("Pick a color like #4d8cff.");
     return parseInt(m[1], 16);
 }
 

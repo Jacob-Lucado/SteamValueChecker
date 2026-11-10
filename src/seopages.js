@@ -49,7 +49,7 @@ export const SEO_PAGES = {
         h1: "Free game alerts in Discord",
         lead: "Stores give games away all the time and the offers disappear fast. The bot posts each free game once, with the store, the end date and a button to claim it, so you don't have to keep checking. Steam free weekends are covered too, with the date they end.",
         sections: [
-            ["What it covers", ["Free games on Epic, Steam, GOG and other stores", "Free weekends, demos and playtests", "Limited-time game codes like SHiFT codes, posted once and greyed out when they run out", "A /games freegames command that shows what's free right now"]],
+            ["What it covers", ["Free games on Epic, Steam, GOG and other stores", "Free weekends, demos and playtests", "Limited-time game codes like SHiFT codes, posted once and grayed out when they run out", "A /games freegames command that shows what's free right now"]],
             ["For your server", ["Point the free games feed at a channel and ping a role. Members who don't want pings can skip them."]]
         ],
         steps: ["Add the bot to your server.", "Choose the channel for free games with /manage alertchannel.", "Optionally pick a role to ping."],
@@ -99,7 +99,7 @@ export const SEO_PAGES = {
         title: "Discord timestamp generator: make timestamps that show in everyone's time zone",
         desc: "Free Discord timestamp generator. Pick a date, time and time zone and copy the code for any style, including the relative style that counts down. Shows each member the time in their own zone.",
         h1: "Discord timestamp generator",
-        lead: "Pick a date and time, and copy the code. Paste it into Discord and every member sees it in their own time zone, so nobody has to do the maths for your game night.",
+        lead: "Pick a date and time, and copy the code. Paste it into Discord and every member sees it in their own time zone, so nobody has to do the math for your game night.",
         html: `<section class="tool"><div class="fields"><label>Date and time<input type="datetime-local" id="when"></label><label>Time zone<select id="zone"></select></label></div>
 <p class="unix">Unix time: <code id="unix"></code></p><div id="styles" class="ts-list" aria-live="polite"></div><noscript><p>This tool needs JavaScript.</p></noscript></section>`,
         sections: [["How Discord timestamps work", ["A timestamp is a code like <t:1767225600:F>. Discord swaps it for the date and time in each reader's own time zone.", "The letter at the end picks the style. R is the relative style (\"in 3 hours\") and updates by itself."]],

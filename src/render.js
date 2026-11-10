@@ -203,11 +203,11 @@ export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null
 
 /** What a member's supporter pass is and does. Same card whether or not they have one, so it doubles as the pitch. */
 export function supporterEmbed({ active, until, founder, wall, boost }, publicUrl = null) {
-    const perks = ["A Supporter role and badge", "Three extra profile themes and a glow", "24 overlays instead of 12", `${Math.round((boost - 1) * 100)}% more XP`, "Your own colour on your price-alert cards", "Gift a pass to a friend"];
+    const perks = ["A Supporter role and badge", "Three extra profile themes and a glow", "24 overlays instead of 12", `${Math.round((boost - 1) * 100)}% more XP`, "Your own color on your price-alert cards", "Gift a pass to a friend"];
     const when = until ? `<t:${Math.floor(until / 1000)}:D>` : null;
     const state = active ? `Your pass is active until ${when}.` : founder ? "Your pass has ended, but you stay a founding supporter." : "You don't have a pass yet.";
     const fields = [{ name: "What you get", value: perks.map(p => `• ${p}`).join("\n"), inline: false }];
-    if (founder) fields.push({ name: "Founding supporter 🌟", value: "You were one of the first 50. That mark and your alert colour are yours for good.", inline: false });
+    if (founder) fields.push({ name: "Founding supporter 🌟", value: "You were one of the first 50. That mark and your alert color are yours for good.", inline: false });
     if (wall) fields.push({ name: "On the supporter wall as", value: wall.slice(0, 24), inline: true });
     const url = publicUrl ? `${String(publicUrl).replace(/\/+$/, "")}/#/tip` : null;
     return { color: active || founder ? 0xf5b942 : COLOR, title: "Supporter pass", description: `${state}${url ? `\n\n[${active ? "Manage or extend it" : "Get a pass"}](${url})` : ""}`, fields, footer: { text: "Nothing in the bot is locked behind it. It just helps keep it running." } };
@@ -226,7 +226,7 @@ export function supporterThanks({ until, founding = false, giftFrom = null, role
         "🎨 **Three extra profile themes**",
         "🧩 **24 overlay slots** instead of 12",
         `⚡ **${Math.round((boost - 1) * 100)}% more XP**`,
-        "🖌️ **Your own colour** on your price-alert cards"
+        "🖌️ **Your own color** on your price-alert cards"
     ];
     const fields = [
         { name: "Active until", value: `${when}\n${left}`, inline: true },
@@ -235,14 +235,14 @@ export function supporterThanks({ until, founding = false, giftFrom = null, role
     ];
     if (founding) fields.push({ name: "Founding supporter 🌟", value: "You're one of the first 50 supporters, so that mark stays on your profile for good, even after your pass ends.", inline: false });
     const todo = [];
-    if (tipUrl) todo.push(`🖌️ [Pick your alert colour and a name for the supporter wall](${tipUrl})`);
+    if (tipUrl) todo.push(`🖌️ [Pick your alert color and a name for the supporter wall](${tipUrl})`);
     if (profileUrl) todo.push(`🎨 [Try your new themes on your profile page](${profileUrl})`);
     else todo.push("🎨 Switch your profile page on to show off the badge and themes");
     todo.push("🎁 Know someone who'd like one? You can gift a pass from the same page.");
     if (role === "not-a-member" && inviteUrl) todo.unshift(`🎖️ [Join the server](${inviteUrl}) and your role is given as soon as you're in`);
     fields.push({ name: "Make it yours", value: todo.join("\n"), inline: false });
     const row = [];
-    if (tipUrl) row.push({ type: 2, style: 5, label: "Customise", emoji: { name: "🖌️" }, url: tipUrl });
+    if (tipUrl) row.push({ type: 2, style: 5, label: "Customize", emoji: { name: "🖌️" }, url: tipUrl });
     if (profileUrl) row.push({ type: 2, style: 5, label: "My profile", emoji: { name: "✨" }, url: profileUrl });
     if (inviteUrl) row.push({ type: 2, style: 5, label: role === "not-a-member" ? "Join the server" : "Our server", emoji: { name: "💬" }, url: inviteUrl });
     return {
@@ -254,7 +254,7 @@ export function supporterThanks({ until, founding = false, giftFrom = null, role
 /** The one nudge before a pass ends. `lastDay` is the final-day version. */
 export function supporterReminder({ until, lastDay = false, founder = false, tipUrl = null }) {
     const ts = Math.floor(until / 1000);
-    const losing = ["🎖️ Supporter role", "✨ Badge and glow on your profile", "🎨 Three extra profile themes", "🧩 24 overlay slots", "⚡ Bonus XP", "🖌️ Your alert colour"];
+    const losing = ["🎖️ Supporter role", "✨ Badge and glow on your profile", "🎨 Three extra profile themes", "🧩 24 overlay slots", "⚡ Bonus XP", "🖌️ Your alert color"];
     const fields = [
         { name: lastDay ? "Ends" : "Ends on", value: `<t:${ts}:F>\n<t:${ts}:R>`, inline: true },
         { name: "Stacks on top", value: "Anything you add is tacked on after the time you have left, so nothing is wasted.", inline: true },
@@ -355,7 +355,7 @@ export function subEmbed({ item, sub, kind }) {
     if (sub.leaving) fields.push({ name: leaving ? "Leaves" : "Until", value: `${stamp(sub.leaving)}\n<t:${Math.floor(sub.leaving / 1000)}:D>`, inline: true });
     return {
         color: leaving ? 0xfaa61a : GREEN, title: leaving ? `⏳ ${item.title} is leaving ${sub.name}` : `📦 ${item.title} is on ${sub.name}`,
-        description: leaving ? `If you want to play it with ${sub.name}, don't wait.` : `It's in the ${sub.name} catalogue now, so you may not need to buy it.`,
+        description: leaving ? `If you want to play it with ${sub.name}, don't wait.` : `It's in the ${sub.name} catalog now, so you may not need to buy it.`,
         thumbnail: artUrl(item) ? { url: artUrl(item) } : undefined, fields,
         footer: { text: "Subscription alerts can be turned off with /alerts bundles  •  Data by IsThereAnyDeal" }
     };

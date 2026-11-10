@@ -140,7 +140,7 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
             if (!top.length) return { empty: true, note: "No deals matched right now." };
             for (const d of top.slice(0, 3)) cards?.push({ title: d.title, url: safeUrl(d.url), linkLabel: `Buy at ${clip(d.shop, 30)}`, image: d.appid ? steamArt(d.appid) : itadArt(d.id), wish: d.wishlist ? undefined : d.title,
                 fields: [{ name: "Price", value: `${money(d.price, cur(d.currency))} (-${d.cut}%)` }, { name: "Was", value: money(d.regular, cur(d.currency)) }, { name: "Fits you", value: d.match ? `${d.match}%` : null }, { name: "Note", value: d.atl ? "All-time low" : d.wishlist ? "On your wishlist" : null }] });
-            return { personalised: r.personalised, yourTopGenres: r.genres, deals: top.map(d => ({ title: d.title, price: money(d.price, cur(d.currency)), discountPct: d.cut, shop: d.shop, matchPct: d.match, atAllTimeLow: d.atl, onYourWishlist: d.wishlist })) };
+            return { personalized: r.personalized, yourTopGenres: r.genres, deals: top.map(d => ({ title: d.title, price: money(d.price, cur(d.currency)), discountPct: d.cut, shop: d.shop, matchPct: d.match, atAllTimeLow: d.atl, onYourWishlist: d.wishlist })) };
         },
 
         async my_settings(_i, ctx) {

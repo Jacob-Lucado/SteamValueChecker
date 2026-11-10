@@ -731,7 +731,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         { id: "graphite", name: "Graphite", css: "linear-gradient(135deg, #16181d 0%, #2b2f38 100%)" },
         { id: "aurora", name: "Aurora", css: "radial-gradient(900px 600px at 20% 10%, #2dd4bf55, transparent 60%), radial-gradient(900px 600px at 85% 80%, #8b5cf655, transparent 60%), linear-gradient(135deg, #0b1220, #101a33)" }
     ];
-    /** Only known looks and wallpapers, and a plain hex colour; anything else falls back to the defaults. */
+    /** Only known looks and wallpapers, and a plain hex color; anything else falls back to the defaults. */
     const cleanLook = b => ({ look: b?.look === "windows" ? "windows" : "original", waves: b?.waves === true, wall: WALLS.some(w => w.id === b?.wall) ? b.wall : /^#[0-9a-fA-F]{6}$/.test(String(b?.wall ?? "")) ? String(b.wall).toLowerCase() : "default" });
     /** Only the owner and people the owner let into the panel (they arrive here acting as the owner). */
     const chatSession = req => { const s = session(req); if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this."); return s; };
@@ -1317,7 +1317,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "POST /api/supporter/alertcolor": async (req, body) => {
             const s = session(req);
             if (!supporters) throw new HttpError(404, "Not found.");
-            if (!isSupporter(db, s.userId, now()) && !isFounder(db, s.userId)) throw new HttpError(403, "Alert colours are a supporter perk.");
+            if (!isSupporter(db, s.userId, now()) && !isFounder(db, s.userId)) throw new HttpError(403, "Alert colors are a supporter perk.");
             try { return { alert_color: supporters.setAlertColor(s.userId, body.color) }; } catch (e) { throw new HttpError(400, e.message); }
         },
         "POST /api/supporter/checkout": async (req, body) => {
@@ -3097,7 +3097,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const s = softSession(req);
             const canMark = Boolean(s && page.guild_id && !isHidden(page.guild_id) && isStaff(s.guilds.find(x => x.id === page.guild_id)));
             const { guild_id: _g, ...rest } = page;
-            // The colour picked for their profile page also tints their wishlist page. Only the fixed theme colours can come out of this.
+            // The color picked for their profile page also tints their wishlist page. Only the fixed theme colors can come out of this.
             const owner = db.getProfileBySlug(page.slug);
             const accent = owner ? PROFILE_THEMES[withDefaults(db.getProfileData(owner.discord_id).data).theme]?.accent ?? null : null;
             return { ...rest, canMark, accent, signedIn: Boolean(s), owner: Boolean(s && owner && s.userId === owner.discord_id), region: s && owner && s.userId !== owner.discord_id ? compareGiftRegions(db, s.userId, owner.discord_id) : null };

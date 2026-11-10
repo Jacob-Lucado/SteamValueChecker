@@ -791,7 +791,7 @@ test("the page has share-preview tags with the real address, plus robots and sit
     assert.match(map, /<loc>[^<]+\/grabber<\/loc><lastmod>\d{4}-\d\d-\d\d<\/lastmod>/);
     assert.ok(map.includes(`<loc>${ORIGIN}/ai</loc>`));
     assert.match(robots, /Allow: \/ai\n/);
-    // The AI companion page: served with the real origin, labelled beta, and every file and picture it uses is there.
+    // The AI companion page: served with the real origin, labeled beta, and every file and picture it uses is there.
     const ai = await t.request("/ai", { raw: true });
     assert.equal(ai.status, 200);
     const aiHtml = await ai.text();
@@ -1206,7 +1206,7 @@ test("gift marks: need a Discord sign-in, one person per game, the owner sees a 
     const ids = (await t.request("/api/wishlist")).data.rows.map(r => r.itad_id);
     const pub = () => t.request("/api/public/wishlist?slug=jacob");
     const gift = (id, extra = {}) => t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id, ...extra } });
-    assert.match((await pub()).data.accent, /^#[0-9a-f]{6}$/i, "the profile page colour tints the wishlist page");
+    assert.match((await pub()).data.accent, /^#[0-9a-f]{6}$/i, "the profile page color tints the wishlist page");
     assert.equal((await gift(ids[0])).status, 400, "the list's owner does not mark their own gifts");
 
     await as("v-a");
@@ -3330,7 +3330,7 @@ test("every store link in any message goes through a landing page that shows wha
         assert.equal(p.components[0].components[1].url, "https://discord.gg/abc"); assert.match(e.description, /\]\(https:\/\/steamvaluechecker\.com\/d\/\d+\)/);
         assert.match(p.content, /\(https:\/\/steamvaluechecker\.com\/d\/\d+\)/); assert.match(p.content, /\(https:\/\/example\.com\/x\)/, "not a store, untouched");
         const id = e.url.split("/").pop(), html = await (await fetch(o.base + `/d/${id}`)).text();
-        assert.match(html, /Hades is 50% off/); assert.match(html, /\$12\.49/); assert.match(html, /Roguelike/); assert.ok(!/FREE ·/.test(html), "a sale isn't labelled free");
+        assert.match(html, /Hades is 50% off/); assert.match(html, /\$12\.49/); assert.match(html, /Roguelike/); assert.ok(!/FREE ·/.test(html), "a sale isn't labeled free");
         assert.match(html, /While you wait/); assert.match(html, /Take me there/);
         assert.match(html, /og:image" content="[^"]*\/d\/\d+\/img/);
     } finally { configureDeals(null); }

@@ -403,7 +403,7 @@ export function createItad({
         return list.filter(d => d.cut >= minCut).slice(0, limit);
     }
 
-    /** A wide pool of current Steam discounts for personalised picks: up to `pages` x 100 deals, deepest cuts first. Cached for ten minutes. */
+    /** A wide pool of current Steam discounts for personalized picks: up to `pages` x 100 deals, deepest cuts first. Cached for ten minutes. */
     async function getDealsPool({ country = "US", pages = 3 } = {}) {
         const key = `pool:${country}`;
         const hit = getCached(key);

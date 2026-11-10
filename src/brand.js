@@ -1,6 +1,6 @@
 import { linkPayload } from "./deallinks.js";
-// One look for everything the bot says. Individual commands still choose their own colours and fields; this fills in what they left out:
-// a colour, the bot's name and logo in the footer, and a proper card instead of bare text. It never overwrites anything a command set.
+// One look for everything the bot says. Individual commands still choose their own colors and fields; this fills in what they left out:
+// a color, the bot's name and logo in the footer, and a proper card instead of bare text. It never overwrites anything a command set.
 export const BRAND_COLOR = 0xff9800;
 export const BRAND_NAME = "Steam Value Checker";
 
