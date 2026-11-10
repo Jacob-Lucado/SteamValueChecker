@@ -19,13 +19,14 @@ export function pickDeals(pool, n = 5) {
         .slice(0, n);
 }
 
+export const LINK_SEP = " || ";
 const line = d => `${d.title}: -${Math.round(d.cut)}%, ${money(d.price, d.currency)}`;
 
 /** The page every roundup link goes through: it lists the picks, shows the top one's picture and sends people on to the site's deals feed. */
 export function roundupLink(picks, { base, now = Date.now() } = {}) {
     if (!picks.length || !base) return null;
     return dealUrl({ key: `weekly:${localParts(now).ymd}`, kind: "deal", title: "This week's best Steam deals", shop: "Steam", url: `${String(base).replace(/\/+$/, "")}/feed`,
-        image: picks[0].appid ? steamArt(picks[0].appid) : null, price: `Up to ${Math.round(Math.max(...picks.map(p => p.cut)))}% off`, games: picks.map(line), blurb: "The five biggest Steam savings this week, picked by the bot." });
+        image: picks[0].appid ? steamArt(picks[0].appid) : null, price: `Up to ${Math.round(Math.max(...picks.map(p => p.cut)))}% off`, games: picks.map(d => `${line(d)}${LINK_SEP}${d.url}`), blurb: "The five biggest Steam savings this week, picked by the bot." });
 }
 
 export function weeklyXText(picks, link, tags) {
@@ -84,7 +85,7 @@ export function createWeekly({ db, itad, xposter = null, postDiscord = null, inv
         let list = []; try { list = await picks(); } catch { /* shown as empty */ }
         let last = null; try { last = JSON.parse(db.getMeta("weekly:last") || "null"); } catch { /* none yet */ }
         const link = roundupLink(list, { base, now: now() });
-        return { on: on(), channel: channel(), last, picks: list.map(d => ({ title: d.title, cut: Math.round(d.cut), price: money(d.price, d.currency), regular: money(d.regular, d.currency) })),
+        return { on: on(), channel: channel(), last, page: link, picks: list.map(d => ({ url: d.url, title: d.title, cut: Math.round(d.cut), price: money(d.price, d.currency), regular: money(d.regular, d.currency) })),
             xText: list.length ? weeklyXText(list, link, xposter?.tags?.() ?? []) : "", nextDue: due(now()) };
     }
     function set({ on: o, channel: c }) {

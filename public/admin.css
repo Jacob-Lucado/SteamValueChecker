@@ -422,3 +422,12 @@ video.sc-media { cursor: default; }
 @media (max-width: 760px) { .rd { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } .rd-side { border-left: 0; border-top: 1px solid var(--line); } }
 
 .sc-link { color: var(--accent); text-decoration: underline; word-break: break-all; } .sc-link:hover { filter: brightness(1.15); }
+
+/* Pinned pages and desktop icons the admin chose for themselves. */
+.adm-start-row { display: flex; align-items: center; } .adm-start-row .adm-start-item { flex: 1; min-width: 0; }
+.adm-pin { background: none; border: 0; color: #9db4d6; cursor: default; padding: 6px 7px; font-size: 14px; white-space: nowrap; } .adm-pin:hover { color: #f5c542; } .adm-pin.on { color: #f5c542; } .adm-short { font-size: 11px; }
+.adm-tile-wrap { position: relative; } .adm-tile-wrap.drag { opacity: .5; } .adm-tile-wrap .adm-tile { width: 100%; }
+.adm-tile-x { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .45); color: #fff; font-size: 11px; cursor: pointer; opacity: 0; } .adm-tile-wrap:hover .adm-tile-x, .adm-tile-x:focus-visible { opacity: 1; }
+.adm-pins-head { display: flex; align-items: baseline; gap: 8px; } .adm-pins-head small { flex: 1; font-weight: 400; opacity: .7; } .adm-pin-reset { background: none; border: 0; color: inherit; text-decoration: underline; cursor: pointer; font-size: 12px; }
+.adm-icon.mine { position: relative; } .adm-icon-x { position: absolute; top: 2px; right: 6px; width: 18px; height: 18px; border-radius: 50%; display: none; place-items: center; background: rgba(0, 0, 0, .5); color: #fff; font-size: 10px; cursor: pointer; } .adm-icon.mine:hover .adm-icon-x, .adm-icon.mine:focus-within .adm-icon-x { display: grid; }
+.adm-orig .adm-pin { color: var(--muted); } .adm-orig .adm-pin:hover, .adm-orig .adm-pin.on { color: #f5c542; }

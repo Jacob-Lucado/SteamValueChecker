@@ -105,6 +105,14 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
             } catch { return null; }
         },
 
+        /** A user's own name (display name, else username), whatever server they are in. Null when Discord doesn't know them. */
+        async userName(userId) {
+            try {
+                const u = await call(`/users/${encodeURIComponent(userId)}`, { headers: bot });
+                return u?.global_name || u?.username || null;
+            } catch { return null; }
+        },
+
         async createChannel(guildId, body) {
             return call(`/guilds/${encodeURIComponent(guildId)}/channels`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify(body) });
         },

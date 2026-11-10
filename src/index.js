@@ -1,3 +1,5 @@
+import { withoutInflated } from "./fakedeals.js";
+import { steamReviews } from "./reviews.js";
 import { createFortnite } from "./fortnite.js";
 import "dotenv/config";
 import { pingIndexNow } from "./indexnow.js";
@@ -171,7 +173,7 @@ const news = createNews();
 const abg = createPlaytestSources({ abg: createAbgFeed(), log: m => console.warn(`[playtests] ${m}`) });
 const gamerPower = createGamerPower({ enabled: process.env.GAMERPOWER !== "off", log: m => console.log(`[gamerpower] ${m}`) });
 const freeWeekends = createFreeWeekends({ enabled: process.env.FREE_WEEKENDS !== "off", log: m => console.log(`[free weekends] ${m}`) });
-const itad = withFreeWeekends(withGamerPower(withLuna(createItad({ apiKey: cfg.itadKey }), luna), gamerPower), freeWeekends);
+const itad = withoutInflated(withFreeWeekends(withGamerPower(withLuna(createItad({ apiKey: cfg.itadKey }), luna), gamerPower), freeWeekends), steamReviews);
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
 const APP_FLAGS = await (async () => {

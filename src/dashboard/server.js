@@ -27,7 +27,7 @@ import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
 import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
 import * as xposterText from "../xposter.js";
-import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl } from "../bundlelanding.js";
+import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl, splitGame } from "../bundlelanding.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
 import { compareGiftRegions } from "../giftregion.js";
@@ -4254,6 +4254,18 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             for (const [k, v] of sessions) if (v.userId === row.owner_id && k !== mine) sessions.delete(k);
             return { ok: true };
         },
+        // Names for Discord IDs shown on admin pages, so a number is easy to put a face to. Unknown IDs just come back without a name.
+        "GET /api/admin/names": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s) && !s.subAdmin) throw new HttpError(403, "Only admins can look names up.");
+            const ids = [...new Set(String(url.searchParams.get("ids") ?? "").split(",").filter(x => /^\d{15,22}$/.test(x)))].slice(0, 40);
+            const names = {};
+            await Promise.all(ids.map(async id => {
+                const n = db.getMeta?.("staffname:" + id) || await remember("uname:" + id, 6 * 3_600_000, async () => (await rest?.userName?.(id)) ?? null).catch(() => null);
+                if (n) names[id] = String(n).slice(0, 60);
+            }));
+            return { names };
+        },
         "GET /api/admin/stats": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
@@ -4953,9 +4965,12 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         const dest = kind === "b" ? bundleDestination(row.url) : dealDestination(row.url);
         const ended = kind === "b" ? Boolean(row.expires_at && row.expires_at <= Date.now()) || row.status === "expired" : Boolean(row.expiry && row.expiry <= Date.now());
         if (part === "go") {
-            if (!dest) return gone(404);
+            const pick = kind === "d" ? Number(new URL(req.url, "http://x").searchParams.get("i")) : NaN;
+            const own = Number.isInteger(pick) && pick >= 0 ? dealDestination(splitGame(row.games?.[pick] ?? "").link) : null;
+            const target = own ?? dest;
+            if (!target) return gone(404);
             countHit(kind, id, req, "go");
-            return send(res, 302, "", { Location: dest, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
+            return send(res, 302, "", { Location: target, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
         }
         const src = safePictureUrl(row.image), picKey = kind + id;
         if (part === "img") {

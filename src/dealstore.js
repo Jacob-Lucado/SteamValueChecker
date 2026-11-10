@@ -23,7 +23,7 @@ export function dealStore({ run, get, all, now }) {
     /** One row per deal. Calling again for the same key refreshes it and gives the same id. */
     function upsertDeal({ key, kind = "free", title, shop = null, url, image = null, price = null, games = null, blurb = null, expiry = null }) {
         if (!key || !title || !/^https:\/\//i.test(String(url ?? ""))) return null;
-        const g = Array.isArray(games) && games.length ? JSON.stringify(games.slice(0, 12).map(x => String(x).slice(0, 100))) : null;
+        const g = Array.isArray(games) && games.length ? JSON.stringify(games.slice(0, 12).map(x => String(x).slice(0, 700))) : null;
         const have = get("SELECT id FROM deal_pages WHERE key = ?", String(key).slice(0, 200));
         if (have) {
             run("UPDATE deal_pages SET title = ?, shop = ?, url = ?, image = COALESCE(?, image), price = COALESCE(?, price), games = COALESCE(?, games), blurb = COALESCE(?, blurb), expiry = ? WHERE id = ?",

@@ -37,6 +37,12 @@ export function dealDestination(url) {
 }
 
 /** Bundle row or free-game row to one shape for the page. */
+/** A stored game line is "text" or "text || https://link"; the link makes it a clickable row. */
+export function splitGame(g) {
+    const [text, link] = String(g).split(" || ");
+    return { text, link: link && /^https:\/\//.test(link) ? link : null };
+}
+
 function modelOf(kind, r, now) {
     if (kind === "bundle") {
         const store = BUNDLE_STORES[r.store] ?? { name: r.store ?? "the store", emoji: "📦" };
@@ -46,13 +52,16 @@ function modelOf(kind, r, now) {
     return { path: "d", kind: r.kind, id: r.id, free: r.kind === "free", storeName: shop, emoji: r.kind === "bundle" ? "📦" : r.kind === "deal" ? "🏷️" : "🎁", title: r.title, price: r.kind === "free" ? "Free" : r.price, count: r.games?.length || null, games: r.games ?? [], expires: r.expiry, ended: Boolean(r.expiry && r.expiry <= now), dest: dealDestination(r.url), picture: r.image, blurb: r.blurb };
 }
 
+const parsed0 = list => list.map(g => splitGame(g).text);
+
 function page(m, { origin, inviteUrl, supportUrl, now }) {
     const hasPicture = Boolean(safePictureUrl(m.picture));
         const title = m.free ? `${m.title} is free on ${m.storeName}` : m.kind === "bundle" ? `${m.title} | ${m.storeName} bundle` : `${m.title} on ${m.storeName}`;
-    const desc = `${m.free ? "Free to keep. " : m.price ? m.price + ". " : ""}${m.count && !m.free ? m.count + " games" + (m.games.length ? ", including " + m.games.slice(0, 3).join(", ") : "") + ". " : ""}${endsText(m.expires, now, m.free)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
+    const desc = `${m.free ? "Free to keep. " : m.price ? m.price + ". " : ""}${m.count && !m.free ? m.count + " games" + (m.games.length ? ", including " + parsed0(m.games).slice(0, 3).join(", ") : "") + ". " : ""}${endsText(m.expires, now, m.free)}. Found by the Steam Value Checker Discord bot.`.replace(/\s+/g, " ");
     const base = `${origin}/${m.path}/${m.id}`, go = `${base}/go`, local = `/${m.path}/${m.id}`;
-    const games = m.games.slice(0, 10), more = (m.count ?? games.length) - games.length;
-    const redirect = Boolean(m.dest) && !m.ended;
+    const parsed = m.games.map(splitGame), linked = m.kind === "deal" && parsed.some(g => g.link);
+    const games = parsed.slice(0, linked ? 12 : 10), more = (m.count ?? games.length) - games.length;
+    const redirect = Boolean(m.dest) && !m.ended && !linked;
     const head = `<!doctype html>
 <html lang="en">
 <head>
@@ -88,13 +97,13 @@ ${m.price ? `<div><b>${esc(m.price)}</b><span>Price</span></div>` : ""}
 ${m.count && !m.free ? `<div><b>${esc(m.count)}</b><span>Games</span></div>` : ""}
 </div>
 ${m.blurb ? `<p class="blurb">${esc(m.blurb)}</p>` : ""}
-${games.length && !m.free ? `<ul class="games">${games.map(g => `<li>${esc(g)}</li>`).join("")}${more > 0 ? `<li class="more">and ${more} more</li>` : ""}</ul>` : ""}
+${games.length && !m.free ? `<ul class="games">${games.map((g, i) => `<li>${g.link ? `<a href="${local}/go?i=${i}" rel="nofollow noopener">${esc(g.text)}</a>` : esc(g.text)}</li>`).join("")}${more > 0 ? `<li class="more">and ${more} more</li>` : ""}</ul>` : ""}
 <p class="ends${m.ended ? " over" : ""}">${esc(endsText(m.expires, now, m.free))}</p>
 ${redirect ? `<div class="redirect" id="go" data-seconds="${REDIRECT_SECONDS}" data-url="${esc(go)}">
 <p><span id="goText">Taking you to ${esc(m.storeName)} in ${REDIRECT_SECONDS} seconds…</span></p>
 <div class="bar"><i></i></div>
 <div class="actions"><a class="btn main" href="${esc(go)}">${m.free ? "Claim it now" : m.kind === "bundle" ? "Go to the bundle now" : "Take me there"}</a><button class="btn" id="stay" type="button">Stay on this page</button></div>
-</div>` : m.dest && !m.ended ? `<div class="actions"><a class="btn main" href="${esc(go)}">See it on ${esc(m.storeName)}</a></div>` : `<div class="actions"><a class="btn main" href="/">See what's on now</a></div>`}
+</div>` : m.dest && !m.ended ? `<div class="actions"><a class="btn main" href="${esc(go)}">${linked ? "See every deal" : `See it on ${esc(m.storeName)}`}</a></div>` : `<div class="actions"><a class="btn main" href="/">See what's on now</a></div>`}
 </div>
 </article>
 <section class="promo">

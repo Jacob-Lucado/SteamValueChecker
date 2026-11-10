@@ -3987,6 +3987,27 @@ window.SVC_SITE = envIn => {
   }
   const admEl = id => document.getElementById(id);
 
+  // Anywhere the admin panel shows a bare Discord ID in a table cell or label, look up the person's name and show it beside the number.
+  const idNames = new Map(), idAsked = new Set();
+  let idTimer = 0;
+  function nameAdminIds(root) {
+    if (!root || !(adminCtx || document.body.classList.contains("adm-body"))) return;
+    const hits = [];
+    for (const el of root.querySelectorAll("td, th + td, dd, code, b, span, strong, div.v")) {
+      if (el.children.length || el.dataset.named) continue;
+      const t = el.textContent.trim();
+      if (/^\d{17,20}$/.test(t)) hits.push([el, t]);
+    }
+    if (!hits.length) return;
+    const show = () => { for (const [el, id] of hits) { const n = idNames.get(id); if (n && !el.dataset.named) { el.dataset.named = "1"; el.textContent = ""; el.append(h("b", { text: n }), h("span", { class: "muted small", "data-named": "1", text: "  " + id })); } } };
+    const need = [...new Set(hits.map(x => x[1]))].filter(id => !idNames.has(id) && !idAsked.has(id)).slice(0, 40);
+    show();
+    if (!need.length) return;
+    need.forEach(id => idAsked.add(id));
+    api("/api/admin/names?ids=" + need.join(",")).then(r => { for (const [id, n] of Object.entries(r?.names ?? {})) idNames.set(id, n); show(); }).catch(() => { need.forEach(id => idAsked.delete(id)); });
+  }
+  new MutationObserver(() => { clearTimeout(idTimer); idTimer = setTimeout(() => nameAdminIds(document.body.classList.contains("adm-body") ? document.body : app), 250); }).observe(document.body, { childList: true, subtree: true });
+
   function adminCenter(title, text, ...actions) {
     app.replaceChildren(h("div", { class: "adm-center" }, h("div", { class: "panel" }, h("h2", { text: title }), h("p", { class: "muted", text }), h("div", { class: "row" }, actions))));
   }
@@ -4388,7 +4409,7 @@ window.SVC_SITE = envIn => {
       h("div", { class: "panel" }, h("h3", { text: "Visits per day" }), t.days.length ? bars : h("p", { class: "muted", text: "Nothing yet. Counts start once the bot has posted a few links." })),
       h("div", { class: "panel" }, h("h3", { text: "Most opened links" }),
         t.top.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Page", "Type", "Store", "Visits", "Clicks", "Through", ""].map(c => h("th", { text: c })))),
-          h("tbody", {}, ...t.top.map(p => h("tr", {}, h("td", {}, h("b", { text: p.title })), h("td", { text: p.kind }), h("td", { text: p.store }), h("td", { text: String(p.visits) }), h("td", { text: String(p.clicks) }), h("td", { text: rate(p.clicks, p.visits) }), h("td", {}, h("a", { href: p.url, target: "_blank", rel: "noopener", text: "Open" })))))) : h("p", { class: "muted", text: "No visits yet." })));
+          h("tbody", {}, ...t.top.map(p => h("tr", {}, h("td", {}, p.url ? h("a", { href: p.url, target: "_blank", rel: "noopener noreferrer" }, h("b", { text: p.title })) : h("b", { text: p.title })), h("td", { text: p.kind }), h("td", { text: p.store }), h("td", { text: String(p.visits) }), h("td", { text: String(p.clicks) }), h("td", { text: rate(p.clicks, p.visits) }), h("td", {}, h("a", { href: p.url, target: "_blank", rel: "noopener", text: "Open" })))))) : h("p", { class: "muted", text: "No visits yet." })));
   }
 
   /** The project's X account: automatic free-game posts, a composer for ads and announcements, a schedule and the recent posts. */
@@ -4547,6 +4568,7 @@ window.SVC_SITE = envIn => {
         })(),
         wk.picks.length ? h("table", {}, h("thead", {}, h("tr", {}, ["This week's picks", "Was", "Now", "Off"].map(c => h("th", { text: c })))),
           h("tbody", {}, wk.picks.map(p => h("tr", {}, h("td", {}, h("b", { text: p.title })), h("td", { text: p.regular }), h("td", { text: p.price }), h("td", { text: "-" + p.cut + "%" }))))) : h("p", { class: "muted", text: "No deals good enough to post right now." }),
+        wk.page ? h("p", { class: "muted small" }, "The page the posts link to: ", h("a", { href: wk.page, target: "_blank", rel: "noopener noreferrer", text: "open the deals page" })) : null,
         wk.xText ? h("pre", { class: "x-text", text: wk.xText }) : null);
 
       // ----- schedule -----

@@ -2,7 +2,7 @@
 // with a taskbar and a Start menu along the bottom. The pages themselves are drawn by app.js; this file only handles the windows.
 (function (root) {
   "use strict";
-  const KEY = "adm-view", SAVE = "adm-windows";
+  const KEY = "adm-view", SAVE = "adm-windows", PINS = "adm-pins", SHORTS = "adm-shortcuts";
   const store = {
     get(k) { try { return root.localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { root.localStorage.setItem(k, v); } catch { /* private window: fine, nothing is remembered */ } }
@@ -170,6 +170,8 @@
   }
 
   /** The desktop: one folder per group, the way a school computer lays out its shortcuts. */
+  let shortcuts = [], drawIcons = () => {};
+  function loadList(key, fallback) { try { const p = JSON.parse(store.get(key) || "null"); if (Array.isArray(p)) return p.filter(x => typeof x === "string" && known(x) && !x.startsWith("f:")); } catch { /* defaults */ } return fallback; }
   function icons() {
     const grid = el("div", "adm-icons", { role: "list" });
     const add = (art, name, run, extra = {}) => {
@@ -179,14 +181,28 @@
       b.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
       grid.append(b); return b;
     };
-    const chatIcon = add("💬", "Staff chat", () => open("chat")); chatIcon.append(el("i", "adm-icon-badge", { "data-badge": "chat", hidden: "" }));
-    for (const [group] of cfg.nav) add(GROUP_ICON[group] || "📁", group, () => open("f:" + group));
-    if (cfg.pages.radio) add("📻", "Radio", () => open("radio"));
-    if (cfg.pages.personalize) add("🎨", "Personalize", () => open("personalize"));
-    add("🌐", "Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; });
+    drawIcons = () => {
+      grid.replaceChildren();
+      const chatIcon = add("💬", "Staff chat", () => open("chat")); chatIcon.append(el("i", "adm-icon-badge", { "data-badge": "chat", hidden: "" }));
+      for (const [group] of cfg.nav) add(GROUP_ICON[group] || "📁", group, () => open("f:" + group));
+      if (cfg.pages.radio) add("📻", "Radio", () => open("radio"));
+      if (cfg.pages.personalize) add("🎨", "Personalize", () => open("personalize"));
+      add("🌐", "Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; });
+      // the pages this admin put on their own desktop
+      for (const id of shortcuts) {
+        const m = metaOf(id), b = add(m.icon, m.title, () => open(id), { title: m.sub || m.title });
+        b.classList.add("mine");
+        const x = el("span", "adm-icon-x", { role: "button", tabindex: "0", title: "Remove from the desktop", "aria-label": "Remove " + m.title + " from the desktop", text: "✕" });
+        const drop = e => { e.stopPropagation(); e.preventDefault(); shortcuts = shortcuts.filter(v => v !== id); saveShortcuts(); };
+        x.addEventListener("click", drop); x.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") drop(e); }); b.append(x);
+      }
+    };
+    drawIcons();
     return grid;
   }
 
+  const saveShortcuts = () => { store.set(SHORTS, JSON.stringify(shortcuts)); drawIcons(); repaintStart(); };
+  let repaintStart = () => {};
   const WINLOGO = () => el("span", "adm-winlogo", { "aria-hidden": "true" }, el("i"), el("i"), el("i"), el("i"));
   const TILES = [["overview", "Overview", "#0a64c8"], ["chat", "Staff chat", "#c4392b"], ["supporters", "Supporters", "#8a3ffc"], ["system", "System health", "#1a8f5a"], ["announce", "Announcements", "#d4741a"], ["indie", "Indie showcase", "#c0287a"]];
 
@@ -195,20 +211,46 @@
     startMenu = el("div", "adm-start", { hidden: "" });
     const rail = el("div", "adm-start-rail");
     const results = el("div", "adm-start-list");
-    const tilesBox = el("div", "adm-start-tiles", {}, el("div", "adm-start-brand", { text: "LucadoOS" }), el("div", "adm-start-group", { text: "Pinned" }));
-    for (const [id, name, color] of TILES) { const t = el("button", "adm-tile", { type: "button" }, el("span", "adm-tile-art", { "aria-hidden": "true", text: cfg.pages[id].icon }), el("span", "", { text: name })); t.style.setProperty("--tile", color); t.addEventListener("click", () => { close(); open(id); }); tilesBox.append(t); }
+    const tilesBox = el("div", "adm-start-tiles");
+    const hues = ["#0a64c8", "#8a3ffc", "#1a8f5a", "#d4741a", "#c4392b", "#0f7b8a", "#6a4fd0", "#c0287a"], DEFAULT_PINS = TILES.map(t => t[0]).filter(id => cfg.pages[id]);
+    let pinned = loadList(PINS, DEFAULT_PINS), lastQ = "", dragFrom = -1;
+    const savePins = () => { store.set(PINS, JSON.stringify(pinned)); drawTiles(); paint(lastQ); };
+    function drawTiles() {
+      const reset = el("button", "adm-pin-reset", { type: "button", title: "Back to the default pinned pages", text: "Reset" }); reset.addEventListener("click", () => { pinned = DEFAULT_PINS.slice(); savePins(); });
+      const head = el("div", "adm-start-group adm-pins-head", {}, el("span", "", { text: "Pinned" }), el("small", "", { text: "drag to reorder · ✕ to unpin" }), reset);
+      const wraps = pinned.map((id, i) => {
+        const m = metaOf(id), t = el("button", "adm-tile", { type: "button" }, el("span", "adm-tile-art", { "aria-hidden": "true", text: m.icon }), el("span", "", { text: m.title }));
+        t.style.setProperty("--tile", (TILES.find(x => x[0] === id) || [])[2] || hues[i % hues.length]); t.addEventListener("click", () => { close(); open(id); });
+        const x = el("button", "adm-tile-x", { type: "button", "aria-label": "Unpin " + m.title, title: "Unpin", text: "✕" }); x.addEventListener("click", () => { pinned = pinned.filter(v => v !== id); savePins(); });
+        const wrap = el("div", "adm-tile-wrap", { draggable: "true" }, t, x);
+        wrap.addEventListener("dragstart", e => { dragFrom = i; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", id); } catch { /* fine */ } wrap.classList.add("drag"); });
+        wrap.addEventListener("dragend", () => wrap.classList.remove("drag"));
+        wrap.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
+        wrap.addEventListener("drop", e => { e.preventDefault(); if (dragFrom < 0 || dragFrom === i) return; const [mv] = pinned.splice(dragFrom, 1); pinned.splice(i, 0, mv); dragFrom = -1; savePins(); });
+        return wrap;
+      });
+      tilesBox.replaceChildren(el("div", "adm-start-brand", { text: "LucadoOS" }), head, ...(wraps.length ? wraps : [el("p", "adm-start-none", { text: "Nothing pinned. Use the ☆ beside any page to pin it here." })]));
+    }
+    for (const [id, name, color] of []) { const t = el("button", "adm-tile", { type: "button" }, el("span", "adm-tile-art", { "aria-hidden": "true", text: cfg.pages[id].icon }), el("span", "", { text: name })); t.style.setProperty("--tile", color); t.addEventListener("click", () => { close(); open(id); }); tilesBox.append(t); }
     const paint = q => {
-      q = (q || "").trim().toLowerCase(); results.replaceChildren();
+      lastQ = q = (q || "").trim().toLowerCase(); results.replaceChildren();
       for (const [group, items] of cfg.nav) {
         const hit = items.filter(([, t, , sub]) => !q || t.toLowerCase().includes(q) || (sub || "").toLowerCase().includes(q) || group.toLowerCase().includes(q)); if (!hit.length) continue;
         results.append(el("div", "adm-start-group", { text: group }));
-        for (const [id, t, g] of hit) { const b = el("button", "adm-start-item", { type: "button" }, el("i", "", { "aria-hidden": "true", text: g }), el("span", "", { text: t })); b.addEventListener("click", () => { close(); open(id); }); results.append(b); }
+        for (const [id, t, g] of hit) {
+          const b = el("button", "adm-start-item", { type: "button" }, el("i", "", { "aria-hidden": "true", text: g }), el("span", "", { text: t })); b.addEventListener("click", () => { close(); open(id); });
+          const isPinned = pinned.includes(id), pin = el("button", "adm-pin" + (isPinned ? " on" : ""), { type: "button", title: isPinned ? "Unpin from the start menu" : "Pin to the start menu", "aria-label": (isPinned ? "Unpin " : "Pin ") + t, text: isPinned ? "★" : "☆" });
+          pin.addEventListener("click", () => { pinned = isPinned ? pinned.filter(v => v !== id) : [...pinned, id]; savePins(); });
+          const onDesk = shortcuts.includes(id), sc = el("button", "adm-pin adm-short" + (onDesk ? " on" : ""), { type: "button", title: onDesk ? "Remove the desktop icon" : "Put an icon on the desktop", "aria-label": (onDesk ? "Remove the desktop icon for " : "Add a desktop icon for ") + t, text: onDesk ? "🖥✓" : "🖥+" });
+          sc.addEventListener("click", () => { shortcuts = onDesk ? shortcuts.filter(v => v !== id) : [...shortcuts, id]; saveShortcuts(); });
+          results.append(el("div", "adm-start-row", {}, b, pin, sc));
+        }
       }
       if (!results.children.length) results.append(el("p", "adm-start-none", { text: "Nothing matches that." }));
     };
     const railBtn = (glyph, label, run) => { const b = el("button", "adm-rail-btn", { type: "button", title: label, "aria-label": label, text: glyph }); b.addEventListener("click", run); return b; };
     rail.append(railBtn("☰", "Switch to the classic panel", () => setMode("classic")), railBtn("🌐", "Back to Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; }));
-    startMenu.append(rail, results, tilesBox); paint("");
+    startMenu.append(rail, results, tilesBox); drawTiles(); paint(""); repaintStart = () => paint(lastQ);
     const btn = el("button", "adm-startbtn", { type: "button", "aria-label": "Start menu", "aria-expanded": "false" }, WINLOGO());
     const search = el("input", "", { type: "text", placeholder: "Type here to search", "aria-label": "Search the admin panel", autocomplete: "off", spellcheck: "false" });
     const box = el("label", "adm-searchbox", {}, el("span", "", { "aria-hidden": "true", text: "⌕" }), search);
@@ -241,6 +283,7 @@
   function begin(options) {
     cfg = options; on = true;
     document.getElementById("adm").hidden = true; document.body.classList.add("adm-os");
+    shortcuts = loadList(SHORTS, []);
     desk = el("div", "adm-desk"); layer = el("div", "adm-layer"); tasks = el("div", "adm-tasks");
     const tray = el("div", "adm-tray"); const status = document.getElementById("admStatus"), user = document.getElementById("admUser");
     if (status) tray.append(status); if (user) { user.querySelectorAll("button").forEach(b => { if (b.textContent === "Desktop view") b.remove(); }); tray.append(user); }
