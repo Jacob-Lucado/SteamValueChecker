@@ -155,7 +155,7 @@ test("Playtester: its feed is read into the shared shape, and demos only count f
     const items = parsePlaytester(F("playtester.xml"));
     assert.equal(items.length, 12);
     const zoom = items.find(x => x.game.startsWith("I got the ZOOMIES"));
-    assert.equal(zoom.kind, "beta"); assert.equal(zoom.sourceName, "Playtester"); assert.equal(zoom.url, "https://playtester.io/i-got-the-zoomies");
+    assert.equal(zoom.kind, "playtest", "Playtester writes Beta on every playtest"); assert.equal(zoom.type, "Playtest"); assert.equal(zoom.sourceName, "Playtester"); assert.equal(zoom.url, "https://playtester.io/i-got-the-zoomies");
     assert.match(zoom.image, /^https:\/\/cdn\.playtester\.io\/thumbnails\//); assert.ok(!zoom.wishlistOnly);
     const demo = items.find(x => x.game === "Space Girl");
     assert.equal(demo.kind, "demo"); assert.equal(demo.wishlistOnly, true); assert.equal(demo.label, "Demo");
