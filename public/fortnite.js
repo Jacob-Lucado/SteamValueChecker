@@ -38,7 +38,8 @@
       tabsEl.replaceChildren(...TABS().map(([id, text]) => h("button", { type: "button", class: "fn-tab" + (tab === id ? " active" : ""), onclick: () => { tab = id; history.replaceState(null, "", id === "shop" ? "/fortnite" : "/fortnite?tab=" + id); drawTabs(); show(); } }, text)));
     }
     const hero = h("section", { class: "fn-hero" });
-    app.replaceChildren(pageHead("Fortnite", "The item shop, news and everything new in the game."), tabsEl, hero, body);
+    const creatorBox = h("aside", { class: "fn-creator", hidden: true });
+    app.replaceChildren(pageHead("Fortnite", "The item shop, news and everything new in the game."), creatorBox, tabsEl, hero, body);
 
     function drawHero() {
       const sh = st.shop;
@@ -218,7 +219,14 @@
       go.addEventListener("click", run); name.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
       body.replaceChildren(h("div", { class: "fn-bar" }, name, plat, go), h("p", { class: "muted small", text: "Battle royale stats for players whose stats are public." }), out);
     }
-    api("/api/fortnite/status").then(s => { st.status = s; drawTabs(); drawHero(); }).catch(() => {});
+    api("/api/fortnite/status").then(s => { st.status = s; drawTabs(); drawHero(); if (s.creatorCode) drawCreator(s.creatorCode); }).catch(() => {});
+    function drawCreator(code) {
+      const copy = h("button", { type: "button", class: "btn blue small", text: "Copy code", onclick: async e => { const btn = e.currentTarget; try { await navigator.clipboard.writeText(code.toUpperCase()); } catch { /* the code is on screen to copy by hand */ } btn.textContent = "Copied"; setTimeout(() => { btn.textContent = "Copy code"; }, 1500); } });
+      const live = h("span", { class: "fn-cc-live muted small", text: "" });
+      creatorBox.hidden = false;
+      creatorBox.replaceChildren(h("div", { class: "fn-cc-text" }, h("span", { class: "fn-eyebrow", text: "Support a creator" }), h("p", {}, "Buying from the item shop? Enter creator code ", h("b", { class: "fn-cc-code", text: code.toUpperCase() }), " at checkout to support Steam Value Checker, at no extra cost to you."), live), copy);
+      api("/api/fortnite/creator?code=" + encodeURIComponent(code)).then(d => { live.textContent = d.status === "ACTIVE" ? `✓ Active${d.name ? " · " + d.name : ""}` : d.status === "NOT_FOUND" ? "" : "Code status: " + d.status.toLowerCase(); if (d.status === "ACTIVE") live.classList.add("ok"); }).catch(() => {});
+    }
     drawTabs(); show();
   }
 

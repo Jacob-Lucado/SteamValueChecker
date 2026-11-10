@@ -42,7 +42,7 @@ export function slimEntry(e) {
     };
 }
 
-export function createFortnite({ fetchImpl = globalThis.fetch, now = () => Date.now(), apiKey = "", log = () => {} } = {}) {
+export function createFortnite({ fetchImpl = globalThis.fetch, now = () => Date.now(), apiKey = "", creatorCode = "LUCADO", log = () => {} } = {}) {
     const cache = new Map();
     const get = async (key, ttl, load) => {
         const hit = cache.get(key);
@@ -153,7 +153,18 @@ export function createFortnite({ fetchImpl = globalThis.fetch, now = () => Date.
             throw down();
         }
     }
-    return { shop, news: newsFeed, map, fresh, search, status, stats, hasStats: Boolean(apiKey) };
+    /** A Support-a-Creator code: whether it is live and whose it is. */
+    async function creator(name) {
+        const code = clip(name, 30).replace(/[^A-Za-z0-9_\-. ]/g, "");
+        if (code.length < 2) throw new UserError("Type a creator code.");
+        try {
+            return await get("cc:" + code.toLowerCase(), 30 * MIN, async () => {
+                const d = await json(`/v2/creatorcode?name=${encodeURIComponent(code)}`).catch(e => { if (e.status === 404 || e.status === 400) return null; throw e; });
+                return d ? { code: clip(d.code, 30), name: clip(d.account?.name, 40), status: String(d.status ?? "").toUpperCase(), verified: Boolean(d.verified) } : { code, name: "", status: "NOT_FOUND", verified: false };
+            });
+        } catch { throw down(); }
+    }
+    return { creator, creatorCode: clip(creatorCode, 30), shop, news: newsFeed, map, fresh, search, status, stats, hasStats: Boolean(apiKey) };
 }
 
 function slimCosmetic(c) {

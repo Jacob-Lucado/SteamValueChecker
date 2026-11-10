@@ -3693,6 +3693,7 @@ const fnEntry = (over = {}) => ({ regularPrice: 1500, finalPrice: 1200, offerId:
     layout: { name: "Peak Style", rank: 50, index: 2, displayType: "tileGrid" }, brItems: [{ id: "Character_X", name: "Peak Guy", type: { value: "outfit", displayValue: "Outfit" }, rarity: { value: "epic", displayValue: "Epic" }, images: { icon: "https://fortnite-api.com/i.png", smallIcon: "https://fortnite-api.com/s.png" } }], ...over });
 const fnFetch = (calls = []) => async url => { calls.push(String(url)); const u = String(url);
     if (/v2\/shop/.test(u)) return { ok: true, status: 200, json: async () => ({ data: { date: "2026-11-10T00:00:00Z", entries: [fnEntry(), fnEntry({ offerId: "o2", layout: { name: "Jam Tracks", rank: 10, index: 1, displayType: "expandableList" }, brItems: undefined, tracks: [{ title: "Song", artist: "Band", albumArt: "https://cdn.fortnite-api.com/a.jpg" }] }), fnEntry({ offerId: "o3", layout: undefined, tileSize: "Size_2_x_1" })] } }) };
+    if (/creatorcode/.test(u)) return { ok: true, status: 200, json: async () => ({ data: { code: "lucado", account: { name: "Jacob Lucado" }, status: "ACTIVE", verified: false } }) };
     if (/stats\/br/.test(u)) return { ok: true, status: 200, json: async () => ({ data: { account: { name: "Pro" }, stats: { all: { overall: { wins: 5, kills: 10, matches: 20, kd: 1, winRate: 25, top10: 8, minutesPlayed: 600 } } } } }) };
     return { ok: false, status: 404, json: async () => ({ error: "nope" }) }; };
 
@@ -3725,4 +3726,12 @@ test("fortnite: the dashboard serves the shop and search to anyone and only offe
     const status = await t.request("/api/fortnite/status"); assert.equal(status.status, 200); assert.equal(status.data.stats, false);
     assert.equal((await t.request("/api/fortnite/search?q=a")).status, 400, "too short");
     assert.equal((await t.request("/api/fortnite/stats?name=Pro")).status, 400, "no key set");
+});
+
+test("fortnite: the creator code is announced and checked live", async () => {
+    const { createFortnite } = await import("../src/fortnite.js");
+    const t = await setup({ extra: { fortniteSvc: createFortnite({ fetchImpl: fnFetch(), creatorCode: "LUCADO" }) } });
+    assert.equal((await t.request("/api/fortnite/status")).data.creatorCode, "LUCADO");
+    const c = await t.request("/api/fortnite/creator?code=LUCADO"); assert.equal(c.status, 200); assert.equal(c.data.status, "ACTIVE"); assert.equal(c.data.name, "Jacob Lucado");
+    assert.equal((await t.request("/api/fortnite/creator?code=x")).status, 400);
 });
