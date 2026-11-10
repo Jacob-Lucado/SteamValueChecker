@@ -491,6 +491,10 @@ test("the dashboard saves ping roles for managers and rejects roles that do not 
     assert.equal(ok.status, 200); assert.equal(t.db.getCommunity("g1").ping_free, "r1");
     const ind = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", indie: "r2" } });
     assert.equal(ind.status, 200); assert.equal(t.db.getCommunity("g1").ping_indie, "r2");
+    const full = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", playtest_full: ["playtester", "itch", "bogus", "playtester"] } });
+    assert.equal(full.status, 200); assert.equal(t.db.getCommunity("g1").playtest_full, "playtester,itch", "only known sources, once each");
+    await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", playtest_full: [] } });
+    assert.equal(t.db.getCommunity("g1").playtest_full, null);
     const bad = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", free: "nope" } });
     assert.equal(bad.status, 400);
     await t.close();

@@ -14,6 +14,8 @@ import { createEmojiGg, PACK_KEY_RE } from "../emojisource.js";
 
 export class CommunityError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
+export const FULL_SOURCES = ["playtester", "itch", "gamerpower", "steamdemo"];
+
 export function createCommunityDash({ db, rest, community, membersIntent = () => true, ai = { available: false, phrase: false }, rt = null, botId, publicUrl = null, fetchImpl = globalThis.fetch, emojigg = createEmojiGg({ fetchImpl }) }) {
     const memeSource = createMemes({ fetchImpl });
     const fail = (status, m) => { throw new CommunityError(status, m); };
@@ -119,6 +121,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         const patch = {};
         for (const k of ["deals", "free", "giveaway", "lfg", "playtest", "squad", "indie"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
         if (b.playtest_all !== undefined) patch.playtest_all = b.playtest_all ? 1 : 0;
+        if (b.playtest_full !== undefined) patch.playtest_full = [...new Set((Array.isArray(b.playtest_full) ? b.playtest_full : []).map(String).filter(k => FULL_SOURCES.includes(k)))].join(",") || null;
         if (b.indie_dev !== undefined) patch.indie_dev_role = await roleOk(gid, b.indie_dev || null);
         if (b.indie_channel !== undefined) patch.indie_channel = await channelOk(gid, b.indie_channel || null);
         if (b.squad_channel !== undefined) patch.squad_channel = await channelOk(gid, b.squad_channel || null);

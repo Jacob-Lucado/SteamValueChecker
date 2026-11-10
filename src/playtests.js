@@ -134,6 +134,10 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
         const everything = Boolean(g.playtest_channel) || Boolean(db.getCommunity(gid)?.playtest_all);
         const apps = guildApps.get(gid) ?? [];
         const hits = [];
+        // Sources the server picked to post in full (every listing, demos included), not just games its members watch.
+        const full = new Set(String(db.getCommunity(gid)?.playtest_full ?? "").split(",").filter(Boolean));
+        const quietFull = new Set();
+        for (const src of full) if (db.getMeta(`ptg:full:${gid}:${src}`) == null) { db.setMeta(`ptg:full:${gid}:${src}`, "1"); if (!first) quietFull.add(src); } // switching one on starts quiet: today's backlog isn't dumped
         const gkey = (item, now_) => { const k = gameKeys(item, now_); return { mark: `ptg:${gid}:${k.mark}`, check: k.check.map(x => `ptg:${gid}:${x}`) }; };
         for (const a of apps) for (const { p, kind } of hitsFor(a.appid)) {
             const key = `ptg:${gid}:${p.gid}`, gk = gkey({ game: a.title, kind }, now());
@@ -146,9 +150,10 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
             const key = `ptg:${gid}:abg:${item.id}`;
             if (db.getMeta(key) != null) continue;
             const match = apps.find(a => sameGame(a.title, item.game) || (item.appid != null && a.appid === item.appid));
-            if (!everything && !match) continue;
-            if (item.wishlistOnly && !match) continue; // Steam's demo list is far too long to post whole
             const gk = gkey(item, now()), src = item.source ?? "abg";
+            if (!everything && !match && !full.has(src)) continue;
+            if (item.wishlistOnly && !match && !full.has(src)) continue; // Steam's demo list is far too long to post whole, unless the server chose this source in full
+            if (quietFull.has(src) && !match) { db.setMeta(key, "1"); db.setMeta(gk.mark, "1"); continue; }
             const newSrc = src !== "abg" && db.getMeta(`ptg:src:${gid}:${src}`) == null;
             if (first || newSrc) { db.setMeta(key, "1"); db.setMeta(gk.mark, "1"); continue; }
             if (gk.check.some(k => db.getMeta(k) != null) || hits.some(h => sameGame(h.game, item.game) && (h.group === kindGroup(item.kind) || h.source === "steam"))) { db.setMeta(key, "1"); continue; }
@@ -198,7 +203,7 @@ export async function refreshPlaytestChannel({ db, news, abg = null, notifier, g
     const found = [];
     for (const item of site) {
         const match = apps.find(a => sameGame(a.title, item.game) || (item.appid != null && a.appid === item.appid));
-        if (item.wishlistOnly && !match) continue;
+        if (item.wishlistOnly && !match && !String(c.playtest_full ?? "").split(",").includes(item.source)) continue;
         found.push({ embed: abgEmbed(item, { watchers: match?.watchers ?? 0 }), url: item.url, date: item.date, key: `ptg:${guildId}:abg:${item.id}`, game: item.game, kind: item.kind });
     }
     for (const a of apps) for (const p of feed.get(a.appid) ?? []) {

@@ -162,3 +162,17 @@ test("Playtester: its feed is read into the shared shape, and demos only count f
     assert.ok(items.every((x, i) => i === 0 || items[i - 1].date >= x.date), "newest first");
     assert.deepEqual(parsePlaytester("nope"), []);
 });
+
+test("a server can choose a source to post in full: its demos, even for games nobody watches, with a quiet start", async () => {
+    const w = world();
+    const demo = (name, daysAgo) => ({ ...item("playtester", name, "demo", daysAgo), wishlistOnly: true, label: "Demo" });
+    w.set([item("abg", "Anchor", "signup", 5)]); await w.run();                       // first look: quiet
+    w.set([item("abg", "Anchor", "signup", 5), demo("Unwatched Demo", 0.3)]); await w.run();
+    assert.equal(w.chan.length, 0, "a demo nobody watches isn't posted by default");
+    w.db.setCommunity("G", { playtest_full: "playtester" });
+    w.set([item("abg", "Anchor", "signup", 5), demo("Unwatched Demo", 0.3)]); await w.run();
+    assert.equal(w.chan.length, 0, "switching it on starts quiet: today's backlog isn't dumped");
+    w.set([item("abg", "Anchor", "signup", 5), demo("Unwatched Demo", 0.3), demo("Brand New Demo", 0.05)]); await w.run();
+    assert.equal(w.chan.length, 1); assert.match(w.chan[0].title, /Brand New Demo/);
+    assert.equal(w.sent.length, 0, "members' own alerts keep the wishlist-only rule");
+});
