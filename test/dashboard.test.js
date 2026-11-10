@@ -3147,3 +3147,18 @@ test("admin X page lists the free games, builds each post with its landing link,
     assert.equal(posted[0].freeId, "1");
     await o.close();
 });
+
+test("admin weekly deals: status, settings and post now are owner-only and report problems plainly", async () => {
+    const { createWeekly } = await import("../src/weeklydeals.js");
+    const deal = t => ({ id: t, title: t, cut: 70, price: 12, regular: 40, currency: "USD", url: "https://store.steampowered.com/app/1/", appid: 1 });
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    assert.equal((await o.request("/api/admin/weekly")).status, 503);
+    await o.close();
+    const sent = [], weekly = createWeekly({ db: openDb(":memory:"), itad: { getDealsPool: async () => ["A", "B", "C", "D"].map(deal) }, postDiscord: async (c, p) => sent.push([c, p]) });
+    const o2 = await signedIn({ config: { ownerId: "u1" }, extra: { weekly } });
+    const st = (await o2.request("/api/admin/weekly")).data; assert.equal(st.picks.length, 4); assert.equal(st.on, true);
+    assert.equal((await o2.request("/api/admin/weekly", { method: "POST", body: { channel: "nope" } })).status, 400);
+    assert.equal((await o2.request("/api/admin/weekly", { method: "POST", body: { channel: "123456789012345678", on: false } })).data.channel, "123456789012345678");
+    assert.equal((await o2.request("/api/admin/weekly/run", { method: "POST", body: {} })).data.discord, true); assert.equal(sent.length, 1);
+    await o2.close();
+});

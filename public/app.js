@@ -4166,6 +4166,7 @@
       const xs = await api("/api/admin/xposter");
       const bl = await api("/api/admin/xposter/bundles?link=" + (bundleLink ? 1 : 0)).catch(() => ({ bundles: [] }));
       const fl = await api("/api/admin/xposter/free?link=" + (freeLink ? 1 : 0)).catch(() => ({ games: [] }));
+      const wk = await api("/api/admin/weekly").catch(() => null);
       if (!document.body.contains(body)) return;
       const save = async patch => { try { await api("/api/admin/xposter", patch); toast("Saved.", "ok"); await draw(); } catch (e) { toast(e.message); } };
 
@@ -4286,6 +4287,21 @@
               h("td", {}, g.posted ? h("span", { class: "muted small", text: "Already posted " }) : null, go, " ", ed));
           }))) : h("p", { class: "muted", text: "No free games right now." }));
 
+      // ----- the Friday roundup -----
+      const weeklyPanel = wk && h("div", { class: "panel" }, h("h3", { text: "Weekly best deals" }),
+        h("p", { class: "muted", text: "Every Friday around noon Eastern, the bot posts the five biggest Steam savings of the week: one X post (when auto posting is on) and one Discord post in the channel below. Both link to one page on the site, so the visits show up on Link traffic." }),
+        (() => {
+          const on = h("input", { type: "checkbox" }); on.checked = wk.on; on.addEventListener("change", () => api("/api/admin/weekly", { on: on.checked }).then(() => toast("Saved.", "ok")).catch(e => toast(e.message)));
+          const ch = h("input", { type: "text", placeholder: "Discord channel ID (optional)", value: wk.channel, size: "28" });
+          const save = h("button", { class: "btn gray small", type: "button", text: "Save channel" }); save.addEventListener("click", () => busy(save, async () => { try { await api("/api/admin/weekly", { channel: ch.value }); toast("Saved.", "ok"); } catch (e) { toast(e.message); } }));
+          const now = h("button", { class: "btn green small", type: "button", text: "Post it now", disabled: !wk.picks.length }); now.addEventListener("click", () => busy(now, async () => { if (!confirm("Post this week's deals now?")) return; try { await api("/api/admin/weekly/run", {}); toast("Posted.", "ok"); await draw(); } catch (e) { toast(e.message); } }));
+          return h("div", {}, h("div", { class: "row" }, h("label", { class: "check" }, on, " Post every Friday"), ch, save, now),
+            wk.last ? h("p", { class: "muted small", text: `Last post: ${when(wk.last.at)}. X: ${wk.last.x === null ? "not posted" : String(wk.last.x).startsWith("failed") ? wk.last.x : "posted"}. Discord: ${wk.last.discord === null ? "no channel set" : wk.last.discord === true ? "posted" : wk.last.discord}.` }) : h("p", { class: "muted small", text: "Nothing posted yet." }));
+        })(),
+        wk.picks.length ? h("table", {}, h("thead", {}, h("tr", {}, ["This week's picks", "Was", "Now", "Off"].map(c => h("th", { text: c })))),
+          h("tbody", {}, wk.picks.map(p => h("tr", {}, h("td", {}, h("b", { text: p.title })), h("td", { text: p.regular }), h("td", { text: p.price }), h("td", { text: "-" + p.cut + "%" }))))) : h("p", { class: "muted", text: "No deals good enough to post right now." }),
+        wk.xText ? h("pre", { class: "x-text", text: wk.xText }) : null);
+
       // ----- schedule -----
       const queue = h("div", { class: "panel" }, h("h3", { text: "Scheduled" }),
         xs.queue.length ? h("table", {}, h("thead", {}, h("tr", {}, ["When", "Post", ""].map(c => h("th", { text: c })))),
@@ -4302,7 +4318,7 @@
             return h("tr", {}, h("td", { text: when(x.at) }), h("td", { text: (kinds[x.kind] || x.kind) + (x.media ? " + picture" : "") }), h("td", { text: x.text.length > 110 ? x.text.slice(0, 110) + "…" : x.text }),
               h("td", {}, x.id && h("a", { href: "https://x.com/i/status/" + x.id, target: "_blank", rel: "noopener", text: "View" }), " ", x.id && del));
           })))) : h("p", { class: "muted", text: "Nothing posted yet." }));
-      body.replaceChildren(status, composer, freeGames, bundles, queue, hist);
+      body.replaceChildren(status, composer, weeklyPanel, freeGames, bundles, queue, hist);
     };
     try { await draw(); } catch (e) { fail(e); }
   }

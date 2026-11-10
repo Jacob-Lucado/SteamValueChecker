@@ -242,7 +242,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ weekly = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -1575,6 +1575,27 @@ export function createDashboard({ storage = null, topgg = null, twitchReply = fa
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             const link = url.searchParams.get("link") !== "0", tags = xposter.tags();
             return { bundles: db.listFeedBundles({ status: "active", limit: 8, adult: false }).map(bundleFeedView).map(b => ({ id: b.id, title: b.title, storeName: b.storeName, price: b.price, expiresAt: b.expiresAt, gameCount: b.gameCount, posted: xposter.bundlePosted(b.id), text: xposterText.bundleText({ ...b, url: `${origin}/b/${b.id}` }, { tags, link }), visits: Number(db.getMeta(`bundlevisit:${b.id}`)) || 0, clicks: Number(db.getMeta(`bundlego:${b.id}`)) || 0 })) };
+        },
+        "GET /api/admin/weekly": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!weekly) throw new HttpError(503, "The weekly deals post isn't available on this bot.");
+            return await weekly.status();
+        },
+        "POST /api/admin/weekly": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!weekly) throw new HttpError(503, "The weekly deals post isn't available on this bot.");
+            try { weekly.set({ on: body.on === undefined ? undefined : Boolean(body.on), channel: body.channel }); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+            return { ok: true, ...(await weekly.status()) };
+        },
+        "POST /api/admin/weekly/run": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!weekly) throw new HttpError(503, "The weekly deals post isn't available on this bot.");
+            const r = await weekly.run({ force: true });
+            if (r.skipped) throw new HttpError(400, r.skipped === "not enough good deals" ? "There aren't enough good deals to post right now." : "Nothing to post.");
+            return { ok: true, ...r };
         },
         "GET /api/admin/xposter/free": async (req, _b, url) => {
             const s = session(req);
