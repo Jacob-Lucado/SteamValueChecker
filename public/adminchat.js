@@ -4,6 +4,16 @@
   "use strict";
   const COLORS = ["#7c6cff", "#3b9fe8", "#e0527f", "#2fb67c", "#e08a2b", "#b45fd1", "#d9534f", "#3aa8a8"];
   const colorOf = key => { let n = 0; for (const c of String(key)) n = (n * 31 + c.charCodeAt(0)) >>> 0; return COLORS[n % COLORS.length]; };
+  /** Message text with @mentions highlighted and web links clickable. Only http and https links; they open in a new tab. */
+  function richText(h, node, body) {
+    for (const part of String(body).split(/(https?:\/\/[^\s<>"']+|@[\w.-]+)/g)) {
+      if (/^https?:\/\//.test(part)) {
+        const url = part.replace(/[.,;:!?)\]]+$/, ""), tail = part.slice(url.length);
+        node.append(h("a", { class: "sc-link", href: url, target: "_blank", rel: "noopener noreferrer", text: url }), document.createTextNode(tail));
+      } else node.append(/^@[\w.-]+$/.test(part) ? h("span", { class: "sc-mention", text: part }) : document.createTextNode(part));
+    }
+    return node;
+  }
   const clock = at => new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const dayName = at => { const d = new Date(at), t = new Date(); return d.toDateString() === t.toDateString() ? "Today" : d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }); };
   const dmId = (a, b) => "dm:" + [a, b].sort().join(":");
@@ -173,7 +183,7 @@
     function bubble(m, prev) {
       const mine = m.author === me().key, grouped = prev && prev.author === m.author && m.at - prev.at < 5 * 60_000 && !m.reply;
       const text = h("div", { class: "sc-text" }); if (!m.body) text.hidden = true;
-      for (const part of m.body.split(/(@[\w.-]+)/g)) text.append(/^@[\w.-]+$/.test(part) ? h("span", { class: "sc-mention", text: part }) : document.createTextNode(part));
+      richText(h, text, m.body);
       const acts = h("span", { class: "sc-acts" }, h("button", { type: "button", title: "React", "aria-label": "React", text: "☺", onclick: e => reactPicker(m, e.currentTarget) }),
         h("button", { type: "button", title: "Reply", "aria-label": "Reply", text: "↩", onclick: () => { replyTo = m; drawReply(); input.focus(); } }),
         mine ? h("button", { type: "button", title: "Edit", "aria-label": "Edit", text: "✎", onclick: () => { editing = m; input.value = m.body; input.focus(); drawReply(); } }) : null,
@@ -220,7 +230,7 @@
     async function tkView(id) {
       tkId = id;
       const r = await api("/api/admin/chat/ticket?id=" + id), t = r.ticket;
-      const thread = h("div", { class: "sc-tkthread" }, ...r.messages.map(m => h("div", { class: "sc-msg" + (m.role === "staff" ? " mine" : "") }, h("span", { class: "sc-av", text: (m.role === "staff" ? "S" : (t.user_name || "?")[0]).toUpperCase() }), h("div", { class: "sc-body" }, h("div", { class: "sc-meta" }, h("b", { text: m.role === "staff" ? "Staff" : (t.user_name || "Member") }), h("span", { class: "muted small", text: clock(m.at) })), h("div", { class: "sc-bubble" }, h("div", { class: "sc-text", text: m.body }))))));
+      const thread = h("div", { class: "sc-tkthread" }, ...r.messages.map(m => h("div", { class: "sc-msg" + (m.role === "staff" ? " mine" : "") }, h("span", { class: "sc-av", text: (m.role === "staff" ? "S" : (t.user_name || "?")[0]).toUpperCase() }), h("div", { class: "sc-body" }, h("div", { class: "sc-meta" }, h("b", { text: m.role === "staff" ? "Staff" : (t.user_name || "Member") }), h("span", { class: "muted small", text: clock(m.at) })), h("div", { class: "sc-bubble" }, richText(h, h("div", { class: "sc-text" }), m.body))))));
       thread.querySelectorAll(".sc-av").forEach((a, i) => a.style.setProperty("background", r.messages[i].role === "staff" ? "#7c6cff" : colorOf(t.user_id || "")));
       const box = h("textarea", { class: "sc-input", rows: "2", maxlength: "1800", placeholder: "Reply to " + (t.user_name || "them") + ". They get it in their DMs and on the site.", "aria-label": "Reply" });
       const go = h("button", { type: "button", class: "sc-send", text: "➤", "aria-label": "Send reply" });
