@@ -710,7 +710,7 @@ const status = createStatusMonitor({
             staleAfter(beat.alerts, cfg.checkEveryMinutes * 60_000) ? { state: "degraded", detail: "The last check is overdue" } : { state: "operational" } },
         ...(giveaways ? { giveaways: { name: "Giveaway engine", desc: "Ends giveaways on time and delivers prize keys", critical: false, check: () =>
             staleAfter(beat.giveaways, 60_000) ? { state: "degraded", detail: "The last run is overdue" } : { state: "operational" } } } : {}),
-        freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games, Steam news and Top.gg votes", critical: false, check: () => {
+        freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games, Steam news and Top.gg votes", critical: false, plural: true, check: () => {
             const bad = [["Amazon Luna", luna.health()], ["GamerPower", gamerPower.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()], ["Top.gg votes", topgg.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
             return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${h.lastError})`).join(" or ")}` } : { state: "operational" };
         } },
