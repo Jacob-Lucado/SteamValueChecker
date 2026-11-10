@@ -11,7 +11,8 @@ export const CHANGELOG = [
         "**Admin desktop:** pin pages to the Start menu and put icons for your most-used pages on the desktop, like the dashboard.",
         "**Fake sales filtered out:** deals where a high sticker price is \"cut\" to a few dollars (a common trick to look like a steal) are now left out of the weekly roundup, hot deals and For You unless the game has a real number of Steam reviews.",
         "**Weekly deals page:** the link in Friday's X and Discord posts now opens a page listing every deal with its price and its own link to the store, instead of the general feed. The admin Weekly best deals panel links to the same page.",
-        "**Names next to Discord IDs:** anywhere the admin panel shows a bare Discord ID (Busiest users, votes and more), it now shows the person's name beside it." ] },
+        "**Names next to Discord IDs:** anywhere the admin panel shows a bare Discord ID (Busiest users, votes and more), it now shows the person's name beside it.",
+        "**Fixed:** the classic header got its right-hand tools back (search, desktop switch, currency, language, display, your name and Log out, and Sign in when logged out)." ] },
     { version: "2026.11.54", date: "2026-11-10", title: "Fortnite on the dashboard", items: [
         "**Fortnite page:** the item shop laid out the way the game shows it, with its sections, big and small tiles, rarity colors, V-Bucks prices, new, on sale and leaving soon badges, a countdown to the next shop, and a closer look at anything in it. You can search the shop and filter it by outfits, emotes, bundles, jam tracks and more.",
         "**Also there:** the latest Fortnite news, everything new in the latest update, the island map with its named places, and a search of every cosmetic that shows how often and when it was last in the shop. It's open to everyone, no sign-in needed.",

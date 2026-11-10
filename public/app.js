@@ -335,6 +335,9 @@ window.SVC_SITE = envIn => {
       ...tabs.map(([id, text]) => h("a", { href: "#/" + id, class: "hubtab" + (view === id ? " active" : ""), "aria-current": view === id ? "page" : null }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
       here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null,
       here.id === "help" ? h("a", { class: "hubtab", href: "/ai", text: "AI companion (beta)" }) : null].filter(Boolean)));
+    // On a narrow screen this row scrolls sideways, so bring the page you're on into view.
+    const cur = bar.querySelector(".hubtab.active");
+    if (cur && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, cur.offsetLeft - (bar.clientWidth - cur.offsetWidth) / 2);
   }
 
   function renderChrome() {
@@ -351,6 +354,21 @@ window.SVC_SITE = envIn => {
       const active = group === here;
       return h("a", { href: group.id === "admin" && state.me && state.me.adminUrl ? state.me.adminUrl : "#/" + pages[0][0], class: active ? "active" : "", "data-pages": pages.map(p => p[0]).join(" "), "aria-current": active ? "page" : null }, navText(group.id, group.label), badge(unread));
     }).filter(Boolean));
+    const acct = document.getElementById("account");
+    const support = state.cfg && state.cfg.supportUrl ? ext(state.cfg.supportUrl, "Support server", "btn gray small support-btn") : null;
+    const links = state.me ? [] : [h("a", { href: "/ai", text: "AI companion" }), state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
+    if (state.me) {
+      acct.replaceChildren(...[...links, support,
+        h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
+        osButton(), currencyPicker(), languagePicker(), displayMenu(),
+        // The signed-in name and Log out always sit together, set slightly apart from the tools.
+        h("div", { class: "user-chip" },
+          state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
+          h("span", { class: "who", text: state.me.user.username }),
+          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; if (EMBED_FRAME) { window.parent.location.reload(); return; } if (NATIVE) { location.reload(); return; } navigate("/"); boot(); } }))].filter(Boolean));
+    } else {
+      acct.replaceChildren(...[...links, support, osButton(), languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
+    }
     drawHubbar(view);
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
