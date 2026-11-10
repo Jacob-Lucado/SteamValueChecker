@@ -390,6 +390,7 @@ window.SVC_SITE = envIn => {
     const ab = state.about;
     const n = v => (v === null || v === undefined ? null : Number(v).toLocaleString());
     const invite = state.cfg && state.cfg.inviteUrl;
+    const onDesk = Boolean(window.LucadoOS?.active()); // already inside the desktop theme: offer the way back, not the way in
     const cta = (extra = "") => h("div", { class: "lp-cta " + extra },
       invite && ext(invite, "Add to a server", "btn green big"),
       state.cfg && state.cfg.supportUrl && ext(state.cfg.supportUrl, "Join the support server", "btn gray big"),
@@ -517,10 +518,10 @@ window.SVC_SITE = envIn => {
       sec("lx-os",
         h("div", { class: "lx-os-text" },
           h("span", { class: "lx-kick", text: "Desktop theme" }),
-          h("h2", { text: "Want it to feel like a desktop?" }),
-          h("p", { class: "lp-sub", text: "LucadoOS turns the whole site into a desktop. Every page is an icon, every page you open is a window you can move, resize and snap side by side, and there's a taskbar and a Start menu. Pick your own wallpaper and colors in Personalize." }),
-          h("div", { class: "lp-cta" }, window.LucadoOS?.canUse() ? h("button", { class: "btn blue big", type: "button", text: "Try the desktop", onclick: () => window.LucadoOS.setMode("os") }) : null),
-          h("p", { class: "muted small", text: "It's a choice, not a change. Classic stays the default, and you can switch back from the taskbar any time. Desktop view needs a screen at least 900 pixels wide." })),
+          h("h2", { text: onDesk ? "You're on the desktop theme" : "Want it to feel like a desktop?" }),
+          h("p", { class: "lp-sub", text: onDesk ? "Every page is an icon and every page you open is a window. Drag them, resize them, snap them side by side, and use Personalize for your own wallpaper and colors. Prefer the regular site? It's one click away." : "LucadoOS turns the whole site into a desktop. Every page is an icon, every page you open is a window you can move, resize and snap side by side, and there's a taskbar and a Start menu. Pick your own wallpaper and colors in Personalize." }),
+          h("div", { class: "lp-cta" }, onDesk ? h("button", { class: "btn gray big", type: "button", text: "Back to the classic site", onclick: () => window.LucadoOS.setMode("classic") }) : window.LucadoOS?.canUse() ? h("button", { class: "btn blue big", type: "button", text: "Try the desktop", onclick: () => window.LucadoOS.setMode("os") }) : null),
+          h("p", { class: "muted small", text: onDesk ? "Your windows and settings are kept if you come back." : "It's a choice, not a change. Classic stays the default, and you can switch back from the taskbar any time. Desktop view needs a screen at least 900 pixels wide." })),
         osPreview()),
 
       sec("lx-ai",
