@@ -94,6 +94,17 @@ test("setup makes the indie showcase channels and roles, connects them, and an o
     assert.ok(spot.permission_overwrites?.some(o => o.id === "G" && BigInt(o.deny) & 2048n), "members can read it but not post");
 });
 
+test("setup makes the Verified IndieDev role and connects it, including on an older server", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "owner", sleep: noSleep, pace: 0 });
+    const role = api.state.roles.find(x => x.name === "Verified IndieDev"); assert.ok(role, "created");
+    assert.equal(db.getCommunity("G").indie_dev_role, role.id);
+    // an older server: no role connected and none created yet
+    api.state.roles = api.state.roles.filter(x => x.name !== "Verified IndieDev"); db.setCommunity("G", { indie_dev_role: null });
+    const again = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "owner", sleep: noSleep, pace: 0 });
+    assert.ok(again.created.roles.includes("Verified IndieDev")); assert.ok(db.getCommunity("G").indie_dev_role);
+});
+
 test("on a fresh server the default channels are reused and the empty default categories are removed", async () => {
     const db = openDb(":memory:");
     const api = fakeApi({ channels: [{ id: "c-t", type: 4, name: "Text Channels" }, { id: "c-g", type: 0, name: "general", parent_id: "c-t" }, { id: "c-v", type: 4, name: "Voice Channels" }, { id: "c-gv", type: 2, name: "General", parent_id: "c-v" }] });

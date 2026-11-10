@@ -186,7 +186,7 @@
     { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
     { id: "feed", label: "Social", pages: [["feed", "Feed"], ["people", "People"], ["friends", "Friends"], ["compare", "Compare"], ["communities", "Communities"], ["discover", "Discover"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
-    { id: "indie", label: "Indie devs", pages: [["indie", "Showcase & tools"]] },
+    { id: "indie", label: "Indie devs", pages: [["indie", "Showcase & tools"], ["devpanel", "Dev panel"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Play together", pages: [["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
@@ -202,6 +202,7 @@
     const me = state.me;
     if (id === "home" && me) return false; // the logo already goes home when signed in
     if (id === "admin") return Boolean(me && me.isOwner);
+    if (id === "devpanel") return Boolean(me && me.indieDev);
     if (id === "giveaways") return Boolean(me && me.giveaways && me.servers.some(g => g.manageable));
     if (id === "gamenight" || id === "compare" || id === "santa" || id === "trivia" || id === "community" || id === "xp" || id === "mod") return Boolean(me && me.servers.some(g => g.bot !== false));
     if (id === "setup") return Boolean(me && me.servers.some(g => g.manageable));
@@ -339,7 +340,7 @@
         h("div", { class: "user-chip" },
           state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
           h("span", { class: "who", text: state.me.user.username }),
-          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; navigate("/"); boot(); } }))].filter(Boolean));
+          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; if (EMBED) { window.parent.location.reload(); return; } navigate("/"); boot(); } }))].filter(Boolean));
     } else {
       acct.replaceChildren(...[...links, support, osButton(), languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
@@ -6807,11 +6808,11 @@
           field("Steam Verified role", vRole), h("div", { class: "row" }, save("Save", () => post("/api/community/verifyrole", { role_id: vRole.value }))),
           h("p", { class: "muted small", text: "Want Discord itself to require it? In Discord open Server Settings, Roles, pick the role, open Links, and add this bot's Steam Verified condition. That one step can only be done in Discord." }));
         // ping roles
-        const pDeals = roSel(st.ping_deals, "Nobody"), pFree = roSel(st.ping_free, "Nobody"), pGw = roSel(st.ping_giveaway, "Nobody"), pLfg = roSel(st.ping_lfg, "Nobody"), pPlay = roSel(st.ping_playtest, "Nobody"), pPlayAll = h("input", { type: "checkbox", checked: Boolean(st.playtest_all) }), pPlayCh = chSel(st.playtest_channel), pSquad = roSel(st.ping_squad, "Nobody"), pSquadCh = chSel(st.squad_channel), pIndie = roSel(st.ping_indie, "Nobody"), pIndieCh = chSel(st.indie_channel);
+        const pDeals = roSel(st.ping_deals, "Nobody"), pFree = roSel(st.ping_free, "Nobody"), pGw = roSel(st.ping_giveaway, "Nobody"), pLfg = roSel(st.ping_lfg, "Nobody"), pPlay = roSel(st.ping_playtest, "Nobody"), pPlayAll = h("input", { type: "checkbox", checked: Boolean(st.playtest_all) }), pPlayCh = chSel(st.playtest_channel), pSquad = roSel(st.ping_squad, "Nobody"), pSquadCh = chSel(st.squad_channel), pIndie = roSel(st.ping_indie, "Nobody"), pIndieCh = chSel(st.indie_channel), pIndieDev = roSel(st.indie_dev_role, "Nobody");
         const pings = h("div", { class: "panel" }, h("h3", { text: "Ping roles" }),
           h("p", { class: "muted", text: "Members opt in to these roles in #roles. The bot pings them (and nobody else) when it posts." }),
-          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
-          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
+          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), field("Verified IndieDev role (the bot gives it to developers when their game is approved in the showcase)", pIndieDev), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
+          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_dev: pIndieDev.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),
@@ -7928,7 +7929,8 @@
   }
 
   const indieView = () => window.IndieUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
-  const VIEWS = { indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
+  const devPanelView = () => window.DevPanel.view({ h, api, app, state, navigate, pageHead, toast, busy });
+  const VIEWS = { devpanel: devPanelView, indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
 
   /** Hands the whole page to the LucadoOS desktop: one icon for each section, and every page opens in its own window. */
   function osMount() {
@@ -7941,7 +7943,7 @@
       if (list.length) nav.push({ label: g.label, icon: ICONS[g.id] || "📄", pages: list, badge: state.me && g.id === "account" ? Number(state.me.unread) || 0 : 0 });
     }
     const want = location.pathname + location.search.replace(/[?&]os=\d\b/, "");
-    window.LucadoOS.begin({ pages, nav, open: want, loginUrl: "/auth/login", logout: async () => { try { await api("/auth/logout", {}); } catch { /* signed out anyway */ } location.href = "/"; }, user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
+    window.LucadoOS.begin({ pages, nav, open: want, loginUrl: "/auth/login", adminUrl: state.me?.adminUrl || null, logout: async () => { try { await api("/auth/logout", {}); } catch { /* signed out anyway */ } location.href = "/"; }, user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
   }
 
   function route() {

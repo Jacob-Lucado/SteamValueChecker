@@ -68,6 +68,17 @@ CREATE TABLE IF NOT EXISTS indie_keyreq (
     created INTEGER NOT NULL,
     UNIQUE (game_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS indie_keys (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL,
+    key     TEXT NOT NULL,
+    added   INTEGER NOT NULL,
+    sent_to TEXT,
+    sent_at INTEGER,
+    req_id  INTEGER,
+    UNIQUE (game_id, key)
+);
+CREATE INDEX IF NOT EXISTS indie_keys_game ON indie_keys (game_id, sent_to);
 CREATE TABLE IF NOT EXISTS indie_days (
     game_id INTEGER NOT NULL,
     day     TEXT NOT NULL,
@@ -137,7 +148,7 @@ export function indieStore({ run, get, all, now }) {
     }
     function indieRemove(id) {
         const n = Number(id);
-        for (const t of ["indie_likes", "indie_updates", "indie_reports", "indie_keyreq", "indie_days", "indie_reviews"]) run(`DELETE FROM ${t} WHERE game_id = ?`, n);
+        for (const t of ["indie_likes", "indie_updates", "indie_reports", "indie_keyreq", "indie_keys", "indie_days", "indie_reviews"]) run(`DELETE FROM ${t} WHERE game_id = ?`, n);
         run("DELETE FROM indie_follows WHERE kind = 'game' AND target = ?", String(n)); run("DELETE FROM indie_games WHERE id = ?", n);
     }
     /** One like per person. Returns whether the game is liked now. */
@@ -207,7 +218,41 @@ export function indieStore({ run, get, all, now }) {
     const indieKeyRequests = gameId => all("SELECT * FROM indie_keyreq WHERE game_id = ? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created DESC LIMIT 100", Number(gameId));
     const indieKeyRequestOf = (gameId, userId) => get("SELECT status FROM indie_keyreq WHERE game_id = ? AND user_id = ?", Number(gameId), String(userId)) ?? null;
     const indieKeyRequestGet = id => get("SELECT * FROM indie_keyreq WHERE id = ?", Number(id)) ?? null;
-    const indieKeyDecide = (id, status) => run("UPDATE indie_keyreq SET status = ? WHERE id = ?", status === "approved" ? "approved" : "declined", Number(id));
+    const indieKeyDecide = (id, status, reply = null) => run("UPDATE indie_keyreq SET status = ?, reply = ?, decided = ? WHERE id = ?", status === "approved" ? "approved" : "declined", clip(reply, 300), now(), Number(id));
+
+    // ---- the dev panel: every key request for a developer's games, and an optional pool of keys to hand out ----
+    /** The developer's requests across all of their games, newest pending first. */
+    function indieKeyInbox(ownerId, { game = null, status = null, q = null, limit = 200 } = {}) {
+        const where = ["g.owner_id = ?"], args = [String(ownerId)];
+        if (game) { where.push("k.game_id = ?"); args.push(Number(game)); }
+        if (["pending", "approved", "declined"].includes(status)) { where.push("k.status = ?"); args.push(status); }
+        if (q) { where.push("(k.name LIKE ? OR k.channel LIKE ? OR k.note LIKE ?)"); const like = `%${String(q).replace(/[%_]/g, "").slice(0, 60)}%`; args.push(like, like, like); }
+        return all(`SELECT k.*, g.title AS game_title, g.image AS game_image, (SELECT COUNT(*) FROM indie_keys x WHERE x.req_id = k.id) AS key_sent FROM indie_keyreq k JOIN indie_games g ON g.id = k.game_id WHERE ${where.join(" AND ")} ORDER BY CASE k.status WHEN 'pending' THEN 0 ELSE 1 END, k.created DESC LIMIT ?`, ...args, Math.min(500, Math.max(1, Number(limit) || 200)));
+    }
+    const indieKeyCounts = gameId => Object.fromEntries(["pending", "approved", "declined"].map(s => [s, get("SELECT COUNT(*) n FROM indie_keyreq WHERE game_id = ? AND status = ?", Number(gameId), s).n]));
+    /** Adds keys to a game's pool. Returns { added, skipped }: blank lines and repeats are skipped. */
+    function indieKeysAdd(gameId, keys, max = 2000) {
+        let added = 0, skipped = 0;
+        const have = get("SELECT COUNT(*) n FROM indie_keys WHERE game_id = ?", Number(gameId)).n;
+        for (const raw of keys) {
+            const k = String(raw ?? "").trim();
+            if (!/^[\w-]{4,80}$/.test(k) || have + added >= max || get("SELECT 1 x FROM indie_keys WHERE game_id = ? AND key = ?", Number(gameId), k)) { skipped++; continue; }
+            run("INSERT INTO indie_keys (game_id, key, added) VALUES (?, ?, ?)", Number(gameId), k, now()); added++;
+        }
+        return { added, skipped };
+    }
+    const indieKeyPool = gameId => ({ total: get("SELECT COUNT(*) n FROM indie_keys WHERE game_id = ?", Number(gameId)).n, left: get("SELECT COUNT(*) n FROM indie_keys WHERE game_id = ? AND sent_to IS NULL", Number(gameId)).n });
+    const indieKeyList = gameId => all("SELECT id, key, added, sent_to, sent_at FROM indie_keys WHERE game_id = ? ORDER BY CASE WHEN sent_to IS NULL THEN 0 ELSE 1 END, id LIMIT 500", Number(gameId));
+    /** Takes the next unsent key for this request, or null when the pool is empty. One request never gets two. */
+    function indieKeyTake(gameId, userId, reqId) {
+        const had = get("SELECT key FROM indie_keys WHERE req_id = ?", Number(reqId)); if (had) return had.key;
+        const k = get("SELECT id, key FROM indie_keys WHERE game_id = ? AND sent_to IS NULL ORDER BY id LIMIT 1", Number(gameId)); if (!k) return null;
+        run("UPDATE indie_keys SET sent_to = ?, sent_at = ?, req_id = ? WHERE id = ? AND sent_to IS NULL", String(userId), now(), Number(reqId), k.id);
+        return k.key;
+    }
+    const indieKeyRemove = (gameId, keyId) => run("DELETE FROM indie_keys WHERE id = ? AND game_id = ? AND sent_to IS NULL", Number(keyId), Number(gameId));
+    const indieKeyClear = gameId => run("DELETE FROM indie_keys WHERE game_id = ? AND sent_to IS NULL", Number(gameId));
+    const indieApprovedOwned = ownerId => get("SELECT COUNT(*) n FROM indie_games WHERE owner_id = ? AND status = 'approved'", String(ownerId)).n;
     const indieSetKeysOpen = (id, on) => run("UPDATE indie_games SET keys_open = ? WHERE id = ?", on ? 1 : 0, Number(id));
 
     // verification and spotlight
@@ -232,5 +277,5 @@ export function indieStore({ run, get, all, now }) {
         run("DELETE FROM indie_likes WHERE user_id = ?", String(userId));
     }
     const indieExport = userId => ({ following: indieFollowing(userId), keyRequests: all("SELECT game_id, status, created FROM indie_keyreq WHERE user_id = ?", String(userId)), games: indieByOwner(userId).map(g => ({ appid: g.appid, title: g.title, status: g.status, pitch: g.pitch, links: g.links, submitted_at: g.created })), liked: all("SELECT game_id FROM indie_likes WHERE user_id = ?", String(userId)).map(r => r.game_id) });
-    return { indieLikedBy, indieDays, indieWeek, indieSnapReviews, indieReviewHistory, indieToggleFollow, indieFollowing, indieIsFollowing, indieFollowers, indieLikers, indieFollowCount, indieAddUpdate, indieUpdates, indieUpdate, indieDeleteUpdate, indieUpdatesSince, indieNewsFeed, indieReport, indieReports, indieResolveReports, indieKeyRequest, indieKeyRequests, indieKeyRequestOf, indieKeyRequestGet, indieKeyDecide, indieSetKeysOpen, indieSetVerifyCode, indieSetVerified, indieSpotlightPick, indieMarkSpotlit, indieApprovedAll, indieReportsFor, indieAdd, indieGet, indieByApp, indieByOwner, indieCountOwner, indieList, indieFeatured, indieGenres, indieDecide, indieFeature, indieEdit, indieRefresh, indieRemove, indieToggleLike, indieLiked, indieBump, indieCounts, indieDueForSync, indieTouchSync, indieTotals, forgetIndieUser, indieExport };
+    return { indieLikedBy, indieDays, indieWeek, indieSnapReviews, indieReviewHistory, indieToggleFollow, indieFollowing, indieIsFollowing, indieFollowers, indieLikers, indieFollowCount, indieAddUpdate, indieUpdates, indieUpdate, indieDeleteUpdate, indieUpdatesSince, indieNewsFeed, indieReport, indieReports, indieResolveReports, indieKeyRequest, indieKeyRequests, indieKeyRequestOf, indieKeyRequestGet, indieKeyDecide, indieKeyInbox, indieKeyCounts, indieKeysAdd, indieKeyPool, indieKeyList, indieKeyTake, indieKeyRemove, indieKeyClear, indieApprovedOwned, indieSetKeysOpen, indieSetVerifyCode, indieSetVerified, indieSpotlightPick, indieMarkSpotlit, indieApprovedAll, indieReportsFor, indieAdd, indieGet, indieByApp, indieByOwner, indieCountOwner, indieList, indieFeatured, indieGenres, indieDecide, indieFeature, indieEdit, indieRefresh, indieRemove, indieToggleLike, indieLiked, indieBump, indieCounts, indieDueForSync, indieTouchSync, indieTotals, forgetIndieUser, indieExport };
 }

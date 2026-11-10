@@ -46,6 +46,7 @@ export const TEMPLATE = {
         { key: "member", name: "Member", color: 0x2ecc71 },
         { key: "verified", name: "Steam Verified", color: 0x66c0f4 },
         { key: "streamer", name: "Streamer", color: 0x9146ff, hoist: true },
+        { key: "indiedev", name: "Verified IndieDev", color: 0xff8a4c, hoist: true },
         { key: "regular", name: "Regular", color: 0x1abc9c, level: 5 },
         { key: "veteran", name: "Veteran", color: 0x9b59b6, level: 15 },
         { key: "legend", name: "Legend", color: 0xf1c40f, level: 30 }
@@ -310,7 +311,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     if (chIds.music1 && created.channels.includes("Music 1") ) db.setMusicSettings(guildId, { stay: 1, home_channel_id: chIds.music1 }); // the bot waits in Music 1 and wakes when someone joins
     db.setGiveawaySettings(guildId, { vouch_channel_id: chIds.vouches, giveaway_channel_id: db.getGiveawaySettings(guildId).giveaway_channel_id ?? chIds.giveaways });
     const pingOf = n => selfRoles.find(r => r.label === n)?.role_id ?? null;
-    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_bundles: pingOf("Bundle pings"), ping_playtest: pingOf("Playtest pings"), playtest_channel: chIds.playtests ?? null, playtest_all: chIds.playtests ? 1 : 0, ping_squad: pingOf("Squad pings"), squad_channel: chIds.nowplaying ?? null, ping_promos: pingOf("Promo drop pings"), ping_stream: pingOf("Stream pings"), ping_indie: pingOf("Indie pings"), indie_channel: chIds.indie ?? null, streamer_role_id: roleIds.streamer, live_channel: chIds.live ?? null });
+    db.setCommunity(guildId, { ping_deals: pingOf("Deal pings"), ping_free: pingOf("Free game pings"), ping_giveaway: pingOf("Giveaway pings"), ping_lfg: pingOf("LFG pings"), ping_codes: pingOf("Game code pings"), ping_bundles: pingOf("Bundle pings"), ping_playtest: pingOf("Playtest pings"), playtest_channel: chIds.playtests ?? null, playtest_all: chIds.playtests ? 1 : 0, ping_squad: pingOf("Squad pings"), squad_channel: chIds.nowplaying ?? null, ping_promos: pingOf("Promo drop pings"), ping_stream: pingOf("Stream pings"), ping_indie: pingOf("Indie pings"), indie_channel: chIds.indie ?? null, streamer_role_id: roleIds.streamer, indie_dev_role: roleIds.indiedev ?? null, live_channel: chIds.live ?? null });
     db.setCommunity(guildId, { verified_role_id: roleIds.verified, welcome_channel: chIds.welcome, log_channel: chIds.memberlog, mod_log_channel: chIds.modlog, announce_channel: chIds.announcements, lb_channel: chIds.leaderboard, meme_channel: chIds.memes ?? db.getCommunity(guildId).meme_channel, honeypot_channel: chIds.honeypot ?? db.getCommunity(guildId).honeypot_channel ?? null, requests_channel: chIds.requests ?? db.getCommunity(guildId).requests_channel ?? null, rules_channel: chIds.rules, autorole_id: roleIds.member, member_role_id: roleIds.member, mod_role_id: roleIds.mod, welcome_on: 1, welcome_dm: 1, xp_on: 1, setup_at: Date.now() });
     for (const r of TEMPLATE.roles.filter(x => x.level)) db.setLevelRole(guildId, r.level, roleIds[r.key]);
     for (const r of selfRoles) db.addSelfRole(guildId, r.role_id, r.label);
@@ -431,6 +432,16 @@ async function communityUpdate({ api, db, guildId, botId, userId, baseUrl, prev,
     if (chIds.requests && !db.getCommunity(guildId).requests_channel) db.setCommunity(guildId, { requests_channel: chIds.requests });
     if (chIds.requests) await backfillForum({ db, api, guildId, base: baseUrl }).catch(() => notes.push("Could not fill #feature-requests (check my permissions there)."));
     // the streamer role, for servers that were set up before it existed
+    // the Verified IndieDev role: the bot gives it when a developer's game is approved in the showcase
+    if (!db.getCommunity(guildId).indie_dev_role) {
+        let ir = existingRoles.find(x => x.name.toLowerCase() === "verified indiedev" && !x.managed);
+        if (!ir) {
+            const def = TEMPLATE.roles.find(x => x.key === "indiedev");
+            ir = await api.createRole(guildId, { name: def.name, color: def.color, hoist: true, mentionable: false, permissions: "0" }).catch(() => { notes.push("Could not create the Verified IndieDev role (I need Manage Roles)."); return null; });
+            if (ir) { created.roles.push(def.name); await wait(); }
+        }
+        if (ir) db.setCommunity(guildId, { indie_dev_role: ir.id });
+    }
     if (!prev.streamer_role_id) {
         let sr = existingRoles.find(x => x.name.toLowerCase() === "streamer" && !x.managed);
         if (!sr) {

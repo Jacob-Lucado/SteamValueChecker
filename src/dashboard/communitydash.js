@@ -119,6 +119,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         const patch = {};
         for (const k of ["deals", "free", "giveaway", "lfg", "playtest", "squad", "indie"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
         if (b.playtest_all !== undefined) patch.playtest_all = b.playtest_all ? 1 : 0;
+        if (b.indie_dev !== undefined) patch.indie_dev_role = await roleOk(gid, b.indie_dev || null);
         if (b.indie_channel !== undefined) patch.indie_channel = await channelOk(gid, b.indie_channel || null);
         if (b.squad_channel !== undefined) patch.squad_channel = await channelOk(gid, b.squad_channel || null);
         if (b.playtest_channel !== undefined) patch.playtest_channel = await channelOk(gid, b.playtest_channel || null);

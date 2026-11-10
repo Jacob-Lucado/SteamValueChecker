@@ -159,9 +159,17 @@ body.los-waves .los-desk, body.los-waves.los-orig .los-desk { background: none; 
 .los-win-body.los-page { padding: 0; overflow: hidden; }
 .los-frame { display: block; width: 100%; height: 100%; border: 0; background: var(--bg); }
 .los-who { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.los-icon { text-decoration: none; } .los-admin { text-decoration: none; }
 .los-who img, .los-who i { width: 22px; height: 22px; border-radius: 50%; background: var(--soft-2); }
 body.los-os .topbar, body.los-os #hubbar, body.los-os main#app, body.los-os .footer, body.los-os .seo-static { display: none !important; }
 /* the same page, shown inside a window: no header, no footer, just the page */
 html.os-embed .topbar, html.os-embed .footer, html.os-embed .site-notice { display: none; }
 html.os-embed body { background: transparent; }
 html.os-embed .page { padding-top: 14px; }
+
+.los-start-row { display: flex; align-items: center; } .los-start-row .los-start-item { flex: 1; min-width: 0; }
+.los-pin { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px 12px; font-size: 16px; } .los-pin:hover { color: #f5c542; } .los-pin.on { color: #f5c542; }
+.los-tile-wrap { position: relative; } .los-tile-wrap.drag { opacity: .5; } .los-tile-wrap .los-tile { width: 100%; }
+.los-tile-x { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.45); color: #fff; font-size: 11px; cursor: pointer; opacity: 0; } .los-tile-wrap:hover .los-tile-x, .los-tile-x:focus-visible { opacity: 1; }
+.los-pins-head { display: flex; align-items: baseline; gap: 8px; } .los-pins-head small { color: var(--muted); font-weight: 400; flex: 1; } .los-pin-reset { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
+.los-classic { font-weight: 600; border: 1px solid var(--accent); color: var(--white); }

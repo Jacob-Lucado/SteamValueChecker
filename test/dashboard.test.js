@@ -98,6 +98,54 @@ test("LucadoOS: its files are served, and only our own frames may show the site'
     await t.close();
 });
 
+test("indie dev panel: it unlocks with an approved game, requests are answered one by one or in bulk, and keys go out from the pool", async () => {
+    const dms = [];
+    const t = await setup({ extra: { dm: async (id, p) => { dms.push([id, p.embeds?.[0]?.title ?? "", p.embeds?.[0]?.description ?? ""]); } } });
+    await t.signIn();
+    const post = (p, body) => t.request(p, { method: "POST", body });
+    assert.equal((await t.request("/api/indie/dev")).status, 403, "no approved game, no panel");
+    assert.equal((await t.request("/api/me")).data.indieDev, false);
+    const id = t.db.indieAdd({ appid: 9, ownerId: "u1", title: "Moss", studio: "Moss Co", pitch: "p", genres: [], image: "https://x/9.jpg" }); t.db.indieDecide(id, "approved"); t.db.indieSetKeysOpen(id, true);
+    assert.equal((await t.request("/api/me")).data.indieDev, true);
+    for (const u of ["r1", "r2", "r3"]) t.db.indieKeyRequest({ gameId: id, userId: u, name: "Streamer " + u, channel: "https://twitch.tv/" + u, note: "hi" });
+    const ov = (await t.request("/api/indie/dev")).data; assert.equal(ov.pending, 3); assert.equal(ov.games[0].pool.left, 0);
+    const add = await post("/api/indie/dev/keys/add", { id, keys: "AAAAA-BBBBB-CCCCC\nAAAAA-BBBBB-CCCCC\nnot a key!\nDDDDD-EEEEE-FFFFF" });
+    assert.deepEqual([add.data.added, add.data.skipped, add.data.pool.left], [2, 2, 2]);
+    const list = (await t.request("/api/indie/dev/requests?status=pending")).data.requests; assert.equal(list.length, 3);
+    assert.equal((await t.request("/api/indie/dev/requests?q=r2")).data.requests.length, 1, "search");
+    const first = await post("/api/indie/dev/decide", { ids: [list[0].id], approve: true, note: "Enjoy!" });
+    assert.deepEqual([first.data.approved, first.data.sent], [1, 1]);
+    assert.match(dms.at(-1)[2], /AAAAA-BBBBB-CCCCC/); assert.match(dms.at(-1)[2], /Enjoy!/);
+    const rest = await post("/api/indie/dev/decide", { ids: list.slice(1).map(x => x.id), approve: true });
+    assert.deepEqual([rest.data.approved, rest.data.sent, rest.data.noKeys], [2, 1, 1], "the pool ran dry for the last one");
+    assert.equal((await post("/api/indie/dev/decide", { ids: [list[0].id], approve: false })).data.results[0].skipped, "a key was already sent", "no taking a key back");
+    assert.equal((await t.request("/api/indie/dev/requests?status=approved")).data.requests.filter(r => r.keySent).length, 2);
+    t.db.indieKeyRequest({ gameId: id, userId: "r4", name: "Late", channel: "https://x.example", note: "" });
+    assert.equal((await post("/api/indie/dev/decide", { ids: [t.db.indieKeyInbox("u1", { status: "pending" })[0].id], approve: false, note: "Not this time" })).data.declined, 1);
+    const k = (await t.request("/api/indie/dev/keys?id=" + id)).data; assert.equal(k.pool.left, 0); assert.ok(k.keys.every(x => x.sentTo));
+    await post("/api/indie/dev/keys/add", { id, keys: "ZZZZZ-YYYYY-XXXXX" });
+    assert.equal((await post("/api/indie/dev/keys/remove", { game: id, all: true })).data.pool.left, 0);
+    assert.equal((await post("/api/indie/dev/decide", { ids: [999999], approve: true })).data.results[0].skipped, "not yours");
+    await t.close();
+});
+
+test("indie dev role: approving a game gives the Verified IndieDev role and one welcome message; taking the last game away takes the role back", async () => {
+    const dms = [], roles = [];
+    const t = await setup({ config: { ownerId: "u1" }, extra: { dm: async (id, p) => { dms.push([id, p.embeds?.[0]?.title ?? "", p.embeds?.[0]?.description ?? ""]); } }, restExtra: { addRole: async (g, u, r) => { roles.push(["add", g, u, r]); }, removeRole: async (g, u, r) => { roles.push(["remove", g, u, r]); } } });
+    await t.signIn();
+    t.db.ensureUser("dev"); t.db.setCommunity("G1", { indie_dev_role: "R1" });
+    const g1 = t.db.indieAdd({ appid: 11, ownerId: "dev", title: "One", studio: "Dev Co", pitch: "p", genres: [], image: "https://x/11.jpg" }), g2 = t.db.indieAdd({ appid: 12, ownerId: "dev", title: "Two", studio: "Dev Co", pitch: "p", genres: [], image: "https://x/12.jpg" });
+    const review = (action, id) => t.request("/api/admin/indie/review", { method: "POST", body: { action, id } });
+    assert.equal((await review("approve", g1)).status, 200);
+    assert.deepEqual(roles, [["add", "G1", "dev", "R1"]]);
+    assert.equal(dms.length, 1); assert.equal(dms[0][0], "dev"); assert.match(dms[0][1], /verified indie dev/i); assert.match(dms[0][2], /\/devpanel/); assert.match(dms[0][2], /Verified IndieDev/);
+    assert.equal((await review("approve", g2)).status, 200); assert.equal(dms.length, 1, "welcomed once");
+    await review("remove", g1); assert.equal(roles.filter(r => r[0] === "remove").length, 0, "still has an approved game");
+    await review("remove", g2); assert.deepEqual(roles.at(-1), ["remove", "G1", "dev", "R1"]);
+    assert.ok(t.db.listNotifications("dev").some(n => /verified indie dev/i.test(n.title)));
+    await t.close();
+});
+
 test("static files, security headers, and nothing outside the allowlist", async () => {
     const t = await setup();
     const r = await t.request("/");

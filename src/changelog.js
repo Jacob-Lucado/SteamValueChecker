@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.52", date: "2026-11-10", title: "Indie dev panel and LucadoOS upgrades", items: [
+        "**Dev panel for indie developers:** once your game is approved you get the **Verified IndieDev** role in every server that has it, and the bot DMs you with a button to open the Dev panel. It has an overview with views, clicks, likes and followers, a request inbox where you approve or decline key requests (one by one or in bulk, with a note back), a key pool the bot hands out automatically, and a news composer for your followers.",
+        "**Build my server** adds the Verified IndieDev role. Run it again on an existing server to pick it up, and set it on the Ping roles panel if you like.",
+        "**LucadoOS:** windows now open full screen so you can shrink them yourself, the Start menu pins can be removed, reordered by dragging, and reset, and there's a clear ← Classic site button in the taskbar. Signing in with Steam or Discord is in the taskbar, owners get an Admin button, and signing out keeps your open windows." ] },
     { version: "2026.11.51", date: "2026-11-10", title: "LucadoOS desktop (beta)", items: [
         "**A desktop for the whole site:** press the 🖥️ button in the top bar to switch to LucadoOS. Every section is an icon, every page opens in its own window, and you can drag, resize, minimize and snap them side by side, with a taskbar and Start menu along the bottom.",
         "**Nothing is lost:** it's the same pages with all the same features, and links still work. Copy the address and it opens the same page. Your open windows come back when you return.",

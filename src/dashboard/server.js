@@ -160,6 +160,7 @@ const FILES = {
     "/profilefx.js": ["profilefx.js", "text/javascript; charset=utf-8"],
     "/indiewaves.js": ["indiewaves.js", "text/javascript; charset=utf-8"],
     "/lucadoos.js": ["lucadoos.js", "text/javascript; charset=utf-8"],
+    "/devpanel.js": ["devpanel.js", "text/javascript; charset=utf-8"],
     "/lucadoos.css": ["lucadoos.css", "text/css; charset=utf-8"],
     "/indie.js": ["indie.js", "text/javascript; charset=utf-8"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
@@ -904,6 +905,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 games: db.countItems(s.userId),
                 servers: serversFor(s, u),
                 isOwner: isOwner(s),
+                indieDev: isOwner(s) || isIndieDev(s.userId),
                 panel: panelInfo,
                 musicUrl: musicOrigin ? musicOrigin + "/" : origin + "/music",
                 adminUrl: isOwner(s) || panel ? (adminOrigin ? adminOrigin + "/" : origin + "/admin") : null,
@@ -3660,6 +3662,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const s = session(req), g = db.indieGet(body.id);
             if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
             db.indieRemove(g.id);
+            await syncIndieDev(s.userId);
             return { ok: true };
         },
         "POST /api/indie/like": async (req, body) => {
@@ -3750,8 +3753,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "POST /api/indie/keys/decide": async (req, body) => {
             const s = session(req), k = db.indieKeyRequestGet(body.id), g = k && db.indieGet(k.game_id);
             if (!k || !g || g.owner_id !== s.userId) throw new HttpError(404, "That request isn't for your game.");
-            db.indieKeyDecide(k.id, body.approve ? "approved" : "declined");
-            try { db.addNotification(k.user_id, { type: "indie", title: body.approve ? `${g.title}: your key request was approved` : `${g.title}: no key this time`, body: body.approve ? "The developer will send your key using the contact you gave." : "The developer passed on this one. Thanks for asking.", url: `/indie/game/${g.id}` }); } catch { /* best effort */ }
+            await decideKeyRequest(g, k, Boolean(body.approve), null);
             return { ok: true };
         },
         // Verified badge: put a one-time code in the game's Steam page text, then check. Only the page's owner can do that.
@@ -3790,6 +3792,49 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
             return { days: db.indieDays(g.id, 14), reviews: db.indieReviewHistory(g.id, 60), views: g.views, clicks: g.clicks, likes: g.likes, followers: db.indieFollowCount(g.id), updates7: db.indieUpdatesSince(g.id, now() - 7 * 86_400_000), release: g.release };
         },
+        // ---------- the indie dev panel: for developers with an approved game ----------
+        "GET /api/indie/dev": async (req) => {
+            const s = devSession(req);
+            const games = db.indieByOwner(s.userId).map(g => ({ id: g.id, title: g.title, image: g.image, status: g.status, studio: g.studio, verified: Boolean(g.verified), keysOpen: Boolean(g.keys_open), views: g.views, clicks: g.clicks, likes: g.likes, followers: db.indieFollowCount(g.id), requests: db.indieKeyCounts(g.id), pool: db.indieKeyPool(g.id), days: db.indieDays(g.id, 14), updates: db.indieUpdates(g.id, 3).map(u => ({ id: u.id, title: u.title, created: u.created })) }));
+            return { games, pending: games.reduce((n, g) => n + g.requests.pending, 0), site: origin };
+        },
+        "GET /api/indie/dev/requests": async (req, _b, url) => {
+            const s = devSession(req), q = url.searchParams;
+            const game = Number(q.get("game")) || null;
+            if (game && db.indieGet(game)?.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            return { requests: db.indieKeyInbox(s.userId, { game, status: q.get("status"), q: q.get("q"), limit: 300 }).map(k => ({ id: k.id, gameId: k.game_id, game: k.game_title, name: k.name, channel: k.channel, note: k.note, status: k.status, created: k.created, decided: k.decided, reply: k.reply, keySent: Boolean(k.key_sent) })) };
+        },
+        "POST /api/indie/dev/decide": async (req, body) => {
+            const s = devSession(req);
+            const ids = [...new Set((Array.isArray(body.ids) ? body.ids : [body.id]).map(Number).filter(Boolean))].slice(0, 50);
+            if (!ids.length) throw new HttpError(400, "Pick at least one request.");
+            const note = String(body.note ?? "").replace(/\s+/g, " ").trim().slice(0, 300) || null, out = [];
+            for (const id of ids) {
+                const k = db.indieKeyRequestGet(id), g = k && db.indieGet(k.game_id);
+                if (!k || !g || g.owner_id !== s.userId) { out.push({ id, skipped: "not yours" }); continue; }
+                out.push(await decideKeyRequest(g, k, Boolean(body.approve), note));
+            }
+            return { results: out, approved: out.filter(r => r.status === "approved").length, declined: out.filter(r => r.status === "declined").length, sent: out.filter(r => r.sent).length, noKeys: out.filter(r => r.status === "approved" && !r.sent).length };
+        },
+        "GET /api/indie/dev/keys": async (req, _b, url) => {
+            const s = devSession(req), g = db.indieGet(url.searchParams.get("id"));
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            return { pool: db.indieKeyPool(g.id), keys: db.indieKeyList(g.id).map(k => ({ id: k.id, key: k.key, sentTo: k.sent_to ? true : false, sentAt: k.sent_at })) };
+        },
+        "POST /api/indie/dev/keys/add": async (req, body) => {
+            const s = devSession(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            const lines = String(body.keys ?? "").split(/[\r\n,;]+/).map(x => x.trim()).filter(Boolean).slice(0, 500);
+            if (!lines.length) throw new HttpError(400, "Paste one key per line.");
+            const r = db.indieKeysAdd(g.id, lines);
+            return { ...r, pool: db.indieKeyPool(g.id) };
+        },
+        "POST /api/indie/dev/keys/remove": async (req, body) => {
+            const s = devSession(req), g = db.indieGet(body.game);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            if (body.all) db.indieKeyClear(g.id); else db.indieKeyRemove(g.id, body.id);
+            return { pool: db.indieKeyPool(g.id) };
+        },
         "GET /api/admin/indie": async (req, _b, url) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             const status = ["pending", "approved", "rejected"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : "pending";
@@ -3824,6 +3869,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 case "refresh": { try { const fresh = await indieApi.lookup(g.appid); db.indieRefresh(g.id, fresh); } catch (e) { throw new HttpError(400, e.message); } break; }
                 default: throw new HttpError(400, "Unknown action.");
             }
+            if (["approve", "reject", "remove"].includes(body.action)) await syncIndieDev(g.owner_id, body.action === "approve" ? g : null);
             return { ok: true, counts: db.indieCounts() };
         },
         "GET /api/admin/indie/reports": async (req) => {
@@ -4842,6 +4888,39 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         bump(`${kind === "b" ? "bundlevisit" : "dealvisit"}:${id}`); bump(`landday:${day}:v`);
     };
     /** What anyone may see of a showcase game: no owner id, no queue notes. */
+    // ---- verified indie developers: the role in your servers, the welcome message, and the dev panel they unlock ----
+    const isIndieDev = userId => Boolean(userId) && db.indieApprovedOwned(userId) > 0;
+    const devSession = req => {
+        const s = session(req);
+        if (!isOwner(s) && !isIndieDev(s.userId)) throw new HttpError(403, "The dev panel is for verified indie developers. It unlocks when a game of yours is approved in the indie showcase.");
+        return s;
+    };
+    /** Gives the Verified IndieDev role (or takes it back when no approved game is left) in every server that set one, and welcomes new devs once. */
+    async function syncIndieDev(userId, game = null) {
+        const has = isIndieDev(userId);
+        for (const g of db.indieDevGuilds?.() ?? []) {
+            try { await (has ? rest?.addRole?.(g.guild_id, userId, g.indie_dev_role) : rest?.removeRole?.(g.guild_id, userId, g.indie_dev_role)); } catch { /* not in that server, or the role is above mine: nothing to do */ }
+        }
+        if (!has || db.getMeta(`indiedev:welcomed:${userId}`)) return;
+        db.setMeta(`indiedev:welcomed:${userId}`, "1");
+        const page = `${origin}/devpanel`;
+        try { db.addNotification(userId, { type: "indie", title: "You're a verified indie dev", body: "The dev panel is open: manage key requests, hand out keys, and post news to your followers.", url: "/devpanel" }); } catch { /* the DM below still goes */ }
+        if (dm) Promise.resolve(dm(userId, { embeds: [{ color: 0xff8a4c, title: "You're a verified indie dev ✅", description: [`${game ? `**${game.title}** is live in the indie showcase, and you now` : "You now"} have the **Verified IndieDev** role in our servers and access to the **indie dev panel**.`, "In the panel you can:", "• approve or decline review key requests, one by one or in bulk", "• load a pool of keys that go out automatically when you approve", "• see views, clicks, likes and followers for each game", "• post news to everyone following you", `**Open it:** ${page}`].join("\n"), footer: { text: "Steam Value Checker · indie showcase" } }], components: [{ type: 1, components: [{ type: 2, style: 5, label: "Open the dev panel", url: page }] }] })).catch(() => {});
+    }
+    /** One key request answered: approve (and send a key from the pool if there is one) or decline. Returns what happened. */
+    async function decideKeyRequest(g, k, approve, note) {
+        const sentAlready = db.indieKeyInbox(g.owner_id, { game: g.id, limit: 500 }).find(x => x.id === k.id)?.key_sent;
+        if (sentAlready) return { id: k.id, skipped: "a key was already sent" };
+        db.indieKeyDecide(k.id, approve ? "approved" : "declined", note);
+        const tell = (title, text) => { try { db.addNotification(k.user_id, { type: "indie", title, body: text, url: `/indie/game/${g.id}` }); } catch { /* best effort */ } };
+        if (!approve) { tell(`${g.title}: no key this time`, note || "The developer passed on this one. Thanks for asking."); return { id: k.id, status: "declined" }; }
+        const key = db.indieKeyTake(g.id, k.user_id, k.id);
+        if (!key) { tell(`${g.title}: your key request was approved`, note || "The developer will send your key using the contact you gave."); return { id: k.id, status: "approved", sent: false }; }
+        let dmOk = false;
+        if (dm) { try { await dm(k.user_id, { embeds: [{ color: 0x57f287, title: `Your key for ${g.title}`, description: `**${key}**\n\n${note ? note + "\n\n" : ""}Redeem it on the platform the developer listed. Thanks for covering the game!`, footer: { text: `From ${g.studio || "the developer"} via Steam Value Checker` } }] }); dmOk = true; } catch { /* closed DMs: the key goes in the inbox instead */ } }
+        tell(`${g.title}: your key is here`, dmOk ? "We sent it to you in a Discord message." : `Your key: ${key}${note ? ". " + note : ""}`);
+        return { id: k.id, status: "approved", sent: true, dm: dmOk };
+    }
     const indiePublic = g => ({ id: g.id, appid: g.appid, title: g.title, studio: g.studio, blurb: g.blurb, pitch: g.pitch, genres: g.genres, image: g.image, price: g.price, release: g.release, links: g.links, featured: g.featured, verified: Boolean(g.verified), likes: g.likes, steamUrl: `https://store.steampowered.com/app/${g.appid}/` });
     const bundleFor = id => { const b = db.getFeedBundle(id); return b && !b.adult ? b : null; };
     /** One handler for both kinds of page. `kind` is "b" (a bundle from the feed) or "d" (a free game or other deal). */

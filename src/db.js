@@ -230,6 +230,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("drop_news", "video", "TEXT");
     for (const [c, d] of [["verified", "INTEGER NOT NULL DEFAULT 0"], ["verify_code", "TEXT"], ["keys_open", "INTEGER NOT NULL DEFAULT 0"], ["spotlit", "INTEGER"]]) addColumn("indie_games", c, d);
     addColumn("social_prefs", "notify", "INTEGER NOT NULL DEFAULT 1");
+    for (const [c, d] of [["reply", "TEXT"], ["decided", "INTEGER"]]) addColumn("indie_keyreq", c, d);
+    addColumn("community", "indie_dev_role", "TEXT");
     addColumn("social_prefs", "dm", "INTEGER NOT NULL DEFAULT 0");
     addColumn("social_prefs", "guestbook", "INTEGER NOT NULL DEFAULT 1");
     addColumn("items", "priority", "INTEGER NOT NULL DEFAULT 0");
@@ -488,6 +490,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     /** Members who share with this server, linked Steam and turned on Now playing. */
     const nowPlayingMembers = guildId => all("SELECT u.discord_id, s.steamid FROM users u JOIN steam_links s ON s.discord_id = u.discord_id WHERE u.share = 1 AND u.nowplaying = 1 AND u.guild_id = ? AND u.paused = 0", guildId).map(clean);
     const indieGuilds = () => all("SELECT guild_id, ping_indie, indie_channel FROM community WHERE indie_channel IS NOT NULL AND indie_channel != ''").map(clean);
+    const indieDevGuilds = () => all("SELECT guild_id, indie_dev_role FROM community WHERE indie_dev_role IS NOT NULL AND indie_dev_role != ''").map(clean);
     const squadGuilds = () => all("SELECT guild_id, ping_squad, squad_channel FROM community WHERE squad_channel IS NOT NULL AND squad_channel != ''").map(clean);
     const playtestUsers = () => all("SELECT * FROM users WHERE playtest >= 1 AND paused = 0").map(clean);
     /** Steam games on the wishlists of members who share in a server, with how many members watch each. */
@@ -895,7 +898,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
-        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
+        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,

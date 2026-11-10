@@ -26,7 +26,7 @@
   const zoneRect = z => { const [a, b, c, d] = ZONES[z], W = layer.clientWidth, H = layer.clientHeight; return { x: Math.round(a * W), y: Math.round(b * H), w: Math.round(c * W), h: Math.round(d * H) }; };
 
   function persist() {
-    store.set(SAVE, JSON.stringify([...wins.values()].map(w => ({ id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max, min: w.min, snap: w.snap || null, z: Number(w.node.style.zIndex) || 0 }))));
+    store.set(SAVE, JSON.stringify([...wins.values()].map(w => ({ id: w.id, path: w.path, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max, min: w.min, snap: w.snap || null, z: Number(w.node.style.zIndex) || 0 }))));
   }
   function focus(w) {
     for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
@@ -104,7 +104,9 @@
     const w = { id, path: id, meta, w: Math.min(1000, W - 200), h: Math.min(680, H - 40), x: Math.max(16, Math.min((desk.querySelector(".los-icons")?.scrollWidth || 0) + 24 + (cascade % 6) * 28, W - 400)), y: 24 + (cascade % 6) * 28, ...(saved ? { x: saved.x, y: saved.y, w: saved.w, h: saved.h, max: saved.max, min: saved.min, snap: saved.snap } : {}) };
     cascade++;
     const native = id.startsWith("os:");
-    const frame = native ? null : el("iframe", "los-frame", { src: id, title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
+    if (!saved && !native) { w.restore = { w: w.w, h: w.h, x: w.x, y: w.y }; w.max = true; } // pages open full screen; people resize them from there
+    if (saved?.path && known(saved.path)) w.path = saved.path;
+    const frame = native ? null : el("iframe", "los-frame", { src: w.path, title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
     const content = el("div", native ? "los-win-body los-native" : "los-win-body los-page", {}, ...(frame ? [frame] : []));
     if (native) { w.w = Math.min(w.w, 720); w.h = Math.min(w.h, 520); personalize(content); }
     const titleText = el("span", "", { text: meta.title }), titleIcon = el("i", "", { "aria-hidden": "true", text: meta.icon });
@@ -190,7 +192,7 @@
     ["graphite", "Graphite", "linear-gradient(135deg, #16181d 0%, #2b2f38 100%)"],
     ["aurora", "Aurora", "radial-gradient(900px 600px at 20% 10%, #2dd4bf55, transparent 60%), radial-gradient(900px 600px at 85% 80%, #8b5cf655, transparent 60%), linear-gradient(135deg, #0b1220, #101a33)"]
   ];
-  const PREFS = "lucado-site-prefs";
+  const PREFS = "lucado-site-prefs", PINS = "lucado-site-pins";
   function loadPrefs() { try { const p = JSON.parse(store.get(PREFS) || "null"); if (p) prefs = { wall: WALLS.some(x => x[0] === p.wall) || /^#[0-9a-f]{6}$/i.test(p.wall || "") ? p.wall : "default", waves: p.waves !== false }; } catch { /* defaults */ } }
   /** The wallpaper and the neon waves. The wallpaper sits on the page so the waves can roll between it and the windows. */
   function applyPrefs() {
@@ -247,6 +249,7 @@
     let lastPz = 0; pz.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach(n => n.classList.remove("sel")); pz.classList.add("sel"); if (Date.now() - lastPz < 450 || root.matchMedia("(pointer: coarse)").matches) open("os:personalize"); lastPz = Date.now(); });
     pz.addEventListener("keydown", e => { if (e.key === "Enter") open("os:personalize"); });
     grid.append(pz);
+    if (cfg?.adminUrl) { const ad = el("a", "los-icon", { href: cfg.adminUrl, target: "_blank", rel: "noopener noreferrer", role: "listitem", title: "Open the admin panel in a new tab" }, el("span", "los-icon-art", { "aria-hidden": "true", text: "🛠️" }), el("span", "los-icon-name", { text: "Admin" })); grid.append(ad); }
     return grid;
   }
 
@@ -255,22 +258,45 @@
   function start() {
     startMenu = el("div", "los-start", { hidden: "" });
     const rail = el("div", "los-start-rail"), results = el("div", "los-start-list");
-    const tilesBox = el("div", "los-start-tiles", {}, el("div", "los-start-brand", { text: "LucadoOS" }), el("div", "los-start-group", { text: "Pinned" }));
-    const pins = ["/", "/library", "/feed", "/free", "/indie", "/servers", "/help"].filter(p => pages[p]);
+    const tilesBox = el("div", "los-start-tiles");
+    const DEFAULT_PINS = ["/", "/library", "/feed", "/free", "/indie", "/servers", "/help"];
+    const loadPins = () => { try { const p = JSON.parse(store.get(PINS) || "null"); if (Array.isArray(p)) return p.filter(x => pages[x]); } catch { /* defaults */ } return DEFAULT_PINS.filter(p => pages[p]); };
+    let pinned = loadPins(), lastQ = "", dragFrom = -1;
+    const savePins = () => { store.set(PINS, JSON.stringify(pinned)); drawTiles(); paint(lastQ); };
     const hues = ["#0a64c8", "#8a3ffc", "#1a8f5a", "#d4741a", "#c4392b", "#0f7b8a", "#6a4fd0"];
-    pins.forEach((p, i) => { const t = el("button", "los-tile", { type: "button" }, el("span", "los-tile-art", { "aria-hidden": "true", text: pages[p].icon }), el("span", "", { text: pages[p].title })); t.style.setProperty("--tile", hues[i % hues.length]); t.addEventListener("click", () => { close(); open(p); }); tilesBox.append(t); });
+    function drawTiles() {
+      const reset = el("button", "los-pin-reset", { type: "button", title: "Back to the default pinned pages", text: "Reset" }); reset.addEventListener("click", () => { pinned = DEFAULT_PINS.filter(p => pages[p]); store.set(PINS, JSON.stringify(pinned)); drawTiles(); paint(lastQ); });
+      const head = el("div", "los-start-group los-pins-head", {}, el("span", "", { text: "Pinned" }), el("small", "", { text: "drag to reorder · ✕ to unpin" }), reset);
+      const wraps = pinned.map((p, i) => {
+        const t = el("button", "los-tile", { type: "button" }, el("span", "los-tile-art", { "aria-hidden": "true", text: pages[p].icon }), el("span", "", { text: pages[p].title })); t.style.setProperty("--tile", hues[i % hues.length]);
+        t.addEventListener("click", () => { close(); open(p); });
+        const x = el("button", "los-tile-x", { type: "button", "aria-label": "Unpin " + pages[p].title, title: "Unpin", text: "✕" }); x.addEventListener("click", () => { pinned = pinned.filter(v => v !== p); savePins(); });
+        const wrap = el("div", "los-tile-wrap", { draggable: "true" }, t, x);
+        wrap.addEventListener("dragstart", e => { dragFrom = i; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", p); } catch { /* fine */ } wrap.classList.add("drag"); });
+        wrap.addEventListener("dragend", () => wrap.classList.remove("drag"));
+        wrap.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
+        wrap.addEventListener("drop", e => { e.preventDefault(); if (dragFrom < 0 || dragFrom === i) return; const [m] = pinned.splice(dragFrom, 1); pinned.splice(i, 0, m); dragFrom = -1; savePins(); });
+        return wrap;
+      });
+      tilesBox.replaceChildren(el("div", "los-start-brand", { text: "LucadoOS" }), head, ...(wraps.length ? wraps : [el("p", "los-start-none", { text: "Nothing pinned. Use the ☆ beside any page to pin it here." })]));
+    }
     const paint = q => {
-      q = (q || "").trim().toLowerCase(); results.replaceChildren();
+      lastQ = q = (q || "").trim().toLowerCase(); results.replaceChildren();
       for (const g of nav) {
         const hit = g.pages.filter(p => !q || p.title.toLowerCase().includes(q) || g.label.toLowerCase().includes(q)); if (!hit.length) continue;
         results.append(el("div", "los-start-group", { text: g.label }));
-        for (const p of hit) { const b = el("button", "los-start-item", { type: "button" }, el("i", "", { "aria-hidden": "true", text: p.icon }), el("span", "", { text: p.title })); b.addEventListener("click", () => { close(); open(p.path); }); results.append(b); }
+        for (const p of hit) {
+          const b = el("button", "los-start-item", { type: "button" }, el("i", "", { "aria-hidden": "true", text: p.icon }), el("span", "", { text: p.title })); b.addEventListener("click", () => { close(); open(p.path); });
+          const on = pinned.includes(p.path), pin = el("button", "los-pin" + (on ? " on" : ""), { type: "button", title: on ? "Unpin from the start menu" : "Pin to the start menu", "aria-label": (on ? "Unpin " : "Pin ") + p.title, text: on ? "★" : "☆" });
+          pin.addEventListener("click", () => { pinned = on ? pinned.filter(v => v !== p.path) : [...pinned, p.path]; savePins(); });
+          results.append(el("div", "los-start-row", {}, b, pin));
+        }
       }
       if (!results.children.length) results.append(el("p", "los-start-none", { text: "Nothing matches that." }));
     };
     const railBtn = (glyph, label, run) => { const b = el("button", "los-rail-btn", { type: "button", title: label, "aria-label": label, text: glyph }); b.addEventListener("click", run); return b; };
-    rail.append(...[railBtn("🎨", "Personalize", () => { close(); open("os:personalize"); }), who && logout ? railBtn("⎋", "Log out", () => logout()) : null, railBtn("☰", "Switch to the classic site", () => setMode("classic"))].filter(Boolean));
-    startMenu.append(rail, results, tilesBox); paint("");
+    rail.append(...[railBtn("🎨", "Personalize", () => { close(); open("os:personalize"); }), cfg?.adminUrl ? railBtn("🛠️", "Admin panel", () => { root.open(cfg.adminUrl, "_blank", "noopener"); }) : null, who && logout ? railBtn("⎋", "Log out", () => logout()) : null, railBtn("☰", "Switch to the classic site", () => setMode("classic"))].filter(Boolean));
+    startMenu.append(rail, results, tilesBox); drawTiles(); paint("");
     const btn = el("button", "los-startbtn", { type: "button", "aria-label": "Start menu", "aria-expanded": "false" }, WINLOGO());
     const search = el("input", "", { type: "text", placeholder: "Type here to search", "aria-label": "Search the site's pages", autocomplete: "off", spellcheck: "false" });
     const box = el("label", "los-searchbox", {}, el("span", "", { "aria-hidden": "true", text: "⌕" }), search);
@@ -298,7 +324,10 @@
     document.body.classList.add("los-os", "los-orig", "los-waves");
     desk = el("div", "los-desk"); layer = el("div", "los-layer"); tasks = el("div", "los-tasks");
     const tray = el("div", "los-tray");
-    tray.append(who ? el("span", "los-who", {}, who.avatar ? el("img", "", { src: who.avatar, alt: "", width: "22", height: "22" }) : el("i"), el("span", "", { text: who.name })) : el("a", "btn green small", { href: options.loginUrl || "/auth/login", text: "Sign in" }));
+    if (who) tray.append(el("span", "los-who", {}, who.avatar ? el("img", "", { src: who.avatar, alt: "", width: "22", height: "22" }) : el("i"), el("span", "", { text: who.name })));
+    else tray.append(el("a", "btn steam small", { href: "/auth/steam", text: "Sign in with Steam" }), el("a", "btn green small", { href: options.loginUrl || "/auth/login", text: "Sign in with Discord" }));
+    const classic = el("button", "btn gray small los-classic", { type: "button", title: "Switch back to the classic site", text: "← Classic site" }); classic.addEventListener("click", () => setMode("classic")); tray.append(classic);
+    if (options.adminUrl) tray.append(el("a", "btn gray small los-admin", { href: options.adminUrl, target: "_blank", rel: "noopener noreferrer", title: "Open the admin panel", text: "Admin" }));
     const tb = el("button", "los-traybtn", { type: "button" }); const paintT = () => { const l = root.svcTheme?.current() === "light"; tb.textContent = l ? "☾" : "☀"; tb.title = tb.ariaLabel = l ? "Switch to the dark theme" : "Switch to the light theme"; };
     tb.addEventListener("click", () => { toggleTheme(); paintT(); }); root.addEventListener("svc-theme", paintT); paintT();
     tray.append(tb, clock());
