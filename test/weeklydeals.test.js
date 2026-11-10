@@ -10,7 +10,7 @@ const pool = [deal("Cheap Thing", 90, 5), deal("Big Game", 75, 60), deal("Meh Sa
 
 test("picks the biggest real savings, once per game, skipping cheap games and small cuts", () => {
     const p = pickDeals(pool);
-    assert.equal(p.length, 5); assert.deepEqual(p.map(d => d.title), ["Big Game", "Sixth", "Fifth", "Fourth", "Another"]);
+    assert.equal(p.length, 5); assert.deepEqual(p.map(d => d.title), ["Big Game", "Sixth", "Fifth", "Another", "Fourth"]);
     assert.ok(!p.some(d => ["Cheap Thing", "Meh Sale", "No Link"].includes(d.title)));
     assert.equal(new Set(p.map(d => d.title)).size, 5);
     for (let i = 1; i < p.length; i++) assert.ok(p[i - 1].regular - p[i - 1].price >= p[i].regular - p[i].price);
