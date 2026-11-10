@@ -386,8 +386,11 @@ const ops = createOps({
 client.once(Events.ClientReady, c => {
     console.log(`Logged in as ${c.user.tag}`);
 
+    // After a reboot the jobs start one after another, not all at once, so the bot doesn't flood Discord or the stores the second it is back.
+    let startSlot = 0;
+    const sched = (fn, everyMs, opts = {}) => schedule(fn, everyMs, { firstRunMs: 60_000 + 20_000 * startSlot++, ...opts });
     // Price alerts
-    schedule(
+    sched(
         async () => {
             const s = await runCycle({ db, itad, notifier, voiceMap, log: m => console.log(`[alerts] ${m}`) });
             console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed, ${s.deferred} held for quiet hours`);
@@ -400,23 +403,23 @@ client.once(Events.ClientReady, c => {
 
     // Giveaways: ends them on time, passes unclaimed prizes on, sends "did it work?" follow-ups, deletes old keys
     if (giveaways) {
-        schedule(
+        sched(
             async () => { await giveaways.tick(); beat.giveaways = Date.now(); },
             60_000,
-            { onError: err => { console.error(`[giveaway] ${err.name}: ${err.message}`); ops.error("giveaways", err); } }
+            { firstRunMs: 15_000, onError: err => { console.error(`[giveaway] ${err.name}: ${err.message}`); ops.error("giveaways", err); } }
         );
     } else console.log("Giveaways are off (set KEY_ENCRYPTION_SECRET to turn them on).");
 
     // Support tickets: quiet ones resolve and close on their own
-    schedule(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
-    schedule(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
-    schedule(async () => { await pollBundles(); }, 30 * 60_000, { onError: err => { console.error(`[bundles] ${err.name}: ${err.message}`); ops.error("bundle feed", err); } });
-    schedule(async () => { await pollCodes(); }, 20 * 60_000, { onError: err => { console.error(`[codes] ${err.name}: ${err.message}`); ops.error("game codes", err); } });
-    schedule(async () => { await pollDrops(); }, 30 * 60_000, { onError: err => { console.error(`[promos] ${err.name}: ${err.message}`); ops.error("promo drops", err); } });
-    schedule(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
+    sched(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
+    sched(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
+    sched(async () => { await pollBundles(); }, 30 * 60_000, { onError: err => { console.error(`[bundles] ${err.name}: ${err.message}`); ops.error("bundle feed", err); } });
+    sched(async () => { await pollCodes(); }, 20 * 60_000, { onError: err => { console.error(`[codes] ${err.name}: ${err.message}`); ops.error("game codes", err); } });
+    sched(async () => { await pollDrops(); }, 30 * 60_000, { onError: err => { console.error(`[promos] ${err.name}: ${err.message}`); ops.error("promo drops", err); } });
+    sched(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
 
     // Bundles, giveaways, weekly digests, library snapshots, cleanup and the daily backup
-    schedule(
+    sched(
         async () => {
             const log = m => console.log(`[maintenance] ${m}`);
             const result = {};
