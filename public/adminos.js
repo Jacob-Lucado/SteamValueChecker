@@ -220,7 +220,7 @@
   }
 
   function clock() {
-    const c = el("div", "adm-clock"), tick = () => { const d = new Date(); c.replaceChildren(el("span", "", { text: d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) }), el("span", "", { text: d.toLocaleDateString("en-US", { timeZone: "America/New_York" }) })); c.title = "Eastern time"; };
+    const c = el("div", "adm-clock"), tick = () => { const d = new Date(); c.replaceChildren(el("span", "", { text: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) }), el("span", "", { text: d.toLocaleDateString("en-US") })); c.title = "Your local time"; };
     tick(); setInterval(tick, 20_000); return c;
   }
 

@@ -3973,7 +3973,7 @@
       finally { go.disabled = false; }
     });
     // The sign-in screen looks like an operating system's: wallpaper, a big clock, a round picture and the fields underneath.
-    const clock = h("div", { class: "adm-lock-clock" }), tick = () => { const d = new Date(); clock.replaceChildren(h("b", { text: d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) }), h("span", { text: d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "long", month: "long", day: "numeric" }) })); };
+    const clock = h("div", { class: "adm-lock-clock" }), tick = () => { const d = new Date(); clock.replaceChildren(h("b", { text: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) }), h("span", { text: d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) })); };
     tick(); const clockTimer = setInterval(() => { if (!clock.isConnected) return clearInterval(clockTimer); tick(); }, 15_000);
     go.textContent = "→"; go.setAttribute("aria-label", "Sign in"); go.className = "adm-lock-go";
     form.replaceChildren(h("div", { class: "adm-lock-fields" }, user, h("div", { class: "adm-lock-pass" }, pass, go)), codeRow, msg);
