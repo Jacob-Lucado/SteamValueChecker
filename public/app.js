@@ -5,6 +5,9 @@ window.SVC_SITE = envIn => {
   // One copy of the site per place it is shown. The normal page makes one for itself. A LucadoOS window makes one more for its own
   // element (env.root), with its own address, so pages open inside the desktop without a frame around each of them.
   const NATIVE = Boolean(env.root);
+  // Read before the visitor counter marks this browser as seen, so the desktop-theme hint only goes to someone brand new.
+  let FIRST_VISIT = false;
+  try { FIRST_VISIT = !NATIVE && !localStorage.getItem("svc_visited") && !localStorage.getItem("svc_os_intro"); } catch { /* no storage, no hint */ }
 
   // A profile's address is /u/name, so chat apps can show a preview. The address bar keeps that form while one is open,
   // which means whatever people copy from it shares properly.
@@ -368,6 +371,20 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- landing ----------
+  /** A small stand-in for the desktop theme: icons, two windows and a taskbar. It's decoration, so it's hidden from screen readers. */
+  function osPreview() {
+    const icon = (e, t) => h("div", { class: "osm-ic" }, h("i", { text: e }), h("span", { text: t }));
+    const win = (cls, icon_, title, ...body) => h("div", { class: "osm-win " + cls }, h("div", { class: "osm-bar" }, h("span", { text: icon_ + " " + title }), h("em", {}, h("u"), h("u"), h("u"))), h("div", { class: "osm-body" }, ...body));
+    return h("div", { class: "osm", "aria-hidden": "true" },
+      h("div", { class: "osm-icons" }, icon("🏠", "Home"), icon("📚", "Library"), icon("💸", "Deals"), icon("🛡️", "Servers"), icon("🪂", "Fortnite")),
+      win("w1", "📚", "Value Checker", h("b", { class: "osm-h", text: "Library value" }),
+        h("div", { class: "osm-stats" }, h("span", {}, h("b", { text: "$4,820" }), "worth"), h("span", {}, h("b", { text: "$1,942" }), "paid"), h("span", {}, h("b", { text: "60%" }), "saved")),
+        h("i", { class: "osm-line l1" }), h("i", { class: "osm-line l2" }), h("i", { class: "osm-line l3" })),
+      win("w2", "💸", "Deals", h("b", { class: "osm-h", text: "Wanderstop is 61% off" }), h("span", { class: "osm-sub", text: "All-time low: $9.87 at Fanatical" }),
+        h("div", { class: "osm-btns" }, h("u", { text: "View deal" }), h("u", { text: "Price history" }))),
+      h("div", { class: "osm-task" }, h("b", { text: "▦ Start" }), h("span", { text: "📚 Value Checker" }), h("span", { text: "💸 Deals" }), h("em", { text: "9:41 AM" })));
+  }
+
   function landing() {
     const failed = new URLSearchParams(LOC.search).get("error");
     const ab = state.about;
@@ -496,6 +513,15 @@ window.SVC_SITE = envIn => {
 
       ab && (n(ab.servers) || n(ab.gamesWatched)) ? h("section", { class: "lp-stats" },
         stat("Servers", n(ab.servers)), stat("Games watched", n(ab.gamesWatched)), stat("Alerts in the last 24h", n(ab.alerts24h)), stat("Giveaway keys redeemed", n(ab.redeemed))) : null,
+
+      sec("lx-os",
+        h("div", { class: "lx-os-text" },
+          h("span", { class: "lx-kick", text: "Desktop theme" }),
+          h("h2", { text: "Want it to feel like a desktop?" }),
+          h("p", { class: "lp-sub", text: "LucadoOS turns the whole site into a desktop. Every page is an icon, every page you open is a window you can move, resize and snap side by side, and there's a taskbar and a Start menu. Pick your own wallpaper and colors in Personalize." }),
+          h("div", { class: "lp-cta" }, window.LucadoOS?.canUse() ? h("button", { class: "btn blue big", type: "button", text: "Try the desktop", onclick: () => window.LucadoOS.setMode("os") }) : null),
+          h("p", { class: "muted small", text: "It's a choice, not a change. Classic stays the default, and you can switch back from the taskbar any time. Desktop view needs a screen at least 900 pixels wide." })),
+        osPreview()),
 
       sec("lx-ai",
         h("i", { class: "lx-aurora a3" }),
@@ -8016,7 +8042,21 @@ window.SVC_SITE = envIn => {
       return;
     }
     route();
+    osIntro();
     if (state.me && state.me.tour && !EMBED && !window.LucadoOS?.active()) setTimeout(() => { if (state.me && state.me.tour && !document.getElementById("tour")) startTour(); }, 700);
+  }
+
+  /** One small card, once, for someone's very first visit, so they know the desktop theme exists. */
+  function osIntro() {
+    if (!FIRST_VISIT || EMBED || ADMIN_MODE || !window.LucadoOS?.canUse() || window.LucadoOS.active()) return;
+    try { localStorage.setItem("svc_os_intro", "1"); } catch { return; }
+    const close = () => card.remove();
+    const card = h("div", { class: "os-intro", role: "dialog", "aria-label": "Desktop theme" },
+      h("button", { type: "button", class: "os-intro-x", "aria-label": "Close", text: "×", onclick: close }),
+      h("b", { text: "🖥️ There's a desktop theme" }),
+      h("p", { text: "LucadoOS turns the site into a desktop with windows you can move and snap. Want to see it? Switching back takes one click." }),
+      h("div", { class: "os-intro-btns" }, h("button", { type: "button", class: "btn blue small", text: "Try it", onclick: () => window.LucadoOS.setMode("os") }), h("button", { type: "button", class: "btn gray small", text: "Not now", onclick: close })));
+    setTimeout(() => { if (!document.getElementById("wiz")) document.body.append(card); }, 3500);
   }
 
   // Visitor counter: totals only. A browser counts as new once (remembered here), no cookies and no addresses stored.

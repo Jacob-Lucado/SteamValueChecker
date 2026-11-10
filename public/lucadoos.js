@@ -32,7 +32,7 @@
     for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
     w.node.style.zIndex = String(++z); w.task.classList.add("on"); for (const o of wins.values()) if (o !== w) o.task.classList.remove("on");
     if (w.pending) { if (w.inline) { w.pending = null; w.mount(); } else if (w.frame) { w.frame.src = w.pending; w.pending = null; } } // a restored window loads the first time you reach for it
-    document.title = `${metaOf(w.id).title} · LucadoOS`; persist(); addressOf(w); syncActive();
+    document.title = `${metaOf(w.id).title} · Steam Value Checker`; persist(); addressOf(w); syncActive();
   }
   /** Keeps the cost down: only windows you can actually see animate their waves, and the desktop's own waves stop while a full-screen window covers them. */
   let lastActive = new Map(), lastDesk = null;
