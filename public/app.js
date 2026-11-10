@@ -7935,15 +7935,15 @@
   /** Hands the whole page to the LucadoOS desktop: one icon for each section, and every page opens in its own window. */
   function osMount() {
     const ICONS = { home: "🏠", library: "📚", feed: "💬", deals: "💸", indie: "🎮", free: "🎁", social: "🤝", servers: "🛡️", streamer: "📺", account: "👤", help: "🛟" };
-    const pages = { "/": { title: state.me ? "Value Checker" : "Home", icon: "🏠", sub: "" } }, nav = [];
+    const pages = { "/": { title: state.me ? "Value Checker" : "Home", icon: state.me ? "📚" : "🏠", sub: "" }, "/home": { title: "Home", icon: "🏠", sub: "" } }, nav = [];
     for (const g of NAV) {
       if (g.id === "admin") continue;
-      const list = g.pages.filter(([id]) => pageVisible(id)).map(([id, text]) => ({ path: id === "home" ? "/" : "/" + id, title: text, icon: ICONS[g.id] || "📄" }));
+      const list = g.pages.filter(([id]) => id === "home" || pageVisible(id)).map(([id, text]) => ({ path: id === "home" ? (state.me ? "/home" : "/") : "/" + id, title: text, icon: ICONS[g.id] || "📄" }));
       for (const p of list) if (p.path !== "/") pages[p.path] = { title: p.title, icon: p.icon, sub: g.label };
       if (list.length) nav.push({ label: g.label, icon: ICONS[g.id] || "📄", pages: list, badge: state.me && g.id === "account" ? Number(state.me.unread) || 0 : 0 });
     }
     const want = location.pathname + location.search.replace(/[?&]os=\d\b/, "");
-    window.LucadoOS.begin({ pages, nav, open: want, loginUrl: "/auth/login", adminUrl: state.me?.adminUrl || null, logout: async () => { try { await api("/auth/logout", {}); } catch { /* signed out anyway */ } location.href = "/"; }, user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
+    window.LucadoOS.begin({ pages, nav, open: want, home: "/home", loginUrl: "/auth/login", adminUrl: state.me?.adminUrl || null, logout: async () => { try { await api("/auth/logout", {}); } catch { /* signed out anyway */ } location.href = "/"; }, user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
   }
 
   function route() {

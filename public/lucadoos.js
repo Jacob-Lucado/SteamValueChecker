@@ -259,7 +259,7 @@
     startMenu = el("div", "los-start", { hidden: "" });
     const rail = el("div", "los-start-rail"), results = el("div", "los-start-list");
     const tilesBox = el("div", "los-start-tiles");
-    const DEFAULT_PINS = ["/", "/library", "/feed", "/free", "/indie", "/servers", "/help"];
+    const DEFAULT_PINS = ["/home", "/", "/library", "/feed", "/free", "/indie", "/servers", "/help"];
     const loadPins = () => { try { const p = JSON.parse(store.get(PINS) || "null"); if (Array.isArray(p)) return p.filter(x => pages[x]); } catch { /* defaults */ } return DEFAULT_PINS.filter(p => pages[p]); };
     let pinned = loadPins(), lastQ = "", dragFrom = -1;
     const savePins = () => { store.set(PINS, JSON.stringify(pinned)); drawTiles(); paint(lastQ); };
@@ -341,7 +341,7 @@
     for (const s of saved.filter(s => known(s.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8)) open(s.id, s);
     const want = options.open && known(options.open) && options.open !== "/" ? options.open : null;
     if (want) { const have = [...wins.values()].find(w => w.id === want || w.path === want); if (have) { have.min = false; have.node.hidden = false; focus(have); } else open(want); }
-    if (!wins.size) open("/");
+    if (!wins.size) open(options.home && known(options.home) ? options.home : "/"); // first visit lands on the Home page
     else { const top = [...wins.values()].filter(o => !o.min).sort((a, b) => Number(b.node.style.zIndex) - Number(a.node.style.zIndex))[0]; if (top) addressOf(top); }
   }
 
