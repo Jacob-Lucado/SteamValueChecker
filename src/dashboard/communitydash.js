@@ -336,5 +336,34 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         try { return { link: await community.inviteLinkFor(gid, userId) }; }
         catch (e) { if (e.userFacing) fail(400, e.message); throw e; }
     }
-    return { overview, setup, welcome, guides, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
+    /**
+     * Every channel the bot posts in, one entry each, with what it posts and what happens when it is left empty.
+     * `group` and `key` drive the Setup page; `column` is where it is kept (the alert channel and the ticket, vouch and giveaway channels have their own rows on that page).
+     */
+    const CHANNELS = [
+        { key: "announce", group: "Announcements and rules", label: "Announcements", help: "Bot news and server announcements you send from the dashboard.", fallback: "the alert channel", column: "announce_channel" },
+        { key: "rules", group: "Announcements and rules", label: "Rules", help: "Where the rules post goes.", column: "rules_channel" },
+        { key: "welcome", group: "Members", label: "Welcome", help: "Welcome messages and cards for new members.", column: "welcome_channel" },
+        { key: "memberlog", group: "Members", label: "Member log", help: "Joins, leaves and name changes.", column: "log_channel" },
+        { key: "modlog", group: "Members", label: "Moderation log", help: "Warnings, timeouts, bans and other moderation actions.", fallback: "the member log", column: "mod_log_channel" },
+        { key: "levelup", group: "Members", label: "Level-up messages", help: "Where level-ups are announced, when announcing is on.", fallback: "the channel the member was chatting in", column: "levelup_channel" },
+        { key: "leaderboard", group: "Members", label: "Leaderboard", help: "The live XP board, refreshed on its own.", column: "lb_channel", reset: { lb_message_id: null } },
+        { key: "playtest", group: "Games and deals", label: "Playtests and demos", help: "Betas, demos, free weekends and sign-ups.", fallback: "the alert channel", column: "playtest_channel" },
+        { key: "indie", group: "Games and deals", label: "Indie showcase", help: "New and featured indie games.", column: "indie_channel" },
+        { key: "squad", group: "Games and deals", label: "Squad-ups", help: "A post when two or more members are in the same game.", column: "squad_channel" },
+        { key: "live", group: "Community", label: "Live streams", help: "A post when a member of your server goes live.", column: "live_channel" },
+        { key: "memes", group: "Community", label: "Memes", help: "The scheduled gaming memes.", column: "meme_channel", reset: { meme_at: null } },
+        { key: "ai", group: "Community", label: "AI companion", help: "The channel the AI companion answers in.", column: "ai_channel" }
+    ];
+    function channelMap(gid) {
+        const c = db.getCommunity(gid);
+        return CHANNELS.map(({ column: _c, reset: _r, ...meta }) => ({ ...meta, value: c[_c] ?? null }));
+    }
+    async function setChannel(gid, key, id) {
+        const def = CHANNELS.find(x => x.key === key) ?? fail(400, "I don't know that channel.");
+        const value = await channelOk(gid, id || null);
+        db.setCommunity(gid, { [def.column]: value, ...(def.reset ?? {}) });
+        return { key, value };
+    }
+    return { channelMap, setChannel, overview, setup, welcome, guides, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
 }

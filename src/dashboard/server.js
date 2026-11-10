@@ -2453,6 +2453,14 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         },
 
         // The same checklist as /manage setup in Discord.
+        "GET /api/servers/channelmap": async (req, _b, url) => {
+            const g = managerGuild(session(req), url.searchParams.get("guild"));
+            return { guild: g.id, channels: cd.channelMap(g.id), alert: db.getGuild(g.id)?.channel_id ?? null };
+        },
+        "POST /api/servers/channelmap": async (req, body) => {
+            const g = managerGuild(session(req), String(body.guild_id));
+            return comm(() => cd.setChannel(g.id, String(body.key), body.channel_id || null));
+        },
         "GET /api/servers/setup": async (req, _b, url) => {
             const s = session(req);
             const g = managerGuild(s, url.searchParams.get("guild"));

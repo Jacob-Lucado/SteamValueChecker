@@ -6631,6 +6631,22 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- guided server setup (same checklist as /manage setup in Discord) ----------
+  /** One row per thing the bot posts, grouped, each with its own channel. Empty rows say what happens instead. */
+  function channelPanel(list, channels, alertId, guildId, reload) {
+    const nameOf = id => { const c = channels.find(x => x.id === id); return c ? "#" + c.name : "a channel I can't see"; };
+    const groups = [...new Set(list.map(x => x.group))];
+    return h("div", { class: "panel" }, h("h3", { text: "Every channel the bot posts in" }),
+      h("p", { class: "muted small", text: "Give each kind of post its own channel. Anything left empty either does nothing or uses the channel noted under it." }),
+      ...groups.map(g => h("div", { class: "chmap-group" }, h("div", { class: "chmap-head", text: g }),
+        ...list.filter(x => x.group === g).map(x => {
+          const sel = select([["", "Not set"], ...channels.map(c => [c.id, "#" + c.name])], x.value || "");
+          const b = h("button", { class: "btn blue small", type: "button", text: "Save" });
+          b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/channelmap", { guild_id: guildId, key: x.key, channel_id: sel.value || null }); toast("Saved.", "ok"); reload(); }));
+          const now = x.value ? "Posting in " + nameOf(x.value) + "." : x.fallback ? "Not set, so it uses " + x.fallback + (x.fallback === "the alert channel" ? (alertId ? " (" + nameOf(alertId) + ")" : ", which isn't set either") : "") + "." : "Not set, so it stays off.";
+          return h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (x.value ? "✅ " : "⬜ ") + x.label }), h("div", { class: "muted small", text: x.help }), h("div", { class: "muted small", text: now })), h("div", { class: "row" }, sel, b));
+        }))));
+  }
+
   async function setupView() {
     const servers = state.me.servers.filter(g => g.manageable);
     const holder = h("div");
@@ -6649,6 +6665,7 @@ window.SVC_SITE = envIn => {
           return;
         }
         const [ch, ro, fo] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] })), api("/api/servers/forums?guild=" + encodeURIComponent(guild.value)).catch(() => ({ forums: [] }))]);
+        const cmap = await api("/api/servers/channelmap?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] }));
         const reqSel = select([["", "Not set"], ...fo.forums.map(c => [c.id, "#" + c.name])], st.requestsChannel || "");
         const chOpts = cur => select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], cur || "");
         const row = (step, title, help, ...controls) => h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (step.done ? "✅ " : step.optional ? "➖ " : "⬜ ") + title }), h("div", { class: "muted small", text: help })), ...controls.filter(Boolean));
@@ -6677,6 +6694,7 @@ window.SVC_SITE = envIn => {
             h("div", { class: "row" }, vouchSel, save("Save", () => api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouchSel.value })))) : null,
           row(st.steps.find(x => x.id === "requests"), "Feature requests forum", "Every idea members send in on the dashboard becomes a post here, tagged with its status (planned, in development, shipped…). Needs a forum channel, which Discord only offers on Community servers.",
             fo.forums.length ? h("div", { class: "row" }, reqSel, save("Save", () => api("/api/community/places", { guild_id: guild.value, requests_channel: reqSel.value }))) : h("span", { class: "muted small", text: "No forum channel yet. \"Create the channels for me\" makes one, or add one in Discord." }))),
+          cmap.channels.length ? channelPanel(cmap.channels, ch.channels, st.alertChannel, guild.value, load) : null,
           h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
             h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/me wishlist import" }), ", then star favorites with ", h("code", { text: "/me wishlist priority" })),
             h("li", {}, "Price a library: ", h("code", { text: "/games value" }), " or link Steam for hours, ", h("code", { text: "/me steam recap" }), " and ", h("code", { text: "/me library challenge" })),
