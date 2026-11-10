@@ -322,7 +322,7 @@
 
     const acct = document.getElementById("account");
     const support = state.cfg && state.cfg.supportUrl ? ext(state.cfg.supportUrl, "Support server", "btn gray small support-btn") : null;
-    const links = state.me ? [] : [h("a", { href: "/ai", text: "AI companion" }), state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
+    const links = state.me ? [] : [h("a", { href: "/ai", text: "AI companion" }), h("a", { href: "/indie", text: "Indie devs" }), state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
     if (state.me) {
       acct.replaceChildren(...[...links, support,
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
@@ -337,6 +337,7 @@
     }
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
+      h("a", { href: "/indie", text: "Indie devs" }),
       ...(cr ? [h("a", { class: "copyright", href: safeHref(cr.url), target: "_blank", rel: "noopener noreferrer" },
         h("img", { src: "/creator.png", alt: "", width: "22", height: "22" }), `© ${new Date().getFullYear()} ${cr.name}`)] : []));
   }
@@ -431,6 +432,7 @@
     showArea(0);
 
     const shipped = [
+      ["NEW", "Indie developer corner", "A free showcase for indie games and a toolbox for Steam developers. Browsing needs no sign-in."],
       ["AI", "The AI companion", "Ask in plain words and get pictures back: price graphs, comparisons, library stats and play plans."],
       ["NEW", "Buy or wait", "A verdict with the reasons and a year of price history."],
       ["NEW", "How-to guides", "Ask \"how do I get Steam verified\" and the bot answers with a picture guide on its own."],
@@ -439,6 +441,12 @@
       ["NEW", "Notes it keeps", "It remembers what you like, a few short notes, and forgets whenever you say."]
     ];
     const step = (num, title, text) => h("div", { class: "lp-step" }, h("div", { class: "lp-num", text: num }), h("h3", { text: title }), h("p", { text }));
+    const indieShots = h("div", { class: "lx-indie-shots", "aria-hidden": "true" }, [1, 2, 3].map(() => h("div", { class: "lx-ix-card" }, h("i", {}), h("b", {}), h("span", {}))));
+    api("/api/indie").then(d => {
+      const list = [...(d.featured || []), ...(d.games || [])].filter((g, i, a) => a.findIndex(x => x.id === g.id) === i).slice(0, 3);
+      if (!list.length || !document.body.contains(indieShots)) return;
+      indieShots.replaceChildren(...list.map(g => h("a", { class: "lx-ix-card real", href: `/indie/game/${g.id}`, tabindex: "-1" }, h("img", { src: g.image, alt: "", width: 460, height: 215, loading: "lazy" }), h("b", { text: g.title }), h("span", { text: g.studio || "Indie studio" }))));
+    }).catch(() => {});
     const aiShots = ["history", "compare", "plan"].map(s => h("img", { src: `/img/ai/${s}.png`, alt: "", loading: "lazy", width: "480", height: "260" }));
 
     app.replaceChildren(...[
@@ -449,6 +457,7 @@
         h("div", { class: "lx-hero-text" },
           failed && h("div", { class: "notice warn", text: "Sign-in didn't work. Give it another go." }),
           h("a", { class: "lx-new", href: "/ai" }, h("b", { text: "NEW" }), "Meet the AI companion", h("span", { class: "lx-beta", text: "BETA" }), h("i", { text: "→" })),
+          h("a", { class: "lx-new lx-new-indie", href: "/indie" }, h("b", { text: "NEW" }), "Indie devs: showcase and free tools", h("i", { text: "→" })),
           state.freeNow ? h("a", { class: "lp-live", href: state.me ? "#/free" : "/auth/login" }, h("i", { class: "lp-dot" }), `${state.freeNow} free offer${state.freeNow === 1 ? "" : "s"} live right now`) : null,
           h("h1", {}, "Your whole gaming life, ", h("span", { class: "lx-grad", text: "worth every penny" }), "."),
           h("p", { class: "lp-sub", text: "I made this bot because I kept losing track of what I'd paid for games. Now it prices your library, watches your wishlist, answers questions with pictures, and runs your gaming server. All free, in Discord and on the web." }),
@@ -457,7 +466,7 @@
         collage),
 
       h("div", { class: "lp-ticker", "aria-hidden": "true" }, h("div", { class: "lp-ticker-track" },
-        ...[0, 1].flatMap(() => ["AI companion", "Library value", "Price graphs", "Wishlist alerts", "Free games", "Steam Verified", "Levels and XP", "Looking for group", "Giveaways", "Stream overlays", "Music", "Guides", "Profiles"].map(t => h("span", { text: t }))))),
+        ...[0, 1].flatMap(() => ["AI companion", "Indie showcase", "Developer tools", "Library value", "Price graphs", "Wishlist alerts", "Free games", "Steam Verified", "Levels and XP", "Looking for group", "Giveaways", "Stream overlays", "Music", "Guides", "Profiles"].map(t => h("span", { text: t }))))),
 
       ab && (n(ab.servers) || n(ab.gamesWatched)) ? h("section", { class: "lp-stats" },
         stat("Servers", n(ab.servers)), stat("Games watched", n(ab.gamesWatched)), stat("Alerts in the last 24h", n(ab.alerts24h)), stat("Giveaway keys redeemed", n(ab.redeemed))) : null,
@@ -471,6 +480,15 @@
           h("div", { class: "lp-cta" }, h("a", { class: "btn blue big", href: "/ai", text: "See what it can do" }), invite && ext(invite, "Add it to a server", "btn gray big")),
           h("p", { class: "muted small", text: "It's in beta. It can be wrong, so check a price before you buy." })),
         h("div", { class: "lx-ai-shots", "aria-hidden": "true" }, ...aiShots)),
+
+      sec("lx-indie",
+        h("div", { class: "lx-indie-text" },
+          h("span", { class: "lx-kick", text: "Indie corner" }),
+          h("h2", { text: "Make a game? Show it off. Play one? Find it." }),
+          h("p", { class: "lp-sub", text: "A free showcase where small studios put their Steam games in front of people, with likes, follows and news posts for players. Developers also get a toolbox of fee, wishlist, capsule and press helpers. Browsing is open to everyone; you only sign in to submit." }),
+          h("ul", { class: "lp-list" }, h("li", { text: "Find your next favorite indie game, with picks matched to your library" }), h("li", { text: "Follow a game or studio and hear when the demo drops" }), h("li", { text: "Submit your own game, post updates and hand out review keys" }), h("li", { text: "Free tools for Steam fees, wishlists, capsules, trailers and Next Fest" })),
+          h("div", { class: "lp-cta" }, h("a", { class: "btn green big", href: "/indie", text: "Browse indie games" }), h("a", { class: "btn gray big", href: "/indie/tools", text: "Developer tools" }), h("a", { class: "btn gray big", href: "/indie/submit", text: "Submit your game" }))),
+        indieShots),
 
       sec("",
         head("Fresh from the workshop", "What's new", "Everything added in the last few days."),
@@ -4145,15 +4163,37 @@
         if (g.status !== "approved") mk("Approve", "green", () => act(g, "approve", { note: note.value }));
         if (g.status !== "rejected") mk("Reject", "red", () => act(g, "reject", { note: note.value }));
         if (g.status === "approved") { mk(g.featured ? "Unfeature" : "Feature", g.featured ? "gray" : "blue", () => act(g, g.featured ? "unfeature" : "feature")); mk("Sync", "gray", () => act(g, "refresh")); mk("Post to X", "gray", async () => { if (confirm(`Post ${g.title} to the project's X account? Posts with a link cost about 20 cents.`)) await act(g, "xpost"); }); }
+        if (g.status === "approved") mk(g.verified ? "Remove verified mark" : "Mark verified", "gray", () => act(g, g.verified ? "unverify" : "verify"));
         mk("Remove", "gray", async () => { if (confirm(`Remove ${g.title} for good?`)) await act(g, "remove"); });
         return h("div", { class: "panel ix-adm" }, h("div", { class: "ix-adm-head" }, h("img", { src: g.image, alt: "", width: 184, height: 69 }), h("div", {}, h("b", { text: g.title }), h("div", { class: "muted small", text: `${g.studio || "Unknown studio"} · Steam app ${g.appid} · by Discord user ${g.owner}` }), h("div", { class: "muted small", text: `${(g.genres || []).join(", ")} · ${g.price || "no price"} · ${g.release || ""}` }))),
-          h("p", { text: g.pitch || "" }), g.note ? h("p", { class: "muted small", text: "Note: " + g.note }) : null,
+          h("p", { text: g.pitch || "" }), g.note ? h("p", { class: "muted small", text: "Note: " + g.note }) : null, g.verified ? h("p", { class: "muted small", text: "✓ Verified by Steam page code" }) : null, g.reports ? h("p", { class: "notice warn", text: `${g.reports} open report${g.reports === 1 ? "" : "s"} on this game` }) : null,
           h("div", { class: "row" }, h("a", { href: g.steamUrl, target: "_blank", rel: "noopener noreferrer", text: "Steam page ↗" }), g.status === "approved" ? h("a", { href: `/indie/game/${g.id}`, target: "_blank", text: "Showcase page ↗" }) : null, Object.entries(g.links || {}).map(([k, u]) => h("a", { href: u, target: "_blank", rel: "noopener noreferrer nofollow", text: k + " ↗" })), g.status === "approved" ? h("span", { class: "muted small", text: `${g.views} views · ${g.clicks} clicks · ♥ ${g.likes}` }) : null),
           h("div", { class: "row" }, note, btns));
       };
+      let rep = { reports: [] }, spot = null;
+      try { rep = await api("/api/admin/indie/reports"); } catch { /* leave the panel empty */ }
+      try { spot = await api("/api/admin/indie/spotlight"); } catch { /* spotlight not available */ }
+      const when = ms => new Date(ms).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      const reportsPanel = h("div", { class: "panel" }, h("h3", { text: `Reports (${rep.reports.length})` }), rep.reports.length ? rep.reports.map(r => {
+        const closeBtn = h("button", { class: "btn gray small", type: "button", text: "Dismiss" }), takeDown = h("button", { class: "btn red small", type: "button", text: "Take the game down" });
+        closeBtn.addEventListener("click", () => busy(closeBtn, async () => { await api("/api/admin/indie/report", { gameId: r.gameId, action: "close" }); await draw(); }));
+        takeDown.addEventListener("click", () => busy(takeDown, async () => { if (!confirm(`Take ${r.title} down?`)) return; await api("/api/admin/indie/report", { gameId: r.gameId, action: "remove" }); await draw(); }));
+        return h("div", { class: "ix-adm-report" }, h("b", { text: r.title || "(removed game)" }), h("span", { class: "muted small", text: ` · reported ${when(r.created)}` }), h("p", { text: r.reason }), h("div", { class: "row" }, r.title ? h("a", { href: `/indie/game/${r.gameId}`, target: "_blank", text: "Showcase page ↗" }) : null, closeBtn, takeDown));
+      }) : h("p", { class: "muted", text: "No open reports." }));
+      let spotPanel = null;
+      if (spot) {
+        const on = h("input", { type: "checkbox" }); on.checked = spot.on; const chan = h("input", { type: "text", placeholder: "Discord channel ID (optional)", value: spot.channel || "", maxlength: 22 }), save = h("button", { class: "btn blue small", type: "button", text: "Save" }), runNow = h("button", { class: "btn gray small", type: "button", text: "Spotlight the next game now" });
+        save.addEventListener("click", () => busy(save, async () => { try { await api("/api/admin/indie/spotlight", { on: on.checked, channel: chan.value }); toast("Saved.", "ok"); } catch (e) { toast(e.message); } }));
+        runNow.addEventListener("click", () => busy(runNow, async () => { if (!confirm(spot.next ? `Spotlight ${spot.next.title} right now? It posts to X (if connected) and your channel.` : "There's no game ready to spotlight.")) return; try { const r = await api("/api/admin/indie/spotlight", { run: true }); toast(r.ran?.skipped ? r.ran.skipped : `Spotlighted ${r.ran.game}.`, "ok"); await draw(); } catch (e) { toast(e.message); } }));
+        spotPanel = h("div", { class: "panel" }, h("h3", { text: "Weekly spotlight" }), h("label", { class: "check" }, on, " Spotlight one game every Wednesday at noon (Eastern)"),
+          h("p", { class: "muted small", text: "It posts the game to X with #WishlistWednesday (when X posting is on) and to a Discord channel if you set one, then marks it Featured for the week. Every game gets a turn; verified and well-liked games go first." }),
+          h("div", { class: "row" }, chan, save), h("p", { class: "muted small", text: spot.next ? `Up next: ${spot.next.title}${spot.next.studio ? " by " + spot.next.studio : ""}` : "Up next: nothing yet. Approve a game first." }),
+          spot.last ? h("p", { class: "muted small", text: `Last: ${spot.last.game}, ${when(spot.last.at)}${spot.last.x ? " · posted to X" : ""}${spot.last.discord === true ? " · posted in Discord" : ""}` }) : null, runNow);
+      }
       body.replaceChildren(
         h("div", { class: "panel" }, h("div", { class: "grid four" }, tile("Waiting", d.counts.pending ?? 0, "need a look"), tile("Live", d.counts.approved ?? 0, "in the showcase"), tile("Views", d.totals.views, "on game pages"), tile("Clicks to Steam", d.totals.clicks), tile("Likes", d.totals.likes))),
         h("div", { class: "panel" }, h("h3", { text: "Submissions" }), h("label", { class: "check" }, open, " Accept new submissions"), h("p", { class: "muted small", text: "Games re-sync from their Steam pages every day on their own, so prices and release dates stay current. You can also do it now." }), syncAll, h("a", { class: "btn gray small", href: "/indie", target: "_blank", text: "Open the showcase" })),
+        ...(spotPanel ? [spotPanel] : []), reportsPanel,
         tabs, d.games.length ? d.games.map(card) : h("p", { class: "muted", text: status === "pending" ? "Nothing is waiting. You're all caught up." : "Nothing here." }));
     };
     await draw();

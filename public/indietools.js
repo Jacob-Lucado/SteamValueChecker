@@ -220,6 +220,40 @@
       v => { const r = C.demoOrPlaytest({ vertical: v.vertical === "1", page: v.page === "1", fest: v.fest === "1", feedback: v.feedback === "1", stable: v.stable === "1" });
         return [k.stats(k.stat("Better fit", r.pick === "demo" ? "A demo" : "A playtest", `${r.demo} points for a demo, ${r.play} for a playtest`, "good")), k.checks(r.why.map(t => ["good", t])), k.note("You can do both: a closed playtest first, then a demo once the build is ready for the public.")]; }); });
 
+
+  reg("next-fest-score", ctx => { const k = kit(ctx), yn = [["1", "Yes"], ["0", "Not yet"]];
+    const q = (key, label) => ({ key, label, type: "select", options: yn, value: "0" });
+    return k.calc([{ key: "wishlists", label: "Wishlists right now", type: "number", value: 0 }, q("page", "Store page is public with a finished capsule and trailer?"), q("demo", "Demo is uploaded and tested?"), q("quick", "The fun lands in the demo's first two minutes?"), q("wishbtn", "The demo ends with a wishlist or follow prompt?"),
+      q("trailer", "Trailer shows gameplay in the first few seconds?"), q("shots", "Five or more good screenshots, best first?"), q("press", "Streamers and press have your demo?"), q("mail", "Your followers know the festival dates?"), q("patch", "You can patch the demo fast?"), q("there", "You'll be around during the festival?")],
+      v => { const r = C.nextFestScore({ ...Object.fromEntries(Object.entries(v).map(([key, val]) => [key, val === "1"])), wishlists: v.wishlists });
+        return [k.stats(k.stat("Readiness", `${r.score} / 100`, r.band, r.score >= 70 ? "good" : r.score >= 40 ? "warn" : "bad")),
+          r.gaps.length ? k.checks(r.gaps.map(g => ["warn", g.fix])) : k.checks([["good", "Nothing big is missing. Do one last install test of the demo on a clean machine."]]),
+          k.note("This is a planning aid built from what tends to matter at Next Fest. It isn't Valve's measure, and a great demo beats a perfect checklist.")]; }); });
+
+  reg("trailer-check", ctx => { const k = kit(ctx), { h } = ctx, out = h("div", { class: "ix-out" }), pick = h("input", { type: "file", accept: "video/*", "aria-label": "Choose your trailer file" });
+    pick.addEventListener("change", async () => {
+      const f = pick.files[0]; if (!f) return;
+      out.replaceChildren(h("p", { class: "muted", text: "Looking at your first seconds…" }));
+      const url = URL.createObjectURL(f), v = h("video", { muted: "", preload: "auto", playsinline: "" });
+      try {
+        v.muted = true; v.src = url;
+        await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error("That video couldn't be opened in your browser. MP4 (H.264) works best.")); });
+        const secs = [0, 1, 2, 3, 4, 5].filter(t => t <= Math.max(0, (v.duration || 6) - 0.1)), frames = [], w = 160, ht = 90, strip = h("div", { class: "ix-frames" });
+        let prev = null;
+        for (const t of secs) {
+          await new Promise(ok => { v.onseeked = ok; v.currentTime = t; });
+          const c = h("canvas", { width: w, height: ht, class: "ix-pix" }), g = c.getContext("2d", { willReadFrequently: true });
+          g.drawImage(v, 0, 0, w, ht); const px = g.getImageData(0, 0, w, ht).data, st = C.imageStats(px);
+          frames.push({ second: t, brightness: st.brightness, motion: prev ? C.frameMotion(prev, px) : null }); prev = new Uint8ClampedArray(px);
+          strip.append(h("figure", {}, c, h("figcaption", { class: "muted small", text: `${t}s` })));
+        }
+        const r = C.trailerOpening(frames);
+        out.replaceChildren(strip, k.checks(r.checks), k.note(`Your video stays on this device. Length: ${Math.round(v.duration)}s. Steam plays trailers muted and small on a page, so the first three seconds have to work with no sound.`));
+      } catch (e) { out.replaceChildren(h("p", { class: "notice warn", text: e.message })); }
+      finally { URL.revokeObjectURL(url); }
+    });
+    return h("div", { class: "ix-tool" }, h("div", { class: "ix-field" }, h("label", { text: "Choose your trailer file" }), pick), out); });
+
   // ---------- press and creators ----------
   /** The game-details form shared by the three writing tools. */
   function gameForm(ctx, extra, render) {

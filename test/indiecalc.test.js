@@ -107,3 +107,15 @@ test("every tool listed on the tools page has a working screen, and every screen
     for (const t of INDIE_TOOLS) { assert.ok(INDIE_CATS.some(c => c.id === t.cat), `${t.id} has a category`); assert.ok(indieSeo(`/indie/tools/${t.id}`), `${t.id} has its own search listing`); assert.ok(t.desc.length > 20); }
     assert.equal(indieSeo("/indie/tools/nope"), null);
 });
+
+test("next fest score rewards what's done, lists the biggest gaps first, and the trailer check flags dark or still openings", () => {
+    const none = C.nextFestScore({}), all = C.nextFestScore({ ...Object.fromEntries(C.FEST_ITEMS.map(([id]) => [id, true])), wishlists: 9000 });
+    assert.equal(none.score, 0); assert.equal(none.band, "Not yet"); assert.equal(all.score, 100); assert.equal(all.band, "Ready"); assert.equal(all.gaps.length, 0);
+    assert.equal(none.gaps[0].id, "wishlists", "the heaviest missing piece is first");
+    const dark = C.trailerOpening([{ second: 0, brightness: 10, motion: null }, { second: 1, brightness: 12, motion: 0.5 }, { second: 2, brightness: 20, motion: 1 }, { second: 3, brightness: 15, motion: 1 }]);
+    assert.equal(dark.checks[0][0], "bad"); assert.equal(dark.checks[1][0], "bad");
+    const lively = C.trailerOpening([{ second: 0, brightness: 120, motion: null }, { second: 1, brightness: 130, motion: 25 }, { second: 2, brightness: 110, motion: 30 }]);
+    assert.deepEqual(lively.checks.map(c => c[0]), ["good", "good", "good"]);
+    assert.equal(C.frameMotion(new Uint8Array(64).fill(10), new Uint8Array(64).fill(10)), 0);
+    assert.ok(C.frameMotion(new Uint8Array(64).fill(0), new Uint8Array(64).fill(255)) > 90);
+});

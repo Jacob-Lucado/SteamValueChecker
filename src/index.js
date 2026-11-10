@@ -112,6 +112,8 @@ import { createXPoster } from "./xposter.js";
 import { createIndie } from "./indie.js";
 import { configureDeals } from "./deallinks.js";
 import { createWeekly } from "./weeklydeals.js";
+import { createSpotlight } from "./indiespotlight.js";
+import { createIndieNews } from "./indienews.js";
 import { createReferrals } from "./referrals.js";
 import { createBundleFeedHandlers } from "./bundlefeedhandlers.js";
 import { createDropHandlers } from "./dropshandlers.js";
@@ -550,11 +552,14 @@ setInterval(() => supporters.sweep().then(() => supporters.remind()).catch(() =>
 const indieSvc = createIndie();
 const xposter = createXPoster({ db, log: m => console.log(`[x] ${m}`) });
 // Friday's roundup of the week's best Steam sales: an X post and, if a channel is set on the admin page, a Discord post
+const indieNews = createIndieNews({ db, dm: (id, p) => discord.sendDm(id, p), base: publicBase, log: m => console.log(`[indie news] ${m}`) });
+const indieSpotlight = createSpotlight({ db, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: m => console.log(`[indie spotlight] ${m}`) });
 const referrals = createReferrals({ db, supporters, dm: (id, p) => discord.sendDm(id, p), publicUrl: publicBase, log: t => console.log(`[referrals] ${t}`) });
 const weekly = createWeekly({ db, itad, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: t => console.log(`[weekly deals] ${t}`) });
 // every few minutes: send any scheduled posts that have come due, then the automatic free-game post if that's switched on
 setTimeout(() => setInterval(() => {
     ops.job("weekly deals", () => weekly.tick()).catch(() => {});
+    ops.job("indie spotlight", () => indieSpotlight.tick()).catch(() => {});
     ops.job("indie sync", () => indieSvc.syncDue(db, { limit: 5, log: m => console.log(`[indie] ${m}`) })).catch(() => {});
     if (!xposter.configured()) return;
     xposter.flush().catch(() => {});
@@ -1042,7 +1047,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ referrals, weekly, indieSvc, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ referrals, weekly, indieSvc, indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

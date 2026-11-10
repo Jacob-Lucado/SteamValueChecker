@@ -60,6 +60,8 @@ import { UserError } from "../errors.js";
 import { createIndie, parseApp, cleanLinks } from "../indie.js";
 import { INDIE_CATS, INDIE_TOOLS, indieSeo, indieSpotlightText } from "../indiemeta.js";
 import { MAX_PENDING_PER_USER, MAX_GAMES_PER_USER } from "../indiestore.js";
+import { createIndieNews, picksFor } from "../indienews.js";
+import { indieBadgeSvg } from "../indiebadge.js";
 import { createStreams, canStreamIn } from "../streamlive.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
@@ -250,7 +252,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ referrals = null, weekly = null, indieSvc = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ referrals = null, weekly = null, indieSvc = null, indieNews = null, spotlight = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -376,6 +378,11 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
     const idFinderLimit = createLimiter({ windowMs: 60_000, max: 15, now });
     const indieApi = indieSvc ?? createIndie();
+    const indieHerald = indieNews ?? createIndieNews({ db, dm, base: origin, log });
+    const indieUpdateLimit = createLimiter({ windowMs: 3600_000, max: 6, now });
+    const indieKeyLimit = createLimiter({ windowMs: 3600_000, max: 8, now });
+    const indieVerifyLimit = createLimiter({ windowMs: 60_000, max: 3, now });
+    const indieReportLimit = createLimiter({ windowMs: 3600_000, max: 6, now });
     const indieLookupLimit = createLimiter({ windowMs: 60_000, max: 20, now });
     const indieSyncLimit = createLimiter({ windowMs: 60_000, max: 1, now });
     const indieWriteLimit = createLimiter({ windowMs: 10 * 60_000, max: 12, now });
@@ -3515,18 +3522,18 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const page = Math.max(0, Math.floor(Number(sp.get("page")) || 0)), per = 24;
             const { games, total } = db.indieList({ genre, q, sort, limit: per, offset: page * per });
             const plain = !genre && !q && page === 0;
-            return { open: db.getMeta("indie:open") !== "0", games: games.map(indiePublic), total, page, per, genres: db.indieGenres(), featured: plain ? db.indieFeatured(3).map(indiePublic) : [] };
+            return { open: db.getMeta("indie:open") !== "0", games: games.map(indiePublic), total, page, per, genres: db.indieGenres(), featured: plain ? db.indieFeatured(3).map(indiePublic) : [], news: plain ? db.indieNewsFeed(5).map(u => ({ id: u.id, gameId: u.game_id, game: u.game_title, studio: u.studio, image: u.image, kind: u.kind, title: u.title, created: u.created })) : [] };
         },
         "GET /api/indie/game": async (req, _b, url) => {
             const g = db.indieGet(url.searchParams.get("id")), sess = softSession(req);
             const mine = Boolean(g && sess && sess.userId === g.owner_id), staff = Boolean(sess && isOwner(sess));
             if (!g || (g.status !== "approved" && !mine && !staff)) throw new HttpError(404, "That game isn't in the showcase.");
             if (g.status === "approved" && !CRAWLER.test(String(req.headers["user-agent"] ?? ""))) db.indieBump(g.id, "views");
-            return { game: { ...indiePublic(g), status: mine || staff ? g.status : undefined, note: mine ? g.note : undefined, liked: db.indieLiked(g.id, sess?.userId), mine }, more: db.indieList({ limit: 4, sort: "popular" }).games.filter(x => x.id !== g.id).slice(0, 3).map(indiePublic) };
+            return { game: { ...indiePublic(g), status: mine || staff ? g.status : undefined, note: mine ? g.note : undefined, liked: db.indieLiked(g.id, sess?.userId), mine, keysOpen: Boolean(g.keys_open), followers: db.indieFollowCount(g.id), following: { game: db.indieIsFollowing(sess?.userId, "game", g.id), studio: db.indieIsFollowing(sess?.userId, "studio", g.owner_id) }, keyRequest: sess ? db.indieKeyRequestOf(g.id, sess.userId)?.status ?? null : null, updates: db.indieUpdates(g.id, 8).map(u => ({ id: u.id, kind: u.kind, title: u.title, body: u.body, link: u.link, created: u.created })), studioGames: db.indieByOwner(g.owner_id).filter(x => x.status === "approved" && x.id !== g.id).slice(0, 4).map(indiePublic) }, more: db.indieList({ limit: 4, sort: "popular" }).games.filter(x => x.id !== g.id).slice(0, 3).map(indiePublic) };
         },
         "GET /api/indie/mine": async (req) => {
             const s = session(req);
-            return { games: db.indieByOwner(s.userId).map(g => ({ ...indiePublic(g), status: g.status, note: g.note, views: g.views, clicks: g.clicks })), limits: { pending: MAX_PENDING_PER_USER, total: MAX_GAMES_PER_USER } };
+            return { games: db.indieByOwner(s.userId).map(g => ({ ...indiePublic(g), status: g.status, note: g.note, views: g.views, clicks: g.clicks, keysOpen: Boolean(g.keys_open), followers: db.indieFollowCount(g.id), pendingKeys: db.indieKeyRequests(g.id).filter(k => k.status === "pending").length })), limits: { pending: MAX_PENDING_PER_USER, total: MAX_GAMES_PER_USER } };
         },
         "POST /api/indie/submit": async (req, body) => {
             const s = session(req);
@@ -3586,11 +3593,126 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!CRAWLER.test(String(req.headers["user-agent"] ?? ""))) db.indieBump(Number(body.id) || 0, "clicks");
             return { ok: true };
         },
+        "GET /api/indie/news": async () => ({ news: db.indieNewsFeed(12).map(u => ({ id: u.id, gameId: u.game_id, game: u.game_title, studio: u.studio, image: u.image, kind: u.kind, title: u.title, created: u.created })) }),
+        "GET /api/indie/foryou": async (req) => {
+            const s = softSession(req);
+            if (!s) return { signedIn: false, picks: [] };
+            const r = picksFor(db, s.userId, { limit: 6 });
+            return { signedIn: true, reason: r.reason, picks: r.picks.map(p => ({ ...indiePublic(p.game), because: p.because })) };
+        },
+        // Follow a game, or the studio behind it. Followers hear about news and get a message.
+        "POST /api/indie/follow": async (req, body) => {
+            const s = session(req);
+            if (!socialWrite.hit(s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            const g = db.indieGet(body.id);
+            if (!g || g.status !== "approved") throw new HttpError(404, "That game isn't in the showcase.");
+            const kind = body.kind === "studio" ? "studio" : "game";
+            if (kind === "studio" && g.owner_id === s.userId) throw new HttpError(400, "That's your own studio.");
+            const on = db.indieToggleFollow(s.userId, kind, kind === "studio" ? g.owner_id : g.id);
+            return { following: on, kind, followers: db.indieFollowCount(g.id) };
+        },
+        "GET /api/indie/following": async (req) => {
+            const s = session(req), games = [], seen = new Set();
+            for (const f of db.indieFollowing(s.userId)) {
+                const found = f.kind === "game" ? [db.indieGet(f.target)] : db.indieByOwner(f.target);
+                for (const g of found) if (g && g.status === "approved" && !seen.has(g.id)) { seen.add(g.id); games.push({ ...indiePublic(g), via: f.kind }); }
+            }
+            return { games: games.slice(0, 40) };
+        },
+        // Developer news on a game's page. Owner only, and only once the game is public.
+        "POST /api/indie/update": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            if (g.status !== "approved") throw new HttpError(400, "You can post news once your game is in the showcase.");
+            if (!indieUpdateLimit.hit(`${s.userId}:${g.id}`).ok) throw new HttpError(429, "That's plenty of news for one hour. Try again later.");
+            const title = String(body.title ?? "").replace(/\s+/g, " ").trim(), text = String(body.body ?? "").replace(/[ \t]+/g, " ").trim();
+            if (title.length < 3 || title.length > 100) throw new HttpError(400, "Give the update a short headline, 3 to 100 characters.");
+            if (text.length > 500) throw new HttpError(400, "Keep the details to 500 characters. Link out for the long version.");
+            let link = null;
+            if (String(body.link ?? "").trim()) { try { const u = new URL(String(body.link).trim()); if (u.protocol !== "https:" || String(body.link).length > 300) throw new Error(); link = u.href; } catch { throw new HttpError(400, "The link needs to be a full https:// address."); } }
+            const id = db.indieAddUpdate({ gameId: g.id, kind: body.kind, title, body: text || null, link });
+            const u = db.indieUpdate(id);
+            indieHerald.publish(g, u).catch(() => {});
+            return { id, update: { id, kind: u.kind, title: u.title, body: u.body, link: u.link, created: u.created } };
+        },
+        "POST /api/indie/update/delete": async (req, body) => {
+            const s = session(req), u = db.indieUpdate(body.id), g = u && db.indieGet(u.game_id);
+            if (!u || !g || (g.owner_id !== s.userId && !isOwner(s))) throw new HttpError(404, "That update isn't yours.");
+            db.indieDeleteUpdate(u.id);
+            return { ok: true };
+        },
+        // Review keys: the developer opens requests, creators and players ask, the developer says yes or no. Keys themselves are sent by the developer.
+        "POST /api/indie/keys/open": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            db.indieSetKeysOpen(g.id, Boolean(body.open));
+            return { open: Boolean(body.open) };
+        },
+        "POST /api/indie/keys/request": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.status !== "approved" || !g.keys_open) throw new HttpError(404, "This game isn't taking review key requests right now.");
+            if (g.owner_id === s.userId) throw new HttpError(400, "That's your own game.");
+            if (!indieKeyLimit.hit(s.userId).ok) throw new HttpError(429, "That's a lot of requests. Try again in a while.");
+            const name = String(body.name ?? "").trim(), channel = String(body.channel ?? "").trim(), note = String(body.note ?? "").trim();
+            if (name.length < 2 || name.length > 60) throw new HttpError(400, "Tell them who you are: a channel name, outlet or handle.");
+            if (channel.length < 4 || channel.length > 300) throw new HttpError(400, "Add a link to your channel, site or profile so they can check it.");
+            if (!db.indieKeyRequest({ gameId: g.id, userId: s.userId, name, channel, note })) throw new HttpError(400, "You've already asked for a key for this game.");
+            try { db.addNotification(g.owner_id, { type: "indie", title: `${name} asked for a key for ${g.title}`, body: "Open your games to say yes or no.", url: "/indie/mine" }); } catch { /* it is in their list either way */ }
+            return { ok: true };
+        },
+        "GET /api/indie/keys": async (req, _b, url) => {
+            const s = session(req), g = db.indieGet(url.searchParams.get("id"));
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            return { open: Boolean(g.keys_open), requests: db.indieKeyRequests(g.id).map(k => ({ id: k.id, name: k.name, channel: k.channel, note: k.note, status: k.status, created: k.created })) };
+        },
+        "POST /api/indie/keys/decide": async (req, body) => {
+            const s = session(req), k = db.indieKeyRequestGet(body.id), g = k && db.indieGet(k.game_id);
+            if (!k || !g || g.owner_id !== s.userId) throw new HttpError(404, "That request isn't for your game.");
+            db.indieKeyDecide(k.id, body.approve ? "approved" : "declined");
+            try { db.addNotification(k.user_id, { type: "indie", title: body.approve ? `${g.title}: your key request was approved` : `${g.title}: no key this time`, body: body.approve ? "The developer will send your key using the contact you gave." : "The developer passed on this one. Thanks for asking.", url: `/indie/game/${g.id}` }); } catch { /* best effort */ }
+            return { ok: true };
+        },
+        // Verified badge: put a one-time code in the game's Steam page text, then check. Only the page's owner can do that.
+        "POST /api/indie/verify/start": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            if (g.verified) return { verified: true };
+            const code = g.verify_code || `svc-verify-${randomBytes(5).toString("hex").slice(0, 8)}`;
+            if (!g.verify_code) db.indieSetVerifyCode(g.id, code);
+            return { verified: false, code };
+        },
+        "POST /api/indie/verify/check": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            if (g.verified) return { verified: true };
+            if (!g.verify_code) throw new HttpError(400, "Start verification first to get your code.");
+            if (!indieVerifyLimit.hit(s.userId).ok) throw new HttpError(429, "Give it a minute before checking again.");
+            let found; try { found = await indieApi.hasVerifyCode(g.appid, g.verify_code); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+            if (!found) return { verified: false, code: g.verify_code, message: "I can't see the code on your Steam page yet. Steam can take a few minutes to show edits, so wait a bit and check again." };
+            db.indieSetVerified(g.id, true);
+            return { verified: true };
+        },
+        "POST /api/indie/report": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.status !== "approved") throw new HttpError(404, "That game isn't in the showcase.");
+            if (!indieReportLimit.hit(s.userId).ok) throw new HttpError(429, "You've sent a few reports already. We'll look at those first.");
+            const reason = String(body.reason ?? "").replace(/\s+/g, " ").trim();
+            if (reason.length < 5) throw new HttpError(400, "Tell us briefly what's wrong.");
+            const fresh = db.indieReport({ gameId: g.id, reporter: s.userId, reason });
+            if (fresh && config.ownerId) { try { db.addNotification(config.ownerId, { type: "indie", title: `Report on ${g.title}`, body: reason.slice(0, 150), url: "/admin#/indie" }); } catch { /* the queue shows it */ } }
+            return { ok: true, already: !fresh };
+        },
+        // Numbers for the developer: the last two weeks of views and clicks, review growth, followers.
+        "GET /api/indie/stats": async (req, _b, url) => {
+            const s = session(req), g = db.indieGet(url.searchParams.get("id"));
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            return { days: db.indieDays(g.id, 14), reviews: db.indieReviewHistory(g.id, 60), views: g.views, clicks: g.clicks, likes: g.likes, followers: db.indieFollowCount(g.id), updates7: db.indieUpdatesSince(g.id, now() - 7 * 86_400_000), release: g.release };
+        },
         "GET /api/admin/indie": async (req, _b, url) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             const status = ["pending", "approved", "rejected"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : "pending";
             const { games } = db.indieList({ status, limit: 60, sort: "new" });
-            return { open: db.getMeta("indie:open") !== "0", counts: db.indieCounts(), totals: db.indieTotals(), games: games.map(g => ({ ...indiePublic(g), status: g.status, note: g.note, owner: g.owner_id, views: g.views, clicks: g.clicks, created: g.created })) };
+            return { open: db.getMeta("indie:open") !== "0", counts: db.indieCounts(), totals: db.indieTotals(), games: games.map(g => ({ ...indiePublic(g), status: g.status, note: g.note, owner: g.owner_id, views: g.views, clicks: g.clicks, created: g.created, reports: db.indieReportsFor(g.id) })), reports: db.indieReports("open").length };
         },
         "POST /api/admin/indie/open": async (req, body) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
@@ -3613,12 +3735,37 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                     try { await xposter.manual({ text: indieSpotlightText(g, `${origin}/indie/game/${g.id}`), kind: "auto" }); } catch (e) { throw new HttpError(400, e.message); }
                     break;
                 }
+                case "verify": db.indieSetVerified(g.id, true); tell(`${g.title} is now verified`, "Your game page shows the verified mark."); break;
+                case "unverify": db.indieSetVerified(g.id, false); break;
                 case "feature": db.indieFeature(g.id, true); break;
                 case "unfeature": db.indieFeature(g.id, false); break;
                 case "refresh": { try { const fresh = await indieApi.lookup(g.appid); db.indieRefresh(g.id, fresh); } catch (e) { throw new HttpError(400, e.message); } break; }
                 default: throw new HttpError(400, "Unknown action.");
             }
             return { ok: true, counts: db.indieCounts() };
+        },
+        "GET /api/admin/indie/reports": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            return { reports: db.indieReports("open").map(r => ({ id: r.id, gameId: r.game_id, title: r.title, appid: r.appid, image: r.image, reason: r.reason, reporter: r.reporter, created: r.created })) };
+        },
+        "POST /api/admin/indie/report": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            const g = db.indieGet(body.gameId);
+            if (!g) throw new HttpError(404, "That game is gone.");
+            db.indieResolveReports(g.id, body.action === "remove" ? "actioned" : "closed");
+            if (body.action === "remove") { db.indieDecide(g.id, "rejected", "Taken down after a report."); try { db.addNotification(g.owner_id, { type: "indie", title: `${g.title} was taken down`, body: "It was reported and a person looked at it. Edit and resubmit if you think that's a mistake.", url: "/indie/mine" }); } catch { /* best effort */ } }
+            return { ok: true };
+        },
+        "GET /api/admin/indie/spotlight": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            if (!spotlight) throw new HttpError(503, "The weekly spotlight isn't available.");
+            return spotlight.status();
+        },
+        "POST /api/admin/indie/spotlight": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!spotlight) throw new HttpError(503, "The weekly spotlight isn't available.");
+            if (body.run) { const r = await spotlight.run({ force: true, gameId: body.gameId || null }); return { ran: r, ...spotlight.status() }; }
+            try { return spotlight.set({ on: body.on, channel: body.channel }); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
         },
         "GET /api/admin/problems": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
@@ -4364,7 +4511,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         bump(`${kind === "b" ? "bundlevisit" : "dealvisit"}:${id}`); bump(`landday:${day}:v`);
     };
     /** What anyone may see of a showcase game: no owner id, no queue notes. */
-    const indiePublic = g => ({ id: g.id, appid: g.appid, title: g.title, studio: g.studio, blurb: g.blurb, pitch: g.pitch, genres: g.genres, image: g.image, price: g.price, release: g.release, links: g.links, featured: g.featured, likes: g.likes, steamUrl: `https://store.steampowered.com/app/${g.appid}/` });
+    const indiePublic = g => ({ id: g.id, appid: g.appid, title: g.title, studio: g.studio, blurb: g.blurb, pitch: g.pitch, genres: g.genres, image: g.image, price: g.price, release: g.release, links: g.links, featured: g.featured, verified: Boolean(g.verified), likes: g.likes, steamUrl: `https://store.steampowered.com/app/${g.appid}/` });
     const bundleFor = id => { const b = db.getFeedBundle(id); return b && !b.adult ? b : null; };
     /** One handler for both kinds of page. `kind` is "b" (a bundle from the feed) or "d" (a free game or other deal). */
     async function serveLanding(res, kind, id, part, req) {
@@ -4551,6 +4698,12 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 if (!v) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
                 const name = withDefaults(db.getProfileData(owner.discord_id).data).name || owner.profile_slug;
                 return send(res, 200, valueBadgeSvg({ name, ...v }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
+            }
+            if (req.method === "GET" && /^\/indie\/game\/\d{1,9}\/badge\.svg$/.test(url.pathname)) {
+                if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const g = db.indieGet(url.pathname.split("/")[3]);
+                if (!g || g.status !== "approved") return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+                return send(res, 200, indieBadgeSvg({ title: g.title, verified: Boolean(g.verified), likes: g.likes, dark: url.searchParams.get("theme") !== "light" }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
             }
             if (req.method === "GET" && /^\/[bd]\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, kind, id, , part] = /^\/([bd])\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveLanding(res, kind, Number(id), part, req); }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());

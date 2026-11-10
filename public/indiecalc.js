@@ -236,5 +236,41 @@
     return { text, length: xLen(text), fits: xLen(text) <= 280 };
   }
 
-  root.IndieCalc = { xLen, xPost, X_KINDS, round, num, valveCut, fees, breakEven, reviewLabel, nextLabel, revenueFromReviews, wishlistSales, wishlistsFor, conversionBand, imageStats, capsuleVerdict, screenshotOrder, CAPSULES, coverCrop, zip, crc32, gradeShortDescription, checkTags, launchContext, demoOrPlaytest, COPIES_PER_REVIEW, YEAR_ONE_PER_WISHLIST, WEEK_ONE };
+
+  /** How ready a game is for Next Fest, 0 to 100, from yes/no answers plus the wishlist count. Biggest gaps come back first. */
+  const FEST_ITEMS = [
+    ["page", 10, "Make the store page public with a finished capsule and trailer."], ["demo", 14, "Get a demo uploaded to Steam and tested on a clean machine."],
+    ["quick", 10, "Cut the demo's start down so the fun lands inside two minutes."], ["wishbtn", 8, "Put a wishlist or follow prompt at the end of the demo."],
+    ["trailer", 8, "Re-cut the trailer so gameplay shows in the first few seconds."], ["shots", 6, "Get five or more good screenshots on the page, best ones first."],
+    ["press", 8, "Send demo keys or the link to streamers and press before the festival."], ["mail", 6, "Tell your newsletter, Discord and social followers the dates."],
+    ["patch", 6, "Make sure you can patch the demo quickly if something breaks."], ["there", 6, "Plan to be around during the festival to answer players and chat live."]
+  ];
+  function nextFestScore(a = {}) {
+    let score = 0; const gaps = [];
+    for (const [id, w, fix] of FEST_ITEMS) { if (a[id]) score += w; else gaps.push({ id, weight: w, fix }); }
+    const wl = Math.max(0, num(a.wishlists)), wlPts = Math.min(18, Math.round((wl / 7000) * 18));
+    score += wlPts; if (wlPts < 12) gaps.push({ id: "wishlists", weight: 18 - wlPts, fix: wl ? "Wishlists are the audience Next Fest turns into demo players. More before the festival means a stronger start." : "Start collecting wishlists now. Next Fest rewards the pages people already know." });
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    const band = score >= 90 ? "Ready" : score >= 70 ? "Nearly ready" : score >= 40 ? "Getting there" : "Not yet";
+    return { score, band, gaps: gaps.sort((x, y) => y.weight - x.weight).slice(0, 5) };
+  }
+
+  /** Looks at a few frames from the start of a trailer: how dark each is and how much changes between them. */
+  function trailerOpening(frames) {
+    const rows = frames.map((f, i) => ({ second: f.second, brightness: f.brightness, motion: i ? f.motion : null }));
+    const checks = [], dark = rows.filter(r => r.brightness < 35).length, still = rows.filter(r => r.motion != null && r.motion < 3).length;
+    const firstTwo = rows.slice(0, 3);
+    checks.push(firstTwo.every(r => r.brightness < 35) ? ["bad", "The first seconds are nearly black. Viewers scroll before anything shows up."] : firstTwo.some(r => r.brightness < 35) ? ["warn", "Part of the opening is dark. Start on something bright and readable if you can."] : ["good", "The opening is bright enough to read on a small screen."]);
+    checks.push(still >= 3 ? ["bad", "Several seconds in a row barely move. A still logo or title card early is where people leave."] : still ? ["warn", "A moment or two is almost still. Make sure it's on purpose."] : ["good", "Something changes on screen every second. That keeps the eye."]);
+    checks.push(dark > rows.length / 2 ? ["warn", "More than half of these frames are dark. Steam's autoplay is muted and small, so brightness helps."] : ["good", "Most frames have enough light."]);
+    return { rows, checks };
+  }
+  /** Average difference between two same-size RGBA pixel arrays on a 0 to 100 scale. */
+  function frameMotion(a, b) {
+    let d = 0, n = 0; const len = Math.min(a.length, b.length);
+    for (let i = 0; i + 3 < len; i += 16) { d += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); n += 3; }
+    return n ? round((d / n / 255) * 100, 1) : 0;
+  }
+
+  root.IndieCalc = { nextFestScore, FEST_ITEMS, trailerOpening, frameMotion, xLen, xPost, X_KINDS, round, num, valveCut, fees, breakEven, reviewLabel, nextLabel, revenueFromReviews, wishlistSales, wishlistsFor, conversionBand, imageStats, capsuleVerdict, screenshotOrder, CAPSULES, coverCrop, zip, crc32, gradeShortDescription, checkTags, launchContext, demoOrPlaytest, COPIES_PER_REVIEW, YEAR_ONE_PER_WISHLIST, WEEK_ONE };
 })(typeof globalThis !== "undefined" ? globalThis : this);

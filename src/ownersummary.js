@@ -22,7 +22,9 @@ export function trafficOf(db) {
     } catch { return null; }
 }
 
-export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, openTickets, week, traffic = null }) {
+export function indieOf(db) { try { return db.indieWeek(); } catch { return null; } }
+
+export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, openTickets, week, traffic = null, indie = null }) {
     const fields = [
         { name: "🌐 Servers", value: `**${servers ?? "-"}**${joined || left ? `  (+${joined} / -${left} this week)` : ""}`, inline: true },
         { name: "🗳️ Votes", value: `**${votes}**`, inline: true },
@@ -33,6 +35,11 @@ export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, op
     if (traffic) {
         const rate = traffic.visits ? ` (${Math.round(traffic.clicks / traffic.visits * 100)}% went on to the store)` : "";
         fields.push({ name: "🔗 Link traffic, last 7 days", value: `**${traffic.visits}** visits, **${traffic.clicks}** clicks${rate}` + (traffic.top.length ? `\nMost opened overall: ${traffic.top.map(p => `**${p.title}** (${p.visits})`).join(", ")}` : ""), inline: false });
+    }
+    if (indie && (indie.views || indie.clicks || indie.submitted || indie.pending || indie.reports)) {
+        const bits = [`**${indie.views}** page views, **${indie.clicks}** Steam clicks`, indie.submitted ? `**${indie.submitted}** new submission${indie.submitted === 1 ? "" : "s"}` : null,
+            indie.pending ? `**${indie.pending}** waiting for you` : null, indie.reports ? `**${indie.reports}** open report${indie.reports === 1 ? "" : "s"}` : null].filter(Boolean);
+        fields.push({ name: "🕹️ Indie showcase, last 7 days", value: bits.join(" · ") });
     }
     return { color: 0xff9800, title: "Your week with Steam Value Checker", description: `Week of ${week}`, fields, footer: { text: "Sent Mondays. Details are on the Admin pages." } };
 }
@@ -50,7 +57,7 @@ export async function runOwnerSummary({ db, ownerId, sendDm, gather, now = () =>
     let live = {};
     try { live = (await gather?.()) ?? {}; } catch { /* the numbers that need a live connection just show a dash */ }
     db.setMeta(key, String(t));
-    await sendDm(ownerId, { embeds: [summaryEmbed({ ...live, joined: srv.filter(e => e.kind === "join").length, left: srv.filter(e => e.kind === "leave").length, votes, week: wk.key, traffic: trafficOf(db) })] });
+    await sendDm(ownerId, { embeds: [summaryEmbed({ ...live, joined: srv.filter(e => e.kind === "join").length, left: srv.filter(e => e.kind === "leave").length, votes, week: wk.key, traffic: trafficOf(db), indie: indieOf(db) })] });
     return { sent: true };
 }
 

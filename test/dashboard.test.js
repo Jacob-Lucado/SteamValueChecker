@@ -3334,3 +3334,107 @@ test("indie: the owner can spotlight an approved game on the project's X account
     assert.match(posted[0].text, /^Indie spotlight: Moss Knight by Moss Co/); assert.match(posted[0].text, /\/indie\/game\/\d+\n#indiegame #gamedev #Steam$/); assert.ok(xLength(posted[0].text) <= 280);
     await o.close();
 });
+
+// ---------- indie: follows, developer news, keys, verification, reports, stats, badge, spotlight ----------
+test("indie: following, developer news, review keys, verification, stats and the badge", async () => {
+    const { createIndie } = await import("../src/indie.js");
+    const published = []; let pageText = "";
+    const t = await setup({ config: { ownerId: "boss" }, extra: { indieSvc: createIndie({ fetchImpl: (url) => steamStub({ about_the_game: pageText })(url) }), indieNews: { publish: async (g, u) => { published.push([g.id, u.title, u.kind]); return {}; } } } });
+    await t.signIn();
+    const post = (p, body) => t.request(p, { method: "POST", body });
+    t.db.ensureUser("dev"); t.db.ensureUser("f1");
+    const mine = t.db.indieAdd({ appid: 5, ownerId: "u1", title: "Mine", studio: "Me Co", pitch: "p", genres: ["Indie"], image: "https://x/5.jpg" }), theirs = t.db.indieAdd({ appid: 6, ownerId: "dev", title: "Theirs", studio: "Dev Co", pitch: "p", genres: ["Indie"], image: "https://x/6.jpg" });
+    t.db.indieDecide(mine, "approved"); t.db.indieDecide(theirs, "approved");
+    // following
+    assert.deepEqual([(await post("/api/indie/follow", { id: theirs })).data.following, (await post("/api/indie/follow", { id: theirs, kind: "studio" })).data.following], [true, true]);
+    assert.equal((await post("/api/indie/follow", { id: mine, kind: "studio" })).status, 400, "not your own studio");
+    assert.equal((await t.request("/api/indie/following")).data.games.length, 1, "a game followed twice shows once");
+    const g = (await t.request("/api/indie/game?id=" + theirs)).data.game; assert.deepEqual([g.following.game, g.following.studio, g.followers], [true, true, 1]);
+    assert.equal((await post("/api/indie/follow", { id: theirs })).data.following, false, "following again takes it back");
+    // developer news
+    assert.equal((await post("/api/indie/update", { id: theirs, title: "Hello there" })).status, 404, "only the owner posts");
+    assert.equal((await post("/api/indie/update", { id: mine, title: "x" })).status, 400);
+    assert.equal((await post("/api/indie/update", { id: mine, title: "Demo is out", link: "http://nope.example" })).status, 400, "https only");
+    const up = await post("/api/indie/update", { id: mine, kind: "demo", title: "Demo is out", body: "Try it free.", link: "https://example.com/demo" }); assert.equal(up.status, 200);
+    assert.deepEqual(published[0], [mine, "Demo is out", "demo"]);
+    assert.equal((await t.request("/api/indie/game?id=" + mine)).data.game.updates[0].title, "Demo is out");
+    assert.equal((await t.request("/api/indie/news")).data.news[0].game, "Mine");
+    assert.equal((await post("/api/indie/update/delete", { id: up.data.id })).status, 200);
+    assert.equal((await t.request("/api/indie/game?id=" + mine)).data.game.updates.length, 0);
+    // review keys
+    assert.equal((await post("/api/indie/keys/request", { id: theirs, name: "Streamer", channel: "https://twitch.tv/x" })).status, 404, "closed until the developer opens it");
+    t.db.indieSetKeysOpen(theirs, true);
+    assert.equal((await post("/api/indie/keys/request", { id: theirs, name: "S", channel: "https://twitch.tv/x" })).status, 400);
+    assert.equal((await post("/api/indie/keys/request", { id: theirs, name: "Streamer", channel: "https://twitch.tv/x" })).status, 200);
+    assert.equal((await post("/api/indie/keys/request", { id: theirs, name: "Streamer", channel: "https://twitch.tv/x" })).status, 400, "once per game");
+    assert.equal((await t.request("/api/indie/game?id=" + theirs)).data.game.keyRequest, "pending");
+    assert.equal((await post("/api/indie/keys/open", { id: mine, open: true })).status, 200);
+    t.db.indieKeyRequest({ gameId: mine, userId: "f1", name: "Reviewer", channel: "https://example.com/r", note: null });
+    const reqs = (await t.request("/api/indie/keys?id=" + mine)).data; assert.equal(reqs.requests.length, 1);
+    assert.equal((await post("/api/indie/keys/decide", { id: reqs.requests[0].id, approve: true })).status, 200);
+    assert.equal(t.db.indieKeyRequestOf(mine, "f1").status, "approved"); assert.match(t.db.listNotifications("f1")[0].title, /approved/);
+    assert.equal((await t.request("/api/indie/keys?id=" + theirs)).status, 404, "not your game's list");
+    // verification
+    const st = (await post("/api/indie/verify/start", { id: mine })).data; assert.match(st.code, /^svc-verify-[a-z0-9]{8}$/);
+    assert.equal((await post("/api/indie/verify/check", { id: mine })).data.verified, false);
+    pageText = `About the game. ${st.code}`;
+    assert.equal((await post("/api/indie/verify/check", { id: mine })).data.verified, true);
+    assert.equal((await t.request("/api/indie/game?id=" + mine)).data.game.verified, true);
+    assert.equal((await post("/api/indie/verify/start", { id: theirs })).status, 404);
+    // reports
+    assert.equal((await post("/api/indie/report", { id: theirs, reason: "no" })).status, 400);
+    assert.equal((await post("/api/indie/report", { id: theirs, reason: "Not a real game page" })).data.already, false);
+    assert.equal((await post("/api/indie/report", { id: theirs, reason: "Not a real game page" })).data.already, true);
+    // stats and badge
+    const stats = (await t.request("/api/indie/stats?id=" + mine)).data; assert.equal(stats.days.length, 14);
+    assert.equal((await t.request("/api/indie/stats?id=" + theirs)).status, 404);
+    const badge = await fetch(t.base + `/indie/game/${mine}/badge.svg`); assert.equal(badge.status, 200); assert.match(badge.headers.get("content-type"), /svg/); assert.match(await badge.text(), /Mine/);
+    t.db.indieDecide(theirs, "rejected"); assert.equal((await fetch(t.base + `/indie/game/${theirs}/badge.svg`)).status, 404, "no badge for a game that isn't live");
+    await t.close();
+});
+
+test("indie: the owner handles reports, verified marks and the weekly spotlight settings", async () => {
+    const calls = [];
+    const spotlight = { status: () => ({ on: true, channel: "", last: null, next: { id: 1, title: "A" } }), set: a => { calls.push(["set", a]); return { on: a.on }; }, run: async a => { calls.push(["run", a]); return { game: "A" }; } };
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { spotlight } });
+    o.db.ensureUser("dev");
+    const id = o.db.indieAdd({ appid: 8, ownerId: "dev", title: "Reported", pitch: "p", genres: [], image: "https://x/8.jpg" }); o.db.indieDecide(id, "approved"); o.db.indieReport({ gameId: id, reporter: "someone", reason: "Looks wrong" });
+    assert.equal((await o.request("/api/admin/indie/reports")).data.reports[0].reason, "Looks wrong");
+    assert.equal((await o.request("/api/admin/indie")).data.reports, 1);
+    const review = (action) => o.request("/api/admin/indie/review", { method: "POST", body: { id, action } });
+    assert.equal((await review("verify")).status, 200); assert.equal(o.db.indieGet(id).verified, 1);
+    assert.equal((await review("unverify")).status, 200); assert.equal(o.db.indieGet(id).verified, 0);
+    assert.equal((await o.request("/api/admin/indie/spotlight")).data.next.title, "A");
+    assert.equal((await o.request("/api/admin/indie/spotlight", { method: "POST", body: { on: false, channel: "123456789012345678" } })).status, 200);
+    assert.equal((await o.request("/api/admin/indie/spotlight", { method: "POST", body: { run: true } })).data.ran.game, "A");
+    assert.deepEqual(calls.map(c => c[0]), ["set", "run"]);
+    assert.equal((await o.request("/api/admin/indie/report", { method: "POST", body: { gameId: id, action: "remove" } })).status, 200);
+    assert.equal(o.db.indieGet(id).status, "rejected"); assert.equal(o.db.indieReports("open").length, 0);
+    await o.close();
+});
+
+test("indie: developer news reaches followers and likers, and the Wednesday spotlight posts once and rotates", async () => {
+    const { createIndieNews } = await import("../src/indienews.js");
+    const { createSpotlight } = await import("../src/indiespotlight.js");
+    const t = await setup({ config: { ownerId: "boss" } });
+    for (const u of ["dev", "f1", "f2", "l1"]) t.db.ensureUser(u);
+    const id = t.db.indieAdd({ appid: 20, ownerId: "dev", title: "Moss", studio: "Moss Co", pitch: "p", genres: ["Indie"], image: "https://x/20.jpg" }); t.db.indieDecide(id, "approved");
+    t.db.indieToggleFollow("f1", "game", id); t.db.indieToggleFollow("f2", "studio", "dev"); t.db.indieToggleLike(id, "l1");
+    const sent = [], news = createIndieNews({ db: t.db, dm: async (to, p) => { sent.push([to, p.embeds[0].title]); }, sleep: async () => {} });
+    const out = await news.publish(t.db.indieGet(id), { kind: "news", title: "Big patch", body: "Fixes", link: null });
+    assert.deepEqual([out.followers, out.likers, out.messaged], [2, 1, 2], "followers get a message, likers only a notification");
+    assert.deepEqual(sent.map(s => s[0]).sort(), ["f1", "f2"]); assert.match(t.db.listNotifications("l1")[0].title, /Big patch/);
+    // spotlight: Wednesday 1pm Eastern
+    const wed = Date.UTC(2026, 10, 11, 18, 0), tuesday = Date.UTC(2026, 10, 10, 18, 0), posts = [], channel = [];
+    const id2 = t.db.indieAdd({ appid: 21, ownerId: "dev", title: "Second", pitch: "p", genres: [], image: "https://x/21.jpg" }); t.db.indieDecide(id2, "approved");
+    t.db.setMeta("indiespot:channel", "123456789012345678");
+    let clock = tuesday;
+    const sp = createSpotlight({ db: t.db, now: () => clock, xposter: { configured: () => true, status: () => ({ enabled: true }), manual: async a => { posts.push(a.text); return { id: "9" }; } }, postDiscord: async (c, p) => { channel.push(c); }, base: "https://svc.test" });
+    assert.equal((await sp.tick()).skipped, "not due", "not on a Tuesday");
+    clock = wed;
+    const first = await sp.tick(); assert.ok(first.game); assert.match(posts[0], /#WishlistWednesday/); assert.equal(channel.length, 1);
+    assert.equal((await sp.tick()).skipped, "not due", "only once that day");
+    clock = wed + 7 * 86_400_000;
+    const second = await sp.tick(); assert.notEqual(second.game, first.game, "the next game gets its turn");
+    await t.close();
+});
