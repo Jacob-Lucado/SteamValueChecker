@@ -55,6 +55,19 @@ export async function runFriendReminders({ db, itad, notifier, now = () => Date.
     return stats;
 }
 
+/** Following someone's page also puts them on the friends list, so only the birthday is left to add. */
+export function friendFromFollow(db, userId, { name, slug }) {
+    const clean = String(name ?? "").replace(/[<>@`]/g, "").replace(/\s+/g, " ").trim().slice(0, 30) || String(slug);
+    return db.addFollowedFriend(userId, { name: clean, slug: String(slug).toLowerCase() });
+}
+/** Everyone already followed becomes a friend once, the first time the list is opened. Removing one afterwards sticks. */
+export function syncFollowedFriends(db, userId, nameOf) {
+    const key = `friendsync:${userId}`;
+    if (db.getMeta(key)) return;
+    db.setMeta(key, "1");
+    for (const f of db.listFollowing(userId)) if (f.slug) friendFromFollow(db, userId, { name: nameOf(f.discord_id) ?? f.slug, slug: f.slug });
+}
+
 export function friendRows(db, userId, nowMs = Date.now()) {
     return db.listFriends(userId).map(f => ({ ...f, daysToBirthday: f.birthday ? daysUntilBirthday(f.birthday, nowMs) : null }))
         .sort((a, b) => (a.daysToBirthday ?? 999) - (b.daysToBirthday ?? 999) || a.name.localeCompare(b.name));
@@ -63,6 +76,6 @@ export function friendRows(db, userId, nowMs = Date.now()) {
 export function saveFriend(db, userId, { name, birthday, page }) {
     const n = cleanFriendName(name), b = cleanBirthday(birthday), slug = page ? cleanSlug(page) : null;
     const r = db.addFriend(userId, { name: n, slug, birthday: b });
-    if (r.full) throw new UserError("You can keep up to 20 friends. Remove one first.");
+    if (r.full) throw new UserError("You can keep up to 100 friends. Remove one first.");
     return { name: n, ...r };
 }

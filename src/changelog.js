@@ -1,6 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
+        "**Friends from follows:** when you follow someone's page they land on your Friends list automatically (and everyone you already follow was added once). Unfollowing removes them again unless you set a birthday. Only the birthday is left to add, right on the row, and you get the reminder a week before. The list now holds up to 100.",
         "**Save all on Setup:** the channel list on the Server setup page has one Save all button instead of a Save per row, and saving no longer reloads the page.",
         "**Giveaway channel on Setup:** the Server setup page now has a Giveaways row under Games and deals. Pick the channel where network-wide giveaways from the bot owner are posted in your server (the alert channel is used if you leave it empty).",
         "**Playtester, all of it:** Playtester only hands out its 50 newest listings per feed, so I now read its main feed, the demo and playtest feeds, and one feed per genre. Nothing it lists ages off the Playtests page, and each game shows its genre tags.",

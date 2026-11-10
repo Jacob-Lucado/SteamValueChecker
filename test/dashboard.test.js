@@ -1341,6 +1341,20 @@ test("community feed: follow, post, react, reply, report and moderate through th
     await as(ID(2));
     assert.equal((await t.request("/api/social/follow", { method: "POST", body: { slug: "ann" } })).data.followers, 1);
     assert.equal((await t.request("/api/social/follow", { method: "POST", body: { slug: "ben" } })).status, 400, "not yourself");
+    // following someone puts them on the friends list, and only the birthday is left to add
+    const fl = (await t.request("/api/friends")).data.friends;
+    assert.equal(fl.length, 1); assert.equal(fl[0].slug, "ann"); assert.equal(fl[0].auto, 1); assert.equal(fl[0].birthday, null);
+    await t.request("/api/social/follow", { method: "POST", body: { slug: "ann" } });
+    assert.equal((await t.request("/api/friends")).data.friends.length, 1, "following twice doesn't add twice");
+    assert.equal((await t.request("/api/friends/birthday", { method: "POST", body: { name: fl[0].name, birthday: "03-27" } })).status, 200);
+    assert.equal((await t.request("/api/friends/birthday", { method: "POST", body: { name: fl[0].name, birthday: "13-40" } })).status, 400);
+    await t.request("/api/social/follow", { method: "POST", body: { slug: "ann", on: false } });
+    assert.equal((await t.request("/api/friends")).data.friends.length, 1, "a friend with a birthday stays when you unfollow");
+    await t.request("/api/friends/remove", { method: "POST", body: { name: fl[0].name } });
+    await t.request("/api/social/follow", { method: "POST", body: { slug: "ann" } });
+    await t.request("/api/social/follow", { method: "POST", body: { slug: "ann", on: false } });
+    assert.equal((await t.request("/api/friends")).data.friends.length, 0, "unfollowing removes a friend the follow made, when nothing was added to it");
+    await t.request("/api/social/follow", { method: "POST", body: { slug: "ann" } });
     const mine = (await t.request("/api/social/feed?scope=following")).data;
     assert.equal(mine.items.length, 1); assert.equal(mine.following, 1);
     assert.equal((await t.request("/api/social/react", { method: "POST", body: { id: first, emoji: "🔥" } })).data.mine, "🔥");

@@ -273,6 +273,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "indie_channel", "TEXT");
     addColumn("community", "ping_playtest", "TEXT");
     addColumn("community", "playtest_all", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("friends", "auto", "INTEGER NOT NULL DEFAULT 0"); // 1 when the friend came from following someone
     addColumn("community", "playtest_full", "TEXT");
     addColumn("community", "playtest_genres", "TEXT");
     addColumn("community", "playtest_channel", "TEXT");

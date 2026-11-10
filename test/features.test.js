@@ -865,8 +865,8 @@ test("friends: birthday maths, limits and a once-a-year reminder", async () => {
     assert.equal((await runFriendReminders({ db, itad, notifier, now: () => day(3, 22) })).sent, 0, "only once a year");
     assert.deepEqual(sent, ["friend"]);
     assert.equal((await runFriendReminders({ db, itad, notifier, now: () => day(3, 21, 2027) })).sent, 1, "again next year");
-    for (let n = 0; n < 25; n++) { try { saveFriend(db, "u1", { name: "F" + n }); } catch { /* full */ } }
-    assert.equal(db.listFriends("u1").length, 20);
+    for (let n = 0; n < 105; n++) { try { saveFriend(db, "u1", { name: "F" + n }); } catch { /* full */ } }
+    assert.equal(db.listFriends("u1").length, 100);
     db.deleteUser("u1");
     assert.equal(db.listFriends("u1").length, 0);
 });

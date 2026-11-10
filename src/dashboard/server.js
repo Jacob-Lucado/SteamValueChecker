@@ -102,7 +102,7 @@ import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY a
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
-import { friendDeals, friendRows, saveFriend } from "../friends.js";
+import { friendDeals, friendRows, saveFriend, friendFromFollow, syncFollowedFriends, cleanFriendName, cleanBirthday } from "../friends.js";
 import { spendSummary, regionCurrency, grabberRegion } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { MAX_CLAIMS_PER_LIST, MAX_CLAIMS_TOTAL, accountOldEnough } from "../giftstore.js";
@@ -2163,7 +2163,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             };
         },
 
-        "GET /api/friends": async (req) => { const s = session(req); userRow(s); return { friends: friendRows(db, s.userId) }; },
+        "GET /api/friends": async (req) => { const s = session(req); userRow(s); syncFollowedFriends(db, s.userId, id => authorCard(id).name); return { friends: friendRows(db, s.userId) }; },
+        "POST /api/friends/birthday": async (req, body) => { const s = session(req); userRow(s); if (!db.setFriendBirthday(s.userId, cleanFriendName(body.name), cleanBirthday(body.birthday))) throw new HttpError(404, "I can't find that friend."); return { ok: true }; },
         "POST /api/friends/add": async (req, body) => { const s = session(req); userRow(s); return saveFriend(db, s.userId, { name: body.name, birthday: body.birthday, page: body.page }); },
         "POST /api/friends/remove": async (req, body) => { const s = session(req); if (!db.removeFriend(s.userId, String(body.name ?? ""))) throw new HttpError(404, "No friend by that name."); return { removed: true }; },
         "GET /api/friends/deals": async (req, _b, url) => {
@@ -3265,6 +3266,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (r === "self") throw new HttpError(400, "That's you.");
             if (r === "blocked") throw new HttpError(403, "You can't follow this person.");
             if (r === "limit") throw new HttpError(429, "You are following as many people as you can. Unfollow someone first.");
+            if (r === "new") friendFromFollow(db, s.userId, { name: authorCard(o.discord_id).name, slug: o.profile_slug ?? body.slug });
+            if (r === "ok" && body.on === false) db.dropFollowedFriend(s.userId, String(o.profile_slug ?? body.slug).toLowerCase());
             if (r === "new") { const me = authorCard(s.userId); notifySocial(o.discord_id, { title: `${me.name} followed you`, url: me.slug ? "/u/" + me.slug : "/feed" }); }
             return { following: body.on !== false, ...db.followCounts(o.discord_id) };
         },
