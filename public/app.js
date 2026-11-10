@@ -1,24 +1,29 @@
 // Steam Value Checker dashboard. All text is inserted with textContent, never innerHTML.
-(() => {
+window.SVC_SITE = envIn => {
   "use strict";
+  const env = envIn || {};
+  // One copy of the site per place it is shown. The normal page makes one for itself. A LucadoOS window makes one more for its own
+  // element (env.root), with its own address, so pages open inside the desktop without a frame around each of them.
+  const NATIVE = Boolean(env.root);
 
   // A profile's address is /u/name, so chat apps can show a preview. The address bar keeps that form while one is open,
   // which means whatever people copy from it shares properly.
 
-  const state = { cfg: null, me: null };
-  window.__svcState = state; // LucadoOS windows (frames) read this instead of asking the server for the same things again
+  const state = env.state || { cfg: null, me: null };
+  if (!NATIVE) window.__svcState = state; // LucadoOS windows (frames) read this instead of asking the server for the same things again
   const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
-  const app = document.getElementById("app");
+  const app = env.root || document.getElementById("app");
   // LucadoOS (the desktop theme) shows each site page in a frame inside a window. Inside one of those frames the page drops its own header and footer.
-  const EMBED = !ADMIN_MODE && window.self !== window.top;
+  const EMBED_FRAME = !ADMIN_MODE && !NATIVE && window.self !== window.top, EMBED = EMBED_FRAME || NATIVE; // EMBED: no header or footer of its own
   // The FanaticalGrabber extension only listens in the top page. Inside a LucadoOS window the desktop passes its messages along in both directions.
-  const extSend = msg => { if (EMBED) window.parent.postMessage({ svcRelay: "page", msg }, location.origin); else window.postMessage(msg, location.origin); };
-  const fromExt = e => e.origin === location.origin && (e.source === window || (EMBED && e.source === window.parent));
-  if (EMBED) document.documentElement.classList.add("os-embed");
+  const extSend = msg => { if (EMBED_FRAME) window.parent.postMessage({ svcRelay: "page", msg }, location.origin); else window.postMessage(msg, location.origin); };
+  const fromExt = e => e.origin === location.origin && (e.source === window || (EMBED_FRAME && e.source === window.parent));
+  if (EMBED_FRAME) document.documentElement.classList.add("os-embed");
 
   // The browser turns null/undefined/false passed to replaceChildren/append/prepend into the words "null", "undefined", "false".
   // Skip them instead, so an optional piece of a page can simply be null.
-  for (const name of ["replaceChildren", "append", "prepend"]) {
+  if (!Element.prototype.__svcPatched) for (const name of ["replaceChildren", "append", "prepend"]) {
+    Element.prototype.__svcPatched = true;
     const native = Element.prototype[name];
     Element.prototype[name] = function (...nodes) { return native.apply(this, nodes.flat(Infinity).filter(n => n !== null && n !== undefined && n !== false)); };
   }
@@ -213,7 +218,7 @@
   function closeMenu() { if (openMenu) { openMenu.btn.setAttribute("aria-expanded", "false"); openMenu.menu.hidden = true; openMenu = null; } }
   document.addEventListener("click", e => { if (openMenu && !openMenu.wrap.contains(e.target)) closeMenu(); });
   // "/" jumps to the search box on the current page, like most sites with a list.
-  document.addEventListener("keydown", e => {
+  if (!NATIVE) document.addEventListener("keydown", e => {
     if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target, tag = (t?.tagName ?? "").toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
@@ -224,7 +229,7 @@
   window.addEventListener("hashchange", closeMenu);
   // On phones the top bar folds into a Menu button so it doesn't cover the page.
   const bar = document.querySelector(".topbar"), tog = document.getElementById("navtoggle");
-  if (bar && tog) { // the admin panel and other pages that share this script have no top bar
+  if (bar && tog && !NATIVE) { // the admin panel and other pages that share this script have no top bar
     const setOpen = on => { bar.classList.toggle("open", on); tog.setAttribute("aria-expanded", String(on)); };
     tog.addEventListener("click", () => setOpen(!bar.classList.contains("open")));
     window.addEventListener("hashchange", () => setOpen(false));
@@ -235,11 +240,20 @@
   const steamIcon = () => { const n = document.createElementNS("http://www.w3.org/2000/svg", "svg"); n.setAttribute("viewBox", "0 0 24 24"); n.setAttribute("width", "18"); n.setAttribute("height", "18"); n.setAttribute("aria-hidden", "true"); const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", STEAM_ICON); p.setAttribute("fill", "currentColor"); n.append(p); return n; };
   const steamLoginBtn = (text = "Sign in through Steam", cls = "btn steam") => h("a", { class: cls, href: "/auth/steam" }, steamIcon(), " " + text);
   // Pages have plain addresses like /wishlist and /servers/123. Old links with a # still work: they are rewritten on load.
+  // A window keeps its own address here; the normal page uses the browser's.
+  const LOC = NATIVE ? { pathname: "/", search: "", hash: "" } : location;
+  const setLoc = path => { const u = new URL(String(path).replace(/^#/, ""), location.origin); LOC.pathname = u.pathname; LOC.search = u.search; LOC.hash = ""; };
+  if (NATIVE) setLoc(env.path || "/");
   const routeText = () => {
-    const h = location.hash.replace(/^#\/?/, "");
-    return h || location.pathname.replace(/^\/+|\/+$/g, "") + location.search;
+    const h = LOC.hash.replace(/^#\/?/, "");
+    return h || LOC.pathname.replace(/^\/+|\/+$/g, "") + LOC.search;
   };
-  const navigate = path => { history.pushState(null, "", path); window.dispatchEvent(new Event("hashchange")); };
+  const navigate = path => {
+    if (NATIVE) { setLoc(path); route(); env.onNavigate?.(LOC.pathname + LOC.search); return; }
+    history.pushState(null, "", path); window.dispatchEvent(new Event("hashchange"));
+  };
+  const replaceUrl = path => { if (NATIVE) { setLoc(path); env.onNavigate?.(LOC.pathname + LOC.search); } else history.replaceState(null, "", path); };
+  const scrollTop0 = () => { if (NATIVE) env.scroller?.scrollTo({ top: 0, behavior: "instant" }); else window.scrollTo({ top: 0, behavior: "instant" }); };
   const currentView = () => routeText().split("?")[0].split("/")[0];
   const currentParam = () => routeText().split("?")[0].split("/")[1] || null;
 
@@ -341,7 +355,7 @@
         h("div", { class: "user-chip" },
           state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
           h("span", { class: "who", text: state.me.user.username }),
-          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; if (EMBED) { window.parent.location.reload(); return; } navigate("/"); boot(); } }))].filter(Boolean));
+          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; if (EMBED_FRAME) { window.parent.location.reload(); return; } if (NATIVE) { location.reload(); return; } navigate("/"); boot(); } }))].filter(Boolean));
     } else {
       acct.replaceChildren(...[...links, support, osButton(), languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
@@ -353,7 +367,7 @@
 
   // ---------- landing ----------
   function landing() {
-    const failed = new URLSearchParams(location.search).get("error");
+    const failed = new URLSearchParams(LOC.search).get("error");
     const ab = state.about;
     const n = v => (v === null || v === undefined ? null : Number(v).toLocaleString());
     const invite = state.cfg && state.cfg.inviteUrl;
@@ -2600,8 +2614,8 @@
     const box = h("div", { class: "panel", id: "twitch-link" });
     async function draw() {
       let d; try { d = await api("/api/twitchlink"); } catch { box.replaceChildren(); return; }
-      const back = /[?&]twitch=(1|none)/.exec(location.search)?.[1];
-      if (back) { history.replaceState(null, "", "/steam"); if (back === "1") toast("Twitch linked.", "ok"); }
+      const back = /[?&]twitch=(1|none)/.exec(LOC.search)?.[1];
+      if (back) { replaceUrl("/steam"); if (back === "1") toast("Twitch linked.", "ok"); }
       const off = h("button", { class: "btn gray small", type: "button", text: "Unlink" });
       off.addEventListener("click", () => busy(off, async () => { await api("/api/twitchlink", { action: "remove" }); toast("Unlinked.", "ok"); draw(); }));
       box.replaceChildren(h("h3", { text: "Twitch (enter giveaways from chat)" }),
@@ -2725,9 +2739,9 @@
     }
     app.replaceChildren(pageHead("Steam", "Sign in through Steam to fill your library automatically: your games, hours played, what you never played and what to play next."),
       slot, out, twitchLinkPanel());
-    if (/[?&]linked=1/.test(location.search)) {
+    if (/[?&]linked=1/.test(LOC.search)) {
       // Just came back from Steam: read the library straight away, then tidy the address.
-      history.replaceState(null, "", "/steam");
+      replaceUrl("/steam");
       out.className = "muted"; out.textContent = "Reading your Steam library…";
       api("/api/steam/sync", {}).then(r => { state.artForce = true; state.me.steam = { linked: true, verified: true, synced: true }; toast(`Signed in. Found ${r.owned} games` + (r.value && r.value.games ? ` worth ${money(r.value.msrp, r.value.currency)}` : "") + ".", "ok"); })
         .then(() => api("/api/wishlist/import", { profile: "" }).then(w => { if (w.added) { state.me.games += w.added; toast(`Also added ${w.added} game${w.added === 1 ? "" : "s"} from your Steam wishlist. I'll keep it in sync.`, "ok"); } }).catch(() => { /* private wishlist: the Wishlist page explains it */ }))
@@ -4210,7 +4224,7 @@
     const body = h("div", {}, h("p", { class: "muted", text: "Loading…" }));
     const refresh = h("button", { class: "btn gray small", type: "button", text: "Refresh", onclick: () => { adminCtx = null; adminMount(page, host, { classic }); adminPulse(); } });
     host.replaceChildren(h("div", { class: "adm-head" }, h("div", {}, h("h1", { text: meta.title }), h("p", { text: meta.sub })), h("div", { class: "adm-actions" }, refresh)), body);
-    if (classic) window.scrollTo({ top: 0, behavior: "instant" });
+    if (classic) scrollTop0();
     if (page === "radio") { host.classList.add("adm-chat-host"); host.replaceChildren(); if (window.AdminRadio) window.AdminRadio.mount(host, { h, api, toast }); else host.append(h("div", { class: "notice warn", text: "The radio didn't load. Refresh the page." })); return; }
     if (page === "chat") { host.classList.add("adm-chat-host"); host.replaceChildren(); if (window.AdminChat) window.AdminChat.mount(host, { h, api, toast }); else host.append(h("div", { class: "notice warn", text: "The chat didn't load. Refresh the page." })); return; }
     const pm = state.me.panel;
@@ -5930,7 +5944,7 @@
   }
   function closeSearch() { if (searchEl) { searchEl.remove(); searchEl = null; } }
   let gPending = false;
-  document.addEventListener("keydown", e => {
+  if (!NATIVE) document.addEventListener("keydown", e => {
     const t = e.target, typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
     if (e.key === "Escape") return closeSearch();
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k" && state.me && !/^\/admin/.test(location.pathname)) { e.preventDefault(); return openSearch(); }
@@ -7667,8 +7681,8 @@
     const composer = h("div", { class: "fd-composer" });
     const scopes = h("div", { class: "fd-scopes" }), serverBar = h("div", { class: "fd-serverbar", hidden: true }), serverHead = h("div", { class: "fd-serverhead" });
     let servers = [];
-    const onServer = id => { st.scope = "servers"; st.server = id; drawChrome(); reload(); window.scrollTo({ top: 0, behavior: "smooth" }); };
-    const onGame = (appid, game) => { st.game = { appid, game }; drawChrome(); reload(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    const onServer = id => { st.scope = "servers"; st.server = id; drawChrome(); reload(); (NATIVE ? env.scroller?.scrollTo({ top: 0, behavior: "smooth" }) : window.scrollTo({ top: 0, behavior: "smooth" })); };
+    const onGame = (appid, game) => { st.game = { appid, game }; drawChrome(); reload(); (NATIVE ? env.scroller?.scrollTo({ top: 0, behavior: "smooth" }) : window.scrollTo({ top: 0, behavior: "smooth" })); };
     function drawChrome() {
       if (st.scope === "following" && !signedIn) st.scope = "everyone";
       scopes.replaceChildren(...[["following", "Following"], ["everyone", "Everyone"], ["servers", "Servers"], ["mine", "My posts"]].filter(([k]) => signedIn || k === "everyone" || k === "servers").map(([k, label]) => {
@@ -7944,16 +7958,18 @@
       if (list.length) nav.push({ label: g.label, icon: ICONS[g.id] || "📄", pages: list, badge: state.me && g.id === "account" ? Number(state.me.unread) || 0 : 0 });
     }
     const want = location.pathname + location.search.replace(/[?&]os=\d\b/, "");
-    window.LucadoOS.begin({ pages, nav, open: want, home: "/home", loginUrl: "/auth/login", adminUrl: state.me?.adminUrl || null, logout: async () => { try { await api("/auth/logout", {}); } catch { /* signed out anyway */ } location.href = "/"; }, user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
+    window.LucadoOS.begin({ pages, nav, open: want, home: "/home", mountPage: env => window.SVC_SITE({ ...env, state }), loginUrl: "/auth/login", adminUrl: state.me?.adminUrl || null, logout: async () => { try { await api("/auth/logout", {}); } catch { /* signed out anyway */ } location.href = "/"; }, user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
   }
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
     if (!ADMIN_MODE && !EMBED && window.LucadoOS?.wanted()) { osMount(); return; }
-    if (state.restricted || new URLSearchParams(location.search).get("error") === "restricted") { state.restricted ||= "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard. If you think this is a mistake, contact the bot owner."; return showRestricted(); }
-    if (!ADMIN_MODE) { const old = /^#\/(.*)$/.exec(location.hash); if (old) history.replaceState(null, "", "/" + old[1]); }
-    renderChrome();
+    if (state.restricted || new URLSearchParams(LOC.search).get("error") === "restricted") { state.restricted ||= "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard. If you think this is a mistake, contact the bot owner."; return showRestricted(); }
+    if (!ADMIN_MODE && !NATIVE) { const old = /^#\/(.*)$/.exec(location.hash); if (old) history.replaceState(null, "", "/" + old[1]); }
+    if (!NATIVE) renderChrome();
     const view = currentView();
+    if (NATIVE) app.dataset.area = view === "streamer" || view === "streams" || view === "streamers" ? "streamer" : view === "indie" || view === "devpanel" ? "indie" : ""; // each window wears its own area colors
+    if (!NATIVE) { // the desktop itself decides the colors and waves around its windows
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else if (view === "indie") document.documentElement.dataset.area = "indie"; else delete document.documentElement.dataset.area;
     // In a LucadoOS window the page draws its own waves (the desktop's sit behind the window), unless Personalize turned them off.
@@ -7965,10 +7981,11 @@
       window.addEventListener("storage", e => { if (e.key === "lucado-site-prefs") apply(); });
       window.addEventListener("message", e => { if (e.source === window.parent && e.origin === location.origin && e.data && e.data.svc === "los-active") { window.__losOn = Boolean(e.data.on); apply(); } }); // the desktop says when this window is hidden behind another
     }
+    }
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie") return landing();
-    if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
-    if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
-    if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
+    if (view === "u" && currentParam()) { publicProfileView(currentParam()); scrollTop0(); return; }
+    if (view === "g" && state.me && currentParam()) { gameView(currentParam()); scrollTop0(); return; }
+    if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); scrollTop0(); return; }
     (VIEWS[view] || (state.me ? valueView : landing))();
     const nb = newsBanner();
     if (nb && view !== "home") app.prepend(nb);
@@ -7976,10 +7993,11 @@
     if (sn) app.prepend(sn);
     const db = discordBanner();
     if (db && view !== "home") app.prepend(db);
-    window.scrollTo({ top: 0, behavior: "instant" });
+    scrollTop0();
   }
 
   async function boot() {
+    if (NATIVE) { route(); return; } // the desktop already loaded the settings and the account
     try {
       const shared = EMBED ? (() => { try { return window.parent.__svcState || null; } catch { return null; } })() : null; // a window reuses what the desktop already loaded
       if (shared && shared.cfg && !shared.restricted) { state.cfg = shared.cfg; state.about = shared.about; state.creator = shared.creator; state.freeNow = shared.freeNow ?? null; state.me = shared.me; }
@@ -8033,7 +8051,21 @@
   })();
 
   if (ADMIN_MODE) { window.addEventListener("hashchange", adminRoute); adminBoot(); }
-  else {
+  else if (NATIVE) {
+    // A window's own links: pages open inside the window, other sites in a new tab, and sign-in takes over the tab.
+    const tidyN = el => el.querySelectorAll?.('a[href^="#/"]').forEach(a => { a.dataset.spa = "1"; a.setAttribute("href", a.getAttribute("href").slice(1)); });
+    new MutationObserver(ms => { for (const m of ms) m.addedNodes.forEach(n => { if (n.nodeType === 1) { if (n.matches('a[href^="#/"]')) { n.dataset.spa = "1"; n.setAttribute("href", n.getAttribute("href").slice(1)); } tidyN(n); } }); }).observe(app, { childList: true, subtree: true });
+    app.addEventListener("click", e => {
+      if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target.closest?.("a[href]"); if (!a || a.target || a.hasAttribute("download")) return;
+      const href = a.getAttribute("href") || "";
+      if (/^https?:\/\//i.test(href)) { try { if (new URL(href).origin !== location.origin) { a.target = "_blank"; a.rel = "noopener noreferrer"; } } catch { /* leave it */ } return; }
+      const path = href.startsWith("#/") ? href.slice(1) : href;
+      if (path.startsWith("/") && !path.startsWith("//") && !/^\/(auth|api|admin)(\/|\?|$)/.test(path) && !/\.[a-z0-9]{2,5}$/i.test(path.split("?")[0])) { e.preventDefault(); navigate(path); }
+    });
+    boot();
+    return { navigate, route, path: () => LOC.pathname + LOC.search };
+  } else {
     window.addEventListener("hashchange", route);
     window.addEventListener("popstate", () => window.dispatchEvent(new Event("hashchange")));
     // Links written as #/page show and copy as plain addresses, and open without reloading the page.
@@ -8054,4 +8086,5 @@
     });
     boot();
   }
-})();
+};
+window.SVC_SITE(); // the normal page starts its own copy; every LucadoOS window then starts one more of its own

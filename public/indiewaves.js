@@ -3,7 +3,7 @@
 // from one set to the next when you move. It stands still if you've asked your device for less motion, and pauses in a background tab.
 (function (root) {
   "use strict";
-  let canvas = null, ctx = null, raf = 0, t0 = 0, w = 0, h = 0, dpr = 1, still = false, last = 0, energy = 0;
+  let bound = null, ro = null, canvas = null, ctx = null, raf = 0, t0 = 0, w = 0, h = 0, dpr = 1, still = false, last = 0, energy = 0;
   // Music: the radio tells us where the track is while it plays. We can't hear the audio (it plays inside SoundCloud's own frame), so the
   // lines pulse on a steady beat worked out from the track and its position, with louder and calmer stretches. No updates for a moment means it's stopped.
   let song = null;
@@ -30,7 +30,7 @@
   const light = () => document.documentElement.dataset.theme === "light";
 
   function size() {
-    dpr = Math.min(2, root.devicePixelRatio || 1); w = root.innerWidth; h = root.innerHeight;
+    dpr = Math.min(2, root.devicePixelRatio || 1); w = bound ? bound.clientWidth : root.innerWidth; h = bound ? bound.clientHeight : root.innerHeight;
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   function frame(now) {
@@ -57,17 +57,24 @@
     }
     if (!still && canvas) raf = root.requestAnimationFrame(frame);
   }
-  function start() {
-    if (canvas) return;
+  /** Puts the canvas inside an element (a LucadoOS window), or back on the page when there is none. */
+  function attach(host) {
+    bound = host || null;
+    if (bound) { canvas.classList.add("in"); bound.prepend(canvas); if (root.ResizeObserver) { ro = ro || new ResizeObserver(() => size()); ro.disconnect(); ro.observe(bound); } }
+    else { canvas.classList.remove("in"); document.body.prepend(canvas); if (ro) ro.disconnect(); }
+    size();
+  }
+  function start(host) {
+    if (canvas) { if ((host || null) !== bound) attach(host); return; }
     still = Boolean(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
     canvas = document.createElement("canvas"); canvas.id = "ix-waves"; canvas.setAttribute("aria-hidden", "true");
-    document.body.prepend(canvas); ctx = canvas.getContext("2d"); if (!ctx) { stop(); return; }
+    document.body.prepend(canvas); ctx = canvas.getContext("2d"); if (!ctx) { stop(); return; } if (host) attach(host);
     t0 = performance.now(); size(); root.addEventListener("resize", size); document.addEventListener("visibilitychange", onVis); raf = root.requestAnimationFrame(frame);
   }
   function onVis() { if (!canvas || still) return; if (document.hidden) root.cancelAnimationFrame(raf); else raf = root.requestAnimationFrame(frame); }
   function stop() {
     if (!canvas) return;
-    root.cancelAnimationFrame(raf); root.removeEventListener("resize", size); document.removeEventListener("visibilitychange", onVis); canvas.remove(); canvas = ctx = null;
+    root.cancelAnimationFrame(raf); root.removeEventListener("resize", size); document.removeEventListener("visibilitychange", onVis); canvas.remove(); canvas = ctx = null; bound = null; if (ro) ro.disconnect();
   }
   root.IndieWaves = { start, stop, music };
 })(typeof globalThis !== "undefined" ? globalThis : this);

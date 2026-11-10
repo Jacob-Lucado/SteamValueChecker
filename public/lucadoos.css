@@ -173,3 +173,9 @@ html.os-embed .page { padding-top: 14px; }
 .los-tile-x { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.45); color: #fff; font-size: 11px; cursor: pointer; opacity: 0; } .los-tile-wrap:hover .los-tile-x, .los-tile-x:focus-visible { opacity: 1; }
 .los-pins-head { display: flex; align-items: baseline; gap: 8px; } .los-pins-head small { color: var(--muted); font-weight: 400; flex: 1; } .los-pin-reset { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
 .los-classic { font-weight: 600; border: 1px solid var(--accent); color: var(--white); }
+
+/* pages that run right in their window: the window's own scroll area sits above the waves */
+.los-win-body.los-page { position: relative; }
+.los-scroll { position: absolute; inset: 0; overflow: auto; z-index: 1; background: transparent; overscroll-behavior: contain; }
+.los-scroll > .svc-root { position: relative; margin: 0 auto; padding-top: 14px; }
+.los-win-body.los-page > #ix-waves { z-index: 0; }

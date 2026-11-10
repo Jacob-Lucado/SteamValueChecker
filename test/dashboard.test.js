@@ -3680,3 +3680,10 @@ test("parseApp reads the other kinds of Steam links people paste", async () => {
     for (const [u, id] of [["https://store.steampowered.com/app/1145360/Hades/", 1145360], ["steamcommunity.com/app/413150", 413150], ["https://s.team/a/367520", 367520], ["https://steamdb.info/app/2379780/charts/", 2379780], ["https://store.steampowered.com/agecheck/app/1086940/", 1086940], ["12345", 12345]]) assert.equal(parseApp(u), id, u);
     assert.equal(parseApp("Hades"), null);
 });
+
+test("LucadoOS windows run the site natively through SVC_SITE", async () => {
+    const { readFileSync } = await import("node:fs");
+    const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8"), os = readFileSync(new URL("../public/lucadoos.js", import.meta.url), "utf8");
+    assert.match(app, /window\.SVC_SITE = envIn =>/); assert.match(app, /mountPage: env => window\.SVC_SITE\(/);
+    assert.match(os, /mountPage\(\{ root: mountEl/); assert.match(os, /lucado-frames/);
+});

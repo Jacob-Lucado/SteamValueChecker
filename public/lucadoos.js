@@ -31,7 +31,7 @@
   function focus(w) {
     for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
     w.node.style.zIndex = String(++z); w.task.classList.add("on"); for (const o of wins.values()) if (o !== w) o.task.classList.remove("on");
-    if (w.pending && w.frame) { w.frame.src = w.pending; w.pending = null; } // a restored window loads the first time you reach for it
+    if (w.pending) { if (w.inline) { w.pending = null; w.mount(); } else if (w.frame) { w.frame.src = w.pending; w.pending = null; } } // a restored window loads the first time you reach for it
     document.title = `${metaOf(w.id).title} · LucadoOS`; persist(); addressOf(w); syncActive();
   }
   /** Keeps the cost down: only windows you can actually see animate their waves, and the desktop's own waves stop while a full-screen window covers them. */
@@ -44,8 +44,10 @@
       const on = !w.min && !w.node.hidden && !w.pending && !coveredBy(w);
       if (lastActive.get(w) !== on) { lastActive.set(w, on); try { w.frame.contentWindow?.postMessage({ svc: "los-active", on }, root.location.origin); } catch { /* not loaded yet; the load handler resends */ } }
     }
-    const hidden = list.some(o => !o.min && !o.node.hidden && o.max && !o.id.startsWith("os:"));
-    if (hidden !== lastDesk) { lastDesk = hidden; if (root.IndieWaves) (prefs.waves && !hidden) ? root.IndieWaves.start() : root.IndieWaves.stop(); }
+    // The waves live in the top full-screen page window when there is one (between its background and its content), otherwise on the desktop.
+    const cover = list.filter(o => !o.min && !o.node.hidden && o.max && !o.id.startsWith("os:")).sort((a, b) => zOf(b) - zOf(a))[0] || null;
+    const hostKey = !prefs.waves ? "off" : cover && cover.inline ? cover.id : cover ? "covered" : "desk";
+    if (hostKey !== lastDesk) { lastDesk = hostKey; const W = root.IndieWaves; if (W) { if (hostKey === "off" || hostKey === "covered") W.stop(); else { W.start(hostKey === "desk" ? null : cover.content); } } }
   }
   function place(w) {
     const n = w.node, W = layer.clientWidth, H = layer.clientHeight;
@@ -56,7 +58,7 @@
     n.style.left = w.x + "px"; n.style.top = w.y + "px"; n.style.width = w.w + "px"; n.style.height = w.h + "px";
   }
 
-  let pages = {}, nav = [], who = null, closeStart = () => {}, prefs = { wall: "default", waves: true }, logout = null;
+  let mountPage = null, pages = {}, nav = [], who = null, closeStart = () => {}, prefs = { wall: "default", waves: true }, logout = null;
   const GLYPH = { "/": "🏠" };
   const pageMeta = id => pages[id] || { title: id.replace(/^\//, "").split("/")[0] || "Home", icon: "📄", sub: "" };
   const metaOf = id => wins.get(id)?.meta || pageMeta(id);
@@ -120,8 +122,11 @@
     const native = id.startsWith("os:");
     if (!saved && !native) { w.restore = { w: w.w, h: w.h, x: w.x, y: w.y }; w.max = true; } // pages open full screen; people resize them from there
     if (saved?.path && known(saved.path)) w.path = saved.path;
-    const frame = native ? null : el("iframe", "los-frame", { ...(saved && saved.defer ? {} : { src: w.path }), title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
-    const content = el("div", native ? "los-win-body los-native" : "los-win-body los-page", {}, ...(frame ? [frame] : []));
+    const inline = !native && typeof mountPage === "function" && store.get("lucado-frames") !== "1"; // pages run right in the window. Setting localStorage "lucado-frames" to "1" brings back the old framed pages if one ever misbehaves
+    const scroller = inline ? el("div", "los-scroll") : null, mountEl = inline ? el("div", "page svc-root") : null;
+    if (inline) scroller.append(mountEl);
+    const frame = native || inline ? null : el("iframe", "los-frame", { ...(saved && saved.defer ? {} : { src: w.path }), title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
+    const content = el("div", native ? "los-win-body los-native" : "los-win-body los-page", {}, ...(frame ? [frame] : []), ...(scroller ? [scroller] : []));
     if (native) { w.w = Math.min(w.w, 720); w.h = Math.min(w.h, 520); personalize(content); }
     const titleText = el("span", "", { text: meta.title }), titleIcon = el("i", "", { "aria-hidden": "true", text: meta.icon });
     const title = el("div", "los-win-title", {}, titleIcon, titleText);
@@ -131,7 +136,7 @@
     const node = el("section", "los-win", { role: "dialog", "aria-label": meta.title }, el("header", "los-win-bar", {}, title, el("div", "los-win-btns", {}, bMin, bMax, bClose)), content);
     const taskIcon = el("i", "", { "aria-hidden": "true", text: meta.icon }), taskText = el("span", "", { text: meta.title });
     const task = el("button", "los-task", { type: "button", title: meta.title }, taskIcon, taskText);
-    w.node = node; w.task = task; w.content = content; w.frame = frame; wins.set(id, w); if (saved && saved.defer) w.pending = w.path;
+    w.node = node; w.task = task; w.content = content; w.frame = frame; wins.set(id, w); if (inline) w.inline = true; if (saved && saved.defer) w.pending = inline ? "inline" : w.path;
     layer.append(node); tasks.append(task);
     place(w); if (w.min) { node.hidden = true; } else if (w.pending) { node.style.zIndex = String(saved.z || ++z); } else focus(w); if (saved && saved.z) node.style.zIndex = String(saved.z);
     // follow the page inside: its title and address change as you move around it, and the browser address follows the window you're in
@@ -143,6 +148,15 @@
       const m = pages[path.split("?")[0]] ?? null, name = m ? m.title : String(t || "").split(/[:|·]/)[0].trim().slice(0, 40) || meta.title;
       if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · LucadoOS`; }
     };
+    if (inline) {
+      const named = path => { // a window's title follows the page it is showing
+        const m = pages[path.split("?")[0]] ?? pages["/" + path.split("?")[0].split("/")[1]] ?? null, name = m ? m.title : meta.title;
+        if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · LucadoOS`; }
+      };
+      w.mount = () => { w.inst = mountPage({ root: mountEl, scroller, path: w.path, onNavigate: p => { w.path = p; named(p); persist(); if (node.classList.contains("focus")) addressOf(w); } }); named(w.path); };
+      content.addEventListener("pointerdown", () => { closeStart(); if (!node.classList.contains("focus")) focus(w); }, true);
+      if (!w.pending) w.mount();
+    }
     if (frame) {
       frame.addEventListener("load", () => { lastActive.delete(w); syncActive(); sync(); try { frame.contentWindow.addEventListener("pointerdown", () => { closeStart(); if (!node.classList.contains("focus")) focus(w); }, true); } catch { /* not ours */ } });
       w.timer = setInterval(() => { if (!node.isConnected) clearInterval(w.timer); else sync(); }, 800);
@@ -195,7 +209,7 @@
     return w;
   }
   /** The browser's address bar shows the page of the window you're in, so a copied link opens the same page. */
-  function addressOf(w) { if (!w.frame) return; try { root.history.replaceState(null, "", w.path); } catch { /* keep going */ } }
+  function addressOf(w) { if (!w.frame && !w.inline) return; try { root.history.replaceState(null, "", w.path); } catch { /* keep going */ } }
 
   const WALLS = [
     ["default", "Default", ""],
@@ -332,6 +346,7 @@
 
   /** Takes over the page. `options`: { pages: {path: {title, icon, sub}}, nav: [{label, icon, pages: [{path, title, icon}]}], user: {name, avatar} | null, loginUrl, open: path to start on }. */
   function begin(options) {
+    mountPage = options.mountPage || null;
     pages = { ...options.pages, "os:personalize": { title: "Personalize", icon: "🎨", sub: "" } }; nav = options.nav; who = options.user || null; logout = options.logout || null; loadPrefs();
     if (on) { return; }
     on = true; cfg = options;
