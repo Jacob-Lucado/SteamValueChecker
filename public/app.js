@@ -8079,6 +8079,7 @@ window.SVC_SITE = envIn => {
       window.addEventListener("message", e => { if (e.source === window.parent && e.origin === location.origin && e.data && e.data.svc === "los-active") { window.__losOn = Boolean(e.data.on); apply(); } }); // the desktop says when this window is hidden behind another
     }
     }
+    if (!view && state.me && !EMBED) { replaceUrl("/home"); return route(); } // signed in, the bare address (and the logo) lands on Home
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie" && view !== "fortnite") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); scrollTop0(); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); scrollTop0(); return; }
