@@ -59,6 +59,7 @@ import { libraryAnalytics } from "../analytics.js";
 import { steamLoginUrl, verifySteamLogin } from "../steamopenid.js";
 import { UserError } from "../errors.js";
 import { createIndie, parseApp, cleanLinks } from "../indie.js";
+import { createFortnite } from "../fortnite.js";
 import { INDIE_CATS, INDIE_TOOLS, indieSeo, indieSpotlightText } from "../indiemeta.js";
 import { MAX_PENDING_PER_USER, MAX_GAMES_PER_USER } from "../indiestore.js";
 import { createIndieNews, picksFor } from "../indienews.js";
@@ -161,6 +162,7 @@ const FILES = {
     "/indiewaves.js": ["indiewaves.js", "text/javascript; charset=utf-8"],
     "/lucadoos.js": ["lucadoos.js", "text/javascript; charset=utf-8"],
     "/devpanel.js": ["devpanel.js", "text/javascript; charset=utf-8"],
+    "/fortnite.js": ["fortnite.js", "text/javascript; charset=utf-8"],
     "/lucadoos.css": ["lucadoos.css", "text/css; charset=utf-8"],
     "/indie.js": ["indie.js", "text/javascript; charset=utf-8"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
@@ -263,7 +265,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ referrals = null, weekly = null, indieSvc = null, indieNews = null, spotlight = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ referrals = null, weekly = null, indieSvc = null, fortniteSvc = null, indieNews = null, spotlight = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -389,12 +391,15 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
     const idFinderLimit = createLimiter({ windowMs: 60_000, max: 15, now });
     const indieApi = indieSvc ?? createIndie();
+    const fortniteCall = async fn => { try { return await fn(); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; } };
     const indieHerald = indieNews ?? createIndieNews({ db, dm, base: origin, log });
     const indieUpdateLimit = createLimiter({ windowMs: 3600_000, max: 6, now });
     const indieKeyLimit = createLimiter({ windowMs: 3600_000, max: 8, now });
     const indieVerifyLimit = createLimiter({ windowMs: 60_000, max: 3, now });
     const indieReportLimit = createLimiter({ windowMs: 3600_000, max: 6, now });
     const indieLookupLimit = createLimiter({ windowMs: 60_000, max: 20, now });
+    const fortniteLimit = createLimiter({ windowMs: 60_000, max: 40, now });
+    const fnSvc = fortniteSvc ?? createFortnite();
     const indieSyncLimit = createLimiter({ windowMs: 60_000, max: 1, now });
     const indieWriteLimit = createLimiter({ windowMs: 10 * 60_000, max: 12, now });
     const socialRead = createLimiter({ windowMs: 60_000, max: 90, now });
@@ -3591,6 +3596,13 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "GET /api/indie/tools": async () => ({ cats: INDIE_CATS, tools: INDIE_TOOLS }),
         "GET /api/indie/calendar": async () => ({ sales: SALES.map(e => ({ name: e.name, kind: e.kind, start: e.start, end: e.end, note: e.note ?? null })), updated: SALES_UPDATED }),
         // One Steam game's public details, or a name search. No sign-in (the tools use it), so it is limited by address.
+        "GET /api/fortnite/shop": async req => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return fortniteCall(() => fnSvc.shop()); },
+        "GET /api/fortnite/news": async req => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return fortniteCall(() => fnSvc.news()); },
+        "GET /api/fortnite/map": async req => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return fortniteCall(() => fnSvc.map()); },
+        "GET /api/fortnite/new": async req => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return fortniteCall(() => fnSvc.fresh()); },
+        "GET /api/fortnite/status": async () => ({ ...(await fnSvc.status()), stats: Boolean(fnSvc.hasStats) }),
+        "GET /api/fortnite/search": async (req, _b, url) => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return { items: await fortniteCall(() => fnSvc.search(url.searchParams.get("q"))) }; },
+        "GET /api/fortnite/stats": async (req, _b, url) => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return fortniteCall(() => fnSvc.stats(url.searchParams.get("name"), url.searchParams.get("platform") || "epic")); },
         "GET /api/indie/lookup": async (req, _b, url) => {
             if (!indieLookupLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute.");
             const q = String(url.searchParams.get("q") ?? "").trim().slice(0, 200);

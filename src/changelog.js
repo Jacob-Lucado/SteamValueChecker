@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.54", date: "2026-11-10", title: "Fortnite on the dashboard", items: [
+        "**Fortnite page:** the item shop laid out the way the game shows it, with its sections, big and small tiles, rarity colors, V-Bucks prices, new, on sale and leaving soon badges, a countdown to the next shop, and a closer look at anything in it. You can search the shop and filter it by outfits, emotes, bundles, jam tracks and more.",
+        "**Also there:** the latest Fortnite news, everything new in the latest update, the island map with its named places, and a search of every cosmetic that shows how often and when it was last in the shop. It's open to everyone, no sign-in needed." ] },
     { version: "2026.11.53", date: "2026-11-10", title: "Indie tools fixes", items: [
         "**Steam lookups:** pages that Steam's main lookup refuses, even though they're public, are now found through a second route, so \"no public store page\" should only show when the page really is hidden.",
         "**Names work too:** the tools that fill in from Steam and the rival comparison accept a game's name as well as a link, and more kinds of Steam links are understood.",

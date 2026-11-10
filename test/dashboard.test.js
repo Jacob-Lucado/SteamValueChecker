@@ -3687,3 +3687,42 @@ test("LucadoOS windows run the site natively through SVC_SITE", async () => {
     assert.match(app, /window\.SVC_SITE = envIn =>/); assert.match(app, /mountPage: env => window\.SVC_SITE\(/);
     assert.match(os, /mountPage\(\{ root: mountEl/); assert.match(os, /lucado-frames/);
 });
+
+// ---- Fortnite ----
+const fnEntry = (over = {}) => ({ regularPrice: 1500, finalPrice: 1200, offerId: "o1", devName: "dev", sortPriority: 1, inDate: "2026-11-01T00:00:00Z", outDate: "2026-11-30T00:00:00Z", giftable: true, tileSize: "Size_1_x_1", colors: { color1: "112233ff", color3: "445566ff", textBackgroundColor: "778899ff" },
+    layout: { name: "Peak Style", rank: 50, index: 2, displayType: "tileGrid" }, brItems: [{ id: "Character_X", name: "Peak Guy", type: { value: "outfit", displayValue: "Outfit" }, rarity: { value: "epic", displayValue: "Epic" }, images: { icon: "https://fortnite-api.com/i.png", smallIcon: "https://fortnite-api.com/s.png" } }], ...over });
+const fnFetch = (calls = []) => async url => { calls.push(String(url)); const u = String(url);
+    if (/v2\/shop/.test(u)) return { ok: true, status: 200, json: async () => ({ data: { date: "2026-11-10T00:00:00Z", entries: [fnEntry(), fnEntry({ offerId: "o2", layout: { name: "Jam Tracks", rank: 10, index: 1, displayType: "expandableList" }, brItems: undefined, tracks: [{ title: "Song", artist: "Band", albumArt: "https://cdn.fortnite-api.com/a.jpg" }] }), fnEntry({ offerId: "o3", layout: undefined, tileSize: "Size_2_x_1" })] } }) };
+    if (/stats\/br/.test(u)) return { ok: true, status: 200, json: async () => ({ data: { account: { name: "Pro" }, stats: { all: { overall: { wins: 5, kills: 10, matches: 20, kd: 1, winRate: 25, top10: 8, minutesPlayed: 600 } } } } }) };
+    return { ok: false, status: 404, json: async () => ({ error: "nope" }) }; };
+
+test("fortnite: the shop is grouped into Fortnite's sections, in its order, with prices and sizes", async () => {
+    const { createFortnite } = await import("../src/fortnite.js");
+    const calls = []; const fn = createFortnite({ fetchImpl: fnFetch(calls) });
+    const s = await fn.shop();
+    assert.deepEqual(s.sections.map(x => x.name), ["Peak Style", "Jam Tracks", "Featured"], "highest rank first");
+    const peak = s.sections[0].entries[0]; assert.equal(peak.name, "Peak Guy"); assert.equal(peak.kind, "outfit"); assert.equal(peak.price, 1200); assert.equal(peak.regular, 1500); assert.deepEqual(peak.colors, ["112233", "445566", "778899"]);
+    assert.equal(s.sections[1].entries[0].kind, "jamtrack"); assert.equal(s.sections[1].display, "expandableList"); assert.equal(s.sections[2].entries[0].size, "Size_2_x_1");
+    await fn.shop(); assert.equal(calls.length, 1, "the second look comes from the cache");
+    assert.ok(s.refreshAt > Date.now() && new Date(s.refreshAt).getUTCHours() === 0);
+});
+
+test("fortnite: a failing upstream serves the last good copy, and stats need a key", async () => {
+    const { createFortnite } = await import("../src/fortnite.js");
+    let t = 0, fail = false; const good = fnFetch();
+    const fn = createFortnite({ now: () => t, fetchImpl: async u => (fail ? { ok: false, status: 503, json: async () => ({}) } : good(u)) });
+    const first = await fn.shop(); fail = true; t += 11 * 60_000;
+    assert.equal((await fn.shop()).count, first.count, "stale but there");
+    await assert.rejects(() => createFortnite({ fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({}) }) }).shop(), /isn't answering/);
+    await assert.rejects(() => fn.stats("Someone"), /aren't switched on/);
+    const keyed = createFortnite({ apiKey: "k", fetchImpl: fnFetch() }); const st = await keyed.stats("Pro"); assert.equal(st.name, "Pro"); assert.equal(st.overall.wins, 5);
+});
+
+test("fortnite: the dashboard serves the shop and search to anyone and only offers stats with a key", async () => {
+    const { createFortnite } = await import("../src/fortnite.js");
+    const t = await setup({ extra: { fortniteSvc: createFortnite({ fetchImpl: fnFetch() }) } });
+    const shop = await t.request("/api/fortnite/shop"); assert.equal(shop.status, 200); assert.equal(shop.data.sections[0].name, "Peak Style");
+    const status = await t.request("/api/fortnite/status"); assert.equal(status.status, 200); assert.equal(status.data.stats, false);
+    assert.equal((await t.request("/api/fortnite/search?q=a")).status, 400, "too short");
+    assert.equal((await t.request("/api/fortnite/stats?name=Pro")).status, 400, "no key set");
+});

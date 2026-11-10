@@ -193,6 +193,7 @@ window.SVC_SITE = envIn => {
     { id: "feed", label: "Social", pages: [["feed", "Feed"], ["people", "People"], ["friends", "Friends"], ["compare", "Compare"], ["communities", "Communities"], ["discover", "Discover"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
     { id: "indie", label: "Indie devs", pages: [["indie", "Showcase & tools"], ["devpanel", "Dev panel"]] },
+    { id: "fortnite", label: "Fortnite", pages: [["fortnite", "Fortnite"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Play together", pages: [["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
@@ -203,7 +204,7 @@ window.SVC_SITE = envIn => {
   ];
   // Pages that are not tabs themselves but belong to a section: one game's page sits under Deals.
   const HUB_ALIAS = { g: "deals" };
-  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "tip", "feed", "discover", "communities", "indie"]);
+  const PUBLIC_PAGES = new Set(["fortnite", "home", "help", "about", "status", "tip", "feed", "discover", "communities", "indie"]);
   function pageVisible(id) {
     const me = state.me;
     if (id === "home" && me) return false; // the logo already goes home when signed in
@@ -7944,12 +7945,13 @@ window.SVC_SITE = envIn => {
   }
 
   const indieView = () => window.IndieUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
+  const fortniteView = () => window.FortniteUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
   const devPanelView = () => window.DevPanel.view({ h, api, app, state, navigate, pageHead, toast, busy });
-  const VIEWS = { devpanel: devPanelView, indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
+  const VIEWS = { fortnite: fortniteView, devpanel: devPanelView, indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
 
   /** Hands the whole page to the LucadoOS desktop: one icon for each section, and every page opens in its own window. */
   function osMount() {
-    const ICONS = { home: "🏠", library: "📚", feed: "💬", deals: "💸", indie: "🎮", free: "🎁", social: "🤝", servers: "🛡️", streamer: "📺", account: "👤", help: "🛟" };
+    const ICONS = { home: "🏠", library: "📚", feed: "💬", deals: "💸", indie: "🎮", free: "🎁", fortnite: "🪂", social: "🤝", servers: "🛡️", streamer: "📺", account: "👤", help: "🛟" };
     const pages = { "/": { title: state.me ? "Value Checker" : "Home", icon: state.me ? "📚" : "🏠", sub: "" }, "/home": { title: "Home", icon: "🏠", sub: "" } }, nav = [];
     for (const g of NAV) {
       if (g.id === "admin") continue;
@@ -7982,7 +7984,7 @@ window.SVC_SITE = envIn => {
       window.addEventListener("message", e => { if (e.source === window.parent && e.origin === location.origin && e.data && e.data.svc === "los-active") { window.__losOn = Boolean(e.data.on); apply(); } }); // the desktop says when this window is hidden behind another
     }
     }
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie" && view !== "fortnite") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); scrollTop0(); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); scrollTop0(); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); scrollTop0(); return; }
