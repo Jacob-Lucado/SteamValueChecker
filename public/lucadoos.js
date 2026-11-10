@@ -223,6 +223,13 @@
     for (const w of wins.values()) { try { w.frame?.contentDocument?.documentElement.setAttribute("data-theme", t); } catch { /* not loaded yet */ } }
   }
   root.addEventListener("svc-theme", pushTheme);
+  // The extension (FanaticalGrabber) only talks to the top page. Pages in windows hand their messages to us, and we pass its answers back down.
+  root.addEventListener("message", e => {
+    if (e.origin !== root.location.origin) return;
+    const d = e.data;
+    if (d && d.svcRelay === "page" && d.msg && d.msg.svc === "page" && [...wins.values()].some(w => w.frame && w.frame.contentWindow === e.source)) root.postMessage(d.msg, root.location.origin);
+    else if (e.source === root && d && d.svc === "ext") for (const w of wins.values()) { try { w.frame?.contentWindow?.postMessage(d, root.location.origin); } catch { /* not loaded */ } }
+  });
 
   /** The desktop: one icon for each section of the site. */
   function icons() {

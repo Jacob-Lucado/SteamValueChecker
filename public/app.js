@@ -10,6 +10,9 @@
   const app = document.getElementById("app");
   // LucadoOS (the desktop theme) shows each site page in a frame inside a window. Inside one of those frames the page drops its own header and footer.
   const EMBED = !ADMIN_MODE && window.self !== window.top;
+  // The FanaticalGrabber extension only listens in the top page. Inside a LucadoOS window the desktop passes its messages along in both directions.
+  const extSend = msg => { if (EMBED) window.parent.postMessage({ svcRelay: "page", msg }, location.origin); else window.postMessage(msg, location.origin); };
+  const fromExt = e => e.origin === location.origin && (e.source === window || (EMBED && e.source === window.parent));
   if (EMBED) document.documentElement.classList.add("os-embed");
 
   // The browser turns null/undefined/false passed to replaceChildren/append/prepend into the words "null", "undefined", "false".
@@ -2778,7 +2781,7 @@
     const MIN_EXT = "2.3.0"; // the first FanaticalGrabber version with the page bridge
     const versionLess = (a, b) => { const x = String(a).split(".").map(n => parseInt(n, 10) || 0), y = String(b).split(".").map(n => parseInt(n, 10) || 0); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
     const getLink = () => (state.cfg && state.cfg.fanaticalUrl ? h("a", { href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer", text: "Get it here" }) : "");
-    const recheck = () => { const b = h("button", { class: "btn gray small", text: "Check again" }); b.addEventListener("click", () => { window.postMessage({ svc: "page", type: "ping" }, location.origin); setTimeout(() => { if (!ext) b.textContent = "Still not detected. Reload this page after updating."; }, 800); }); return b; };
+    const recheck = () => { const b = h("button", { class: "btn gray small", text: "Check again" }); b.addEventListener("click", () => { extSend({ svc: "page", type: "ping" }); setTimeout(() => { if (!ext) b.textContent = "Still not detected. Reload this page after updating."; }, 800); }); return b; };
     const mask = k => k.slice(0, 5) + "-•••••-" + k.slice(-5);
     function refresh() {
       const n = keysIn().length;
@@ -2786,7 +2789,7 @@
       go.disabled = !ext || running || !n;
     }
     function onMsg(e) {
-      if (e.source !== window || e.origin !== location.origin) return;
+      if (!fromExt(e)) return;
       const m = e.data;
       if (!m || m.svc !== "ext") return;
       if (m.type === "vault") { showVault(m.items || []); return; }
@@ -2803,7 +2806,7 @@
           if (newest && versionLess(ext, newest)) { extState.className = "notice warn"; extState.replaceChildren(`FanaticalGrabber ${ext} is ready. A newer version (${newest}) is out with fixes and new features: update it from the Chrome Web Store. `, getLink()); }
         }
         refresh();
-        if (ext) window.postMessage({ svc: "page", type: "vault" }, location.origin);
+        if (ext) extSend({ svc: "page", type: "vault" });
         return;
       }
       if (m.id !== jobId) return;
@@ -2836,7 +2839,7 @@
     window.addEventListener("message", onMsg);
     // The page only lives while this view is open: stop listening once the route changes.
     window.addEventListener("hashchange", () => window.removeEventListener("message", onMsg), { once: true });
-    window.postMessage({ svc: "page", type: "ping" }, location.origin);
+    extSend({ svc: "page", type: "ping" });
     setTimeout(() => { if (!extFound) { extState.className = "notice warn"; extState.replaceChildren(`The FanaticalGrabber extension was not detected. Install it, or update it if it is older than ${MIN_EXT} (older versions cannot take keys from this page), then reload this page. `, getLink(), " ", recheck()); } }, 1500);
     box.addEventListener("input", refresh);
     async function start(keys, fromQueue) {
@@ -2854,7 +2857,7 @@
       rows = new Map(); outcomes = skipped.slice(); tbody.replaceChildren(); tools.hidden = true;
       for (const k of keys) { const tr = h("tr", {}, h("td", {}, h("code", { text: mask(k) })), h("td", { class: "muted", text: "Waiting" }), h("td")); rows.set(k, tr); tbody.append(tr); }
       table.hidden = false; running = true; stop.hidden = false; progress.textContent = "Starting…"; refresh();
-      window.postMessage({ svc: "page", type: "redeem", id: jobId, items: keys }, location.origin);
+      extSend({ svc: "page", type: "redeem", id: jobId, items: keys });
     }
     go.addEventListener("click", () => start(keysIn(), false));
     // A batch queued with /games redeem in Discord: shown here, started only when the member presses Run.
@@ -2875,7 +2878,7 @@
     checkQueue();
     const poll = setInterval(checkQueue, 20000);
     window.addEventListener("hashchange", () => clearInterval(poll), { once: true });
-    stop.addEventListener("click", () => { window.postMessage({ svc: "page", type: "stop", id: jobId }, location.origin); progress.textContent = "Stopping after the current key…"; });
+    stop.addEventListener("click", () => { extSend({ svc: "page", type: "stop", id: jobId }); progress.textContent = "Stopping after the current key…"; });
     const copyBtn = h("button", { class: "btn gray", text: "Copy results" });
     copyBtn.addEventListener("click", async () => {
       const lines = [...rows.entries()].map(([k, tr]) => `${k}\t${tr.dataset.status || "not tried"}\t${tr.cells[2].textContent}`);
@@ -3043,8 +3046,8 @@
         const connect = h("button", { class: "btn green small", text: link ? "Reconnect the extension" : "Connect the extension" });
         connect.addEventListener("click", () => busy(connect, async () => {
           const ask = (type, extra = {}) => new Promise(res => {
-            const on = e => { if (e.source === window && e.data && e.data.svc === "ext" && (e.data.type === (type === "ping" ? "pong" : "connected"))) { window.removeEventListener("message", on); res(e.data); } };
-            window.addEventListener("message", on); window.postMessage({ svc: "page", type, ...extra }, location.origin);
+            const on = e => { if (fromExt(e) && e.data && e.data.svc === "ext" && (e.data.type === (type === "ping" ? "pong" : "connected"))) { window.removeEventListener("message", on); res(e.data); } };
+            window.addEventListener("message", on); extSend({ svc: "page", type, ...extra });
             setTimeout(() => { window.removeEventListener("message", on); res(null); }, 1500);
           });
           const here = await ask("ping");
