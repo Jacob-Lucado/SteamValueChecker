@@ -440,10 +440,11 @@
       ["NEW", "Notes it keeps", "It remembers what you like, a few short notes, and forgets whenever you say."]
     ];
     const step = (num, title, text) => h("div", { class: "lp-step" }, h("div", { class: "lp-num", text: num }), h("h3", { text: title }), h("p", { text }));
-    const indieShots = h("div", { class: "lx-indie-shots", "aria-hidden": "true" }, [1, 2, 3].map(() => h("div", { class: "lx-ix-card" }, h("i", {}), h("b", {}), h("span", {}))));
+    const indieShots = h("div", { class: "lx-indie-shots" }, [["fee-calculator", "Steam fee and tax calculator", "What you keep from each sale"], ["wishlist-calculator", "Wishlist calculator", "Wishlists into likely sales"], ["capsule-analyzer", "Capsule analyzer", "Does it read at thumbnail size?"], ["next-fest-score", "Next Fest readiness score", "What to fix before the festival"]]
+      .map(([id, t, d]) => h("a", { class: "lx-ix-tool", href: `/indie/tools/${id}` }, h("b", { text: t }), h("span", { text: d }))));
     api("/api/indie").then(d => {
       const list = [...(d.featured || []), ...(d.games || [])].filter((g, i, a) => a.findIndex(x => x.id === g.id) === i).slice(0, 3);
-      if (!list.length || !document.body.contains(indieShots)) return;
+      if (list.length < 3 || !document.body.contains(indieShots)) return;
       indieShots.replaceChildren(...list.map(g => h("a", { class: "lx-ix-card real", href: `/indie/game/${g.id}`, tabindex: "-1" }, h("img", { src: g.image, alt: "", width: 460, height: 215, loading: "lazy" }), h("b", { text: g.title }), h("span", { text: g.studio || "Indie studio" }))));
     }).catch(() => {});
     const aiShots = ["history", "compare", "plan"].map(s => h("img", { src: `/img/ai/${s}.png`, alt: "", loading: "lazy", width: "480", height: "260" }));
@@ -483,10 +484,9 @@
       sec("lx-indie",
         h("div", { class: "lx-indie-text" },
           h("span", { class: "lx-kick", text: "Indie corner" }),
-          h("h2", { text: "Make a game? Show it off. Play one? Find it." }),
-          h("p", { class: "lp-sub", text: "A free showcase where small studios put their Steam games in front of people, with likes, follows and news posts for players. Developers also get a toolbox of fee, wishlist, capsule and press helpers. Browsing is open to everyone; you only sign in to submit." }),
-          h("ul", { class: "lp-list" }, h("li", { text: "Find your next favorite indie game, with picks matched to your library" }), h("li", { text: "Follow a game or studio and hear when the demo drops" }), h("li", { text: "Submit your own game, post updates and hand out review keys" }), h("li", { text: "Free tools for Steam fees, wishlists, capsules, trailers and Next Fest" })),
-          h("div", { class: "lp-cta" }, h("a", { class: "btn green big", href: "/indie", text: "Browse indie games" }), h("a", { class: "btn gray big", href: "/indie/tools", text: "Developer tools" }), h("a", { class: "btn gray big", href: "/indie/submit", text: "Submit your game" }))),
+          h("h2", { text: "A home for indie games on Steam" }),
+          h("p", { class: "lp-sub", text: "Find games from small studios, or put your own in front of people. It's free, and developers get a set of Steam tools for fees, wishlists, capsules and launch planning." }),
+          h("div", { class: "lp-cta" }, h("a", { class: "btn blue big", href: "/indie", text: "Browse indie games" }), h("a", { class: "btn gray big", href: "/indie/tools", text: "Developer tools" }))),
         indieShots),
 
       sec("",
