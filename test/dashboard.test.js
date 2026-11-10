@@ -3728,6 +3728,20 @@ test("fortnite: the dashboard serves the shop and search to anyone and only offe
     assert.equal((await t.request("/api/fortnite/stats?name=Pro")).status, 400, "no key set");
 });
 
+test("/fortnite has its own title and share card, and writes today's shop out with the creator code", async () => {
+    const { createFortnite } = await import("../src/fortnite.js");
+    const t = await setup({ extra: { fortniteSvc: createFortnite({ fetchImpl: fnFetch(), creatorCode: "LUCADO" }) } });
+    const r = await t.request("/fortnite"); assert.equal(r.status, 200);
+    const html = r.text;
+    assert.match(html, /<title>Fortnite item shop today/);
+    assert.match(html, /og:image" content="[^"]*\/page-fortnite\.jpg/);
+    assert.match(html, /creator code <strong>LUCADO<\/strong>/);
+    assert.match(html, /item-shop\?creator-code=LUCADO/);
+    assert.match(html, /V-Bucks/);
+    assert.match(html, /"@type":"ItemList"/);
+    assert.equal((await t.request("/page-fortnite.jpg")).status, 200);
+});
+
 test("fortnite: the creator code is announced and checked live", async () => {
     const { createFortnite } = await import("../src/fortnite.js");
     const t = await setup({ extra: { fortniteSvc: createFortnite({ fetchImpl: fnFetch(), creatorCode: "LUCADO" }) } });

@@ -178,6 +178,7 @@
 
   reg("revenue-estimator", ctx => { const k = kit(ctx), { h } = ctx, state = {}, out = h("div", { class: "ix-out" });
     const show = () => { const g = state.game; if (!g) return; const rv = g.reviews, price = g.priceCents ? g.priceCents / 100 : 0;
+      if (rv?.failed) { out.replaceChildren(k.note(`Steam didn't send back the review count for ${g.title} just now. Press Fill from Steam again in a moment.`)); return; }
       if (!rv || !rv.total) { out.replaceChildren(k.note(`${g.title} has no public reviews yet, so there's nothing to estimate from.`)); return; }
       const e = C.revenueFromReviews({ reviews: rv.total, price }), lab = C.reviewLabel(rv.positive, rv.negative);
       out.replaceChildren(h("div", { class: "ix-game" }, h("img", { src: g.image, alt: "", width: 184, height: 69 }), h("div", {}, h("b", { text: g.title }), h("div", { class: "muted small", text: `${g.studio || ""} · ${price ? usd(price) : "Free"} · ${int(rv.total)} reviews · ${lab.label}` }))),

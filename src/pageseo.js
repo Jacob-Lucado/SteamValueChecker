@@ -53,6 +53,17 @@ export const PAGE_SEO = {
             ["How can I help without paying?", "Vote for the bot on Top.gg, add it to a server and tell friends who buy too many bundles."]
         ]
     },
+    fortnite: {
+        title: "Fortnite item shop today: current skins, prices and creator code | Steam Value Checker",
+        desc: "Today's Fortnite item shop with prices and when each item leaves, plus Fortnite news, the map and player stats. Support the creator with code LUCADO when you buy.",
+        alt: "Fortnite item shop today on Steam Value Checker, with creator code LUCADO",
+        faq: [
+            ["What is in the Fortnite item shop today?", "The page lists everything in the shop right now with its V-Bucks price and when it leaves. The shop refreshes every day at 8 PM Eastern."],
+            ["What is a Fortnite creator code?", "A Support-A-Creator code. Enter it in the item shop before you buy and a small share goes to that creator at no extra cost to you."],
+            ["What creator code should I use here?", "Use LUCADO in the Fortnite item shop. Every buy link on this page adds it for you."],
+            ["Does it cost more to use a creator code?", "No. The price is the same with or without a code."]
+        ]
+    },
     feed: {
         title: "Live game deals feed: free games, bundles and sales | Steam Value Checker",
         desc: "What's on right now: free games from Epic, Steam, GOG and Prime, new bundles from Humble, Fanatical, IndieGala and Steam, and the biggest sales, updated as they appear.",

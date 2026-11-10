@@ -36,15 +36,21 @@ export function createIndie({ fetchImpl = globalThis.fetch, now = () => Date.now
     }
     const plain = t => String(t ?? "").replace(/<[^>]*>/g, " ").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
 
-    /** Review totals for a game, or null when Steam has none. */
+    /** Review totals for a game. Null when Steam really has none; `{ failed: true }` when Steam didn't answer (so callers don't call it "no reviews"). */
     async function reviews(appid) {
         const hit = recall("r" + appid); if (hit) return hit;
-        try {
-            const d = await getJson(`https://store.steampowered.com/appreviews/${appid}?json=1&language=all&purchase_type=all&num_per_page=0`);
-            const q = d?.query_summary;
-            if (!q) return remember("r" + appid, null);
-            return remember("r" + appid, { positive: Number(q.total_positive) || 0, negative: Number(q.total_negative) || 0, total: Number(q.total_reviews) || 0, label: q.review_score_desc || null });
-        } catch { return null; }
+        let lastErr = null;
+        for (let tries = 0; tries < 3; tries++) { // Steam throttles this endpoint now and then, so ask again before giving up
+            try {
+                const d = await getJson(`https://store.steampowered.com/appreviews/${appid}?json=1&language=all&purchase_type=all&filter=all&review_type=all&num_per_page=1`);
+                const q = d?.query_summary;
+                if (!q) { lastErr = new Error("no summary in the reply"); continue; }
+                const total = Number(q.total_reviews) || (Number(q.total_positive) || 0) + (Number(q.total_negative) || 0);
+                return remember("r" + appid, total ? { positive: Number(q.total_positive) || 0, negative: Number(q.total_negative) || 0, total, label: q.review_score_desc || null } : null);
+            } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 600 * (tries + 1))); }
+        }
+        console.warn(`Steam review count for ${appid} failed: ${lastErr?.message ?? lastErr}`);
+        return { failed: true };
     }
 
     /** Fallback lookup through Steam's store browse service. Null when the page really isn't visible. */
@@ -116,7 +122,7 @@ export function createIndie({ fetchImpl = globalThis.fetch, now = () => Date.now
     async function syncDue(db, { limit = 5, log = () => {} } = {}) {
         let done = 0;
         for (const g of db.indieDueForSync(limit)) {
-            try { const fresh = await lookup(g.appid, { fresh: true }); if (fresh.type === "game") { db.indieRefresh(g.id, fresh); done++; const r = await reviews(g.appid); if (r) db.indieSnapReviews(g.id, r.total, r.positive); } else db.indieTouchSync(g.id); }
+            try { const fresh = await lookup(g.appid, { fresh: true }); if (fresh.type === "game") { db.indieRefresh(g.id, fresh); done++; const r = await reviews(g.appid); if (r && !r.failed) db.indieSnapReviews(g.id, r.total, r.positive); } else db.indieTouchSync(g.id); }
             catch (e) { db.indieTouchSync(g.id); log(`indie sync ${g.appid}: ${e.message}`); } // tried; look again tomorrow
         }
         return done;

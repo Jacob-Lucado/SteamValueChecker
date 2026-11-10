@@ -151,6 +151,7 @@ const FILES = {
     "/page-about.jpg": ["page-about.jpg", "image/jpeg"],
     "/page-status.jpg": ["page-status.jpg", "image/jpeg"],
     "/page-tip.jpg": ["page-tip.jpg", "image/jpeg"],
+    "/page-fortnite.jpg": ["page-fortnite.jpg", "image/jpeg"],
     "/page-feed.jpg": ["page-feed.jpg", "image/jpeg"],
     "/page-discover.jpg": ["page-discover.jpg", "image/jpeg"],
     "/page-communities.jpg": ["page-communities.jpg", "image/jpeg"],
@@ -4900,13 +4901,14 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         set(/(<meta property="og:image:alt" content=")[^"]*"/, seo.alt); set(/(<meta name="twitter:image:alt" content=")[^"]*"/, seo.alt);
         const ld = [{ "@context": "https://schema.org", "@type": key === "support" ? "ContactPage" : key === "about" ? "AboutPage" : "WebPage", name: title, url, description: desc, isPartOf: { "@type": "WebSite", name: "Steam Value Checker", url: origin }, primaryImageOfPage: img.replace(/\?.*/, "") },
             { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Steam Value Checker", item: origin + "/" }, { "@type": "ListItem", position: 2, name: title.split(/ [|:] /)[0], item: url }] },
+            ...(extra?.ld ?? []),
             ...(faq.length ? [{ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) }] : [])];
         html = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => ld.map(x => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("\n"))
             .replace(/<meta property="og:image:type" content="[^"]*">/, '<meta property="og:image:type" content="image/jpeg">')
             .replace(/<title>[^<]*<\/title>/, () => `<title>${escHtml(title)}</title>`)
             .replace(/<meta name="robots" content="[^"]*">/, ticket || seo.noindex ? '<meta name="robots" content="noindex,nofollow">' : '<meta name="robots" content="index,follow,max-image-preview:large">');
         // the same answers as plain text, for anything that doesn't run the page's scripts
-        html = html.replace("</body>", () => `<noscript><main><h1>${escHtml(title.split(/ [|:] /)[0])}</h1><p>${escHtml(desc)}</p>${faq.map(([q, a]) => `<h2>${escHtml(q)}</h2><p>${escHtml(a)}</p>`).join("")}</main></noscript>\n</body>`);
+        html = html.replace("</body>", () => `<noscript><main><h1>${escHtml(title.split(/ [|:] /)[0])}</h1><p>${escHtml(desc)}</p>${extra?.html ?? ""}${faq.map(([q, a]) => `<h2>${escHtml(q)}</h2><p>${escHtml(a)}</p>`).join("")}</main></noscript>\n</body>`);
         return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
     }
     // ---------- the page a bundle post on X links to ----------
@@ -5158,6 +5160,17 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 if (referrals.ownerOf(url.pathname.slice(3))) setCookie(res, REF_COOKIE, url.pathname.slice(3), 30 * 86400);
                 return send(res, 302, "", { Location: "/" });
             }
+            { if (req.method === "GET" && url.pathname === "/fortnite" && !onAdminHost(req) && !onMusicHost(req)) {
+                // Its own title and answers, and today's shop written out as plain text with the creator code up front, for search and link cards.
+                const code = fnSvc.creatorCode || "", buy = code ? `https://www.fortnite.com/item-shop?creator-code=${encodeURIComponent(code)}` : "https://www.fortnite.com/item-shop";
+                let items = [];
+                try { items = (await fnSvc.shop()).sections.flatMap(sec => sec.entries).filter(e => e.price > 0).slice(0, 10); } catch { /* the page still stands without the list */ }
+                const seo = { ...PAGE_SEO.fortnite, desc: code ? PAGE_SEO.fortnite.desc.replace("LUCADO", code) : PAGE_SEO.fortnite.desc.replace(" Support the creator with code LUCADO when you buy.", "") };
+                const html = `<p>Buying in the Fortnite item shop? Enter creator code <strong>${escHtml(code || "LUCADO")}</strong> first, or use these links: it costs you nothing extra.</p>`
+                    + (items.length ? `<h2>In the Fortnite item shop now</h2><ul>${items.map(e => `<li>${escHtml(e.name)}: ${Number(e.price).toLocaleString("en-US")} V-Bucks (<a href="${escHtml(buy)}">buy with code ${escHtml(code || "LUCADO")}</a>)</li>`).join("")}</ul>` : "");
+                const ld = items.length ? [{ "@context": "https://schema.org", "@type": "ItemList", name: "Fortnite item shop today", itemListElement: items.map((e, i) => ({ "@type": "ListItem", position: i + 1, item: { "@type": "Product", name: e.name, ...(e.art ? { image: e.art } : {}), offers: { "@type": "Offer", price: String(e.price), priceCurrency: "VBUCKS", url: buy } } })) }] : [];
+                return await servePageShell(res, "fortnite", false, { seo, html, ld });
+            } }
             { const m = req.method === "GET" && /^\/(support|help|about|status|tip|feed|discover|communities)(\/\d{1,9})?$/.exec(url.pathname); if (m && (!m[2] || m[1] === "support") && !onAdminHost(req) && !onMusicHost(req)) return await servePageShell(res, m[1], Boolean(m[2])); }
             { const m = req.method === "GET" && /^\/indie(\/[a-z0-9\/-]*)?$/.exec(url.pathname); if (m && !onAdminHost(req) && !onMusicHost(req)) {
                 const path = url.pathname.replace(/\/+$/, ""), gm = /^\/indie\/game\/(\d{1,9})$/.exec(path), game = gm ? db.indieGet(gm[1]) : null;
@@ -5176,7 +5189,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
                 // Public pages only. The date is when the file behind each page last changed, so crawlers know what to revisit.
-                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : "0.5"]), ["/indie", "page-indie.jpg", "daily", "0.7"], ["/indie/tools", "page-indie-tools.jpg", "monthly", "0.7"], ...INDIE_TOOLS.map(t => [`/indie/tools/${t.id}`, "page-indie-tools.jpg", "monthly", "0.6"]), ...db.indieList({ limit: 60, sort: "new" }).games.map(g => [`/indie/game/${g.id}`, "page-indie.jpg", "weekly", "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"], ["/licenses.html", "licenses.pdf", "yearly", "0.2"]];
+                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : k === "fortnite" ? "0.7" : "0.5"]), ["/indie", "page-indie.jpg", "daily", "0.7"], ["/indie/tools", "page-indie-tools.jpg", "monthly", "0.7"], ...INDIE_TOOLS.map(t => [`/indie/tools/${t.id}`, "page-indie-tools.jpg", "monthly", "0.6"]), ...db.indieList({ limit: 60, sort: "new" }).games.map(g => [`/indie/game/${g.id}`, "page-indie.jpg", "weekly", "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"], ["/licenses.html", "licenses.pdf", "yearly", "0.2"]];
                 const day = f => { try { return statSync(f.startsWith("seo/") ? SEO_SRC : join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
                 const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
                 return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
