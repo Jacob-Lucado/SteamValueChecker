@@ -160,7 +160,7 @@ const FILES = {
     "/indietools.js": ["indietools.js", "text/javascript; charset=utf-8"],
     "/profilefx.js": ["profilefx.js", "text/javascript; charset=utf-8"],
     "/indiewaves.js": ["indiewaves.js", "text/javascript; charset=utf-8"],
-    "/hearts.js": ["hearts.js", "text/javascript; charset=utf-8"],
+    "/floatwall.js": ["floatwall.js", "text/javascript; charset=utf-8"],
     "/lucadoos.js": ["lucadoos.js", "text/javascript; charset=utf-8"],
     "/devpanel.js": ["devpanel.js", "text/javascript; charset=utf-8"],
     "/fortnite.js": ["fortnite.js", "text/javascript; charset=utf-8"],
@@ -728,7 +728,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         { id: "dusk", name: "Dusk", css: "linear-gradient(135deg, #2b1055 0%, #7597de 100%)" },
         { id: "sunset", name: "Sunset", css: "linear-gradient(135deg, #42275a 0%, #a8456b 55%, #f09a5b 100%)" },
         { id: "forest", name: "Forest", css: "linear-gradient(135deg, #0b3d2e 0%, #1c7a52 60%, #6bbf8a 100%)" },
-        { id: "hearts", name: "Floating hearts", css: "linear-gradient(135deg, #2a0f2e 0%, #5b1a4a 55%, #b23a6b 100%)" },
+        { id: "float", name: "Floating Steam", css: "linear-gradient(135deg, #0a1030 0%, #151a52 55%, #2a2478 100%)" },
         { id: "graphite", name: "Graphite", css: "linear-gradient(135deg, #16181d 0%, #2b2f38 100%)" },
         { id: "aurora", name: "Aurora", css: "radial-gradient(900px 600px at 20% 10%, #2dd4bf55, transparent 60%), radial-gradient(900px 600px at 85% 80%, #8b5cf655, transparent 60%), linear-gradient(135deg, #0b1220, #101a33)" }
     ];

@@ -35,7 +35,7 @@
     document.title = `${metaOf(w.id).title} · LucadoOS`; persist(); addressOf(w); syncActive();
   }
   /** Keeps the cost down: only windows you can actually see animate their waves, and the desktop's own waves stop while a full-screen window covers them. */
-  let lastActive = new Map(), lastDesk = null, lastHearts = null;
+  let lastActive = new Map(), lastDesk = null, lastFloat = null;
   function syncActive() {
     const zOf = o => Number(o.node.style.zIndex) || 0, list = [...wins.values()];
     const coveredBy = w => list.some(o => o !== w && !o.min && !o.node.hidden && o.max && zOf(o) > zOf(w));
@@ -47,8 +47,8 @@
     // The waves live in the top full-screen page window when there is one (between its background and its content), otherwise on the desktop.
     const cover = list.filter(o => !o.min && !o.node.hidden && o.max && !o.id.startsWith("os:")).sort((a, b) => zOf(b) - zOf(a))[0] || null;
     const hostKey = !prefs.waves ? "off" : cover && cover.inline ? cover.id : cover ? "covered" : "desk";
-    const heartKey = prefs.wall !== "hearts" ? "off" : hostKey === "off" ? (cover && cover.inline ? cover.id : cover ? "covered" : "desk") : hostKey;
-    if (heartKey !== lastHearts) { lastHearts = heartKey; const Hb = root.HeartsBg; if (Hb) { if (heartKey === "off" || heartKey === "covered") Hb.stop(); else Hb.start(heartKey === "desk" ? null : cover.content); } }
+    const floatKey = prefs.wall !== "float" ? "off" : hostKey === "off" ? (cover && cover.inline ? cover.id : cover ? "covered" : "desk") : hostKey;
+    if (floatKey !== lastFloat) { lastFloat = floatKey; const Fb = root.FloatBg; if (Fb) { if (floatKey === "off" || floatKey === "covered") Fb.stop(); else Fb.start(floatKey === "desk" ? null : cover.content); } }
     if (hostKey !== lastDesk) { lastDesk = hostKey; const W = root.IndieWaves; if (W) { if (hostKey === "off" || hostKey === "covered") W.stop(); else { W.start(hostKey === "desk" ? null : cover.content); } } }
   }
   function place(w) {
@@ -219,7 +219,7 @@
     ["dusk", "Dusk", "linear-gradient(135deg, #2b1055 0%, #7597de 100%)"],
     ["sunset", "Sunset", "linear-gradient(135deg, #42275a 0%, #a8456b 55%, #f09a5b 100%)"],
     ["forest", "Forest", "linear-gradient(135deg, #0b3d2e 0%, #1c7a52 60%, #6bbf8a 100%)"],
-    ["hearts", "Floating hearts", "linear-gradient(135deg, #2a0f2e 0%, #5b1a4a 55%, #b23a6b 100%)"],
+    ["float", "Floating Steam", "linear-gradient(135deg, #0a1030 0%, #151a52 55%, #2a2478 100%)"],
     ["graphite", "Graphite", "linear-gradient(135deg, #16181d 0%, #2b2f38 100%)"],
     ["aurora", "Aurora", "radial-gradient(900px 600px at 20% 10%, #2dd4bf55, transparent 60%), radial-gradient(900px 600px at 85% 80%, #8b5cf655, transparent 60%), linear-gradient(135deg, #0b1220, #101a33)"]
   ];
@@ -233,8 +233,8 @@
     let tone = "";
     if (css) { tone = "dark"; if (/^#[0-9a-f]{6}$/i.test(prefs.wall)) { const n = parseInt(prefs.wall.slice(1), 16), lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; tone = lum > 0.6 ? "light" : "dark"; } } // the presets are all dark
     document.body.classList.toggle("los-wall-dark", tone === "dark"); document.body.classList.toggle("los-wall-light", tone === "light");
-    document.body.classList.toggle("los-waves", prefs.waves || prefs.wall === "hearts");
-    lastDesk = null; lastHearts = null; syncActive();
+    document.body.classList.toggle("los-waves", prefs.waves || prefs.wall === "float");
+    lastDesk = null; lastFloat = null; syncActive();
   }
   function savePrefs(patch) { prefs = { ...prefs, ...patch }; store.set(PREFS, JSON.stringify(prefs)); applyPrefs(); }
   /** The Personalize window: wallpaper, neon waves and the light or dark theme. Kept in this browser. */

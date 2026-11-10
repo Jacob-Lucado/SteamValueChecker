@@ -178,7 +178,7 @@ html.os-embed .page { padding-top: 14px; }
 .los-win-body.los-page { position: relative; }
 .los-scroll { position: absolute; inset: 0; overflow: auto; z-index: 1; background: transparent; overscroll-behavior: contain; }
 .los-scroll > .svc-root { position: relative; margin: 0 auto; padding-top: 14px; }
-.los-win-body.los-page > #ix-waves, .los-win-body.los-page > #ix-hearts { z-index: 0; }
+.los-win-body.los-page > #ix-waves, .los-win-body.los-page > #ix-float { z-index: 0; }
 
 /* labels on the desktop follow the wallpaper */
 body.los-wall-dark .los-icon-name, :root[data-theme="light"] body.los-wall-dark.los-orig .los-icon-name { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .85); }
