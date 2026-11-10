@@ -5,6 +5,7 @@ import { UserError } from "./errors.js";
 import { money, steamArt } from "./render.js";
 import { dealUrl } from "./deallinks.js";
 import { hashtagsFor, xLength } from "./xposter.js";
+import { recordProblem } from "./adminlog.js";
 
 const HOUR = 12, FRIDAY = 5, MIN_CUT = 50, MIN_REGULAR = 10;
 
@@ -70,10 +71,10 @@ export function createWeekly({ db, itad, xposter = null, postDiscord = null, inv
         const link = roundupLink(list, { base, now: ms });
         const out = { picks: list.length, x: null, discord: null };
         if (xposter?.configured?.() && (force || xposter.status().enabled)) {
-            try { out.x = (await xposter.manual({ text: weeklyXText(list, link, xposter.tags()), kind: "auto" })).id ?? true; } catch (e) { out.x = `failed: ${e.message}`; log(`weekly deals on X: ${e.message}`); }
+            try { out.x = (await xposter.manual({ text: weeklyXText(list, link, xposter.tags()), kind: "auto" })).id ?? true; } catch (e) { out.x = `failed: ${e.message}`; log(`weekly deals on X: ${e.message}`); recordProblem(db, "Weekly deals on X", e.message); }
         }
         if (postDiscord && channel()) {
-            try { await postDiscord(channel(), weeklyEmbed(list, { link, inviteUrl: inviteUrl() })); out.discord = true; } catch (e) { out.discord = `failed: ${e.message}`; log(`weekly deals in Discord: ${e.message}`); }
+            try { await postDiscord(channel(), weeklyEmbed(list, { link, inviteUrl: inviteUrl() })); out.discord = true; } catch (e) { out.discord = `failed: ${e.message}`; log(`weekly deals in Discord: ${e.message}`); recordProblem(db, "Weekly deals in Discord", e.message); }
         }
         db.setMeta("weekly:last", JSON.stringify({ at: ms, ...out }));
         return out;

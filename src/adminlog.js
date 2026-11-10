@@ -7,6 +7,11 @@ export function pushEvent(db, key, entry, max = 100) {
     db.setMeta(key, JSON.stringify(list));
 }
 
+/** Remembers something that failed quietly (a DM that couldn't send, an X post that errored) so the admin Problems panel can show it. */
+export function recordProblem(db, where, message) {
+    try { pushEvent(db, "adminlog:problems", { where, message: String(message ?? "").slice(0, 200), at: Date.now() }, 60); } catch { /* never let bookkeeping break the thing being logged */ }
+}
+
 export function readEvents(db, key, limit = 100) {
     try {
         const v = JSON.parse(db.getMeta(key) || "[]");

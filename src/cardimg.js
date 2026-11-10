@@ -225,6 +225,17 @@ ${chips}
 </svg>`;
 }
 
+/** The little chips on the share picture. The library's worth goes first when the person shows it publicly, since it's the thing people tap for. */
+export function shareFacts(profile) {
+    const get = k => profile.sections.find(s => s.key === k);
+    const facts = [], v = get("value"), favs = get("favorites")?.games ?? [], wish = get("wishlist")?.games ?? [], tr = get("trophies");
+    if (v?.worth > 0) facts.push(`$${Number(v.worth).toLocaleString("en-US")} library`);
+    if (favs.length) facts.push(`${favs.length} favorite${favs.length === 1 ? "" : "s"}`);
+    if (wish.length) facts.push(`${wish.length} on wishlist`);
+    if (tr?.earned) facts.push(`${tr.earned} trophies`);
+    return facts;
+}
+
 /** The share picture as PNG. `profile` is what buildProfile returns for an anonymous viewer. */
 export async function renderProfileShare({ profile, fetchImpl = fetch }) {
     const favs = profile.sections.find(s => s.key === "favorites")?.games ?? [];
@@ -233,10 +244,6 @@ export async function renderProfileShare({ profile, fetchImpl = fetch }) {
     if (profile.banner?.art) pool.unshift(profile.banner.art);
     const urls = [...new Set(pool)].slice(0, 3);
     const [avatar, ...art] = await Promise.all([profile.avatar ? fetchImageDataUri(profile.avatar, { fetchImpl }) : null, ...urls.map(u => fetchImageDataUri(u, { fetchImpl }))]);
-    const facts = [];
-    if (favs.length) facts.push(`${favs.length} favorite${favs.length === 1 ? "" : "s"}`);
-    if (wish.length) facts.push(`${wish.length} on wishlist`);
-    const tr = profile.sections.find(s => s.key === "trophies");
-    if (tr?.earned) facts.push(`${tr.earned} trophies`);
+    const facts = shareFacts(profile);
     return svgToPng(profileShareSvg({ name: profile.name, bio: profile.bio, accent: profile.theme.accent, bg: profile.theme.bg, light: profile.theme.light, avatar, art: art.filter(Boolean), facts, slug: profile.slug }), 1200);
 }

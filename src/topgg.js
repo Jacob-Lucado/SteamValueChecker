@@ -2,7 +2,7 @@
 // in every server where they already have XP. The token comes from the TOPGG_TOKEN secret and is never written anywhere else.
 export const TOPGG_API = "https://top.gg/api/v1/projects/@me";
 export const VOTE_XP = 250;                     // per vote; a weekend vote counts double on Top.gg's side, so it pays double here too
-import { pushEvent, readEvents } from "./adminlog.js";
+import { pushEvent, readEvents, recordProblem } from "./adminlog.js";
 const SEEN_KEEP_MS = 3 * 86400_000;
 
 export function createTopgg({ token, db, reward, notify = async () => {}, fetchImpl = globalThis.fetch, now = () => Date.now(), log = () => {} } = {}) {
@@ -56,11 +56,11 @@ export function createTopgg({ token, db, reward, notify = async () => {}, fetchI
         db.setMeta(`topgg:votes:${id}`, String(total + 1));
         const xp = VOTE_XP * weight;
         let servers = 0;
-        try { servers = await reward(id, xp); } catch (e) { log(`Vote reward failed: ${e.message}`); }
+        try { servers = await reward(id, xp); } catch (e) { log(`Vote reward failed: ${e.message}`); recordProblem(db, "Vote reward", e.message); }
         db.setMeta("topgg:stat:votes", String((Number(db.getMeta("topgg:stat:votes")) || 0) + 1));
         db.setMeta("topgg:stat:xp", String((Number(db.getMeta("topgg:stat:xp")) || 0) + xp * servers));
         pushEvent(db, "topgg:recent", { id, at, xp, servers, weight }, 30);
-        await notify(id, { xp, servers, total: total + 1, expiresAt: Date.parse(v.expires_at) || null }).catch(() => {});
+        await notify(id, { xp, servers, total: total + 1, expiresAt: Date.parse(v.expires_at) || null }).catch(e => recordProblem(db, "Vote thank-you", `Couldn't message ${id}: ${e?.message ?? e}`));
         return 1;
     }
 

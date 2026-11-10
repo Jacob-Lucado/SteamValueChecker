@@ -212,7 +212,7 @@ const MAX_SESSIONS = 10_000;
 const COOKIE = "svc_session";
 const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived than the Discord one
 const STATE_COOKIE = "svc_state";
-const STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
+const REF_COOKIE = "svc_ref", STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const MUTE_DAYS = 3650;
 const COOLDOWNS = { grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
@@ -242,7 +242,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ weekly = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ referrals = null, weekly = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -1575,6 +1575,12 @@ export function createDashboard({ weekly = null, storage = null, topgg = null, t
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             const link = url.searchParams.get("link") !== "0", tags = xposter.tags();
             return { bundles: db.listFeedBundles({ status: "active", limit: 8, adult: false }).map(bundleFeedView).map(b => ({ id: b.id, title: b.title, storeName: b.storeName, price: b.price, expiresAt: b.expiresAt, gameCount: b.gameCount, posted: xposter.bundlePosted(b.id), text: xposterText.bundleText({ ...b, url: `${origin}/b/${b.id}` }, { tags, link }), visits: Number(db.getMeta(`bundlevisit:${b.id}`)) || 0, clicks: Number(db.getMeta(`bundlego:${b.id}`)) || 0 })) };
+        },
+        "GET /api/referral": async (req) => {
+            const s = session(req);
+            if (!s) throw new HttpError(401, "Sign in first.");
+            if (!referrals) throw new HttpError(404, "Not found.");
+            return referrals.stats(s.userId);
         },
         "GET /api/admin/weekly": async (req) => {
             const s = session(req);
@@ -3478,6 +3484,22 @@ export function createDashboard({ weekly = null, storage = null, topgg = null, t
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             return { groups: logs ? groupErrors(logs.recent({ level: "error", limit: 400 })) : [], available: Boolean(logs) };
         },
+        "GET /api/admin/problems": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            return { list: readEvents(db, "adminlog:problems", 40) };
+        },
+        "POST /api/admin/problems/clear": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            db.setMeta("adminlog:problems", "[]");
+            return { ok: true };
+        },
+        "GET /api/admin/xposter/next": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+            let list = [];
+            try { list = await itad.getGiveawayList(); } catch { /* shown as nothing queued */ }
+            return xposter.peek(list);
+        },
         "GET /api/admin/datarequests": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             const list = readEvents(db, "adminlog:datareq", 100), since = now() - 30 * 86400_000;
@@ -4019,7 +4041,10 @@ export function createDashboard({ weekly = null, storage = null, topgg = null, t
             userId: who.user.id, username: name, avatar,
             guilds: (who.guilds ?? []).map(g => ({ id: g.id, name: g.name, icon: g.icon, owner: Boolean(g.owner), permissions: String(g.permissions ?? "0") }))
         });
+        const wasNew = !db.getUser(who.user.id);
         db.ensureUser(who.user.id);
+        const refCode = cookies(req)[REF_COOKIE];
+        if (refCode) { setCookie(res, REF_COOKIE, "", 0); referrals?.onSignup({ userId: who.user.id, code: refCode, wasNew }).catch(() => {}); }
         if (twitch) {
             const tw = (who.connections ?? []).filter(c => c.type === "twitch" && c.id && c.name).sort((a, b) => Number(Boolean(b.verified)) - Number(Boolean(a.verified)))[0];
             if (!tw) return send(res, 302, "", { Location: "/#/steam?twitch=none" });
@@ -4139,9 +4164,12 @@ export function createDashboard({ weekly = null, storage = null, topgg = null, t
             const cfg = withDefaults(db.getProfileData(owner.discord_id).data);
             const name = cfg.name || owner.profile_slug;
             const title = `${name} on Steam Value Checker`;
-            const desc = (cfg.bio || `${name}'s game profile: favorite games, wishlist and more.`).replace(/\s+/g, " ").slice(0, 160);
+            // when they show their library's worth publicly, the preview leads with it
+            const vs = (cfg.sections ?? []).find(x => x.key === "value" && x.vis === "public"), snap = vs ? db.listSnapshots(owner.discord_id, 1)[0] : null;
+            const lead = snap && snap.games > 0 && snap.msrp > 0 ? `${name}'s game library is worth $${Math.round(snap.msrp).toLocaleString("en-US")} across ${Number(snap.games).toLocaleString("en-US")} games. ` : "";
+            const desc = (lead + (cfg.bio || `${name}'s game profile: favorite games, wishlist and more.`)).replace(/\s+/g, " ").slice(0, 200);
             const url = `${origin}/u/${owner.profile_slug}`;
-            const img = `${url}/og.png?v=${createHash("sha1").update(JSON.stringify(db.getProfileData(owner.discord_id).data)).digest("hex").slice(0, 8)}`;
+            const img = `${url}/og.png?v=${createHash("sha1").update(JSON.stringify(db.getProfileData(owner.discord_id).data) + (snap?.msrp ?? "")).digest("hex").slice(0, 8)}`;
             const set = (re, v) => { html = html.replace(re, `$1${escHtml(v).replace(/\$/g, "$$$$")}"`); };
             set(/(<meta property="og:title" content=")[^"]*"/, title);
             set(/(<meta property="og:description" content=")[^"]*"/, desc);
@@ -4387,6 +4415,10 @@ export function createDashboard({ weekly = null, storage = null, topgg = null, t
             }
             if (req.method === "GET" && /^\/[bd]\/\d{1,9}(\/(img|go))?$/.test(url.pathname)) { const [, kind, id, , part] = /^\/([bd])\/(\d+)(\/(img|go))?$/.exec(url.pathname); return await serveLanding(res, kind, Number(id), part, req); }
             if (req.method === "GET" && /^\/u\/[a-z0-9_-]{3,24}$/i.test(url.pathname)) return await serveProfileShell(res, url.pathname.slice(3).toLowerCase());
+            if (req.method === "GET" && referrals && /^\/r\/[a-z0-9]{8}$/.test(url.pathname)) { // an invite link: remember who sent them, then show the site
+                if (referrals.ownerOf(url.pathname.slice(3))) setCookie(res, REF_COOKIE, url.pathname.slice(3), 30 * 86400);
+                return send(res, 302, "", { Location: "/" });
+            }
             { const m = req.method === "GET" && /^\/(support|help|about|status|tip|feed|discover|communities)(\/\d{1,9})?$/.exec(url.pathname); if (m && (!m[2] || m[1] === "support") && !onAdminHost(req) && !onMusicHost(req)) return await servePageShell(res, m[1], Boolean(m[2])); }
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });

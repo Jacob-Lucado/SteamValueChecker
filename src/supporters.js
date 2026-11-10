@@ -71,7 +71,7 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
     }
 
     /** Adds days to a person's pass (from today, or from the end of the one they have). Safe to call twice for the same payment. `cents` is what they paid, 0 for a gift. */
-    async function grant(userId, days, paymentId, via = "Square", cents = 0, { giftFrom = null } = {}) {
+    async function grant(userId, days, paymentId, via = "Square", cents = 0, { giftFrom = null, silent = false } = {}) {
         if (db.getMeta(PAID + paymentId)) return { duplicate: true };
         const d = Math.max(1, Math.min(3660, Math.round(Number(days) || 0)));
         const start = Math.max(now(), supporterUntil(db, userId)), until = start + d * DAY;
@@ -82,7 +82,7 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         pushEvent(db, "adminlog:supporters", { id: userId, days: d, via, at: now() }, 100);
         const role = await syncRole(userId, true);
         if (role !== "ok") log(`Supporter role for ${userId} not given: ${role}`);
-        try {
+        if (!silent) try {
             const me = db.getUser?.(userId), base = publicUrl ? String(publicUrl).replace(/\/+$/, "") : null;
             await dm?.(userId, supporterThanks({
                 until, founding, giftFrom, role, boost: SUPPORTER_XP_BOOST,
@@ -90,7 +90,7 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
                 profileUrl: base && me?.profile_slug && me.profile_public ? `${base}/u/${me.profile_slug}` : null
             }));
         } catch { /* DMs may be closed */ }
-        if (giftFrom) try { await dm?.(giftFrom, giftSentEmbed({ to: userId, until, tipUrl: renewUrl })); } catch { /* DMs may be closed */ }
+        if (giftFrom && !silent) try { await dm?.(giftFrom, giftSentEmbed({ to: userId, until, tipUrl: renewUrl })); } catch { /* DMs may be closed */ }
         return { duplicate: false, until, founding, role };
     }
 

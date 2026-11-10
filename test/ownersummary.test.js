@@ -46,3 +46,16 @@ test("release notes: first run only records, a new version posts once", async ()
     assert.match(posts[0][1].embeds[0].description, /• One\n• Two/);
     assert.equal((await runReleaseNotes({ ...base, channelId: null, version: "3", entry })).posted, false);
 });
+
+test("the Monday summary includes last week's link traffic and the most opened pages", async () => {
+    const { trafficOf, summaryEmbed } = await import("../src/ownersummary.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:");
+    assert.equal(trafficOf(db), null, "nothing counted yet");
+    const id = db.upsertDeal({ key: "free:s1", kind: "free", title: "Summary Game", shop: "Epic Games", url: "https://store.epicgames.com/p/s" });
+    db.setMeta(`dealvisit:${id}`, "40"); db.setMeta(`dealgo:${id}`, "25"); db.setMeta("landday:2026-11-08:v", "40"); db.setMeta("landday:2026-11-08:g", "25");
+    const t = trafficOf(db); assert.equal(t.visits, 40); assert.equal(t.clicks, 25); assert.equal(t.top[0].title, "Summary Game");
+    const f = summaryEmbed({ servers: 3, joined: 0, left: 0, votes: 1, errors: 0, week: "x", traffic: t }).fields.find(x => x.name.includes("Link traffic"));
+    assert.match(f.value, /\*\*40\*\* visits, \*\*25\*\* clicks \(63% went on/); assert.match(f.value, /Summary Game/);
+    assert.ok(!summaryEmbed({ servers: 3, votes: 0, week: "x" }).fields.some(x => x.name.includes("Link traffic")));
+});

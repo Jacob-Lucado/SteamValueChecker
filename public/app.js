@@ -4167,6 +4167,7 @@
       const bl = await api("/api/admin/xposter/bundles?link=" + (bundleLink ? 1 : 0)).catch(() => ({ bundles: [] }));
       const fl = await api("/api/admin/xposter/free?link=" + (freeLink ? 1 : 0)).catch(() => ({ games: [] }));
       const wk = await api("/api/admin/weekly").catch(() => null);
+      const nx = await api("/api/admin/xposter/next").catch(() => null);
       if (!document.body.contains(body)) return;
       const save = async patch => { try { await api("/api/admin/xposter", patch); toast("Saved.", "ok"); await draw(); } catch (e) { toast(e.message); } };
 
@@ -4275,6 +4276,13 @@
       const freeBox = h("input", { type: "checkbox" }); freeBox.checked = freeLink; freeBox.addEventListener("change", () => { freeLink = freeBox.checked; draw(); });
       const freshFree = fl.games.filter(g => !g.posted);
       const newestFree = h("button", { class: "btn green small", type: "button", text: "Post the soonest to end", disabled: !xs.configured || !freshFree.length }); if (freshFree.length) newestFree.addEventListener("click", () => postFree(freshFree[0], newestFree));
+      const nextPanel = h("div", { class: "panel" }, h("h3", { text: "Next automatic post" }),
+        !nx || nx.off ? h("p", { class: "muted", text: "Automatic posting is off, so nothing is lined up. Turn it on above and the next one shows up here." })
+          : nx.nothing ? h("p", { class: "muted", text: "Nothing new to post right now. Every free game has already gone out." })
+          : h("div", {},
+            h("p", { class: "muted", text: `${nx.title} on ${nx.shop || "the store"}${nx.expiry ? ", ends " + new Date(nx.expiry).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " ET" : ""}. ${nx.capped ? "Today's limit is used up, so it goes out tomorrow." : nx.waitMs > 0 ? `It goes out in about ${Math.ceil(nx.waitMs / 60000)} min.` : "It goes out on the next check, within a few minutes."}` }),
+            h("pre", { class: "xprev", text: nx.text }),
+            h("p", { class: "muted small", text: `${nx.chars} characters, about ${money(nx.cost)} to send.${nx.link ? " X turns the link into a card with the game's picture." : ""}` })));
       const freeGames = h("div", { class: "panel" }, h("h3", { text: "Free games right now" }),
         h("p", { class: "muted", text: "Every game that's free to keep at the moment, soonest to end first. Each one goes out with a link to its page on the site, which shows the game's picture and sends people on to the store. Games you post here are skipped by the automatic posts." }),
         h("div", { class: "row" }, newestFree, h("label", { class: "check" }, freeBox, ` Include the game's link (about ${money(xs.linkCost)} each instead of ${money(xs.plainCost)})`)),
@@ -4318,7 +4326,7 @@
             return h("tr", {}, h("td", { text: when(x.at) }), h("td", { text: (kinds[x.kind] || x.kind) + (x.media ? " + picture" : "") }), h("td", { text: x.text.length > 110 ? x.text.slice(0, 110) + "…" : x.text }),
               h("td", {}, x.id && h("a", { href: "https://x.com/i/status/" + x.id, target: "_blank", rel: "noopener", text: "View" }), " ", x.id && del));
           })))) : h("p", { class: "muted", text: "Nothing posted yet." }));
-      body.replaceChildren(status, composer, weeklyPanel, freeGames, bundles, queue, hist);
+      body.replaceChildren(status, nextPanel, composer, weeklyPanel, freeGames, bundles, queue, hist);
     };
     try { await draw(); } catch (e) { fail(e); }
   }
@@ -4334,11 +4342,17 @@
       const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
       const lagBad = p.lagMs > 100;
       const st = await api("/api/admin/storage").catch(() => null);
-      const [eg, se, cw] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null)]);
+      const [eg, se, cw, pb] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null)]);
       const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
       const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
         eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
           h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
+      const pbPanel = pb && h("div", { class: "panel" }, h("h3", { text: "Quiet problems" }),
+        h("p", { class: "muted", text: "Things that failed without anyone being told: a thank-you DM that wouldn't send, an X post that errored, a weekly post that didn't go out." }),
+        pb.list.length ? h("div", {}, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "When"].map(c => h("th", { text: c })))),
+          h("tbody", {}, pb.list.map(e => h("tr", {}, h("td", {}, h("b", { text: e.where })), h("td", { text: e.message }), h("td", { text: ago(e.at) }))))),
+          (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Clear the list" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/problems/clear", {}); adminRoute(); })); return b; })())
+          : h("p", { class: "muted", text: "Nothing has failed quietly. All good." }));
       const cwPanel = cw && h("div", { class: "panel" }, h("h3", { text: "Busiest users" }),
         cw.rows.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Discord ID", "Last hour", "Last 24 h", "Most used", ""].map(c => h("th", { text: c })))),
           h("tbody", {}, cw.rows.map(r => h("tr", {}, h("td", { text: r.id }), h("td", {}, h("b", { text: String(r.hour), class: r.heavy ? "bad" : "" })), h("td", { text: String(r.day) }), h("td", { text: r.top }),
@@ -4360,6 +4374,7 @@
           tile("Memory", p.rssMb + " MB", `${p.heapMb} MB of ${p.heapLimitMb} MB heap`), tile("Event loop lag", p.lagMs + " ms", lagBad ? "Slow: something is blocking" : "Healthy")),
         h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
         storagePanel,
+        pbPanel,
         errPanel,
         cwPanel,
         srvPanel,
@@ -5050,6 +5065,7 @@
         h("p", { text: "I make Steam Value Checker and FanaticalGrabber on my own and pay for the hosting out of pocket. Tips go toward the server bill and the time I spend fixing things. Nothing is locked behind them, and nobody gets treated differently for giving." }),
         tip ? h("p", {}, ext("https://www.paypal.com/paypalme/Lucadosus", "Chip in on PayPal", "btn blue")) : null,
         h("div", { id: "supporter-box" }),
+        h("div", { id: "referral-box" }),
         h("h3", { text: "Other ways to help" }),
         h("ul", {},
           h("li", { text: "Add Steam Value Checker to a server and tell friends who buy too many bundles." }),
@@ -5058,6 +5074,17 @@
         h("h3", { text: "Good to know" }),
         h("p", { class: "muted", text: "The PayPal button opens PayPal, which handles the payment. This dashboard never sees any payment details. A tip is a gift, not a purchase, and it doesn't buy a feature or a promise of support." })));
     if (!state.me) return;
+    try { // invite links: each friend who joins earns the person a few supporter days
+      const r = await api("/api/referral"), rb = document.getElementById("referral-box");
+      if (rb) {
+        const copy = h("button", { class: "btn blue", type: "button", text: "Copy my link" });
+        copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.link); toast("Copied.", "ok"); } catch { toast("Select the link and copy it."); } });
+        rb.replaceChildren(h("h3", { text: "Invite friends, earn supporter days" }),
+          h("p", { class: "muted", text: `Share your own link. Every friend who signs in through it for the first time adds ${r.daysEach} days of supporter to your pass, up to ${r.max} friends.` }),
+          h("div", { class: "row" }, h("input", { type: "text", value: r.link, readonly: "", size: "34", "aria-label": "Your invite link" }), copy),
+          h("p", { class: r.full ? "notice ok" : "muted small", text: r.full ? `You've reached the limit: ${r.max} friends, ${r.daysEarned} days earned. Thank you for spreading the word!` : `${r.joined} of ${r.max} friends so far${r.joined ? ` (${r.daysEarned} days earned)` : ""}. Their Discord account has to be at least a week old to count.` }));
+      }
+    } catch { /* signed out or the feature is off */ }
     try {
       const s = await api("/api/supporter"), box = document.getElementById("supporter-box");
       if (!box || (!s.enabled && !s.until)) return;

@@ -54,5 +54,7 @@ export function dealStore({ run, get, all, now }) {
         }
         return { pages: [...pages.values()], days: [...days.values()].sort((x, y) => x.day.localeCompare(y.day)) };
     }
-    return { upsertDeal, getDeal, pruneDeals, trafficReport };
+    /** The newest free-game pages: id and store, for working out which stores' posts get opened. */
+    const recentFreePages = (limit = 400) => all("SELECT id, shop FROM deal_pages WHERE kind = 'free' ORDER BY id DESC LIMIT ?", limit);
+    return { upsertDeal, getDeal, pruneDeals, trafficReport, recentFreePages };
 }

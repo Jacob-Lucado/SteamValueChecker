@@ -208,3 +208,36 @@ test("posts that link to our landing pages carry no uploaded picture, because th
     await x.manual({ text: "New bundle\n\nLink in bio.", imageUrl: "https://cdn.example.com/b.png", bundleId: "6" });
     assert.ok(calls.some(u => u.includes("/2/media")));
 });
+
+test("the next free game goes to the store whose posts get opened most, unless something is about to end", async () => {
+    const db = openDb(":memory:"), sent = [];
+    const fetchImpl = async (u, o) => { if (String(u).includes("/2/tweets")) sent.push(JSON.parse(o.body).text); return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ data: { id: "1" } }), text: async () => "" }; };
+    let t = Date.UTC(2026, 10, 9, 15);
+    const x = createXPoster({ env: ENV, db, fetchImpl, now: () => t, log() {} });
+    x.setSettings({ enabled: true, daily: 6, links: false });
+    // history: Epic posts pulled in lots of visits, GOG ones hardly any
+    for (const [shop, v] of [["Epic Games", 90], ["Epic Games", 70], ["GOG", 2], ["GOG", 1]]) { const id = db.upsertDeal({ key: `free:h${shop}${v}`, kind: "free", title: "x", shop, url: "https://a.example/x" }); db.setMeta(`dealvisit:${id}`, String(v)); }
+    const day = 86_400_000;
+    const gog = game("gog1", { shop: "GOG", title: "Gog Game", expiry: t + 3 * day }), epic = game("epic1", { shop: "Epic Games", title: "Epic Game", expiry: t + 5 * day });
+    await x.tick([gog, epic]);
+    assert.match(sent[0], /Epic Game/, "the store people open most goes first, even though GOG ends sooner");
+    t += 4 * 3_600_000; // past the gap; now the GOG game is the only one left, and one is about to end
+    const soon = game("soon1", { shop: "GOG", title: "Ends Soon", expiry: t + 5 * 3_600_000 }), later = game("epic2", { shop: "Epic Games", title: "Epic Two", expiry: t + 5 * day });
+    await x.tick([gog, soon, later]);
+    assert.match(sent[1], /Ends Soon/, "about to end beats everything");
+});
+
+test("peek shows the next automatic post without sending or marking anything, and a failed post lands in the problems list", async () => {
+    const { readEvents } = await import("../src/adminlog.js");
+    const db = openDb(":memory:"), sent = [];
+    const x = createXPoster({ env: ENV, db, fetchImpl: async (u, o) => { sent.push(o); return { ok: false, status: 500, text: async () => "boom", json: async () => ({}) }; } });
+    assert.deepEqual(x.peek([game("a")]), { off: true }, "off until it's switched on");
+    x.setSettings({ enabled: true });
+    assert.deepEqual(x.peek([]), { nothing: true });
+    const p = x.peek([game("a", { title: "Peeked" })]);
+    assert.equal(p.title, "Peeked"); assert.match(p.text, /Free right now: Peeked/); assert.equal(p.chars, p.text.length); assert.ok(p.cost > 0);
+    assert.equal(sent.length, 0, "peeking sends nothing"); assert.equal(x.freePosted("a"), false, "and marks nothing");
+    const r = await x.tick([game("a")]);
+    assert.ok(r.error);
+    assert.equal(readEvents(db, "adminlog:problems")[0].where, "X post");
+});

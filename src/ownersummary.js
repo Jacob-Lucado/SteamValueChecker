@@ -12,7 +12,17 @@ export function easternWeek(ms) {
     return { weekday: p.weekday, key: new Date(monday).toISOString().slice(0, 10) };
 }
 
-export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, openTickets, week }) {
+/** The past week of landing-page traffic and the most opened pages, or null when nothing has been counted. */
+export function trafficOf(db) {
+    try {
+        const { pages, days } = db.trafficReport();
+        const week = days.slice(-7), sum = f => week.reduce((n, d) => n + d[f], 0);
+        const top = pages.filter(p => p.visits > 0).sort((a, b) => b.visits - a.visits).slice(0, 3).map(p => ({ title: (p.path === "b" ? db.getFeedBundle(p.id) : db.getDeal(p.id))?.title ?? "(removed)", visits: p.visits, clicks: p.clicks }));
+        return sum("visits") || sum("clicks") || top.length ? { visits: sum("visits"), clicks: sum("clicks"), previews: sum("previews"), top } : null;
+    } catch { return null; }
+}
+
+export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, openTickets, week, traffic = null }) {
     const fields = [
         { name: "🌐 Servers", value: `**${servers ?? "-"}**${joined || left ? `  (+${joined} / -${left} this week)` : ""}`, inline: true },
         { name: "🗳️ Votes", value: `**${votes}**`, inline: true },
@@ -20,6 +30,10 @@ export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, op
     ];
     if (diskPct != null) fields.push({ name: "💾 Disk", value: `**${diskPct}%** used`, inline: true });
     if (openTickets != null) fields.push({ name: "🎫 Open tickets", value: `**${openTickets}**`, inline: true });
+    if (traffic) {
+        const rate = traffic.visits ? ` (${Math.round(traffic.clicks / traffic.visits * 100)}% went on to the store)` : "";
+        fields.push({ name: "🔗 Link traffic, last 7 days", value: `**${traffic.visits}** visits, **${traffic.clicks}** clicks${rate}` + (traffic.top.length ? `\nMost opened overall: ${traffic.top.map(p => `**${p.title}** (${p.visits})`).join(", ")}` : ""), inline: false });
+    }
     return { color: 0xff9800, title: "Your week with Steam Value Checker", description: `Week of ${week}`, fields, footer: { text: "Sent Mondays. Details are on the Admin pages." } };
 }
 
@@ -36,7 +50,7 @@ export async function runOwnerSummary({ db, ownerId, sendDm, gather, now = () =>
     let live = {};
     try { live = (await gather?.()) ?? {}; } catch { /* the numbers that need a live connection just show a dash */ }
     db.setMeta(key, String(t));
-    await sendDm(ownerId, { embeds: [summaryEmbed({ ...live, joined: srv.filter(e => e.kind === "join").length, left: srv.filter(e => e.kind === "leave").length, votes, week: wk.key })] });
+    await sendDm(ownerId, { embeds: [summaryEmbed({ ...live, joined: srv.filter(e => e.kind === "join").length, left: srv.filter(e => e.kind === "leave").length, votes, week: wk.key, traffic: trafficOf(db) })] });
     return { sent: true };
 }
 

@@ -3162,3 +3162,54 @@ test("admin weekly deals: status, settings and post now are owner-only and repor
     assert.equal((await o2.request("/api/admin/weekly/run", { method: "POST", body: {} })).data.discord, true); assert.equal(sent.length, 1);
     await o2.close();
 });
+
+test("profile share previews lead with the library's worth, but only when the person shows it publicly", async () => {
+    const { shareFacts } = await import("../src/cardimg.js");
+    assert.deepEqual(shareFacts({ sections: [{ key: "value", worth: 4212 }, { key: "favorites", games: [{}, {}] }] }), ["$4,212 library", "2 favorites"]);
+    assert.deepEqual(shareFacts({ sections: [{ key: "favorites", games: [{}] }] }), ["1 favorite"], "no value section, no worth chip");
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    try {
+        await o.request("/api/profile", { method: "POST", body: { enabled: true, slug: "worthy" } });
+        const page = vis => o.request("/api/profile/page", { method: "POST", body: { name: "Jacob", bio: "I play too much.", sections: [{ key: "about", vis: "public" }, { key: "value", vis }] } });
+        o.db.upsertSnapshot("u1", { day: "2026-11-09", games: 312, paid: 900, msrp: 4212.4, msrp_paid: 1000, cheapest: 800 });
+        await page("hidden");
+        let html = await (await fetch(o.base + "/u/worthy")).text();
+        assert.doesNotMatch(html, /library is worth \$/); assert.match(html, /og:description" content="I play too much\./);
+        await page("public");
+        html = await (await fetch(o.base + "/u/worthy")).text();
+        assert.match(html, /Jacob&#39;s game library is worth \$4,212 across 312 games\. I play too much\./);
+    } finally { await o.close(); }
+});
+
+test("invite links: /r/<code> remembers the sender, a first sign-in credits them, and the page reports the totals", async () => {
+    const { createReferrals } = await import("../src/referrals.js");
+    const rdb = openDb(":memory:"), grants = [];
+    const referrals = createReferrals({ db: rdb, supporters: { grant: async (...a) => { grants.push(a); return { until: Date.now() + 1e9 }; } }, publicUrl: "http://x.test" });
+    const code = referrals.codeFor("sender9");
+    const t = await setup({ extra: { referrals } });
+    try {
+        assert.equal((await t.request("/api/referral")).status, 401, "signed out");
+        const r = await t.request(`/r/${code}`); assert.equal(r.status, 302); assert.equal(r.headers.get("location"), "/"); assert.ok(r.set.some(c => c.startsWith("svc_ref=")));
+        const bad = await t.request("/r/zzzzzzzz"); assert.equal(bad.status, 302); assert.ok(!bad.set.some(c => c.startsWith("svc_ref=")), "an unknown code isn't remembered");
+        await t.signIn(); await new Promise(r => setTimeout(r, 50));
+        assert.equal(grants.length, 1); assert.equal(grants[0][0], "sender9"); assert.equal(grants[0][4], 0);
+        assert.equal((await t.request("/api/referral")).data.joined, 0, "u1 has invited nobody");
+        assert.ok(!t.cookie().includes("svc_ref="), "the cookie is used up");
+    } finally { await t.close(); }
+});
+
+test("admin problems list and next-post preview are owner-only", async () => {
+    const { recordProblem } = await import("../src/adminlog.js");
+    const xposter = { configured: () => true, tags: () => [], freePosted: () => false, bundlePosted: () => false, status: () => ({}), peek: () => ({ title: "Next One", text: "hi", chars: 2, cost: 0.2 }) };
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { xposter } });
+    assert.deepEqual((await o.request("/api/admin/problems")).data.list, []);
+    recordProblem(o.db, "X post", "boom");
+    const list = (await o.request("/api/admin/problems")).data.list;
+    assert.equal(list[0].where, "X post"); await o.request("/api/admin/problems/clear", { method: "POST", body: {} }); assert.equal((await o.request("/api/admin/problems")).data.list.length, 0);
+    assert.equal((await o.request("/api/admin/xposter/next")).data.title, "Next One");
+    await o.close();
+    const u = await signedIn({ config: { ownerId: "someone-else" } });
+    assert.equal((await u.request("/api/admin/problems")).status, 403);
+    assert.equal((await u.request("/api/admin/xposter/next")).status, 403);
+    await u.close();
+});

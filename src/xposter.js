@@ -3,6 +3,7 @@
 // at most a few a day, and does nothing until the owner switches it on and has added the four keys.
 import { dealUrl } from "./deallinks.js";
 import { freeArt } from "./render.js";
+import { recordProblem } from "./adminlog.js";
 import { createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -238,12 +239,37 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
     }
 
     /** Posts at most one new free game now, if it's switched on, under today's cap and far enough after the last one. */
+    /** How many visits an average post for each store has pulled in, from the landing pages' own counters. */
+    function shopScores() {
+        const sums = new Map();
+        try { for (const { id, shop } of db.recentFreePages?.() ?? []) { const v = Number(db.getMeta(`dealvisit:${id}`)) || 0, s = sums.get(shop) ?? { n: 0, v: 0 }; s.n++; s.v += v; sums.set(shop, s); } } catch { /* no data yet */ }
+        return new Map([...sums].filter(([, s]) => s.n >= 2).map(([shop, s]) => [shop, s.v / s.n]));
+    }
+    /** What to post next. Anything about to end goes first, since it can't wait; otherwise the store whose posts people open most. */
+    function pickNext(fresh) {
+        const byEnd = [...fresh].sort((a, b) => (a.expiry ?? Infinity) - (b.expiry ?? Infinity));
+        if (byEnd[0]?.expiry && byEnd[0].expiry - now() < 12 * 3_600_000) return byEnd[0];
+        const score = shopScores();
+        return byEnd.sort((a, b) => (score.get(b.shop) ?? 0) - (score.get(a.shop) ?? 0))[0]; // a stable sort, so ties keep the soonest-ending first
+    }
+    /** What the next automatic post would look like, without sending or marking anything. */
+    function peek(list) {
+        if (!enabled() || !configured()) return { off: true };
+        const fresh = (list ?? []).filter(g => g.type !== "dlc" && /^https:\/\//.test(g.url ?? "") && g.title && !db.getMeta(SEEN + g.id) && (!g.expiry || g.expiry - now() > 2 * 3_600_000));
+        const g = pickNext(fresh);
+        if (!g) return { nothing: true };
+        const link = linksOn();
+        const page = link ? dealUrl({ key: `free:${g.id ?? g.url}`, kind: "free", title: g.title, shop: g.shop, url: g.url, image: freeArt(g), expiry: g.expiry }) : g.url;
+        const text = freeGameText({ ...g, url: page }, now(), tags(), { link });
+        const gapLeft = Math.max(0, GAP_MS - (now() - (Number(db.getMeta(LAST)) || 0)));
+        return { title: g.title, shop: g.shop, expiry: g.expiry ?? null, text, chars: text.length, cost: hasCardLink(text) ? COST_LINK_POST : COST_PER_POST, image: freeArt(g) ?? null, link, capped: postedToday() >= daily(), waitMs: gapLeft };
+    }
     async function tick(list) {
         if (!enabled() || !configured()) return { skipped: "off" };
         if (postedToday() >= daily()) return { skipped: "cap" };
         if (now() - (Number(db.getMeta(LAST)) || 0) < GAP_MS) return { skipped: "gap" };
         const fresh = (list ?? []).filter(g => g.type !== "dlc" && /^https:\/\//.test(g.url ?? "") && g.title && !db.getMeta(SEEN + g.id) && (!g.expiry || g.expiry - now() > 2 * 3_600_000));
-        const g = fresh.sort((a, b) => (a.expiry ?? Infinity) - (b.expiry ?? Infinity))[0];
+        const g = pickNext(fresh);
         if (!g) return { skipped: "nothing" };
         db.setMeta(SEEN + g.id, String(now())); // marked first, so a failure can't turn into a loop of retries that each cost money
         try {
@@ -260,6 +286,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
             return { posted: g.title, id: r.id };
         } catch (err) {
             db.setMeta(ERR, JSON.stringify({ at: now(), message: err.message }));
+            recordProblem(db, "X post", err.message);
             log(`post failed: ${err.message}`);
             return { error: err.message };
         }
@@ -280,5 +307,5 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
     }
     const freePosted = id => Boolean(db.getMeta(SEEN + id));
     const bundlePosted = id => Boolean(db.getMeta(BUNDLEDONE + id));
-    return { freePosted, bundlePosted, tags, configured, post, check, tick, status, setSettings, manual, schedule, unschedule, flush, remove, uploadImage };
+    return { freePosted, bundlePosted, tags, configured, post, check, peek, tick, status, setSettings, manual, schedule, unschedule, flush, remove, uploadImage };
 }
