@@ -3657,3 +3657,26 @@ test("indie: developer news reaches followers and likers, and the Wednesday spot
     const second = await sp.tick(); assert.notEqual(second.game, first.game, "the next game gets its turn");
     await t.close();
 });
+
+test("indie lookup falls back to the store browse service when appdetails refuses a public page", async () => {
+    const { createIndie } = await import("../src/indie.js");
+    const seen = [];
+    const fetchImpl = async url => {
+        seen.push(String(url));
+        if (String(url).includes("appdetails")) return { ok: true, json: async () => ({ 777: { success: false } }) };
+        return { ok: true, json: async () => ({ response: { store_items: [{ success: 1, visible: true, type: 0, name: "Turtle Farm", appid: 777, basic_info: { short_description: "A cozy farm.", developers: [{ name: "Shell Co" }], publishers: [{ name: "Shell Co" }] }, release: { steam_release_date: 1600353507 }, best_purchase_option: { formatted_final_price: "$9.99", final_price_in_cents: "999" }, platforms: { windows: true, mac: false }, screenshots: { all_ages_screenshots: [{ filename: "steam/apps/777/ss_a.jpg?t=1" }] } }] } }) };
+    };
+    const g = await createIndie({ fetchImpl }).lookup(777);
+    assert.equal(g.title, "Turtle Farm"); assert.equal(g.type, "game"); assert.equal(g.studio, "Shell Co"); assert.equal(g.price, "$9.99");
+    assert.equal(g.comingSoon, false); assert.deepEqual(g.platforms, ["windows"]); assert.match(g.screenshots[0], /^https:\/\/.*ss_a\.jpg$/);
+    assert.ok(seen.some(u => u.includes("IStoreBrowseService")));
+    // a page that is truly hidden still reads as not public
+    const none = createIndie({ fetchImpl: async u => ({ ok: true, json: async () => String(u).includes("appdetails") ? { 5: { success: false } } : { response: { store_items: [{ success: 2, appid: 5 }] } } }) });
+    await assert.rejects(() => none.lookup(5), /no public store page/);
+});
+
+test("parseApp reads the other kinds of Steam links people paste", async () => {
+    const { parseApp } = await import("../src/indie.js");
+    for (const [u, id] of [["https://store.steampowered.com/app/1145360/Hades/", 1145360], ["steamcommunity.com/app/413150", 413150], ["https://s.team/a/367520", 367520], ["https://steamdb.info/app/2379780/charts/", 2379780], ["https://store.steampowered.com/agecheck/app/1086940/", 1086940], ["12345", 12345]]) assert.equal(parseApp(u), id, u);
+    assert.equal(parseApp("Hades"), null);
+});

@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.53", date: "2026-11-10", title: "Indie tools fixes", items: [
+        "**Steam lookups:** pages that Steam's main lookup refuses, even though they're public, are now found through a second route, so \"no public store page\" should only show when the page really is hidden.",
+        "**Names work too:** the tools that fill in from Steam and the rival comparison accept a game's name as well as a link, and more kinds of Steam links are understood.",
+        "**Trailer check:** it can play the video you choose again." ] },
     { version: "2026.11.52", date: "2026-11-10", title: "Indie dev panel and LucadoOS upgrades", items: [
         "**Dev panel for indie developers:** once your game is approved you get the **Verified IndieDev** role in every server that has it, and the bot DMs you with a button to open the Dev panel. It has an overview with views, clicks, likes and followers, a request inbox where you approve or decline key requests (one by one or in bulk, with a note back), a key pool the bot hands out automatically, and a news composer for your followers.",
         "**Build my server** adds the Verified IndieDev role. Run it again on an existing server to pick it up, and set it on the Ping roles panel if you like.",

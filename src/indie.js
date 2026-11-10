@@ -9,7 +9,7 @@ const TTL = 10 * 60_000;
 export function parseApp(input) {
     const s = String(input ?? "").trim();
     if (/^\d{1,9}$/.test(s)) return Number(s);
-    const m = /store\.steampowered\.com\/app\/(\d{1,9})/i.exec(s) ?? /^app\/(\d{1,9})/i.exec(s);
+    const m = /(?:store\.steampowered\.com|steamcommunity\.com|steamdb\.info)\/(?:agecheck\/)?(?:app|widget)\/(\d{1,9})/i.exec(s) ?? /s\.team\/a\/(\d{1,9})/i.exec(s) ?? /^app\/(\d{1,9})/i.exec(s);
     return m ? Number(m[1]) : null;
 }
 
@@ -47,6 +47,28 @@ export function createIndie({ fetchImpl = globalThis.fetch, now = () => Date.now
         } catch { return null; }
     }
 
+    /** Fallback lookup through Steam's store browse service. Null when the page really isn't visible. */
+    async function browseItem(id) {
+        let it;
+        try {
+            const input = { ids: [{ appid: id }], context: { language: "english", country_code: "US" }, data_request: { include_basic_info: true, include_release: true, include_screenshots: true, include_assets: true, include_all_purchase_options: true, include_platforms: true } };
+            it = (await getJson(`https://api.steampowered.com/IStoreBrowseService/GetItems/v1?input_json=${encodeURIComponent(JSON.stringify(input))}`))?.response?.store_items?.[0];
+        } catch { return null; }
+        if (!it || it.success !== 1 || it.visible === false || !it.name) return null;
+        const b = it.basic_info ?? {}, rel = it.release ?? {}, when = Number(rel.steam_release_date) || 0, buy = it.best_purchase_option;
+        const soon = Boolean(rel.is_coming_soon) || !when || when * 1000 > now();
+        const fmt = when ? new Date(when * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : null;
+        const shots = (it.screenshots?.all_ages_screenshots ?? []).slice(0, 8).map(x => `https://shared.akamai.steamstatic.com/store_item_assets/${String(x.filename).replace(/\?.*$/, "")}`).filter(u => /^https:\/\//.test(u));
+        const free = Boolean(it.is_free);
+        return remember("g" + id, {
+            appid: id, type: it.type === 0 ? "game" : "other", title: it.name, studio: b.developers?.[0]?.name ?? "", publisher: b.publishers?.[0]?.name ?? "",
+            blurb: plain(b.short_description), long: plain(b.short_description), genres: [], categories: [], image: steamArt(id),
+            price: free ? "Free" : buy?.formatted_final_price ?? null, free, priceCents: buy?.final_price_in_cents ? Number(buy.final_price_in_cents) : null,
+            release: fmt, comingSoon: soon, website: null, screenshots: shots, hay: plain(b.short_description),
+            languages: "", platforms: Object.entries(it.platforms ?? {}).filter(([k, v]) => v === true && ["windows", "mac", "linux"].includes(k)).map(([k]) => k)
+        });
+    }
+
     /** One game's public details. Throws a plain message when it isn't a game or Steam can't find it. */
     async function lookup(appid, { withReviews = false, fresh = false } = {}) {
         const id = Number(appid);
@@ -54,21 +76,28 @@ export function createIndie({ fetchImpl = globalThis.fetch, now = () => Date.now
         if (!Number.isInteger(id) || id <= 0) throw new UserError("That doesn't look like a Steam store link.");
         let g = recall("g" + id);
         if (!g) {
-            let d;
-            try { d = (await getJson(`https://store.steampowered.com/api/appdetails?appids=${id}&l=english&cc=us`))?.[id]; }
-            catch { throw new UserError("Steam isn't answering right now. Try again in a minute."); }
-            if (!d?.success || !d.data) throw new UserError("Steam has no public store page for that app.");
-            const x = d.data;
-            g = remember("g" + id, {
-                appid: id, type: x.type ?? "game", title: x.name ?? "", studio: (x.developers ?? [])[0] ?? "", publisher: (x.publishers ?? [])[0] ?? "",
-                blurb: plain(x.short_description), long: plain(x.about_the_game).slice(0, 1500), genres: (x.genres ?? []).map(t => t.description).filter(Boolean),
-                categories: (x.categories ?? []).map(t => t.description).filter(Boolean), image: steamArt(id),
-                price: x.is_free ? "Free" : x.price_overview?.final_formatted ?? null, free: Boolean(x.is_free), priceCents: x.price_overview?.initial ?? null,
-                release: x.release_date?.date ?? null, comingSoon: Boolean(x.release_date?.coming_soon), website: x.website ?? null,
-                screenshots: (x.screenshots ?? []).slice(0, 8).map(s => s.path_thumbnail).filter(u => /^https:\/\//.test(u ?? "")),
-                hay: plain([x.short_description, x.about_the_game, x.detailed_description, x.website, x.support_info?.url, x.support_info?.email].filter(Boolean).join(" ")).slice(0, 30000),
-                languages: plain(x.supported_languages).replace(/\*?languages with full audio support/i, "").slice(0, 200), platforms: Object.entries(x.platforms ?? {}).filter(([, v]) => v).map(([k]) => k)
-            });
+            let d = null, down = false;
+            for (let tries = 0; tries < 2 && !d?.success; tries++) { // one retry: Steam sometimes answers a busy 429 or an empty reply
+                try { d = (await getJson(`https://store.steampowered.com/api/appdetails?appids=${id}&l=english&cc=us`))?.[id]; down = false; }
+                catch { down = true; }
+            }
+            if (d?.success && d.data) {
+                const x = d.data;
+                g = remember("g" + id, {
+                    appid: id, type: x.type ?? "game", title: x.name ?? "", studio: (x.developers ?? [])[0] ?? "", publisher: (x.publishers ?? [])[0] ?? "",
+                    blurb: plain(x.short_description), long: plain(x.about_the_game).slice(0, 1500), genres: (x.genres ?? []).map(t => t.description).filter(Boolean),
+                    categories: (x.categories ?? []).map(t => t.description).filter(Boolean), image: steamArt(id),
+                    price: x.is_free ? "Free" : x.price_overview?.final_formatted ?? null, free: Boolean(x.is_free), priceCents: x.price_overview?.initial ?? null,
+                    release: x.release_date?.date ?? null, comingSoon: Boolean(x.release_date?.coming_soon), website: x.website ?? null,
+                    screenshots: (x.screenshots ?? []).slice(0, 8).map(s => s.path_thumbnail).filter(u => /^https:\/\//.test(u ?? "")),
+                    hay: plain([x.short_description, x.about_the_game, x.detailed_description, x.website, x.support_info?.url, x.support_info?.email].filter(Boolean).join(" ")).slice(0, 30000),
+                    languages: plain(x.supported_languages).replace(/\*?languages with full audio support/i, "").slice(0, 200), platforms: Object.entries(x.platforms ?? {}).filter(([, v]) => v).map(([k]) => k)
+                });
+            } else {
+                // appdetails says no for plenty of public pages (regional rules, age gates, new pages). The store browse service is more forgiving.
+                g = await browseItem(id);
+                if (!g) throw new UserError(down ? "Steam isn't answering right now. Try again in a minute." : "Steam has no public store page for that app.");
+            }
         }
         return withReviews ? { ...g, reviews: await reviews(id) } : g;
     }

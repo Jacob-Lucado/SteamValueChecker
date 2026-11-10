@@ -36,13 +36,14 @@
     }
     /** Pull a game's details from Steam for pre-filling a form. */
     function steamBox(onGame, { withReviews = false } = {}) {
-      const input = h("input", { type: "text", placeholder: "Paste a Steam store link or app ID", "aria-label": "Steam store link" });
+      const input = h("input", { type: "text", placeholder: "Steam store link, app ID or game name", "aria-label": "Steam store link" });
       const btn = h("button", { class: "btn blue small", type: "button", text: "Fill from Steam" }), msg = h("span", { class: "muted small" });
       const go = () => ctx.busy(btn, async () => {
         msg.textContent = "";
-        const d = await ctx.api("/api/indie/lookup?q=" + encodeURIComponent(input.value.trim()));
-        if (!d.game) { msg.textContent = "That looks like a name. Paste the game's store link, or use the App ID Finder to get it."; return; }
-        onGame(d.game); msg.textContent = `Loaded ${d.game.title}.`;
+        let d = await ctx.api("/api/indie/lookup?q=" + encodeURIComponent(input.value.trim())), byName = false;
+        if (!d.game && d.results?.length) { byName = true; d = await ctx.api("/api/indie/lookup?q=" + d.results[0].appid); } // a name works too: take the top match
+        if (!d.game) { msg.textContent = "Steam found nothing under that name. Try the store link, or the App ID Finder."; return; }
+        onGame(d.game); msg.textContent = byName ? `Loaded ${d.game.title}, the top match. Wrong game? Paste its store link instead.` : `Loaded ${d.game.title}.`;
       });
       btn.addEventListener("click", go); input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go(); } });
       // Sent here from My games with ?app=123: fill everything in straight away.
@@ -317,8 +318,8 @@
         row("Positive", g => (g.reviews?.total ? C.reviewLabel(g.reviews.positive, g.reviews.negative).pct + "%" : "–")), row("Estimated copies", g => (g.reviews?.total ? int(C.revenueFromReviews({ reviews: g.reviews.total, price: 0 }).typical.copies) : "–")), row("Genres", g => g.genres.join(", ") || "–"), row("Platforms", g => g.platforms.join(", ") || "–")))),
         k.note("Estimated copies use reviews × about 35, a rough middle. Compare the genres and price points first: they tell you who you're really up against."));
     };
-    const box = i => { const input = h("input", { type: "text", placeholder: i ? "Rival's store link" : "Your game's store link", "aria-label": i ? "Rival's store link" : "Your game's store link" }), btn = h("button", { class: "btn blue small", type: "button", text: "Load" });
-      const go = () => ctx.busy(btn, async () => { const d = await ctx.api("/api/indie/lookup?q=" + encodeURIComponent(input.value.trim())); if (!d.game) { ctx.toast("Paste the store link, not the name. The App ID Finder can find it."); return; } games[i] = d.game; show(); });
+    const box = i => { const input = h("input", { type: "text", placeholder: i ? "Rival's name or store link" : "Your game's name or store link", "aria-label": i ? "Rival's name or store link" : "Your game's name or store link" }), btn = h("button", { class: "btn blue small", type: "button", text: "Load" });
+      const go = () => ctx.busy(btn, async () => { let d = await ctx.api("/api/indie/lookup?q=" + encodeURIComponent(input.value.trim())); if (!d.game && d.results?.length) d = await ctx.api("/api/indie/lookup?q=" + d.results[0].appid); if (!d.game) { ctx.toast("Steam found nothing under that. Try the store link."); return; } games[i] = d.game; show(); });
       btn.addEventListener("click", go); input.addEventListener("keydown", e => { if (e.key === "Enter") go(); }); return h("div", { class: "ix-steam" }, input, btn); };
     show();
     return h("div", { class: "ix-tool" }, h("div", { class: "ix-two" }, box(0), box(1)), out); });
