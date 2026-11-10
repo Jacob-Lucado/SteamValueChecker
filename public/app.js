@@ -3933,7 +3933,7 @@
     ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["profiles", "Profile pages", "▭", "Reported profile pages, and a way to hide or restore one."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."], ["traffic", "Link traffic", "↗", "How many people open the bot's links and click through to the stores."], ["indie", "Indie showcase", "◈", "Review submissions, feature games and pause the form."], ["xposts", "X posting", "✕", "Post to the project's X account: ads, scheduled posts and the automatic free-game posts."]]],
     ["Support", [["chat", "Staff chat", "💬", "Chat with the team, and answer tickets and bug reports without leaving."]]],
-    ["Operations", [["admins", "Admin users", "👤", "Give other people their own login to this admin panel."], ["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
+    ["Operations", [["personalize", "Personalize", "🎨", "Pick the look and the wallpaper of your desktop. Only you see it."], ["admins", "Admin users", "👤", "Give other people their own login to this admin panel."], ["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
   const ADMIN_PAGES = Object.fromEntries(ADMIN_NAV.flatMap(([, items]) => items.map(([id, title, icon, sub]) => [id, { title, icon, sub }])));
   let adminCtx = null, adminCtxAt = 0, adminTimer = 0;
@@ -3991,6 +3991,26 @@
   const randomPassword = () => { const set = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789", a = crypto.getRandomValues(new Uint32Array(18)); return Array.from(a, n => set[n % set.length]).join(""); };
 
   /** The owner's list of other people who can use this panel, and what each may change. */
+  /** The look and wallpaper of the desktop, saved for whoever is signed in. */
+  async function adminPersonalize(body, fail) {
+    let data; try { data = await api("/api/admin/prefs"); } catch (e) { return fail(e); }
+    let prefs = data.prefs;
+    const os = window.AdminOS;
+    const save = async patch => { prefs = { ...prefs, ...patch }; os?.applyPrefs(prefs, data.walls); draw(); try { await api("/api/admin/prefs", prefs); } catch (e) { toast(e.message); } };
+    const box = h("div", { class: "pz" });
+    const draw = () => {
+      const looks = [["original", "Original", "The LucadoOS colours, rounded windows"], ["windows", "Windows", "Flat and square, like a PC"]].map(([id, name, sub]) => h("button", { type: "button", class: "pz-look" + (prefs.look === id ? " on" : ""), onclick: () => save({ look: id }) }, h("b", { text: name }), h("small", { text: sub })));
+      const swatches = data.walls.map(w => { const b = h("button", { type: "button", class: "pz-wall" + (prefs.wall === w.id ? " on" : ""), title: w.name, "aria-label": w.name, onclick: () => save({ wall: w.id }) }, h("span", { text: w.name })); if (w.css) b.style.setProperty("background", w.css); return b; });
+      const color = h("input", { type: "color", "aria-label": "Pick any colour", value: /^#/.test(prefs.wall) ? prefs.wall : "#1b2a4a" });
+      color.addEventListener("change", () => save({ wall: color.value }));
+      const wv = h("input", { type: "checkbox" }); wv.checked = Boolean(prefs.waves); wv.addEventListener("change", () => save({ waves: wv.checked }));
+      box.replaceChildren(h("h3", { text: "Look" }), h("div", { class: "pz-row" }, ...looks), h("h3", { text: "Wallpaper" }), h("div", { class: "pz-row" }, ...swatches, h("label", { class: "pz-color" + (/^#/.test(prefs.wall) ? " on" : "") }, color, h("span", { text: "Your colour" }))),
+        h("label", { class: "pz-waves" }, wv, h("span", {}, h("b", { text: "Neon waves" }), h("small", { text: "Glowing lines rolling over the wallpaper. Works with any colour above, or on the default one." })))   ,
+        os?.active() ? null : h("p", { class: "muted small", text: "The desktop look only shows on a wider screen, in desktop view." }));
+    };
+    draw(); body.replaceChildren(box);
+  }
+
   async function adminAdmins(body, fail) {
     let d;
     try { d = await api("/api/admin/admins"); } catch (e) { return fail(e); }
@@ -4141,7 +4161,8 @@
       if (ADMIN_PAGES.account) { ADMIN_PAGES.account = { ...ADMIN_PAGES.account, title: "My password", sub: "Change the password for your admin login." }; ADMIN_NAV.forEach(g => g[1] = g[1].map(it => it[0] === "account" ? ["account", "My password", it[2], "Change the password for your admin login."] : it)); }
     }
     adminChrome();
-    if (window.AdminOS?.wanted()) window.AdminOS.begin({ nav: ADMIN_NAV, pages: ADMIN_PAGES, siteUrl: state.cfg.siteUrl, render: (id, host) => adminMount(id, host) });
+    let look = null; try { look = await api("/api/admin/prefs"); } catch { /* the default look is fine */ }
+    if (window.AdminOS?.wanted()) window.AdminOS.begin({ nav: ADMIN_NAV, pages: ADMIN_PAGES, siteUrl: state.cfg.siteUrl, render: (id, host) => adminMount(id, host), prefs: look?.prefs, walls: look?.walls });
     adminRoute();
     adminPulse();
     window.AdminChat?.watch({ api, toast });
@@ -4196,6 +4217,7 @@
     if (page === "audit") return void adminAudit(body);
     if (page === "account") return void (state.me.panel ? adminSelf(body) : adminAccount(body, fail));
     if (page === "admins") return void adminAdmins(body, fail);
+    if (page === "personalize") return void adminPersonalize(body, fail);
     adminContext().then(ctx => {
       const tab = ctx.TABS.find(t => t[0] === page);
       const nodes = tab[2]();

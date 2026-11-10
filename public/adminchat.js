@@ -106,9 +106,8 @@
       wrap.append(pop);
     }
     function drawPeople() {
-      const by = (role, label) => { const list = st.people.filter(p => (role === "staff" ? p.role !== "owner" && p.role !== "admin" : p.role === role)); if (!list.length) return []; return [h("div", { class: "sc-group" }, h("span", { text: `${label} · ${list.length}` })), ...list.map(p => h("div", { class: "sc-person" + (p.online ? "" : " off") }, h("span", { class: "sc-av", "data-k": p.key, text: (p.name[0] || "?").toUpperCase() }), h("span", { text: p.name + (p.key === me().key ? " (you)" : "") }), h("i", { class: "sc-dot" + (p.online ? " on" : ""), "aria-hidden": "true" })))]; };
+      const by = (role, label) => { const list = st.people.filter(p => (role === "staff" ? p.role !== "owner" && p.role !== "admin" : p.role === role)); if (!list.length) return []; return [h("div", { class: "sc-group" }, h("span", { text: `${label} · ${list.length}` })), ...list.map(p => h("div", { class: "sc-person" + (p.online ? "" : " off") }, face(p.key, p.name, false), h("span", { text: p.name + (p.key === me().key ? " (you)" : "") }), h("i", { class: "sc-dot" + (p.online ? " on" : ""), "aria-hidden": "true" })))]; };
       people.replaceChildren(h("div", { class: "sc-brand" }, h("b", { text: "People" }), h("small", { text: `${st.people.filter(p => p.online).length} online` })), ...by("owner", "Owner"), ...by("admin", "Admins"), ...by("staff", "Staff"));
-      people.querySelectorAll(".sc-av").forEach(a => a.style.setProperty("background", colorOf(a.dataset.k)));
     }
     function drawTitle() { title.replaceChildren(h("b", { text: roomName() }), h("span", { class: "muted small", text: room === "requests" ? "What members are asking for. Set a status and they get told." : room === "tickets" ? "Every support ticket and bug report, answered right here" : room.startsWith("dm:") ? "Only the two of you can see this" : (st.channels.find(c => c.id === room)?.topic || "") }),
       me().owner && room !== "tickets" && room !== "requests" && !room.startsWith("dm:") && !["general", "support"].includes(room) ? h("button", { type: "button", class: "btn gray small", text: "Delete channel", onclick: async () => { if (!confirm(`Delete #${room} and everything said in it?`)) return; try { await api("/api/admin/chat/channel/delete", { id: room }); await loadState(); open("general"); } catch (e) { toast(e.message); } } }) : null); }
@@ -122,6 +121,14 @@
       const p = h("div", { class: "sc-picker" }, ...REACTS.map(e => h("button", { type: "button", text: e, onclick: () => { p.remove(); react(m, e); } })));
       anchor.closest(".sc-bubble").append(p); setTimeout(() => document.addEventListener("click", () => p.remove(), { once: true }), 0);
     }
+    /** A round picture: their Discord avatar when we have one, otherwise a coloured circle with their initial. */
+    function face(key, name, ghost) {
+      const url = person(key).avatar, a = h("span", { class: "sc-av" + (ghost ? " ghost" : ""), text: ghost ? "" : (name[0] || "?").toUpperCase() });
+      if (ghost) return a;
+      a.style.background = colorOf(key);
+      if (url) { const img = h("img", { src: url, alt: "", width: "34", height: "34", loading: "lazy" }); img.addEventListener("error", () => img.remove()); a.textContent = ""; a.append(img); img.addEventListener("error", () => { a.textContent = (name[0] || "?").toUpperCase(); }); }
+      return a;
+    }
     function bubble(m, prev) {
       const mine = m.author === me().key, grouped = prev && prev.author === m.author && m.at - prev.at < 5 * 60_000 && !m.reply;
       const text = h("div", { class: "sc-text" });
@@ -130,7 +137,7 @@
         h("button", { type: "button", title: "Reply", "aria-label": "Reply", text: "↩", onclick: () => { replyTo = m; drawReply(); input.focus(); } }),
         mine ? h("button", { type: "button", title: "Edit", "aria-label": "Edit", text: "✎", onclick: () => { editing = m; input.value = m.body; input.focus(); drawReply(); } }) : null,
         mine || me().owner ? h("button", { type: "button", title: "Delete", "aria-label": "Delete", text: "✕", onclick: async () => { try { await api("/api/admin/chat/delete", { id: m.id }); await load(true); } catch (e) { toast(e.message); } } }) : null);
-      const av = h("span", { class: "sc-av" + (grouped ? " ghost" : ""), text: grouped ? "" : (m.name[0] || "?").toUpperCase() }); if (!grouped) av.style.background = colorOf(m.author);
+      const av = face(m.author, m.name, grouped);
       return h("div", { class: "sc-msg" + (mine ? " mine" : "") + (grouped ? " grouped" : ""), "data-id": m.id }, av, h("div", { class: "sc-body" },
         grouped ? null : h("div", { class: "sc-meta" }, h("b", { text: m.name }), h("span", { class: "muted small", text: clock(m.at) })),
         m.reply ? h("div", { class: "sc-quote" }, h("b", { text: m.reply.name }), " ", m.reply.body) : null, h("div", { class: "sc-bubble" }, text, m.edited ? h("small", { class: "sc-edited", text: " (edited)" }) : null, acts), chips(m)));

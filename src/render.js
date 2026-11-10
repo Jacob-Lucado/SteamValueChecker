@@ -676,23 +676,24 @@ export function freeGamesPayload(shop, games, { pager = null } = {}) {
         const dlc = g.type === "dlc" || /\b(dlc|soundtrack|add-?on|season pass)\b/i.test(g.title ?? "");
         const own = !dlc || !g.base ? "" : g.baseOwned === true ? `\n🟢 You own the base game (${g.base.name})` : g.baseOwned === false ? `\n🔴 You don't own the base game (${g.base.name})` : `\n🧩 DLC for ${g.base.name}`;
         return {
-            color: dlc && g.baseOwned === false ? 0xed4245 : GREEN, title: `${dlc ? "🧩" : "🎁"} ${g.title}`.slice(0, 256), url: safeUrl(claim[n]),
-            description: `## FREE${dlc ? " DLC" : ""}  •  ${shopIcon(shop)} ${shop}\n${g.expiry ? `Claim it ${stamp(g.expiry)} or it's gone.` : "Free to keep while the offer lasts."}${g.store ? `\n🎟️ Delivered through ${g.store}` : ""}${g.blurb ? `\n*${g.blurb}*` : ""}${own}`,
+            color: dlc && g.baseOwned === false ? 0xed4245 : g.weekend ? 0x66c0f4 : GREEN, title: `${g.weekend ? "🎮" : dlc ? "🧩" : "🎁"} ${g.title}`.slice(0, 256), url: safeUrl(claim[n]),
+            description: g.weekend ? `## FREE TO PLAY  •  ${shopIcon(shop)} ${shop}\nFree to play until <t:${Math.floor(g.expiry / 1000)}:d>. After that it goes back to its normal price.` : `## FREE${dlc ? " DLC" : ""}  •  ${shopIcon(shop)} ${shop}\n${g.expiry ? `Claim it ${stamp(g.expiry)} or it's gone.` : "Free to keep while the offer lasts."}${g.store ? `\n🎟️ Delivered through ${g.store}` : ""}${g.blurb ? `\n*${g.blurb}*` : ""}${own}`,
             fields: [
                 { name: "Store", value: `${shopIcon(shop)} ${shop}`, inline: true },
-                { name: g.expiry ? "Ends" : "Status", value: g.expiry ? `${stamp(g.expiry)}\n<t:${Math.floor(g.expiry / 1000)}:f>` : "Limited time", inline: true },
-                { name: "Price", value: "~~Paid~~ **$0.00**", inline: true }
+                { name: g.expiry ? (g.weekend ? "Free until" : "Ends") : "Status", value: g.expiry ? `${stamp(g.expiry)}\n<t:${Math.floor(g.expiry / 1000)}:f>` : "Limited time", inline: true },
+                { name: "Price", value: g.weekend ? "**Free to play** for now" : "~~Paid~~ **$0.00**", inline: true }
             ],
             image: big && art ? { url: art } : undefined,
             thumbnail: !big && art ? { url: art } : undefined,
-            footer: n === list.length - 1 || pager ? { text: /luna/i.test(shop) ? "Claim it with your Amazon account (free with Prime)  •  Data from Amazon Luna" : `Claiming needs you to be signed in to the store  •  Data by ${String(g.id).startsWith("gp:") ? "GamerPower" : "IsThereAnyDeal"}` } : undefined
+            footer: g.weekend ? { text: "Steam free weekend  •  Playing it needs a free Steam account" } : n === list.length - 1 || pager ? { text: /luna/i.test(shop) ? "Claim it with your Amazon account (free with Prime)  •  Data from Amazon Luna" : `Claiming needs you to be signed in to the store  •  Data by ${String(g.id).startsWith("gp:") ? "GamerPower" : "IsThereAnyDeal"}` } : undefined
         };
     });
     const link = (label, url) => ({ type: 2, style: 5, label: label.slice(0, 80), url: safeUrl(url) });
     const row = list.length === 1
-        ? [link("Claim game", claim[0])]
+        ? [link(list[0].weekend ? "Play free" : "Claim game", claim[0])]
         : [{ type: 2, style: 1, label: `Claim all (${list.length})`, custom_id: FREE_CLAIM_ALL_ID }, ...list.slice(0, 4).map((g, n) => link(`Claim ${g.title}`, claim[n]))];
-    const content = list.length === 1 ? `Free game on ${shop}` : `${list.length} free games on ${shop}`;
+    const allWeekend = list.every(g => g.weekend);
+    const content = allWeekend ? (list.length === 1 ? `Free to play until <t:${Math.floor(list[0].expiry / 1000)}:d> on ${shop}` : `${list.length} games free to play for a limited time on ${shop}`) : list.length === 1 ? `Free game on ${shop}` : `${list.length} free games on ${shop}`;
     if (pager && list.length > 1) {
         // one game per page: "Claim all" stays on every page, plus this game's own claim link
         return pagedPayload(pager, { content, pages: list.map((g, n) => ({ embed: embeds[n], label: g.title, rows: [{ type: 1, components: [row[0], link(`Claim ${g.title}`, claim[n])] }] })) });

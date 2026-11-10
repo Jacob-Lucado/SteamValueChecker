@@ -708,17 +708,28 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     }
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
     // The staff chat knows people by one key: the owner's Discord ID, a Discord admin's ID, or an adm-... login.
+    const WALLS = [
+        { id: "default", name: "Default", css: "" },
+        { id: "ocean", name: "Ocean", css: "linear-gradient(135deg, #0a3a86 0%, #0e55b8 45%, #1b86e0 100%)" },
+        { id: "dusk", name: "Dusk", css: "linear-gradient(135deg, #2b1055 0%, #7597de 100%)" },
+        { id: "sunset", name: "Sunset", css: "linear-gradient(135deg, #42275a 0%, #a8456b 55%, #f09a5b 100%)" },
+        { id: "forest", name: "Forest", css: "linear-gradient(135deg, #0b3d2e 0%, #1c7a52 60%, #6bbf8a 100%)" },
+        { id: "graphite", name: "Graphite", css: "linear-gradient(135deg, #16181d 0%, #2b2f38 100%)" },
+        { id: "aurora", name: "Aurora", css: "radial-gradient(900px 600px at 20% 10%, #2dd4bf55, transparent 60%), radial-gradient(900px 600px at 85% 80%, #8b5cf655, transparent 60%), linear-gradient(135deg, #0b1220, #101a33)" }
+    ];
+    /** Only known looks and wallpapers, and a plain hex colour; anything else falls back to the defaults. */
+    const cleanLook = b => ({ look: b?.look === "windows" ? "windows" : "original", waves: b?.waves === true, wall: WALLS.some(w => w.id === b?.wall) ? b.wall : /^#[0-9a-fA-F]{6}$/.test(String(b?.wall ?? "")) ? String(b.wall).toLowerCase() : "default" });
     /** Only the owner and people the owner let into the panel (they arrive here acting as the owner). */
     const chatSession = req => { const s = session(req); if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this."); return s; };
     const chatTyping = new Map(); // room -> Map(person key -> when they last typed)
     const chatLimit = createLimiter({ windowMs: 5000, max: 6, now });
     const chatOnline = new Map();
-    const chatMe = s => { const key = s.viaSub ?? s.userId, owner = !s.viaSub && key === config.ownerId, access = owner ? null : db.getAdminAccess(key); return { key, owner, name: String(access?.label || s.username || "Someone").slice(0, 40) }; };
-    const chatSeen = me => { chatOnline.set(me.key, now()); try { db.setMeta("staffname:" + me.key, me.name); } catch { /* the name is a nicety */ } };
+    const chatMe = s => { const key = s.viaSub ?? s.userId, owner = !s.viaSub && key === config.ownerId, access = owner ? null : db.getAdminAccess(key); const pic = /^https:\/\/cdn\.discordapp\.com\//.test(String(s.avatar ?? "")) && /^\d{17,20}$/.test(key) ? String(s.avatar) : null; return { key, owner, name: String(access?.label || s.username || "Someone").slice(0, 40), pic }; };
+    const chatSeen = me => { chatOnline.set(me.key, now()); try { db.setMeta("staffname:" + me.key, me.name); if (me.pic) db.setMeta("staffpic:" + me.key, me.pic); } catch { /* the name is a nicety */ } };
     const chatPeople = () => {
         const t = now(), nameOf = k => db.getMeta("staffname:" + k) || null;
         const list = [{ key: config.ownerId, name: nameOf(config.ownerId) || "Owner", role: "owner" }, ...db.listAdminAccess().map(a => ({ key: a.id, name: a.label || a.username || nameOf(a.id) || "Admin", role: a.edit.includes("*") ? "admin" : "staff" }))];
-        return list.map(p => ({ ...p, online: (chatOnline.get(p.key) ?? 0) > t - 45_000 }));
+        return list.map(p => ({ ...p, avatar: db.getMeta("staffpic:" + p.key) || null, online: (chatOnline.get(p.key) ?? 0) > t - 45_000 }));
     };
     /** A room the person may use: a channel that exists, or a direct message with one other person on the panel. */
     const chatChannel = (me, id) => {
@@ -4030,6 +4041,18 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const id = db.sendStaff(channel, me.key, me.name, body, reply);
             db.markStaffRead(me.key, channel, id); chatSeen(me);
             return { ok: true, id };
+        },
+        // How the desktop looks for each person signed in: the look and the wallpaper. Everyone on the panel may change their own.
+        "GET /api/admin/prefs": async (req) => {
+            const s = chatSession(req); const me = chatMe(s);
+            let p = {}; try { p = JSON.parse(db.getMeta("admprefs:" + me.key) || "{}"); } catch { /* fresh */ }
+            return { prefs: cleanLook(p), walls: WALLS.map(w => ({ id: w.id, name: w.name, css: w.css })) };
+        },
+        "POST /api/admin/prefs": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            const p = cleanLook(b);
+            db.setMeta("admprefs:" + me.key, JSON.stringify(p));
+            return { ok: true, prefs: p };
         },
         "POST /api/admin/chat/typing": async (req, b) => {
             const s = chatSession(req); const me = chatMe(s);

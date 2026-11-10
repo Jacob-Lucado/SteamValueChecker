@@ -181,6 +181,7 @@
     };
     const chatIcon = add("💬", "Staff chat", () => open("chat")); chatIcon.append(el("i", "adm-icon-badge", { "data-badge": "chat", hidden: "" }));
     for (const [group] of cfg.nav) add(GROUP_ICON[group] || "📁", group, () => open("f:" + group));
+    if (cfg.pages.personalize) add("🎨", "Personalize", () => open("personalize"));
     add("🌐", "Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; });
     return grid;
   }
@@ -225,6 +226,17 @@
     tick(); setInterval(tick, 20_000); return c;
   }
 
+  let prefs = { look: "original", wall: "default" }, walls = [];
+  /** The look (original or Windows) and the wallpaper, for whoever is signed in. */
+  function applyPrefs(p, w) {
+    prefs = { look: p?.look === "windows" ? "windows" : "original", wall: p?.wall || "default", waves: p?.waves === true }; if (w) walls = w;
+    document.body.classList.toggle("adm-orig", prefs.look !== "windows");
+    const css = /^#[0-9a-f]{6}$/i.test(prefs.wall) ? prefs.wall : walls.find(x => x.id === prefs.wall)?.css || "";
+    // the wallpaper lives on the page itself, so the neon waves can roll between it and the windows
+    css ? document.body.style.setProperty("--wall", css) : document.body.style.removeProperty("--wall");
+    document.body.classList.toggle("adm-waves", prefs.waves);
+    if (root.IndieWaves) prefs.waves ? root.IndieWaves.start() : root.IndieWaves.stop();
+  }
   function begin(options) {
     cfg = options; on = true;
     document.getElementById("adm").hidden = true; document.body.classList.add("adm-os");
@@ -235,11 +247,12 @@
     const [btn, box] = start();
     bar = el("footer", "adm-taskbar", {}, btn, box, tasks, tray);
     desk.append(icons(), layer, startMenu, bar); document.body.prepend(desk);
+    applyPrefs(options.prefs, options.walls);
     root.addEventListener("resize", () => { for (const w of wins.values()) place(w); });
     let saved = []; try { saved = JSON.parse(store.get(SAVE) || "[]"); } catch { /* start fresh */ }
     for (const s of saved.filter(s => known(s.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8)) open(s.id, s);
     if (!wins.size) open("overview");
   }
 
-  root.AdminOS = { wanted, begin, open: id => open(id), active: () => on, setMode };
+  root.AdminOS = { wanted, begin, applyPrefs, open: id => open(id), active: () => on, setMode };
 })(typeof globalThis !== "undefined" ? globalThis : this);

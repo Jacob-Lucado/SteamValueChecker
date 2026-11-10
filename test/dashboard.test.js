@@ -1781,6 +1781,14 @@ test("staff chat: messages, edits, reactions, tickets and requests all work from
     assert.equal((await o.request("/api/admin/chat/tickets")).data.tickets.length, 0, "resolved ones leave the open list");
     assert.equal((await o.request("/api/admin/chat/tickets?status=resolved")).data.tickets.length, 1);
     assert.equal((await o.request("/api/admin/chat/requests")).status, 200);
+    // each person's desktop look
+    assert.deepEqual((await o.request("/api/admin/prefs")).data.prefs, { look: "original", waves: false, wall: "default" });
+    await o.request("/api/admin/prefs", { method: "POST", body: { look: "windows", wall: "sunset", waves: true } });
+    assert.deepEqual((await o.request("/api/admin/prefs")).data.prefs, { look: "windows", waves: true, wall: "sunset" });
+    await o.request("/api/admin/prefs", { method: "POST", body: { look: "evil", wall: "url(http://x)" } });
+    assert.deepEqual((await o.request("/api/admin/prefs")).data.prefs, { look: "original", waves: false, wall: "default" }, "anything unknown falls back");
+    await o.request("/api/admin/prefs", { method: "POST", body: { look: "original", wall: "#1b2a4a" } });
+    assert.equal((await o.request("/api/admin/prefs")).data.prefs.wall, "#1b2a4a");
     await o.close();
     const u = await signedIn({ extra: db => ({ tickets: createTicketService({ db, discord: { post: async () => ({ id: "1" }), edit: async () => {}, dm: async () => {} }, ownerId: "u1", publicUrl: "https://x.test" }) }) });
     assert.equal((await u.request("/api/admin/chat/tickets")).status, 403);

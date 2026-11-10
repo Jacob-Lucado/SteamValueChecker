@@ -14,6 +14,7 @@ import { loadConfig } from "./config.js";
 import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
+import { createFreeWeekends, withFreeWeekends } from "./freeweekend.js";
 import { createTopgg, VOTE_XP } from "./topgg.js";
 import { pushEvent, readEvents } from "./adminlog.js";
 import { createVoterRole } from "./voterrole.js";
@@ -168,7 +169,8 @@ const news = createNews();
 // Every playtest source in one list (Alpha Beta Gamer, GamerPower, itch.io, Steam's new demos), with duplicates between them removed.
 const abg = createPlaytestSources({ abg: createAbgFeed(), log: m => console.warn(`[playtests] ${m}`) });
 const gamerPower = createGamerPower({ enabled: process.env.GAMERPOWER !== "off", log: m => console.log(`[gamerpower] ${m}`) });
-const itad = withGamerPower(withLuna(createItad({ apiKey: cfg.itadKey }), luna), gamerPower);
+const freeWeekends = createFreeWeekends({ enabled: process.env.FREE_WEEKENDS !== "off", log: m => console.log(`[free weekends] ${m}`) });
+const itad = withFreeWeekends(withGamerPower(withLuna(createItad({ apiKey: cfg.itadKey }), luna), gamerPower), freeWeekends);
 // Welcome messages and invite tracking need the Server Members intent, which is a switch in the Developer Portal.
 // Ask Discord whether it is on before using it: asking for an intent that is off makes the login fail.
 const APP_FLAGS = await (async () => {

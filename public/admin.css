@@ -118,9 +118,9 @@
 /* ---------- desktop view: a Windows-style desktop (wallpaper, shortcuts, windows, taskbar, Start) ---------- */
 .adm[hidden] { display: none; }
 body.adm-os { overflow: hidden; height: 100vh; background: #0b3f8f; }
-.adm-desk { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; background:
+.adm-desk { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; background: var(--wall,
   radial-gradient(1100px 700px at 78% 62%, #2f9bf2 0, rgba(47, 155, 242, 0) 62%), radial-gradient(900px 600px at 30% 105%, #1d6fd6 0, rgba(29, 111, 214, 0) 65%),
-  radial-gradient(700px 420px at 12% 8%, #08306f 0, rgba(8, 48, 111, 0) 70%), linear-gradient(135deg, #0a3a86 0%, #0e55b8 45%, #1b86e0 100%); }
+  radial-gradient(700px 420px at 12% 8%, #08306f 0, rgba(8, 48, 111, 0) 70%), linear-gradient(135deg, #0a3a86 0%, #0e55b8 45%, #1b86e0 100%)); }
 .adm-icons { position: absolute; left: 6px; top: 6px; bottom: 52px; display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 84px); grid-auto-columns: 80px; gap: 2px; align-content: start; z-index: 1; }
 .adm-icon { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border: 1px solid transparent; background: none; color: #fff; font: inherit; font-size: 12px; cursor: default; text-align: center; }
 .adm-icon:hover { background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .2); }
@@ -334,3 +334,57 @@ body.adm-os { overflow: hidden; height: 100vh; background: #0b3f8f; }
 .adm-desk::after { content: "LucadoOS"; position: absolute; right: 24px; bottom: 56px; font-size: 38px; font-weight: 200; letter-spacing: .04em; color: rgba(255,255,255,.14); pointer-events: none; }
 .sc-compose .sc-input { height: 40px; min-height: 40px; } .sc-tk .sc-input { height: 64px; }
 .sc .btn.small:not(.gray) { background: var(--accent); color: #fff; border: 0; }
+
+/* ---- the original LucadoOS look: the site's own colours, rounded windows. Windows look is the same page with .adm-orig off. ---- */
+body.adm-os.adm-orig { background: var(--bg); }
+.adm-orig .adm-desk { background: var(--wall, radial-gradient(900px 520px at 80% 0, var(--bg-glow), transparent 65%), radial-gradient(700px 480px at 0 100%, var(--glow-2), transparent 65%)), var(--bg); }
+.adm-orig .adm-desk::after { color: var(--muted); opacity: .25; }
+.adm-orig .adm-icons { left: 14px; top: 14px; bottom: 62px; grid-template-rows: repeat(auto-fill, 92px); grid-auto-columns: 96px; gap: 4px; }
+.adm-orig .adm-icon { padding: 8px 4px; border-radius: 10px; color: var(--white); }
+.adm-orig .adm-icon:hover { background: var(--soft); border-color: transparent; }
+.adm-orig .adm-icon.sel, .adm-orig .adm-icon:focus-visible { background: var(--hover-row); border-color: var(--accent); }
+.adm-orig .adm-icon-art { width: 44px; height: 44px; font-size: 22px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, var(--accent-2), var(--accent)); box-shadow: 0 6px 16px rgba(0, 0, 0, .3); }
+:root[data-theme="light"] .adm-orig .adm-icon-name { text-shadow: none; color: var(--text); }
+.adm-orig .adm-layer { bottom: 48px; }
+.adm-orig .adm-win { border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(3, 8, 18, .38); }
+.adm-orig .adm-win.focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 18px 50px rgba(3, 8, 18, .5); }
+.adm-orig .adm-win.max { border-radius: 0; border: 0; }
+.adm-orig .adm-win-bar { height: auto; padding: 6px 8px 6px 12px; background: var(--panel); color: var(--white); border-bottom: 1px solid var(--line); align-items: center; cursor: grab; }
+.adm-orig .adm-win-title { font-size: 13px; font-weight: 600; } .adm-orig .adm-win-title i { color: var(--accent); }
+.adm-orig .adm-win-btns { gap: 4px; }
+.adm-orig .adm-win-btn { width: 30px; height: 24px; border-radius: 7px; color: var(--text); }
+.adm-orig .adm-win-btn:hover { background: var(--soft-2); }
+.adm-orig .adm-win-btn.close:hover { background: var(--bad); color: #fff; }
+.adm-orig .adm-taskbar { height: 48px; align-items: center; gap: 8px; padding: 0 10px; background: var(--nav); color: var(--text); backdrop-filter: blur(14px); border-top: 1px solid var(--line); }
+.adm-orig .adm-startbtn { width: auto; height: 34px; padding: 0 12px; gap: 8px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--white); font-weight: 600; cursor: pointer; }
+.adm-orig .adm-startbtn::after { content: "LucadoOS"; font-size: 13px; }
+.adm-orig .adm-startbtn:hover, .adm-orig .adm-startbtn[aria-expanded="true"] { border-color: var(--accent); background: var(--panel); }
+.adm-orig .adm-winlogo i { background: var(--accent); border-radius: 2px; }
+.adm-orig .adm-searchbox { width: 220px; height: 34px; border: 1px solid var(--line); border-radius: 9px; background: var(--input-bg); color: var(--muted); }
+.adm-orig .adm-searchbox span { color: var(--muted); } .adm-orig .adm-searchbox input { color: var(--text); } .adm-orig .adm-searchbox input::placeholder { color: var(--muted); }
+.adm-orig .adm-tasks { gap: 6px; }
+.adm-orig .adm-task { flex: 0 1 170px; height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; background: var(--soft); color: var(--text); cursor: pointer; }
+.adm-orig .adm-task i { color: var(--accent); }
+.adm-orig .adm-task:hover { background: var(--soft-2); }
+.adm-orig .adm-task.on { background: var(--hover-row); border-color: var(--accent); color: var(--white); }
+.adm-orig .adm-tray { gap: 12px; padding: 0; } .adm-orig .adm-tray .adm-status { color: var(--muted); }
+.adm-orig .adm-clock { align-items: flex-end; padding: 0; color: var(--muted); } .adm-orig .adm-clock:hover { background: none; }
+.adm-orig .adm-start { left: 10px; bottom: 56px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(3, 8, 18, .5); overflow: hidden; }
+.adm-orig .adm-start-rail { background: var(--soft); } .adm-orig .adm-rail-btn { color: var(--text); } .adm-orig .adm-rail-btn:hover { background: var(--hover-row); }
+.adm-orig .adm-start-group { color: var(--muted); } .adm-orig .adm-start-brand { color: var(--white); }
+.adm-orig .adm-start-item { color: var(--text); } .adm-orig .adm-start-item:hover, .adm-orig .adm-start-item:focus-visible { background: var(--hover-row); }
+.adm-orig .adm-start-item i { background: linear-gradient(135deg, var(--accent-2), var(--accent)); border-radius: 6px; color: #fff; }
+.adm-orig .adm-tile { border-radius: 10px; }
+/* personalize page */
+.pz h3 { margin: 14px 0 8px; font-size: 14px; } .pz-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.pz-look { text-align: left; background: var(--panel); border: 2px solid var(--line); color: var(--text); border-radius: 12px; padding: 12px 16px; cursor: pointer; display: grid; gap: 2px; min-width: 200px; font: inherit; } .pz-look.on { border-color: var(--accent); }
+.pz-look small { color: var(--muted); }
+.pz-wall { width: 110px; height: 70px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: #fff; cursor: pointer; display: grid; align-items: end; justify-items: start; padding: 6px 8px; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,.7); } .pz-wall.on { border-color: var(--accent); outline: 2px solid var(--accent); }
+.pz-color { display: grid; gap: 4px; justify-items: center; font-size: 12px; color: var(--muted); } .pz-color.on { color: var(--accent); } .pz-color input { width: 110px; height: 70px; border: 2px solid var(--line); border-radius: 10px; background: none; padding: 0; cursor: pointer; }
+.sc-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+
+/* neon waves: the wallpaper moves to the page so the canvas can sit between it and the windows */
+body.adm-os.adm-waves { background: var(--wall, linear-gradient(135deg, #0a3a86 0%, #0e55b8 45%, #1b86e0 100%)); }
+body.adm-os.adm-waves.adm-orig { background: var(--wall, radial-gradient(900px 520px at 80% 0, var(--bg-glow), transparent 65%), radial-gradient(700px 480px at 0 100%, var(--glow-2), transparent 65%), var(--bg)); }
+body.adm-waves .adm-desk, body.adm-waves.adm-orig .adm-desk { background: none; }
+.pz-waves { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; cursor: pointer; } .pz-waves span { display: grid; gap: 2px; } .pz-waves small { color: var(--muted); }

@@ -18,7 +18,7 @@ export const PANEL_AREAS = [
     { id: "music", label: "Music sessions", re: /^\/api\/admin\/music/ },
     { id: "system", label: "System health actions", re: /^\/api\/admin\/(logs\/clear|problems\/clear|clear-dm-failures|offsite\/verify)/ }
 ];
-const FREE = /^\/api\/admin\/(self\/password|bugs\/seen|chat\/)/; // always fine for a panel user
+const FREE = /^\/api\/admin\/(self\/password|bugs\/seen|chat\/|prefs)/; // always fine for a panel user
 export const areaOf = path => PANEL_AREAS.find(a => a.re.test(path))?.id ?? null;
 /** May this panel user send this request? Reading is always fine; a change needs the area switched on ("*" means every area). */
 export function mayChange(edit, method, rawPath) {
