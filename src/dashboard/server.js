@@ -159,6 +159,8 @@ const FILES = {
     "/indietools.js": ["indietools.js", "text/javascript; charset=utf-8"],
     "/profilefx.js": ["profilefx.js", "text/javascript; charset=utf-8"],
     "/indiewaves.js": ["indiewaves.js", "text/javascript; charset=utf-8"],
+    "/lucadoos.js": ["lucadoos.js", "text/javascript; charset=utf-8"],
+    "/lucadoos.css": ["lucadoos.css", "text/css; charset=utf-8"],
     "/indie.js": ["indie.js", "text/javascript; charset=utf-8"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
@@ -434,6 +436,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (enc) { body = squeeze(Buffer.from(body), enc, 4); headers = { ...headers, "Content-Encoding": enc, Vary: "Accept-Encoding" }; }
         }
         const path = String(res.req?.url ?? "");
+        // LucadoOS shows the site's own pages in windows, which are same-origin frames. Nobody else can frame them.
+        const ownFrame = res.req?.headers?.["sec-fetch-dest"] === "iframe" && res.req?.headers?.["sec-fetch-site"] === "same-origin" && !onAdminHost(res.req) && !onMusicHost(res.req);
         res.writeHead(status, {
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY",
@@ -443,8 +447,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             ...(origin.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
             // The data and sign-in endpoints never belong in a search result, even if something links to them.
             ...(/^\/(api|auth)\//.test(path) || /^\/(admin|music|overlay|streamcard|giveawayoverlay)(\.css|\.js)?(\?|$)/.test(path) || onAdminHost(res.req) || onMusicHost(res.req) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
-            "Content-Security-Policy": /^\/(overlay|giveawayoverlay|ov)(\?|$)/.test(path) ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
-            ...(/^\/(overlay|giveawayoverlay|ov)(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
+            "Content-Security-Policy": /^\/(overlay|giveawayoverlay|ov)(\?|$)/.test(path) || ownFrame ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP,
+            ...(/^\/(overlay|giveawayoverlay|ov)(\?|$)/.test(path) || ownFrame ? { "X-Frame-Options": "SAMEORIGIN" } : {}),
             // The terms and privacy PDFs are shown in a frame on our own pages, so they may be framed by us and by no one else.
             ...(/^\/[a-z-]+\.pdf(\?|$)/.test(path) ? { "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy": "frame-ancestors 'self'", "Content-Disposition": "inline" } : {}),
             ...headers

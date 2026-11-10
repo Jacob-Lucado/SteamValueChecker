@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.51", date: "2026-11-10", title: "LucadoOS desktop (beta)", items: [
+        "**A desktop for the whole site:** press the 🖥️ button in the top bar to switch to LucadoOS. Every section is an icon, every page opens in its own window, and you can drag, resize, minimize and snap them side by side, with a taskbar and Start menu along the bottom.",
+        "**Nothing is lost:** it's the same pages with all the same features, and links still work. Copy the address and it opens the same page. Your open windows come back when you return.",
+        "**Classic stays the default.** Switch back any time from the Start menu. LucadoOS needs a wide screen, so phones and small windows always get the classic site." ] },
     { version: "2026.11.50", date: "2026-11-10", title: "Indie showcase for your server", items: [
         "**Build my server** now makes an **Indie showcase** area: #indie-spotlight, where the weekly indie pick is posted every Wednesday, and #indie-games for talking about hidden gems. There are two new self-roles in #roles, **Indie pings** and **Indie dev**.",
         "**Already built your server?** Run Build my server again. It only adds what's missing and leaves everything else alone.",

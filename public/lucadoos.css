@@ -1,0 +1,160 @@
+/* LucadoOS for the whole site: the desktop, its windows, taskbar and Start menu. Same look as the admin panel's original theme. */
+body.los-os { overflow: hidden; height: 100vh; background: #0b3f8f; }
+.los-desk { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; background: var(--wall,
+  radial-gradient(1100px 700px at 78% 62%, #2f9bf2 0, rgba(47, 155, 242, 0) 62%), radial-gradient(900px 600px at 30% 105%, #1d6fd6 0, rgba(29, 111, 214, 0) 65%),
+  radial-gradient(700px 420px at 12% 8%, #08306f 0, rgba(8, 48, 111, 0) 70%), linear-gradient(135deg, #0a3a86 0%, #0e55b8 45%, #1b86e0 100%)); }
+.los-icons { position: absolute; left: 6px; top: 6px; bottom: 52px; display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 84px); grid-auto-columns: 80px; gap: 2px; align-content: start; z-index: 1; }
+.los-icon { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border: 1px solid transparent; background: none; color: #fff; font: inherit; font-size: 12px; cursor: default; text-align: center; }
+.los-icon:hover { background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .2); }
+.los-icon.sel, .los-icon:focus-visible { background: rgba(255, 255, 255, .24); border-color: rgba(255, 255, 255, .45); outline: none; }
+.los-icon-art { width: 40px; height: 40px; display: grid; place-items: center; font-size: 28px; line-height: 1; }
+.los-icon-name { line-height: 1.15; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); overflow-wrap: anywhere; }
+.los-layer { position: absolute; left: 0; right: 0; top: 0; bottom: 40px; z-index: 2; pointer-events: none; overflow: hidden; }
+.los-win { position: absolute; display: flex; flex-direction: column; min-width: 380px; min-height: 240px; background: var(--bg); border: 1px solid #3a3f47; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); overflow: hidden; pointer-events: auto; }
+.los-win[hidden] { display: none; }
+.los-win.focus { border-color: #2d8ad8; box-shadow: 0 14px 44px rgba(0, 0, 0, .55); }
+.los-win.max { left: 0; top: 0; width: 100%; height: 100%; border: 0; }
+.los-win-bar { flex: none; display: flex; align-items: stretch; justify-content: space-between; height: 32px; padding: 0 0 0 10px; background: #202225; color: #fff; cursor: default; user-select: none; touch-action: none; }
+:root[data-theme="light"] .los-win-bar { background: #fff; color: #111; border-bottom: 1px solid #ddd; }
+.los-win-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+.los-win-title i { font-style: normal; font-size: 14px; }
+.los-win-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.los-win-btns { display: flex; }
+.los-win-btn { width: 46px; border: 0; background: none; color: inherit; font-size: 13px; line-height: 1; cursor: default; }
+.los-win-btn:hover { background: rgba(255, 255, 255, .12); }
+:root[data-theme="light"] .los-win-btn:hover { background: rgba(0, 0, 0, .08); }
+.los-win-btn.close:hover { background: #e81123; color: #fff; }
+.los-win-btn:focus-visible { outline: 2px solid #2d8ad8; outline-offset: -2px; }
+.los-win-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px 24px; }
+.los-win-body.los-folder { padding: 10px; background: var(--bg); }
+.los-files { display: grid; grid-template-columns: repeat(auto-fill, 96px); gap: 6px; align-content: start; }
+.los-file { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 1px solid transparent; background: none; color: var(--text); font: inherit; font-size: 12px; text-align: center; cursor: default; }
+.los-file .los-icon-art { border-radius: 8px; color: #fff; background: linear-gradient(135deg, var(--accent-2), var(--accent)); font-size: 20px; }
+.los-file .los-icon-name { text-shadow: none; }
+.los-file:hover { background: var(--soft); }
+.los-file.sel, .los-file:focus-visible { background: var(--hover-row); border-color: var(--accent); outline: none; }
+.los-badge { position: absolute; top: 2px; right: 10px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; text-align: center; }
+.los-win-grip { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; }
+.los-win.max .los-win-grip { display: none; }
+.los-taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; z-index: 40; display: flex; align-items: stretch; gap: 0; background: rgba(24, 26, 30, .96); color: #fff; border-top: 1px solid rgba(255, 255, 255, .06); }
+.los-startbtn { width: 48px; border: 0; background: none; display: grid; place-items: center; cursor: default; }
+.los-startbtn:hover, .los-startbtn[aria-expanded="true"] { background: rgba(255, 255, 255, .14); }
+.los-winlogo { display: grid; grid-template: 1fr 1fr / 1fr 1fr; gap: 2px; width: 17px; height: 17px; }
+.los-winlogo i { background: #4cb4ff; }
+.los-searchbox { display: flex; align-items: center; gap: 8px; width: 230px; margin: 0; padding: 0 12px; background: #f2f2f2; color: #666; font-size: 13px; cursor: text; }
+.los-searchbox span { font-size: 18px; color: #333; }
+.los-searchbox input { flex: 1; min-width: 0; width: auto; padding: 0; margin: 0; border: 0; background: none; color: #222; font: inherit; outline: none; box-shadow: none; }
+.los-searchbox input::placeholder { color: #555; }
+.los-tasks { flex: 1; min-width: 0; display: flex; overflow-x: auto; scrollbar-width: none; }
+.los-task { flex: 0 1 160px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: #fff; font: inherit; font-size: 12px; cursor: default; }
+.los-task i { font-style: normal; font-size: 16px; }
+.los-task span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.los-task { border-bottom-color: #6fb7ff; background: rgba(255, 255, 255, .06); }
+.los-task:hover { background: rgba(255, 255, 255, .16); }
+.los-task.on { background: rgba(255, 255, 255, .2); }
+.los-tray { display: flex; align-items: center; gap: 4px; flex: none; padding: 0 6px; font-size: 12px; }
+.los-tray .los-status { color: #d6dbe3; }
+.los-tray .los-status .txt { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.los-tray .los-user { gap: 6px; }
+.los-tray .los-user img { width: 24px; height: 24px; }
+.los-tray .btn { padding: 3px 9px; font-size: 12px; min-height: 0; }
+.los-clock { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.25; padding: 0 10px; font-size: 12px; text-align: center; }
+.los-clock:hover { background: rgba(255, 255, 255, .12); }
+.los-start { position: absolute; left: 0; bottom: 40px; z-index: 50; width: 640px; max-width: 100vw; height: min(560px, calc(100vh - 50px)); display: grid; grid-template-columns: 48px 280px minmax(0, 1fr); background: #1c1e22; color: #fff; border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 14px 44px rgba(0, 0, 0, .55); }
+.los-start[hidden] { display: none; }
+.los-start-rail { display: flex; flex-direction: column; justify-content: flex-end; background: rgba(0, 0, 0, .25); }
+.los-rail-btn { height: 48px; border: 0; background: none; color: #fff; font-size: 18px; cursor: default; }
+.los-rail-btn:hover { background: rgba(255, 255, 255, .14); }
+.los-start-list { overflow-y: auto; padding: 6px 0; }
+.los-start-group { margin: 10px 14px 4px; font-size: 12px; font-weight: 600; color: #8fb8f0; }
+.los-start-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 7px 14px; border: 0; background: none; color: #fff; font: inherit; font-size: 13px; text-align: left; cursor: default; }
+.los-start-item i { font-style: normal; width: 22px; height: 22px; display: grid; place-items: center; background: #2d6cc0; font-size: 13px; }
+.los-start-item:hover, .los-start-item:focus-visible { background: rgba(255, 255, 255, .14); outline: none; }
+.los-start-none { margin: 16px; color: #9aa3b0; font-size: 13px; }
+.los-start-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; align-content: start; padding: 6px 12px; overflow-y: auto; }
+.los-start-tiles .los-start-group { grid-column: 1 / -1; margin-left: 2px; }
+.los-tile { height: 92px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 8px 10px; border: 2px solid transparent; background: var(--tile, #0a64c8); color: #fff; font: inherit; font-size: 12px; text-align: left; cursor: default; }
+.los-tile:hover { border-color: rgba(255, 255, 255, .6); }
+.los-tile-art { font-size: 26px; }
+@media (max-width: 700px) { .los-start { grid-template-columns: 48px minmax(0, 1fr); } .los-start-tiles { display: none; } }
+@media (prefers-reduced-motion: no-preference) { .los-win { animation: los-pop .12s ease-out; } }
+@keyframes los-pop { from { opacity: 0; transform: scale(.98); } }
+
+/* snapping */
+.los-snap-preview { position: absolute; z-index: 1000; pointer-events: none; background: rgba(120, 190, 255, .22); border: 2px solid rgba(160, 210, 255, .8); border-radius: 6px; transition: all .08s ease-out; }
+.los-win.snapped { border-radius: 0; }
+.los-assist { position: absolute; z-index: 900; display: flex; flex-direction: column; gap: 12px; padding: 18px; background: rgba(20, 24, 30, .86); backdrop-filter: blur(10px); color: #fff; pointer-events: auto; overflow: auto; }
+.los-assist p { margin: 0; font-size: 14px; }
+.los-assist-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.los-assist-card { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 140px; padding: 14px 8px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); color: #fff; font: inherit; font-size: 12px; cursor: default; }
+.los-assist-card span { font-size: 26px; }
+.los-assist-card:hover { border-color: #6fb7ff; background: rgba(111, 183, 255, .2); }
+.los-flyout { position: fixed; z-index: 2000; display: grid; grid-template-columns: repeat(2, 84px); gap: 8px; padding: 10px; background: #26292e; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+.los-fly-layout { position: relative; height: 52px; background: rgba(255, 255, 255, .06); }
+.los-fly-zone { position: absolute; padding: 0; border: 2px solid #26292e; background: rgba(255, 255, 255, .22); cursor: default; box-sizing: border-box; }
+.los-fly-zone:hover { background: #4cb4ff; }
+
+/* a window's content follows the window's own size, so a full screen window really uses the space */
+.los-win-body.los-content { max-width: none; width: auto; }
+.los-content .grid:not(.two):not(.three):not(.four):not(.five) { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.los-win-body.wide > div:nth-child(2) { column-count: 2; column-gap: 16px; }
+.los-start-brand { font-size: 22px; font-weight: 300; letter-spacing: .02em; padding: 4px 8px 10px; }
+.los-icon { position: relative; }
+.los-icon-badge { position: absolute; top: 2px; right: 8px; font-style: normal; background: #e5484d; color: #fff; font-size: 11px; min-width: 18px; height: 18px; border-radius: 9px; display: grid; place-items: center; padding: 0 5px; }
+.los-icon-badge[hidden] { display: none; }
+.los-desk::after { content: "LucadoOS"; position: absolute; right: 24px; bottom: 56px; font-size: 38px; font-weight: 200; letter-spacing: .04em; color: rgba(255,255,255,.14); pointer-events: none; }
+/* ---- the original LucadoOS look: the site's own colours, rounded windows. Windows look is the same page with .los-orig off. ---- */
+body.los-os.los-orig { background: var(--bg); }
+.los-orig .los-desk { background: var(--wall, radial-gradient(900px 520px at 80% 0, var(--bg-glow), transparent 65%), radial-gradient(700px 480px at 0 100%, var(--glow-2), transparent 65%)), var(--bg); }
+.los-orig .los-desk::after { color: var(--muted); opacity: .25; }
+.los-orig .los-icons { left: 14px; top: 14px; bottom: 62px; grid-template-rows: repeat(auto-fill, 92px); grid-auto-columns: 96px; gap: 4px; }
+.los-orig .los-icon { padding: 8px 4px; border-radius: 10px; color: var(--white); }
+.los-orig .los-icon:hover { background: var(--soft); border-color: transparent; }
+.los-orig .los-icon.sel, .los-orig .los-icon:focus-visible { background: var(--hover-row); border-color: var(--accent); }
+.los-orig .los-icon-art { width: 44px; height: 44px; font-size: 22px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, var(--accent-2), var(--accent)); box-shadow: 0 6px 16px rgba(0, 0, 0, .3); }
+:root[data-theme="light"] .los-orig .los-icon-name { text-shadow: none; color: var(--text); }
+.los-orig .los-layer { bottom: 48px; }
+.los-orig .los-win { border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(3, 8, 18, .38); }
+.los-orig .los-win.focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 18px 50px rgba(3, 8, 18, .5); }
+.los-orig .los-win.max { border-radius: 0; border: 0; }
+.los-orig .los-win-bar { height: auto; padding: 6px 8px 6px 12px; background: var(--panel); color: var(--white); border-bottom: 1px solid var(--line); align-items: center; cursor: grab; }
+.los-orig .los-win-title { font-size: 13px; font-weight: 600; } .los-orig .los-win-title i { color: var(--accent); }
+.los-orig .los-win-btns { gap: 4px; }
+.los-orig .los-win-btn { width: 30px; height: 24px; border-radius: 7px; color: var(--text); }
+.los-orig .los-win-btn:hover { background: var(--soft-2); }
+.los-orig .los-win-btn.close:hover { background: var(--bad); color: #fff; }
+.los-orig .los-taskbar { height: 48px; align-items: center; gap: 8px; padding: 0 10px; background: var(--nav); color: var(--text); backdrop-filter: blur(14px); border-top: 1px solid var(--line); }
+.los-orig .los-startbtn { width: auto; height: 34px; padding: 0 12px; gap: 8px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--white); font-weight: 600; cursor: pointer; }
+.los-orig .los-startbtn::after { content: "LucadoOS"; font-size: 13px; }
+.los-orig .los-startbtn:hover, .los-orig .los-startbtn[aria-expanded="true"] { border-color: var(--accent); background: var(--panel); }
+.los-orig .los-winlogo i { background: var(--accent); border-radius: 2px; }
+.los-orig .los-searchbox { width: 220px; height: 34px; border: 1px solid var(--line); border-radius: 9px; background: var(--input-bg); color: var(--muted); }
+.los-orig .los-searchbox span { color: var(--muted); } .los-orig .los-searchbox input { color: var(--text); } .los-orig .los-searchbox input::placeholder { color: var(--muted); }
+.los-orig .los-tasks { gap: 6px; }
+.los-orig .los-task { flex: 0 1 170px; height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; background: var(--soft); color: var(--text); cursor: pointer; }
+.los-orig .los-task i { color: var(--accent); }
+.los-orig .los-task:hover { background: var(--soft-2); }
+.los-orig .los-task.on { background: var(--hover-row); border-color: var(--accent); color: var(--white); }
+.los-orig .los-tray { gap: 12px; padding: 0; } .los-orig .los-tray .los-status { color: var(--muted); }
+.los-orig .los-clock { align-items: flex-end; padding: 0; color: var(--muted); } .los-orig .los-clock:hover { background: none; }
+.los-orig .los-start { left: 10px; bottom: 56px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(3, 8, 18, .5); overflow: hidden; }
+.los-orig .los-start-rail { background: var(--soft); } .los-orig .los-rail-btn { color: var(--text); } .los-orig .los-rail-btn:hover { background: var(--hover-row); }
+.los-orig .los-start-group { color: var(--muted); } .los-orig .los-start-brand { color: var(--white); }
+.los-orig .los-start-item { color: var(--text); } .los-orig .los-start-item:hover, .los-orig .los-start-item:focus-visible { background: var(--hover-row); }
+.los-orig .los-start-item i { background: linear-gradient(135deg, var(--accent-2), var(--accent)); border-radius: 6px; color: #fff; }
+.los-orig .los-tile { border-radius: 10px; }
+/* neon waves: the wallpaper moves to the page so the canvas can sit between it and the windows */
+body.los-os.los-waves { background: var(--wall, linear-gradient(135deg, #0a3a86 0%, #0e55b8 45%, #1b86e0 100%)); }
+body.los-os.los-waves.los-orig { background: var(--wall, radial-gradient(900px 520px at 80% 0, var(--bg-glow), transparent 65%), radial-gradient(700px 480px at 0 100%, var(--glow-2), transparent 65%), var(--bg)); }
+body.los-waves .los-desk, body.los-waves.los-orig .los-desk { background: none; }
+
+/* the site's own page sits in a frame inside the window */
+.los-win-body.los-page { padding: 0; overflow: hidden; }
+.los-frame { display: block; width: 100%; height: 100%; border: 0; background: var(--bg); }
+.los-who { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.los-who img, .los-who i { width: 22px; height: 22px; border-radius: 50%; background: var(--soft-2); }
+body.los-os .topbar, body.los-os #hubbar, body.los-os main#app, body.los-os .footer, body.los-os .seo-static { display: none !important; }
+/* the same page, shown inside a window: no header, no footer, just the page */
+html.os-embed .topbar, html.os-embed .footer, html.os-embed .site-notice { display: none; }
+html.os-embed body { background: transparent; }
+html.os-embed .page { padding-top: 14px; }

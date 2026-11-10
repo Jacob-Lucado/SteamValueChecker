@@ -8,6 +8,9 @@
   const state = { cfg: null, me: null };
   const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
   const app = document.getElementById("app");
+  // LucadoOS (the desktop theme) shows each site page in a frame inside a window. Inside one of those frames the page drops its own header and footer.
+  const EMBED = !ADMIN_MODE && window.self !== window.top;
+  if (EMBED) document.documentElement.classList.add("os-embed");
 
   // The browser turns null/undefined/false passed to replaceChildren/append/prepend into the words "null", "undefined", "false".
   // Skip them instead, so an optional piece of a page can simply be null.
@@ -238,6 +241,8 @@
   const navText = (id, text) => text; // h() translates it
 
   // Prices come from one saved setting, the region (it decides the currency). It is kept on the account, so the Discord bot uses it too.
+  /** The switch to the LucadoOS desktop theme (wide screens only; Classic stays the default). */
+  const osButton = () => (window.LucadoOS?.canUse() ? h("button", { class: "theme-btn", type: "button", text: "🖥️", title: "Switch to the LucadoOS desktop", "aria-label": "Switch to the LucadoOS desktop", onclick: () => window.LucadoOS.setMode("os") }) : null);
   function currencyPicker() {
     const regions = state.cfg.regions;
     const current = regions.find(r => r.value === state.me.settings.region);
@@ -326,14 +331,14 @@
     if (state.me) {
       acct.replaceChildren(...[...links, support,
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
-        currencyPicker(), languagePicker(), displayMenu(),
+        osButton(), currencyPicker(), languagePicker(), displayMenu(),
         // The signed-in name and Log out always sit together, set slightly apart from the tools.
         h("div", { class: "user-chip" },
           state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
           h("span", { class: "who", text: state.me.user.username }),
           h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; navigate("/"); boot(); } }))].filter(Boolean));
     } else {
-      acct.replaceChildren(...[...links, support, languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
+      acct.replaceChildren(...[...links, support, osButton(), languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
     }
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
@@ -7922,15 +7927,30 @@
   const indieView = () => window.IndieUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
   const VIEWS = { indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
 
+  /** Hands the whole page to the LucadoOS desktop: one icon for each section, and every page opens in its own window. */
+  function osMount() {
+    const ICONS = { home: "🏠", library: "📚", feed: "💬", deals: "💸", indie: "🎮", free: "🎁", social: "🤝", servers: "🛡️", streamer: "📺", account: "👤", help: "🛟" };
+    const pages = { "/": { title: state.me ? "Value Checker" : "Home", icon: "🏠", sub: "" } }, nav = [];
+    for (const g of NAV) {
+      if (g.id === "admin") continue;
+      const list = g.pages.filter(([id]) => pageVisible(id)).map(([id, text]) => ({ path: id === "home" ? "/" : "/" + id, title: text, icon: ICONS[g.id] || "📄" }));
+      for (const p of list) if (p.path !== "/") pages[p.path] = { title: p.title, icon: p.icon, sub: g.label };
+      if (list.length) nav.push({ label: g.label, icon: ICONS[g.id] || "📄", pages: list });
+    }
+    const want = location.pathname + location.search.replace(/[?&]os=\d\b/, "");
+    window.LucadoOS.begin({ pages, nav, open: want, loginUrl: "/auth/login", user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
+  }
+
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
+    if (!ADMIN_MODE && !EMBED && window.LucadoOS?.wanted()) { osMount(); return; }
     if (state.restricted || new URLSearchParams(location.search).get("error") === "restricted") { state.restricted ||= "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard. If you think this is a mistake, contact the bot owner."; return showRestricted(); }
     if (!ADMIN_MODE) { const old = /^#\/(.*)$/.exec(location.hash); if (old) history.replaceState(null, "", "/" + old[1]); }
     renderChrome();
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else if (view === "indie") document.documentElement.dataset.area = "indie"; else delete document.documentElement.dataset.area;
-    if (window.IndieWaves) { if (view === "u") window.IndieWaves.stop(); else window.IndieWaves.start(); }
+    if (window.IndieWaves) { if (view === "u" || EMBED) window.IndieWaves.stop(); else window.IndieWaves.start(); }
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
@@ -7958,7 +7978,7 @@
       return;
     }
     route();
-    if (state.me && state.me.tour) setTimeout(() => { if (state.me && state.me.tour && !document.getElementById("tour")) startTour(); }, 700);
+    if (state.me && state.me.tour && !EMBED && !window.LucadoOS?.active()) setTimeout(() => { if (state.me && state.me.tour && !document.getElementById("tour")) startTour(); }, 700);
   }
 
   // Visitor counter: totals only. A browser counts as new once (remembered here), no cookies and no addresses stored.
@@ -8004,6 +8024,12 @@
     const tidy = root => root.querySelectorAll?.('a[href^="#/"]').forEach(a => { a.dataset.spa = "1"; a.setAttribute("href", a.getAttribute("href").slice(1)); });
     new MutationObserver(ms => { for (const m of ms) m.addedNodes.forEach(n => { if (n.nodeType === 1) { if (n.matches('a[href^="#/"]')) tidy({ querySelectorAll: () => [n] }); tidy(n); } }); }).observe(document.body, { childList: true, subtree: true });
     tidy(document);
+    // Inside a LucadoOS window, sign-in pages can't load in a frame, so they take over the whole tab, and other sites open in a new one.
+    if (EMBED) document.addEventListener("click", e => {
+      const a = e.target.closest?.("a[href]"); if (!a || a.target) return;
+      const href = a.getAttribute("href") || "";
+      if (/^\/auth\//.test(href)) a.target = "_top"; else if (/^https?:\/\//i.test(href)) { try { if (new URL(href).origin !== location.origin) { a.target = "_blank"; a.rel = "noopener noreferrer"; } } catch { /* leave it */ } }
+    }, true);
     document.addEventListener("click", e => {
       if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest?.("a[data-spa], a[href^=\"#/\"]");

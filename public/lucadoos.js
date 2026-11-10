@@ -1,0 +1,258 @@
+// LucadoOS for the whole site: the same pages, laid out as a desktop. Every page is an icon, every open page is a window you can drag,
+// resize, minimize and snap, with a taskbar and a Start menu along the bottom. The pages themselves are the normal site pages, shown in
+// frames, so everything on them works exactly as it does in the classic view. It's a second theme: Classic stays the default.
+(function (root) {
+  "use strict";
+  const KEY = "lucado-site-view", SAVE = "lucado-site-windows";
+  const store = {
+    get(k) { try { return root.localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { root.localStorage.setItem(k, v); } catch { /* private window: fine, nothing is remembered */ } }
+  };
+  const wanted = () => {
+    const q = /[?&]os=(0|1)\b/.exec(root.location.search); if (q) store.set(KEY, q[1] === "1" ? "os" : "classic");
+    return store.get(KEY) === "os" && root.innerWidth >= 900 && root.self === root.top;
+  };
+  const setMode = m => { store.set(KEY, m); root.location.reload(); };
+  let on = false, cfg = null, desk, layer, bar, tasks, startMenu, wins = new Map(), z = 10, cascade = 0, h;
+
+
+
+  function el(tag, cls, attrs = {}, ...kids) { const n = document.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === "text") n.textContent = v; else n.setAttribute(k, v); } n.append(...kids.filter(Boolean)); return n; }
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  // Snap zones as fractions of the desktop: x, y, width, height. Edges and the layout picker both use these.
+  const ZONES = { L: [0, 0, .5, 1], R: [.5, 0, .5, 1], TL: [0, 0, .5, .5], TR: [.5, 0, .5, .5], BL: [0, .5, .5, .5], BR: [.5, .5, .5, .5], L23: [0, 0, 2 / 3, 1], R13: [2 / 3, 0, 1 / 3, 1], C1: [0, 0, 1 / 3, 1], C2: [1 / 3, 0, 1 / 3, 1], C3: [2 / 3, 0, 1 / 3, 1] };
+  const LAYOUTS = [["L", "R"], ["L23", "R13"], ["C1", "C2", "C3"], ["TL", "TR", "BL", "BR"]];
+  const zoneRect = z => { const [a, b, c, d] = ZONES[z], W = layer.clientWidth, H = layer.clientHeight; return { x: Math.round(a * W), y: Math.round(b * H), w: Math.round(c * W), h: Math.round(d * H) }; };
+
+  function persist() {
+    store.set(SAVE, JSON.stringify([...wins.values()].map(w => ({ id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max, min: w.min, snap: w.snap || null, z: Number(w.node.style.zIndex) || 0 }))));
+  }
+  function focus(w) {
+    for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
+    w.node.style.zIndex = String(++z); w.task.classList.add("on"); for (const o of wins.values()) if (o !== w) o.task.classList.remove("on");
+    document.title = `${metaOf(w.id).title} · LucadoOS`; persist(); addressOf(w);
+  }
+  function place(w) {
+    const n = w.node, W = layer.clientWidth, H = layer.clientHeight;
+    if (w.max) { n.classList.add("max"); for (const k of ["left", "top", "width", "height"]) n.style.removeProperty(k); return; }
+    n.classList.remove("max");
+    if (w.snap && ZONES[w.snap]) { const r = zoneRect(w.snap); Object.assign(w, r); n.classList.add("snapped"); } else { n.classList.remove("snapped"); w.snap = null; }
+    w.w = clamp(w.w, 380, W); w.h = clamp(w.h, 260, H); w.x = clamp(w.x, -w.w + 120, W - 120); w.y = clamp(w.y, 0, H - 40);
+    n.style.left = w.x + "px"; n.style.top = w.y + "px"; n.style.width = w.w + "px"; n.style.height = w.h + "px";
+  }
+
+  let pages = {}, nav = [], who = null;
+  const GLYPH = { "/": "🏠" };
+  const pageMeta = id => pages[id] || { title: id.replace(/^\//, "").split("/")[0] || "Home", icon: "📄", sub: "" };
+  const metaOf = id => wins.get(id)?.meta || pageMeta(id);
+  const known = id => typeof id === "string" && /^\/(?!api\/|auth\/|admin)/.test(id) && !/^\/\//.test(id);
+  let previewEl = null;
+  function showPreview(zone) {
+    if (!zone) { previewEl?.remove(); previewEl = null; return; }
+    if (!previewEl) { previewEl = el("div", "los-snap-preview", { "aria-hidden": "true" }); layer.append(previewEl); }
+    const r = zone === "MAX" ? { x: 0, y: 0, w: layer.clientWidth, h: layer.clientHeight } : zoneRect(zone);
+    Object.assign(previewEl.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+  }
+  /** Puts a window in a zone ("MAX" fills the desktop, null brings it back to its old size). */
+  function snapTo(w, zone) {
+    if (zone === "MAX") { if (!w.max && !w.snap) w.restore = { w: w.w, h: w.h, x: w.x, y: w.y }; w.snap = null; w.max = true; place(w); persist(); return; }
+    if (zone === null) { const r = w.restore || { w: 880, h: 600, x: 60, y: 40 }; w.max = false; w.snap = null; Object.assign(w, { w: r.w, h: r.h, x: r.x ?? 60, y: r.y ?? 40 }); place(w); persist(); return; }
+    if (!w.max && !w.snap) w.restore = { w: w.w, h: w.h, x: w.x, y: w.y };
+    w.max = false; w.snap = zone; w.min = false; w.node.hidden = false; place(w); focus(w); persist(); assist(zone);
+  }
+  /** After one window snaps, offer the other open windows for the spaces that are left (Windows 11's snap assist). */
+  function assist(zone) {
+    root.document.querySelector(".los-assist")?.remove();
+    const layout = LAYOUTS.find(l => l.includes(zone)); if (!layout) return;
+    const free = layout.filter(z => z !== zone && ![...wins.values()].some(o => o.snap === z && !o.min));
+    const others = [...wins.values()].filter(o => !o.snap && !o.max);
+    if (!free.length || !others.length) return;
+    const zoneNow = free[0], r = zoneRect(zoneNow);
+    const box = el("div", "los-assist", { role: "dialog", "aria-label": "Pick a window for this space" });
+    Object.assign(box.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+    box.append(el("p", "", { text: "Pick a window for this space" }));
+    const row = el("div", "los-assist-row");
+    for (const o of others) { const m = metaOf(o.id), b = el("button", "los-assist-card", { type: "button" }, el("span", "", { "aria-hidden": "true", text: m.icon }), el("b", "", { text: m.title })); b.addEventListener("click", () => { box.remove(); snapTo(o, zoneNow); }); row.append(b); }
+    box.append(row); layer.append(box);
+    const away = ev => { if (!box.contains(ev.target)) { box.remove(); document.removeEventListener("pointerdown", away, true); } };
+    setTimeout(() => document.addEventListener("pointerdown", away, true), 0);
+    document.addEventListener("keydown", function esc(ev) { if (ev.key === "Escape") { box.remove(); document.removeEventListener("keydown", esc); } });
+  }
+  /** The little layout picker under the maximize button. */
+  function layoutFlyout(w, anchor) {
+    document.querySelector(".los-flyout")?.remove();
+    const fly = el("div", "los-flyout", { role: "menu" });
+    for (const layout of LAYOUTS) {
+      const cell = el("div", "los-fly-layout");
+      for (const z of layout) { const [a, b, c, d] = ZONES[z], t = el("button", "los-fly-zone", { type: "button", "aria-label": "Snap " + z, title: "Snap here" }); Object.assign(t.style, { left: a * 100 + "%", top: b * 100 + "%", width: c * 100 + "%", height: d * 100 + "%" }); t.addEventListener("click", () => { fly.remove(); snapTo(w, z); }); cell.append(t); }
+      fly.append(cell);
+    }
+    const rc = anchor.getBoundingClientRect(); fly.style.top = rc.bottom + 4 + "px"; fly.style.left = Math.max(8, rc.right - 190) + "px";
+    document.body.append(fly);
+    const gone = ev => { if (!fly.contains(ev.target) && ev.target !== anchor) { fly.remove(); document.removeEventListener("pointermove", gone); } };
+    fly.addEventListener("pointerleave", () => fly.remove()); setTimeout(() => document.addEventListener("pointermove", ev => { if (!fly.isConnected) return; const f = fly.getBoundingClientRect(), a = anchor.getBoundingClientRect(); const inside = (r, x, y) => x >= r.left - 6 && x <= r.right + 6 && y >= r.top - 6 && y <= r.bottom + 6; if (!inside(f, ev.clientX, ev.clientY) && !inside(a, ev.clientX, ev.clientY)) fly.remove(); }), 0);
+  }
+
+
+  /** Opens a page in a window. The window shows the page in a frame and follows it as you click around inside. */
+  function open(id, saved) {
+    if (!known(id)) id = "/";
+    const have = wins.get(id);
+    if (have) { have.min = false; have.node.hidden = false; focus(have); return have; }
+    const meta = { ...pageMeta(id) }, W = layer.clientWidth, H = layer.clientHeight;
+    const w = { id, path: id, meta, w: Math.min(1000, W - 60), h: Math.min(680, H - 40), x: Math.max(16, Math.min(110 + (cascade % 6) * 28, W - 400)), y: 24 + (cascade % 6) * 28, ...(saved ? { x: saved.x, y: saved.y, w: saved.w, h: saved.h, max: saved.max, min: saved.min, snap: saved.snap } : {}) };
+    cascade++;
+    const frame = el("iframe", "los-frame", { src: id, title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
+    const content = el("div", "los-win-body los-page", {}, frame);
+    const titleText = el("span", "", { text: meta.title }), titleIcon = el("i", "", { "aria-hidden": "true", text: meta.icon });
+    const title = el("div", "los-win-title", {}, titleIcon, titleText);
+    const bMin = el("button", "los-win-btn", { type: "button", "aria-label": "Minimize", title: "Minimize", text: "–" });
+    const bMax = el("button", "los-win-btn", { type: "button", "aria-label": "Maximize", title: "Maximize", text: "▢" });
+    const bClose = el("button", "los-win-btn close", { type: "button", "aria-label": "Close", title: "Close", text: "✕" });
+    const node = el("section", "los-win", { role: "dialog", "aria-label": meta.title }, el("header", "los-win-bar", {}, title, el("div", "los-win-btns", {}, bMin, bMax, bClose)), content);
+    const taskIcon = el("i", "", { "aria-hidden": "true", text: meta.icon }), taskText = el("span", "", { text: meta.title });
+    const task = el("button", "los-task", { type: "button", title: meta.title }, taskIcon, taskText);
+    w.node = node; w.task = task; w.content = content; w.frame = frame; wins.set(id, w);
+    layer.append(node); tasks.append(task);
+    place(w); if (w.min) { node.hidden = true; } else focus(w); if (saved && saved.z) node.style.zIndex = String(saved.z);
+    // follow the page inside: its title and address change as you move around it, and the browser address follows the window you're in
+    const sync = () => {
+      let path, t;
+      try { const l = frame.contentWindow.location; path = l.pathname + l.search; t = frame.contentDocument.title; } catch { return; }
+      if (!path || path === "about:blank") return;
+      if (path !== w.path) { w.path = path; persist(); if (node.classList.contains("focus")) addressOf(w); }
+      const m = pages[path.split("?")[0]] ?? null, name = m ? m.title : String(t || "").split(/[:|·]/)[0].trim().slice(0, 40) || meta.title;
+      if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · LucadoOS`; }
+    };
+    frame.addEventListener("load", () => { sync(); try { frame.contentWindow.addEventListener("pointerdown", () => { if (!node.classList.contains("focus")) focus(w); }, true); } catch { /* not ours */ } });
+    w.timer = setInterval(() => { if (!node.isConnected) clearInterval(w.timer); else sync(); }, 800);
+    const shut = () => { clearInterval(w.timer); node.remove(); task.remove(); wins.delete(id); persist(); const top = [...wins.values()].filter(o => !o.min).sort((a, b) => Number(b.node.style.zIndex) - Number(a.node.style.zIndex))[0]; if (top) focus(top); else { document.title = "LucadoOS"; } };
+    const minimize = () => { w.min = true; node.hidden = true; task.classList.remove("on"); node.classList.remove("focus"); persist(); };
+    const toggleMax = () => { snapTo(w, w.max ? null : "MAX"); focus(w); };
+    bMin.addEventListener("click", minimize); bMax.addEventListener("click", toggleMax); bClose.addEventListener("click", shut);
+    task.addEventListener("click", () => { if (w.min) { w.min = false; node.hidden = false; focus(w); } else if (node.classList.contains("focus")) minimize(); else focus(w); });
+    node.addEventListener("pointerdown", () => { if (!node.classList.contains("focus")) focus(w); }, true);
+    title.addEventListener("dblclick", toggleMax);
+    // dragging by the title bar; near an edge it snaps, like Windows 11
+    node.querySelector(".los-win-bar").addEventListener("pointerdown", e => {
+      if (e.target.closest("button") || e.button !== 0) return;
+      const bar0 = e.currentTarget; bar0.setPointerCapture(e.pointerId);
+      const sx = e.clientX, sy = e.clientY; let ox = w.x, oy = w.y, started = false, target = null;
+      const edgeZone = ev => {
+        const r = layer.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, W = r.width, H = r.height, e0 = 6;
+        if (y <= e0) return x <= 60 ? "TL" : x >= W - 60 ? "TR" : "MAX";
+        if (x <= e0) return y <= 60 ? "TL" : y >= H - 60 ? "BL" : "L";
+        if (x >= W - e0) return y <= 60 ? "TR" : y >= H - 60 ? "BR" : "R";
+        return null;
+      };
+      const move = ev => {
+        if (!started) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return; started = true; if (w.max || w.snap) { const was = w.restore || { w: 880, h: 600 }; const frac = (sx - (layer.getBoundingClientRect().left + w.x)) / Math.max(1, w.w || 1); w.max = false; w.snap = null; w.w = was.w; w.h = was.h; w.x = ev.clientX - was.w * clamp(frac, .1, .9); w.y = 0; ox = w.x; oy = w.y; place(w); focus(w); } }
+        w.x = ox + ev.clientX - sx; w.y = oy + ev.clientY - sy; w.restore = { w: w.w, h: w.h }; place(w);
+        target = edgeZone(ev); showPreview(target);
+      };
+      const up = () => { bar0.removeEventListener("pointermove", move); bar0.removeEventListener("pointerup", up); bar0.removeEventListener("pointercancel", up); showPreview(null); if (started && target) snapTo(w, target); persist(); };
+      bar0.addEventListener("pointermove", move); bar0.addEventListener("pointerup", up); bar0.addEventListener("pointercancel", up);
+    });
+    // hovering the maximize button offers the snap layouts
+    let flyTimer = 0;
+    bMax.addEventListener("pointerenter", () => { flyTimer = setTimeout(() => layoutFlyout(w, bMax), 450); });
+    bMax.addEventListener("pointerleave", () => { clearTimeout(flyTimer); });
+    node.addEventListener("keydown", e => {
+      if (!(e.ctrlKey && e.altKey)) return;
+      const k = { ArrowLeft: "L", ArrowRight: "R", ArrowUp: "MAX" }[e.key];
+      if (k) { e.preventDefault(); snapTo(w, k); } else if (e.key === "ArrowDown") { e.preventDefault(); snapTo(w, null); }
+    });
+    // resizing from the corner grip
+    const grip = el("div", "los-win-grip", { "aria-hidden": "true" }); node.append(grip);
+    grip.addEventListener("pointerdown", e => {
+      if (w.max) return; e.preventDefault(); grip.setPointerCapture(e.pointerId);
+      const sx = e.clientX, sy = e.clientY, ow = w.w, oh = w.h;
+      if (w.snap) { w.snap = null; w.restore = null; } const move = ev => { w.w = ow + ev.clientX - sx; w.h = oh + ev.clientY - sy; place(w); };
+      const up = () => { grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up); persist(); };
+      grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", up);
+    });
+    return w;
+  }
+  /** The browser's address bar shows the page of the window you're in, so a copied link opens the same page. */
+  function addressOf(w) { try { root.history.replaceState(null, "", w.path); } catch { /* keep going */ } }
+
+  /** The desktop: one icon for each section of the site. */
+  function icons() {
+    const grid = el("div", "los-icons", { role: "list" });
+    for (const g of nav) {
+      const first = g.pages[0]; if (!first) continue;
+      const b = el("button", "los-icon", { type: "button", role: "listitem", title: g.pages.map(p => p.title).join(", ") }, el("span", "los-icon-art", { "aria-hidden": "true", text: g.icon }), el("span", "los-icon-name", { text: g.label }));
+      let last = 0;
+      b.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach(n => n.classList.remove("sel")); b.classList.add("sel"); if (Date.now() - last < 450 || root.matchMedia("(pointer: coarse)").matches) open(first.path); last = Date.now(); });
+      b.addEventListener("keydown", e => { if (e.key === "Enter") open(first.path); });
+      grid.append(b);
+    }
+    return grid;
+  }
+
+  const WINLOGO = () => el("span", "los-winlogo", { "aria-hidden": "true" }, el("i"), el("i"), el("i"), el("i"));
+  /** Start button, the menu with every page, and the search box. */
+  function start() {
+    startMenu = el("div", "los-start", { hidden: "" });
+    const rail = el("div", "los-start-rail"), results = el("div", "los-start-list");
+    const tilesBox = el("div", "los-start-tiles", {}, el("div", "los-start-brand", { text: "LucadoOS" }), el("div", "los-start-group", { text: "Pinned" }));
+    const pins = ["/", "/library", "/feed", "/free", "/indie", "/servers", "/help"].filter(p => pages[p]);
+    const hues = ["#0a64c8", "#8a3ffc", "#1a8f5a", "#d4741a", "#c4392b", "#0f7b8a", "#6a4fd0"];
+    pins.forEach((p, i) => { const t = el("button", "los-tile", { type: "button" }, el("span", "los-tile-art", { "aria-hidden": "true", text: pages[p].icon }), el("span", "", { text: pages[p].title })); t.style.setProperty("--tile", hues[i % hues.length]); t.addEventListener("click", () => { close(); open(p); }); tilesBox.append(t); });
+    const paint = q => {
+      q = (q || "").trim().toLowerCase(); results.replaceChildren();
+      for (const g of nav) {
+        const hit = g.pages.filter(p => !q || p.title.toLowerCase().includes(q) || g.label.toLowerCase().includes(q)); if (!hit.length) continue;
+        results.append(el("div", "los-start-group", { text: g.label }));
+        for (const p of hit) { const b = el("button", "los-start-item", { type: "button" }, el("i", "", { "aria-hidden": "true", text: p.icon }), el("span", "", { text: p.title })); b.addEventListener("click", () => { close(); open(p.path); }); results.append(b); }
+      }
+      if (!results.children.length) results.append(el("p", "los-start-none", { text: "Nothing matches that." }));
+    };
+    const railBtn = (glyph, label, run) => { const b = el("button", "los-rail-btn", { type: "button", title: label, "aria-label": label, text: glyph }); b.addEventListener("click", run); return b; };
+    rail.append(railBtn("☰", "Switch to the classic site", () => setMode("classic")));
+    startMenu.append(rail, results, tilesBox); paint("");
+    const btn = el("button", "los-startbtn", { type: "button", "aria-label": "Start menu", "aria-expanded": "false" }, WINLOGO());
+    const search = el("input", "", { type: "text", placeholder: "Type here to search", "aria-label": "Search the site's pages", autocomplete: "off", spellcheck: "false" });
+    const box = el("label", "los-searchbox", {}, el("span", "", { "aria-hidden": "true", text: "⌕" }), search);
+    const close = () => { startMenu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+    const show = q => { startMenu.hidden = false; btn.setAttribute("aria-expanded", "true"); paint(q); };
+    btn.addEventListener("click", e => { e.stopPropagation(); if (startMenu.hidden) { search.value = ""; show(""); } else close(); });
+    search.addEventListener("focus", () => show(search.value)); search.addEventListener("input", () => show(search.value));
+    search.addEventListener("keydown", e => { if (e.key === "Enter") { results.querySelector(".los-start-item")?.click(); search.value = ""; search.blur(); } });
+    document.addEventListener("pointerdown", e => { if (!startMenu.hidden && !startMenu.contains(e.target) && !btn.contains(e.target) && !box.contains(e.target)) close(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+    return [btn, box];
+  }
+
+  function clock() {
+    const c = el("div", "los-clock"), tick = () => { const d = new Date(); c.replaceChildren(el("span", "", { text: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) }), el("span", "", { text: d.toLocaleDateString("en-US") })); c.title = "Your local time"; };
+    tick(); setInterval(tick, 20_000); return c;
+  }
+
+
+  /** Takes over the page. `options`: { pages: {path: {title, icon, sub}}, nav: [{label, icon, pages: [{path, title, icon}]}], user: {name, avatar} | null, loginUrl, open: path to start on }. */
+  function begin(options) {
+    pages = options.pages; nav = options.nav; who = options.user || null;
+    if (on) { return; }
+    on = true; cfg = options;
+    document.body.classList.add("los-os", "los-orig", "los-waves");
+    desk = el("div", "los-desk"); layer = el("div", "los-layer"); tasks = el("div", "los-tasks");
+    const tray = el("div", "los-tray");
+    tray.append(who ? el("span", "los-who", {}, who.avatar ? el("img", "", { src: who.avatar, alt: "", width: "22", height: "22" }) : el("i"), el("span", "", { text: who.name })) : el("a", "btn green small", { href: options.loginUrl || "/auth/login", text: "Sign in" }));
+    tray.append(clock());
+    const [btn, box] = start();
+    bar = el("footer", "los-taskbar", {}, btn, box, tasks, tray);
+    desk.append(icons(), layer, startMenu, bar); document.body.prepend(desk);
+    if (root.IndieWaves) root.IndieWaves.start();
+    root.addEventListener("resize", () => { for (const w of wins.values()) place(w); });
+    let saved = []; try { saved = JSON.parse(store.get(SAVE) || "[]"); } catch { /* start fresh */ }
+    for (const s of saved.filter(s => known(s.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8)) open(s.id, s);
+    const want = options.open && known(options.open) && options.open !== "/" ? options.open : null;
+    if (want) { const have = [...wins.values()].find(w => w.id === want || w.path === want); if (have) { have.min = false; have.node.hidden = false; focus(have); } else open(want); }
+    if (!wins.size) open("/");
+    else { const top = [...wins.values()].filter(o => !o.min).sort((a, b) => Number(b.node.style.zIndex) - Number(a.node.style.zIndex))[0]; if (top) addressOf(top); }
+  }
+
+  root.LucadoOS = { wanted, begin, open: id => open(id), active: () => on, setMode, canUse: () => root.innerWidth >= 900 && root.self === root.top };
+})(typeof globalThis !== "undefined" ? globalThis : this);

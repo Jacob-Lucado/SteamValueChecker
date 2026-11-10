@@ -83,6 +83,21 @@ async function setup({ sendFails = false, guildsOf, config = {}, giveawayService
     return { db, dash, base, cookie: () => cookie, request, signIn, sent, advance: ms => { clock += ms; }, close: () => dash.close() };
 }
 
+test("LucadoOS: its files are served, and only our own frames may show the site's pages", async () => {
+    const t = await setup();
+    assert.equal((await t.request("/lucadoos.js")).status, 200); assert.equal((await t.request("/lucadoos.css")).status, 200);
+    const page = await t.request("/");
+    assert.match(page.text, /\/lucadoos\.js/); assert.match(page.text, /\/lucadoos\.css/);
+    const get = h => fetch(t.base + "/feed", { headers: h });
+    const top = await get({});
+    assert.equal(top.headers.get("x-frame-options"), "DENY"); assert.match(top.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+    const own = await get({ "Sec-Fetch-Dest": "iframe", "Sec-Fetch-Site": "same-origin" });
+    assert.equal(own.headers.get("x-frame-options"), "SAMEORIGIN"); assert.match(own.headers.get("content-security-policy"), /frame-ancestors 'self'/);
+    const other = await get({ "Sec-Fetch-Dest": "iframe", "Sec-Fetch-Site": "cross-site" });
+    assert.equal(other.headers.get("x-frame-options"), "DENY", "another site can't frame it");
+    await t.close();
+});
+
 test("static files, security headers, and nothing outside the allowlist", async () => {
     const t = await setup();
     const r = await t.request("/");
