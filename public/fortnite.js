@@ -21,6 +21,10 @@
   const clock = ms => { const t = Math.max(0, Math.floor(ms / 1000)), p = x => String(x).padStart(2, "0"); return `${p(Math.floor(t / 3600))}:${p(Math.floor((t % 3600) / 60))}:${p(t % 60)}`; };
   const day = iso => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }); }; // the shop and its dates run on UTC
 
+  /** The player for an emote's showcase video, opened only when asked for so nothing loads until then. */
+  const playerFor = (h, id) => h("iframe", { class: "fn-player", src: `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1`, title: "Preview", allow: "autoplay; encrypted-media; picture-in-picture; fullscreen", allowfullscreen: "", referrerpolicy: "strict-origin-when-cross-origin", loading: "lazy" });
+  const findPreview = (h, name, kind) => h("a", { class: "btn gray small", href: "https://www.youtube.com/results?search_query=" + encodeURIComponent(`fortnite ${name} ${kind === "emote" ? "emote" : ""}`.trim()), target: "_blank", rel: "noopener noreferrer", text: "Find a preview on YouTube" });
+
   function view(ctx) {
     const { h, api, app, pageHead, toast, busy } = ctx;
     const q = new URLSearchParams(location.search);
@@ -79,6 +83,7 @@
       btn.style.setProperty("--c1", c1); btn.style.setProperty("--c2", c2); btn.style.setProperty("--rar", rarityColor(e.rarity));
       btn.append(
         e.art ? h("img", { class: "fn-art", src: e.art, alt: "", loading: "lazy", width: "512", height: "512" }) : h("span", { class: "fn-noart", text: e.name.slice(0, 1) }),
+        e.video ? h("span", { class: "fn-play", title: "Has a preview video", text: "▶ Preview" }) : null,
         h("span", { class: "fn-badges" }, isNew ? h("em", { class: "new", text: "New" }) : null, e.price < e.regular ? h("em", { class: "sale", text: "-" + Math.round((1 - e.price / e.regular) * 100) + "%" }) : null, leaving ? h("em", { class: "leave", text: "Leaves in " + span(left) }) : null),
         h("span", { class: "fn-label" }, h("b", { text: e.name }), h("small", { text: e.bundle ? (e.bundleInfo || "Bundle") + (e.items.length ? ` · ${e.items.length} items` : "") : e.kind === "jamtrack" ? e.artist : kindName(e.kind).replace(/s$/, "") }), price(e.price, e.regular)));
       btn.addEventListener("click", () => detail(e));
@@ -134,13 +139,17 @@
       const c1 = e.colors[0] ? "#" + e.colors[0] : rarityColor(e.rarity), c2 = e.colors[1] ? "#" + e.colors[1] : "#101826";
       const art = h("div", { class: "fn-d-art" }, e.art ? h("img", { src: e.art, alt: e.name, width: "512", height: "512" }) : null);
       art.style.setProperty("--c1", c1); art.style.setProperty("--c2", c2);
+      const showVideo = id => { art.classList.add("playing"); art.replaceChildren(playerFor(h, id)); };
+      if (e.video) art.append(h("button", { type: "button", class: "fn-d-play", onclick: () => showVideo(e.video) }, h("span", { text: "▶" }), " Watch the preview"));
+      const hasEmote = e.kind === "emote" || e.items.some(i => /emote/i.test(i.type));
       const card = h("div", { class: "fn-d" }, art, h("div", { class: "fn-d-info" },
         h("span", { class: "fn-eyebrow", text: [kindName(e.kind).replace(/s$/, ""), e.rarityName].filter(Boolean).join(" · ") }), h("h2", { text: e.name }),
         h("div", { class: "fn-d-price" }, price(e.price, e.regular), e.price < e.regular ? h("span", { class: "fn-chip sale", text: "Save " + n(e.regular - e.price) }) : null),
         e.set ? h("p", { class: "muted small", text: "Set: " + e.set }) : null, e.intro ? h("p", { class: "muted small", text: e.intro }) : null,
         left !== null && Number.isFinite(left) ? h("p", { class: "small", text: left > 0 ? `Leaves the shop in ${span(left)} (${day(e.out)}).` : "Leaving the shop." }) : null,
         e.giftable ? h("p", { class: "muted small", text: "Can be gifted." }) : null,
-        e.items.length > 1 || e.bundle ? h("div", { class: "fn-d-items" }, h("h4", { text: "Included" }), e.items.map(i => h("div", { class: "fn-d-item" }, i.art ? h("img", { src: i.art, alt: "", width: "40", height: "40", loading: "lazy" }) : null, h("span", {}, h("b", { text: i.name }), h("small", { text: i.type }))))) : null,
+        e.items.length > 1 || e.bundle ? h("div", { class: "fn-d-items" }, h("h4", { text: "Included" }), e.items.map(i => h("div", { class: "fn-d-item" }, i.art ? h("img", { src: i.art, alt: "", width: "40", height: "40", loading: "lazy" }) : null, h("span", {}, h("b", { text: i.name }), h("small", { text: i.type })), i.video ? h("button", { type: "button", class: "btn gray small fn-item-play", text: "▶ Preview", onclick: () => showVideo(i.video) }) : null))) : null,
+        !e.video && hasEmote ? findPreview(h, e.name, e.kind) : null,
         e.tracks.length ? h("div", { class: "fn-d-items" }, h("h4", { text: "Jam tracks" }), e.tracks.map(t => h("p", { class: "small", text: `${t.title} · ${t.artist}` }))) : null,
         h("button", { type: "button", class: "btn gray small", text: "Close", onclick: close })));
       back.append(card); document.body.append(back);
@@ -161,7 +170,7 @@
     function cosmeticCard(c, opts = {}) {
       const b = h("button", { type: "button", class: "fn-tile s1 cos", "aria-label": c.name });
       b.style.setProperty("--c1", rarityColor(c.rarity)); b.style.setProperty("--c2", "#101826"); b.style.setProperty("--rar", rarityColor(c.rarity));
-      b.append(h("img", { class: "fn-art", src: c.art, alt: "", loading: "lazy", width: "256", height: "256" }), h("span", { class: "fn-label" }, h("b", { text: c.name }), h("small", { text: [c.typeName, c.rarityName].filter(Boolean).join(" · ") }), opts.history ? h("small", { text: c.shopHistory ? `In the shop ${c.shopHistory}×${c.lastSeen ? " · last " + day(c.lastSeen) : ""}` : "Never in the shop" }) : null));
+      b.append(h("img", { class: "fn-art", src: c.art, alt: "", loading: "lazy", width: "256", height: "256" }), c.video ? h("span", { class: "fn-play", title: "Has a preview video", text: "▶ Preview" }) : null, h("span", { class: "fn-label" }, h("b", { text: c.name }), h("small", { text: [c.typeName, c.rarityName].filter(Boolean).join(" · ") }), opts.history ? h("small", { text: c.shopHistory ? `In the shop ${c.shopHistory}×${c.lastSeen ? " · last " + day(c.lastSeen) : ""}` : "Never in the shop" }) : null));
       b.addEventListener("click", () => cosmeticDetail(c)); return b;
     }
     function cosmeticDetail(c) {
@@ -169,10 +178,12 @@
       const close = () => { back.remove(); document.removeEventListener("keydown", esc); }; const esc = ev => { if (ev.key === "Escape") close(); };
       document.addEventListener("keydown", esc); back.addEventListener("click", ev => { if (ev.target === back) close(); });
       const art = h("div", { class: "fn-d-art" }, h("img", { src: c.art, alt: c.name, width: "512", height: "512" })); art.style.setProperty("--c1", rarityColor(c.rarity)); art.style.setProperty("--c2", "#101826");
+      if (c.video) art.append(h("button", { type: "button", class: "fn-d-play", onclick: () => { art.classList.add("playing"); art.replaceChildren(playerFor(h, c.video)); } }, h("span", { text: "▶" }), " Watch the preview"));
       back.append(h("div", { class: "fn-d" }, art, h("div", { class: "fn-d-info" }, h("span", { class: "fn-eyebrow", text: [c.typeName, c.rarityName].filter(Boolean).join(" · ") }), h("h2", { text: c.name }),
         c.desc ? h("p", { text: c.desc }) : null, c.set ? h("p", { class: "muted small", text: "Set: " + c.set }) : null, c.intro ? h("p", { class: "muted small", text: c.intro }) : null,
         c.added ? h("p", { class: "muted small", text: "Added " + day(c.added) }) : null,
         h("p", { class: "small", text: c.shopHistory ? `Seen in the item shop ${c.shopHistory} ${c.shopHistory === 1 ? "time" : "times"}${c.lastSeen ? `, last on ${day(c.lastSeen)}` : ""}.` : "Not in the item shop yet." }),
+        !c.video && c.type === "emote" ? findPreview(h, c.name, "emote") : null,
         h("button", { type: "button", class: "btn gray small", text: "Close", onclick: close }))));
       document.body.append(back);
     }

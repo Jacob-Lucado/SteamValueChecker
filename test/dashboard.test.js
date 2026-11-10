@@ -3708,6 +3708,15 @@ test("fortnite: the shop is grouped into Fortnite's sections, in its order, with
     assert.ok(s.refreshAt > Date.now() && new Date(s.refreshAt).getUTCHours() === 0);
 });
 
+test("fortnite: emotes carry a preview video only when the id looks like a real YouTube id", async () => {
+    const { createFortnite } = await import("../src/fortnite.js");
+    const mk = id => async () => ({ ok: true, status: 200, json: async () => ({ data: { date: "2026-11-10T00:00:00Z", entries: [fnEntry({ brItems: [{ id: "EID_X", name: "Groove", type: { value: "emote", displayValue: "Emote" }, rarity: { value: "rare", displayValue: "Rare" }, images: { icon: "https://fortnite-api.com/i.png" }, showcaseVideo: id }] })] } }) });
+    const good = (await createFortnite({ fetchImpl: mk("ofXMzLds9rM") }).shop()).sections[0].entries[0];
+    assert.equal(good.video, "ofXMzLds9rM"); assert.equal(good.items[0].video, "ofXMzLds9rM");
+    const bad = (await createFortnite({ fetchImpl: mk('x"><script>') }).shop()).sections[0].entries[0];
+    assert.equal(bad.video, null); assert.equal(bad.items[0].video, null);
+});
+
 test("fortnite: a failing upstream serves the last good copy, and stats need a key", async () => {
     const { createFortnite } = await import("../src/fortnite.js");
     let t = 0, fail = false; const good = fnFetch();
