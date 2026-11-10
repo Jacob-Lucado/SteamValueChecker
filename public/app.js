@@ -3972,10 +3972,19 @@
       } catch (err) { msg.textContent = err.message || "Could not sign in."; msg.hidden = false; }
       finally { go.disabled = false; }
     });
-    app.replaceChildren(h("div", { class: "adm-center adm-login" }, h("div", { class: "panel" },
-      h("img", { src: "/logo.png", alt: "", width: "48", height: "48" }), h("h2", { text: "Admin panel" }), h("p", { class: "muted", text: "Only the bot owner can sign in." }),
-      form, h("div", { class: "adm-or" }, h("span", { text: "or" })),
-      h("a", { class: "btn gray big", href: "/auth/login?next=admin", text: "Sign in with Discord" }), h("div", { class: "row center" }, themeButton()))));
+    // The sign-in screen looks like an operating system's: wallpaper, a big clock, a round picture and the fields underneath.
+    const clock = h("div", { class: "adm-lock-clock" }), tick = () => { const d = new Date(); clock.replaceChildren(h("b", { text: d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) }), h("span", { text: d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "long", month: "long", day: "numeric" }) })); };
+    tick(); const clockTimer = setInterval(() => { if (!clock.isConnected) return clearInterval(clockTimer); tick(); }, 15_000);
+    go.textContent = "→"; go.setAttribute("aria-label", "Sign in"); go.className = "adm-lock-go";
+    form.replaceChildren(h("div", { class: "adm-lock-fields" }, user, h("div", { class: "adm-lock-pass" }, pass, go)), codeRow, msg);
+    user.placeholder = "Username"; pass.placeholder = "Password"; user.setAttribute("aria-label", "Username"); pass.setAttribute("aria-label", "Password");
+    app.replaceChildren(h("div", { class: "adm-lock" }, clock,
+      h("div", { class: "adm-lock-card" },
+        h("div", { class: "adm-lock-avatar" }, h("img", { src: "/logo.png", alt: "", width: "96", height: "96" })),
+        h("h2", { text: "Admin" }), h("p", { class: "adm-lock-sub", text: "Only the bot owner can sign in." }),
+        form,
+        h("a", { class: "adm-lock-alt", href: "/auth/login?next=admin", text: "Sign in with Discord" })),
+      h("div", { class: "adm-lock-corner" }, themeButton())));
     user.focus();
   }
 
