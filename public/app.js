@@ -2249,7 +2249,7 @@
               h("div", { class: "rule inline" }, pick, set, g.alertChannel && clear),
               h("p", { class: "muted small", text: "Saving posts a short confirmation there, which also checks that the bot can post. If that fails, give the bot View Channel, Send Messages and Embed Links in the channel." })),
             h("div", { class: "panel" }, h("h3", { text: "Free game feed" }),
-              h("p", { class: "muted", text: "Post new free games (not DLC) in the alert channel for everyone, once each. Needs an alert channel." }),
+              h("p", { class: "muted", text: "Post new free games, and Steam free weekends, in the alert channel for everyone, once each. Not DLC. Needs an alert channel." }),
               h("div", { class: "rule inline" }, feedOn, feedLabel)),
             h("div", { class: "panel" }, h("h3", { text: "Hot deals" }),
               h("p", { class: "muted", text: "Post big Steam discounts in the alert channel, even for games nobody here watches, each deal once. Enter the smallest discount to post (30 to 95 percent). 0 turns it off. Needs an alert channel." }),

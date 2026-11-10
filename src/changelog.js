@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.49", date: "2026-11-09", title: "Free to play until", items: [
+        "**Free weekends and trials:** when Steam makes a paid game free to play for a few days, the bot now posts it with the date it ends and a Play free button. It shows up in free game alerts, the server free feed and `/free`, next to the games you can keep.",
+        "**Which games:** it watches the games people play most and the ones on sale. A tiny game with its own free weekend can still slip by, so tell us in a ticket if you spot one we missed." ] },
     { version: "2026.11.48", date: "2026-11-09", title: "Bundle pictures and supporter touches", items: [
         "**Bundle pictures:** Steam bundles in the bundles channel show their banner again, and bundles without one use a screenshot of the first game.",
         "**Adult bundles:** they're left out by default. Server managers can switch them on with `/server promos bundles adult:true` or from the Game bundles panel on the dashboard.",

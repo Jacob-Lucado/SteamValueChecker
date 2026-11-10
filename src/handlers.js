@@ -516,7 +516,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                 const dlc = i.options.getBoolean("dlc");
                 db.updateUser(user.discord_id, { free: on ? 1 : 0, ...(dlc === null ? {} : { free_dlc: dlc ? 1 : 0 }) });
                 const dlcNote = dlc === null ? "" : dlc ? " Free DLC is included." : " Free DLC is hidden.";
-                return eph(i, (on ? "You will be told when a game is free to claim. Several free games from one store come in one message with a Claim all button." : "Free game alerts are off.") + dlcNote);
+                return eph(i, (on ? "You will be told when a game is free to claim or free to play for a few days. Several free games from one store come in one message with a Claim all button." : "Free game alerts are off.") + dlcNote);
             }
             case "codes": {
                 const on = i.options.getBoolean("enabled", true);
@@ -597,7 +597,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                 if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/manage alertchannel set`.");
                 const on = i.options.getBoolean("enabled", true);
                 db.setFreeFeed(i.guildId, on);
-                return eph(i, on ? "Free game feed on. New free games (not DLC) are posted in the alert channel, once each." : "Free game feed off.");
+                return eph(i, on ? "Free game feed on. New free games and Steam free weekends (not DLC) are posted in the alert channel, once each." : "Free game feed off.");
             }
             case "hot": {
                 if (!db.getGuild(i.guildId)) return eph(i, "Set an alert channel first with `/manage alertchannel set`.");

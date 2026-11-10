@@ -47,7 +47,7 @@ export const SEO_PAGES = {
         title: "Free game alerts for Discord: Epic, Steam, GOG and more | Steam Value Checker",
         desc: "Get a Discord message the moment a game goes free on Epic, Steam, GOG and other stores, with a button to claim it. Each offer is posted once, with the end date.",
         h1: "Free game alerts in Discord",
-        lead: "Stores give games away all the time and the offers disappear fast. The bot posts each free game once, with the store, the end date and a button to claim it, so you don't have to keep checking.",
+        lead: "Stores give games away all the time and the offers disappear fast. The bot posts each free game once, with the store, the end date and a button to claim it, so you don't have to keep checking. Steam free weekends are covered too, with the date they end.",
         sections: [
             ["What it covers", ["Free games on Epic, Steam, GOG and other stores", "Free weekends, demos and playtests", "Limited-time game codes like SHiFT codes, posted once and greyed out when they run out", "A /games freegames command that shows what's free right now"]],
             ["For your server", ["Point the free games feed at a channel and ping a role. Members who don't want pings can skip them."]]

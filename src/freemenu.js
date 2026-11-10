@@ -27,7 +27,7 @@ export function freeMenu(list, { cat = "games", store = "all", page = 0, showDlc
         embed = { ...freeGamesPayload(g.shop, [g]).embeds[0] };
         const next = rows.slice(page + 1, page + 4).map(x => `${isDlc(x) ? "🧩" : "🎮"} ${x.title}`.slice(0, 60));
         if (next.length) embed.fields = [...embed.fields, { name: "Up next", value: next.join("\n"), inline: false }];
-        embed.footer = { text: `${page + 1} of ${rows.length}  •  ${CAT_NAME[cat]}  •  Data by IsThereAnyDeal` };
+        embed.footer = { text: `${page + 1} of ${rows.length}  •  ${CAT_NAME[cat]}  •  ${g.weekend ? "Free weekends from Steam" : "Data by IsThereAnyDeal"}` };
     } else {
         embed = { color: 0x57f287, title: "Nothing free here right now", description: cat === "dlc" ? "No free DLC at the moment." : "No free games at the moment. Turn on `/alerts freegames` to be told when one appears." };
     }
@@ -48,7 +48,7 @@ export function freeMenu(list, { cat = "games", store = "all", page = 0, showDlc
         { type: 2, style: 2, label: `${rows.length ? page + 1 : 0} / ${rows.length}`, custom_id: "fg_page", disabled: true },
         { type: 2, style: 2, label: "Next ▶", custom_id: `fg:${cat}:${store}:${page + 1}`, disabled: page >= rows.length - 1 }
     ];
-    if (g) nav.push({ type: 2, style: 5, label: "Claim this one", url: g.url });
+    if (g) nav.push({ type: 2, style: 5, label: g.weekend ? "Play free" : "Claim this one", url: g.url });
     components.push({ type: 1, components: nav });
     return { content: rows.length ? `**${rows.length}** free ${rows.length === 1 ? "offer" : "offers"} right now` : "", embeds: [embed], components };
 }
