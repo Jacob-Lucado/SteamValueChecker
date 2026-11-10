@@ -715,6 +715,13 @@ test("giveaways page: managers only, validated, and keys never come back", async
     const pend = (await t.request("/api/giveaways?guild=g-admin")).data.pending;
     assert.equal(pend.length, 1); assert.equal(pend[0].prize, "Hades"); assert.equal(pend[0].winner_id, "winner1"); assert.ok(pend[0].left_ms > 0);
     assert.ok(!JSON.stringify(pend).includes("AAAAA"));
+    assert.equal(pend[0].reached, null, "nothing sent yet");
+    t.db.setNotifyState(waiting.id, "none");
+    t.db.setGiveawayStatus(made.data.id, "ended");
+    const ended = (await t.request("/api/giveaways?guild=g-admin")).data;
+    assert.equal(ended.pending[0].reached, "none");
+    assert.match(ended.giveaways[0].outcome, /1 waiting on a winner \(1 couldn't be reached\), 1 with no winner/);
+    t.db.setGiveawayStatus(made.data.id, "active");
     assert.equal((await t.request("/api/giveaways/remind", { method: "POST", body: { guild_id: "g-admin", key_id: waiting.id } })).status, 200);
     assert.ok(dms.some(d => d.u === "winner1" && /Claim prize/.test(JSON.stringify(d.p))), "the winner got the reminder with a Claim button");
     assert.equal((await t.request("/api/giveaways/remind", { method: "POST", body: { guild_id: "g-admin", key_id: 999999 } })).status, 404);

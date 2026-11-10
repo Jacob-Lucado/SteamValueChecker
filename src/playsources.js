@@ -96,6 +96,23 @@ export function parseSteamDemos(json) {
 // ---------- Playtester: https://playtester.io/rss.xml ----------
 // A site that collects indie alphas, betas, playtests and demos across Steam and the consoles. Titles read "Game - Beta" or "Game - Demo".
 export const PLAYTESTER_URL = "https://playtester.io/rss.xml";
+// Every feed is capped at the 50 newest, so to see everything the site lists we read the main feed, the demo and playtest feeds, and one feed per genre.
+export const PLAYTESTER_FEEDS = ["https://playtester.io/rss/type/demo", "https://playtester.io/rss/type/playtest"];
+export const playtesterGenreUrl = slug => `https://playtester.io/rss/category/${encodeURIComponent(slug)}`;
+/** The genre slugs the site offers, read from the page that describes its feeds. */
+export function parsePlaytesterGenres(html) {
+    return [...new Set([...String(html ?? "").matchAll(/\\?"slug\\?":\\?"([a-z0-9-]{1,40})\\?",\\?"name\\?"/g)].map(m => m[1]))];
+}
+/** Joins the lists by item, keeping every genre tag any of them gave. */
+export function mergePlaytester(lists) {
+    const by = new Map();
+    for (const it of lists.flat()) {
+        const have = by.get(it.id);
+        if (!have) by.set(it.id, it);
+        else if (it.tags?.length > (have.tags?.length ?? 0)) by.set(it.id, { ...have, tags: it.tags });
+    }
+    return [...by.values()].sort((a, b) => b.date - a.date);
+}
 export function parsePlaytester(xml) {
     const out = [];
     for (const m of String(xml ?? "").matchAll(/<item>([\s\S]*?)<\/item>/gi)) {
@@ -108,7 +125,8 @@ export function parsePlaytester(xml) {
         const image = safeUrl(/<media:content[^>]+url="(https:\/\/[^"]+)"/i.exec(it)?.[1] ?? "");
         const summary = decodeEntities(tag(it, "description").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 300);
         // Like Steam's and itch.io's, the demos come by the dozen, so they only count for games someone has on a wishlist.
-        out.push({ id: `pt:${tag(it, "guid").trim() || url}`, source: "playtester", sourceName: "Playtester", game, type, kind, url, date, summary, image, ...(kind === "demo" ? { wishlistOnly: true, label: "Demo" } : {}) });
+        const tags = [...it.matchAll(/<category>([\s\S]*?)<\/category>/gi)].map(c => decodeEntities(c[1]).replace(/<!\[CDATA\[|\]\]>/g, "").trim()).filter(Boolean).slice(0, 12);
+        out.push({ id: `pt:${tag(it, "guid").trim() || url}`, source: "playtester", sourceName: "Playtester", game, type, kind, url, date, summary, image, tags, ...(kind === "demo" ? { wishlistOnly: true, label: "Demo" } : {}) });
     }
     return out.sort((a, b) => b.date - a.date);
 }
@@ -128,7 +146,8 @@ export function dedupeItems(items) {
     const kept = [];
     for (const it of ranked) {
         const g = kindGroup(it.kind);
-        if (kept.some(k => kindGroup(k.kind) === g && Math.abs(k.date - it.date) <= SAME_WINDOW && sameGame(k.game, it.game))) continue;
+        const twin = kept.find(k => kindGroup(k.kind) === g && Math.abs(k.date - it.date) <= SAME_WINDOW && sameGame(k.game, it.game));
+        if (twin) { if (it.tags?.length && !twin.tags?.length) twin.tags = it.tags; continue; }
         kept.push(it);
     }
     return kept.sort((a, b) => b.date - a.date);
@@ -166,6 +185,21 @@ export function createPlaytestSources({ fetchImpl = globalThis.fetch, now = () =
         if (!res.ok) throw new Error(`${new URL(url).hostname} ${res.status}`);
         return as === "json" ? res.json() : res.text();
     };
+    // The per-genre feeds are a lot of requests, so they are read once in a while and the last copy is reused in between.
+    let genreCache = { at: 0, items: [] };
+    async function playtesterGenres() {
+        if (now() - genreCache.at < 6 * 3600_000) return genreCache.items;
+        try {
+            const slugs = parsePlaytesterGenres(await get("https://playtester.io/rss", "text"));
+            const items = [];
+            for (let i = 0; i < slugs.length; i += 8) {
+                const part = await Promise.allSettled(slugs.slice(i, i + 8).map(async sl => parsePlaytester(await get(playtesterGenreUrl(sl), "text"))));
+                for (const r of part) if (r.status === "fulfilled") items.push(...r.value);
+            }
+            genreCache = { at: now(), items };
+        } catch { genreCache.at = now() - 6 * 3600_000 + 15 * 60_000; } // try again in 15 minutes, keep what we have
+        return genreCache.items;
+    }
     const abgFeed = abg ?? createAbgFeed({ fetchImpl, now, ttlMs });
     const sources = [
         { name: "Alpha Beta Gamer", get: () => abgFeed.latest().then(list => list.map(x => ({ ...x, source: "abg", sourceName: "Alpha Beta Gamer" }))), health: () => null },
@@ -175,7 +209,11 @@ export function createPlaytestSources({ fetchImpl = globalThis.fetch, now = () =
             if (lists.every(r => r.status === "rejected")) throw lists[0].reason; // one tag failing only costs that tag
             return lists.flatMap(r => (r.status === "fulfilled" ? r.value : []));
         } }),
-        cached({ name: "Playtester", ttlMs, now, load: async () => parsePlaytester(await get(PLAYTESTER_URL, "text")) }),
+        cached({ name: "Playtester", ttlMs, now, load: async () => {
+            const main = parsePlaytester(await get(PLAYTESTER_URL, "text")); // this one has to work
+            const extra = await Promise.allSettled(PLAYTESTER_FEEDS.map(async u => parsePlaytester(await get(u, "text"))));
+            return mergePlaytester([main, ...extra.map(r => (r.status === "fulfilled" ? r.value : [])), await playtesterGenres()]);
+        } }),
         cached({ name: "Steam demos", ttlMs, now, load: async () => parseSteamDemos(await get(STEAM_DEMOS_URL, "json")) })
     ];
     async function latest() {

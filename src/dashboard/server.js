@@ -784,6 +784,19 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         return g;
     }
     const needGiveaways = () => { if (!giveaways) throw new HttpError(503, "Giveaways are not set up on this bot. The owner needs to set KEY_ENCRYPTION_SECRET."); };
+    /** One plain line for a giveaway's list: what became of the prizes (claimed, waiting, no winner) and whether waiting winners were reached. */
+    const outcomeOf = (x, keys) => {
+        if (x.status === "active" || x.status === "scheduled" || x.status === "cancelled") return null;
+        const n = st => keys.filter(k => k.status === st).length;
+        const claimed = n("delivered") + n("confirmed"), waiting = n("assigned"), open = n("available"), problem = n("problem");
+        const lost = keys.filter(k => k.status === "assigned" && k.notify_state === "none").length;
+        const bits = [];
+        if (claimed) bits.push(`${claimed} claimed`);
+        if (waiting) bits.push(`${waiting} waiting on a winner${lost ? ` (${lost} couldn't be reached)` : ""}`);
+        if (open) bits.push(`${open} with no winner`);
+        if (problem) bits.push(`${problem} with a problem`);
+        return bits.join(", ") || null;
+    };
     /** Prizes still waiting for their winner to press Claim, with the winner's name and time left, for the dashboard and the admin panel. */
     const pendingClaimsFor = async (guildId = null) => {
         const guildNames = new Map((guildList?.() ?? []).map(g => [g.id, g.name]));
@@ -3491,7 +3504,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const g = managerGuild(s, url.searchParams.get("guild"));
             const rows = db.listGiveaways(g.id, { limit: 50 }).map(x => {
                 const keys = db.listKeys(x.id);
-                return { id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length };
+                return { id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length, outcome: outcomeOf(x, keys) };
             });
             return { giveaways: rows, pending: await pendingClaimsFor(g.id), settings: db.getGiveawaySettings(g.id), max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
@@ -4493,7 +4506,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
             const names = new Map((guildList?.() ?? []).map(g => [g.id, g.name]));
             const dest = db.giveawayDestinations().map(d => ({ id: d.guild_id, name: names.get(d.guild_id) ?? d.guild_id, channel_id: d.channel_id }));
-            const list = db.listGlobalGiveaways(15).map(g => ({ id: g.id, title: g.title, host: g.host_name ?? null, steps: g.steps ? JSON.parse(g.steps).length : 0, status: g.status, ends_at: g.ends_at, entries: db.countEntries(g.id), prizes: db.listKeys(g.id).length,
+            const list = db.listGlobalGiveaways(15).map(g => ({ id: g.id, title: g.title, host: g.host_name ?? null, steps: g.steps ? JSON.parse(g.steps).length : 0, status: g.status, ends_at: g.ends_at, entries: db.countEntries(g.id), prizes: db.listKeys(g.id).length, outcome: outcomeOf(g, db.listKeys(g.id)),
                 channels: db.listMirrors(g.id).filter(m => m.kind === "channel").length + 1, dms: db.listMirrors(g.id).filter(m => m.kind === "dm").length, spread: giveaways?.spreadStatus(g.id) ?? null }));
             return { available: Boolean(giveaways), pending: await pendingClaimsFor(null), destinations: dest, dm: db.broadcastTargets().users.length, list, ownerName: config.creator?.name ?? "You", stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },

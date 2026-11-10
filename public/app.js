@@ -1889,7 +1889,7 @@ window.SVC_SITE = envIn => {
   // since the page opened, and pauses while the tab is hidden.
   const PLAYTEST_POLL_MS = 5 * 60_000;
   async function playtestsView() {
-    const F = { kind: "all", mine: false, hideOwned: false, q: "" };
+    const F = { kind: "all", mine: false, hideOwned: false, q: "", genre: "" };
     let data = null, seen = null, fresh = new Set(), loadedAt = 0, timer = null, failed = false;
     const list = h("div"), stamp = h("span", { class: "muted small" }), bar = h("div", { class: "row free-bar" });
     const alive = () => document.body.contains(list) && currentView() === "playtests";
@@ -1900,6 +1900,15 @@ window.SVC_SITE = envIn => {
     const mineBox = h("input", { type: "checkbox" }), ownBox = h("input", { type: "checkbox" });
     mineBox.addEventListener("change", () => { F.mine = mineBox.checked; draw(); });
     ownBox.addEventListener("change", () => { F.hideOwned = ownBox.checked; draw(); });
+    const genreSel = h("select", { "aria-label": "Filter by genre" });
+    genreSel.addEventListener("change", () => { F.genre = genreSel.value; draw(); });
+    const fillGenres = () => {
+      const count = new Map();
+      for (const x of data.items) for (const t of x.tags || []) count.set(t, (count.get(t) || 0) + 1);
+      const names = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a.localeCompare(b));
+      genreSel.replaceChildren(h("option", { value: "", text: names.length ? "Any genre" : "Genres load with Playtester" }), ...names.map(n => h("option", { value: n, text: `${n} (${count.get(n)})` })));
+      genreSel.value = names.includes(F.genre) ? F.genre : ""; F.genre = genreSel.value; genreSel.hidden = !names.length;
+    };
     const refreshBtn = h("button", { class: "btn gray small", type: "button", text: "Refresh", onclick: () => load(true) });
     const tick = () => { stamp.textContent = !loadedAt ? "" : (failed ? "Could not refresh. Showing the last list. " : "") + "Updated " + (Date.now() - loadedAt < 60000 ? "just now" : when(loadedAt)) + ". Refreshes by itself."; };
 
@@ -1912,6 +1921,7 @@ window.SVC_SITE = envIn => {
           h("strong", { text: x.game }),
           h("span", { class: "muted small", text: x.title !== x.game ? x.title : "" }),
           x.summary ? h("span", { class: "muted small pt-sum", text: x.summary }) : null,
+          x.tags && x.tags.length ? h("span", { class: "muted small", text: x.tags.slice(0, 5).join(" · ") }) : null,
           h("span", { class: "muted small", text: `${x.source} · ${when(x.date)}` }),
           ext(x.url, "How to join", "btn green small")));
     }
@@ -1919,7 +1929,7 @@ window.SVC_SITE = envIn => {
       if (!data) return;
       bar.replaceChildren(
         h("div", { class: "chips" }, KINDS.map(([id, label]) => { const n = data.items.filter(x => id === "all" || x.kind === id).length; return h("button", { class: "tab small" + (F.kind === id ? " active" : ""), type: "button", text: `${label} (${n})`, onclick: () => { F.kind = id; draw(); } }); })));
-      const rows = data.items.filter(x => (F.kind === "all" || x.kind === F.kind) && (!F.mine || x.wishlist) && (!F.hideOwned || !x.owned) && (!F.q || x.game.toLowerCase().includes(F.q)));
+      const rows = data.items.filter(x => (F.kind === "all" || x.kind === F.kind) && (!F.mine || x.wishlist) && (!F.hideOwned || !x.owned) && (!F.q || x.game.toLowerCase().includes(F.q)) && (!F.genre || (x.tags || []).includes(F.genre)));
       list.replaceChildren(rows.length ? h("div", { class: "free-grid" }, rows.map(card))
         : h("div", { class: "empty", text: data.items.length ? "Nothing matches those filters." : "No playtests or demos found right now. This page checks again by itself." }));
     }
@@ -1936,7 +1946,7 @@ window.SVC_SITE = envIn => {
         }
         seen = ids; data = d; failed = false; loadedAt = Date.now();
         notes.replaceChildren(...[!d.sources.abg && h("div", { class: "notice warn", text: "The playtest sites could not be reached just now, so only Steam announcements are shown." }), !d.sources.steam && d.watching === 0 && h("p", { class: "muted small", text: "Add games to your wishlist or link Steam and their Steam announcements show up here too." })].filter(Boolean));
-        draw();
+        fillGenres(); draw();
       } catch (e) { failed = true; if (!data) list.replaceChildren(h("div", { class: "notice warn", text: e.message })); else if (manual) toast(e.message, "error"); }
       tick();
     }
@@ -1949,7 +1959,7 @@ window.SVC_SITE = envIn => {
     document.addEventListener("visibilitychange", onVis);
     const on = state.me && state.me.settings && state.me.settings.playtest;
     app.replaceChildren(pageHead("Playtests", "Playtests, betas, demos and free weekends happening now. It reads the Steam announcements of games on your wishlist or in your library, and Alpha Beta Gamer, Playtester, GamerPower, itch.io and Steam's new demos for games Steam news never mentions."),
-      h("div", { class: "panel" }, h("div", { class: "row free-bar" }, search,
+      h("div", { class: "panel" }, h("div", { class: "row free-bar" }, search, genreSel,
         h("label", { class: "check" }, mineBox, " ", h("span", { text: "On my wishlist" })), h("label", { class: "check" }, ownBox, " ", h("span", { text: "Hide games I own" })), refreshBtn, stamp),
         h("p", { class: "muted small" }, on ? "Your playtest alerts are on. " : "Want a message when one shows up? ", h("a", { href: "#/alerts", text: on ? "Change them in Alert settings." : "Turn on playtest alerts." }))),
       notes, bar, list);
@@ -3771,7 +3781,7 @@ window.SVC_SITE = envIn => {
       let info = null, timer = 0;
       const paintList = () => {
         const when = t => new Date(t).toLocaleString();
-        list.replaceChildren(info.list.length ? table(["#", "Title", "Host", "Status", "Entries", "Shown in", "Ends"], info.list.map(g => [g.id, g.title, g.host || "-", g.status, g.entries,
+        list.replaceChildren(info.list.length ? table(["#", "Title", "Host", "Status", "Prizes", "Entries", "Shown in", "Ends"], info.list.map(g => [g.id, g.title, g.host || "-", g.status, g.outcome || "-", g.entries,
           `${g.channels} server${g.channels === 1 ? "" : "s"}, ${g.dms} DM${g.dms === 1 ? "" : "s"}${g.spread && !g.spread.done ? ` (sending ${g.spread.sent + g.spread.failed}/${g.spread.total})` : g.spread && g.spread.failed ? ` (${g.spread.failed} failed)` : ""}`, when(g.ends_at)])) : h("p", { class: "muted", text: "No network-wide giveaways yet." }));
         list.prepend(pendingPanel(info.pending, id => api("/api/admin/giveaways/remind", { key_id: id }), refresh));
         // End buttons sit under the table so the table helper stays plain text.
@@ -5134,7 +5144,7 @@ window.SVC_SITE = envIn => {
       const body = rows.map(g => {
         const details = h("button", { class: "btn gray small", text: "Details" });
         details.addEventListener("click", () => busy(details, () => showDetails(g, detail)));
-        return h("tr", {}, h("td", { text: "#" + g.id }), h("td", { text: g.title }), h("td", { text: statusLabel[g.status] || g.status }),
+        return h("tr", {}, h("td", { text: "#" + g.id }), h("td", { text: g.title }), h("td", { text: statusLabel[g.status] || g.status }), h("td", { class: "muted small", text: g.outcome || "" }),
           h("td", { class: "num live-entries", "data-gid": String(g.id), text: String(g.entries) }), h("td", { class: "num", text: `${g.redeemed}/${g.prizes}` }),
           h("td", { text: g.status === "active" ? new Date(g.ends_at).toLocaleString() : g.status === "scheduled" ? "Starts " + new Date(g.starts_at).toLocaleString() : "" }),
           h("td", { class: "actions" }, details,
@@ -5144,7 +5154,7 @@ window.SVC_SITE = envIn => {
             g.status === "ended" ? act("Draw for open prizes", "gray", "/api/giveaways/reroll", { id: g.id }, r => `Drew ${r.winners} new winner${r.winners === 1 ? "" : "s"}.`) : null));
       });
       return h("div", { class: "panel" }, h("h3", { text: "Giveaways" }),
-        rows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["", "Title", "Status", "Entries", "Redeemed", "Ends", ""].map((c, i) => h("th", { class: i === 3 || i === 4 ? "num" : "", text: c })))), h("tbody", {}, body)))
+        rows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["", "Title", "Status", "Prizes", "Entries", "Redeemed", "Ends", ""].map((c, i) => h("th", { class: i === 4 || i === 5 ? "num" : "", text: c })))), h("tbody", {}, body)))
           : h("div", { class: "empty", text: "No giveaways yet." }), detail);
     }
 
@@ -6945,11 +6955,14 @@ window.SVC_SITE = envIn => {
         const fullBoxes = FULL.map(([id, label]) => { const cb = h("input", { type: "checkbox", checked: fullOn.has(id) }); cb.dataset.src = id; return h("label", { class: "check-row" }, cb, " " + label); });
         const fullField = h("div", { class: "field" }, h("label", { text: "Post every listing from these sources in the playtest channel" }), h("div", { class: "stack" }, ...fullBoxes),
           h("p", { class: "muted small", text: "Without a tick, a source's demos only post for games your members have on a wishlist. Ticking one posts all of its listings. Turning one on starts quiet, so today's backlog isn't dumped." }));
+        const genreIn = h("input", { type: "text", maxlength: "300", placeholder: "Any genre. Or e.g. Co-op, Roguelike, Cozy", value: String(st.playtest_genres || "").split(",").filter(Boolean).join(", ") });
+        const genreField = h("div", { class: "field" }, h("label", { text: "Only these genres from Playtester (optional)" }), genreIn,
+          h("p", { class: "muted small", text: "Playtester tags every game with genres like Action, Co-op or Cozy. List the ones you want, separated by commas, and the rest of its listings are skipped. Games your members have on a wishlist always post. Leave it empty for everything." }));
         const fullSources = () => fullBoxes.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
         const pings = h("div", { class: "panel" }, h("h3", { text: "Ping roles" }),
           h("p", { class: "muted", text: "Members opt in to these roles in #roles. The bot pings them (and nobody else) when it posts." }),
-          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), fullField, field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), field("Verified IndieDev role (the bot gives it to developers when their game is approved in the showcase)", pIndieDev), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
-          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { playtest_full: fullSources(), free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_dev: pIndieDev.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
+          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), fullField, genreField, field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), field("Verified IndieDev role (the bot gives it to developers when their game is approved in the showcase)", pIndieDev), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
+          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { playtest_full: fullSources(), playtest_genres: genreIn.value, free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_dev: pIndieDev.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),

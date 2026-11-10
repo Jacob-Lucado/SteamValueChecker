@@ -122,6 +122,8 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         for (const k of ["deals", "free", "giveaway", "lfg", "playtest", "squad", "indie"]) if (b[k] !== undefined) patch[`ping_${k}`] = await roleOk(gid, b[k] || null);
         if (b.playtest_all !== undefined) patch.playtest_all = b.playtest_all ? 1 : 0;
         if (b.playtest_full !== undefined) patch.playtest_full = [...new Set((Array.isArray(b.playtest_full) ? b.playtest_full : []).map(String).filter(k => FULL_SOURCES.includes(k)))].join(",") || null;
+        // Genres to keep from Playtester's full feed, lowercase and comma separated. Empty means every genre.
+        if (b.playtest_genres !== undefined) patch.playtest_genres = [...new Set(String(b.playtest_genres ?? "").split(",").map(x => x.trim().toLowerCase().slice(0, 30)).filter(Boolean))].slice(0, 20).join(",") || null;
         if (b.indie_dev !== undefined) patch.indie_dev_role = await roleOk(gid, b.indie_dev || null);
         if (b.indie_channel !== undefined) patch.indie_channel = await channelOk(gid, b.indie_channel || null);
         if (b.squad_channel !== undefined) patch.squad_channel = await channelOk(gid, b.squad_channel || null);

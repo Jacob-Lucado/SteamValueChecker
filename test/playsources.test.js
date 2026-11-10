@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { openDb } from "../src/db.js";
-import { cleanGame, kindFromText, kindGroup, parseGamerPower, parseItch, parsePlaytester, parseSteamDemos, dedupeItems, gameKeys, createPlaytestSources } from "../src/playsources.js";
+import { cleanGame, kindFromText, kindGroup, parseGamerPower, parseItch, parsePlaytester, parsePlaytesterGenres, mergePlaytester, parseSteamDemos, dedupeItems, gameKeys, createPlaytestSources } from "../src/playsources.js";
 import { runPlaytests, refreshPlaytestChannel, abgEmbed } from "../src/playtests.js";
 import { playtestBoard } from "../src/playboard.js";
 
@@ -175,4 +175,35 @@ test("a server can choose a source to post in full: its demos, even for games no
     w.set([item("abg", "Anchor", "signup", 5), demo("Unwatched Demo", 0.3), demo("Brand New Demo", 0.05)]); await w.run();
     assert.equal(w.chan.length, 1); assert.match(w.chan[0].title, /Brand New Demo/);
     assert.equal(w.sent.length, 0, "members' own alerts keep the wishlist-only rule");
+});
+
+test("Playtester: genre tags are read, and every feed (main, types, one per genre) is pulled and merged", async () => {
+    const zoom = parsePlaytester(F("playtester.xml")).find(x => x.game === "Space Girl");
+    assert.deepEqual(zoom.tags.slice(0, 3), ["Singleplayer", "Action", "Shooter"]);
+    const page = String.raw`{\"categories\":[{\"slug\":\"co-op\",\"name\":\"Co-op\"},{\"slug\":\"cozy\",\"name\":\"Cozy\"}]}`;
+    assert.deepEqual(parsePlaytesterGenres(page), ["co-op", "cozy"]);
+    const feed = (title, tags) => `<rss><channel><item><title>${title} - Beta</title><link>https://playtester.io/${title.toLowerCase().replace(/ /g, "-")}</link><guid>https://playtester.io/${title.toLowerCase().replace(/ /g, "-")}</guid><pubDate>Tue, 10 Nov 2026 18:14:04 GMT</pubDate>${tags.map(t => `<category>${t}</category>`).join("")}</item></channel></rss>`;
+    const asked = [];
+    const fetchImpl = async url => {
+        asked.push(url);
+        const text = url === "https://playtester.io/rss" ? page : url.endsWith("/rss/category/cozy") ? feed("Old Cozy Game", ["Cozy"]) : url.endsWith("/rss/type/playtest") ? feed("Only In Playtests", ["Co-op"]) : url.includes("playtester.io") ? feed("Main Game", ["Action"]) : "";
+        return { ok: true, text: async () => text, json: async () => ({}) };
+    };
+    const src = createPlaytestSources({ fetchImpl, now: () => T0 });
+    const got = (await src.latest()).filter(x => x.source === "playtester").map(x => x.game).sort();
+    assert.deepEqual(got, ["Main Game", "Old Cozy Game", "Only In Playtests"]);
+    assert.ok(["rss.xml", "rss/type/demo", "rss/type/playtest", "rss/category/co-op", "rss/category/cozy"].every(p => asked.some(u => u.endsWith(p))), "all the feeds were asked for");
+    const mergedTags = mergePlaytester([[{ id: "a", date: 1, tags: [] }], [{ id: "a", date: 1, tags: ["Cozy"] }]]);
+    assert.deepEqual(mergedTags[0].tags, ["Cozy"]);
+});
+
+test("a server can limit Playtester's full feed to some genres, but wishlisted games always post", async () => {
+    const w = world();
+    const t = (name, tags, h) => ({ ...item("playtester", name, "beta", h), tags });
+    const seed = t("Seed Game", ["Cozy"], 6);
+    w.set([item("abg", "Anchor", "signup", 5), seed]); await w.run();   // first look at both sources is quiet
+    w.db.setCommunity("G", { playtest_full: "playtester", playtest_genres: "cozy" });
+    w.set([item("abg", "Anchor", "signup", 5), seed]); await w.run(); // switching on starts quiet
+    w.set([item("abg", "Anchor", "signup", 5), seed, t("Cozy Farm", ["Cozy", "Farming"], 0.1), t("Grim Shooter", ["Action"], 0.1)]); await w.run();
+    assert.equal(w.chan.length, 1); assert.match(w.chan[0].title, /Cozy Farm/);
 });

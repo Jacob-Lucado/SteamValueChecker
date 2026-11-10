@@ -1,6 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
+        "**Playtester, all of it:** Playtester only hands out its 50 newest listings per feed, so I now read its main feed, the demo and playtest feeds, and one feed per genre. Nothing it lists ages off the Playtests page, and each game shows its genre tags.",
+        "**Genre filters:** the Playtests page has a genre picker, and server managers can limit Playtester's full feed to the genres they want (games your members have on a wishlist always post).",
+        "**Giveaway outcomes:** the giveaway lists on the dashboard and the admin panel now have a Prizes column saying what became of each prize: claimed, waiting on a winner (and whether they could be reached), or no winner.",
         "**Giveaway winners in other servers:** if a winner's DMs are closed, I now ping them in the channel they entered from (their own server) before trying the host's. The host gets a message right away when nobody could reach the winner, and the Waiting to be claimed panels show whether each winner was reached.",
         "**Buy links:** every Fortnite item has a Buy in the Fortnite shop button and a Copy link button, and the link opens Fortnite's shop with creator code LUCADO already applied.",
         "**Treasure tab:** per-chest odds, the Treasure Hour boosts, and the weekly Treasure Hunters prizes, with this week highlighted.",
