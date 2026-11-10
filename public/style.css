@@ -1755,14 +1755,13 @@ a.fd-name:hover { text-decoration: underline; }
 :root[data-area="indie"][data-theme="light"] { --accent: #d9531e; --accent-2: #c42b7a; --accent-hover: #ee6a35; --on-accent: #ffffff; --bg-glow: rgba(255, 140, 80, .22); --glow-2: rgba(255, 79, 163, .14); --ix-shadow: rgba(217, 83, 30, .22); }
 :root[data-area="indie"] body {
   background:
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, .055) 1px, transparent 1.5px) 0 0 / 22px 22px,
     radial-gradient(760px 420px at 92% -60px, rgba(46, 230, 197, .13), transparent 70%),
     radial-gradient(900px 480px at 45% -120px, var(--glow-2), transparent 70%),
     radial-gradient(900px 480px at -5% 0, var(--bg-glow), transparent 70%),
     var(--bg);
   background-attachment: fixed;
 }
-:root[data-area="indie"][data-theme="light"] body { background: radial-gradient(circle at 1px 1px, rgba(20, 40, 80, .07) 1px, transparent 1.5px) 0 0 / 22px 22px, radial-gradient(900px 480px at 45% -120px, var(--glow-2), transparent 70%), radial-gradient(900px 480px at -5% 0, var(--bg-glow), transparent 70%), var(--bg); background-attachment: fixed; }
+:root[data-area="indie"][data-theme="light"] body { background: radial-gradient(900px 480px at 45% -120px, var(--glow-2), transparent 70%), radial-gradient(900px 480px at -5% 0, var(--bg-glow), transparent 70%), var(--bg); background-attachment: fixed; }
 :root[data-area="indie"] #nav::after, :root[data-area="indie"] header::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--ix-grad); }
 :root[data-area="indie"] #app h1 { background: var(--ix-grad); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -.02em; }
 :root[data-area="indie"] .ix-tab { border: 2px solid transparent; font-weight: 700; }
