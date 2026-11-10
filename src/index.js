@@ -555,7 +555,7 @@ const indieSvc = createIndie();
 const xposter = createXPoster({ db, log: m => console.log(`[x] ${m}`) });
 // Friday's roundup of the week's best Steam sales: an X post and, if a channel is set on the admin page, a Discord post
 const indieNews = createIndieNews({ db, dm: (id, p) => discord.sendDm(id, p), base: publicBase, log: m => console.log(`[indie news] ${m}`) });
-const indieSpotlight = createSpotlight({ db, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: m => console.log(`[indie spotlight] ${m}`) });
+const indieSpotlight = createSpotlight({ db, xposter, postChannel: notifier.postChannel, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: m => console.log(`[indie spotlight] ${m}`) });
 const referrals = createReferrals({ db, supporters, dm: (id, p) => discord.sendDm(id, p), publicUrl: publicBase, log: t => console.log(`[referrals] ${t}`) });
 const weekly = createWeekly({ db, itad, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: t => console.log(`[weekly deals] ${t}`) });
 // every few minutes: send any scheduled posts that have come due, then the automatic free-game post if that's switched on

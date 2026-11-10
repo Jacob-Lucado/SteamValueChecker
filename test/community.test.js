@@ -74,6 +74,26 @@ test("community setup builds the layout, connects the bot, and running it again 
     assert.equal(again.created.channels.length, 0);
 });
 
+test("setup makes the indie showcase channels and roles, connects them, and an older server gets them on its next run", async () => {
+    const db = openDb(":memory:"), api = fakeApi();
+    const r = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "owner", sleep: noSleep, pace: 0 });
+    const names = api.state.channels.map(c => c.name);
+    assert.ok(names.includes("indie-spotlight") && names.includes("indie-games"));
+    assert.ok(api.state.roles.some(x => x.name === "Indie pings") && api.state.roles.some(x => x.name === "Indie dev"));
+    const c = db.getCommunity("G");
+    assert.equal(c.indie_channel, r.channels.indie);
+    assert.equal(c.ping_indie, db.listSelfRoles("G").find(x => x.label === "Indie pings").role_id);
+    assert.ok(api.state.sent.some(m => m.id === r.channels.indie && /hand-picked indie game/.test(m.p.content)), "the spotlight channel explains itself");
+    // a server built before the showcase existed: no keys for it, no channels, nothing connected
+    api.state.channels = api.state.channels.filter(x => !["indie-spotlight", "indie-games", "🌟 INDIE SHOWCASE"].includes(x.name));
+    db.setCommunity("G", { indie_channel: null, ping_indie: null, setup_keys: JSON.stringify(Object.keys(r.channels).filter(k => !["indie", "indiechat"].includes(k))) });
+    const again = await communitySetup({ api, db, guildId: "G", botId: "bot", userId: "owner", sleep: noSleep, pace: 0 });
+    assert.deepEqual(again.created.channels.sort(), ["indie-games", "indie-spotlight"]);
+    assert.ok(db.getCommunity("G").indie_channel && db.getCommunity("G").ping_indie, "connected on the update too");
+    const spot = api.state.channels.find(x => x.name === "indie-spotlight");
+    assert.ok(spot.permission_overwrites?.some(o => o.id === "G" && BigInt(o.deny) & 2048n), "members can read it but not post");
+});
+
 test("on a fresh server the default channels are reused and the empty default categories are removed", async () => {
     const db = openDb(":memory:");
     const api = fakeApi({ channels: [{ id: "c-t", type: 4, name: "Text Channels" }, { id: "c-g", type: 0, name: "general", parent_id: "c-t" }, { id: "c-v", type: 4, name: "Voice Channels" }, { id: "c-gv", type: 2, name: "General", parent_id: "c-v" }] });
@@ -458,6 +478,8 @@ test("the dashboard saves ping roles for managers and rejects roles that do not 
     const t = await dashSetup();
     const ok = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", free: "r1", lfg: "r2" } });
     assert.equal(ok.status, 200); assert.equal(t.db.getCommunity("g1").ping_free, "r1");
+    const ind = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", indie: "r2" } });
+    assert.equal(ind.status, 200); assert.equal(t.db.getCommunity("g1").ping_indie, "r2");
     const bad = await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", free: "nope" } });
     assert.equal(bad.status, 400);
     await t.close();

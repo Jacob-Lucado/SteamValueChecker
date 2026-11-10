@@ -18,7 +18,7 @@ export function spotlightEmbed(game, url, { inviteUrl = null } = {}) {
     return { embeds: [embed], components: [{ type: 1, components: row }] };
 }
 
-export function createSpotlight({ db, xposter = null, postDiscord = null, inviteUrl = () => null, base = null, now = () => Date.now(), log = () => {} }) {
+export function createSpotlight({ db, xposter = null, postDiscord = null, postChannel = null, inviteUrl = () => null, base = null, now = () => Date.now(), log = () => {} }) {
     const on = () => db.getMeta("indiespot:on") !== "0";
     const channel = () => db.getMeta("indiespot:channel") || "";
     const dayKey = ms => localParts(ms).ymd;
@@ -37,6 +37,12 @@ export function createSpotlight({ db, xposter = null, postDiscord = null, invite
         }
         if (postDiscord && channel()) {
             try { await postDiscord(channel(), spotlightEmbed(shaped, url, { inviteUrl: inviteUrl() })); out.discord = true; } catch (e) { out.discord = `failed: ${e.message}`; log(`indie spotlight in Discord: ${e.message}`); }
+        }
+        // and every server that has its own indie-spotlight channel (the community setup makes one), pinging its Indie pings role
+        if (postChannel) {
+            let sent = 0;
+            for (const g of db.indieGuilds?.() ?? []) { try { if (await postChannel(g.indie_channel, spotlightEmbed(shaped, url), g.ping_indie || null)) sent++; } catch { /* one server never blocks the rest */ } }
+            out.servers = sent;
         }
         // this week's pick wears the Featured mark; last week's loses it (only if the spotlight gave it, never one the owner featured by hand)
         const prev = Number(db.getMeta("indiespot:featured")) || 0;

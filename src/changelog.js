@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.50", date: "2026-11-10", title: "Indie showcase for your server", items: [
+        "**Build my server** now makes an **Indie showcase** area: #indie-spotlight, where the weekly indie pick is posted every Wednesday, and #indie-games for talking about hidden gems. There are two new self-roles in #roles, **Indie pings** and **Indie dev**.",
+        "**Already built your server?** Run Build my server again. It only adds what's missing and leaves everything else alone.",
+        "**On the dashboard:** the Ping roles panel has an indie spotlight channel and an Indie ping role, so you can point the weekly pick at any channel you like." ] },
     { version: "2026.11.49", date: "2026-11-09", title: "Free to play until", items: [
         "**Free weekends and trials:** when Steam makes a paid game free to play for a few days, the bot now posts it with the date it ends and a Play free button. It shows up in free game alerts, the server free feed and `/free`, next to the games you can keep.",
         "**Which games:** it watches the games people play most and the ones on sale. A tiny game with its own free weekend can still slip by, so tell us in a ticket if you spot one we missed." ] },

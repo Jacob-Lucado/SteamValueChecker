@@ -3584,6 +3584,12 @@ test("indie: developer news reaches followers and likers, and the Wednesday spot
     clock = wed;
     const first = await sp.tick(); assert.ok(first.game); assert.match(posts[0], /#WishlistWednesday/); assert.equal(channel.length, 1);
     assert.equal((await sp.tick()).skipped, "not due", "only once that day");
+    // servers with their own indie channel get the same pick, pinging their Indie pings role
+    t.db.setCommunity("S1", { indie_channel: "c1", ping_indie: "r1" }); t.db.setCommunity("S2", { indie_channel: "c2" });
+    const served = [], sp2 = createSpotlight({ db: t.db, now: () => clock, postChannel: async (c, p, role) => { served.push([c, role, p.embeds[0].title]); return true; }, base: "https://svc.test" });
+    clock = wed + 14 * 86_400_000; const third = await sp2.tick();
+    assert.equal(third.servers, 2); assert.deepEqual(served.map(x => x.slice(0, 2)), [["c1", "r1"], ["c2", null]]); assert.match(served[0][2], /Indie spotlight/);
+    clock = wed + 7 * 86_400_000;
     clock = wed + 7 * 86_400_000;
     const second = await sp.tick(); assert.notEqual(second.game, first.game, "the next game gets its turn");
     await t.close();
