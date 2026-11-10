@@ -14,7 +14,7 @@ test("posts are cleaned, linked to Steam, sorted, and patch notes are told apart
     assert.deepEqual(out.map(p => p.gid), ["2", "1"]);
     assert.equal(out[0].patch, true); assert.equal(out[1].patch, false);
     assert.equal(out[0].summary, "Fixes Fixed a crash see & more"); assert.equal(out[0].image, "https://clan.fastly.steamstatic.com/images/44/abc.png");
-    assert.equal(out[0].url, "https://store.steampowered.com/news/app/1245620/view/2");
+    assert.equal(out[0].url, "https://steamcommunity.com/games/1245620/announcements/detail/2");
     assert.equal(cleanPost("a ".repeat(400), 50).endsWith("…"), true);
     for (const t of ["Hotfix 3", "Update 4: new map", "v1.0.2", "Changelog"]) assert.equal(isPatchNote(t), true, t);
     for (const t of ["Weekend sale", "Meet the team", "Developer stream tonight"]) assert.equal(isPatchNote(t), false, t);

@@ -23,7 +23,7 @@ export function parseNews(json, appid) {
         if (!gid || !Number.isFinite(date) || !n?.title) continue;
         const img = IMG.exec(String(n.contents ?? ""))?.[1], vid = findVideo(n.contents);
         out.push({ gid, appid, title: String(n.title).slice(0, 200), date, summary: cleanPost(n.contents), patch: isPatchNote(n.title),
-            url: `https://store.steampowered.com/news/app/${appid}/view/${gid}`, image: img ? `https://clan.fastly.steamstatic.com/images/${img}` : (vid?.thumb ?? null), video: vid?.url ?? null });
+            url: `https://steamcommunity.com/games/${appid}/announcements/detail/${gid}`, image: img ? `https://clan.fastly.steamstatic.com/images/${img}` : (vid?.thumb ?? null), video: vid?.url ?? null });
     }
     return out.sort((a, b) => b.date - a.date);
 }
