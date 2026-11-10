@@ -21,20 +21,25 @@
     const isSet = t => /\/playlists\//.test(t.embed);
     function say(msg) { stage.replaceChildren(h("div", { class: "rd-empty" }, h("div", { class: "rd-icon", text: "📻" }), h("b", { text: msg }), h("p", { class: "muted", text: "Add a SoundCloud link on the right, then press play on any track." }))); }
 
+    let lastPos = 0;
+    const sub = () => { try { for (const v of ["finish", "play", "pause", "playProgress"]) frame.contentWindow.postMessage(JSON.stringify({ method: "addEventListener", value: v }), WIDGET); } catch { /* the ready message covers it */ } };
     function listen(ev) {
       if (!frame || ev.source !== frame.contentWindow || ev.origin !== WIDGET) return;
       let d = ev.data; try { if (typeof d === "string") d = JSON.parse(d); } catch { return; }
-      if (d?.method === "ready") frame.contentWindow.postMessage(JSON.stringify({ method: "addEventListener", value: "finish" }), WIDGET);
+      if (d?.method === "ready") sub();
+      const w = root.IndieWaves, cur0 = tracks[idx()];
+      if (d?.method === "play" || d?.method === "pause" || d?.method === "finish") w?.music?.(d.method === "play" ? { seed: cur0?.embed, pos: lastPos } : null);
+      if (d?.method === "playProgress") { const pos = Number(d.value?.currentPosition); if (Number.isFinite(pos)) { lastPos = pos; w?.music?.({ seed: cur0?.embed, pos }); } }
       if (d?.method === "finish" && auto) { const cur = tracks[idx()]; if (cur && !isSet(cur)) step(1); }
     }
     root.addEventListener("message", listen);
 
     function play(id) {
       const t = tracks.find(x => x.id === id); if (!t) return;
-      now = id; write({ ...read(), last: id });
+      now = id; lastPos = 0; write({ ...read(), last: id });
       const src = `${WIDGET}/player/?url=${encodeURIComponent(t.embed)}&auto_play=true&color=%237c6cff&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false`;
       frame = h("iframe", { class: "rd-frame", src, title: t.title, allow: "autoplay; encrypted-media", scrolling: "no", frameborder: "no", width: "100%", height: isSet(t) ? "380" : "166" });
-      frame.addEventListener("load", () => { try { frame.contentWindow.postMessage(JSON.stringify({ method: "addEventListener", value: "finish" }), WIDGET); } catch { /* the ready message covers it */ } });
+      frame.addEventListener("load", sub);
       const art = t.art ? h("img", { class: "rd-art", src: t.art, alt: "" }) : h("div", { class: "rd-art rd-noart", text: "♪" });
       stage.replaceChildren(h("div", { class: "rd-now" }, art, h("div", { class: "rd-meta" }, h("small", { class: "muted", text: "NOW PLAYING" }), h("b", { class: "rd-title", text: t.title }), h("span", { class: "muted", text: t.author }), h("small", { class: "muted", text: `Added by ${t.by}` }))),
         frame, controls(t));
