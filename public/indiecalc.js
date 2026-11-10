@@ -112,7 +112,7 @@
     const out = [];
     out.push(st.brightness < 55 ? ["bad", "Very dark. On Steam's dark pages it will melt into the background. Lift the shadows or add a lighter focal point."] : st.brightness < 85 ? ["warn", "A bit dark. Fine for a moody game, but make sure the logo and the subject still pop."] : st.brightness > 215 ? ["warn", "Very bright. Check it doesn't look washed out beside darker capsules."] : ["good", "Brightness is in a comfortable range."]);
     out.push(st.contrast < 30 ? ["bad", "Low contrast. At thumbnail size everything blends together. Separate the subject from the background."] : st.contrast < 45 ? ["warn", "Moderate contrast. A stronger light-and-dark split would read better when small."] : ["good", "Good contrast between light and dark areas."]);
-    out.push(st.saturation < 12 ? ["warn", "Almost no colour. That can look stylish, but it stands out less in a row of colourful capsules."] : ["good", "There's enough colour to catch the eye."]);
+    out.push(st.saturation < 12 ? ["warn", "Almost no color. That can look stylish, but it stands out less in a row of colorful capsules."] : ["good", "There's enough color to catch the eye."]);
     return out;
   }
   /** Which screenshots look weak: dark ones, and a suggested order with the strongest first. */
@@ -133,7 +133,7 @@
     { id: "logo", name: "Library logo", w: 1280, h: 720, note: "Transparent PNG laid over the hero. It's shown up to 1280 wide." },
     { id: "background", name: "Page background", w: 1438, h: 810, note: "Faint image behind your store page." }
   ];
-  /** The source rectangle that fills a target size, centred on a focal point (0 to 1 each way). */
+  /** The source rectangle that fills a target size, centered on a focal point (0 to 1 each way). */
   function coverCrop(sw, sh, tw, th, fx = 0.5, fy = 0.5) {
     const scale = Math.max(tw / sw, th / sh), cw = tw / scale, ch = th / scale;
     return { sx: Math.min(sw - cw, Math.max(0, fx * sw - cw / 2)), sy: Math.min(sh - ch, Math.max(0, fy * sh - ch / 2)), sw: cw, sh: ch };

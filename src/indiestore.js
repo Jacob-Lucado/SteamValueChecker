@@ -23,10 +23,65 @@ CREATE TABLE IF NOT EXISTS indie_games (
     views     INTEGER NOT NULL DEFAULT 0,
     created   INTEGER NOT NULL,
     decided   INTEGER,
-    synced    INTEGER
+    synced    INTEGER,
+    verified  INTEGER NOT NULL DEFAULT 0,
+    verify_code TEXT,
+    keys_open INTEGER NOT NULL DEFAULT 0,
+    spotlit   INTEGER
 );
 CREATE INDEX IF NOT EXISTS indie_games_status ON indie_games (status, created);
 CREATE INDEX IF NOT EXISTS indie_games_owner ON indie_games (owner_id);
+CREATE TABLE IF NOT EXISTS indie_follows (
+    user_id TEXT NOT NULL,
+    kind    TEXT NOT NULL,
+    target  TEXT NOT NULL,
+    created INTEGER NOT NULL,
+    PRIMARY KEY (user_id, kind, target)
+);
+CREATE TABLE IF NOT EXISTS indie_updates (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL,
+    kind    TEXT NOT NULL,
+    title   TEXT NOT NULL,
+    body    TEXT,
+    link    TEXT,
+    created INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS indie_updates_game ON indie_updates (game_id, created);
+CREATE TABLE IF NOT EXISTS indie_reports (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id  INTEGER NOT NULL,
+    reporter TEXT NOT NULL,
+    reason   TEXT NOT NULL,
+    status   TEXT NOT NULL DEFAULT 'open',
+    created  INTEGER NOT NULL,
+    UNIQUE (game_id, reporter)
+);
+CREATE TABLE IF NOT EXISTS indie_keyreq (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
+    name    TEXT,
+    channel TEXT,
+    note    TEXT,
+    status  TEXT NOT NULL DEFAULT 'pending',
+    created INTEGER NOT NULL,
+    UNIQUE (game_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS indie_days (
+    game_id INTEGER NOT NULL,
+    day     TEXT NOT NULL,
+    views   INTEGER NOT NULL DEFAULT 0,
+    clicks  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (game_id, day)
+);
+CREATE TABLE IF NOT EXISTS indie_reviews (
+    game_id  INTEGER NOT NULL,
+    day      TEXT NOT NULL,
+    total    INTEGER NOT NULL,
+    positive INTEGER NOT NULL,
+    PRIMARY KEY (game_id, day)
+);
 CREATE TABLE IF NOT EXISTS indie_likes (
     game_id  INTEGER NOT NULL,
     user_id  TEXT NOT NULL,
@@ -80,15 +135,89 @@ export function indieStore({ run, get, all, now }) {
     function indieRefresh(id, { title, studio, blurb, genres, image, price, release }) {
         run("UPDATE indie_games SET title = ?, studio = ?, blurb = ?, genres = ?, image = ?, price = ?, release = ?, synced = " + now() + " WHERE id = ?", clip(title, 200), clip(studio, 120), clip(blurb, 400), JSON.stringify((genres ?? []).slice(0, 8)), clip(image, 500), clip(price, 40), clip(release, 40), Number(id));
     }
-    function indieRemove(id) { run("DELETE FROM indie_likes WHERE game_id = ?", Number(id)); run("DELETE FROM indie_games WHERE id = ?", Number(id)); }
+    function indieRemove(id) {
+        const n = Number(id);
+        for (const t of ["indie_likes", "indie_updates", "indie_reports", "indie_keyreq", "indie_days", "indie_reviews"]) run(`DELETE FROM ${t} WHERE game_id = ?`, n);
+        run("DELETE FROM indie_follows WHERE kind = 'game' AND target = ?", String(n)); run("DELETE FROM indie_games WHERE id = ?", n);
+    }
     /** One like per person. Returns whether the game is liked now. */
     function indieToggleLike(id, userId) {
         const had = get("SELECT 1 x FROM indie_likes WHERE game_id = ? AND user_id = ?", Number(id), String(userId));
         if (had) { run("DELETE FROM indie_likes WHERE game_id = ? AND user_id = ?", Number(id), String(userId)); run("UPDATE indie_games SET likes = MAX(0, likes - 1) WHERE id = ?", Number(id)); return false; }
         run("INSERT INTO indie_likes (game_id, user_id) VALUES (?, ?)", Number(id), String(userId)); run("UPDATE indie_games SET likes = likes + 1 WHERE id = ?", Number(id)); return true;
     }
+    const indieLikedBy = userId => all("SELECT game_id FROM indie_likes WHERE user_id = ?", String(userId)).map(r => r.game_id);
     const indieLiked = (id, userId) => Boolean(userId && get("SELECT 1 x FROM indie_likes WHERE game_id = ? AND user_id = ?", Number(id), String(userId)));
-    const indieBump = (id, field) => { if (field === "views" || field === "clicks") run(`UPDATE indie_games SET ${field} = ${field} + 1 WHERE id = ? AND status = 'approved'`, Number(id)); };
+    const dayOf = (t = now()) => new Date(t).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    const indieBump = (id, field) => {
+        if (field !== "views" && field !== "clicks") return;
+        const r = run(`UPDATE indie_games SET ${field} = ${field} + 1 WHERE id = ? AND status = 'approved'`, Number(id));
+        if (r.changes) run(`INSERT INTO indie_days (game_id, day, ${field}) VALUES (?, ?, 1) ON CONFLICT(game_id, day) DO UPDATE SET ${field} = ${field} + 1`, Number(id), dayOf());
+    };
+    /** The last n days for one game, oldest first, with the quiet days filled in as zeros. */
+    function indieDays(id, n = 14) {
+        const rows = new Map(all("SELECT day, views, clicks FROM indie_days WHERE game_id = ? AND day >= ?", Number(id), dayOf(now() - n * 86_400_000)).map(r => [r.day, r]));
+        return Array.from({ length: n }, (_, i) => { const day = dayOf(now() - (n - 1 - i) * 86_400_000), r = rows.get(day); return { day, views: r?.views ?? 0, clicks: r?.clicks ?? 0 }; });
+    }
+    /** All games over the last week, for the owner's Monday summary. */
+    const indieWeek = () => ({ ...get("SELECT COALESCE(SUM(views),0) views, COALESCE(SUM(clicks),0) clicks FROM indie_days WHERE day >= ?", dayOf(now() - 6 * 86_400_000)), submitted: get("SELECT COUNT(*) n FROM indie_games WHERE created >= ?", now() - 7 * 86_400_000).n, pending: get("SELECT COUNT(*) n FROM indie_games WHERE status = 'pending'").n, reports: get("SELECT COUNT(*) n FROM indie_reports WHERE status = 'open'").n });
+    const indieSnapReviews = (id, total, positive) => run("INSERT INTO indie_reviews (game_id, day, total, positive) VALUES (?, ?, ?, ?) ON CONFLICT(game_id, day) DO UPDATE SET total = excluded.total, positive = excluded.positive", Number(id), dayOf(), Number(total) || 0, Number(positive) || 0);
+    const indieReviewHistory = (id, n = 60) => all("SELECT day, total, positive FROM indie_reviews WHERE game_id = ? ORDER BY day DESC LIMIT ?", Number(id), n).reverse();
+
+    // follows: a game, or every game a studio (its owner) makes
+    function indieToggleFollow(userId, kind, target) {
+        if (kind !== "game" && kind !== "studio") return false;
+        const t = String(target), had = get("SELECT 1 x FROM indie_follows WHERE user_id = ? AND kind = ? AND target = ?", String(userId), kind, t);
+        if (had) { run("DELETE FROM indie_follows WHERE user_id = ? AND kind = ? AND target = ?", String(userId), kind, t); return false; }
+        run("INSERT INTO indie_follows (user_id, kind, target, created) VALUES (?, ?, ?, ?)", String(userId), kind, t, now()); return true;
+    }
+    const indieFollowing = userId => all("SELECT kind, target FROM indie_follows WHERE user_id = ? ORDER BY created DESC LIMIT 200", String(userId));
+    const indieIsFollowing = (userId, kind, target) => Boolean(userId && get("SELECT 1 x FROM indie_follows WHERE user_id = ? AND kind = ? AND target = ?", String(userId), kind, String(target)));
+    const indieFollowers = (kind, target) => all("SELECT user_id FROM indie_follows WHERE kind = ? AND target = ?", kind, String(target)).map(r => r.user_id);
+    const indieLikers = id => all("SELECT user_id FROM indie_likes WHERE game_id = ?", Number(id)).map(r => r.user_id);
+    const indieFollowCount = id => get("SELECT COUNT(*) n FROM indie_follows WHERE kind = 'game' AND target = ?", String(id)).n;
+
+    // developer updates
+    function indieAddUpdate({ gameId, kind = "news", title, body = null, link = null }) {
+        const k = ["news", "demo", "playtest", "release", "sale"].includes(kind) ? kind : "news";
+        const r = run("INSERT INTO indie_updates (game_id, kind, title, body, link, created) VALUES (?, ?, ?, ?, ?, ?)", Number(gameId), k, clip(title, 120), clip(body, 600), clip(link, 300), now());
+        return Number(r.lastInsertRowid);
+    }
+    const indieUpdates = (gameId, limit = 10) => all("SELECT * FROM indie_updates WHERE game_id = ? ORDER BY created DESC LIMIT ?", Number(gameId), limit);
+    const indieUpdate = id => get("SELECT * FROM indie_updates WHERE id = ?", Number(id)) ?? null;
+    const indieDeleteUpdate = id => run("DELETE FROM indie_updates WHERE id = ?", Number(id));
+    const indieUpdatesSince = (gameId, since) => get("SELECT COUNT(*) n FROM indie_updates WHERE game_id = ? AND created >= ?", Number(gameId), since).n;
+    /** The newest developer news across the showcase, approved games only. */
+    const indieNewsFeed = (limit = 6) => all("SELECT u.*, g.title AS game_title, g.image, g.studio FROM indie_updates u JOIN indie_games g ON g.id = u.game_id WHERE g.status = 'approved' ORDER BY u.created DESC LIMIT ?", limit);
+
+    // reports
+    function indieReport({ gameId, reporter, reason }) {
+        const had = get("SELECT id FROM indie_reports WHERE game_id = ? AND reporter = ?", Number(gameId), String(reporter));
+        if (had) return false;
+        run("INSERT INTO indie_reports (game_id, reporter, reason, created) VALUES (?, ?, ?, ?)", Number(gameId), String(reporter), clip(reason, 300) ?? "No reason given", now()); return true;
+    }
+    const indieReports = (status = "open") => all("SELECT r.*, g.title, g.appid, g.image FROM indie_reports r LEFT JOIN indie_games g ON g.id = r.game_id WHERE r.status = ? ORDER BY r.created DESC LIMIT 100", status);
+    const indieResolveReports = (gameId, status = "closed") => run("UPDATE indie_reports SET status = ? WHERE game_id = ?", status, Number(gameId));
+
+    // review key requests
+    function indieKeyRequest({ gameId, userId, name, channel, note }) {
+        if (get("SELECT 1 x FROM indie_keyreq WHERE game_id = ? AND user_id = ?", Number(gameId), String(userId))) return false;
+        run("INSERT INTO indie_keyreq (game_id, user_id, name, channel, note, created) VALUES (?, ?, ?, ?, ?, ?)", Number(gameId), String(userId), clip(name, 60), clip(channel, 300), clip(note, 300), now()); return true;
+    }
+    const indieKeyRequests = gameId => all("SELECT * FROM indie_keyreq WHERE game_id = ? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created DESC LIMIT 100", Number(gameId));
+    const indieKeyRequestOf = (gameId, userId) => get("SELECT status FROM indie_keyreq WHERE game_id = ? AND user_id = ?", Number(gameId), String(userId)) ?? null;
+    const indieKeyRequestGet = id => get("SELECT * FROM indie_keyreq WHERE id = ?", Number(id)) ?? null;
+    const indieKeyDecide = (id, status) => run("UPDATE indie_keyreq SET status = ? WHERE id = ?", status === "approved" ? "approved" : "declined", Number(id));
+    const indieSetKeysOpen = (id, on) => run("UPDATE indie_games SET keys_open = ? WHERE id = ?", on ? 1 : 0, Number(id));
+
+    // verification and spotlight
+    const indieSetVerifyCode = (id, code) => run("UPDATE indie_games SET verify_code = ? WHERE id = ?", code, Number(id));
+    const indieSetVerified = (id, on) => run("UPDATE indie_games SET verified = ?, verify_code = CASE WHEN ? = 1 THEN NULL ELSE verify_code END WHERE id = ?", on ? 1 : 0, on ? 1 : 0, Number(id));
+    /** The approved game spotlighted longest ago (never first), skipping anything spotlighted in the last `restDays`. */
+    const indieSpotlightPick = (restDays = 21) => get("SELECT * FROM indie_games WHERE status = 'approved' AND COALESCE(spotlit, 0) < ? ORDER BY COALESCE(spotlit, 0) ASC, verified DESC, likes DESC, created DESC LIMIT 1", now() - restDays * 86_400_000);
+    const indieMarkSpotlit = id => run("UPDATE indie_games SET spotlit = ? WHERE id = ?", now(), Number(id));
+    const indieApprovedAll = () => all("SELECT * FROM indie_games WHERE status = 'approved'").map(shape);
+    const indieReportsFor = gameId => get("SELECT COUNT(*) n FROM indie_reports WHERE game_id = ? AND status = 'open'", Number(gameId)).n;
     const indieCounts = () => Object.fromEntries(all("SELECT status, COUNT(*) n FROM indie_games GROUP BY status").map(r => [r.status, r.n]));
     /** Approved games not refreshed from Steam in a day, least recently synced first. */
     const indieDueForSync = (limit = 5, olderThanMs = 86_400_000) => all("SELECT id, appid FROM indie_games WHERE status = 'approved' AND COALESCE(synced, 0) < ? ORDER BY COALESCE(synced, 0) ASC LIMIT ?", now() - olderThanMs, limit);
@@ -97,9 +226,11 @@ export function indieStore({ run, get, all, now }) {
     /** Someone deleting their data takes their games and likes with them. */
     function forgetIndieUser(userId) {
         for (const g of all("SELECT id FROM indie_games WHERE owner_id = ?", String(userId))) indieRemove(g.id);
+        run("DELETE FROM indie_follows WHERE user_id = ? OR (kind = 'studio' AND target = ?)", String(userId), String(userId));
+        run("DELETE FROM indie_reports WHERE reporter = ?", String(userId)); run("DELETE FROM indie_keyreq WHERE user_id = ?", String(userId));
         for (const l of all("SELECT game_id FROM indie_likes WHERE user_id = ?", String(userId))) run("UPDATE indie_games SET likes = MAX(0, likes - 1) WHERE id = ?", l.game_id);
         run("DELETE FROM indie_likes WHERE user_id = ?", String(userId));
     }
-    const indieExport = userId => ({ games: indieByOwner(userId).map(g => ({ appid: g.appid, title: g.title, status: g.status, pitch: g.pitch, links: g.links, submitted_at: g.created })), liked: all("SELECT game_id FROM indie_likes WHERE user_id = ?", String(userId)).map(r => r.game_id) });
-    return { indieAdd, indieGet, indieByApp, indieByOwner, indieCountOwner, indieList, indieFeatured, indieGenres, indieDecide, indieFeature, indieEdit, indieRefresh, indieRemove, indieToggleLike, indieLiked, indieBump, indieCounts, indieDueForSync, indieTouchSync, indieTotals, forgetIndieUser, indieExport };
+    const indieExport = userId => ({ following: indieFollowing(userId), keyRequests: all("SELECT game_id, status, created FROM indie_keyreq WHERE user_id = ?", String(userId)), games: indieByOwner(userId).map(g => ({ appid: g.appid, title: g.title, status: g.status, pitch: g.pitch, links: g.links, submitted_at: g.created })), liked: all("SELECT game_id FROM indie_likes WHERE user_id = ?", String(userId)).map(r => r.game_id) });
+    return { indieLikedBy, indieDays, indieWeek, indieSnapReviews, indieReviewHistory, indieToggleFollow, indieFollowing, indieIsFollowing, indieFollowers, indieLikers, indieFollowCount, indieAddUpdate, indieUpdates, indieUpdate, indieDeleteUpdate, indieUpdatesSince, indieNewsFeed, indieReport, indieReports, indieResolveReports, indieKeyRequest, indieKeyRequests, indieKeyRequestOf, indieKeyRequestGet, indieKeyDecide, indieSetKeysOpen, indieSetVerifyCode, indieSetVerified, indieSpotlightPick, indieMarkSpotlit, indieApprovedAll, indieReportsFor, indieAdd, indieGet, indieByApp, indieByOwner, indieCountOwner, indieList, indieFeatured, indieGenres, indieDecide, indieFeature, indieEdit, indieRefresh, indieRemove, indieToggleLike, indieLiked, indieBump, indieCounts, indieDueForSync, indieTouchSync, indieTotals, forgetIndieUser, indieExport };
 }

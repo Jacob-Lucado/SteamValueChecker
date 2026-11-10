@@ -41,7 +41,7 @@
       const t = await tools();
       const teaser = h("section", { class: "ix-teaser" }, h("div", {}, h("h2", { text: "Free tools for developers" }), h("p", { class: "muted", text: `${t.tools.length} calculators, checkers and generators for your Steam launch. No sign-in, and nothing you enter or drop in leaves your browser.` }), link("/indie/tools", "Open the toolbox", "btn blue")),
         h("div", { class: "ix-teaser-list" }, t.tools.slice(0, 6).map(x => link(`/indie/tools/${x.id}`, x.name, "ix-teaser-item"))));
-      wrapPage("", banner("Indie corner", "Find your next favourite indie game", "Games from small studios, with a free home for yours. Every game links straight to its Steam page, and the toolbox is free for any developer.", link("/indie/submit", "Submit your game", "btn green"), link("/indie/tools", "Developer tools", "btn gray")), featured,
+      wrapPage("", banner("Indie corner", "Find your next favorite indie game", "Games from small studios, with a free home for yours. Every game links straight to its Steam page, and the toolbox is free for any developer.", link("/indie/submit", "Submit your game", "btn green"), link("/indie/tools", "Developer tools", "btn gray")), featured,
         h("div", { class: "ix-filters" }, search, genre, sort, count), grid, pager, teaser);
       let timer = null;
       const load = async () => {

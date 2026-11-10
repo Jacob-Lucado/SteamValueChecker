@@ -66,6 +66,7 @@ export function createIndie({ fetchImpl = globalThis.fetch, now = () => Date.now
                 price: x.is_free ? "Free" : x.price_overview?.final_formatted ?? null, free: Boolean(x.is_free), priceCents: x.price_overview?.initial ?? null,
                 release: x.release_date?.date ?? null, comingSoon: Boolean(x.release_date?.coming_soon), website: x.website ?? null,
                 screenshots: (x.screenshots ?? []).slice(0, 8).map(s => s.path_thumbnail).filter(u => /^https:\/\//.test(u ?? "")),
+                hay: plain([x.short_description, x.about_the_game, x.detailed_description, x.website, x.support_info?.url, x.support_info?.email].filter(Boolean).join(" ")).slice(0, 30000),
                 languages: plain(x.supported_languages).replace(/\*?languages with full audio support/i, "").slice(0, 200), platforms: Object.entries(x.platforms ?? {}).filter(([, v]) => v).map(([k]) => k)
             });
         }
@@ -86,10 +87,16 @@ export function createIndie({ fetchImpl = globalThis.fetch, now = () => Date.now
     async function syncDue(db, { limit = 5, log = () => {} } = {}) {
         let done = 0;
         for (const g of db.indieDueForSync(limit)) {
-            try { const fresh = await lookup(g.appid, { fresh: true }); if (fresh.type === "game") { db.indieRefresh(g.id, fresh); done++; } else db.indieTouchSync(g.id); }
+            try { const fresh = await lookup(g.appid, { fresh: true }); if (fresh.type === "game") { db.indieRefresh(g.id, fresh); done++; const r = await reviews(g.appid); if (r) db.indieSnapReviews(g.id, r.total, r.positive); } else db.indieTouchSync(g.id); }
             catch (e) { db.indieTouchSync(g.id); log(`indie sync ${g.appid}: ${e.message}`); } // tried; look again tomorrow
         }
         return done;
     }
-    return { lookup, search, reviews, parseApp, syncDue };
+    /** Is this code written on the game's own Steam page? Only the people who control the page can put it there. */
+    async function hasVerifyCode(appid, code) {
+        if (!/^svc-verify-[a-z0-9]{8}$/.test(String(code ?? ""))) return false;
+        const g = await lookup(appid, { fresh: true });
+        return g.hay.toLowerCase().includes(code.toLowerCase());
+    }
+    return { lookup, search, reviews, parseApp, syncDue, hasVerifyCode };
 }

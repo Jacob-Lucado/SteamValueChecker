@@ -33,6 +33,12 @@ export const INDIE_TOOLS = [
     { id: "rival-compare", cat: "research", name: "Rival Comparison", desc: "Put two games' price, reviews, genres and release dates side by side.", fresh: true }
 ];
 
+/** The kinds of developer news, with how they read in a message and on the page. */
+export const INDIE_KIND_LABEL = {
+    news: { icon: "📰", name: "News", cta: "Read more" }, demo: { icon: "🎮", name: "Demo", cta: "Get the demo" },
+    playtest: { icon: "🧪", name: "Playtest", cta: "Sign up" }, release: { icon: "🚀", name: "Release", cta: "See it on Steam" }, sale: { icon: "🏷️", name: "Sale", cta: "See the deal" }
+};
+
 const BY_ID = new Map(INDIE_TOOLS.map(t => [t.id, t]));
 export const indieTool = id => BY_ID.get(id) ?? null;
 
@@ -66,9 +72,9 @@ export function indieSeo(path, game = null) {
 }
 
 /** The post the project's own X account sends when it spotlights a showcase game. Links count as 23 characters. */
-export function indieSpotlightText(game, url) {
+export function indieSpotlightText(game, url, { wednesday = false } = {}) {
     const len = t => t.replace(/https?:\/\/\S+/g, "x".repeat(23)).length;
-    const tags = "#indiegame #gamedev #Steam", head = `Indie spotlight: ${game.title}${game.studio ? ` by ${game.studio}` : ""}`;
+    const tags = `${wednesday ? "#WishlistWednesday " : ""}#indiegame #gamedev #Steam`, head = `Indie spotlight: ${game.title}${game.studio ? ` by ${game.studio}` : ""}`;
     let pitch = String(game.pitch || game.blurb || "").replace(/\s+/g, " ").trim();
     const build = p => `${head}\n\n${p ? p + "\n\n" : ""}${url}\n${tags}`;
     while (pitch.length > 12 && len(build(pitch)) > 280) pitch = pitch.slice(0, -6).trimEnd() + "…";

@@ -112,7 +112,7 @@
         g.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, 0, 0, w, ht); URL.revokeObjectURL(url);
         const st = C.imageStats(g.getImageData(0, 0, w, ht).data);
         const bg = h("div", { class: "ix-rowmock" }, h("div", { class: "ix-rowmock-pic" }, c), h("div", {}, h("b", { text: "Your game" }), h("span", { class: "muted small", text: "Shown the way Steam shows it in a list, at 231 × 87" })));
-        out.replaceChildren(bg, k.stats(k.stat("Brightness", `${Math.round(st.brightness)} / 255`), k.stat("Contrast", String(Math.round(st.contrast))), k.stat("Colour", `${Math.round(st.saturation)}%`)), k.checks(C.capsuleVerdict(st)), k.note("Your picture stays on this device. Aspect ratio matters: Steam's small capsule is wide, so keep the name and focal point away from the edges."));
+        out.replaceChildren(bg, k.stats(k.stat("Brightness", `${Math.round(st.brightness)} / 255`), k.stat("Contrast", String(Math.round(st.contrast))), k.stat("Color", `${Math.round(st.saturation)}%`)), k.checks(C.capsuleVerdict(st)), k.note("Your picture stays on this device. Aspect ratio matters: Steam's small capsule is wide, so keep the name and focal point away from the edges."));
       } catch (e) { out.replaceChildren(h("p", { class: "notice warn", text: e.message })); }
     });
     return h("div", { class: "ix-tool" }, h("div", { class: "ix-field" }, h("label", { text: "Choose your capsule picture" }), pick), out); });
@@ -144,7 +144,7 @@
         const r = C.screenshotOrder(rows.map(x => x.st)), early = r.dark.filter(i => i < 5);
         out.replaceChildren(k.checks([early.length ? ["bad", `${early.length} of your first five are dark (${early.map(i => "#" + (i + 1)).join(", ")}). Players decide on the first few, so lead with brighter, busier shots.`] : ["good", "None of your first five are dark."], r.dark.length > early.length ? ["warn", `${r.dark.length - early.length} later screenshots are dark. Fine as long as they show something worth the squint.`] : null].filter(Boolean)),
           h("div", { class: "ix-shots" }, rows.map((x, i) => h("figure", { class: r.dark.includes(i) ? "dim" : "" }, x.canvas, h("figcaption", { class: "small", text: `#${i + 1} · brightness ${Math.round(x.st.brightness)}` })))),
-          h2(ctx, "A stronger order to try", r.order.map(i => "#" + (i + 1)).join(", ")), k.note("The order is a starting point based on brightness, contrast and colour. You know which shots tell your game's story best. Nothing is uploaded."));
+          h2(ctx, "A stronger order to try", r.order.map(i => "#" + (i + 1)).join(", ")), k.note("The order is a starting point based on brightness, contrast and color. You know which shots tell your game's story best. Nothing is uploaded."));
       } catch (e) { out.replaceChildren(h("p", { class: "notice warn", text: e.message })); }
     });
     return h("div", { class: "ix-tool" }, h("div", { class: "ix-field" }, h("label", { text: "Choose your screenshots, in the order they appear on your page (up to 12)" }), pick), out); });
