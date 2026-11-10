@@ -1598,6 +1598,14 @@ window.SVC_SITE = envIn => {
     const count = h("span", { class: "muted small", text: `${cfg.bio.length}/300` });
     bio.addEventListener("input", () => { cfg.bio = bio.value; count.textContent = `${bio.value.length}/300`; changed(); });
     const about = h("div", { class: "panel" }, h("h3", { text: "About you" }), field("Display name", name), field("Bio", bio), count);
+    // The birthday is kept apart from the page design: it saves on its own and never shows on the page.
+    const bdIn = h("input", { type: "text", maxlength: "5", placeholder: "MM-DD", value: (d.birthday && d.birthday.value) || "", "aria-label": "Your birthday" });
+    const bdShare = h("input", { type: "checkbox", checked: Boolean(d.birthday && d.birthday.share) });
+    const bdSave = h("button", { class: "btn gray small", type: "button", text: "Save birthday" });
+    bdSave.addEventListener("click", () => busy(bdSave, async () => { const r = await api("/api/profile/birthday", { birthday: bdIn.value.trim(), share: bdShare.checked }); bdShare.checked = r.share; toast(r.birthday ? (r.share ? "Saved. People with your page on their friends list will get a reminder." : "Saved. It stays private.") : "Birthday removed.", "ok"); }));
+    const birthday = h("div", { class: "panel" }, h("h3", { text: "Birthday" }),
+      h("p", { class: "muted small", text: "Month and day only, never the year. It never shows on your page." }),
+      field("Your birthday", bdIn), h("label", { class: "check" }, bdShare, " Remind people who have my page on their friends list (they only see a reminder, and you can turn this off any time)"), h("div", { class: "row" }, bdSave));
 
     // links
     const linkBox = h("div", { class: "pf-rows" });
@@ -1710,7 +1718,7 @@ window.SVC_SITE = envIn => {
     drawBg();
     const pageBgPanel = h("div", { class: "panel" }, h("h3", { text: "Page background" }), h("p", { class: "muted small", text: "The space around your profile card." }), bgBox);
     holder.replaceChildren(h("div", { class: "pf-editor" },
-      h("div", { class: "pf-form" }, look, pageBgPanel, about, links, favs, song, secs, h("div", { class: "row pf-save" }, saveBtn, open, copy)),
+      h("div", { class: "pf-form" }, look, pageBgPanel, about, birthday, links, favs, song, secs, h("div", { class: "row pf-save" }, saveBtn, open, copy)),
       h("div", { class: "pf-side" }, h("div", { class: "pf-sticky" }, h("h3", { text: "Preview" }), pv))));
     draw(d.profile);
     window.addEventListener("hashchange", () => { clearTimeout(timer); }, { once: true });
@@ -6552,7 +6560,7 @@ window.SVC_SITE = envIn => {
         const bd = h("input", { type: "text", maxlength: "5", placeholder: "MM-DD", "aria-label": "Birthday for " + f.name, class: "fr-bday" });
         const bdSave = h("button", { class: "btn gray small", type: "button", text: "Set birthday" });
         bdSave.addEventListener("click", () => busy(bdSave, async () => { await api("/api/friends/birthday", { name: f.name, birthday: bd.value }); toast("Birthday saved. You'll get a reminder a week before.", "ok"); load(); }));
-        return h("div", { class: "panel" }, h("strong", { text: f.name }), f.auto ? h("span", { class: "chip dim", text: " Following" }) : null, h("span", { class: "muted", text: f.birthday ? "  " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, f.birthday ? null : bd, f.birthday ? null : bdSave, show, del));
+        return h("div", { class: "panel" }, h("strong", { text: f.name }), f.auto ? h("span", { class: "chip dim", text: " Following" }) : null, h("span", { class: "muted", text: f.birthday ? "  " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") + (f.fromPage ? ", shared on their page" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, f.birthday ? null : bd, f.birthday ? null : bdSave, show, del));
       }));
     }
     const add = h("button", { class: "btn blue", text: "Save friend" });

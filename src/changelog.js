@@ -1,6 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
+        "**Your birthday:** the profile editor has a Birthday box (month and day only, never shown on your page). Tick the share option and anyone who has your page on their Friends list gets the reminder a week before, without having to type it in. A friend's own entry still wins, and turning sharing off or switching your page off hides it again.",
         "**Playtester labels:** Playtester writes \"Beta\" in the title of every playtest, so they all showed up as Betas. They're now listed as Playtests, and only its demos stay Demos.",
         "**Friends from follows:** when you follow someone's page they land on your Friends list automatically (and everyone you already follow was added once). Unfollowing removes them again unless you set a birthday. Only the birthday is left to add, right on the row, and you get the reminder a week before. The list now holds up to 100.",
         "**Save all on Setup:** the channel list on the Server setup page has one Save all button instead of a Save per row, and saving no longer reloads the page.",

@@ -102,7 +102,7 @@ import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY a
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
-import { friendDeals, friendRows, saveFriend, friendFromFollow, syncFollowedFriends, cleanFriendName, cleanBirthday } from "../friends.js";
+import { saveOwnBirthday, friendDeals, friendRows, saveFriend, friendFromFollow, syncFollowedFriends, cleanFriendName, cleanBirthday } from "../friends.js";
 import { spendSummary, regionCurrency, grabberRegion } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { MAX_CLAIMS_PER_LIST, MAX_CLAIMS_TOTAL, accountOldEnough } from "../giftstore.js";
@@ -666,7 +666,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         const { data, blocked } = db.getProfileData(u.discord_id);
         const titles = [...new Set([...db.listLibrary(u.discord_id), ...db.listItems(u.discord_id)].map(x => x.title))].sort((a, b) => a.localeCompare(b)).slice(0, 500);
         return {
-            slug: u.profile_slug ?? null, public: Boolean(u.profile_public), blocked, config: withDefaults(data),
+            slug: u.profile_slug ?? null, public: Boolean(u.profile_public), blocked, config: withDefaults(data), birthday: { value: db.getBirthday(u.discord_id)?.mmdd ?? "", share: Boolean(db.getBirthday(u.discord_id)?.share) },
             steamLinked: Boolean(db.getSteamLink(u.discord_id)),
             backgrounds: db.listProfileBgs(u.discord_id).map(b => ({ id: b.id, source: b.source, bytes: b.bytes, url: `/pbg/${b.id}?v=${b.created_at}` })), maxBackgrounds: MAX_BG_STORED, presets: PAGE_PRESETS,
             choices: { themes: Object.entries(PROFILE_THEMES).map(([k, v]) => ({ key: k, bg: v.bg, accent: v.accent, locked: Boolean(v.supporter) && !isSupporter(db, u.discord_id, now()) })), styles: Object.entries(PROFILE_STYLES).map(([k, v]) => ({ key: k, name: v.name, blurb: v.blurb, bg: v.bg ?? null, accent: v.accent ?? null, locked: Boolean(v.supporter) && !isSupporter(db, u.discord_id, now()) })), bgstyles: BG_STYLES, layouts: LAYOUTS, sections: Object.entries(SECTIONS), links: LINK_KIND_NAMES, titles },
@@ -2939,6 +2939,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const s = session(req); const u = userRow(s);
             return await profileEditorPayload(u);
         },
+        // The member's own birthday (month and day). Shared only when they tick the box, and then only as a reminder for people who have their page on their friends list.
+        "POST /api/profile/birthday": async (req, body) => { const s = session(req); userRow(s); return saveOwnBirthday(db, s.userId, { birthday: body.birthday, share: body.share }); },
         "POST /api/profile/page": async (req, body) => {
             const s = session(req); const u = userRow(s);
             const { data } = db.getProfileData(s.userId);

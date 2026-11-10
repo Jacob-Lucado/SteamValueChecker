@@ -1580,6 +1580,11 @@ test("profile song: saved songs show on the public page, and an owner is told wh
     await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
     const saved = await t.request("/api/profile/page", { method: "POST", body: { song: { url: "https://youtu.be/dQw4w9WgXcQ", title: "Test" }, enter: true } });
     assert.equal(saved.status, 200); assert.equal(saved.data.config.song.provider, "youtube");
+    // a birthday saves on its own, comes back in the editor, and never shows on the public page
+    assert.equal((await t.request("/api/profile/birthday", { method: "POST", body: { birthday: "03-27", share: true } })).data.share, true);
+    assert.deepEqual((await t.request("/api/profile/page")).data.birthday, { value: "03-27", share: true });
+    assert.equal((await t.request("/api/profile/birthday", { method: "POST", body: { birthday: "99-99" } })).status, 400);
+    assert.ok(!JSON.stringify((await t.request("/api/public/profile?slug=jacob")).data).includes("03-27"), "not on the public page");
     let pub = (await t.request("/api/public/profile?slug=jacob")).data.profile;
     assert.equal(pub.song.provider, "youtube"); assert.equal(pub.enter, true);
     rt.set({ profile_songs: false });
