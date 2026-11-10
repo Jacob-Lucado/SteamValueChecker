@@ -64,7 +64,7 @@ test("sources: one failing source only costs itself, the lists are cached, and a
     const by = s => all.filter(x => x.source === s).length;
     assert.ok(by("abg") && by("gamerpower") && by("itch") && by("steamdemo"), "every source is in the merged list");
     assert.ok(all.every((x, i) => i === 0 || all[i - 1].date >= x.date), "newest first");
-    await src.latest(); assert.equal(calls["itch.io"], 1, "remembered");
+    await src.latest(); assert.equal(calls["itch.io"], 4, "remembered: one request per itch.io tag, once");
     t = 31 * 60_000; down.add("itch.io"); down.add("www.gamerpower.com");
     const partial = await src.latest();
     assert.ok(by("itch") && partial.some(x => x.source === "itch"), "the last good copy still serves while a site is down");
@@ -139,4 +139,13 @@ test("embed: names the source it came from and can carry its own label", () => {
     assert.match(abgEmbed({ game: "G", kind: "signup", url: "https://x.test/", date: T0, summary: "" }).footer.text, /Found on Alpha Beta Gamer/);
     const a = gameKeys({ game: "Brand New: Demo", kind: "demo" }, T0), b = gameKeys({ game: "Brand New", kind: "demo" }, T0);
     assert.equal(a.mark, b.mark, "the same game under the same key");
+});
+
+test("itch.io: beta, alpha and demo tags are read too, and demos only count for wishlisted games", async () => {
+    const urls = [];
+    const fetchImpl = async url => { urls.push(String(url)); const u = new URL(url); if (u.hostname === "itch.io") return { ok: true, text: async () => F("itch-playtest.xml") }; return { ok: false, status: 503, text: async () => "", json: async () => ({}) }; };
+    const items = await createPlaytestSources({ fetchImpl, now: () => T0 }).latest();
+    assert.deepEqual(urls.filter(u => u.includes("itch.io")).map(u => /tag-(\w+)\.xml/.exec(u)[1]).sort(), ["alpha", "beta", "demo", "playtest"]);
+    assert.ok(items.some(x => x.source === "itch" && x.kind === "playtest"));
+    assert.ok(items.filter(x => x.kind === "demo").every(x => x.wishlistOnly === true));
 });

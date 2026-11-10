@@ -3,7 +3,7 @@
 //   { id, source, sourceName, game, type, kind, label?, url, date, summary, image, appid?, wishlistOnly? }
 // `kind` is one of signup, playtest, demo, alpha, beta (the same words the Alpha Beta Gamer reader uses).
 //
-// Sources: Alpha Beta Gamer (abgfeed.js), GamerPower's beta and playtest key listings, itch.io's "playtest" tag, and Steam's own
+// Sources: Alpha Beta Gamer (abgfeed.js), GamerPower's beta and playtest key listings, itch.io's playtest, beta, alpha and demo tags, and Steam's own
 // list of new demos. Steam gets dozens of demos a day, so those only count for games someone has on a wishlist (`wishlistOnly`).
 // Looked at and left out: BetaBound (gadgets and apps, not games), GamingOnLinux (about one relevant article in thirty), Reddit and
 // IndieDB (both refuse bots).
@@ -55,6 +55,12 @@ export function parseGamerPower(json, { now = Date.now() } = {}) {
 
 // ---------- itch.io: https://itch.io/games/newest/tag-playtest.xml ----------
 export const ITCH_URL = "https://itch.io/games/newest/tag-playtest.xml";
+// itch.io gives every browse page a feed (add .xml). Playtests, betas and alphas are announced as they are; demos there number in the
+// hundreds a day, so they only count for games somebody has on a wishlist, like Steam's.
+export const ITCH_FEEDS = [
+    { tag: "playtest", kind: "playtest" }, { tag: "beta", kind: "beta" }, { tag: "alpha", kind: "alpha" }, { tag: "demo", kind: "demo", wishlistOnly: true }
+];
+export const itchFeedUrl = tag => `https://itch.io/games/newest/tag-${tag}.xml`;
 export function parseItch(xml, { kind = "playtest" } = {}) {
     const out = [];
     for (const m of String(xml ?? "").matchAll(/<item>([\s\S]*?)<\/item>/gi)) {
@@ -144,7 +150,11 @@ export function createPlaytestSources({ fetchImpl = globalThis.fetch, now = () =
     const sources = [
         { name: "Alpha Beta Gamer", get: () => abgFeed.latest().then(list => list.map(x => ({ ...x, source: "abg", sourceName: "Alpha Beta Gamer" }))), health: () => null },
         cached({ name: "GamerPower", ttlMs, now, load: async () => parseGamerPower(await get(GAMERPOWER_URL, "json"), { now: now() }) }),
-        cached({ name: "itch.io", ttlMs: Math.max(ttlMs, 60 * 60_000), now, load: async () => parseItch(await get(ITCH_URL, "text")) }),
+        cached({ name: "itch.io", ttlMs: Math.max(ttlMs, 60 * 60_000), now, load: async () => {
+            const lists = await Promise.allSettled(ITCH_FEEDS.map(async f => parseItch(await get(itchFeedUrl(f.tag), "text"), { kind: f.kind }).map(x => (f.wishlistOnly ? { ...x, wishlistOnly: true, label: "Demo" } : x))));
+            if (lists.every(r => r.status === "rejected")) throw lists[0].reason; // one tag failing only costs that tag
+            return lists.flatMap(r => (r.status === "fulfilled" ? r.value : []));
+        } }),
         cached({ name: "Steam demos", ttlMs, now, load: async () => parseSteamDemos(await get(STEAM_DEMOS_URL, "json")) })
     ];
     async function latest() {

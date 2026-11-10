@@ -17,7 +17,8 @@ export const CHANGELOG = [
         "**Revenue Estimator:** if Steam is slow to send the review count, it tries again and tells you, instead of saying the game has no reviews.",
         "**Browser tab titles:** the tab now names the page you are on (Library, For you, Help and so on), including the Fortnite tabs and tabs inside a page, instead of keeping the last title.",
         "**Home when signed in:** the bare address and the logo now land on Home instead of the Value Checker.",
-        "**Patch note links:** news alerts now open the post on Steam Community, which loads reliably, instead of the Steam News Hub page that sometimes came up blank." ] },
+        "**Patch note links:** news alerts now open the post on Steam Community, which loads reliably, instead of the Steam News Hub page that sometimes came up blank.",
+        "**More playtest sources:** the playtest and demo alerts now also read itch.io's beta, alpha and demo listings (demos only for games on a wishlist), on top of Steam announcements, Alpha Beta Gamer, GamerPower and Steam's new demos." ] },
     { version: "2026.11.54", date: "2026-11-10", title: "Fortnite on the dashboard", items: [
         "**Fortnite page:** the item shop laid out the way the game shows it, with its sections, big and small tiles, rarity colors, V-Bucks prices, new, on sale and leaving soon badges, a countdown to the next shop, and a closer look at anything in it. You can search the shop and filter it by outfits, emotes, bundles, jam tracks and more.",
         "**Also there:** the latest Fortnite news, everything new in the latest update, the island map with its named places, and a search of every cosmetic that shows how often and when it was last in the shop. It's open to everyone, no sign-in needed.",
