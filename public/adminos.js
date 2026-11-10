@@ -235,9 +235,8 @@
     const css = /^#[0-9a-f]{6}$/i.test(prefs.wall) ? prefs.wall : walls.find(x => x.id === prefs.wall)?.css || "";
     // the wallpaper lives on the page itself, so the neon waves can roll between it and the windows
     css ? document.body.style.setProperty("--wall", css) : document.body.style.removeProperty("--wall");
-    document.body.classList.toggle("adm-waves", prefs.waves || prefs.wall === "float");
+    document.body.classList.toggle("adm-waves", prefs.waves);
     if (root.IndieWaves) prefs.waves ? root.IndieWaves.start() : root.IndieWaves.stop();
-    if (root.FloatBg) prefs.wall === "float" ? root.FloatBg.start() : root.FloatBg.stop();
   }
   function begin(options) {
     cfg = options; on = true;
