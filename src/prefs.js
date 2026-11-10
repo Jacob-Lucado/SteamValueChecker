@@ -1,6 +1,7 @@
 // Validation for the newer personal settings (quiet hours, digest, bundle alerts, sharing).
 // Used by both the Discord commands and the dashboard, so the rules are the same in both.
 import { UserError } from "./errors.js";
+import { cleanSkipList } from "./playskip.js";
 import { LANGS } from "./i18n.js";
 import { parseClock, formatClock, validTimezone, WEEKDAYS, DEFAULT_TZ } from "./timeutil.js";
 
@@ -60,6 +61,7 @@ export function prefsPatch(input, user) {
     if (has("free_dlc")) patch.free_dlc = input.free_dlc ? 1 : 0;
     if (has("dlc")) patch.dlc = input.dlc ? 1 : 0;
     if (has("playtest")) patch.playtest = input.playtest === true ? 1 : Math.min(2, Math.max(0, Math.trunc(Number(input.playtest)) || 0));
+    if (has("playtest_skip")) patch.playtest_skip = cleanSkipList(input.playtest_skip) || null;
     if (has("achv")) patch.achv = input.achv ? 1 : 0;
     if (has("nowplaying")) patch.nowplaying = input.nowplaying ? 1 : 0;
     if (has("nudge")) patch.nudge = input.nudge ? 1 : 0;
@@ -85,7 +87,7 @@ export const MUTABLE = ["alert", "bundle", "free", "news", "dlc", "refund", "mil
 export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? DEFAULT_TZ,
-        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, playtest: u.playtest ?? 0, achv: Boolean(u.achv), nowplaying: Boolean(u.nowplaying), nudge: Boolean(u.nudge), yearly: Boolean(u.yearly), refund: Boolean(u.refund), milestones: Boolean(u.milestones), dlc: Boolean(u.dlc),
+        digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, playtest: u.playtest ?? 0, playtest_skip: String(u.playtest_skip ?? "").split(",").filter(Boolean), achv: Boolean(u.achv), nowplaying: Boolean(u.nowplaying), nudge: Boolean(u.nudge), yearly: Boolean(u.yearly), refund: Boolean(u.refund), milestones: Boolean(u.milestones), dlc: Boolean(u.dlc),
         min_discount: u.min_discount ?? 0, max_price: u.max_price ?? 0, lows_only: Boolean(u.lows_only), muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
     };
 }

@@ -274,6 +274,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "ping_playtest", "TEXT");
     addColumn("community", "playtest_all", "INTEGER NOT NULL DEFAULT 0");
     addColumn("friends", "auto", "INTEGER NOT NULL DEFAULT 0"); // 1 when the friend came from following someone
+    addColumn("users", "playtest_skip", "TEXT");
+    addColumn("community", "playtest_skip", "TEXT");
     addColumn("community", "playtest_full", "TEXT");
     addColumn("community", "playtest_genres", "TEXT");
     addColumn("community", "playtest_channel", "TEXT");
@@ -426,7 +428,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["wish_sync", "wish_synced_at", "muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "playtest_skip", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {

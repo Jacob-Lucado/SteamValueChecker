@@ -1217,3 +1217,13 @@ test("/manage community playtests: managers only, with a cooldown", async () => 
     const a = mk(true); await h.handleCommand(a); assert.match(a.out.reply.content, /Posted the 4 newest of 4/); assert.match(a.out.reply.content, /<#PT>/);
     const b = mk(true); await h.handleCommand(b); assert.match(b.out.reply.content, /Try again in/); assert.equal(n, 1);
 });
+
+test("dashboard: playtest sources can be left out per server and per member", async () => {
+    const t = await dashSetup();
+    await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", playtest_skip: ["itch", "bogus", "itch", "playtester"] } });
+    assert.equal(t.db.getCommunity("g1").playtest_skip, "itch,playtester", "only known sites, once each");
+    await t.request("/api/community/pings", { method: "POST", body: { guild_id: "g1", playtest_skip: [] } });
+    assert.equal(t.db.getCommunity("g1").playtest_skip, null);
+    const saved = await t.request("/api/settings", { method: "POST", body: { playtest_skip: ["itch", "nope"] } });
+    assert.equal(saved.status, 200, saved.text); assert.deepEqual(saved.data.settings.playtest_skip, ["itch"]);
+});
