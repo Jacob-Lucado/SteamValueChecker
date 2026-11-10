@@ -146,12 +146,12 @@
       if (!path || path === "about:blank") return;
       if (path !== w.path) { w.path = path; persist(); if (node.classList.contains("focus")) addressOf(w); }
       const m = pages[path.split("?")[0]] ?? null, name = m ? m.title : String(t || "").split(/[:|·]/)[0].trim().slice(0, 40) || meta.title;
-      if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · LucadoOS`; }
+      if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · Steam Value Checker`; }
     };
     if (inline) {
       const named = path => { // a window's title follows the page it is showing
         const m = pages[path.split("?")[0]] ?? pages["/" + path.split("?")[0].split("/")[1]] ?? null, name = m ? m.title : meta.title;
-        if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · LucadoOS`; }
+        if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · Steam Value Checker`; }
       };
       w.mount = () => { w.inst = mountPage({ root: mountEl, scroller, path: w.path, onNavigate: p => { w.path = p; named(p); persist(); if (node.classList.contains("focus")) addressOf(w); } }); named(w.path); };
       content.addEventListener("pointerdown", () => { closeStart(); if (!node.classList.contains("focus")) focus(w); }, true);

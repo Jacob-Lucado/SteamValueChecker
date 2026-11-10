@@ -321,6 +321,22 @@ window.SVC_SITE = envIn => {
     return wrap;
   }
 
+  let nativeLinkClick = null; // a desktop window's link handling, shared by its page and its row of section tabs
+  /** The tabs for the section you are in (only when it has more than one page you can see). A desktop window keeps its own row above its page. */
+  function drawHubbar(view) {
+    const hubOf = id => (HUB_ALIAS[id] ? NAV.find(g => g.id === HUB_ALIAS[id]) : NAV.find(g => g.pages.some(([p]) => p === id)));
+    const here = hubOf(view);
+    const badge = n => (n ? h("span", { class: "badge-count", text: String(Math.min(99, n)) }) : null);
+    let bar = NATIVE ? app.parentElement?.querySelector(":scope > .hubbar") : document.getElementById("hubbar");
+    if (!bar) { bar = h("nav", { class: "hubbar", "aria-label": "Section pages" }); if (!NATIVE) bar.id = "hubbar"; else bar.addEventListener("click", e => nativeLinkClick?.(e)); app.before(bar); }
+    const tabs = here ? here.pages.filter(([id]) => pageVisible(id)) : [];
+    bar.hidden = tabs.length < 2;
+    bar.replaceChildren(...(tabs.length < 2 ? [] : [
+      ...tabs.map(([id, text]) => h("a", { href: "#/" + id, class: "hubtab" + (view === id ? " active" : ""), "aria-current": view === id ? "page" : null }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
+      here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null,
+      here.id === "help" ? h("a", { class: "hubtab", href: "/ai", text: "AI companion (beta)" }) : null].filter(Boolean)));
+  }
+
   function renderChrome() {
     const view = currentView();
     const nav = document.getElementById("nav");
@@ -335,34 +351,7 @@ window.SVC_SITE = envIn => {
       const active = group === here;
       return h("a", { href: group.id === "admin" && state.me && state.me.adminUrl ? state.me.adminUrl : "#/" + pages[0][0], class: active ? "active" : "", "data-pages": pages.map(p => p[0]).join(" "), "aria-current": active ? "page" : null }, navText(group.id, group.label), badge(unread));
     }).filter(Boolean));
-    // The tabs for the section you are in (only when it has more than one page you can see).
-    let bar = document.getElementById("hubbar");
-    if (!bar) { bar = h("nav", { id: "hubbar", class: "hubbar", "aria-label": "Section pages" }); app.before(bar); }
-    const tabs = here ? here.pages.filter(([id]) => pageVisible(id)) : [];
-    bar.hidden = tabs.length < 2;
-    bar.replaceChildren(...(tabs.length < 2 ? [] : [
-      ...tabs.map(([id, text]) => h("a", { href: "#/" + id, class: "hubtab" + (view === id ? " active" : ""), "aria-current": view === id ? "page" : null }, navText(id, text), id === "notifications" ? badge(state.me && state.me.unread) : null)),
-      here.id === "help" && state.cfg ? ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗", "hubtab") : null,
-      here.id === "help" ? h("a", { class: "hubtab", href: "/ai", text: "AI companion (beta)" }) : null].filter(Boolean)));
-    // On a narrow screen this row scrolls sideways, so bring the page you're on into view.
-    const cur = bar.querySelector(".hubtab.active");
-    if (cur && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, cur.offsetLeft - (bar.clientWidth - cur.offsetWidth) / 2);
-
-    const acct = document.getElementById("account");
-    const support = state.cfg && state.cfg.supportUrl ? ext(state.cfg.supportUrl, "Support server", "btn gray small support-btn") : null;
-    const links = state.me ? [] : [h("a", { href: "/ai", text: "AI companion" }), state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
-    if (state.me) {
-      acct.replaceChildren(...[...links, support,
-        h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
-        osButton(), currencyPicker(), languagePicker(), displayMenu(),
-        // The signed-in name and Log out always sit together, set slightly apart from the tools.
-        h("div", { class: "user-chip" },
-          state.me.user.avatar && h("img", { class: "avatar", src: state.me.user.avatar, alt: "" }),
-          h("span", { class: "who", text: state.me.user.username }),
-          h("button", { class: "btn gray small", text: "Log out", onclick: async () => { try { await api("/auth/logout", {}); } catch {} state.me = null; if (EMBED_FRAME) { window.parent.location.reload(); return; } if (NATIVE) { location.reload(); return; } navigate("/"); boot(); } }))].filter(Boolean));
-    } else {
-      acct.replaceChildren(...[...links, support, osButton(), languagePicker(), themeButton(), steamLoginBtn("Steam", "btn steam small"), h("a", { class: "btn green", href: "/auth/login", text: "Sign in with Discord" })].filter(Boolean));
-    }
+    drawHubbar(view);
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
       ...(cr ? [h("a", { class: "copyright", href: safeHref(cr.url), target: "_blank", rel: "noopener noreferrer" },
@@ -7997,7 +7986,7 @@ window.SVC_SITE = envIn => {
     if (!ADMIN_MODE && !EMBED && window.LucadoOS?.wanted()) { osMount(); return; }
     if (state.restricted || new URLSearchParams(LOC.search).get("error") === "restricted") { state.restricted ||= "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard. If you think this is a mistake, contact the bot owner."; return showRestricted(); }
     if (!ADMIN_MODE && !NATIVE) { const old = /^#\/(.*)$/.exec(location.hash); if (old) history.replaceState(null, "", "/" + old[1]); }
-    if (!NATIVE) renderChrome();
+    if (!NATIVE) renderChrome(); else drawHubbar(currentView());
     const view = currentView();
     if (NATIVE) app.dataset.area = view === "streamer" || view === "streams" || view === "streamers" ? "streamer" : view === "indie" || view === "devpanel" ? "indie" : ""; // each window wears its own area colors
     if (!NATIVE) { // the desktop itself decides the colors and waves around its windows
@@ -8100,14 +8089,15 @@ window.SVC_SITE = envIn => {
     // A window's own links: pages open inside the window, other sites in a new tab, and sign-in takes over the tab.
     const tidyN = el => el.querySelectorAll?.('a[href^="#/"]').forEach(a => { a.dataset.spa = "1"; a.setAttribute("href", a.getAttribute("href").slice(1)); });
     new MutationObserver(ms => { for (const m of ms) m.addedNodes.forEach(n => { if (n.nodeType === 1) { if (n.matches('a[href^="#/"]')) { n.dataset.spa = "1"; n.setAttribute("href", n.getAttribute("href").slice(1)); } tidyN(n); } }); }).observe(app, { childList: true, subtree: true });
-    app.addEventListener("click", e => {
+    nativeLinkClick = e => {
       if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest?.("a[href]"); if (!a || a.target || a.hasAttribute("download")) return;
       const href = a.getAttribute("href") || "";
       if (/^https?:\/\//i.test(href)) { try { if (new URL(href).origin !== location.origin) { a.target = "_blank"; a.rel = "noopener noreferrer"; } } catch { /* leave it */ } return; }
       const path = href.startsWith("#/") ? href.slice(1) : href;
       if (path.startsWith("/") && !path.startsWith("//") && !/^\/(auth|api|admin)(\/|\?|$)/.test(path) && !/\.[a-z0-9]{2,5}$/i.test(path.split("?")[0])) { e.preventDefault(); navigate(path); }
-    });
+    };
+    app.addEventListener("click", nativeLinkClick);
     boot();
     return { navigate, route, path: () => LOC.pathname + LOC.search };
   } else {

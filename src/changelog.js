@@ -5,7 +5,8 @@ export const CHANGELOG = [
         "**Treasure tab:** per-chest odds, the Treasure Hour boosts, and the weekly Treasure Hunters prizes, with this week highlighted.",
         "**Licenses page:** credits for the services and data the site uses, trademark notes, and the license for every library it's built on. It's laid out like the terms and privacy pages, and linked from About and the footer.",
         "**Desktop theme preview:** the home page now shows what LucadoOS looks like, with a Try the desktop button (or a Back to the classic site button if you are already on it). First-time visitors on a wide screen also get a small one-time note that it exists.",
-        "**Tab names:** in the desktop theme the browser tab now says Steam Value Checker instead of LucadoOS." ] },
+        "**Tab names:** in the desktop theme the browser tab now says Steam Value Checker instead of LucadoOS.",
+        "**Section tabs on the desktop:** pages in desktop windows now show their section's row of tabs, like My servers, Setup and Community, so you can move between them without going back." ] },
     { version: "2026.11.54", date: "2026-11-10", title: "Fortnite on the dashboard", items: [
         "**Fortnite page:** the item shop laid out the way the game shows it, with its sections, big and small tiles, rarity colors, V-Bucks prices, new, on sale and leaving soon badges, a countdown to the next shop, and a closer look at anything in it. You can search the shop and filter it by outfits, emotes, bundles, jam tracks and more.",
         "**Also there:** the latest Fortnite news, everything new in the latest update, the island map with its named places, and a search of every cosmetic that shows how often and when it was last in the shop. It's open to everyone, no sign-in needed.",
