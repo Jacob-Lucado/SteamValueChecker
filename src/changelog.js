@@ -1,6 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
+        "**Save all on Setup:** the channel list on the Server setup page has one Save all button instead of a Save per row, and saving no longer reloads the page.",
+        "**Giveaway channel on Setup:** the Server setup page now has a Giveaways row under Games and deals. Pick the channel where network-wide giveaways from the bot owner are posted in your server (the alert channel is used if you leave it empty).",
         "**Playtester, all of it:** Playtester only hands out its 50 newest listings per feed, so I now read its main feed, the demo and playtest feeds, and one feed per genre. Nothing it lists ages off the Playtests page, and each game shows its genre tags.",
         "**Genre filters:** the Playtests page has a genre picker, and server managers can limit Playtester's full feed to the genres they want (games your members have on a wishlist always post).",
         "**Giveaway outcomes:** the giveaway lists on the dashboard and the admin panel now have a Prizes column saying what became of each prize: claimed, waiting on a winner (and whether they could be reached), or no winner.",

@@ -354,6 +354,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         { key: "levelup", group: "Members", label: "Level-up messages", help: "Where level-ups are announced, when announcing is on.", fallback: "the channel the member was chatting in", column: "levelup_channel" },
         { key: "leaderboard", group: "Members", label: "Leaderboard", help: "The live XP board, refreshed on its own.", column: "lb_channel", reset: { lb_message_id: null } },
         { key: "playtest", group: "Games and deals", label: "Playtests and demos", help: "Betas, demos, free weekends and sign-ups.", fallback: "the alert channel", column: "playtest_channel" },
+        { key: "giveaway", group: "Games and deals", label: "Giveaways", help: "Where network-wide giveaways from the bot owner are posted in your server.", fallback: "the alert channel", store: "giveaway" },
         { key: "indie", group: "Games and deals", label: "Indie showcase", help: "New and featured indie games.", column: "indie_channel" },
         { key: "squad", group: "Games and deals", label: "Squad-ups", help: "A post when two or more members are in the same game.", column: "squad_channel" },
         { key: "live", group: "Community", label: "Live streams", help: "A post when a member of your server goes live.", column: "live_channel" },
@@ -362,12 +363,14 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
     ];
     function channelMap(gid) {
         const c = db.getCommunity(gid);
-        return CHANNELS.map(({ column: _c, reset: _r, ...meta }) => ({ ...meta, value: c[_c] ?? null }));
+        const gw = db.getGiveawaySettings(gid);
+        return CHANNELS.map(({ column: _c, reset: _r, store: _s, ...meta }) => ({ ...meta, value: (_s === "giveaway" ? gw.giveaway_channel_id : c[_c]) ?? null }));
     }
     async function setChannel(gid, key, id) {
         const def = CHANNELS.find(x => x.key === key) ?? fail(400, "I don't know that channel.");
         const value = await channelOk(gid, id || null);
-        db.setCommunity(gid, { [def.column]: value, ...(def.reset ?? {}) });
+        if (def.store === "giveaway") db.setGiveawaySettings(gid, { giveaway_channel_id: value }); // kept with the giveaway settings, which is where network-wide giveaways look
+        else db.setCommunity(gid, { [def.column]: value, ...(def.reset ?? {}) });
         return { key, value };
     }
     return { channelMap, setChannel, overview, setup, welcome, guides, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };

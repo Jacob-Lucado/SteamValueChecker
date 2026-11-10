@@ -6721,19 +6721,40 @@ window.SVC_SITE = envIn => {
 
   // ---------- guided server setup (same checklist as /manage setup in Discord) ----------
   /** One row per thing the bot posts, grouped, each with its own channel. Empty rows say what happens instead. */
-  function channelPanel(list, channels, alertId, guildId, reload) {
+  function channelPanel(list, channels, alertId, guildId) {
     const nameOf = id => { const c = channels.find(x => x.id === id); return c ? "#" + c.name : "a channel I can't see"; };
     const groups = [...new Set(list.map(x => x.group))];
+    const rows = []; // one per channel: where it is saved now, and what the dropdown says
+    const status = x => x.value ? "Posting in " + nameOf(x.value) + "." : x.fallback ? "Not set, so it uses " + x.fallback + (x.fallback === "the alert channel" ? (alertId ? " (" + nameOf(alertId) + ")" : ", which isn't set either") : "") + "." : "Not set, so it stays off.";
+    const saveAll = h("button", { class: "btn blue", type: "button", text: "Save all", disabled: true });
+    const hint = h("span", { class: "muted small", text: "" });
+    const refreshBar = () => { const n = rows.filter(r => r.sel.value !== (r.x.value || "")).length; saveAll.disabled = !n; hint.textContent = n ? `${n} unsaved change${n === 1 ? "" : "s"}` : ""; };
+    const body = groups.map(g => h("div", { class: "chmap-group" }, h("div", { class: "chmap-head", text: g }),
+      ...list.filter(x => x.group === g).map(x => {
+        const sel = select([["", "Not set"], ...channels.map(c => [c.id, "#" + c.name])], x.value || "");
+        const mark = h("b", { text: (x.value ? "✅ " : "⬜ ") + x.label }), now = h("div", { class: "muted small", text: status(x) });
+        const row = { x, sel, mark, now };
+        rows.push(row);
+        sel.addEventListener("change", refreshBar);
+        return h("div", { class: "setup-row" }, h("div", {}, mark, h("div", { class: "muted small", text: x.help }), now), h("div", { class: "row" }, sel));
+      })));
+    saveAll.addEventListener("click", () => busy(saveAll, async () => {
+      const changed = rows.filter(r => r.sel.value !== (r.x.value || ""));
+      let failed = 0, firstErr = "";
+      for (const r of changed) {
+        try {
+          await api("/api/servers/channelmap", { guild_id: guildId, key: r.x.key, channel_id: r.sel.value || null });
+          r.x.value = r.sel.value || null; // now what is saved, so the page stays put and just updates its notes
+          r.mark.textContent = (r.x.value ? "✅ " : "⬜ ") + r.x.label; r.now.textContent = status(r.x);
+        } catch (e) { failed++; firstErr ||= e.message; }
+      }
+      refreshBar();
+      if (failed) toast(`${changed.length - failed} saved, ${failed} didn't (${firstErr})`, "error");
+      else toast(changed.length === 1 ? "Saved." : `Saved ${changed.length} channels.`, "ok");
+    }));
     return h("div", { class: "panel" }, h("h3", { text: "Every channel the bot posts in" }),
-      h("p", { class: "muted small", text: "Give each kind of post its own channel. Anything left empty either does nothing or uses the channel noted under it." }),
-      ...groups.map(g => h("div", { class: "chmap-group" }, h("div", { class: "chmap-head", text: g }),
-        ...list.filter(x => x.group === g).map(x => {
-          const sel = select([["", "Not set"], ...channels.map(c => [c.id, "#" + c.name])], x.value || "");
-          const b = h("button", { class: "btn blue small", type: "button", text: "Save" });
-          b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/channelmap", { guild_id: guildId, key: x.key, channel_id: sel.value || null }); toast("Saved.", "ok"); reload(); }));
-          const now = x.value ? "Posting in " + nameOf(x.value) + "." : x.fallback ? "Not set, so it uses " + x.fallback + (x.fallback === "the alert channel" ? (alertId ? " (" + nameOf(alertId) + ")" : ", which isn't set either") : "") + "." : "Not set, so it stays off.";
-          return h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (x.value ? "✅ " : "⬜ ") + x.label }), h("div", { class: "muted small", text: x.help }), h("div", { class: "muted small", text: now })), h("div", { class: "row" }, sel, b));
-        }))));
+      h("p", { class: "muted small", text: "Give each kind of post its own channel, then press Save all. Anything left empty either does nothing or uses the channel noted under it." }),
+      ...body, h("div", { class: "row" }, saveAll, hint));
   }
 
   async function setupView() {

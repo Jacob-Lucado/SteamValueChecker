@@ -546,13 +546,19 @@ test("dashboard: the Setup page's channel map lists every channel and saves one 
     const post = body => t.request("/api/servers/channelmap", { method: "POST", body: { guild_id: "g1", ...body } });
     const first = await get();
     assert.equal(first.status, 200);
-    for (const k of ["announce", "rules", "welcome", "memberlog", "modlog", "levelup", "leaderboard", "playtest", "indie", "squad", "live", "memes", "ai"]) assert.ok(first.data.channels.some(c => c.key === k), k);
+    for (const k of ["announce", "rules", "welcome", "memberlog", "modlog", "levelup", "leaderboard", "playtest", "giveaway", "indie", "squad", "live", "memes", "ai"]) assert.ok(first.data.channels.some(c => c.key === k), k);
     assert.equal(first.data.channels.find(c => c.key === "announce").value, null);
     assert.equal((await post({ key: "announce", channel_id: "c1" })).status, 200);
     assert.equal(t.db.getCommunity("g1").announce_channel, "c1");
     assert.equal((await get()).data.channels.find(c => c.key === "announce").value, "c1");
     assert.equal((await post({ key: "modlog", channel_id: "c1" })).status, 200); assert.equal(t.db.getCommunity("g1").mod_log_channel, "c1");
     assert.equal((await post({ key: "announce", channel_id: "" })).status, 200); assert.equal(t.db.getCommunity("g1").announce_channel, null);
+    // the giveaway channel is where network-wide giveaways are posted in this server
+    assert.equal((await post({ key: "giveaway", channel_id: "c1" })).status, 200);
+    assert.equal(t.db.getGiveawaySettings("g1").giveaway_channel_id, "c1");
+    assert.ok(t.db.giveawayDestinations().some(d => d.guild_id === "g1" && d.channel_id === "c1"), "network-wide giveaways go there");
+    assert.equal((await get()).data.channels.find(c => c.key === "giveaway").value, "c1");
+    assert.equal((await post({ key: "giveaway", channel_id: "" })).status, 200); assert.equal(t.db.getGiveawaySettings("g1").giveaway_channel_id, null);
     assert.equal((await post({ key: "announce", channel_id: "nope" })).status, 400, "a channel the bot can't see");
     assert.equal((await post({ key: "bogus", channel_id: "c1" })).status, 400, "an unknown kind");
     assert.equal((await t.request("/api/servers/channelmap", { method: "POST", body: { guild_id: "g2", key: "announce", channel_id: "c1" } })).status, 403, "not a manager there");
