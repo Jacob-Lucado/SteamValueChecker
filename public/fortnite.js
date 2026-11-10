@@ -35,6 +35,8 @@
     const TABS = () => [["shop", "Item shop"], ["news", "News"], ["new", "New cosmetics"], ["map", "Map"], ["treasure", "Treasure"], ["search", "Cosmetic search"], ...(st.status && st.status.stats ? [["stats", "Player stats"]] : [])];
     const tabsEl = h("nav", { class: "fn-tabs", "aria-label": "Fortnite" });
     function drawTabs() {
+      const here = TABS().find(([id]) => id === tab);
+      if (!window.LucadoOS?.wanted?.() && !document.documentElement.dataset.mode) document.title = (tab === "shop" || !here ? "Fortnite item shop" : "Fortnite " + here[1].toLowerCase()) + " · Steam Value Checker";
       tabsEl.replaceChildren(...TABS().map(([id, text]) => h("button", { type: "button", class: "fn-tab" + (tab === id ? " active" : ""), onclick: () => { tab = id; history.replaceState(null, "", id === "shop" ? "/fortnite" : "/fortnite?tab=" + id); drawTabs(); show(); } }, text)));
     }
     const hero = h("section", { class: "fn-hero" });

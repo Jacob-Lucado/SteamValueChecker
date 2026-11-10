@@ -14,7 +14,8 @@ export const CHANGELOG = [
         "**Names next to Discord IDs:** anywhere the admin panel shows a bare Discord ID (Busiest users, votes and more), it now shows the person's name beside it.",
         "**Fixed:** the classic header got its right-hand tools back (search, desktop switch, currency, language, display, your name and Log out, and Sign in when logged out).",
         "**Fortnite page SEO:** /fortnite now has its own title, description, share card and structured data, and writes today's shop out as plain text with your creator code and buy links, so search engines and link previews see it.",
-        "**Revenue Estimator:** if Steam is slow to send the review count, it tries again and tells you, instead of saying the game has no reviews." ] },
+        "**Revenue Estimator:** if Steam is slow to send the review count, it tries again and tells you, instead of saying the game has no reviews.",
+        "**Browser tab titles:** the tab now names the page you are on (Library, For you, Help and so on), including the Fortnite tabs and tabs inside a page, instead of keeping the last title." ] },
     { version: "2026.11.54", date: "2026-11-10", title: "Fortnite on the dashboard", items: [
         "**Fortnite page:** the item shop laid out the way the game shows it, with its sections, big and small tiles, rarity colors, V-Bucks prices, new, on sale and leaving soon badges, a countdown to the next shop, and a closer look at anything in it. You can search the shop and filter it by outfits, emotes, bundles, jam tracks and more.",
         "**Also there:** the latest Fortnite news, everything new in the latest update, the island map with its named places, and a search of every cosmetic that shows how often and when it was last in the shop. It's open to everyone, no sign-in needed.",

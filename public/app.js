@@ -340,8 +340,28 @@ window.SVC_SITE = envIn => {
     if (cur && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, cur.offsetLeft - (bar.clientWidth - cur.offsetWidth) / 2);
   }
 
+  // The browser tab names the page you're on. Pages that set their own title (a profile, an indie game) do it after this runs.
+  const BASE_TITLE = document.title;
+  let pageLabel = null;
+  function setPageTitle(view) {
+    const label = pageLabel = view === "home" ? null : NAV.flatMap(g => g.pages).find(([id]) => id === view)?.[1] ?? (HUB_ALIAS[view] ? "Game" : null);
+    const count = /^\(\d+\) /.exec(document.title)?.[0] ?? "";
+    document.title = count + (label ? `${label} · Steam Value Checker` : BASE_TITLE.replace(/^\(\d+\) /, ""));
+  }
+
+  // Tabs inside a page (Setup sections, Library categories) add their name to the tab title too.
+  if (!ADMIN_MODE && !EMBED) app.addEventListener("click", e => {
+    if (!e.target.closest(".tabs .tab")) return;
+    setTimeout(() => {
+      const on = app.querySelector(".tabs .tab.active"); if (!on) return;
+      const label = on.textContent.replace(/\s*\(\d+\)\s*$/, "").trim(), count = /^\(\d+\) /.exec(document.title)?.[0] ?? "";
+      if (label && pageLabel) document.title = `${count}${label} · ${pageLabel} · Steam Value Checker`;
+    }, 0);
+  });
+
   function renderChrome() {
     const view = currentView();
+    if (!ADMIN_MODE && !EMBED) setPageTitle(view);
     const nav = document.getElementById("nav");
     const badge = n => (n ? h("span", { class: "badge-count", text: String(Math.min(99, n)) }) : null);
     closeMenu();
