@@ -6,6 +6,7 @@
   // which means whatever people copy from it shares properly.
 
   const state = { cfg: null, me: null };
+  window.__svcState = state; // LucadoOS windows (frames) read this instead of asking the server for the same things again
   const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
   const app = document.getElementById("app");
   // LucadoOS (the desktop theme) shows each site page in a frame inside a window. Inside one of those frames the page drops its own header and footer.
@@ -7956,9 +7957,14 @@
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
     if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else if (view === "indie") document.documentElement.dataset.area = "indie"; else delete document.documentElement.dataset.area;
     // In a LucadoOS window the page draws its own waves (the desktop's sit behind the window), unless Personalize turned them off.
-    const wavesOn = () => { if (!EMBED) return true; try { return JSON.parse(localStorage.getItem("lucado-site-prefs") || "{}").waves !== false; } catch { return true; } };
+    const wavesOn = () => { if (!EMBED) return true; if (window.__losOn === false) return false; try { return JSON.parse(localStorage.getItem("lucado-site-prefs") || "{}").waves !== false; } catch { return true; } };
     if (window.IndieWaves) { if (view === "u" || !wavesOn()) window.IndieWaves.stop(); else window.IndieWaves.start(); }
-    if (EMBED && !window.__wavesWatch) { window.__wavesWatch = true; window.addEventListener("storage", e => { if (e.key === "lucado-site-prefs" && window.IndieWaves) wavesOn() ? window.IndieWaves.start() : window.IndieWaves.stop(); }); }
+    if (EMBED && !window.__wavesWatch) {
+      window.__wavesWatch = true;
+      const apply = () => { if (window.IndieWaves && currentView() !== "u") wavesOn() ? window.IndieWaves.start() : window.IndieWaves.stop(); };
+      window.addEventListener("storage", e => { if (e.key === "lucado-site-prefs") apply(); });
+      window.addEventListener("message", e => { if (e.source === window.parent && e.origin === location.origin && e.data && e.data.svc === "los-active") { window.__losOn = Boolean(e.data.on); apply(); } }); // the desktop says when this window is hidden behind another
+    }
     if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
@@ -7975,9 +7981,11 @@
 
   async function boot() {
     try {
-      if (!state.cfg) state.cfg = await api("/api/config");
+      const shared = EMBED ? (() => { try { return window.parent.__svcState || null; } catch { return null; } })() : null; // a window reuses what the desktop already loaded
+      if (shared && shared.cfg && !shared.restricted) { state.cfg = shared.cfg; state.about = shared.about; state.creator = shared.creator; state.freeNow = shared.freeNow ?? null; state.me = shared.me; }
+      else { if (!state.cfg) state.cfg = await api("/api/config");
       try { const x = await api("/api/about"); state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null; } catch { state.about = null; state.creator = null; }
-      try { state.me = await api("/api/me"); if (state.me?.adminOnly) state.me = null; } catch { state.me = null; } // a password sign-in opens the admin panel only
+      try { state.me = await api("/api/me"); if (state.me?.adminOnly) state.me = null; } catch { state.me = null; } } // a password sign-in opens the admin panel only
       // No choice made in this browser yet: follow the language already set for the bot on this account.
       const mine = state.me?.settings?.lang;
       if (!I18N.hasChoice() && mine && mine !== "en" && I18N.valid(mine)) { LANG = mine; I18N.remember(mine); document.documentElement.lang = mine; }
@@ -7993,7 +8001,7 @@
   // "Viewing now" uses a random id kept for this tab only; the server forgets it 75 seconds after the last ping.
   (function visitCounter() {
     const out = document.getElementById("visits");
-    if (!out) return;
+    if (!out || EMBED) return; // a desktop window's footer is hidden, and the desktop already counts the visit
     const BASE = "/api/visits/dashboard";
     const rnd = new Uint8Array(12);
     crypto.getRandomValues(rnd);

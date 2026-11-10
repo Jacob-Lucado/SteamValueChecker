@@ -31,7 +31,21 @@
   function focus(w) {
     for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
     w.node.style.zIndex = String(++z); w.task.classList.add("on"); for (const o of wins.values()) if (o !== w) o.task.classList.remove("on");
-    document.title = `${metaOf(w.id).title} · LucadoOS`; persist(); addressOf(w);
+    if (w.pending && w.frame) { w.frame.src = w.pending; w.pending = null; } // a restored window loads the first time you reach for it
+    document.title = `${metaOf(w.id).title} · LucadoOS`; persist(); addressOf(w); syncActive();
+  }
+  /** Keeps the cost down: only windows you can actually see animate their waves, and the desktop's own waves stop while a full-screen window covers them. */
+  let lastActive = new Map(), lastDesk = null;
+  function syncActive() {
+    const zOf = o => Number(o.node.style.zIndex) || 0, list = [...wins.values()];
+    const coveredBy = w => list.some(o => o !== w && !o.min && !o.node.hidden && o.max && zOf(o) > zOf(w));
+    for (const w of list) {
+      if (!w.frame) continue;
+      const on = !w.min && !w.node.hidden && !w.pending && !coveredBy(w);
+      if (lastActive.get(w) !== on) { lastActive.set(w, on); try { w.frame.contentWindow?.postMessage({ svc: "los-active", on }, root.location.origin); } catch { /* not loaded yet; the load handler resends */ } }
+    }
+    const hidden = list.some(o => !o.min && !o.node.hidden && o.max && !o.id.startsWith("os:"));
+    if (hidden !== lastDesk) { lastDesk = hidden; if (root.IndieWaves) (prefs.waves && !hidden) ? root.IndieWaves.start() : root.IndieWaves.stop(); }
   }
   function place(w) {
     const n = w.node, W = layer.clientWidth, H = layer.clientHeight;
@@ -106,7 +120,7 @@
     const native = id.startsWith("os:");
     if (!saved && !native) { w.restore = { w: w.w, h: w.h, x: w.x, y: w.y }; w.max = true; } // pages open full screen; people resize them from there
     if (saved?.path && known(saved.path)) w.path = saved.path;
-    const frame = native ? null : el("iframe", "los-frame", { src: w.path, title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
+    const frame = native ? null : el("iframe", "los-frame", { ...(saved && saved.defer ? {} : { src: w.path }), title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
     const content = el("div", native ? "los-win-body los-native" : "los-win-body los-page", {}, ...(frame ? [frame] : []));
     if (native) { w.w = Math.min(w.w, 720); w.h = Math.min(w.h, 520); personalize(content); }
     const titleText = el("span", "", { text: meta.title }), titleIcon = el("i", "", { "aria-hidden": "true", text: meta.icon });
@@ -117,9 +131,9 @@
     const node = el("section", "los-win", { role: "dialog", "aria-label": meta.title }, el("header", "los-win-bar", {}, title, el("div", "los-win-btns", {}, bMin, bMax, bClose)), content);
     const taskIcon = el("i", "", { "aria-hidden": "true", text: meta.icon }), taskText = el("span", "", { text: meta.title });
     const task = el("button", "los-task", { type: "button", title: meta.title }, taskIcon, taskText);
-    w.node = node; w.task = task; w.content = content; w.frame = frame; wins.set(id, w);
+    w.node = node; w.task = task; w.content = content; w.frame = frame; wins.set(id, w); if (saved && saved.defer) w.pending = w.path;
     layer.append(node); tasks.append(task);
-    place(w); if (w.min) { node.hidden = true; } else focus(w); if (saved && saved.z) node.style.zIndex = String(saved.z);
+    place(w); if (w.min) { node.hidden = true; } else if (w.pending) { node.style.zIndex = String(saved.z || ++z); } else focus(w); if (saved && saved.z) node.style.zIndex = String(saved.z);
     // follow the page inside: its title and address change as you move around it, and the browser address follows the window you're in
     const sync = () => {
       let path, t;
@@ -130,7 +144,7 @@
       if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · LucadoOS`; }
     };
     if (frame) {
-      frame.addEventListener("load", () => { sync(); try { frame.contentWindow.addEventListener("pointerdown", () => { closeStart(); if (!node.classList.contains("focus")) focus(w); }, true); } catch { /* not ours */ } });
+      frame.addEventListener("load", () => { lastActive.delete(w); syncActive(); sync(); try { frame.contentWindow.addEventListener("pointerdown", () => { closeStart(); if (!node.classList.contains("focus")) focus(w); }, true); } catch { /* not ours */ } });
       w.timer = setInterval(() => { if (!node.isConnected) clearInterval(w.timer); else sync(); }, 800);
     }
     const shut = () => { clearInterval(w.timer); node.remove(); task.remove(); wins.delete(id); persist(); const top = [...wins.values()].filter(o => !o.min).sort((a, b) => Number(b.node.style.zIndex) - Number(a.node.style.zIndex))[0]; if (top) focus(top); else { document.title = "LucadoOS"; } };
@@ -199,7 +213,7 @@
     const css = /^#[0-9a-f]{6}$/i.test(prefs.wall) ? prefs.wall : (WALLS.find(x => x[0] === prefs.wall) || [])[2] || "";
     css ? document.body.style.setProperty("--wall", css) : document.body.style.removeProperty("--wall");
     document.body.classList.toggle("los-waves", prefs.waves);
-    if (root.IndieWaves) prefs.waves ? root.IndieWaves.start() : root.IndieWaves.stop();
+    lastDesk = null; syncActive();
   }
   function savePrefs(patch) { prefs = { ...prefs, ...patch }; store.set(PREFS, JSON.stringify(prefs)); applyPrefs(); }
   /** The Personalize window: wallpaper, neon waves and the light or dark theme. Kept in this browser. */
@@ -334,11 +348,14 @@
     const [btn, box] = start();
     bar = el("footer", "los-taskbar", {}, btn, box, tasks, tray);
     desk.append(icons(), layer, startMenu, bar); document.body.prepend(desk);
-    applyPrefs();
+    applyPrefs(); setInterval(syncActive, 600); // minimizing, maximizing and closing all change what's visible
     let narrow = false;
     root.addEventListener("resize", () => { for (const w of wins.values()) place(w); if (root.innerWidth < 900 && !narrow) { narrow = true; root.location.reload(); } }); // a small screen gets the classic site
     let saved = []; try { saved = JSON.parse(store.get(SAVE) || "[]"); } catch { /* start fresh */ }
-    for (const s of saved.filter(s => known(s.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8)) open(s.id, s);
+    const live = saved.filter(s => known(s.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8), topLive = [...live].reverse().find(s => !s.min);
+    for (const s of live) open(s.id, { ...s, defer: s !== topLive });
+    for (const s of live) { const w = wins.get(s.id); if (w) w.node.style.zIndex = String(++z); } // restore the stacking order exactly: oldest at the bottom, newest on top
+    if (topLive && wins.get(topLive.id)) focus(wins.get(topLive.id));
     const want = options.open && known(options.open) && options.open !== "/" ? options.open : null;
     if (want) { const have = [...wins.values()].find(w => w.id === want || w.path === want); if (have) { have.min = false; have.node.hidden = false; focus(have); } else open(want); }
     if (!wins.size) open(options.home && known(options.home) ? options.home : "/"); // first visit lands on the Home page
