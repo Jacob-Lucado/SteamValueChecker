@@ -322,7 +322,7 @@
 
     const acct = document.getElementById("account");
     const support = state.cfg && state.cfg.supportUrl ? ext(state.cfg.supportUrl, "Support server", "btn gray small support-btn") : null;
-    const links = state.me ? [] : [h("a", { href: "/ai", text: "AI companion" }), h("a", { href: "/indie", text: "Indie devs" }), state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
+    const links = state.me ? [] : [h("a", { href: "/ai", text: "AI companion" }), state.cfg && ext(state.cfg.fanaticalUrl, "FanaticalGrabber ↗")].filter(Boolean); // signed in: it lives in the Help menu
     if (state.me) {
       acct.replaceChildren(...[...links, support,
         h("button", { class: "theme-btn", type: "button", text: "🔍", title: "Search (press /)", "aria-label": "Search", onclick: openSearch }),
@@ -337,7 +337,6 @@
     }
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
-      h("a", { href: "/indie", text: "Indie devs" }),
       ...(cr ? [h("a", { class: "copyright", href: safeHref(cr.url), target: "_blank", rel: "noopener noreferrer" },
         h("img", { src: "/creator.png", alt: "", width: "22", height: "22" }), `© ${new Date().getFullYear()} ${cr.name}`)] : []));
   }
