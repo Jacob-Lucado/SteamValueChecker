@@ -110,7 +110,7 @@ const GIVEAWAY_FIELDS = [
 
 export function giveawayStore({ db, run, get, all, clean, now }) {
     // Rows handed out never carry the encrypted key unless asked for.
-    const KEY_COLS = "id, giveaway_id, position, label, kind, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, remind_stage, (key_enc IS NOT NULL) AS has_key";
+    const KEY_COLS = "id, giveaway_id, position, label, kind, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, remind_stage, notify_state, (key_enc IS NOT NULL) AS has_key";
 
     const RULE_COLS = ["require_role_id", "require_all", "override_role_id", "bonus_role_id", "bonus_entries", "require_steam"];
     /** Changes who may enter a giveaway. Only the rule columns can be set here. */
@@ -159,7 +159,10 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
 
     // entries
     const getEntry = (id, userId) => clean(get("SELECT * FROM giveaway_entries WHERE giveaway_id = ? AND discord_id = ?", id, userId));
-    const addEntry = (id, userId, entries) => run("INSERT OR REPLACE INTO giveaway_entries (giveaway_id, discord_id, entries, entered_at) VALUES (?,?,?,?)", id, userId, entries, now());
+    const addEntry = (id, userId, entries, channelId = null) => run("INSERT OR REPLACE INTO giveaway_entries (giveaway_id, discord_id, entries, entered_at, entry_channel) VALUES (?,?,?,?,?)", id, userId, entries, now(), channelId ? String(channelId) : null);
+    /** The channel a person pressed Enter in: for a cross-server giveaway that is a channel in their own server. */
+    const entryChannel = (id, userId) => get("SELECT entry_channel FROM giveaway_entries WHERE giveaway_id = ? AND discord_id = ?", id, userId)?.entry_channel ?? null;
+    const setNotifyState = (keyId, state) => run("UPDATE giveaway_keys SET notify_state = ? WHERE id = ?", state, keyId);
     const removeEntry = (id, userId) => run("DELETE FROM giveaway_entries WHERE giveaway_id = ? AND discord_id = ?", id, userId).changes > 0;
     const listEntries = id => all("SELECT discord_id, entries FROM giveaway_entries WHERE giveaway_id = ?", id).map(clean);
     const countEntries = id => get("SELECT COUNT(*) AS n FROM giveaway_entries WHERE giveaway_id = ?", id).n;
@@ -173,13 +176,13 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         return r ? { ...clean(r), has_key: Boolean(r.has_key) } : undefined;
     };
     const assignKey = (keyId, userId, deadline) => run(
-        "UPDATE giveaway_keys SET status = 'assigned', winner_id = ?, assigned_at = ?, deadline = ?, delivered_at = NULL, delivered_via = NULL, confirm_at = NULL, prompts = 0, remind_stage = 0 WHERE id = ?",
+        "UPDATE giveaway_keys SET status = 'assigned', winner_id = ?, assigned_at = ?, deadline = ?, delivered_at = NULL, delivered_via = NULL, confirm_at = NULL, prompts = 0, remind_stage = 0, notify_state = NULL WHERE id = ?",
         userId, now(), deadline, keyId);
     const releaseKey = keyId => run("UPDATE giveaway_keys SET status = 'available', winner_id = NULL, deadline = NULL, assigned_at = NULL WHERE id = ?", keyId);
     const setRemindStage = (keyId, stage) => run("UPDATE giveaway_keys SET remind_stage = ? WHERE id = ?", stage, keyId);
     /** Prizes handed to a winner who hasn't pressed Claim yet, soonest deadline first. Optionally for one server. */
     const pendingClaims = ({ guildId = null, limit = 100 } = {}) => all(
-        `SELECT k.id, k.giveaway_id, k.label, k.kind, k.winner_id, k.assigned_at, k.deadline, k.remind_stage, k.redraws, g.title, g.guild_id, g.is_global, g.claim_hours
+        `SELECT k.id, k.giveaway_id, k.label, k.kind, k.winner_id, k.assigned_at, k.deadline, k.remind_stage, k.notify_state, k.redraws, g.title, g.guild_id, g.is_global, g.claim_hours
          FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id
          WHERE k.status = 'assigned' AND k.winner_id IS NOT NULL ${guildId ? "AND g.guild_id = ?" : ""} ORDER BY k.deadline ASC LIMIT ?`, ...(guildId ? [guildId, limit] : [limit])).map(clean);
     const bumpRedraw = keyId => run("UPDATE giveaway_keys SET redraws = redraws + 1 WHERE id = ?", keyId);
@@ -274,7 +277,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         markSoon, unmarkSoon, soonIds, listSoon,
         listTemplates, saveTemplate, removeTemplate, prizesFor,
         setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
-        setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, removeEntry, listEntries, countEntries,
+        setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, entryChannel, setNotifyState, removeEntry, listEntries, countEntries,
         listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,
         giveawayTotals, getGiveawaySettings, setGiveawaySettings, forgetGiveawayUser, hasGiveawayData

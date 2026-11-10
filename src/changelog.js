@@ -1,6 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
+        "**Giveaway winners in other servers:** if a winner's DMs are closed, I now ping them in the channel they entered from (their own server) before trying the host's. The host gets a message right away when nobody could reach the winner, and the Waiting to be claimed panels show whether each winner was reached.",
         "**Buy links:** every Fortnite item has a Buy in the Fortnite shop button and a Copy link button, and the link opens Fortnite's shop with creator code LUCADO already applied.",
         "**Treasure tab:** per-chest odds, the Treasure Hour boosts, and the weekly Treasure Hunters prizes, with this week highlighted.",
         "**Licenses page:** credits for the services and data the site uses, trademark notes, and the license for every library it's built on. It's laid out like the terms and privacy pages, and linked from About and the footer.",

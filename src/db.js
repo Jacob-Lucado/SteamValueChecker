@@ -234,6 +234,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "indie_dev_role", "TEXT");
     addColumn("social_prefs", "dm", "INTEGER NOT NULL DEFAULT 0");
     addColumn("giveaway_keys", "remind_stage", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("giveaway_keys", "notify_state", "TEXT");
+    addColumn("giveaway_entries", "entry_channel", "TEXT");
     addColumn("social_prefs", "guestbook", "INTEGER NOT NULL DEFAULT 1");
     addColumn("items", "priority", "INTEGER NOT NULL DEFAULT 0");
     addColumn("items", "release_at", "INTEGER");

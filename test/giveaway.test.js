@@ -10,13 +10,13 @@ import { giveawayPayload, keyMessage } from "../src/gwrender.js";
 const SECRET = "test-secret-at-least-16-chars";
 const HOUR = 3600_000;
 
-function rig({ dmFails = new Set(), gone = new Set(), vouches = "vouch-chan", itad = null } = {}) {
+function rig({ dmFails = new Set(), badChannels = new Set(), gone = new Set(), vouches = "vouch-chan", itad = null } = {}) {
     let clock = 1_800_000_000_000;
     const db = openDb(":memory:", { now: () => clock });
     const posts = [], edits = [], dms = [];
     let n = 100;
     const discord = {
-        post: async (channelId, payload) => { posts.push({ channelId, payload }); return { id: String(++n) }; },
+        post: async (channelId, payload) => { if (badChannels.has(channelId)) throw new Error("no access"); posts.push({ channelId, payload }); return { id: String(++n) }; },
         edit: async (channelId, messageId, payload) => { edits.push({ channelId, messageId, payload }); },
         dm: async (userId, payload) => { if (dmFails.has(userId)) throw new Error("closed"); dms.push({ userId, payload }); },
         memberOk: async (g, u) => !gone.has(u),
@@ -29,7 +29,7 @@ function rig({ dmFails = new Set(), gone = new Set(), vouches = "vouch-chan", it
         guild_id: "G", channel_id: "C", host_id: "host", title: "Big giveaway", duration_ms: 2 * HOUR,
         keys: [{ label: "Hades", key: "AAAAA-BBBBB-CCCCC" }, { label: "Celeste", key: "DDDDD-EEEEE-FFFFF" }], ...over
     });
-    const enterAll = async (id, users) => { for (const u of users) await svc.enter(id, { userId: u, roleIds: [] }); };
+    const enterAll = async (id, users, chans) => { for (const u of users) await svc.enter(id, { userId: u, roleIds: [], channelId: chans?.[u] ?? null }); };
     return { db, vault, svc, posts, edits, dms, make, enterAll, advance: ms => { clock += ms; }, now: () => clock };
 }
 
@@ -564,4 +564,34 @@ test("a host or the owner can nudge a slow winner right now", async () => {
     assert.equal(r.winner, k.winner_id); assert.equal(t.dms.length, before + 1);
     await t.svc.confirm; // sanity: the API exists next to remind
     await assert.rejects(() => t.svc.remind(999), /isn't waiting/);
+});
+
+test("a winner with closed DMs is pinged where they entered, and the host hears when nobody can reach them", async () => {
+    // Reached in the channel they entered from (their own server).
+    let t = rig({ dmFails: new Set(["a"]) });
+    let { id } = await t.make({ keys: [{ label: "Hades", key: "K1" }] });
+    await t.enterAll(id, ["a"], { a: "THEIR-CHAN" });
+    t.advance(3 * HOUR);
+    await t.svc.tick();
+    assert.equal(t.db.listKeys(id)[0].notify_state, "channel");
+    assert.ok(t.posts.some(p => p.channelId === "THEIR-CHAN" && /<@a>/.test(p.payload.content)), "pinged in their own server");
+
+    // Nowhere to reach them: the host is told straight away.
+    const bad = new Set();
+    t = rig({ dmFails: new Set(["a"]), badChannels: bad });
+    ({ id } = await t.make({ keys: [{ label: "Hades", key: "K1" }] }));
+    await t.enterAll(id, ["a"], { a: "THEIR-CHAN" });
+    bad.add("THEIR-CHAN").add("C");
+    t.advance(3 * HOUR);
+    await t.svc.tick();
+    assert.equal(t.db.listKeys(id)[0].notify_state, "none");
+    assert.ok(t.dms.some(d => d.userId === "host" && /couldn't reach them/.test(d.payload.embeds[0].description)), "the host is told");
+
+    // A normal DM is recorded as reached.
+    t = rig();
+    ({ id } = await t.make({ keys: [{ label: "Hades", key: "K1" }] }));
+    await t.enterAll(id, ["a"]);
+    t.advance(3 * HOUR);
+    await t.svc.tick();
+    assert.equal(t.db.listKeys(id)[0].notify_state, "dm");
 });

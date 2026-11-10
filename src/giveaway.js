@@ -99,7 +99,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(id), g.status)); } catch (e) { log(`giveaway edit failed: ${e?.name ?? "error"}`); }
         }
         if (g.announce_id) {
-            try { await discord.edit(g.channel_id, g.announce_id, winnersPayload(g, keys)); } catch (e) { log(`winners edit failed: ${e?.name ?? "error"}`); }
+            try { const wp = winnersPayload(g, keys); await discord.edit(g.channel_id, g.announce_id, { ...wp, content: wp.content ?? "" }); } catch (e) { log(`winners edit failed: ${e?.name ?? "error"}`); }
         }
     }
 
@@ -252,7 +252,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             if (g.min_member_days && who.joinedAt && (now() - who.joinedAt) / 86400_000 < g.min_member_days) throw new UserError(`You need to have been in this server for at least ${g.min_member_days} days to enter.`);
         }
         const entries = hasAnyRole(have, g.bonus_role_id) ? g.bonus_entries : 1;
-        db.addEntry(g.id, who.userId, entries);
+        db.addEntry(g.id, who.userId, entries, who.channelId ?? null);
         return { status: "entered", entries, total: entryCount(g.id), steps: stepsOf(g), hostName: g.host_name ?? null };
     }
 
@@ -317,10 +317,23 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const key = db.getKey(k.id ?? k.keyId);
         if (!key || key.status !== "assigned" || !key.winner_id) return false;
         const payload = winnerNudge(g, key, { stage, left: (key.deadline ?? now()) - now() });
-        try { await discord.dm(key.winner_id, payload); return true; }
+        let state = "none";
+        try { await discord.dm(key.winner_id, payload); state = "dm"; }
         catch {
-            try { await discord.post(g.channel_id, { ...payload, content: `<@${key.winner_id}> ${stage === 0 ? "you won a prize" : "you haven't claimed your prize yet"}.`, allowedMentions: { users: [key.winner_id] } }); return true; } catch { return false; }
+            // DMs are closed. Try the channel they entered from (in a cross-server giveaway that is a channel in their own server), then the giveaway's own.
+            const text = { ...payload, content: `<@${key.winner_id}> ${stage === 0 ? "you won a prize" : "you haven't claimed your prize yet"}.`, allowedMentions: { users: [key.winner_id] } };
+            for (const ch of [...new Set([db.entryChannel(g.id, key.winner_id), g.channel_id].filter(Boolean))]) {
+                try { await discord.post(ch, text); state = "channel"; break; } catch { /* try the next one */ }
+            }
         }
+        // Keep the best result: a DM that worked once stays "dm" even if a later reminder had to go to a channel.
+        if (stage === 0 || state === "dm" || key.notify_state !== "dm") db.setNotifyState(key.id, state);
+        if (stage === 0 && state !== "dm") {
+            await dmHost(g, hostNote(g, state === "channel"
+                ? `<@${key.winner_id}> won **${key.label}**, but their DMs are closed, so I pinged them in a channel instead. Keep an eye on it, or message them yourself.`
+                : `<@${key.winner_id}> won **${key.label}**, but I couldn't reach them: their DMs are closed and I couldn't post in a channel they can see (they may not have finished setting the bot up in their server). Message them directly, or reroll if they don't respond.`));
+        }
+        return state !== "none";
     }
 
     /** Ends a giveaway: draws one winner per prize, posts the winners, and tells the host. */

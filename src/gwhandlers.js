@@ -227,7 +227,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
     function who(i) {
         const roles = i.member?.roles;
         return {
-            userId: i.user.id,
+            userId: i.user.id, channelId: i.channelId ?? i.channel?.id ?? null,
             roleIds: Array.isArray(roles) ? roles : [...(roles?.cache?.keys?.() ?? [])],
             boosting: Boolean(i.member?.premiumSinceTimestamp ?? i.member?.premiumSince), joinedAt: i.member?.joinedTimestamp ?? null, createdAt: i.user.createdTimestamp ?? null
         };

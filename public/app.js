@@ -126,12 +126,12 @@ window.SVC_SITE = envIn => {
     const panel = h("div", { class: "panel" }, h("h3", { text: "Waiting to be claimed" }));
     if (!rows.length) { panel.append(h("p", { class: "muted small", text: "Nobody is sitting on an unclaimed prize right now. Winners get a DM when they're drawn, a reminder halfway and a last call near the end, and you get a message if one runs out." })); return panel; }
     panel.append(h("p", { class: "muted small", text: "Winners who haven't pressed Claim prize. They're reminded halfway and near the end, and the prize is redrawn if time runs out. You can nudge anyone now." }));
-    panel.append(h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Prize", "Giveaway", "Winner", "Time left", "Reminders", ""].map(c => h("th", { text: c })))),
+    panel.append(h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Prize", "Giveaway", "Winner", "Reached", "Time left", "Reminders", ""].map(c => h("th", { text: c })))),
       h("tbody", {}, rows.map(r => {
         const b = h("button", { class: "btn gray small", type: "button", text: "Remind now" });
         b.addEventListener("click", () => busy(b, async () => { await remind(r.key_id); toast("Reminder sent.", "ok"); if (reload) await reload(); }));
         return h("tr", {}, h("td", {}, h("b", { text: r.prize })), h("td", { text: `#${r.giveaway_id} ${r.title}${r.server ? " · " + r.server : ""}` }),
-          h("td", { text: r.winner ? `${r.winner} (${r.winner_id})` : r.winner_id }), h("td", { class: r.left_ms < 6 * 3600_000 ? "warn-text" : "", text: words(r.left_ms) }),
+          h("td", { text: r.winner ? `${r.winner} (${r.winner_id})` : r.winner_id }), h("td", { class: r.reached === "none" ? "warn-text" : "", text: ({ dm: "By DM", channel: "In a channel (DMs closed)", none: "Couldn't reach them" })[r.reached] || "Not sent yet" }), h("td", { class: r.left_ms < 6 * 3600_000 ? "warn-text" : "", text: words(r.left_ms) }),
           h("td", { text: r.reminders ? String(r.reminders) : "none yet" }), h("td", {}, b));
       })))));
     return panel;

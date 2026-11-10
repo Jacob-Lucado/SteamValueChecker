@@ -791,7 +791,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         return await Promise.all(rows.map(async k => {
             const winner = db.getMeta?.("staffname:" + k.winner_id) || await remember("uname:" + k.winner_id, 6 * 3_600_000, async () => (await rest?.userName?.(k.winner_id)) ?? null).catch(() => null);
             return { key_id: k.id, giveaway_id: k.giveaway_id, title: k.title, prize: k.label, winner_id: k.winner_id, winner: winner ? String(winner).slice(0, 60) : null, server: guildNames.get(k.guild_id) ?? null,
-                global: Boolean(k.is_global), deadline: k.deadline, left_ms: Math.max(0, (k.deadline ?? now()) - now()), reminders: k.remind_stage, redraws: k.redraws };
+                global: Boolean(k.is_global), deadline: k.deadline, left_ms: Math.max(0, (k.deadline ?? now()) - now()), reminders: k.remind_stage, redraws: k.redraws, reached: k.notify_state ?? null };
         }));
     };
     function giveawayOf(g, id) {
