@@ -226,6 +226,10 @@
   function applyPrefs() {
     const css = /^#[0-9a-f]{6}$/i.test(prefs.wall) ? prefs.wall : (WALLS.find(x => x[0] === prefs.wall) || [])[2] || "";
     css ? document.body.style.setProperty("--wall", css) : document.body.style.removeProperty("--wall");
+    // Desktop labels follow the wallpaper, not the theme: a dark wallpaper needs light text even in light mode.
+    let tone = "";
+    if (css) { tone = "dark"; if (/^#[0-9a-f]{6}$/i.test(prefs.wall)) { const n = parseInt(prefs.wall.slice(1), 16), lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; tone = lum > 0.6 ? "light" : "dark"; } } // the presets are all dark
+    document.body.classList.toggle("los-wall-dark", tone === "dark"); document.body.classList.toggle("los-wall-light", tone === "light");
     document.body.classList.toggle("los-waves", prefs.waves);
     lastDesk = null; syncActive();
   }

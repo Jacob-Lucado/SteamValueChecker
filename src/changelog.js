@@ -5,7 +5,8 @@ export const CHANGELOG = [
         "**Names work too:** the tools that fill in from Steam and the rival comparison accept a game's name as well as a link, and more kinds of Steam links are understood.",
         "**Trailer check:** it can play the video you choose again.",
         "**LucadoOS:** the neon waves now show inside full-screen windows, and the Personalize switch turns them on and off.",
-        "**Faster LucadoOS:** pages now run right inside their windows instead of each one loading the whole site again, so opening a window is quick and uses far less memory. Windows share what the desktop already loaded, only the window on top loads when your windows come back, and the neon waves sit inside full-screen windows." ] },
+        "**Faster LucadoOS:** pages now run right inside their windows instead of each one loading the whole site again, so opening a window is quick and uses far less memory. Windows share what the desktop already loaded, only the window on top loads when your windows come back, and the neon waves sit inside full-screen windows.",
+        "**Light mode:** desktop icon names are readable on dark wallpapers now." ] },
     { version: "2026.11.52", date: "2026-11-10", title: "Indie dev panel and LucadoOS upgrades", items: [
         "**Dev panel for indie developers:** once your game is approved you get the **Verified IndieDev** role in every server that has it, and the bot DMs you with a button to open the Dev panel. It has an overview with views, clicks, likes and followers, a request inbox where you approve or decline key requests (one by one or in bulk, with a note back), a key pool the bot hands out automatically, and a news composer for your followers.",
         "**Build my server** adds the Verified IndieDev role. Run it again on an existing server to pick it up, and set it on the Ping roles panel if you like.",
