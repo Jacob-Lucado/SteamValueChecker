@@ -177,6 +177,7 @@ const FILES = {
     "/overlayui.css": ["overlayui.css", "text/css; charset=utf-8"],
     "/overlayui.js": ["overlayui.js", "text/javascript; charset=utf-8"],
     "/admin": ["admin.html", "text/html; charset=utf-8"],
+    "/adminos.js": ["adminos.js", "text/javascript; charset=utf-8"],
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
     "/BingSiteAuth.xml": ["BingSiteAuth.xml", "application/xml; charset=utf-8"],
     "/seo.css": ["seo.css", "text/css; charset=utf-8"],

@@ -4061,6 +4061,7 @@
       h("a", { class: "btn gray", href: state.cfg.siteUrl || "/", text: "Back to Steam Value Checker" }),
       h("button", { class: "btn gray", type: "button", text: "Sign out", onclick: async () => { try { await api("/auth/logout", {}); } catch { /* already out */ } location.reload(); } }));
     adminChrome();
+    if (window.AdminOS?.wanted()) window.AdminOS.begin({ nav: ADMIN_NAV, pages: ADMIN_PAGES, siteUrl: state.cfg.siteUrl, render: (id, host) => adminMount(id, host) });
     adminRoute();
     adminPulse();
     setInterval(adminPulse, 30_000);
@@ -4072,6 +4073,7 @@
       ...items.map(([id, title, icon]) => h("a", { class: "adm-link", href: "#/" + id, "data-page": id }, h("i", { text: icon, "aria-hidden": "true" }), h("span", { text: title }), h("span", { class: "adm-badge", "data-badge": id, hidden: true })))]));
     admEl("admFoot").replaceChildren(h("a", { href: state.cfg.siteUrl || "/", text: "← Steam Value Checker" }), h("span", { text: "Signed in as " + (state.me.user?.username || "owner") }));
     admEl("admUser").replaceChildren(state.me.user?.avatar ? h("img", { src: state.me.user.avatar, alt: "", width: "30", height: "30", referrerpolicy: "no-referrer" }) : null, themeButton(),
+      window.AdminOS && window.innerWidth >= 900 ? h("button", { class: "btn gray small", type: "button", text: "Desktop view", onclick: () => window.AdminOS.setMode("os") }) : null,
       h("button", { class: "btn gray small", type: "button", text: "Sign out", onclick: async () => { try { await api("/auth/logout", {}); } catch { /* already out */ } location.reload(); } }));
     const shell = admEl("adm");
     admEl("admBurger").addEventListener("click", () => shell.classList.toggle("open"));
@@ -4094,19 +4096,13 @@
     } catch { /* the badge is a nicety */ }
   }
 
-  function adminRoute() {
-    clearTimeout(adminTimer);
-    admEl("adm").classList.remove("open");
-    const id = (location.hash.replace(/^#\/?/, "").split(/[/?]/)[0]) || "overview";
-    const page = ADMIN_PAGES[id] ? id : "overview";
-    document.querySelectorAll(".adm-link").forEach(a => { const on = a.dataset.page === page; a.classList.toggle("active", on); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); });
+  /** Draws one admin page (its heading, refresh button and content) into any box. The sidebar layout and the desktop windows both use this. */
+  function adminMount(page, host, { classic = false } = {}) {
     const meta = ADMIN_PAGES[page];
-    document.title = `${meta.title} · Admin · Steam Value Checker`;
-    admEl("admCrumb").replaceChildren("Admin / ", h("b", { text: meta.title }));
     const body = h("div", {}, h("p", { class: "muted", text: "Loading…" }));
-    const refresh = h("button", { class: "btn gray small", type: "button", text: "Refresh", onclick: () => { adminCtx = null; adminRoute(); adminPulse(); } });
-    app.replaceChildren(h("div", { class: "adm-head" }, h("div", {}, h("h1", { text: meta.title }), h("p", { text: meta.sub })), h("div", { class: "adm-actions" }, refresh)), body);
-    window.scrollTo({ top: 0, behavior: "instant" });
+    const refresh = h("button", { class: "btn gray small", type: "button", text: "Refresh", onclick: () => { adminCtx = null; adminMount(page, host, { classic }); adminPulse(); } });
+    host.replaceChildren(h("div", { class: "adm-head" }, h("div", {}, h("h1", { text: meta.title }), h("p", { text: meta.sub })), h("div", { class: "adm-actions" }, refresh)), body);
+    if (classic) window.scrollTo({ top: 0, behavior: "instant" });
     const draw = nodes => body.replaceChildren(...nodes);
     const fail = e => body.replaceChildren(h("div", { class: "notice warn", text: e.message || "Something went wrong." }));
     if (page === "system") return void adminSystem(body, fail);
@@ -4132,6 +4128,19 @@
       draw(nodes);
     }).catch(fail);
   }
+  function adminRoute() {
+    clearTimeout(adminTimer);
+    admEl("adm").classList.remove("open");
+    const id = (location.hash.replace(/^#\/?/, "").split(/[/?]/)[0]) || "overview";
+    const page = ADMIN_PAGES[id] ? id : "overview";
+    if (window.AdminOS?.active()) { window.AdminOS.open(page); return; } // on the desktop, a link opens that page's window
+    document.querySelectorAll(".adm-link").forEach(a => { const on = a.dataset.page === page; a.classList.toggle("active", on); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); });
+    const meta = ADMIN_PAGES[page];
+    document.title = `${meta.title} · Admin · Steam Value Checker`;
+    admEl("admCrumb").replaceChildren("Admin / ", h("b", { text: meta.title }));
+    adminMount(page, app, { classic: true });
+  }
+
 
   /** One-click doors to the things you do most. */
   /** What needs the owner right now. Fills in by itself; empty means all quiet. */

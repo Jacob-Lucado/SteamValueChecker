@@ -2951,6 +2951,7 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         assert.equal((await o.request("/api/profile/page")).data.choices.themes.find(x => x.key === "galaxy").locked, true);
         assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "555555555", days: 5 } })).status, 200);
         assert.equal((await theme("galaxy")).status, 200);
+        assert.equal((await o.request("/adminos.js")).status, 200, "the admin desktop script is served");
         const style = k => o.request("/api/profile/page", { method: "POST", body: { style: k } });
         assert.equal((await style("nope")).status, 400, "an unknown style is refused");
         assert.equal((await style("ember")).status, 200, "free styles save for anyone");
