@@ -180,6 +180,7 @@
     { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
     { id: "feed", label: "Social", pages: [["feed", "Feed"], ["people", "People"], ["friends", "Friends"], ["compare", "Compare"], ["communities", "Communities"], ["discover", "Discover"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"]] },
+    { id: "indie", label: "Indie devs", pages: [["indie", "Showcase & tools"]] },
     { id: "free", label: "Free & codes", pages: [["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "social", label: "Play together", pages: [["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"]] },
     { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
@@ -190,7 +191,7 @@
   ];
   // Pages that are not tabs themselves but belong to a section: one game's page sits under Deals.
   const HUB_ALIAS = { g: "deals" };
-  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "tip", "feed", "discover", "communities"]);
+  const PUBLIC_PAGES = new Set(["home", "help", "about", "status", "tip", "feed", "discover", "communities", "indie"]);
   function pageVisible(id) {
     const me = state.me;
     if (id === "home" && me) return false; // the logo already goes home when signed in
@@ -3900,7 +3901,7 @@
     ["Dashboard", [["overview", "Overview", "◧", "How the bot is doing right now."], ["system", "System health", "♥", "The bot's process, memory and sign-ins, refreshed live."]]],
     ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."], ["panels", "Panel runs", "▤", "Which commands people run from menus and panels."]]],
     ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["profiles", "Profile pages", "▭", "Reported profile pages, and a way to hide or restore one."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
-    ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."], ["traffic", "Link traffic", "↗", "How many people open the bot's links and click through to the stores."], ["xposts", "X posting", "✕", "Post to the project's X account: ads, scheduled posts and the automatic free-game posts."]]],
+    ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."], ["traffic", "Link traffic", "↗", "How many people open the bot's links and click through to the stores."], ["indie", "Indie showcase", "◈", "Review submissions, feature games and pause the form."], ["xposts", "X posting", "✕", "Post to the project's X account: ads, scheduled posts and the automatic free-game posts."]]],
     ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
     ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
@@ -4081,6 +4082,7 @@
     if (page === "system") return void adminSystem(body, fail);
     if (page === "xposts") return void adminXPosts(body, fail);
     if (page === "traffic") return void adminTraffic(body, fail);
+    if (page === "indie") return void adminIndie(body, fail);
     if (page === "votes") return void adminVotes(body, fail);
     if (page === "datareq") return void adminDataReq(body, fail);
     if (page === "supporters") return void adminSupporters(body, fail);
@@ -4126,6 +4128,37 @@
   }
 
   /** Every link the bot posts goes through a page on the site first. This shows how many people opened them and how many went on to the store. */
+  async function adminIndie(body, fail) {
+    const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
+    let status = "pending";
+    const draw = async () => {
+      let d;
+      try { d = await api("/api/admin/indie?status=" + status); } catch (e) { return fail(e); }
+      if (!document.body.contains(body)) return;
+      const act = async (g, action, extra = {}) => { try { await api("/api/admin/indie/review", { id: g.id, action, ...extra }); toast("Done.", "ok"); await draw(); } catch (e) { toast(e.message); } };
+      const open = h("input", { type: "checkbox" }); open.checked = d.open; open.addEventListener("change", async () => { try { await api("/api/admin/indie/open", { open: open.checked }); toast(open.checked ? "Submissions are open." : "Submissions are paused.", "ok"); } catch (e) { toast(e.message); open.checked = !open.checked; } });
+      const syncAll = h("button", { class: "btn gray small", type: "button", text: "Sync games from Steam now" }); syncAll.addEventListener("click", () => busy(syncAll, async () => { const r = await api("/api/admin/indie/review", { action: "syncall" }); toast(`Refreshed ${r.synced} game${r.synced === 1 ? "" : "s"}.`, "ok"); await draw(); }));
+      const tabs = h("div", { class: "row" }, ["pending", "approved", "rejected"].map(k => { const b = h("button", { class: "btn small " + (status === k ? "blue" : "gray"), type: "button", text: `${k[0].toUpperCase() + k.slice(1)} (${d.counts[k] ?? 0})` }); b.addEventListener("click", () => { status = k; draw(); }); return b; }));
+      const card = g => {
+        const note = h("input", { type: "text", placeholder: "Note to the developer (optional)", maxlength: 300 }), btns = [];
+        const mk = (text, cls, fn) => { const b = h("button", { class: "btn small " + cls, type: "button", text }); b.addEventListener("click", () => busy(b, fn)); btns.push(b); };
+        if (g.status !== "approved") mk("Approve", "green", () => act(g, "approve", { note: note.value }));
+        if (g.status !== "rejected") mk("Reject", "red", () => act(g, "reject", { note: note.value }));
+        if (g.status === "approved") { mk(g.featured ? "Unfeature" : "Feature", g.featured ? "gray" : "blue", () => act(g, g.featured ? "unfeature" : "feature")); mk("Sync", "gray", () => act(g, "refresh")); mk("Post to X", "gray", async () => { if (confirm(`Post ${g.title} to the project's X account? Posts with a link cost about 20 cents.`)) await act(g, "xpost"); }); }
+        mk("Remove", "gray", async () => { if (confirm(`Remove ${g.title} for good?`)) await act(g, "remove"); });
+        return h("div", { class: "panel ix-adm" }, h("div", { class: "ix-adm-head" }, h("img", { src: g.image, alt: "", width: 184, height: 69 }), h("div", {}, h("b", { text: g.title }), h("div", { class: "muted small", text: `${g.studio || "Unknown studio"} · Steam app ${g.appid} · by Discord user ${g.owner}` }), h("div", { class: "muted small", text: `${(g.genres || []).join(", ")} · ${g.price || "no price"} · ${g.release || ""}` }))),
+          h("p", { text: g.pitch || "" }), g.note ? h("p", { class: "muted small", text: "Note: " + g.note }) : null,
+          h("div", { class: "row" }, h("a", { href: g.steamUrl, target: "_blank", rel: "noopener noreferrer", text: "Steam page ↗" }), g.status === "approved" ? h("a", { href: `/indie/game/${g.id}`, target: "_blank", text: "Showcase page ↗" }) : null, Object.entries(g.links || {}).map(([k, u]) => h("a", { href: u, target: "_blank", rel: "noopener noreferrer nofollow", text: k + " ↗" })), g.status === "approved" ? h("span", { class: "muted small", text: `${g.views} views · ${g.clicks} clicks · ♥ ${g.likes}` }) : null),
+          h("div", { class: "row" }, note, btns));
+      };
+      body.replaceChildren(
+        h("div", { class: "panel" }, h("div", { class: "grid four" }, tile("Waiting", d.counts.pending ?? 0, "need a look"), tile("Live", d.counts.approved ?? 0, "in the showcase"), tile("Views", d.totals.views, "on game pages"), tile("Clicks to Steam", d.totals.clicks), tile("Likes", d.totals.likes))),
+        h("div", { class: "panel" }, h("h3", { text: "Submissions" }), h("label", { class: "check" }, open, " Accept new submissions"), h("p", { class: "muted small", text: "Games re-sync from their Steam pages every day on their own, so prices and release dates stay current. You can also do it now." }), syncAll, h("a", { class: "btn gray small", href: "/indie", target: "_blank", text: "Open the showcase" })),
+        tabs, d.games.length ? d.games.map(card) : h("p", { class: "muted", text: status === "pending" ? "Nothing is waiting. You're all caught up." : "Nothing here." }));
+    };
+    await draw();
+  }
+
   async function adminTraffic(body, fail) {
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
     let t;
@@ -7721,7 +7754,8 @@
       h("div", { class: "muted small" }, feedAgo(x.at), x.game ? " · " + x.game : "", Object.entries(x.reactions || {}).map(([e, n]) => ` · ${e} ${n}`).join(""), x.replies ? ` · ${x.replies} ${x.replies === 1 ? "reply" : "replies"}` : ""))));
   }
 
-  const VIEWS = { feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
+  const indieView = () => window.IndieUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
+  const VIEWS = { indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
 
   function route() {
     if (!state.cfg) return; // still starting; boot() calls route() once the settings are in
@@ -7730,8 +7764,8 @@
     renderChrome();
     const view = currentView();
     // The Streamers pages wear the colors of the big streaming sites (Twitch purple, YouTube red, Kick green).
-    if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else delete document.documentElement.dataset.area;
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities") return landing();
+    if (view === "streamer" || view === "streams" || view === "streamers") document.documentElement.dataset.area = "streamer"; else if (view === "indie") document.documentElement.dataset.area = "indie"; else delete document.documentElement.dataset.area;
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); window.scrollTo({ top: 0, behavior: "instant" }); return; }

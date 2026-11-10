@@ -3213,3 +3213,124 @@ test("admin problems list and next-post preview are owner-only", async () => {
     assert.equal((await u.request("/api/admin/xposter/next")).status, 403);
     await u.close();
 });
+
+// ---------- indie showcase ----------
+const steamStub = (over = {}) => async (url) => {
+    const j = o => ({ ok: true, status: 200, json: async () => o });
+    if (/appreviews/.test(url)) return j({ query_summary: { total_positive: 90, total_negative: 10, total_reviews: 100, review_score_desc: "Very Positive" } });
+    if (/storesearch/.test(url)) return j({ items: [{ id: 10, name: "Hades", price: { final: 2499 } }] });
+    const id = /appids=(\d+)/.exec(url)[1];
+    if (id === "999") return j({ [id]: { success: false } });
+    return j({ [id]: { success: true, data: { type: id === "888" ? "dlc" : "game", name: `Game ${id}`, developers: ["Studio X"], short_description: "<b>Short</b> blurb &amp; more", genres: [{ description: "Indie" }], is_free: false, price_overview: { final_formatted: "$9.99", initial: 999 }, release_date: { date: "Jan 1, 2027" }, platforms: { windows: true }, ...over } } });
+};
+const indieSetup = async (extra = {}) => { const { createIndie } = await import("../src/indie.js"); return signedIn({ config: { ownerId: "u1" }, extra: { indieSvc: createIndie({ fetchImpl: steamStub() }), ...extra } }); };
+
+test("indie: the showcase and tools are public, the submit form needs a sign-in, and the owner reviews everything", async () => {
+    const t = await indieSetup();
+    const anon = async (p, opt) => fetch(t.base + p, opt);
+    // public pages
+    assert.equal((await anon("/api/indie/tools")).status, 200);
+    assert.equal((await anon("/api/indie")).status, 200);
+    const lk = await anon("/api/indie/lookup?q=" + encodeURIComponent("https://store.steampowered.com/app/321/Thing/"));
+    const lkd = await lk.json(); assert.equal(lkd.game.title, "Game 321"); assert.equal(lkd.game.blurb, "Short blurb & more"); assert.equal(lkd.game.reviews.total, 100);
+    assert.equal((await (await anon("/api/indie/lookup?q=hades")).json()).results[0].appid, 10);
+    assert.equal((await anon("/api/indie/lookup?q=")).status, 400);
+    for (const [path, re] of [["/indie", /Indie games on Steam/], ["/indie/tools", /free Steam tools for indie game developers/], ["/indie/tools/fee-calculator", /Steam Fee and Tax Calculator/]]) { const r = await anon(path); assert.equal(r.status, 200); assert.match(await r.text(), re); }
+    assert.match(await (await anon("/indie/submit")).text(), /noindex/);
+    assert.ok([401, 403].includes((await anon("/api/indie/submit", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status), "no submitting without signing in");
+    await t.close();
+});
+
+test("indie: submitting checks the link, the pitch and the limits; the owner approves; people can like and the page shows up in search", async () => {
+    const { createIndie } = await import("../src/indie.js");
+    const owner = await signedIn({ config: { ownerId: "u1" }, extra: { indieSvc: createIndie({ fetchImpl: steamStub() }) } });
+    const post = (p, body) => owner.request(p, { method: "POST", body });
+    const ok = { url: "https://store.steampowered.com/app/100/A/", pitch: "A long enough pitch about the game.", team: true, links: { website: "https://example.com", discord: "javascript:alert(1)", trailer: "https://youtu.be/x" } };
+    assert.equal((await post("/api/indie/submit", { ...ok, url: "nope" })).status, 400);
+    assert.equal((await post("/api/indie/submit", { ...ok, team: false })).status, 400);
+    assert.equal((await post("/api/indie/submit", { ...ok, pitch: "short" })).status, 400);
+    assert.equal((await post("/api/indie/submit", { ...ok, url: "https://store.steampowered.com/app/888/Dlc/" })).status, 400, "DLC isn't a game");
+    assert.equal((await post("/api/indie/submit", { ...ok, url: "https://store.steampowered.com/app/999/Gone/" })).status, 400, "no store page");
+    const r = await post("/api/indie/submit", ok); assert.equal(r.status, 200); assert.equal(r.data.status, "approved", "the bot owner's own game goes straight in");
+    assert.equal((await post("/api/indie/submit", ok)).status, 400, "no duplicates");
+    const game = (await owner.request("/api/indie/game?id=" + r.data.id)).data.game;
+    assert.equal(game.title, "Game 100"); assert.equal(game.studio, "Studio X"); assert.deepEqual(Object.keys(game.links).sort(), ["trailer", "website"], "unsafe links are dropped");
+    assert.equal(game.owner_id, undefined, "the owner's id is never shown");
+    const like = await post("/api/indie/like", { id: r.data.id }); assert.deepEqual([like.data.liked, like.data.likes], [true, 1]);
+    assert.equal((await post("/api/indie/like", { id: r.data.id })).data.likes, 0, "liking again takes it back");
+    const list = (await owner.request("/api/indie?q=game")).data; assert.equal(list.total, 1); assert.equal(list.genres[0].name, "Indie");
+    assert.equal((await owner.request("/api/indie?genre=Puzzle")).data.total, 0);
+    const html = await (await fetch(owner.base + "/indie/game/" + r.data.id)).text();
+    assert.match(html, /<title>Game 100 by Studio X/); assert.match(html, /og:image" content="https:\/\/[^"]*100/);
+    assert.match(await (await fetch(owner.base + "/sitemap.xml")).text(), new RegExp(`/indie/game/${r.data.id}<`));
+    assert.match(await (await fetch(owner.base + "/robots.txt")).text(), /Disallow: \/indie\/submit/);
+    await owner.close();
+});
+
+test("indie: other people's games wait in a queue, show nowhere until approved, and the review actions work and tell the developer", async () => {
+    const { createIndie } = await import("../src/indie.js");
+    const t = await setup({ config: { ownerId: "boss" }, extra: { indieSvc: createIndie({ fetchImpl: steamStub() }) } });
+    await t.signIn();
+    const post = (p, body) => t.request(p, { method: "POST", body });
+    const ids = [];
+    for (const n of [1, 2, 3]) { const r = await post("/api/indie/submit", { url: `https://store.steampowered.com/app/${n}/`, pitch: "A long enough pitch about the game.", team: true }); assert.equal(r.data.status, "pending"); ids.push(r.data.id); }
+    assert.equal((await post("/api/indie/submit", { url: "https://store.steampowered.com/app/4/", pitch: "A long enough pitch about the game.", team: true })).status, 400, "three waiting at once is the limit");
+    assert.equal((await t.request("/api/indie")).data.total, 0, "nothing public yet");
+    assert.equal((await fetch(t.base + "/api/indie/game?id=" + ids[0])).status, 404, "anonymous visitors can't see a pending game");
+    assert.equal((await t.request("/api/indie/game?id=" + ids[0])).data.game.mine, true, "but its developer can");
+    assert.equal((await t.request("/api/admin/indie")).status, 403); assert.equal((await post("/api/admin/indie/review", { id: ids[0], action: "approve" })).status, 403);
+    const edit = await post("/api/indie/edit", { id: ids[0], pitch: "A better pitch than the first one was.", links: { x: "https://x.com/me" } }); assert.equal(edit.status, 200);
+    assert.equal((await t.request("/api/indie/mine")).data.games.length, 3);
+    assert.equal((await post("/api/indie/withdraw", { id: ids[2] })).status, 200);
+    await t.close();
+});
+
+test("indie: owner-only queue, approve, reject with a note, feature, pause and sync", async () => {
+    const { createIndie } = await import("../src/indie.js");
+    const owner = await signedIn({ config: { ownerId: "u1" }, extra: { indieSvc: createIndie({ fetchImpl: steamStub({ short_description: "Fresh from Steam" }) }) } });
+    const a = owner.db.indieAdd({ appid: 1, ownerId: "dev1", title: "One", pitch: "p", genres: ["Indie"], image: "https://x/1.jpg" }), b = owner.db.indieAdd({ appid: 2, ownerId: "dev2", title: "Two", pitch: "p", genres: [], image: "https://x/2.jpg" });
+    owner.db.ensureUser("dev1"); owner.db.ensureUser("dev2");
+    const review = (id, action, note) => owner.request("/api/admin/indie/review", { method: "POST", body: { id, action, note } });
+    let q = (await owner.request("/api/admin/indie")).data; assert.equal(q.counts.pending, 2); assert.equal(q.games.length, 2);
+    assert.equal((await review(a, "approve")).status, 200); assert.equal((await review(b, "reject", "Needs a clearer pitch")).status, 200);
+    assert.equal(owner.db.indieGet(a).status, "approved"); assert.equal(owner.db.indieGet(b).note, "Needs a clearer pitch");
+    assert.equal(owner.db.listNotifications("dev2")[0].title, "Two wasn't accepted yet");
+    assert.equal((await review(a, "feature")).status, 200); assert.equal((await owner.request("/api/indie")).data.featured[0].title, "One");
+    assert.equal((await review(a, "refresh")).status, 200); assert.equal(owner.db.indieGet(a).title, "Game 1", "sync brings the Steam details back in");
+    assert.equal((await review(null, "syncall")).status, 200);
+    assert.equal((await owner.request("/api/admin/indie/open", { method: "POST", body: { open: false } })).status, 200);
+    assert.equal((await owner.request("/api/indie")).data.open, false);
+    assert.equal((await review(b, "remove")).status, 200); assert.equal(owner.db.indieGet(b), null);
+    assert.equal((await review(a, "bogus")).status, 400);
+    await owner.close();
+});
+
+test("indie: a developer can sync their own game but not someone else's, and deleting an account takes their games and likes", async () => {
+    const { createIndie } = await import("../src/indie.js");
+    const t = await setup({ config: { ownerId: "boss" }, extra: { indieSvc: createIndie({ fetchImpl: steamStub() }) } });
+    await t.signIn();
+    const mine = t.db.indieAdd({ appid: 5, ownerId: "u1", title: "Old name", pitch: "p", genres: [], image: "https://x/5.jpg" }), other = t.db.indieAdd({ appid: 6, ownerId: "someone", title: "Theirs", pitch: "p", genres: [], image: "https://x/6.jpg" });
+    t.db.indieDecide(mine, "approved"); t.db.indieDecide(other, "approved");
+    const sync = await t.request("/api/indie/sync", { method: "POST", body: { id: mine } }); assert.equal(sync.status, 200); assert.equal(sync.data.game.title, "Game 5");
+    assert.equal((await t.request("/api/indie/sync", { method: "POST", body: { id: mine } })).status, 429, "once a minute");
+    assert.equal((await t.request("/api/indie/sync", { method: "POST", body: { id: other } })).status, 404);
+    t.db.indieToggleLike(other, "u1"); assert.equal(t.db.indieGet(other).likes, 1);
+    assert.equal(t.db.indieExport("u1").games.length, 1);
+    t.db.deleteUser("u1");
+    assert.equal(t.db.indieGet(mine), null, "their game goes"); assert.equal(t.db.indieGet(other).likes, 0, "and their like");
+    await t.close();
+});
+
+test("indie: the owner can spotlight an approved game on the project's X account", async () => {
+    const posted = [];
+    const xposter = { configured: () => true, tags: () => [], freePosted: () => false, bundlePosted: () => false, status: () => ({}), manual: async a => { posted.push(a); return { id: "1" }; } };
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { xposter } });
+    const id = o.db.indieAdd({ appid: 3, ownerId: "dev", title: "Moss Knight", studio: "Moss Co", pitch: "word ".repeat(100), genres: [], image: "https://x/3.jpg" });
+    const call = () => o.request("/api/admin/indie/review", { method: "POST", body: { id, action: "xpost" } });
+    assert.equal((await call()).status, 400, "not until it's approved");
+    o.db.indieDecide(id, "approved");
+    assert.equal((await call()).status, 200);
+    const { xLength } = await import("../src/xposter.js");
+    assert.match(posted[0].text, /^Indie spotlight: Moss Knight by Moss Co/); assert.match(posted[0].text, /\/indie\/game\/\d+\n#indiegame #gamedev #Steam$/); assert.ok(xLength(posted[0].text) <= 280);
+    await o.close();
+});

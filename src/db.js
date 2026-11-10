@@ -11,6 +11,7 @@ import { requestSchema, requestStore } from "./requeststore.js";
 import { codeSchema, codeStore } from "./codestore.js";
 import { bundleFeedSchema, bundleFeedStore } from "./bundlefeedstore.js";
 import { dealSchema, dealStore } from "./dealstore.js";
+import { indieSchema, indieStore } from "./indiestore.js";
 import { dropSchema, dropStore } from "./dropstore.js";
 import { banSchema, banStore } from "./banstore.js";
 import { musicSchema, musicStore, MUSIC_EXTRA_COLUMNS } from "./musicstore.js";
@@ -182,6 +183,7 @@ ${requestSchema}
 ${codeSchema}
 ${bundleFeedSchema}
 ${dealSchema}
+${indieSchema}
 ${dropSchema}
 ${banSchema}
 ${musicSchema}
@@ -368,6 +370,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const promoCodes = codeStore({ run, get, all, clean, now });
     const bundleFeed = bundleFeedStore({ run, get, all, clean, now });
     const deals = dealStore({ run, get, all, now });
+    const indie = indieStore({ run, get, all, now });
     const promoDrops = dropStore({ run, get, all, clean, now });
     const community = communityStore({ run, get, all, clean, now });
     const lfg = lfgStore({ db, run, get, all, clean, now });
@@ -806,7 +809,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId), overlays: streamOverlays.listOvs(discordId).map(o => ({ name: o.name, kind: o.kind, created: o.created })), supporter: supporterExport(discordId) };
+        return { user: u, indie: indie.indieExport(discordId), community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId), overlays: streamOverlays.listOvs(discordId).map(o => ({ name: o.name, kind: o.kind, created: o.created })), supporter: supporterExport(discordId) };
     }
 
     /** Pass, founder mark, wall name and what was paid, for the data export. Payment records are kept as accounting entries without a name after deletion. */
@@ -826,6 +829,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
             calendar.forgetCalendarUser(discordId);
             music.forgetMusicUser(discordId);
             lfg.forgetLfgUser(discordId);
+            indie.forgetIndieUser(discordId);
             tickets.deleteUserTickets(discordId);
             social.forgetSocialUser(discordId);
             requests.forgetRequestUser(discordId);
@@ -887,6 +891,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

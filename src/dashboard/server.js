@@ -57,6 +57,9 @@ import { forYou } from "../foryou.js";
 import { libraryAnalytics } from "../analytics.js";
 import { steamLoginUrl, verifySteamLogin } from "../steamopenid.js";
 import { UserError } from "../errors.js";
+import { createIndie, parseApp, cleanLinks } from "../indie.js";
+import { INDIE_CATS, INDIE_TOOLS, indieSeo, indieSpotlightText } from "../indiemeta.js";
+import { MAX_PENDING_PER_USER, MAX_GAMES_PER_USER } from "../indiestore.js";
 import { createStreams, canStreamIn } from "../streamlive.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { prefsPatch, prefsView } from "../prefs.js";
@@ -99,7 +102,7 @@ import { friendDeals, friendRows, saveFriend } from "../friends.js";
 import { spendSummary, regionCurrency, grabberRegion } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
 import { MAX_CLAIMS_PER_LIST, MAX_CLAIMS_TOTAL, accountOldEnough } from "../giftstore.js";
-import { upcomingSales, salesBefore, SALES_UPDATED } from "../salescal.js";
+import { upcomingSales, salesBefore, SALES_UPDATED, SALES } from "../salescal.js";
 import { playNext } from "../library.js";
 import { resolveProfile, syncSteamLibrary, playStats, steamNext, fetchProfileCard, fetchOwnedGames } from "../steamlib.js";
 import { bundleCheck } from "../bundle.js";
@@ -145,6 +148,11 @@ const FILES = {
     "/page-feed.jpg": ["page-feed.jpg", "image/jpeg"],
     "/page-discover.jpg": ["page-discover.jpg", "image/jpeg"],
     "/page-communities.jpg": ["page-communities.jpg", "image/jpeg"],
+    "/page-indie.jpg": ["page-indie.jpg", "image/jpeg"],
+    "/page-indie-tools.jpg": ["page-indie-tools.jpg", "image/jpeg"],
+    "/indiecalc.js": ["indiecalc.js", "text/javascript; charset=utf-8"],
+    "/indietools.js": ["indietools.js", "text/javascript; charset=utf-8"],
+    "/indie.js": ["indie.js", "text/javascript; charset=utf-8"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
     "/privacy.pdf": ["privacy.pdf", "application/pdf"],
     "/overlay": ["overlay.html", "text/html; charset=utf-8"],
@@ -242,7 +250,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ referrals = null, weekly = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ referrals = null, weekly = null, indieSvc = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -367,6 +375,10 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
     const cache = new Map();
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
     const idFinderLimit = createLimiter({ windowMs: 60_000, max: 15, now });
+    const indieApi = indieSvc ?? createIndie();
+    const indieLookupLimit = createLimiter({ windowMs: 60_000, max: 20, now });
+    const indieSyncLimit = createLimiter({ windowMs: 60_000, max: 1, now });
+    const indieWriteLimit = createLimiter({ windowMs: 10 * 60_000, max: 12, now });
     const socialRead = createLimiter({ windowMs: 60_000, max: 90, now });
     const socialWrite = createLimiter({ windowMs: 60_000, max: 25, now });
     const apiLimit = createLimiter({ windowMs: 60_000, max: config.apiPerMinute ?? 120, now });
@@ -3484,6 +3496,130 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             return { groups: logs ? groupErrors(logs.recent({ level: "error", limit: 400 })) : [], available: Boolean(logs) };
         },
+        // ---------- indie showcase and developer tools ----------
+        "GET /api/indie/tools": async () => ({ cats: INDIE_CATS, tools: INDIE_TOOLS }),
+        "GET /api/indie/calendar": async () => ({ sales: SALES.map(e => ({ name: e.name, kind: e.kind, start: e.start, end: e.end, note: e.note ?? null })), updated: SALES_UPDATED }),
+        // One Steam game's public details, or a name search. No sign-in (the tools use it), so it is limited by address.
+        "GET /api/indie/lookup": async (req, _b, url) => {
+            if (!indieLookupLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute.");
+            const q = String(url.searchParams.get("q") ?? "").trim().slice(0, 200);
+            if (!q) throw new HttpError(400, "Paste a Steam store link or type a game's name.");
+            const id = parseApp(q);
+            try {
+                if (id) return { game: await indieApi.lookup(id, { withReviews: true }) };
+                return { results: await indieApi.search(q) };
+            } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+        },
+        "GET /api/indie": async (req, _b, url) => {
+            const sp = url.searchParams, genre = sp.get("genre") || null, q = (sp.get("q") || "").trim() || null, sort = ["new", "popular", "az"].includes(sp.get("sort")) ? sp.get("sort") : "new";
+            const page = Math.max(0, Math.floor(Number(sp.get("page")) || 0)), per = 24;
+            const { games, total } = db.indieList({ genre, q, sort, limit: per, offset: page * per });
+            const plain = !genre && !q && page === 0;
+            return { open: db.getMeta("indie:open") !== "0", games: games.map(indiePublic), total, page, per, genres: db.indieGenres(), featured: plain ? db.indieFeatured(3).map(indiePublic) : [] };
+        },
+        "GET /api/indie/game": async (req, _b, url) => {
+            const g = db.indieGet(url.searchParams.get("id")), sess = softSession(req);
+            const mine = Boolean(g && sess && sess.userId === g.owner_id), staff = Boolean(sess && isOwner(sess));
+            if (!g || (g.status !== "approved" && !mine && !staff)) throw new HttpError(404, "That game isn't in the showcase.");
+            if (g.status === "approved" && !CRAWLER.test(String(req.headers["user-agent"] ?? ""))) db.indieBump(g.id, "views");
+            return { game: { ...indiePublic(g), status: mine || staff ? g.status : undefined, note: mine ? g.note : undefined, liked: db.indieLiked(g.id, sess?.userId), mine }, more: db.indieList({ limit: 4, sort: "popular" }).games.filter(x => x.id !== g.id).slice(0, 3).map(indiePublic) };
+        },
+        "GET /api/indie/mine": async (req) => {
+            const s = session(req);
+            return { games: db.indieByOwner(s.userId).map(g => ({ ...indiePublic(g), status: g.status, note: g.note, views: g.views, clicks: g.clicks })), limits: { pending: MAX_PENDING_PER_USER, total: MAX_GAMES_PER_USER } };
+        },
+        "POST /api/indie/submit": async (req, body) => {
+            const s = session(req);
+            if (db.getMeta("indie:open") === "0" && s.userId !== config.ownerId) throw new HttpError(400, "Submissions are paused for a bit. Check back soon.");
+            if (!indieWriteLimit.hit(s.userId).ok) throw new HttpError(429, "That's a lot of submissions at once. Try again in a few minutes.");
+            const appid = parseApp(body.url);
+            if (!appid) throw new HttpError(400, "Paste your game's Steam store link, like https://store.steampowered.com/app/123456/Your_Game/");
+            if (body.team !== true) throw new HttpError(400, "Tick the box to confirm you're part of the team that makes this game.");
+            const pitch = String(body.pitch ?? "").replace(/\s+/g, " ").trim();
+            if (pitch.length < 20 || pitch.length > 400) throw new HttpError(400, "Write a pitch between 20 and 400 characters: what makes your game worth a look?");
+            if (db.indieByApp(appid)) throw new HttpError(400, "That game is already in the showcase, or waiting to be looked at.");
+            if (db.indieCountOwner(s.userId) >= MAX_GAMES_PER_USER) throw new HttpError(400, `You can have up to ${MAX_GAMES_PER_USER} games here.`);
+            if (db.indieCountOwner(s.userId, "pending") >= MAX_PENDING_PER_USER) throw new HttpError(400, `You already have ${MAX_PENDING_PER_USER} games waiting to be looked at. They'll be reviewed soon.`);
+            let g;
+            try { g = await indieApi.lookup(appid); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+            if (g.type !== "game") throw new HttpError(400, "Only games can go in the showcase, not DLC, demos or soundtracks. Use the main game's page.");
+            const id = db.indieAdd({ appid, ownerId: s.userId, title: g.title, studio: g.studio, blurb: g.blurb, pitch, genres: g.genres, image: g.image, price: g.price, release: g.release, links: cleanLinks(body.links) });
+            const auto = s.userId === config.ownerId;
+            if (auto) db.indieDecide(id, "approved");
+            else if (config.ownerId) { try { db.addNotification(config.ownerId, { type: "indie", title: "New indie submission", body: g.title, url: "/admin#/indie" }); } catch { /* the queue still shows it */ } }
+            return { id, status: auto ? "approved" : "pending", title: g.title };
+        },
+        "POST /api/indie/edit": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            const pitch = String(body.pitch ?? "").replace(/\s+/g, " ").trim();
+            if (pitch.length < 20 || pitch.length > 400) throw new HttpError(400, "Write a pitch between 20 and 400 characters.");
+            db.indieEdit(g.id, { pitch, links: cleanLinks(body.links) });
+            return { ok: true };
+        },
+        // Pull the latest price, release date, picture and description from the game's Steam page.
+        "POST /api/indie/sync": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            if (!indieSyncLimit.hit(`${s.userId}:${g.id}`).ok) throw new HttpError(429, "Give it a minute before syncing again.");
+            let fresh; try { fresh = await indieApi.lookup(g.appid, { fresh: true }); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
+            if (fresh.type !== "game") throw new HttpError(400, "Steam no longer lists that as a game.");
+            db.indieRefresh(g.id, fresh);
+            return { game: indiePublic(db.indieGet(g.id)) };
+        },
+        "POST /api/indie/withdraw": async (req, body) => {
+            const s = session(req), g = db.indieGet(body.id);
+            if (!g || g.owner_id !== s.userId) throw new HttpError(404, "That game isn't yours.");
+            db.indieRemove(g.id);
+            return { ok: true };
+        },
+        "POST /api/indie/like": async (req, body) => {
+            const s = session(req);
+            if (!socialWrite.hit(s.userId).ok) throw new HttpError(429, "Slow down a little.");
+            const g = db.indieGet(body.id);
+            if (!g || g.status !== "approved") throw new HttpError(404, "That game isn't in the showcase.");
+            const liked = db.indieToggleLike(g.id, s.userId);
+            return { liked, likes: db.indieGet(g.id).likes };
+        },
+        "POST /api/indie/click": async (req, body) => {
+            if (!socialWrite.hit(clientIp(req)).ok) return { ok: true };
+            if (!CRAWLER.test(String(req.headers["user-agent"] ?? ""))) db.indieBump(Number(body.id) || 0, "clicks");
+            return { ok: true };
+        },
+        "GET /api/admin/indie": async (req, _b, url) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
+            const status = ["pending", "approved", "rejected"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : "pending";
+            const { games } = db.indieList({ status, limit: 60, sort: "new" });
+            return { open: db.getMeta("indie:open") !== "0", counts: db.indieCounts(), totals: db.indieTotals(), games: games.map(g => ({ ...indiePublic(g), status: g.status, note: g.note, owner: g.owner_id, views: g.views, clicks: g.clicks, created: g.created })) };
+        },
+        "POST /api/admin/indie/open": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            db.setMeta("indie:open", body.open ? "1" : "0");
+            return { open: Boolean(body.open) };
+        },
+        "POST /api/admin/indie/review": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (body.action === "syncall") { const n = await indieApi.syncDue(db, { limit: 30 }); return { ok: true, synced: n, counts: db.indieCounts() }; }
+            const g = db.indieGet(body.id);
+            if (!g) throw new HttpError(404, "That game is gone.");
+            const note = String(body.note ?? "").trim().slice(0, 300) || null, tell = (title, text) => { try { db.addNotification(g.owner_id, { type: "indie", title, body: text, url: "/indie/mine" }); } catch { /* best effort */ } };
+            switch (body.action) {
+                case "approve": db.indieDecide(g.id, "approved", note); tell(`${g.title} is live in the indie showcase`, "People can find it now. Share the page anywhere you like."); break;
+                case "reject": db.indieDecide(g.id, "rejected", note); tell(`${g.title} wasn't accepted yet`, note || "You can edit your pitch and send it back in."); break;
+                case "remove": db.indieRemove(g.id); break;
+                case "xpost": {
+                    if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
+                    if (g.status !== "approved") throw new HttpError(400, "Approve the game first.");
+                    try { await xposter.manual({ text: indieSpotlightText(g, `${origin}/indie/game/${g.id}`), kind: "auto" }); } catch (e) { throw new HttpError(400, e.message); }
+                    break;
+                }
+                case "feature": db.indieFeature(g.id, true); break;
+                case "unfeature": db.indieFeature(g.id, false); break;
+                case "refresh": { try { const fresh = await indieApi.lookup(g.appid); db.indieRefresh(g.id, fresh); } catch (e) { throw new HttpError(400, e.message); } break; }
+                default: throw new HttpError(400, "Unknown action.");
+            }
+            return { ok: true, counts: db.indieCounts() };
+        },
         "GET /api/admin/problems": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can see this.");
             return { list: readEvents(db, "adminlog:problems", 40) };
@@ -3983,7 +4119,7 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
         sweep();
         // Sent here from the admin panel: after signing in, go back there.
         const next = new URL(req.url, origin).searchParams.get("next");
-        if (next === "admin" || next === "music") setCookie(res, NEXT_COOKIE, next, 600);
+        if (next === "admin" || next === "music" || next === "indie") setCookie(res, NEXT_COOKIE, next, 600);
         const state = randomBytes(24).toString("hex");
         states.set(state, now() + 10 * 60_000);
         setCookie(res, STATE_COOKIE, state, 600);
@@ -4072,6 +4208,7 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
             return send(res, 302, "", { Location: "/#/steam?roles=1" });
         }
         if (cookies(req)[NEXT_COOKIE] === "admin") { setCookie(res, NEXT_COOKIE, "", 0); return send(res, 302, "", { Location: adminHome }); }
+        if (cookies(req)[NEXT_COOKIE] === "indie") { setCookie(res, NEXT_COOKIE, "", 0); return send(res, 302, "", { Location: "/indie/submit" }); }
         if (cookies(req)[NEXT_COOKIE] === "music") { setCookie(res, NEXT_COOKIE, "", 0); return send(res, 302, "", { Location: musicHome }); }
         send(res, 302, "", { Location: "/#/mypage" });
     }
@@ -4192,11 +4329,11 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
     }
     // The app's public pages each get their own title, description, picture and questions (see pageseo.js), so search results and link cards
     // say what the page is for instead of repeating the home page. A single ticket (/support/12) is private and kept out of search.
-    async function servePageShell(res, key, ticket) {
-        const seo = PAGE_SEO[key], body = await loadFile("index.html");
+    async function servePageShell(res, key, ticket, extra = null) {
+        const seo = extra?.seo ?? PAGE_SEO[key], body = await loadFile("index.html");
         if (!seo || !body) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
         let html = body.toString("utf8");
-        const { title, desc, faq } = seo, url = `${origin}/${key}`, img = `${origin}/page-${key}.jpg?v=1`;
+        const { title, desc } = seo, faq = seo.faq ?? [], url = extra?.url ?? `${origin}/${key}`, img = extra?.img ?? `${origin}/page-${key}.jpg?v=1`;
         const set = (re, v) => { html = html.replace(re, `$1${escHtml(v).replace(/\$/g, "$$$$")}"`); };
         set(/(<meta property="og:title" content=")[^"]*"/, title); set(/(<meta name="twitter:title" content=")[^"]*"/, title);
         set(/(<meta property="og:description" content=")[^"]*"/, desc); set(/(<meta name="twitter:description" content=")[^"]*"/, desc); set(/(<meta name="description" content=")[^"]*"/, desc);
@@ -4205,11 +4342,11 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
         set(/(<meta property="og:image:alt" content=")[^"]*"/, seo.alt); set(/(<meta name="twitter:image:alt" content=")[^"]*"/, seo.alt);
         const ld = [{ "@context": "https://schema.org", "@type": key === "support" ? "ContactPage" : key === "about" ? "AboutPage" : "WebPage", name: title, url, description: desc, isPartOf: { "@type": "WebSite", name: "Steam Value Checker", url: origin }, primaryImageOfPage: img.replace(/\?.*/, "") },
             { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Steam Value Checker", item: origin + "/" }, { "@type": "ListItem", position: 2, name: title.split(/ [|:] /)[0], item: url }] },
-            { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) }];
+            ...(faq.length ? [{ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) }] : [])];
         html = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => ld.map(x => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("\n"))
             .replace(/<meta property="og:image:type" content="[^"]*">/, '<meta property="og:image:type" content="image/jpeg">')
             .replace(/<title>[^<]*<\/title>/, () => `<title>${escHtml(title)}</title>`)
-            .replace(/<meta name="robots" content="[^"]*">/, ticket ? '<meta name="robots" content="noindex,nofollow">' : '<meta name="robots" content="index,follow,max-image-preview:large">');
+            .replace(/<meta name="robots" content="[^"]*">/, ticket || seo.noindex ? '<meta name="robots" content="noindex,nofollow">' : '<meta name="robots" content="index,follow,max-image-preview:large">');
         // the same answers as plain text, for anything that doesn't run the page's scripts
         html = html.replace("</body>", () => `<noscript><main><h1>${escHtml(title.split(/ [|:] /)[0])}</h1><p>${escHtml(desc)}</p>${faq.map(([q, a]) => `<h2>${escHtml(q)}</h2><p>${escHtml(a)}</p>`).join("")}</main></noscript>\n</body>`);
         return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
@@ -4226,6 +4363,8 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
         if (CRAWLER.test(String(req.headers?.["user-agent"] ?? ""))) { bump(`landday:${day}:p`); return; }
         bump(`${kind === "b" ? "bundlevisit" : "dealvisit"}:${id}`); bump(`landday:${day}:v`);
     };
+    /** What anyone may see of a showcase game: no owner id, no queue notes. */
+    const indiePublic = g => ({ id: g.id, appid: g.appid, title: g.title, studio: g.studio, blurb: g.blurb, pitch: g.pitch, genres: g.genres, image: g.image, price: g.price, release: g.release, links: g.links, featured: g.featured, likes: g.likes, steamUrl: `https://store.steampowered.com/app/${g.appid}/` });
     const bundleFor = id => { const b = db.getFeedBundle(id); return b && !b.adult ? b : null; };
     /** One handler for both kinds of page. `kind` is "b" (a bundle from the feed) or "d" (a free game or other deal). */
     async function serveLanding(res, kind, id, part, req) {
@@ -4420,10 +4559,16 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
                 return send(res, 302, "", { Location: "/" });
             }
             { const m = req.method === "GET" && /^\/(support|help|about|status|tip|feed|discover|communities)(\/\d{1,9})?$/.exec(url.pathname); if (m && (!m[2] || m[1] === "support") && !onAdminHost(req) && !onMusicHost(req)) return await servePageShell(res, m[1], Boolean(m[2])); }
+            { const m = req.method === "GET" && /^\/indie(\/[a-z0-9\/-]*)?$/.exec(url.pathname); if (m && !onAdminHost(req) && !onMusicHost(req)) {
+                const path = url.pathname.replace(/\/+$/, ""), gm = /^\/indie\/game\/(\d{1,9})$/.exec(path), game = gm ? db.indieGet(gm[1]) : null;
+                const seo = indieSeo(path, game && game.status === "approved" ? game : null);
+                if (seo) return await servePageShell(res, "indie", false, { seo, url: `${origin}${path}`, img: seo.image ?? `${origin}/page-${seo.slug}.jpg?v=1` });
+                return await servePageShell(res, "indie", true, { seo: indieSeo("/indie/mine"), url: `${origin}${path}`, img: `${origin}/page-indie.jpg?v=1` }); // unknown or not public yet: the app shows the right message and search skips it
+            } }
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\nAllow: /support\nAllow: /help\nAllow: /about\nAllow: /status\nAllow: /tip\nAllow: /feed\nAllow: /discover\nAllow: /communities\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\nAllow: /support\nAllow: /help\nAllow: /about\nAllow: /status\nAllow: /tip\nAllow: /feed\nAllow: /discover\nAllow: /communities\nAllow: /indie\nDisallow: /indie/submit\nDisallow: /indie/mine\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();
@@ -4431,7 +4576,7 @@ export function createDashboard({ referrals = null, weekly = null, storage = nul
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
                 // Public pages only. The date is when the file behind each page last changed, so crawlers know what to revisit.
-                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"]];
+                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : "0.5"]), ["/indie", "page-indie.jpg", "daily", "0.7"], ["/indie/tools", "page-indie-tools.jpg", "monthly", "0.7"], ...INDIE_TOOLS.map(t => [`/indie/tools/${t.id}`, "page-indie-tools.jpg", "monthly", "0.6"]), ...db.indieList({ limit: 60, sort: "new" }).games.map(g => [`/indie/game/${g.id}`, "page-indie.jpg", "weekly", "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"]];
                 const day = f => { try { return statSync(f.startsWith("seo/") ? SEO_SRC : join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
                 const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
                 return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
