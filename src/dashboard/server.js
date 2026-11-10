@@ -50,7 +50,7 @@ import { valueBadgeSvg } from "../valuebadge.js";
 import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
 import { supporterUntil, isSupporter, isFounder, wallName, alertColorHex, foundersTaken, FOUNDERS_MAX, endOfDayEastern } from "../supporters.js";
-import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
+import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, PROFILE_STYLES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { commandGuide } from "../hubpanel.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
 import { forYou } from "../foryou.js";
@@ -154,6 +154,7 @@ const FILES = {
     "/page-indie-tools.jpg": ["page-indie-tools.jpg", "image/jpeg"],
     "/indiecalc.js": ["indiecalc.js", "text/javascript; charset=utf-8"],
     "/indietools.js": ["indietools.js", "text/javascript; charset=utf-8"],
+    "/profilefx.js": ["profilefx.js", "text/javascript; charset=utf-8"],
     "/indiewaves.js": ["indiewaves.js", "text/javascript; charset=utf-8"],
     "/indie.js": ["indie.js", "text/javascript; charset=utf-8"],
     "/terms.pdf": ["terms.pdf", "application/pdf"],
@@ -637,7 +638,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             slug: u.profile_slug ?? null, public: Boolean(u.profile_public), blocked, config: withDefaults(data),
             steamLinked: Boolean(db.getSteamLink(u.discord_id)),
             backgrounds: db.listProfileBgs(u.discord_id).map(b => ({ id: b.id, source: b.source, bytes: b.bytes, url: `/pbg/${b.id}?v=${b.created_at}` })), maxBackgrounds: MAX_BG_STORED, presets: PAGE_PRESETS,
-            choices: { themes: Object.entries(PROFILE_THEMES).map(([k, v]) => ({ key: k, bg: v.bg, accent: v.accent, locked: Boolean(v.supporter) && !isSupporter(db, u.discord_id, now()) })), bgstyles: BG_STYLES, layouts: LAYOUTS, sections: Object.entries(SECTIONS), links: LINK_KIND_NAMES, titles },
+            choices: { themes: Object.entries(PROFILE_THEMES).map(([k, v]) => ({ key: k, bg: v.bg, accent: v.accent, locked: Boolean(v.supporter) && !isSupporter(db, u.discord_id, now()) })), styles: Object.entries(PROFILE_STYLES).map(([k, v]) => ({ key: k, name: v.name, blurb: v.blurb, bg: v.bg ?? null, accent: v.accent ?? null, locked: Boolean(v.supporter) && !isSupporter(db, u.discord_id, now()) })), bgstyles: BG_STYLES, layouts: LAYOUTS, sections: Object.entries(SECTIONS), links: LINK_KIND_NAMES, titles },
             profile: u.profile_slug ? await buildProfile({ db, itad, nowPlaying }, u, { owner: true, sameServer: true }) : null
         };
     }
@@ -2816,6 +2817,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const { data } = db.getProfileData(s.userId);
             const next = cleanProfile(body ?? {}, data);
             if (next.theme && PROFILE_THEMES[next.theme]?.supporter && next.theme !== data.theme && !isSupporter(db, s.userId, now())) throw new HttpError(403, "That theme is for supporters. You can get a pass on the Chip in page.");
+            if (next.style && PROFILE_STYLES[next.style]?.supporter && next.style !== data.style && !isSupporter(db, s.userId, now())) throw new HttpError(403, "That style is for supporters. You can get a pass on the Chip in page.");
             db.setProfileData(s.userId, next);
             return await profileEditorPayload(db.getUser(s.userId));
         },

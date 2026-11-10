@@ -1316,7 +1316,7 @@
   }
 
   function renderProfile(p, { canMark = false, preview = false, signedIn = false, region = null, social = null } = {}) {
-    const root = h("div", { class: "pf", "data-bg": p.theme.bgstyle, "data-layout": p.theme.layout, "data-light": p.theme.light ? "1" : "0" });
+    const root = h("div", { class: "pf", "data-bg": p.theme.bgstyle, "data-layout": p.theme.layout, "data-light": p.theme.light ? "1" : "0", "data-style": p.theme.style || "classic" });
     root.style.setProperty("--pf-bg", p.theme.bg);
     root.style.setProperty("--pf-accent", p.theme.accent);
     root.style.setProperty("--pf-fg", p.theme.light ? "#1b1f2a" : "#eef1f8");
@@ -1407,6 +1407,8 @@
     if (!p.sections.length) body.append(h("p", { class: "muted", text: "This profile has nothing to show right now." }));
     root.append(body);
     if (pageBg && preview) { const stage = h("div", { class: "pf-stage" }, pageBg, root); return stage; }
+    if (p.theme.fx && window.ProfileFx) setTimeout(() => { if (root.isConnected) window.ProfileFx.start(root, p.theme.fx); }, 0);
+    if (p.theme.style === "kinetic") root.prepend(h("div", { class: "pf-kin", "aria-hidden": "true" }, h("span", { class: "pf-kin-name", text: (p.name || "").slice(0, 14) })));
     return root;
   }
 
@@ -1452,10 +1454,11 @@
     cfg.song = songToLink(cfg.song);
     const pv = h("div", { class: "pf-preview" });
     let dirty = false, timer = null;
+    let tryStyle = null; // a supporter style someone is only looking at: shown in the preview, never saved
     let tryTheme = null; // a supporter theme someone is only looking at: shown in the preview, never saved
     const payload = () => ({ ...cfg, links: cfg.links.filter(l => l.url.trim()), favorites: cfg.favorites, song: cfg.song && cfg.song.url ? cfg.song : null });
     const draw = profile => { pv.replaceChildren(profile ? renderProfile(profile, { preview: true }) : h("p", { class: "muted", text: "Nothing to preview yet." })); };
-    const refresh = () => { clearTimeout(timer); timer = setTimeout(async () => { try { draw((await api("/api/profile/preview", tryTheme ? { ...payload(), theme: tryTheme } : payload())).profile); } catch (e) { pv.prepend(h("div", { class: "notice warn", text: e.message })); } }, 450); };
+    const refresh = () => { clearTimeout(timer); timer = setTimeout(async () => { try { draw((await api("/api/profile/preview", { ...payload(), ...(tryTheme ? { theme: tryTheme } : {}), ...(tryStyle ? { style: tryStyle } : {}) })).profile); } catch (e) { pv.prepend(h("div", { class: "notice warn", text: e.message })); } }, 450); };
     const changed = () => { dirty = true; saveBtn.disabled = false; refresh(); };
 
     // look
@@ -1467,6 +1470,16 @@
       return b;
     }));
     drawThemes();
+    const styleBox = h("div", { class: "pf-styles" });
+    const drawStyles = () => styleBox.replaceChildren(...d.choices.styles.map(t => {
+      const on = (tryStyle || cfg.style || "classic") === t.key;
+      const b = h("button", { type: "button", class: "pf-style" + (on ? " on" : ""), "data-style": t.key, "aria-pressed": String(on), title: t.name },
+        h("span", { class: "pf-style-pv" }, h("i"), h("i"), h("i")), h("b", { text: t.name + (t.locked ? " 🔒" : "") }), h("span", { class: "muted small", text: t.blurb }));
+      if (t.bg) { b.style.setProperty("--sv-bg", t.bg); b.style.setProperty("--sv-ac", t.accent); }
+      b.addEventListener("click", () => { if (t.locked) { tryStyle = t.key; drawStyles(); refresh(); return toast("Previewing " + t.name + ". It's for supporters, so it won't save without a pass (Chip in page, Help menu).", "warn"); } tryStyle = null; cfg.style = t.key; drawStyles(); changed(); });
+      return b;
+    }));
+    drawStyles();
     const accent = h("input", { type: "color", value: cfg.accent || (d.choices.themes.find(t => t.key === cfg.theme) || {}).accent || "#66c0f4", "aria-label": "Accent colour" });
     accent.addEventListener("input", () => { cfg.accent = accent.value; changed(); });
     const accentReset = h("button", { type: "button", class: "btn gray small", text: "Use the theme colour" });
@@ -1477,7 +1490,7 @@
     av.addEventListener("change", () => { cfg.avatar = av.checked; changed(); });
     const gateBox = h("input", { type: "checkbox", checked: Boolean(cfg.enter) });
     gateBox.addEventListener("change", () => { cfg.enter = gateBox.checked; changed(); });
-    const look = h("div", { class: "panel" }, h("h3", { text: "Look" }), field("Theme", themeBox), h("div", { class: "row" }, field("Accent colour", accent), h("div", {}, h("label", { text: "\u00a0" }), accentReset)),
+    const look = h("div", { class: "panel" }, h("h3", { text: "Look" }), field("Style", styleBox), h("p", { class: "muted small", text: "A style changes the whole look. Everything except Classic brings its own colors, and the accent below still tints it." }), field("Theme (Classic only)", themeBox), h("div", { class: "row" }, field("Accent colour", accent), h("div", {}, h("label", { text: "\u00a0" }), accentReset)),
       h("div", { class: "row" }, pick("Background", "bgstyle", d.choices.bgstyles.map(x => [x, nice(x)])), pick("Layout", "layout", d.choices.layouts.map(x => [x, nice(x)])), pick("Banner", "banner", [["gradient", "Colour"], ["game", "First favorite game's art"], ["none", "None"]])),
       h("label", { class: "check" }, av, " ", "Show my Steam picture", d.steamLinked ? null : h("span", { class: "muted small", text: " (link Steam first)" })));
 

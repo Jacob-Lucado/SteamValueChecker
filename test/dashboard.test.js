@@ -2951,6 +2951,12 @@ test("supporter passes: Square's signed callback grants one, a forged one doesn'
         assert.equal((await o.request("/api/profile/page")).data.choices.themes.find(x => x.key === "galaxy").locked, true);
         assert.equal((await o.request("/api/admin/supporters/grant", { method: "POST", body: { user_id: "555555555", days: 5 } })).status, 200);
         assert.equal((await theme("galaxy")).status, 200);
+        const style = k => o.request("/api/profile/page", { method: "POST", body: { style: k } });
+        assert.equal((await style("nope")).status, 400, "an unknown style is refused");
+        assert.equal((await style("ember")).status, 200, "free styles save for anyone");
+        assert.equal((await style("kinetic")).status, 200, "a supporter can pick Kinetic");
+        assert.equal((await o.request("/api/profile/page")).data.config.style, "kinetic");
+        assert.equal((await o.request("/api/profile/page")).data.choices.styles.find(x => x.key === "kinetic").locked, false);
         const ed = body => o.request("/api/admin/supporters/edit", { method: "POST", body: { id: "222222222", ...body } });
         const before = supporterUntil(o.db, "222222222");
         assert.ok((await ed({ action: "add_days", days: 10 })).data.until - before >= 10 * 86_400_000 - 1000, "days can be added");

@@ -16,6 +16,17 @@ const EXTRA = { light: ["#f3f5fa", "#3b6df0"], mono: ["#121212", "#e6e6e6"], ros
 const SUPPORTER_EXTRA = { aurora: ["#0b1f2a", "#7cf2c6"], dusk: ["#2b1226", "#ffb454"], galaxy: ["#140f30", "#b794ff"] };
 export const PROFILE_THEMES = Object.fromEntries([...Object.entries({ ...THEMES, ...EXTRA }).map(([k, [bg, accent]]) => [k, { bg, accent, light: k === "light" }]),
     ...Object.entries(SUPPORTER_EXTRA).map(([k, [bg, accent]]) => [k, { bg, accent, light: false, supporter: true }])]);
+// Styles change the whole look of the page (colors, type, borders, motion), where a theme is only a color pair.
+// A style that carries its own palette wins over the color theme; "classic" leaves the theme in charge.
+export const PROFILE_STYLES = {
+    classic: { name: "Classic", blurb: "Your color theme, clean and simple." },
+    ember: { name: "Crimson Ember", blurb: "Near-black with blood-red edges, tag labels and rising embers.", bg: "#07080a", accent: "#c1121f", light: false, fx: "embers" },
+    terminal: { name: "Terminal", blurb: "Green phosphor on black, monospace, with scanlines.", bg: "#04100a", accent: "#39ff88", light: false, fx: null },
+    sakura: { name: "Sakura", blurb: "Soft pink paper and drifting petals.", bg: "#fff1f5", accent: "#e0527f", light: true, fx: "petals" },
+    frost: { name: "Frost", blurb: "Cold glass panels under falling snow.", bg: "#0a1826", accent: "#8fd8ff", light: false, fx: "snow" },
+    kinetic: { name: "Kinetic", blurb: "A cinematic poster card: vignette, gold corner brackets, a laser scan and drifting petals.", bg: "#08080b", accent: "#b5893d", light: false, fx: "petals", supporter: true },
+    arcade: { name: "Arcade", blurb: "Neon on deep purple with a rolling grid floor.", bg: "#10052a", accent: "#ff3df0", light: false, fx: null }
+};
 export const BG_STYLES = ["plain", "gradient", "dots", "grid"];
 export const LAYOUTS = ["classic", "wide", "compact"];
 export const VISIBILITY = ["public", "server", "hidden"];
@@ -119,6 +130,7 @@ export function cleanProfile(input, prev = {}) {
     if (has("bio")) out.bio = clean(input.bio, 300).split(/\r?\n/).slice(0, 6).join("\n");
     if (has("theme")) { if (!PROFILE_THEMES[input.theme]) throw new UserError("Pick one of the colour themes."); out.theme = input.theme; }
     if (has("accent")) { if (input.accent && !HEX.test(input.accent)) throw new UserError("Colours look like #66c0f4."); out.accent = input.accent ? String(input.accent).toLowerCase() : null; }
+    if (has("style")) { if (!PROFILE_STYLES[input.style]) throw new UserError("Pick one of the styles."); out.style = input.style; }
     if (has("bgstyle")) { if (!BG_STYLES.includes(input.bgstyle)) throw new UserError("Pick a background style from the list."); out.bgstyle = input.bgstyle; }
     if (has("layout")) { if (!LAYOUTS.includes(input.layout)) throw new UserError("Pick a layout from the list."); out.layout = input.layout; }
     if (has("banner")) { if (!["gradient", "game", "none"].includes(input.banner)) throw new UserError("Pick a banner style."); out.banner = input.banner; }
@@ -160,7 +172,7 @@ function mergeSections(saved) {
 
 export function withDefaults(data = {}) {
     return {
-        name: data.name ?? "", bio: data.bio ?? "", theme: PROFILE_THEMES[data.theme] ? data.theme : "night", accent: HEX.test(data.accent ?? "") ? data.accent : null,
+        name: data.name ?? "", bio: data.bio ?? "", theme: PROFILE_THEMES[data.theme] ? data.theme : "night", style: PROFILE_STYLES[data.style] ? data.style : "classic", accent: HEX.test(data.accent ?? "") ? data.accent : null,
         bgstyle: BG_STYLES.includes(data.bgstyle) ? data.bgstyle : "gradient", layout: LAYOUTS.includes(data.layout) ? data.layout : "classic",
         banner: ["gradient", "game", "none"].includes(data.banner) ? data.banner : "gradient", avatar: Boolean(data.avatar),
         pagebg: { ...defaultPageBg(), ...(data.pagebg && typeof data.pagebg === "object" ? data.pagebg : {}) },
@@ -191,7 +203,9 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
     const cfg = withDefaults(draft ?? db.getProfileData(owner.discord_id).data);
     const supporter = isSupporter(db, owner.discord_id);
     const themeKey = PROFILE_THEMES[cfg.theme]?.supporter && !supporter && !draft ? "night" : cfg.theme; // the owner's own editor preview may show a locked theme
-    const theme = PROFILE_THEMES[themeKey];
+    let st = PROFILE_STYLES[cfg.style] ?? PROFILE_STYLES.classic;
+    if (st.supporter && !supporter && !draft) st = PROFILE_STYLES.classic; // a lapsed pass keeps the choice saved but shows the plain look
+    const theme = st.bg ? { bg: st.bg, accent: st.accent, light: Boolean(st.light) } : PROFILE_THEMES[themeKey];
     const lib = db.listLibrary(owner.discord_id);
     const items = db.listItems(owner.discord_id);
     const known = new Map([...lib, ...items].map(x => [x.itad_id, x]));
@@ -252,7 +266,7 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
         enter: Boolean(song && cfg.enter),
         supporter, founder: isFounder(db, owner.discord_id),
         slug: owner.profile_slug, name: cfg.name || owner.profile_slug, bio: cfg.bio, avatar: cfg.avatar && steam?.avatar ? steam.avatar : null,
-        theme: { key: themeKey, bg: theme.bg, accent: cfg.accent ?? theme.accent, light: theme.light, bgstyle: cfg.bgstyle, layout: cfg.layout },
+        theme: { key: themeKey, style: st === PROFILE_STYLES.classic ? "classic" : cfg.style, fx: st.fx ?? null, bg: theme.bg, accent: cfg.accent ?? theme.accent, light: theme.light, bgstyle: cfg.bgstyle, layout: cfg.layout },
         banner: { kind: cfg.banner, art: bannerGame },
         pagebg: pageBgFor(db, owner, cfg.pagebg),
         links: cfg.links.map(l => ({ kind: l.kind, label: LINK_KINDS[l.kind]?.label ?? l.kind, url: l.url })),
