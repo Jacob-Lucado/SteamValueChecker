@@ -36,7 +36,7 @@
     const price = (p, regular) => h("span", { class: "fn-price" }, vbuck(), regular > p ? h("s", { text: n(regular) }) : null, h("b", { text: n(p) }));
     const body = h("div", { class: "fn-body" });
     let timer = 0, countdownEl = null;
-    const TABS = () => [["shop", "Item shop"], ["news", "News"], ["new", "New cosmetics"], ["map", "Map"], ["search", "Cosmetic search"], ...(st.status && st.status.stats ? [["stats", "Player stats"]] : [])];
+    const TABS = () => [["shop", "Item shop"], ["news", "News"], ["new", "New cosmetics"], ["map", "Map"], ["treasure", "Treasure"], ["search", "Cosmetic search"], ...(st.status && st.status.stats ? [["stats", "Player stats"]] : [])];
     const tabsEl = h("nav", { class: "fn-tabs", "aria-label": "Fortnite" });
     function drawTabs() {
       tabsEl.replaceChildren(...TABS().map(([id, text]) => h("button", { type: "button", class: "fn-tab" + (tab === id ? " active" : ""), onclick: () => { tab = id; history.replaceState(null, "", id === "shop" ? "/fortnite" : "/fortnite?tab=" + id); drawTabs(); show(); } }, text)));
@@ -67,7 +67,7 @@
 
     function show() {
       hero.hidden = tab !== "shop";
-      ({ shop, news, new: fresh, map, search, stats })[tab]?.();
+      ({ shop, news, new: fresh, map, treasure, search, stats })[tab]?.();
     }
     const loading = text => body.replaceChildren(h("p", { class: "muted", text }));
 
@@ -129,6 +129,13 @@
       body.replaceChildren(h("div", { class: "fn-bar" }, search, only), chips, list);
       paint();
     }
+    /** The item shop link with the creator code baked in, so the code is already applied when they land there. */
+    const shopLink = () => { const c = st.status && st.status.creatorCode; return "https://www.fortnite.com/item-shop" + (c ? "?creator-code=" + encodeURIComponent(c.toUpperCase()) : ""); };
+    function buyRow(url) {
+      const copy = h("button", { type: "button", class: "btn gray small", text: "Copy link", onclick: async ev => { const b = ev.currentTarget; try { await navigator.clipboard.writeText(url); } catch { /* the link is on the button to copy by hand */ } b.textContent = "Copied"; setTimeout(() => { b.textContent = "Copy link"; }, 1500); } });
+      const code = st.status && st.status.creatorCode;
+      return h("div", { class: "fn-buy" }, h("a", { class: "btn blue", href: url, target: "_blank", rel: "noopener noreferrer", text: "Buy in the Fortnite shop" }), copy, code ? h("small", { class: "muted", text: `Opens with creator code ${code.toUpperCase()} already applied.` }) : null);
+    }
     function detail(e) {
       const back = h("div", { class: "fn-modal", role: "dialog", "aria-modal": "true", "aria-label": e.name });
       const close = () => { back.remove(); document.removeEventListener("keydown", esc); };
@@ -151,6 +158,7 @@
         e.items.length > 1 || e.bundle ? h("div", { class: "fn-d-items" }, h("h4", { text: "Included" }), e.items.map(i => h("div", { class: "fn-d-item" }, i.art ? h("img", { src: i.art, alt: "", width: "40", height: "40", loading: "lazy" }) : null, h("span", {}, h("b", { text: i.name }), h("small", { text: i.type })), i.video ? h("button", { type: "button", class: "btn gray small fn-item-play", text: "▶ Preview", onclick: () => showVideo(i.video) }) : null))) : null,
         !e.video && hasEmote ? findPreview(h, e.name, e.kind) : null,
         e.tracks.length ? h("div", { class: "fn-d-items" }, h("h4", { text: "Jam tracks" }), e.tracks.map(t => h("p", { class: "small", text: `${t.title} · ${t.artist}` }))) : null,
+        buyRow(shopLink()),
         h("button", { type: "button", class: "btn gray small", text: "Close", onclick: close })));
       back.append(card); document.body.append(back);
     }
@@ -184,6 +192,7 @@
         c.added ? h("p", { class: "muted small", text: "Added " + day(c.added) }) : null,
         h("p", { class: "small", text: c.shopHistory ? `Seen in the item shop ${c.shopHistory} ${c.shopHistory === 1 ? "time" : "times"}${c.lastSeen ? `, last on ${day(c.lastSeen)}` : ""}.` : "Not in the item shop yet." }),
         !c.video && c.type === "emote" ? findPreview(h, c.name, "emote") : null,
+        buyRow(shopLink()),
         h("button", { type: "button", class: "btn gray small", text: "Close", onclick: close }))));
       document.body.append(back);
     }
@@ -231,6 +240,36 @@
       body.replaceChildren(h("div", { class: "fn-bar" }, name, plat, go), h("p", { class: "muted small", text: "Battle royale stats for players whose stats are public." }), out);
     }
     api("/api/fortnite/status").then(s => { st.status = s; drawTabs(); drawHero(); if (s.creatorCode) drawCreator(s.creatorCode); }).catch(() => {});
+    // ---------- treasure ----------
+    const TREASURE = {
+      odds: [["Gold Outfit", 1562500], ["Pirate Shop Access", 137500], ["Vehicle & Decal", 7813], ["Pickaxe or Back Bling", 568], ["Jam Track", 391], ["Loading Screen", 272], ["Gizmo (any)", 127]],
+      hours: [["Standard Treasure Hour", "7.5×", "1.5×", "10×"], ["Boosted Treasure Hour", "10×", "2×", "10×"]],
+      gizmos: ["Extraction Accelerator", "Portable Extractor", "Sprite Locator", "Lucky Locator", "Golden Firework"],
+      weeks: [
+        { from: "2026-11-01", to: "2026-11-08", name: "A$AP Arrives", prizes: [["Outfit", "Solid Gold A$AP Rocky"], ["Pickaxe", "Solid Gold A$AP Rocky's Gauntlets"], ["Car decal", "Gold Mercedes-AMG G 63 Decal"], ["Jam track", "A$AP Rocky Jam Track"], ["Loading screen", "Plunder in Paradise"]] },
+        { from: "2026-11-08", to: "2026-11-15", name: "Lil Uzi Arrives", prizes: [["Outfit", "Solid Gold Lil Uzi Vert"], ["Back bling", "Diamond and Gold"], ["Car decal", "Gold Cadillac CT5-V Decal"], ["Jam track", "Jam Track"], ["Loading screen", "So Kawaii"]] },
+        { from: "2026-11-15", to: "2026-11-22", name: "Miku & Teto Arrive", prizes: [] },
+        { from: "2026-11-22", to: "2026-11-29", name: "Oscar Arrives", prizes: [] },
+        { from: "2026-11-29", to: "2026-12-05", name: "The Final Hunt", prizes: [] }
+      ]
+    };
+    function treasure() {
+      const t = TREASURE, nowD = new Date().toISOString().slice(0, 10), fmt = d => new Date(d + "T12:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+      const rarest = Math.max(...t.odds.map(o => o[1]));
+      body.replaceChildren(
+        h("div", { class: "fn-t-intro" }, h("h2", { text: "Treasure Hunters" }), h("p", { class: "muted", text: "Chest drop rates stay the same all season. Treasure Hours boost the chance of the big prizes for a short while, and each week has its own set of prizes to hunt." })),
+        h("h3", { class: "fn-h", text: "Chance per chest" }),
+        h("div", { class: "fn-t-odds" }, t.odds.map(([name, n_]) => { const bar = h("i", {}); bar.style.width = Math.max(3, 100 * Math.log(n_) / Math.log(rarest)) + "%"; return h("div", { class: "fn-t-odd" }, h("span", { text: name }), h("b", { text: "1 in " + n(n_) }), h("div", { class: "fn-t-bar" }, bar)); })),
+        h("h3", { class: "fn-h", text: "Treasure Hour boosts" }),
+        h("div", { class: "fn-t-hours" }, t.hours.map(([name, g, p, v]) => h("div", { class: "fn-t-hour" }, h("b", { text: name }), h("span", {}, "Gold Outfit ", h("b", { text: g })), h("span", {}, "Pirate Shop Access ", h("b", { text: p })), h("span", {}, "Vehicle & Decal ", h("b", { text: v }))))),
+        h("h3", { class: "fn-h", text: "Weekly prizes" }),
+        h("div", { class: "fn-t-weeks" }, t.weeks.map(w => {
+          const live = nowD >= w.from && nowD < w.to, done = nowD >= w.to;
+          return h("div", { class: "fn-t-week" + (live ? " live" : "") + (done ? " done" : "") }, h("div", { class: "fn-t-wh" }, h("span", { class: "fn-eyebrow", text: `${fmt(w.from)} – ${fmt(w.to)}` }), live ? h("span", { class: "fn-chip sale", text: "This week" }) : done ? h("span", { class: "muted small", text: "Ended" }) : null), h("h4", { text: w.name }),
+            w.prizes.length ? h("ul", {}, w.prizes.map(([k, v]) => h("li", {}, h("small", { text: k }), h("b", { text: v })))) : h("p", { class: "muted small", text: "Prizes not revealed yet." }),
+            h("p", { class: "muted small", text: "Gizmos: " + t.gizmos.join(", ") }));
+        })));
+    }
     function drawCreator(code) {
       const copy = h("button", { type: "button", class: "btn blue small", text: "Copy code", onclick: async e => { const btn = e.currentTarget; try { await navigator.clipboard.writeText(code.toUpperCase()); } catch { /* the code is on screen to copy by hand */ } btn.textContent = "Copied"; setTimeout(() => { btn.textContent = "Copy code"; }, 1500); } });
       const live = h("span", { class: "fn-cc-live muted small", text: "" });

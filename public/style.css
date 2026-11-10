@@ -2042,3 +2042,10 @@ a.fd-name:hover { text-decoration: underline; }
 .fn-d-art { position: relative; } .fn-d-art.playing { background: #000; place-items: stretch; } .fn-player { width: 100%; height: 100%; min-height: 320px; border: 0; display: block; }
 .fn-d-play { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; font: inherit; font-weight: 700; color: #fff; background: rgba(8, 12, 20, .82); border: 1px solid rgba(255,255,255,.25); border-radius: 99px; padding: 9px 18px; cursor: pointer; white-space: nowrap; } .fn-d-play:hover { background: var(--accent-2); } .fn-d-play span { color: #ff5d6c; } .fn-d-play:hover span { color: #fff; }
 .fn-item-play { margin-left: auto; }
+.fn-buy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 8px; } .fn-buy small { flex-basis: 100%; }
+.fn-t-intro h2 { margin: 0 0 4px; } .fn-h { margin: 26px 0 10px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.fn-t-odds, .fn-t-hours, .fn-t-weeks { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.fn-t-odd, .fn-t-hour, .fn-t-week { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
+.fn-t-odd { grid-template-columns: 1fr auto; } .fn-t-bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; } .fn-t-bar i { display: block; height: 100%; background: var(--accent-2); }
+.fn-t-hour span { display: flex; justify-content: space-between; font-size: 14px; }
+.fn-t-week.live { border-color: var(--accent-2); } .fn-t-week.done { opacity: .6; } .fn-t-wh { display: flex; justify-content: space-between; align-items: center; } .fn-t-week h4 { margin: 0; } .fn-t-week ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; } .fn-t-week li { display: grid; font-size: 14px; } .fn-t-week li small { color: var(--muted); }
