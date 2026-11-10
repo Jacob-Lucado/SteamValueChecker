@@ -18,6 +18,7 @@ import { musicSchema, musicStore, MUSIC_EXTRA_COLUMNS } from "./musicstore.js";
 import { pagerSchema, pagerStore } from "./pagerstore.js";
 import { auditSchema, auditStore } from "./auditstore.js";
 import { adminLoginSchema, adminLoginStore } from "./adminlogin.js";
+import { staffChatSchema, staffChatStore } from "./staffchat.js";
 import { overlaySchema, overlayStore } from "./overlaystore.js";
 import { streamCardSchema, streamCardStore } from "./streamcard.js";
 import { streamOverlaySchema, streamOverlayStore } from "./overlays.js";
@@ -190,6 +191,7 @@ ${musicSchema}
 ${pagerSchema}
 ${auditSchema}
 ${adminLoginSchema}
+${staffChatSchema}
 ${overlaySchema}
 ${streamCardSchema}
 ${streamOverlaySchema}
@@ -382,7 +384,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const music = musicStore({ run, get, all, clean, now });
     const pager = pagerStore({ run, get, now });
     const audit = auditStore({ run, all, now });
-    const adminLogin = adminLoginStore({ run, get, now });
+    const adminLogin = adminLoginStore({ run, get, all, now });
+    addColumn("staff_msgs", "edited", "INTEGER NOT NULL DEFAULT 0");
+    const staffChat = staffChatStore({ run, get, all, now });
     const overlay = overlayStore({ run, get, all, now });
     const streamCard = streamCardStore({ run, get, now });
     const streamOverlays = streamOverlayStore({ run, get, all, now });
@@ -892,6 +896,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

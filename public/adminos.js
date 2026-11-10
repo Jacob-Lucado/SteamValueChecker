@@ -26,7 +26,7 @@
   function focus(w) {
     for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
     w.node.style.zIndex = String(++z); w.task.classList.add("on"); for (const o of wins.values()) if (o !== w) o.task.classList.remove("on");
-    document.title = `${metaOf(w.id).title} · Admin · Steam Value Checker`; persist();
+    document.title = `${metaOf(w.id).title} · LucadoOS`; persist();
   }
   function place(w) {
     const n = w.node, W = layer.clientWidth, H = layer.clientHeight;
@@ -179,20 +179,21 @@
       b.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
       grid.append(b); return b;
     };
+    const chatIcon = add("💬", "Staff chat", () => open("chat")); chatIcon.append(el("i", "adm-icon-badge", { "data-badge": "chat", hidden: "" }));
     for (const [group] of cfg.nav) add(GROUP_ICON[group] || "📁", group, () => open("f:" + group));
     add("🌐", "Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; });
     return grid;
   }
 
   const WINLOGO = () => el("span", "adm-winlogo", { "aria-hidden": "true" }, el("i"), el("i"), el("i"), el("i"));
-  const TILES = [["overview", "Overview", "#0a64c8"], ["bugs", "Bug reports", "#c4392b"], ["supporters", "Supporters", "#8a3ffc"], ["system", "System health", "#1a8f5a"], ["announce", "Announcements", "#d4741a"], ["indie", "Indie showcase", "#c0287a"]];
+  const TILES = [["overview", "Overview", "#0a64c8"], ["chat", "Staff chat", "#c4392b"], ["supporters", "Supporters", "#8a3ffc"], ["system", "System health", "#1a8f5a"], ["announce", "Announcements", "#d4741a"], ["indie", "Indie showcase", "#c0287a"]];
 
   /** Start button, the Windows-style menu, and the "Type here to search" box. Returns both for the taskbar. */
   function start() {
     startMenu = el("div", "adm-start", { hidden: "" });
     const rail = el("div", "adm-start-rail");
     const results = el("div", "adm-start-list");
-    const tilesBox = el("div", "adm-start-tiles", {}, el("div", "adm-start-group", { text: "Pinned" }));
+    const tilesBox = el("div", "adm-start-tiles", {}, el("div", "adm-start-brand", { text: "LucadoOS" }), el("div", "adm-start-group", { text: "Pinned" }));
     for (const [id, name, color] of TILES) { const t = el("button", "adm-tile", { type: "button" }, el("span", "adm-tile-art", { "aria-hidden": "true", text: cfg.pages[id].icon }), el("span", "", { text: name })); t.style.setProperty("--tile", color); t.addEventListener("click", () => { close(); open(id); }); tilesBox.append(t); }
     const paint = q => {
       q = (q || "").trim().toLowerCase(); results.replaceChildren();

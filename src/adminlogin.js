@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS admin_login (
     totp_on      INTEGER NOT NULL DEFAULT 0,
     totp_step    INTEGER NOT NULL DEFAULT 0
 );
+-- Everyone besides the owner who may open the admin panel: a username login (adm-...) or a Discord account, and what they may change.
+CREATE TABLE IF NOT EXISTS admin_access (
+    user_id TEXT PRIMARY KEY,
+    kind    TEXT NOT NULL,
+    label   TEXT NOT NULL DEFAULT '',
+    edit    TEXT NOT NULL DEFAULT '[]',
+    added   INTEGER NOT NULL
+);
 `;
 
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
@@ -68,7 +76,7 @@ export function matchTotp(secret, code, nowMs, lastStep = 0) {
 }
 export const totpUri = (secret, account) => `otpauth://totp/${encodeURIComponent("Steam Value Checker")}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent("Steam Value Checker")}`;
 
-export function adminLoginStore({ run, get, now }) {
+export function adminLoginStore({ run, get, all, now }) {
     const getLogin = ownerId => get("SELECT * FROM admin_login WHERE owner_id = ?", String(ownerId)) ?? null;
     const getLoginByName = username => get("SELECT * FROM admin_login WHERE username = ?", String(username)) ?? null;
     function saveLogin(ownerId, username, password) {
@@ -89,5 +97,12 @@ export function adminLoginStore({ run, get, now }) {
     const okLogin = (ownerId, step = 0, t = now()) => run("UPDATE admin_login SET fails = 0, locked_until = 0, last_login = ?, totp_step = MAX(totp_step, ?) WHERE owner_id = ?", t, step, String(ownerId));
     const setTotp = (ownerId, secret, on) => run("UPDATE admin_login SET totp_secret = ?, totp_on = ?, totp_step = 0 WHERE owner_id = ?", secret, on ? 1 : 0, String(ownerId));
     const useTotpStep = (ownerId, step) => run("UPDATE admin_login SET totp_step = ? WHERE owner_id = ?", step, String(ownerId));
-    return { getAdminLogin: getLogin, getAdminLoginByName: getLoginByName, saveAdminLogin: saveLogin, removeAdminLogin: removeLogin, failAdminLogin: failLogin, okAdminLogin: okLogin, setAdminTotp: setTotp, useAdminTotpStep: useTotpStep };
+    const parseEdit = t => { try { const v = JSON.parse(t); return Array.isArray(v) ? v : []; } catch { return []; } };
+    const getAccess = id => { const r = get("SELECT * FROM admin_access WHERE user_id = ?", String(id)); return r ? { ...r, edit: parseEdit(r.edit) } : null; };
+    const setAccess = (id, kind, label, edit) => run("INSERT INTO admin_access (user_id, kind, label, edit, added) VALUES (?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET label = excluded.label, edit = excluded.edit", String(id), kind, String(label ?? ""), JSON.stringify(edit), now());
+    const setAccessEdit = (id, edit) => run("UPDATE admin_access SET edit = ? WHERE user_id = ?", JSON.stringify(edit), String(id));
+    const removeAccess = id => { run("DELETE FROM admin_access WHERE user_id = ?", String(id)); run("DELETE FROM admin_login WHERE owner_id = ?", String(id)); };
+    /** Every extra panel user, with the sign-in details that only username logins have. */
+    const listAccess = () => all("SELECT a.user_id AS id, a.kind, a.label, a.edit, a.added, l.username, l.last_login, l.locked_until FROM admin_access a LEFT JOIN admin_login l ON l.owner_id = a.user_id ORDER BY a.added").map(r => ({ ...r, edit: parseEdit(r.edit) }));
+    return { getAdminAccess: getAccess, setAdminAccess: setAccess, setAdminAccessEdit: setAccessEdit, removeAdminAccess: removeAccess, listAdminAccess: listAccess, getAdminLogin: getLogin, getAdminLoginByName: getLoginByName, saveAdminLogin: saveLogin, removeAdminLogin: removeLogin, failAdminLogin: failLogin, okAdminLogin: okLogin, setAdminTotp: setTotp, useAdminTotpStep: useTotpStep };
 }

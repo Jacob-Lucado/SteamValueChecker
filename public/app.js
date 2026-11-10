@@ -3932,8 +3932,8 @@
     ["Insights", [["growth", "Growth", "↗", "New members and alerts over the last 30 days."], ["features", "Usage", "▦", "Who uses what, and the most watched games."], ["community", "Community", "◎", "Community features across every server."], ["votes", "Top.gg votes", "▲", "Who voted for the bot and the XP it paid out."], ["panels", "Panel runs", "▤", "Which commands people run from menus and panels."]]],
     ["People", [["supporters", "Supporters", "★", "Who has a supporter pass, and a way to hand one out."], ["servers", "Servers", "▣", "Every server the bot is in."], ["members", "People and restrictions", "☺", "Find anyone, see who is active, restrict or restore."], ["profiles", "Profile pages", "▭", "Reported profile pages, and a way to hide or restore one."], ["gifts", "Gift marks", "🎁", "Reported gift marks and who is blocked from making them."], ["social", "Community", "💬", "Reported feed posts and who is blocked from posting."]]],
     ["Reach", [["announce", "Announcements", "✉", "Tell members and servers something."], ["giveaway", "Giveaways", "★", "Network-wide key giveaways."], ["traffic", "Link traffic", "↗", "How many people open the bot's links and click through to the stores."], ["indie", "Indie showcase", "◈", "Review submissions, feature games and pause the form."], ["xposts", "X posting", "✕", "Post to the project's X account: ads, scheduled posts and the automatic free-game posts."]]],
-    ["Support", [["bugs", "Bug reports", "⚑", "Reports from members. Open one to reply."], ["requests", "Feature requests", "✎", "What members are asking for."]]],
-    ["Operations", [["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
+    ["Support", [["chat", "Staff chat", "💬", "Chat with the team, and answer tickets and bug reports without leaving."]]],
+    ["Operations", [["admins", "Admin users", "👤", "Give other people their own login to this admin panel."], ["ai", "AI companion", "✦", "Turn it on or off, tune it, see who uses it, try it."], ["settings", "Bot settings", "☰", "Switches and numbers you can change without a restart."], ["music", "Music sessions", "♫", "Voice sessions running right now."], ["tools", "Backups and logs", "⚙", "Download a backup, reset failed DMs, read the log."], ["datareq", "Data requests", "⌫", "Who asked to export or delete their data, and when."], ["audit", "Audit log", "☰", "What you did in this panel, newest first."], ["account", "Account and security", "⚿", "A username and password as a second way in, and a two-step code."]]]
   ];
   const ADMIN_PAGES = Object.fromEntries(ADMIN_NAV.flatMap(([, items]) => items.map(([id, title, icon, sub]) => [id, { title, icon, sub }])));
   let adminCtx = null, adminCtxAt = 0, adminTimer = 0;
@@ -3954,7 +3954,7 @@
   function adminLoginScreen() {
     admEl("adm").classList.add("adm-bare");
     document.body.classList.add("adm-bare-body");
-    document.title = "Sign in · Admin · Steam Value Checker";
+    document.title = "Sign in · LucadoOS";
     const user = h("input", { type: "text", name: "username", autocomplete: "username", autocapitalize: "none", spellcheck: "false", required: "" });
     const pass = h("input", { type: "password", name: "password", autocomplete: "current-password", required: "" });
     const code = h("input", { type: "text", name: "code", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "7", placeholder: "123456" });
@@ -3981,11 +3981,76 @@
     app.replaceChildren(h("div", { class: "adm-lock" }, clock,
       h("div", { class: "adm-lock-card" },
         h("div", { class: "adm-lock-avatar" }, h("img", { src: "/logo.png", alt: "", width: "96", height: "96" })),
-        h("h2", { text: "Admin" }), h("p", { class: "adm-lock-sub", text: "Only the bot owner can sign in." }),
+        h("h2", { text: "LucadoOS" }), h("p", { class: "adm-lock-sub", text: "Sign in to continue." }),
         form,
         h("a", { class: "adm-lock-alt", href: "/auth/login?next=admin", text: "Sign in with Discord" })),
       h("div", { class: "adm-lock-corner" }, themeButton())));
     user.focus();
+  }
+
+  const randomPassword = () => { const set = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789", a = crypto.getRandomValues(new Uint32Array(18)); return Array.from(a, n => set[n % set.length]).join(""); };
+
+  /** The owner's list of other people who can use this panel, and what each may change. */
+  async function adminAdmins(body, fail) {
+    let d;
+    try { d = await api("/api/admin/admins"); } catch (e) { return fail(e); }
+    const redraw = () => adminAdmins(body, fail);
+    const when = t => t ? new Date(t).toLocaleString() : "never";
+    // A picker for "may change": everything, nothing, or particular areas.
+    const picker = initial => {
+      const all = h("input", { type: "checkbox" }), boxes = d.areas.map(a => { const c = h("input", { type: "checkbox", value: a.id }); return [a, c, h("label", { class: "check" }, c, " ", a.label)]; });
+      all.checked = initial.includes("*");
+      for (const [a, c] of boxes) c.checked = all.checked || initial.includes(a.id);
+      const sync = () => { for (const [, c] of boxes) { c.disabled = all.checked; if (all.checked) c.checked = true; } };
+      all.addEventListener("change", sync); sync();
+      const node = h("div", { class: "adm-perms" }, h("label", { class: "check" }, all, h("b", { text: " Can change everything on the panel" })), h("div", { class: "adm-perm-grid" }, boxes.map(x => x[2])), h("p", { class: "muted small", text: "Everyone can look at every page. Leave all of these off for a view-only login." }));
+      return { node, value: () => all.checked ? ["*"] : boxes.filter(([, c]) => c.checked).map(([a]) => a.id) };
+    };
+    let kind = "password";
+    const kindSel = h("select", { "aria-label": "How they sign in" }, h("option", { value: "password", text: "Username and password" }), h("option", { value: "discord", text: "Discord account (their Discord ID)" }));
+    const uName = h("input", { type: "text", autocapitalize: "none", spellcheck: "false", autocomplete: "off", "aria-label": "Username", placeholder: "username" });
+    const pass = h("input", { type: "text", autocomplete: "off", spellcheck: "false", "aria-label": "Password", placeholder: "at least 12 characters" });
+    const make = h("button", { type: "button", class: "btn gray small", text: "Make one", onclick: () => { pass.value = randomPassword(); } });
+    const did = h("input", { type: "text", inputmode: "numeric", autocomplete: "off", "aria-label": "Discord ID", placeholder: "17 to 20 digits" });
+    const label = h("input", { type: "text", maxlength: "40", autocomplete: "off", "aria-label": "A name to remember them by", placeholder: "e.g. Sam (mod)" });
+    const pwFields = h("div", {}, field("Username", uName), field("Password", h("div", { class: "row" }, pass, make)));
+    const dcFields = h("div", { hidden: "" }, field("Discord ID", did), field("Name (just for your list)", label),
+      h("p", { class: "muted small", text: "They sign in with the Discord button on the admin page. In Discord, turn on Developer Mode, right-click them and choose Copy User ID." }));
+    kindSel.addEventListener("change", () => { kind = kindSel.value; pwFields.hidden = kind !== "password"; dcFields.hidden = kind !== "discord"; });
+    const perms = picker([]);
+    const add = h("button", { type: "submit", class: "btn blue", text: "Add admin user" });
+    const form = h("form", { class: "adm-form", novalidate: "" }, field("How they sign in", kindSel), pwFields, dcFields, h("h4", { text: "What they may change" }), perms.node,
+      h("p", { class: "muted small", text: "Admin users never get bot powers, and they can't manage other admin users, change your sign-in, or download backups." }), add);
+    form.addEventListener("submit", e => { e.preventDefault(); busy(add, async () => {
+      await api("/api/admin/admins/add", kind === "discord" ? { kind, discordId: did.value, label: label.value, edit: perms.value() } : { kind, username: uName.value, password: pass.value, edit: perms.value() });
+      toast(kind === "discord" ? "Added. They can sign in with Discord on this page." : "Added. Give them the username and password.", "ok"); redraw(); }); });
+    const rows = d.admins.map(a => {
+      const open = h("button", { type: "button", class: "btn gray small", text: "What they can change" }), del = h("button", { type: "button", class: "btn red small", text: "Remove" });
+      const extra = [open];
+      if (a.kind === "password") { const reset = h("button", { type: "button", class: "btn gray small", text: "New password" }); reset.addEventListener("click", () => { const np = prompt(`New password for ${a.username} (at least 12 characters). Leave it empty to make one.`, ""); if (np === null) return; const pw = np || randomPassword(); busy(reset, async () => { await api("/api/admin/admins/reset", { id: a.id, password: pw }); prompt(`Done. ${a.username} was signed out. Their new password:`, pw); }); }); extra.push(reset); }
+      del.addEventListener("click", () => { if (confirm(`Remove ${a.username || a.label || a.id}? They lose access right away.`)) busy(del, async () => { await api("/api/admin/admins/remove", { id: a.id }); toast("Removed.", "ok"); redraw(); }); });
+      const detail = h("tr", { hidden: "" }), p2 = picker(a.edit), save = h("button", { type: "button", class: "btn blue small", text: "Save" });
+      save.addEventListener("click", () => busy(save, async () => { await api("/api/admin/admins/access", { id: a.id, edit: p2.value() }); toast("Saved.", "ok"); redraw(); }));
+      detail.append(h("td", { colspan: "5" }, p2.node, save));
+      open.addEventListener("click", () => { detail.hidden = !detail.hidden; });
+      const summary = a.edit.includes("*") ? "Everything" : a.edit.length ? `${a.edit.length} area${a.edit.length === 1 ? "" : "s"}` : "View only";
+      return [h("tr", {}, h("td", {}, h("b", { text: a.username || a.label || a.id }), a.kind === "discord" ? h("div", { class: "muted small", text: a.id }) : null), h("td", { text: a.kind === "discord" ? "Discord" : "Password" }), h("td", { text: summary }), h("td", { text: when(a.last_login) }), h("td", {}, h("div", { class: "row" }, ...extra, del))), detail];
+    });
+    body.replaceChildren(
+      h("div", { class: "panel" }, h("h3", { text: "Add an admin user" }), form),
+      h("div", { class: "panel" }, h("h3", { text: `Admin users (${d.admins.length})` }), rows.length
+        ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Who", "Signs in with", "May change", "Last password sign-in", ""].map(c => h("th", { text: c })))), h("tbody", {}, rows.flat())))
+        : h("p", { class: "muted", text: "Nobody yet. It's just you." })));
+  }
+  /** What an admin user sees instead of the owner's Account page: their own password. */
+  function adminSelf(body) {
+    const cur = h("input", { type: "password", autocomplete: "current-password", "aria-label": "Current password", required: "" });
+    const np = h("input", { type: "password", autocomplete: "new-password", "aria-label": "New password", required: "" });
+    const np2 = h("input", { type: "password", autocomplete: "new-password", "aria-label": "Repeat the new password", required: "" });
+    const save = h("button", { type: "submit", class: "btn blue", text: "Change password" });
+    const form = h("form", { class: "adm-form", novalidate: "" }, field("Current password", cur), field("New password", np), field("Repeat the new password", np2), h("p", { class: "muted small", text: "Use at least 12 characters." }), save);
+    form.addEventListener("submit", e => { e.preventDefault(); if (np.value !== np2.value) return toast("The two passwords don't match.", "error"); busy(save, async () => { await api("/api/admin/self/password", { current: cur.value, password: np.value }); toast("Saved. Your other sign-ins were ended.", "ok"); form.reset(); }); });
+    body.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Your password" }), h("p", { class: "muted", text: `You're signed in as ${state.me.user.username}.` }), form));
   }
 
   /** Create or change the username and password, and turn the two-step code on or off. */
@@ -4066,13 +4131,20 @@
     try { state.cfg = await api("/api/config"); } catch (e) { return adminCenter("Can't reach the bot", e.message); }
     try { state.me = await api("/api/me"); } catch { state.me = null; }
     if (!state.me) return adminLoginScreen();
-    if (!state.me.isOwner) return adminCenter("Owner only", "This account isn't the bot owner, so there's nothing to see here.",
+    if (!state.me.isOwner && !state.me.panel) return adminCenter("Owner only", "This account isn't the bot owner, so there's nothing to see here.",
       h("a", { class: "btn gray", href: state.cfg.siteUrl || "/", text: "Back to Steam Value Checker" }),
       h("button", { class: "btn gray", type: "button", text: "Sign out", onclick: async () => { try { await api("/auth/logout", {}); } catch { /* already out */ } location.reload(); } }));
+    if (state.me.panel) { // someone the owner let in: no page for managing admins; a username login gets "My password", a Discord login has nothing to change
+      const drop = new Set(state.me.panel.kind === "password" ? ["admins"] : ["admins", "account"]);
+      for (const g of ADMIN_NAV) g[1] = g[1].filter(([id]) => !drop.has(id));
+      for (const id of drop) delete ADMIN_PAGES[id];
+      if (ADMIN_PAGES.account) { ADMIN_PAGES.account = { ...ADMIN_PAGES.account, title: "My password", sub: "Change the password for your admin login." }; ADMIN_NAV.forEach(g => g[1] = g[1].map(it => it[0] === "account" ? ["account", "My password", it[2], "Change the password for your admin login."] : it)); }
+    }
     adminChrome();
     if (window.AdminOS?.wanted()) window.AdminOS.begin({ nav: ADMIN_NAV, pages: ADMIN_PAGES, siteUrl: state.cfg.siteUrl, render: (id, host) => adminMount(id, host) });
     adminRoute();
     adminPulse();
+    window.AdminChat?.watch({ api, toast });
     setInterval(adminPulse, 30_000);
   }
 
@@ -4099,10 +4171,6 @@
       const b = sys.bot || {};
       box.replaceChildren(h("i", { class: "adm-dot ok", "aria-hidden": "true" }), h("span", { class: "txt", text: `Online${b.pingMs != null ? " · " + b.pingMs + " ms" : ""}${b.servers != null ? " · " + b.servers + " servers" : ""}` }));
     } catch (e) { box.replaceChildren(h("i", { class: "adm-dot bad", "aria-hidden": "true" }), h("span", { class: "txt", text: "Can't reach the bot" })); }
-    try {
-      const n = (await api("/api/admin/bugs")).newCount || 0, badge = document.querySelector('[data-badge="bugs"]');
-      if (badge) { badge.hidden = !n; badge.textContent = String(n); }
-    } catch { /* the badge is a nicety */ }
   }
 
   /** Draws one admin page (its heading, refresh button and content) into any box. The sidebar layout and the desktop windows both use this. */
@@ -4112,6 +4180,9 @@
     const refresh = h("button", { class: "btn gray small", type: "button", text: "Refresh", onclick: () => { adminCtx = null; adminMount(page, host, { classic }); adminPulse(); } });
     host.replaceChildren(h("div", { class: "adm-head" }, h("div", {}, h("h1", { text: meta.title }), h("p", { text: meta.sub })), h("div", { class: "adm-actions" }, refresh)), body);
     if (classic) window.scrollTo({ top: 0, behavior: "instant" });
+    if (page === "chat") { host.classList.add("adm-chat-host"); host.replaceChildren(); if (window.AdminChat) window.AdminChat.mount(host, { h, api, toast }); else host.append(h("div", { class: "notice warn", text: "The chat didn't load. Refresh the page." })); return; }
+    const pm = state.me.panel;
+    if (pm && pm.areas.includes(page) && !pm.edit.includes("*") && !pm.edit.includes(page)) host.insertBefore(h("div", { class: "notice", text: "You can look at this page, but you can't change anything on it. Ask the owner if you need edit access." }), body);
     const draw = nodes => body.replaceChildren(...nodes);
     const fail = e => body.replaceChildren(h("div", { class: "notice warn", text: e.message || "Something went wrong." }));
     if (page === "system") return void adminSystem(body, fail);
@@ -4123,7 +4194,8 @@
     if (page === "supporters") return void adminSupporters(body, fail);
     if (page === "profiles") return void adminProfiles(body, fail);
     if (page === "audit") return void adminAudit(body);
-    if (page === "account") return void adminAccount(body, fail);
+    if (page === "account") return void (state.me.panel ? adminSelf(body) : adminAccount(body, fail));
+    if (page === "admins") return void adminAdmins(body, fail);
     adminContext().then(ctx => {
       const tab = ctx.TABS.find(t => t[0] === page);
       const nodes = tab[2]();
@@ -4141,11 +4213,11 @@
     clearTimeout(adminTimer);
     admEl("adm").classList.remove("open");
     const id = (location.hash.replace(/^#\/?/, "").split(/[/?]/)[0]) || "overview";
-    const page = ADMIN_PAGES[id] ? id : "overview";
+    const page = ({ bugs: "chat", requests: "chat" })[id] || (ADMIN_PAGES[id] ? id : "overview");
     if (window.AdminOS?.active()) { window.AdminOS.open(page); return; } // on the desktop, a link opens that page's window
     document.querySelectorAll(".adm-link").forEach(a => { const on = a.dataset.page === page; a.classList.toggle("active", on); on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"); });
     const meta = ADMIN_PAGES[page];
-    document.title = `${meta.title} · Admin · Steam Value Checker`;
+    document.title = `${meta.title} · LucadoOS`;
     admEl("admCrumb").replaceChildren("Admin / ", h("b", { text: meta.title }));
     adminMount(page, app, { classic: true });
   }
@@ -4166,7 +4238,7 @@
     return h("div", { class: "adm-quick" },
       q("#/announce", "Announce something", "Message members and servers"),
       q("#/giveaway", "Start a giveaway", "Network-wide, all servers"),
-      q("#/bugs", ctx.bugData.newCount ? `${ctx.bugData.newCount} new bug report${ctx.bugData.newCount === 1 ? "" : "s"}` : "Bug reports", `${ctx.bugData.open} open`),
+      q("#/chat", ctx.bugData.newCount ? `${ctx.bugData.newCount} new bug report${ctx.bugData.newCount === 1 ? "" : "s"}` : "Tickets and bugs", `${ctx.bugData.open} open`),
       q("/api/admin/backup", "Download the backup", "The latest database copy", { download: "" }));
   }
   function adminTrends(ctx) {

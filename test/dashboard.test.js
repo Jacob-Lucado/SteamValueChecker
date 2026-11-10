@@ -1755,6 +1755,38 @@ test("bug reports reach the owner's admin page with a new count until seen", asy
     await u.close();
 });
 
+test("staff chat: messages, edits, reactions, tickets and requests all work from the owner's chat", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: db => ({ tickets: createTicketService({ db, discord: { post: async () => ({ id: "1" }), edit: async () => {}, dm: async () => {} }, ownerId: "u1", publicUrl: "https://x.test" }) }) });
+    const st = await o.request("/api/admin/chat/state");
+    assert.equal(st.status, 200); assert.ok(st.data.channels.some(c => c.id === "general"));
+    const sent = await o.request("/api/admin/chat/send", { method: "POST", body: { channel: "general", body: "hello @team" } });
+    assert.equal(sent.status, 200);
+    assert.equal((await o.request("/api/admin/chat/edit", { method: "POST", body: { id: sent.data.id, body: "hello again" } })).status, 200);
+    assert.equal((await o.request("/api/admin/chat/react", { method: "POST", body: { id: sent.data.id, emoji: "👍" } })).status, 200);
+    assert.equal((await o.request("/api/admin/chat/react", { method: "POST", body: { id: sent.data.id, emoji: "🦄" } })).status, 400, "only the listed reactions");
+    let m = (await o.request("/api/admin/chat/messages?channel=general")).data.messages[0];
+    assert.equal(m.body, "hello again"); assert.ok(m.edited > 0); assert.deepEqual(Object.keys(m.reactions), ["👍"]);
+    await o.request("/api/admin/chat/react", { method: "POST", body: { id: sent.data.id, emoji: "👍" } });
+    m = (await o.request("/api/admin/chat/messages?channel=general")).data.messages[0];
+    assert.deepEqual(m.reactions, {}, "a second tap takes it back");
+    assert.equal((await o.request("/api/admin/chat/typing", { method: "POST", body: { channel: "general" } })).status, 200);
+    // tickets and bug reports are answered from the chat
+    const t = await o.request("/api/tickets", { method: "POST", body: { subject: "Broken", body: "It breaks", kind: "bug" } });
+    assert.equal(t.status, 200);
+    const list = await o.request("/api/admin/chat/tickets");
+    assert.equal(list.data.tickets.length, 1); assert.equal(list.data.tickets[0].bug, true); assert.equal(list.data.open, 1);
+    const one = await o.request("/api/admin/chat/ticket?id=" + list.data.tickets[0].id);
+    assert.equal(one.data.messages.length >= 1, true);
+    assert.equal((await o.request("/api/admin/tickets/status", { method: "POST", body: { id: list.data.tickets[0].id, status: "resolved" } })).status, 200);
+    assert.equal((await o.request("/api/admin/chat/tickets")).data.tickets.length, 0, "resolved ones leave the open list");
+    assert.equal((await o.request("/api/admin/chat/tickets?status=resolved")).data.tickets.length, 1);
+    assert.equal((await o.request("/api/admin/chat/requests")).status, 200);
+    await o.close();
+    const u = await signedIn({ extra: db => ({ tickets: createTicketService({ db, discord: { post: async () => ({ id: "1" }), edit: async () => {}, dm: async () => {} }, ownerId: "u1", publicUrl: "https://x.test" }) }) });
+    assert.equal((await u.request("/api/admin/chat/tickets")).status, 403);
+    await u.close();
+});
+
 test("admin network-wide giveaway: owner only, needs a confirm and a destination channel", async () => {
     const t = await signedIn();
     assert.equal((await t.request("/api/admin/giveaways")).status, 403);
@@ -2143,6 +2175,54 @@ test("terms and privacy answer at .html and at the plain path", async () => {
         assert.equal(head.status, 200);
         assert.match(head.headers.get("content-type"), /text\/html/);
     } finally { await t.close(); }
+});
+
+test("admin users: the owner adds panel logins that open the admin panel but not owner-only pages", async () => {
+    const o = await signedIn({ config: { ownerId: "u1" } });
+    const post = (p, body) => o.request(p, { method: "POST", body });
+    try {
+        assert.equal((await post("/api/admin/admins/add", { username: "x", password: "a long enough password" })).status, 400);
+        assert.equal((await post("/api/admin/admins/add", { username: "helper", password: "short" })).status, 400);
+        const add = await post("/api/admin/admins/add", { username: "Helper.Two", password: "a long enough password" });
+        assert.equal(add.status, 200); assert.match(add.data.id, /^adm-[0-9a-f]{12}$/);
+        assert.equal((await post("/api/admin/admins/add", { username: "helper.two", password: "another long password" })).status, 409, "usernames are unique");
+        assert.equal((await o.request("/api/admin/admins")).data.admins[0].username, "helper.two");
+        assert.equal((await post("/api/admin/admins/add", { kind: "discord", discordId: "123", edit: [] })).status, 400, "a Discord ID is 17 to 20 digits");
+        assert.equal((await post("/api/admin/admins/add", { kind: "discord", discordId: "u1" })).status, 400);
+        const dc = await post("/api/admin/admins/add", { kind: "discord", discordId: "345678901234567890", label: "Sam", edit: ["gifts", "bogus"] });
+        assert.equal(dc.status, 200);
+        assert.equal((await post("/api/admin/admins/add", { kind: "discord", discordId: "345678901234567890" })).status, 409);
+        assert.deepEqual((await o.request("/api/admin/admins")).data.admins.find(a => a.id === "345678901234567890").edit, ["gifts"], "unknown areas are dropped");
+        assert.equal((await post("/api/admin/admins/access", { id: "345678901234567890", edit: ["*"] })).status, 200);
+        assert.deepEqual((await o.request("/api/admin/admins")).data.admins.find(a => a.id === "345678901234567890").edit, ["*"]);
+        assert.equal((await post("/api/admin/admins/remove", { id: "345678901234567890" })).status, 200);
+        const extra = await post("/api/admin/admins/add", { username: "temp.person", password: "temporary long password" });
+        assert.equal((await post("/api/admin/admins/reset", { id: extra.data.id, password: "short" })).status, 400);
+        assert.equal((await post("/api/admin/admins/reset", { id: extra.data.id, password: "a different long password" })).status, 200);
+        assert.equal((await post("/api/admin/admins/remove", { id: extra.data.id })).status, 200);
+        assert.equal((await o.request("/api/admin/admins")).data.admins.length, 1, "removed for good");
+        assert.equal((await post("/api/admin/admins/remove", { id: "u1" })).status, 200, "never touches the owner's own row");
+        await post("/auth/logout", {});
+        assert.equal((await post("/api/admin/login", { username: "helper.two", password: "wrong wrong wrong wrong" })).status, 401);
+        assert.equal((await post("/api/admin/login", { username: "helper.two", password: "a long enough password" })).status, 200);
+        const me = await o.request("/api/me");
+        assert.equal(me.data.isOwner, false); assert.equal(me.data.panel.kind, "password"); assert.equal(me.data.user.username, "helper.two");
+        assert.equal((await o.request("/api/admin/system")).status, 200, "the panel's own pages work");
+        assert.equal((await post("/api/admin/gifts", { action: "x" })).status, 403, "view-only until the owner switches an area on");
+        assert.equal((await post("/api/admin/bugs/seen", {})).status, 200, "marking bugs seen is always fine");
+        assert.equal(me.data.panel.kind, "password");
+        assert.equal((await o.request("/api/admin/admins")).status, 403, "but not managing admin users");
+        assert.equal((await post("/api/admin/account/save", { username: "evil", password: "a long enough password" })).status, 403);
+        assert.equal((await o.request("/api/admin/backup")).status, 403);
+        assert.equal((await o.request("/api/wishlist")).status, 401, "and nothing outside the panel");
+        assert.equal((await post("/api/admin/self/password", { current: "nope nope nope nope", password: "brand new long password" })).status, 403);
+        assert.equal((await post("/api/admin/self/password", { current: "a long enough password", password: "brand new long password" })).status, 200);
+        await post("/auth/logout", {});
+        assert.equal((await post("/api/admin/login", { username: "helper.two", password: "a long enough password" })).status, 401, "the old password stops working");
+        assert.equal((await post("/api/admin/login", { username: "helper.two", password: "brand new long password" })).status, 200);
+        assert.equal((await o.request("/api/admin/system")).status, 200);
+        await post("/auth/logout", {});
+    } finally { await o.close(); }
 });
 
 test("admin password sign-in: create it, use it, two-step codes, lockout, and it opens the admin panel only", async () => {

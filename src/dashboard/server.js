@@ -118,6 +118,8 @@ import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.
 import { giveawayInput } from "../gwinput.js";
 import { MAX_KEYS } from "../gwstore.js";
 import { createMusicChat } from "../musicchat.js";
+import { dmChannel, isDm, dmParts } from "../staffchat.js";
+import { PANEL_AREAS, mayChange, cleanEdit } from "../paneluser.js";
 import { checkPassword, burnTime, passwordProblem, USERNAME_RE, newTotpSecret, matchTotp, totpUri } from "../adminlogin.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
@@ -177,6 +179,7 @@ const FILES = {
     "/overlayui.css": ["overlayui.css", "text/css; charset=utf-8"],
     "/overlayui.js": ["overlayui.js", "text/javascript; charset=utf-8"],
     "/admin": ["admin.html", "text/html; charset=utf-8"],
+    "/adminchat.js": ["adminchat.js", "text/javascript; charset=utf-8"],
     "/adminos.js": ["adminos.js", "text/javascript; charset=utf-8"],
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
     "/BingSiteAuth.xml": ["BingSiteAuth.xml", "application/xml; charset=utf-8"],
@@ -561,9 +564,22 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             sessions.delete(cookies(req)[COOKIE]);
             throw Object.assign(new HttpError(403, RESTRICTED_TEXT), { restricted: true });
         }
+        const path = String(req.url).split("?")[0], onPanel = /^\/api\/admin\//.test(path);
+        // Someone the owner let into the admin panel (a username login or a Discord account). On the panel's own pages they act with the owner's rights,
+        // limited to the areas they were given, and never on the owner-only ones.
+        const access = s.subAdmin || (onPanel && s.userId !== config.ownerId && !s.steamOnly) ? db.getAdminAccess(s.userId) : null;
+        if (s.subAdmin && !access) { sessions.delete(cookies(req)[COOKIE]); throw new HttpError(401, "Please sign in with Discord."); }
+        if (access && onPanel) {
+            if (/^\/api\/admin\/(account|admins|backup)/.test(path)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!mayChange(access.edit, req.method, path)) throw new HttpError(403, "You can look at this page, but you don't have permission to change it. Ask the owner for edit access.");
+            if (req.method === "POST" && !auditedReq.has(req)) { auditedReq.add(req); try { db.logAudit({ actor: s.userId, action: "admin-action", target: path, detail: "panel user " + (access.label || s.username) }); } catch { /* best effort */ } }
+            return { ...s, userId: config.ownerId, steamOnly: false, viaSub: s.userId, adminOnly: true };
+        }
+        if (s.subAdmin) return s;
         if (s.userId) db.touchUser(s.userId);
         return s;
     }
+    const auditedReq = new WeakSet();
 
     /** The signed-in session if there is one, otherwise null (for public pages that show a little more to staff). */
     function softSession(req) {
@@ -671,7 +687,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         if (!r.ok) throw new HttpError(429, `Too many tries. Try again in ${r.retryAfterS}s.`);
         const row = config.ownerId ? db.getAdminLoginByName(String(b.username ?? "").trim().toLowerCase()) : null;
         const wrong = () => new HttpError(401, "Wrong username or password.");
-        if (!row) { burnTime(); throw wrong(); }
+        if (!row || (row.owner_id !== config.ownerId && !db.getAdminAccess(row.owner_id))) { burnTime(); throw wrong(); }
         const t = now();
         if (row.locked_until > t) { burnTime(); throw new HttpError(429, "This sign-in is locked for a while after too many wrong tries. Use Discord, or wait."); }
         if (!checkPassword(String(b.password ?? ""), row.salt, row.hash)) {
@@ -686,11 +702,34 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!step) { db.failAdminLogin(row.owner_id, t); throw new HttpError(401, "That code is not right."); }
         }
         db.okAdminLogin(row.owner_id, step, t);
-        startSession(res, { userId: row.owner_id, username: row.username, avatar: null, guilds: [], adminOnly: true }, ADMIN_SESSION_MS);
+        startSession(res, { userId: row.owner_id, username: row.username, avatar: null, guilds: [], adminOnly: true, subAdmin: row.owner_id !== config.ownerId }, ADMIN_SESSION_MS);
         try { db.logAudit({ actor: row.owner_id, action: "login-password", target: null, detail: `ip=${ip}` }); } catch { /* best effort */ }
         return { ok: true };
     }
     const isOwner = s => Boolean(config.ownerId) && s.userId === config.ownerId && !s.steamOnly; // admin always needs a real Discord sign-in
+    // The staff chat knows people by one key: the owner's Discord ID, a Discord admin's ID, or an adm-... login.
+    /** Only the owner and people the owner let into the panel (they arrive here acting as the owner). */
+    const chatSession = req => { const s = session(req); if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this."); return s; };
+    const chatTyping = new Map(); // room -> Map(person key -> when they last typed)
+    const chatLimit = createLimiter({ windowMs: 5000, max: 6, now });
+    const chatOnline = new Map();
+    const chatMe = s => { const key = s.viaSub ?? s.userId, owner = !s.viaSub && key === config.ownerId, access = owner ? null : db.getAdminAccess(key); return { key, owner, name: String(access?.label || s.username || "Someone").slice(0, 40) }; };
+    const chatSeen = me => { chatOnline.set(me.key, now()); try { db.setMeta("staffname:" + me.key, me.name); } catch { /* the name is a nicety */ } };
+    const chatPeople = () => {
+        const t = now(), nameOf = k => db.getMeta("staffname:" + k) || null;
+        const list = [{ key: config.ownerId, name: nameOf(config.ownerId) || "Owner", role: "owner" }, ...db.listAdminAccess().map(a => ({ key: a.id, name: a.label || a.username || nameOf(a.id) || "Admin", role: a.edit.includes("*") ? "admin" : "staff" }))];
+        return list.map(p => ({ ...p, online: (chatOnline.get(p.key) ?? 0) > t - 45_000 }));
+    };
+    /** A room the person may use: a channel that exists, or a direct message with one other person on the panel. */
+    const chatChannel = (me, id) => {
+        if (isDm(id)) {
+            const parts = dmParts(id), other = parts.find(x => x !== me.key);
+            if (!parts.includes(me.key) || !other || parts.length !== 2 || !chatPeople().some(p => p.key === other)) throw new HttpError(403, "That conversation isn't yours.");
+            return dmChannel(parts[0], parts[1]);
+        }
+        if (!db.hasStaffChannel(id)) { db.staffChannels(); if (!db.hasStaffChannel(id)) throw new HttpError(404, "That channel isn't there."); }
+        return id;
+    };
     let broadcasterInstance = null;
     const broadcaster = () => sharedBroadcaster ?? (broadcasterInstance ??= createBroadcaster({ publicUrl: config.publicUrl, db, ownerId: config.ownerId, delayMs: config.broadcastDelayMs ?? 1100,
         guildInfo: id => { const g = (guildList ? guildList() : []).find(x => x.id === id); return g ? { name: g.name, icon: g.icon ?? null } : null; },
@@ -820,6 +859,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         },
         "GET /api/me": async (req) => {
             const s = session(req);
+            const panel = isOwner(s) ? null : db.getAdminAccess(s.userId);
+            const panelInfo = panel ? { kind: panel.kind, edit: panel.edit, areas: PANEL_AREAS.map(a => a.id) } : null;
+            if (s.subAdmin) return { user: { id: s.userId, username: s.username, avatar: null }, settings: {}, games: 0, servers: [], isOwner: false, panel: panelInfo, adminOnly: true, steamOnly: false, unread: 0, bugsNew: 0, steam: { linked: false }, setup: [] };
             const u = userRow(s);
             return {
                 user: { id: s.userId, username: s.username, avatar: s.avatar },
@@ -827,8 +869,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 games: db.countItems(s.userId),
                 servers: serversFor(s, u),
                 isOwner: isOwner(s),
+                panel: panelInfo,
                 musicUrl: musicOrigin ? musicOrigin + "/" : origin + "/music",
-                adminUrl: isOwner(s) ? (adminOrigin ? adminOrigin + "/" : origin + "/admin") : null,
+                adminUrl: isOwner(s) || panel ? (adminOrigin ? adminOrigin + "/" : origin + "/admin") : null,
                 steamOnly: Boolean(s.steamOnly),
                 adminOnly: Boolean(s.adminOnly),
                 giveaways: Boolean(giveaways),
@@ -3854,7 +3897,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (bad) throw new HttpError(400, bad);
             db.saveAdminLogin(config.ownerId, username, String(b.password));
             const mine = cookies(req)[COOKIE];
-            for (const [k, v] of sessions) if (v.adminOnly && k !== mine) sessions.delete(k); // other password sessions end when the password changes
+            for (const [k, v] of sessions) if (v.adminOnly && !v.subAdmin && k !== mine) sessions.delete(k); // other password sessions end when the password changes
             return { ok: true, username };
         },
         "POST /api/admin/account/remove": async (req, b) => {
@@ -3864,7 +3907,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!prev) return { ok: true };
             verifyCurrent(prev, b.current);
             db.removeAdminLogin(config.ownerId);
-            for (const [k, v] of sessions) if (v.adminOnly) sessions.delete(k);
+            for (const [k, v] of sessions) if (v.adminOnly && !v.subAdmin) sessions.delete(k);
             return { ok: true };
         },
         "POST /api/admin/account/totp/start": async (req, b) => {
@@ -3895,6 +3938,168 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!r) return { ok: true };
             verifyCurrent(r, b.current);
             db.setAdminTotp(config.ownerId, null, false);
+            return { ok: true };
+        },
+        // Extra panel logins the owner hands out. They open this admin panel and nothing else, and they never touch bot commands.
+        "GET /api/admin/admins": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            return { admins: db.listAdminAccess(), areas: PANEL_AREAS.map(a => ({ id: a.id, label: a.label })) };
+        },
+        "POST /api/admin/admins/add": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (db.listAdminAccess().length >= 25) throw new HttpError(400, "That's plenty of admin users. Remove one before adding another.");
+            const edit = cleanEdit(b.edit);
+            if (b.kind === "discord") {
+                const id = String(b.discordId ?? "").trim();
+                if (!/^\d{17,20}$/.test(id)) throw new HttpError(400, "A Discord ID is 17 to 20 digits. Turn on Developer Mode in Discord, right-click the person and choose Copy User ID.");
+                if (id === config.ownerId) throw new HttpError(400, "That's you. You already have full access.");
+                if (db.getAdminAccess(id)) throw new HttpError(409, "That person is already an admin user.");
+                db.setAdminAccess(id, "discord", String(b.label ?? "").trim().slice(0, 40), edit);
+                try { db.logAudit({ actor: config.ownerId, action: "admin-user-add", target: id, detail: "discord" }); } catch { /* best effort */ }
+                return { ok: true, id };
+            }
+            const username = String(b.username ?? "").trim().toLowerCase();
+            if (!USERNAME_RE.test(username)) throw new HttpError(400, "The username needs 3 to 32 letters, numbers, dots, dashes or underscores, starting with a letter or number.");
+            const bad = passwordProblem(b.password, username);
+            if (bad) throw new HttpError(400, bad);
+            if (db.getAdminLoginByName(username)) throw new HttpError(409, "Someone already has that username.");
+            const id = "adm-" + randomBytes(6).toString("hex");
+            db.saveAdminLogin(id, username, String(b.password));
+            db.setAdminAccess(id, "password", username, edit);
+            try { db.logAudit({ actor: config.ownerId, action: "admin-user-add", target: username, detail: id }); } catch { /* best effort */ }
+            return { ok: true, id };
+        },
+        // What one admin user may change.
+        "POST /api/admin/admins/access": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!db.getAdminAccess(b.id)) throw new HttpError(404, "That admin user isn't there anymore.");
+            db.setAdminAccessEdit(b.id, cleanEdit(b.edit));
+            try { db.logAudit({ actor: config.ownerId, action: "admin-user-access", target: String(b.id), detail: JSON.stringify(cleanEdit(b.edit)) }); } catch { /* best effort */ }
+            return { ok: true };
+        },
+        "POST /api/admin/admins/reset": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const row = /^adm-[0-9a-f]{12}$/.test(String(b.id)) && db.getAdminAccess(b.id) ? db.getAdminLogin(b.id) : null;
+            if (!row) throw new HttpError(404, "That admin user isn't there anymore, or signs in with Discord.");
+            const bad = passwordProblem(b.password, row.username);
+            if (bad) throw new HttpError(400, bad);
+            db.saveAdminLogin(row.owner_id, row.username, String(b.password));
+            for (const [k, v] of sessions) if (v.userId === row.owner_id) sessions.delete(k);
+            try { db.logAudit({ actor: config.ownerId, action: "admin-user-reset", target: row.username, detail: row.owner_id }); } catch { /* best effort */ }
+            return { ok: true };
+        },
+        "POST /api/admin/admins/remove": async (req, b) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
+            const id = String(b.id ?? "");
+            if (!id || id === config.ownerId || !db.getAdminAccess(id)) return { ok: true };
+            db.removeAdminAccess(id);
+            for (const [k, v] of sessions) if (v.userId === id && v.subAdmin) sessions.delete(k);
+            try { db.logAudit({ actor: config.ownerId, action: "admin-user-remove", target: id, detail: "" }); } catch { /* best effort */ }
+            return { ok: true };
+        },
+        // ---- the staff chat: the owner and the people let into the panel ----
+        "GET /api/admin/chat/state": async (req) => {
+            const s = chatSession(req); const me = chatMe(s); chatSeen(me);
+            const people = chatPeople();
+            const dms = db.staffDmRooms(me.key);
+            const rooms = [...db.staffChannels().map(c => c.id), ...dms], unread = db.staffUnread(me.key, rooms);
+            const latest = {}; for (const c of Object.keys(unread)) { const m = db.lastStaffMsg(c); if (m) latest[c] = { id: m.id, name: m.name, body: String(m.body).slice(0, 140) }; }
+            return { me, channels: db.staffChannels(), people, unread, mentions: db.staffMentions(me.key, me.name, rooms), latest, dmRooms: dms };
+        },
+        "GET /api/admin/chat/messages": async (req, _b, url) => {
+            const s = chatSession(req); const me = chatMe(s); chatSeen(me);
+            const channel = chatChannel(me, String(url.searchParams.get("channel") ?? ""));
+            const after = Math.max(0, Number(url.searchParams.get("after")) || 0);
+            const messages = db.staffMessages(channel, after);
+            if (messages.length) db.markStaffRead(me.key, channel, messages[messages.length - 1].id);
+            const t = Date.now(), typing = [...(chatTyping.get(channel) ?? new Map())].filter(([k, at]) => k !== me.key && t - at < 5000).map(([k]) => chatPeople().find(p => p.key === k)?.name ?? "Someone");
+            return { messages, typing, people: chatPeople().map(p => ({ key: p.key, online: p.online })) };
+        },
+        "POST /api/admin/chat/send": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            if (!chatLimit.hit(me.key).ok) throw new HttpError(429, "Slow down a little.");
+            const channel = chatChannel(me, String(b.channel ?? ""));
+            const body = String(b.body ?? "").replace(/\r/g, "").trim();
+            if (!body) throw new HttpError(400, "Type something first.");
+            const reply = b.reply && db.getStaffMsg(b.reply)?.channel === channel ? Number(b.reply) : null;
+            const id = db.sendStaff(channel, me.key, me.name, body, reply);
+            db.markStaffRead(me.key, channel, id); chatSeen(me);
+            return { ok: true, id };
+        },
+        "POST /api/admin/chat/typing": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            const channel = chatChannel(me, String(b.channel ?? ""));
+            if (!chatTyping.has(channel)) chatTyping.set(channel, new Map());
+            chatTyping.get(channel).set(me.key, Date.now());
+            return { ok: true };
+        },
+        "POST /api/admin/chat/edit": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            const m = db.getStaffMsg(b.id);
+            if (!m) throw new HttpError(404, "That message is gone.");
+            if (m.author !== me.key) throw new HttpError(403, "You can only edit your own messages.");
+            const body = String(b.body ?? "").replace(/\r/g, "").trim();
+            if (!body) throw new HttpError(400, "A message can't be empty. Delete it instead.");
+            db.editStaffMsg(m.id, body);
+            return { ok: true };
+        },
+        "POST /api/admin/chat/react": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            const m = db.getStaffMsg(b.id), emoji = String(b.emoji ?? "");
+            if (!m) throw new HttpError(404, "That message is gone.");
+            if (!["👍", "❤️", "😂", "🎉", "👀", "✅", "🙏", "🔥"].includes(emoji)) throw new HttpError(400, "Pick one of the listed reactions.");
+            chatChannel(me, m.channel);
+            db.toggleStaffReact(m.id, me.key, emoji);
+            return { ok: true };
+        },
+        "GET /api/admin/chat/requests": async (req) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const list = db.listRequests(s.userId, { sort: "new" }).map(r => ({ id: r.id, title: r.title, body: String(r.body ?? "").slice(0, 1500), status: r.status, note: r.note, user_name: r.user_name, votes: r.votes, created_at: r.created_at }));
+            return { requests: list, statuses: REQUEST_STATUSES, open: list.filter(r => r.status === "open").length };
+        },
+        "POST /api/admin/chat/delete": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            const m = db.getStaffMsg(b.id);
+            if (!m) return { ok: true };
+            if (m.author !== me.key && !me.owner) throw new HttpError(403, "You can only delete your own messages.");
+            db.deleteStaffMsg(m.id);
+            return { ok: true };
+        },
+        "POST /api/admin/chat/channel": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            if (!me.owner) throw new HttpError(403, "Only the owner can add channels.");
+            if (db.staffChannels().length >= 12) throw new HttpError(400, "That's enough channels for now.");
+            const id = db.addStaffChannel(b.name);
+            if (!id) throw new HttpError(400, "Pick a different name. Use letters, numbers and dashes, and not one that already exists.");
+            return { ok: true, id };
+        },
+        "POST /api/admin/chat/channel/delete": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            if (!me.owner) throw new HttpError(403, "Only the owner can remove channels.");
+            if (["general", "support"].includes(String(b.id))) throw new HttpError(400, "That one stays.");
+            db.removeStaffChannel(String(b.id));
+            return { ok: true };
+        },
+        // A panel user changing their own password.
+        "POST /api/admin/self/password": async (req, b) => {
+            const s = session(req);
+            if (!s.viaSub) throw new HttpError(403, "This is for admin users. The owner changes the password on the Account page.");
+            const row = db.getAdminLogin(s.viaSub);
+            if (!row) throw new HttpError(400, "You sign in with Discord, so there is no password to change.");
+            const t = now();
+            if (row.locked_until > t) throw new HttpError(429, "Too many wrong passwords. Try again later.");
+            if (!checkPassword(String(b.current ?? ""), row.salt, row.hash)) { db.failAdminLogin(row.owner_id, t); throw new HttpError(403, "That is not your current password."); }
+            const bad = passwordProblem(b.password, row.username);
+            if (bad) throw new HttpError(400, bad);
+            db.saveAdminLogin(row.owner_id, row.username, String(b.password));
+            const mine = cookies(req)[COOKIE];
+            for (const [k, v] of sessions) if (v.userId === row.owner_id && k !== mine) sessions.delete(k);
             return { ok: true };
         },
         "GET /api/admin/stats": async (req) => {
@@ -4047,6 +4252,44 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const seen = Number(db.getMeta("bugs_seen") ?? 0);
             const bugs = db.listBugs({ limit: 100 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, user_id: t.user_id, user_name: t.user_name, created_at: t.created_at, updated_at: t.updated_at, text: String(t.first).slice(0, 600), replies: t.replies, isNew: t.created_at > seen && ["open", "waiting"].includes(t.status) }));
             return { bugs, newCount: bugs.filter(b => b.isNew).length, open: bugs.filter(b => ["open", "waiting"].includes(b.status)).length };
+        },
+        // Support tickets and bug reports inside the staff chat. Panel users act as the owner here, same as the rest of /api/admin.
+        "GET /api/admin/chat/tickets": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            needTickets();
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            const status = ["active", "resolved", "closed"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : "active";
+            const seen = Number(db.getMeta("bugs_seen") ?? 0);
+            const list = db.listTickets({ all: true, status, limit: 60 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, user_name: t.user_name, updated_at: t.updated_at, created_at: t.created_at,
+                bug: String(t.tags ?? "").split(",").includes("bug"), assigned: Boolean(t.assignee_id), isNew: t.created_at > seen && ["open", "waiting"].includes(t.status) }));
+            return { tickets: list, open: db.listTickets({ all: true, status: "active", limit: 200 }).length };
+        },
+        "GET /api/admin/chat/ticket": async (req, _b, url) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            needTickets();
+            const { t } = ticketAccess(s, url.searchParams.get("id"));
+            return { ticket: { id: t.id, subject: t.subject, status: t.status, user_id: t.user_id, user_name: t.user_name, assignee_id: t.assignee_id, tags: t.tags, created_at: t.created_at },
+                messages: db.listTicketMessages(t.id), canned: db.listCanned(t.guild_id ?? "*"), errors: logs && String(t.tags ?? "").includes("bug") ? logs.recent({ level: "error", limit: 8 }) : [] };
+        },
+        "POST /api/admin/tickets/reply": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            needTickets();
+            const { t } = ticketAccess(s, body.id);
+            await tickets.reply(t.id, { authorId: s.userId, role: t.user_id === s.userId ? "user" : "staff", body: body.body });
+            return { ok: true };
+        },
+        "POST /api/admin/tickets/status": async (req, body) => {
+            const s = session(req);
+            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this.");
+            needTickets();
+            const { t } = ticketAccess(s, body.id);
+            if (body.status === "resolved") await tickets.resolve(t.id, { by: s.userId, note: body.note ? String(body.note).slice(0, 500) : null });
+            else if (body.status === "closed") await tickets.close(t.id, { by: s.userId });
+            else throw new HttpError(400, "Unknown status.");
+            return { ok: true };
         },
         "POST /api/admin/bugs/seen": async (req) => {
             const s = session(req);
