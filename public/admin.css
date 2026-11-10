@@ -197,3 +197,23 @@ body.adm-os { overflow: hidden; height: 100vh; background: #0b3f8f; }
 @media (max-width: 700px) { .adm-start { grid-template-columns: 48px minmax(0, 1fr); } .adm-start-tiles { display: none; } }
 @media (prefers-reduced-motion: no-preference) { .adm-win { animation: adm-pop .12s ease-out; } }
 @keyframes adm-pop { from { opacity: 0; transform: scale(.98); } }
+
+/* snapping */
+.adm-snap-preview { position: absolute; z-index: 1000; pointer-events: none; background: rgba(120, 190, 255, .22); border: 2px solid rgba(160, 210, 255, .8); border-radius: 6px; transition: all .08s ease-out; }
+.adm-win.snapped { border-radius: 0; }
+.adm-assist { position: absolute; z-index: 900; display: flex; flex-direction: column; gap: 12px; padding: 18px; background: rgba(20, 24, 30, .86); backdrop-filter: blur(10px); color: #fff; pointer-events: auto; overflow: auto; }
+.adm-assist p { margin: 0; font-size: 14px; }
+.adm-assist-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.adm-assist-card { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 140px; padding: 14px 8px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); color: #fff; font: inherit; font-size: 12px; cursor: default; }
+.adm-assist-card span { font-size: 26px; }
+.adm-assist-card:hover { border-color: #6fb7ff; background: rgba(111, 183, 255, .2); }
+.adm-flyout { position: fixed; z-index: 2000; display: grid; grid-template-columns: repeat(2, 84px); gap: 8px; padding: 10px; background: #26292e; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+.adm-fly-layout { position: relative; height: 52px; background: rgba(255, 255, 255, .06); }
+.adm-fly-zone { position: absolute; padding: 0; border: 2px solid #26292e; background: rgba(255, 255, 255, .22); cursor: default; box-sizing: border-box; }
+.adm-fly-zone:hover { background: #4cb4ff; }
+
+/* a window's content follows the window's own size, so a full screen window really uses the space */
+.adm-win-body.adm-content { max-width: none; width: auto; }
+.adm-content .grid:not(.two):not(.three):not(.four):not(.five) { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.adm-win-body.wide > div:nth-child(2) { column-count: 2; column-gap: 16px; }
+.adm-win-body.wide > div:nth-child(2) > * { break-inside: avoid; }

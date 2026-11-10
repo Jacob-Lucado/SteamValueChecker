@@ -15,8 +15,13 @@
   function el(tag, cls, attrs = {}, ...kids) { const n = document.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === "text") n.textContent = v; else n.setAttribute(k, v); } n.append(...kids.filter(Boolean)); return n; }
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+  // Snap zones as fractions of the desktop: x, y, width, height. Edges and the layout picker both use these.
+  const ZONES = { L: [0, 0, .5, 1], R: [.5, 0, .5, 1], TL: [0, 0, .5, .5], TR: [.5, 0, .5, .5], BL: [0, .5, .5, .5], BR: [.5, .5, .5, .5], L23: [0, 0, 2 / 3, 1], R13: [2 / 3, 0, 1 / 3, 1], C1: [0, 0, 1 / 3, 1], C2: [1 / 3, 0, 1 / 3, 1], C3: [2 / 3, 0, 1 / 3, 1] };
+  const LAYOUTS = [["L", "R"], ["L23", "R13"], ["C1", "C2", "C3"], ["TL", "TR", "BL", "BR"]];
+  const zoneRect = z => { const [a, b, c, d] = ZONES[z], W = layer.clientWidth, H = layer.clientHeight; return { x: Math.round(a * W), y: Math.round(b * H), w: Math.round(c * W), h: Math.round(d * H) }; };
+
   function persist() {
-    store.set(SAVE, JSON.stringify([...wins.values()].map(w => ({ id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max, min: w.min, z: Number(w.node.style.zIndex) || 0 }))));
+    store.set(SAVE, JSON.stringify([...wins.values()].map(w => ({ id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max, min: w.min, snap: w.snap || null, z: Number(w.node.style.zIndex) || 0 }))));
   }
   function focus(w) {
     for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
@@ -27,6 +32,7 @@
     const n = w.node, W = layer.clientWidth, H = layer.clientHeight;
     if (w.max) { n.classList.add("max"); for (const k of ["left", "top", "width", "height"]) n.style.removeProperty(k); return; }
     n.classList.remove("max");
+    if (w.snap && ZONES[w.snap]) { const r = zoneRect(w.snap); Object.assign(w, r); n.classList.add("snapped"); } else { n.classList.remove("snapped"); w.snap = null; }
     w.w = clamp(w.w, 380, W); w.h = clamp(w.h, 260, H); w.x = clamp(w.x, -w.w + 120, W - 120); w.y = clamp(w.y, 0, H - 40);
     n.style.left = w.x + "px"; n.style.top = w.y + "px"; n.style.width = w.w + "px"; n.style.height = w.h + "px";
   }
@@ -47,6 +53,53 @@
     return grid;
   }
 
+  let previewEl = null;
+  function showPreview(zone) {
+    if (!zone) { previewEl?.remove(); previewEl = null; return; }
+    if (!previewEl) { previewEl = el("div", "adm-snap-preview", { "aria-hidden": "true" }); layer.append(previewEl); }
+    const r = zone === "MAX" ? { x: 0, y: 0, w: layer.clientWidth, h: layer.clientHeight } : zoneRect(zone);
+    Object.assign(previewEl.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+  }
+  /** Puts a window in a zone ("MAX" fills the desktop, null brings it back to its old size). */
+  function snapTo(w, zone) {
+    if (zone === "MAX") { if (!w.max && !w.snap) w.restore = { w: w.w, h: w.h, x: w.x, y: w.y }; w.snap = null; w.max = true; place(w); persist(); return; }
+    if (zone === null) { const r = w.restore || { w: 880, h: 600, x: 60, y: 40 }; w.max = false; w.snap = null; Object.assign(w, { w: r.w, h: r.h, x: r.x ?? 60, y: r.y ?? 40 }); place(w); persist(); return; }
+    if (!w.max && !w.snap) w.restore = { w: w.w, h: w.h, x: w.x, y: w.y };
+    w.max = false; w.snap = zone; w.min = false; w.node.hidden = false; place(w); focus(w); persist(); assist(zone);
+  }
+  /** After one window snaps, offer the other open windows for the spaces that are left (Windows 11's snap assist). */
+  function assist(zone) {
+    root.document.querySelector(".adm-assist")?.remove();
+    const layout = LAYOUTS.find(l => l.includes(zone)); if (!layout) return;
+    const free = layout.filter(z => z !== zone && ![...wins.values()].some(o => o.snap === z && !o.min));
+    const others = [...wins.values()].filter(o => !o.snap && !o.max);
+    if (!free.length || !others.length) return;
+    const zoneNow = free[0], r = zoneRect(zoneNow);
+    const box = el("div", "adm-assist", { role: "dialog", "aria-label": "Pick a window for this space" });
+    Object.assign(box.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+    box.append(el("p", "", { text: "Pick a window for this space" }));
+    const row = el("div", "adm-assist-row");
+    for (const o of others) { const m = metaOf(o.id), b = el("button", "adm-assist-card", { type: "button" }, el("span", "", { "aria-hidden": "true", text: m.icon }), el("b", "", { text: m.title })); b.addEventListener("click", () => { box.remove(); snapTo(o, zoneNow); }); row.append(b); }
+    box.append(row); layer.append(box);
+    const away = ev => { if (!box.contains(ev.target)) { box.remove(); document.removeEventListener("pointerdown", away, true); } };
+    setTimeout(() => document.addEventListener("pointerdown", away, true), 0);
+    document.addEventListener("keydown", function esc(ev) { if (ev.key === "Escape") { box.remove(); document.removeEventListener("keydown", esc); } });
+  }
+  /** The little layout picker under the maximize button. */
+  function layoutFlyout(w, anchor) {
+    document.querySelector(".adm-flyout")?.remove();
+    const fly = el("div", "adm-flyout", { role: "menu" });
+    for (const layout of LAYOUTS) {
+      const cell = el("div", "adm-fly-layout");
+      for (const z of layout) { const [a, b, c, d] = ZONES[z], t = el("button", "adm-fly-zone", { type: "button", "aria-label": "Snap " + z, title: "Snap here" }); Object.assign(t.style, { left: a * 100 + "%", top: b * 100 + "%", width: c * 100 + "%", height: d * 100 + "%" }); t.addEventListener("click", () => { fly.remove(); snapTo(w, z); }); cell.append(t); }
+      fly.append(cell);
+    }
+    const rc = anchor.getBoundingClientRect(); fly.style.top = rc.bottom + 4 + "px"; fly.style.left = Math.max(8, rc.right - 190) + "px";
+    document.body.append(fly);
+    const gone = ev => { if (!fly.contains(ev.target) && ev.target !== anchor) { fly.remove(); document.removeEventListener("pointermove", gone); } };
+    fly.addEventListener("pointerleave", () => fly.remove()); setTimeout(() => document.addEventListener("pointermove", ev => { if (!fly.isConnected) return; const f = fly.getBoundingClientRect(), a = anchor.getBoundingClientRect(); const inside = (r, x, y) => x >= r.left - 6 && x <= r.right + 6 && y >= r.top - 6 && y <= r.bottom + 6; if (!inside(f, ev.clientX, ev.clientY) && !inside(a, ev.clientX, ev.clientY)) fly.remove(); }), 0);
+  }
+
   function open(id, saved) {
     if (!known(id)) id = "overview";
     const have = wins.get(id);
@@ -65,34 +118,51 @@
     layer.append(node); tasks.append(task);
     place(w); if (w.min) { node.hidden = true; } else focus(w); if (saved && saved.z) node.style.zIndex = String(saved.z);
     if (id.startsWith("f:")) { content.classList.add("adm-folder"); content.append(folderView(id.slice(2))); } else cfg.render(id, content);
+    if (root.ResizeObserver) new ResizeObserver(() => content.classList.toggle("wide", content.clientWidth >= 1300)).observe(content); // a big window lays its panels out in two columns
 
     const minimize = () => { w.min = true; node.hidden = true; task.classList.remove("on"); node.classList.remove("focus"); persist(); };
-    const toggleMax = () => { w.max = !w.max; place(w); focus(w); };
+    const toggleMax = () => { snapTo(w, w.max ? null : "MAX"); focus(w); };
     bMin.addEventListener("click", minimize); bMax.addEventListener("click", toggleMax);
     bClose.addEventListener("click", () => { node.remove(); task.remove(); wins.delete(id); persist(); const top = [...wins.values()].filter(o => !o.min).sort((a, b) => Number(b.node.style.zIndex) - Number(a.node.style.zIndex))[0]; if (top) focus(top); else document.title = "Admin · Steam Value Checker"; });
     task.addEventListener("click", () => { if (w.min) { w.min = false; node.hidden = false; focus(w); } else if (node.classList.contains("focus")) minimize(); else focus(w); });
     node.addEventListener("pointerdown", () => { if (!node.classList.contains("focus")) focus(w); }, true);
     title.addEventListener("dblclick", toggleMax);
 
-    // dragging by the title bar
+    // dragging by the title bar; near an edge it snaps, like Windows 11
     node.querySelector(".adm-win-bar").addEventListener("pointerdown", e => {
       if (e.target.closest("button") || e.button !== 0) return;
-      const sx = e.clientX, sy = e.clientY, ox = w.x, oy = w.y, wasMax = w.max;
       const bar0 = e.currentTarget; bar0.setPointerCapture(e.pointerId);
-      const move = ev => {
-        if (wasMax && !w.max) return;
-        if (w.max) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return; w.max = false; w.x = ev.clientX - w.w / 2; w.y = 0; place(w); return; }
-        w.x = ox + ev.clientX - sx; w.y = oy + ev.clientY - sy; place(w);
+      const sx = e.clientX, sy = e.clientY; let ox = w.x, oy = w.y, started = false, target = null;
+      const edgeZone = ev => {
+        const r = layer.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, W = r.width, H = r.height, e0 = 6;
+        if (y <= e0) return x <= 60 ? "TL" : x >= W - 60 ? "TR" : "MAX";
+        if (x <= e0) return y <= 60 ? "TL" : y >= H - 60 ? "BL" : "L";
+        if (x >= W - e0) return y <= 60 ? "TR" : y >= H - 60 ? "BR" : "R";
+        return null;
       };
-      const up = () => { bar0.removeEventListener("pointermove", move); bar0.removeEventListener("pointerup", up); bar0.removeEventListener("pointercancel", up); persist(); };
+      const move = ev => {
+        if (!started) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return; started = true; if (w.max || w.snap) { const was = w.restore || { w: 880, h: 600 }; const frac = (sx - (layer.getBoundingClientRect().left + w.x)) / Math.max(1, w.w || 1); w.max = false; w.snap = null; w.w = was.w; w.h = was.h; w.x = ev.clientX - was.w * clamp(frac, .1, .9); w.y = 0; ox = w.x; oy = w.y; place(w); focus(w); } }
+        w.x = ox + ev.clientX - sx; w.y = oy + ev.clientY - sy; w.restore = { w: w.w, h: w.h }; place(w);
+        target = edgeZone(ev); showPreview(target);
+      };
+      const up = () => { bar0.removeEventListener("pointermove", move); bar0.removeEventListener("pointerup", up); bar0.removeEventListener("pointercancel", up); showPreview(null); if (started && target) snapTo(w, target); persist(); };
       bar0.addEventListener("pointermove", move); bar0.addEventListener("pointerup", up); bar0.addEventListener("pointercancel", up);
+    });
+    // hovering the maximize button offers the snap layouts
+    let flyTimer = 0;
+    bMax.addEventListener("pointerenter", () => { flyTimer = setTimeout(() => layoutFlyout(w, bMax), 450); });
+    bMax.addEventListener("pointerleave", () => { clearTimeout(flyTimer); });
+    node.addEventListener("keydown", e => {
+      if (!(e.ctrlKey && e.altKey)) return;
+      const k = { ArrowLeft: "L", ArrowRight: "R", ArrowUp: "MAX" }[e.key];
+      if (k) { e.preventDefault(); snapTo(w, k); } else if (e.key === "ArrowDown") { e.preventDefault(); snapTo(w, null); }
     });
     // resizing from the corner grip
     const grip = el("div", "adm-win-grip", { "aria-hidden": "true" }); node.append(grip);
     grip.addEventListener("pointerdown", e => {
       if (w.max) return; e.preventDefault(); grip.setPointerCapture(e.pointerId);
       const sx = e.clientX, sy = e.clientY, ow = w.w, oh = w.h;
-      const move = ev => { w.w = ow + ev.clientX - sx; w.h = oh + ev.clientY - sy; place(w); };
+      if (w.snap) { w.snap = null; w.restore = null; } const move = ev => { w.w = ow + ev.clientX - sx; w.h = oh + ev.clientY - sy; place(w); };
       const up = () => { grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up); persist(); };
       grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", up);
     });
