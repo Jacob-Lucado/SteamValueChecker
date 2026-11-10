@@ -7935,10 +7935,10 @@
       if (g.id === "admin") continue;
       const list = g.pages.filter(([id]) => pageVisible(id)).map(([id, text]) => ({ path: id === "home" ? "/" : "/" + id, title: text, icon: ICONS[g.id] || "📄" }));
       for (const p of list) if (p.path !== "/") pages[p.path] = { title: p.title, icon: p.icon, sub: g.label };
-      if (list.length) nav.push({ label: g.label, icon: ICONS[g.id] || "📄", pages: list });
+      if (list.length) nav.push({ label: g.label, icon: ICONS[g.id] || "📄", pages: list, badge: state.me && g.id === "account" ? Number(state.me.unread) || 0 : 0 });
     }
     const want = location.pathname + location.search.replace(/[?&]os=\d\b/, "");
-    window.LucadoOS.begin({ pages, nav, open: want, loginUrl: "/auth/login", user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
+    window.LucadoOS.begin({ pages, nav, open: want, loginUrl: "/auth/login", logout: async () => { try { await api("/auth/logout", {}); } catch { /* signed out anyway */ } location.href = "/"; }, user: state.me ? { name: state.me.user.username, avatar: state.me.user.avatar || null } : null });
   }
 
   function route() {

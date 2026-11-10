@@ -42,11 +42,11 @@
     n.style.left = w.x + "px"; n.style.top = w.y + "px"; n.style.width = w.w + "px"; n.style.height = w.h + "px";
   }
 
-  let pages = {}, nav = [], who = null;
+  let pages = {}, nav = [], who = null, closeStart = () => {}, prefs = { wall: "default", waves: true }, logout = null;
   const GLYPH = { "/": "🏠" };
   const pageMeta = id => pages[id] || { title: id.replace(/^\//, "").split("/")[0] || "Home", icon: "📄", sub: "" };
   const metaOf = id => wins.get(id)?.meta || pageMeta(id);
-  const known = id => typeof id === "string" && /^\/(?!api\/|auth\/|admin)/.test(id) && !/^\/\//.test(id);
+  const known = id => id === "os:personalize" || typeof id === "string" && /^\/(?!api\/|auth\/|admin)/.test(id) && !/^\/\//.test(id);
   let previewEl = null;
   function showPreview(zone) {
     if (!zone) { previewEl?.remove(); previewEl = null; return; }
@@ -101,10 +101,12 @@
     const have = wins.get(id);
     if (have) { have.min = false; have.node.hidden = false; focus(have); return have; }
     const meta = { ...pageMeta(id) }, W = layer.clientWidth, H = layer.clientHeight;
-    const w = { id, path: id, meta, w: Math.min(1000, W - 60), h: Math.min(680, H - 40), x: Math.max(16, Math.min(110 + (cascade % 6) * 28, W - 400)), y: 24 + (cascade % 6) * 28, ...(saved ? { x: saved.x, y: saved.y, w: saved.w, h: saved.h, max: saved.max, min: saved.min, snap: saved.snap } : {}) };
+    const w = { id, path: id, meta, w: Math.min(1000, W - 200), h: Math.min(680, H - 40), x: Math.max(16, Math.min((desk.querySelector(".los-icons")?.scrollWidth || 0) + 24 + (cascade % 6) * 28, W - 400)), y: 24 + (cascade % 6) * 28, ...(saved ? { x: saved.x, y: saved.y, w: saved.w, h: saved.h, max: saved.max, min: saved.min, snap: saved.snap } : {}) };
     cascade++;
-    const frame = el("iframe", "los-frame", { src: id, title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
-    const content = el("div", "los-win-body los-page", {}, frame);
+    const native = id.startsWith("os:");
+    const frame = native ? null : el("iframe", "los-frame", { src: id, title: meta.title, loading: "eager", referrerpolicy: "same-origin" });
+    const content = el("div", native ? "los-win-body los-native" : "los-win-body los-page", {}, ...(frame ? [frame] : []));
+    if (native) { w.w = Math.min(w.w, 720); w.h = Math.min(w.h, 520); personalize(content); }
     const titleText = el("span", "", { text: meta.title }), titleIcon = el("i", "", { "aria-hidden": "true", text: meta.icon });
     const title = el("div", "los-win-title", {}, titleIcon, titleText);
     const bMin = el("button", "los-win-btn", { type: "button", "aria-label": "Minimize", title: "Minimize", text: "–" });
@@ -125,8 +127,10 @@
       const m = pages[path.split("?")[0]] ?? null, name = m ? m.title : String(t || "").split(/[:|·]/)[0].trim().slice(0, 40) || meta.title;
       if (name !== meta.title) { meta.title = name; if (m) meta.icon = m.icon; titleText.textContent = taskText.textContent = name; titleIcon.textContent = taskIcon.textContent = meta.icon; task.title = name; node.setAttribute("aria-label", name); if (node.classList.contains("focus")) document.title = `${name} · LucadoOS`; }
     };
-    frame.addEventListener("load", () => { sync(); try { frame.contentWindow.addEventListener("pointerdown", () => { if (!node.classList.contains("focus")) focus(w); }, true); } catch { /* not ours */ } });
-    w.timer = setInterval(() => { if (!node.isConnected) clearInterval(w.timer); else sync(); }, 800);
+    if (frame) {
+      frame.addEventListener("load", () => { sync(); try { frame.contentWindow.addEventListener("pointerdown", () => { closeStart(); if (!node.classList.contains("focus")) focus(w); }, true); } catch { /* not ours */ } });
+      w.timer = setInterval(() => { if (!node.isConnected) clearInterval(w.timer); else sync(); }, 800);
+    }
     const shut = () => { clearInterval(w.timer); node.remove(); task.remove(); wins.delete(id); persist(); const top = [...wins.values()].filter(o => !o.min).sort((a, b) => Number(b.node.style.zIndex) - Number(a.node.style.zIndex))[0]; if (top) focus(top); else { document.title = "LucadoOS"; } };
     const minimize = () => { w.min = true; node.hidden = true; task.classList.remove("on"); node.classList.remove("focus"); persist(); };
     const toggleMax = () => { snapTo(w, w.max ? null : "MAX"); focus(w); };
@@ -175,7 +179,50 @@
     return w;
   }
   /** The browser's address bar shows the page of the window you're in, so a copied link opens the same page. */
-  function addressOf(w) { try { root.history.replaceState(null, "", w.path); } catch { /* keep going */ } }
+  function addressOf(w) { if (!w.frame) return; try { root.history.replaceState(null, "", w.path); } catch { /* keep going */ } }
+
+  const WALLS = [
+    ["default", "Default", ""],
+    ["ocean", "Ocean", "linear-gradient(135deg, #0a3a86 0%, #0e55b8 45%, #1b86e0 100%)"],
+    ["dusk", "Dusk", "linear-gradient(135deg, #2b1055 0%, #7597de 100%)"],
+    ["sunset", "Sunset", "linear-gradient(135deg, #42275a 0%, #a8456b 55%, #f09a5b 100%)"],
+    ["forest", "Forest", "linear-gradient(135deg, #0b3d2e 0%, #1c7a52 60%, #6bbf8a 100%)"],
+    ["graphite", "Graphite", "linear-gradient(135deg, #16181d 0%, #2b2f38 100%)"],
+    ["aurora", "Aurora", "radial-gradient(900px 600px at 20% 10%, #2dd4bf55, transparent 60%), radial-gradient(900px 600px at 85% 80%, #8b5cf655, transparent 60%), linear-gradient(135deg, #0b1220, #101a33)"]
+  ];
+  const PREFS = "lucado-site-prefs";
+  function loadPrefs() { try { const p = JSON.parse(store.get(PREFS) || "null"); if (p) prefs = { wall: WALLS.some(x => x[0] === p.wall) || /^#[0-9a-f]{6}$/i.test(p.wall || "") ? p.wall : "default", waves: p.waves !== false }; } catch { /* defaults */ } }
+  /** The wallpaper and the neon waves. The wallpaper sits on the page so the waves can roll between it and the windows. */
+  function applyPrefs() {
+    const css = /^#[0-9a-f]{6}$/i.test(prefs.wall) ? prefs.wall : (WALLS.find(x => x[0] === prefs.wall) || [])[2] || "";
+    css ? document.body.style.setProperty("--wall", css) : document.body.style.removeProperty("--wall");
+    document.body.classList.toggle("los-waves", prefs.waves);
+    if (root.IndieWaves) prefs.waves ? root.IndieWaves.start() : root.IndieWaves.stop();
+  }
+  function savePrefs(patch) { prefs = { ...prefs, ...patch }; store.set(PREFS, JSON.stringify(prefs)); applyPrefs(); }
+  /** The Personalize window: wallpaper, neon waves and the light or dark theme. Kept in this browser. */
+  function personalize(host) {
+    const box = el("div", "pz");
+    const draw = () => {
+      const swatches = WALLS.map(([id, name, css]) => { const b = el("button", "pz-wall" + (prefs.wall === id ? " on" : ""), { type: "button", title: name, "aria-label": name }, el("span", "", { text: name })); if (css) b.style.background = css; b.addEventListener("click", () => { savePrefs({ wall: id }); draw(); }); return b; });
+      const color = el("input", "", { type: "color", "aria-label": "Pick any color", value: /^#/.test(prefs.wall) ? prefs.wall : "#1b2a4a" });
+      color.addEventListener("change", () => { savePrefs({ wall: color.value }); draw(); });
+      const wv = el("input", "", { type: "checkbox" }); wv.checked = prefs.waves; wv.addEventListener("change", () => { savePrefs({ waves: wv.checked }); draw(); });
+      const light = root.svcTheme?.current() === "light";
+      const themeBtn = el("button", "btn gray small", { type: "button", text: light ? "Switch to dark" : "Switch to light" }); themeBtn.addEventListener("click", () => { toggleTheme(); draw(); });
+      box.replaceChildren(el("h3", "", { text: "Wallpaper" }), el("div", "pz-row", {}, ...swatches, el("label", "pz-color" + (/^#/.test(prefs.wall) ? " on" : ""), {}, color, el("span", "", { text: "Any color" }))),
+        el("label", "pz-waves", {}, wv, el("span", "", {}, el("b", "", { text: "Neon waves" }), el("small", "", { text: "Glowing lines rolling over the wallpaper." }))),
+        el("h3", "", { text: "Theme" }), el("div", "pz-row", {}, themeBtn), el("p", "muted small", { text: "These are saved in this browser." }));
+    };
+    draw(); host.append(box);
+  }
+  /** Light or dark for the desktop and every open page. */
+  function toggleTheme() { root.svcTheme?.toggle(); }
+  function pushTheme() {
+    const t = root.svcTheme?.current(); if (!t) return;
+    for (const w of wins.values()) { try { w.frame?.contentDocument?.documentElement.setAttribute("data-theme", t); } catch { /* not loaded yet */ } }
+  }
+  root.addEventListener("svc-theme", pushTheme);
 
   /** The desktop: one icon for each section of the site. */
   function icons() {
@@ -186,8 +233,13 @@
       let last = 0;
       b.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach(n => n.classList.remove("sel")); b.classList.add("sel"); if (Date.now() - last < 450 || root.matchMedia("(pointer: coarse)").matches) open(first.path); last = Date.now(); });
       b.addEventListener("keydown", e => { if (e.key === "Enter") open(first.path); });
+      if (g.badge) b.append(el("i", "los-icon-badge", { text: String(Math.min(99, g.badge)) }));
       grid.append(b);
     }
+    const pz = el("button", "los-icon", { type: "button", role: "listitem", title: "Wallpaper, neon waves and theme" }, el("span", "los-icon-art", { "aria-hidden": "true", text: "🎨" }), el("span", "los-icon-name", { text: "Personalize" }));
+    let lastPz = 0; pz.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach(n => n.classList.remove("sel")); pz.classList.add("sel"); if (Date.now() - lastPz < 450 || root.matchMedia("(pointer: coarse)").matches) open("os:personalize"); lastPz = Date.now(); });
+    pz.addEventListener("keydown", e => { if (e.key === "Enter") open("os:personalize"); });
+    grid.append(pz);
     return grid;
   }
 
@@ -210,12 +262,12 @@
       if (!results.children.length) results.append(el("p", "los-start-none", { text: "Nothing matches that." }));
     };
     const railBtn = (glyph, label, run) => { const b = el("button", "los-rail-btn", { type: "button", title: label, "aria-label": label, text: glyph }); b.addEventListener("click", run); return b; };
-    rail.append(railBtn("☰", "Switch to the classic site", () => setMode("classic")));
+    rail.append(...[railBtn("🎨", "Personalize", () => { close(); open("os:personalize"); }), who && logout ? railBtn("⎋", "Log out", () => logout()) : null, railBtn("☰", "Switch to the classic site", () => setMode("classic"))].filter(Boolean));
     startMenu.append(rail, results, tilesBox); paint("");
     const btn = el("button", "los-startbtn", { type: "button", "aria-label": "Start menu", "aria-expanded": "false" }, WINLOGO());
     const search = el("input", "", { type: "text", placeholder: "Type here to search", "aria-label": "Search the site's pages", autocomplete: "off", spellcheck: "false" });
     const box = el("label", "los-searchbox", {}, el("span", "", { "aria-hidden": "true", text: "⌕" }), search);
-    const close = () => { startMenu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+    const close = () => { startMenu.hidden = true; btn.setAttribute("aria-expanded", "false"); }; closeStart = close;
     const show = q => { startMenu.hidden = false; btn.setAttribute("aria-expanded", "true"); paint(q); };
     btn.addEventListener("click", e => { e.stopPropagation(); if (startMenu.hidden) { search.value = ""; show(""); } else close(); });
     search.addEventListener("focus", () => show(search.value)); search.addEventListener("input", () => show(search.value));
@@ -233,19 +285,22 @@
 
   /** Takes over the page. `options`: { pages: {path: {title, icon, sub}}, nav: [{label, icon, pages: [{path, title, icon}]}], user: {name, avatar} | null, loginUrl, open: path to start on }. */
   function begin(options) {
-    pages = options.pages; nav = options.nav; who = options.user || null;
+    pages = { ...options.pages, "os:personalize": { title: "Personalize", icon: "🎨", sub: "" } }; nav = options.nav; who = options.user || null; logout = options.logout || null; loadPrefs();
     if (on) { return; }
     on = true; cfg = options;
     document.body.classList.add("los-os", "los-orig", "los-waves");
     desk = el("div", "los-desk"); layer = el("div", "los-layer"); tasks = el("div", "los-tasks");
     const tray = el("div", "los-tray");
     tray.append(who ? el("span", "los-who", {}, who.avatar ? el("img", "", { src: who.avatar, alt: "", width: "22", height: "22" }) : el("i"), el("span", "", { text: who.name })) : el("a", "btn green small", { href: options.loginUrl || "/auth/login", text: "Sign in" }));
-    tray.append(clock());
+    const tb = el("button", "los-traybtn", { type: "button" }); const paintT = () => { const l = root.svcTheme?.current() === "light"; tb.textContent = l ? "☾" : "☀"; tb.title = tb.ariaLabel = l ? "Switch to the dark theme" : "Switch to the light theme"; };
+    tb.addEventListener("click", () => { toggleTheme(); paintT(); }); root.addEventListener("svc-theme", paintT); paintT();
+    tray.append(tb, clock());
     const [btn, box] = start();
     bar = el("footer", "los-taskbar", {}, btn, box, tasks, tray);
     desk.append(icons(), layer, startMenu, bar); document.body.prepend(desk);
-    if (root.IndieWaves) root.IndieWaves.start();
-    root.addEventListener("resize", () => { for (const w of wins.values()) place(w); });
+    applyPrefs();
+    let narrow = false;
+    root.addEventListener("resize", () => { for (const w of wins.values()) place(w); if (root.innerWidth < 900 && !narrow) { narrow = true; root.location.reload(); } }); // a small screen gets the classic site
     let saved = []; try { saved = JSON.parse(store.get(SAVE) || "[]"); } catch { /* start fresh */ }
     for (const s of saved.filter(s => known(s.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8)) open(s.id, s);
     const want = options.open && known(options.open) && options.open !== "/" ? options.open : null;
