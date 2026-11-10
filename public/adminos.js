@@ -21,7 +21,7 @@
   function focus(w) {
     for (const o of wins.values()) o.node.classList.toggle("focus", o === w);
     w.node.style.zIndex = String(++z); w.task.classList.add("on"); for (const o of wins.values()) if (o !== w) o.task.classList.remove("on");
-    document.title = `${cfg.pages[w.id].title} · Admin · Steam Value Checker`; persist();
+    document.title = `${metaOf(w.id).title} · Admin · Steam Value Checker`; persist();
   }
   function place(w) {
     const n = w.node, W = layer.clientWidth, H = layer.clientHeight;
@@ -31,12 +31,28 @@
     n.style.left = w.x + "px"; n.style.top = w.y + "px"; n.style.width = w.w + "px"; n.style.height = w.h + "px";
   }
 
+  const GROUP_ICON = { Dashboard: "🖥️", Insights: "📊", People: "👥", Reach: "📣", Support: "🛟", Operations: "⚙️" };
+  const metaOf = id => id.startsWith("f:") ? { title: id.slice(2), icon: GROUP_ICON[id.slice(2)] || "📁", sub: "" } : cfg.pages[id];
+  const known = id => id.startsWith("f:") ? cfg.nav.some(([g]) => g === id.slice(2)) : Boolean(cfg.pages[id]);
+  /** A folder window: the pages of one group laid out like files in Explorer. */
+  function folderView(group) {
+    const items = (cfg.nav.find(([g]) => g === group) || [, []])[1];
+    const grid = el("div", "adm-files");
+    for (const [id, title, glyph] of items) {
+      const b = el("button", "adm-file", { type: "button", title: cfg.pages[id].sub }, el("span", "adm-icon-art", { "aria-hidden": "true", text: glyph }), el("span", "adm-icon-name", { text: title }), el("span", "adm-badge", { "data-badge": id, hidden: "" }));
+      let last = 0; b.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach(n => n.classList.remove("sel")); b.classList.add("sel"); if (Date.now() - last < 450 || root.matchMedia("(pointer: coarse)").matches) open(id); last = Date.now(); });
+      b.addEventListener("keydown", e => { if (e.key === "Enter") open(id); });
+      grid.append(b);
+    }
+    return grid;
+  }
+
   function open(id, saved) {
-    if (!cfg.pages[id]) id = "overview";
+    if (!known(id)) id = "overview";
     const have = wins.get(id);
     if (have) { have.min = false; have.node.hidden = false; focus(have); return have; }
-    const meta = cfg.pages[id], W = layer.clientWidth, H = layer.clientHeight;
-    const w = { id, w: Math.min(920, W - 60), h: Math.min(640, H - 40), x: Math.max(16, Math.min((desk.querySelector(".adm-icons")?.scrollWidth || 0) + 24, W - Math.min(920, W - 60) - 16)) + (cascade % 6) * 30, y: 20 + (cascade % 6) * 28, max: false, min: false, ...(saved || {}) };
+    const meta = metaOf(id), W = layer.clientWidth, H = layer.clientHeight;
+    const w = { id, w: Math.min(id.startsWith("f:") ? 640 : 920, W - 60), h: Math.min(id.startsWith("f:") ? 420 : 640, H - 40), x: Math.max(16, Math.min((desk.querySelector(".adm-icons")?.scrollWidth || 0) + 24, W - Math.min(920, W - 60) - 16)) + (cascade % 6) * 30, y: 20 + (cascade % 6) * 28, max: false, min: false, ...(saved || {}) };
     cascade++;
     const content = el("div", "adm-content adm-win-body");
     const title = el("div", "adm-win-title", {}, el("i", "", { "aria-hidden": "true", text: meta.icon }), el("span", "", { text: meta.title }));
@@ -48,7 +64,7 @@
     w.node = node; w.task = task; w.content = content; wins.set(id, w);
     layer.append(node); tasks.append(task);
     place(w); if (w.min) { node.hidden = true; } else focus(w); if (saved && saved.z) node.style.zIndex = String(saved.z);
-    cfg.render(id, content);
+    if (id.startsWith("f:")) { content.classList.add("adm-folder"); content.append(folderView(id.slice(2))); } else cfg.render(id, content);
 
     const minimize = () => { w.min = true; node.hidden = true; task.classList.remove("on"); node.classList.remove("focus"); persist(); };
     const toggleMax = () => { w.max = !w.max; place(w); focus(w); };
@@ -83,45 +99,58 @@
     return w;
   }
 
+  /** The desktop: one folder per group, the way a school computer lays out its shortcuts. */
   function icons() {
     const grid = el("div", "adm-icons", { role: "list" });
-    for (const [, items] of cfg.nav) for (const [id, title, glyph] of items) {
-      const b = el("button", "adm-icon", { type: "button", role: "listitem", title: cfg.pages[id].sub, "data-page": id }, el("span", "adm-icon-art", { "aria-hidden": "true", text: glyph }), el("span", "adm-icon-name", { text: title }), el("span", "adm-badge", { "data-badge": id, hidden: "" }));
+    const add = (art, name, run, extra = {}) => {
+      const b = el("button", "adm-icon", { type: "button", role: "listitem", ...extra }, el("span", "adm-icon-art", { "aria-hidden": "true", text: art }), el("span", "adm-icon-name", { text: name }));
       let last = 0;
-      b.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach(n => n.classList.remove("sel")); b.classList.add("sel"); if (Date.now() - last < 450 || root.matchMedia("(pointer: coarse)").matches) open(id); last = Date.now(); });
-      b.addEventListener("keydown", e => { if (e.key === "Enter") open(id); });
-      grid.append(b);
-    }
+      b.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach(n => n.classList.remove("sel")); b.classList.add("sel"); if (Date.now() - last < 450 || root.matchMedia("(pointer: coarse)").matches) run(); last = Date.now(); });
+      b.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+      grid.append(b); return b;
+    };
+    for (const [group] of cfg.nav) add(GROUP_ICON[group] || "📁", group, () => open("f:" + group));
+    add("🌐", "Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; });
     return grid;
   }
 
+  const WINLOGO = () => el("span", "adm-winlogo", { "aria-hidden": "true" }, el("i"), el("i"), el("i"), el("i"));
+  const TILES = [["overview", "Overview", "#0a64c8"], ["bugs", "Bug reports", "#c4392b"], ["supporters", "Supporters", "#8a3ffc"], ["system", "System health", "#1a8f5a"], ["announce", "Announcements", "#d4741a"], ["indie", "Indie showcase", "#c0287a"]];
+
+  /** Start button, the Windows-style menu, and the "Type here to search" box. Returns both for the taskbar. */
   function start() {
     startMenu = el("div", "adm-start", { hidden: "" });
-    const search = el("input", "adm-start-search", { type: "text", placeholder: "Search pages…", "aria-label": "Search pages", autocomplete: "off" });
-    const list = el("div", "adm-start-list");
-    const paint = () => {
-      const q = search.value.trim().toLowerCase(); list.replaceChildren();
+    const rail = el("div", "adm-start-rail");
+    const results = el("div", "adm-start-list");
+    const tilesBox = el("div", "adm-start-tiles", {}, el("div", "adm-start-group", { text: "Pinned" }));
+    for (const [id, name, color] of TILES) { const t = el("button", "adm-tile", { type: "button" }, el("span", "adm-tile-art", { "aria-hidden": "true", text: cfg.pages[id].icon }), el("span", "", { text: name })); t.style.setProperty("--tile", color); t.addEventListener("click", () => { close(); open(id); }); tilesBox.append(t); }
+    const paint = q => {
+      q = (q || "").trim().toLowerCase(); results.replaceChildren();
       for (const [group, items] of cfg.nav) {
-        const hit = items.filter(([, t, , sub]) => !q || t.toLowerCase().includes(q) || (sub || "").toLowerCase().includes(q)); if (!hit.length) continue;
-        list.append(el("div", "adm-start-group", { text: group }));
-        for (const [id, t, g] of hit) { const b = el("button", "adm-start-item", { type: "button" }, el("i", "", { "aria-hidden": "true", text: g }), el("span", "", { text: t })); b.addEventListener("click", () => { close(); open(id); }); list.append(b); }
+        const hit = items.filter(([, t, , sub]) => !q || t.toLowerCase().includes(q) || (sub || "").toLowerCase().includes(q) || group.toLowerCase().includes(q)); if (!hit.length) continue;
+        results.append(el("div", "adm-start-group", { text: group }));
+        for (const [id, t, g] of hit) { const b = el("button", "adm-start-item", { type: "button" }, el("i", "", { "aria-hidden": "true", text: g }), el("span", "", { text: t })); b.addEventListener("click", () => { close(); open(id); }); results.append(b); }
       }
+      if (!results.children.length) results.append(el("p", "adm-start-none", { text: "Nothing matches that." }));
     };
-    search.addEventListener("input", paint); search.addEventListener("keydown", e => { if (e.key === "Enter") list.querySelector(".adm-start-item")?.click(); });
-    const foot = el("div", "adm-start-foot");
-    const classic = el("button", "adm-start-item", { type: "button" }, el("i", "", { text: "☰" }), el("span", "", { text: "Switch to the classic panel" })); classic.addEventListener("click", () => setMode("classic"));
-    const site = el("a", "adm-start-item", { href: cfg.siteUrl || "/" }, el("i", "", { text: "←" }), el("span", "", { text: "Back to Steam Value Checker" }));
-    foot.append(classic, site); startMenu.append(search, list, foot); paint();
-    const btn = el("button", "adm-startbtn", { type: "button", "aria-label": "Start menu", "aria-expanded": "false" }, el("img", "", { src: "/logo.png", alt: "", width: "22", height: "22" }), el("span", "", { text: "Start" }));
+    const railBtn = (glyph, label, run) => { const b = el("button", "adm-rail-btn", { type: "button", title: label, "aria-label": label, text: glyph }); b.addEventListener("click", run); return b; };
+    rail.append(railBtn("☰", "Switch to the classic panel", () => setMode("classic")), railBtn("🌐", "Back to Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; }));
+    startMenu.append(rail, results, tilesBox); paint("");
+    const btn = el("button", "adm-startbtn", { type: "button", "aria-label": "Start menu", "aria-expanded": "false" }, WINLOGO());
+    const search = el("input", "", { type: "text", placeholder: "Type here to search", "aria-label": "Search the admin panel", autocomplete: "off", spellcheck: "false" });
+    const box = el("label", "adm-searchbox", {}, el("span", "", { "aria-hidden": "true", text: "⌕" }), search);
     const close = () => { startMenu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
-    btn.addEventListener("click", e => { e.stopPropagation(); const show = startMenu.hidden; startMenu.hidden = !show; btn.setAttribute("aria-expanded", String(show)); if (show) { search.value = ""; paint(); search.focus(); } });
-    document.addEventListener("pointerdown", e => { if (!startMenu.hidden && !startMenu.contains(e.target) && !btn.contains(e.target)) close(); });
+    const show = q => { startMenu.hidden = false; btn.setAttribute("aria-expanded", "true"); paint(q); };
+    btn.addEventListener("click", e => { e.stopPropagation(); if (startMenu.hidden) { search.value = ""; show(""); } else close(); });
+    search.addEventListener("focus", () => show(search.value)); search.addEventListener("input", () => show(search.value));
+    search.addEventListener("keydown", e => { if (e.key === "Enter") { results.querySelector(".adm-start-item")?.click(); search.value = ""; search.blur(); } });
+    document.addEventListener("pointerdown", e => { if (!startMenu.hidden && !startMenu.contains(e.target) && !btn.contains(e.target) && !box.contains(e.target)) close(); });
     document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
-    return btn;
+    return [btn, box];
   }
 
   function clock() {
-    const c = el("div", "adm-clock"), tick = () => { const d = new Date(); c.replaceChildren(el("b", "", { text: d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) }), el("small", "", { text: d.toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }) })); c.title = "Eastern time"; };
+    const c = el("div", "adm-clock"), tick = () => { const d = new Date(); c.replaceChildren(el("span", "", { text: d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) }), el("span", "", { text: d.toLocaleDateString("en-US", { timeZone: "America/New_York" }) })); c.title = "Eastern time"; };
     tick(); setInterval(tick, 20_000); return c;
   }
 
@@ -130,15 +159,15 @@
     document.getElementById("adm").hidden = true; document.body.classList.add("adm-os");
     desk = el("div", "adm-desk"); layer = el("div", "adm-layer"); tasks = el("div", "adm-tasks");
     const tray = el("div", "adm-tray"); const status = document.getElementById("admStatus"), user = document.getElementById("admUser");
-    if (status) tray.append(status); if (user) { user.querySelectorAll("button").forEach(b => { if (b.textContent === "Desktop view") b.remove(); }); tray.append(user); } tray.append(clock());
-    bar = el("footer", "adm-taskbar", {}, start(), tasks, tray);
+    if (status) tray.append(status); if (user) { user.querySelectorAll("button").forEach(b => { if (b.textContent === "Desktop view") b.remove(); }); tray.append(user); }
+    tray.append(clock());
+    const [btn, box] = start();
+    bar = el("footer", "adm-taskbar", {}, btn, box, tasks, tray);
     desk.append(icons(), layer, startMenu, bar); document.body.prepend(desk);
-    if (root.IndieWaves) root.IndieWaves.start();
     root.addEventListener("resize", () => { for (const w of wins.values()) place(w); });
     let saved = []; try { saved = JSON.parse(store.get(SAVE) || "[]"); } catch { /* start fresh */ }
-    for (const s of saved.filter(s => cfg.pages[s.id]).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8)) open(s.id, s);
+    for (const s of saved.filter(s => known(s.id)).sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 8)) open(s.id, s);
     if (!wins.size) open("overview");
-    document.getElementById("admSearch")?.addEventListener("click", () => {}); // the Ctrl K palette still works from the keyboard
   }
 
   root.AdminOS = { wanted, begin, open: id => open(id), active: () => on, setMode };
