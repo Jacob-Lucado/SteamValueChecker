@@ -355,8 +355,7 @@ window.SVC_SITE = envIn => {
     const cr = state.creator;
     document.getElementById("footer-links").replaceChildren(
       ...(cr ? [h("a", { class: "copyright", href: safeHref(cr.url), target: "_blank", rel: "noopener noreferrer" },
-        h("img", { src: "/creator.png", alt: "", width: "22", height: "22" }), `© ${new Date().getFullYear()} ${cr.name}`)] : []),
-      h("a", { class: "copyright", href: "/licenses.html", text: "Licenses" }));
+        h("img", { src: "/creator.png", alt: "", width: "22", height: "22" }), `© ${new Date().getFullYear()} ${cr.name}`)] : []));
   }
 
   // ---------- landing ----------

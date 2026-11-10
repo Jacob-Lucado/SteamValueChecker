@@ -54,7 +54,7 @@ export function legalPage(kind, origin) {
 <div class="panel">
 ${body}
 </div>
-<p class="muted small"><a href="/${other[0]}">${other[1]}</a></p>
+<p class="muted small">${Object.entries(DOCS).filter(([k]) => k !== kind).map(([k, d]) => `<a href="/${k}.html">${d.title}</a>`).join(" · ")}</p>
 </main>
 </body>
 </html>
