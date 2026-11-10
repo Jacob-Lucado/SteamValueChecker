@@ -181,6 +181,7 @@
     };
     const chatIcon = add("💬", "Staff chat", () => open("chat")); chatIcon.append(el("i", "adm-icon-badge", { "data-badge": "chat", hidden: "" }));
     for (const [group] of cfg.nav) add(GROUP_ICON[group] || "📁", group, () => open("f:" + group));
+    if (cfg.pages.radio) add("📻", "Radio", () => open("radio"));
     if (cfg.pages.personalize) add("🎨", "Personalize", () => open("personalize"));
     add("🌐", "Steam Value Checker", () => { root.location.href = cfg.siteUrl || "/"; });
     return grid;

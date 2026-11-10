@@ -64,15 +64,18 @@
 
   function mount(host, { h, api, toast }) {
     host.classList.add("sc-host");
-    let st = null, room = null, last = 0, timer = 0, replyTo = null, shown = [], busyPoll = false, tkFilter = "active", tkOpen = 0, tkId = 0, rqOpen = 0, editing = null, lastTyped = 0;
+    let st = null, room = null, last = 0, timer = 0, replyTo = null, shown = [], busyPoll = false, tkFilter = "active", tkOpen = 0, tkId = 0, rqOpen = 0, editing = null, lastTyped = 0, pending = null;
     const side = h("aside", { class: "sc-side" }), people = h("aside", { class: "sc-people" });
     const title = h("div", { class: "sc-title" }), log = h("div", { class: "sc-log", role: "log", "aria-live": "polite" });
     const replyBar = h("div", { class: "sc-replybar", hidden: "" });
     const input = h("textarea", { class: "sc-input", rows: "1", maxlength: "1000", placeholder: "Message the room. Enter sends, Shift+Enter makes a new line.", "aria-label": "Message" });
     const sendBtn = h("button", { type: "button", class: "sc-send", "aria-label": "Send", text: "➤" });
-    const compose = h("div", { class: "sc-compose" }, input, sendBtn), tk = h("div", { class: "sc-tk", hidden: "" });
+    const fileIn = h("input", { type: "file", accept: "image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime", hidden: "" });
+    const attachBtn = h("button", { type: "button", class: "sc-attach", title: "Add a picture or clip", "aria-label": "Add a picture or clip", text: "📎" });
+    const preview = h("div", { class: "sc-preview", hidden: "" });
+    const compose = h("div", { class: "sc-compose" }, attachBtn, input, sendBtn, fileIn), tk = h("div", { class: "sc-tk", hidden: "" });
     const typingLine = h("div", { class: "sc-typing", "aria-live": "polite" });
-    const main = h("section", { class: "sc-main" }, title, log, typingLine, replyBar, compose, tk);
+    const main = h("section", { class: "sc-main" }, title, log, typingLine, replyBar, preview, compose, tk);
     const wrap = h("div", { class: "sc" }, side, main, people);
     host.replaceChildren(wrap);
 
@@ -129,9 +132,47 @@
       if (url) { const img = h("img", { src: url, alt: "", width: "34", height: "34", loading: "lazy" }); img.addEventListener("error", () => img.remove()); a.textContent = ""; a.append(img); img.addEventListener("error", () => { a.textContent = (name[0] || "?").toUpperCase(); }); }
       return a;
     }
+    const mediaUrl = id => "/api/admin/chat/media?id=" + encodeURIComponent(id);
+    function mediaNode(m) {
+      if (!m.media) return null;
+      if (m.media.kind === "video") return h("video", { class: "sc-media", src: mediaUrl(m.media.id), controls: "", preload: "metadata", playsinline: "" });
+      const img = h("img", { class: "sc-media", src: mediaUrl(m.media.id), alt: "Picture from " + m.name, loading: "lazy" });
+      img.addEventListener("click", () => lightbox(mediaUrl(m.media.id)));
+      img.addEventListener("load", () => { if (log.scrollHeight - log.scrollTop - log.clientHeight < 400) log.scrollTop = log.scrollHeight; });
+      return img;
+    }
+    function lightbox(src) {
+      const box = h("div", { class: "sc-lightbox", role: "dialog", "aria-label": "Picture" }, h("img", { src, alt: "" }), h("button", { type: "button", class: "sc-lbx", "aria-label": "Close", text: "✕" }));
+      const close = () => { box.remove(); document.removeEventListener("keydown", esc); }, esc = e => { if (e.key === "Escape") close(); };
+      box.addEventListener("click", close); document.addEventListener("keydown", esc); document.body.append(box);
+    }
+    function drawPreview() {
+      preview.hidden = !pending;
+      if (!pending) { preview.replaceChildren(); return; }
+      const thumb = pending.kind === "video" ? h("video", { src: pending.local, muted: "", preload: "metadata" }) : h("img", { src: pending.local, alt: "" });
+      preview.replaceChildren(thumb, h("span", { class: "small muted", text: pending.up ? "Uploading…" : pending.file.name }), h("button", { type: "button", class: "btn gray small", text: "Remove", onclick: () => { URL.revokeObjectURL(pending.local); pending = null; drawPreview(); } }));
+    }
+    async function attach(file) {
+      if (!file) return;
+      const kind = /^video\//.test(file.type) ? "video" : /^image\//.test(file.type) ? "image" : null;
+      if (!kind) { toast("Only pictures and clips can go in the chat."); return; }
+      if (file.size > (kind === "video" ? 30e6 : 10e6)) { toast(kind === "video" ? "Clips can be up to 30 MB." : "Pictures can be up to 10 MB."); return; }
+      if (pending) URL.revokeObjectURL(pending.local);
+      const mine = pending = { file, kind, local: URL.createObjectURL(file), up: true, id: null }; drawPreview();
+      try {
+        const r = await fetch("/api/admin/chat/upload", { method: "POST", credentials: "same-origin", headers: { "X-Requested-With": "dashboard", "Content-Type": file.type || "application/octet-stream" }, body: file });
+        const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "That didn't upload.");
+        if (pending === mine) { mine.id = j.id; mine.up = false; drawPreview(); }
+      } catch (e) { if (pending === mine) { URL.revokeObjectURL(mine.local); pending = null; drawPreview(); } toast(e.message); }
+    }
+    attachBtn.addEventListener("click", () => fileIn.click());
+    fileIn.addEventListener("change", () => { attach(fileIn.files[0]); fileIn.value = ""; });
+    input.addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])].find(x => /^(image|video)\//.test(x.type)); if (f) { e.preventDefault(); attach(f); } });
+    main.addEventListener("dragover", e => { if (room !== "tickets" && room !== "requests" && e.dataTransfer?.types?.includes("Files")) e.preventDefault(); });
+    main.addEventListener("drop", e => { const f = e.dataTransfer?.files?.[0]; if (f && room !== "tickets" && room !== "requests") { e.preventDefault(); attach(f); } });
     function bubble(m, prev) {
       const mine = m.author === me().key, grouped = prev && prev.author === m.author && m.at - prev.at < 5 * 60_000 && !m.reply;
-      const text = h("div", { class: "sc-text" });
+      const text = h("div", { class: "sc-text" }); if (!m.body) text.hidden = true;
       for (const part of m.body.split(/(@[\w.-]+)/g)) text.append(/^@[\w.-]+$/.test(part) ? h("span", { class: "sc-mention", text: part }) : document.createTextNode(part));
       const acts = h("span", { class: "sc-acts" }, h("button", { type: "button", title: "React", "aria-label": "React", text: "☺", onclick: e => reactPicker(m, e.currentTarget) }),
         h("button", { type: "button", title: "Reply", "aria-label": "Reply", text: "↩", onclick: () => { replyTo = m; drawReply(); input.focus(); } }),
@@ -140,7 +181,7 @@
       const av = face(m.author, m.name, grouped);
       return h("div", { class: "sc-msg" + (mine ? " mine" : "") + (grouped ? " grouped" : ""), "data-id": m.id }, av, h("div", { class: "sc-body" },
         grouped ? null : h("div", { class: "sc-meta" }, h("b", { text: m.name }), h("span", { class: "muted small", text: clock(m.at) })),
-        m.reply ? h("div", { class: "sc-quote" }, h("b", { text: m.reply.name }), " ", m.reply.body) : null, h("div", { class: "sc-bubble" }, text, m.edited ? h("small", { class: "sc-edited", text: " (edited)" }) : null, acts), chips(m)));
+        m.reply ? h("div", { class: "sc-quote" }, h("b", { text: m.reply.name }), " ", m.reply.body || "📎 Attachment") : null, h("div", { class: "sc-bubble" }, mediaNode(m), text, m.edited ? h("small", { class: "sc-edited", text: " (edited)" }) : null, acts), chips(m)));
     }
     function paint(append) {
       const near = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
@@ -225,9 +266,10 @@
       if (isTk) { room = id; live.room = id; drawSide(); drawTitle(); (id === "requests" ? rqList : tkList)().catch(e => toast(e.message)); return; }
       room = id; live.room = id; last = 0; shown = []; replyTo = null; drawReply(); st.unread[id] = 0; drawSide(); drawTitle(); load(true).catch(e => toast(e.message)); input.focus(); }
     async function send() {
-      const body = input.value.trim(); if (!body) return;
+      const body = input.value.trim(); if (!body && !(pending && pending.id)) return;
+      if (pending && pending.up) { toast("Hold on, the file is still uploading."); return; }
       sendBtn.disabled = true;
-      try { if (editing) { await api("/api/admin/chat/edit", { id: editing.id, body }); editing = null; drawReply(); await load(true); input.value = ""; return; } await api("/api/admin/chat/send", { channel: room, body, reply: replyTo?.id }); input.value = ""; input.style.height = ""; replyTo = null; drawReply(); await load(false); }
+      try { if (editing) { await api("/api/admin/chat/edit", { id: editing.id, body }); editing = null; drawReply(); await load(true); input.value = ""; return; } await api("/api/admin/chat/send", { channel: room, body, reply: replyTo?.id, media: pending?.id }); if (pending) { URL.revokeObjectURL(pending.local); pending = null; drawPreview(); } input.value = ""; input.style.height = ""; replyTo = null; drawReply(); await load(false); }
       catch (e) { toast(e.message); } finally { sendBtn.disabled = false; input.focus(); }
     }
     sendBtn.addEventListener("click", send);

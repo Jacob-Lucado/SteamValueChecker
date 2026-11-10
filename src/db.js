@@ -386,6 +386,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const audit = auditStore({ run, all, now });
     const adminLogin = adminLoginStore({ run, get, all, now });
     addColumn("staff_msgs", "edited", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("staff_msgs", "media", "TEXT");
     const staffChat = staffChatStore({ run, get, all, now });
     const overlay = overlayStore({ run, get, all, now });
     const streamCard = streamCardStore({ run, get, now });

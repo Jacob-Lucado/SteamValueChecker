@@ -15,9 +15,10 @@ import { indexNowKey } from "../indexnow.js";
 import { PAGE_SEO } from "../pageseo.js";
 import { SEO_PAGES, seoSlugs, seoIsLive, renderSeoPage } from "../seopages.js";
 import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync, createReadStream } from "node:fs";
+import { tmpdir } from "node:os";
 import v8 from "node:v8";
-import { join as joinPath } from "node:path";
+import { join as joinPath, dirname as dirnameOf } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -179,6 +180,7 @@ const FILES = {
     "/overlayui.css": ["overlayui.css", "text/css; charset=utf-8"],
     "/overlayui.js": ["overlayui.js", "text/javascript; charset=utf-8"],
     "/admin": ["admin.html", "text/html; charset=utf-8"],
+    "/adminradio.js": ["adminradio.js", "text/javascript; charset=utf-8"],
     "/adminchat.js": ["adminchat.js", "text/javascript; charset=utf-8"],
     "/adminos.js": ["adminos.js", "text/javascript; charset=utf-8"],
     "/admin.css": ["admin.css", "text/css; charset=utf-8"],
@@ -424,7 +426,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const squeeze = (buf, enc, quality) => (enc === "br" ? brotliCompressSync(buf, { params: { [zc.BROTLI_PARAM_QUALITY]: quality } }) : gzipSync(buf, { level: Math.min(9, quality) }));
     const CSP =
 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
-        "media-src https:; connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self' https://www.youtube-nocookie.com https://w.soundcloud.com https://open.spotify.com; object-src 'self'; frame-ancestors 'none'";
+        "media-src 'self' https:; connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self' https://www.youtube-nocookie.com https://w.soundcloud.com https://open.spotify.com; object-src 'self'; frame-ancestors 'none'";
     const send = (res, status, body, headers = {}) => {
         const type = String(headers["Content-Type"] ?? "");
         if (COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && body && Buffer.byteLength(body) > 1024) {
@@ -721,6 +723,24 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const cleanLook = b => ({ look: b?.look === "windows" ? "windows" : "original", waves: b?.waves === true, wall: WALLS.some(w => w.id === b?.wall) ? b.wall : /^#[0-9a-fA-F]{6}$/.test(String(b?.wall ?? "")) ? String(b.wall).toLowerCase() : "default" });
     /** Only the owner and people the owner let into the panel (they arrive here acting as the owner). */
     const chatSession = req => { const s = session(req); if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can see this."); return s; };
+    // ----- staff chat pictures and clips: kept on disk next to the database, checked by what the bytes really are -----
+    const mediaDir = config.chatMediaDir ?? joinPath(config.backupDir ? dirnameOf(config.backupDir) : tmpdir(), "chat-media");
+    const RADIO_MAX = 200;
+    const MEDIA_MAX = { image: 10_000_000, video: 30_000_000 };
+    const mediaLimit = createLimiter({ windowMs: 60_000, max: 8, now });
+    function sniffMedia(b) {
+        if (b.length < 12) return null;
+        const t4 = b.toString("latin1", 0, 4);
+        if (b[0] === 0x89 && t4.slice(1) === "PNG") return { kind: "image", mime: "image/png", ext: "png" };
+        if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return { kind: "image", mime: "image/jpeg", ext: "jpg" };
+        if (t4 === "GIF8") return { kind: "image", mime: "image/gif", ext: "gif" };
+        if (t4 === "RIFF" && b.toString("latin1", 8, 12) === "WEBP") return { kind: "image", mime: "image/webp", ext: "webp" };
+        if (b.toString("latin1", 4, 8) === "ftyp") { const brand = b.toString("latin1", 8, 12); if (/^(heic|heix|mif1|msf1|hevc)/.test(brand)) return null; return brand.startsWith("qt") ? { kind: "video", mime: "video/quicktime", ext: "mov" } : { kind: "video", mime: "video/mp4", ext: "mp4" }; }
+        if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return { kind: "video", mime: "video/webm", ext: "webm" };
+        return null;
+    }
+    const mediaPath = m => joinPath(mediaDir, `${m.id}.${m.ext}`);
+    const dropFiles = list => { for (const m of list) { try { unlinkSync(mediaPath(m)); } catch { /* already gone */ } try { db.dropStaffMedia(m.id); } catch { /* best effort */ } } };
     const chatTyping = new Map(); // room -> Map(person key -> when they last typed)
     const chatLimit = createLimiter({ windowMs: 5000, max: 6, now });
     const chatOnline = new Map();
@@ -4019,7 +4039,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const people = chatPeople();
             const dms = db.staffDmRooms(me.key);
             const rooms = [...db.staffChannels().map(c => c.id), ...dms], unread = db.staffUnread(me.key, rooms);
-            const latest = {}; for (const c of Object.keys(unread)) { const m = db.lastStaffMsg(c); if (m) latest[c] = { id: m.id, name: m.name, body: String(m.body).slice(0, 140) }; }
+            const latest = {}; for (const c of Object.keys(unread)) { const m = db.lastStaffMsg(c); if (m) latest[c] = { id: m.id, name: m.name, body: String(m.body).slice(0, 140) || "Sent a picture or clip" }; }
             return { me, channels: db.staffChannels(), people, unread, mentions: db.staffMentions(me.key, me.name, rooms), latest, dmRooms: dms };
         },
         "GET /api/admin/chat/messages": async (req, _b, url) => {
@@ -4036,9 +4056,11 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!chatLimit.hit(me.key).ok) throw new HttpError(429, "Slow down a little.");
             const channel = chatChannel(me, String(b.channel ?? ""));
             const body = String(b.body ?? "").replace(/\r/g, "").trim();
-            if (!body) throw new HttpError(400, "Type something first.");
+            const media = b.media ? db.getStaffMedia(String(b.media)) : null;
+            if (b.media && (!media || media.owner !== me.key || media.msg)) throw new HttpError(400, "That picture didn't upload. Try attaching it again.");
+            if (!body && !media) throw new HttpError(400, "Type something first.");
             const reply = b.reply && db.getStaffMsg(b.reply)?.channel === channel ? Number(b.reply) : null;
-            const id = db.sendStaff(channel, me.key, me.name, body, reply);
+            const id = db.sendStaff(channel, me.key, me.name, body, reply, media?.id ?? null);
             db.markStaffRead(me.key, channel, id); chatSeen(me);
             return { ok: true, id };
         },
@@ -4053,6 +4075,39 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const p = cleanLook(b);
             db.setMeta("admprefs:" + me.key, JSON.stringify(p));
             return { ok: true, prefs: p };
+        },
+        // ----- radio: SoundCloud links the staff add, played from one shared list -----
+        "GET /api/admin/radio": async (req) => {
+            const s = chatSession(req); const me = chatMe(s);
+            return { tracks: db.radioList().map(t => ({ id: t.id, title: t.title, author: t.author, art: t.art, embed: t.embed, url: t.url, by: t.by_name, mine: t.by_key === me.key, at: t.at })), owner: me.owner, max: RADIO_MAX };
+        },
+        "POST /api/admin/radio/add": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            if (!chatLimit.hit(me.key).ok) throw new HttpError(429, "Slow down a little.");
+            let u; try { u = new URL(String(b.url ?? "").trim()); } catch { throw new HttpError(400, "That doesn't look like a link."); }
+            if (u.protocol !== "https:" || !/^(www\.|m\.)?soundcloud\.com$|^on\.soundcloud\.com$/.test(u.hostname)) throw new HttpError(400, "Paste a SoundCloud link, like https://soundcloud.com/artist/track.");
+            if (db.radioCount() >= RADIO_MAX) throw new HttpError(400, `The radio holds ${RADIO_MAX} tracks. Remove a few first.`);
+            let info;
+            try {
+                const r = await (config.soundcloudFetch ?? globalThis.fetch)(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(u.toString())}`, { signal: AbortSignal.timeout(10_000) });
+                if (!r.ok) throw new Error(String(r.status));
+                info = await r.json();
+            } catch { throw new HttpError(400, "SoundCloud didn't know that link. Check it's a public track or set."); }
+            const src = /src="(https:\/\/w\.soundcloud\.com\/player\/\?[^"]+)"/.exec(String(info.html ?? ""))?.[1]?.replace(/&amp;/g, "&");
+            let embed = null; try { embed = new URL(src).searchParams.get("url"); } catch { /* handled below */ }
+            if (!embed || !/^https:\/\/api\.soundcloud\.com\/(tracks|playlists)\/\d+$/.test(embed)) throw new HttpError(400, "I couldn't play that one. Try another link.");
+            if (db.radioHas(embed)) throw new HttpError(409, "That one is already on the radio.");
+            const art = /^https:\/\/[a-z0-9.-]*sndcdn\.com\//.test(String(info.thumbnail_url ?? "")) ? info.thumbnail_url : null;
+            const id = db.radioAdd({ url: u.toString().slice(0, 300), embed, title: String(info.title ?? "Untitled").replace(/\s+by\s+.+$/i, ""), author: info.author_name ?? "", art, by_key: me.key, by_name: me.name });
+            return { ok: true, id };
+        },
+        "POST /api/admin/radio/remove": async (req, b) => {
+            const s = chatSession(req); const me = chatMe(s);
+            const t = db.radioGet(b.id);
+            if (!t) return { ok: true };
+            if (t.by_key !== me.key && !me.owner) throw new HttpError(403, "You can only remove tracks you added.");
+            db.radioRemove(t.id);
+            return { ok: true };
         },
         "POST /api/admin/chat/typing": async (req, b) => {
             const s = chatSession(req); const me = chatMe(s);
@@ -4091,6 +4146,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const m = db.getStaffMsg(b.id);
             if (!m) return { ok: true };
             if (m.author !== me.key && !me.owner) throw new HttpError(403, "You can only delete your own messages.");
+            dropFiles(db.staffMediaOfMsg(m.id));
             db.deleteStaffMsg(m.id);
             return { ok: true };
         },
@@ -4106,6 +4162,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const s = chatSession(req); const me = chatMe(s);
             if (!me.owner) throw new HttpError(403, "Only the owner can remove channels.");
             if (["general", "support"].includes(String(b.id))) throw new HttpError(400, "That one stays.");
+            dropFiles(db.staffMediaOfChannel(String(b.id)));
             db.removeStaffChannel(String(b.id));
             return { ok: true };
         },
@@ -5056,6 +5113,38 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 return send(res, 200, readFileSync(joinPath(config.backupDir, name)), {
                     "Content-Type": "application/vnd.sqlite3", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store"
                 });
+            }
+
+            if (key === "POST /api/admin/chat/upload") {
+                const s = chatSession(req); const me = chatMe(s);
+                if (req.headers["x-requested-with"] !== "dashboard" || (req.headers.origin && req.headers.origin !== origin && req.headers.origin !== adminOrigin)) throw new HttpError(403, "Request blocked.");
+                if (!mediaLimit.hit(me.key).ok) throw new HttpError(429, "Slow down a little.");
+                const chunks = []; let size = 0;
+                for await (const c of req) { size += c.length; if (size > MEDIA_MAX.video) throw new HttpError(413, "That file is too big. Pictures can be 10 MB and clips 30 MB."); chunks.push(c); }
+                const buf = Buffer.concat(chunks), kind = sniffMedia(buf);
+                if (!kind) throw new HttpError(400, "That isn't a picture or clip I can show. Use PNG, JPG, GIF, WebP, MP4, MOV or WebM.");
+                if (buf.length > MEDIA_MAX[kind.kind]) throw new HttpError(413, "That picture is over 10 MB.");
+                dropFiles(db.strayStaffMedia(now() - 3_600_000));
+                mkdirSync(mediaDir, { recursive: true });
+                const id = randomBytes(12).toString("hex");
+                writeFileSync(mediaPath({ id, ext: kind.ext }), buf);
+                db.addStaffMedia(id, me.key, kind.kind, kind.mime, kind.ext, buf.length);
+                return json(res, 200, { id, kind: kind.kind });
+            }
+            if (key === "GET /api/admin/chat/media") {
+                const s = chatSession(req); const me = chatMe(s);
+                const m = db.getStaffMedia(url.searchParams.get("id") ?? "");
+                if (!m) throw new HttpError(404, "That file isn't there anymore.");
+                if (m.msg) { const msg = db.getStaffMsg(m.msg); if (!msg) throw new HttpError(404, "That file isn't there anymore."); chatChannel(me, msg.channel); }
+                else if (m.owner !== me.key) throw new HttpError(404, "That file isn't there anymore.");
+                let total; try { total = statSync(mediaPath(m)).size; } catch { throw new HttpError(404, "That file isn't there anymore."); }
+                const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ""));
+                let start = 0, end = total - 1, code = 200;
+                if (range && (range[1] || range[2])) { if (range[1]) { start = Number(range[1]); end = range[2] ? Math.min(Number(range[2]), total - 1) : total - 1; } else { start = Math.max(0, total - Number(range[2])); } code = 206; }
+                if (start > end || start >= total) { res.writeHead(416, { "Content-Range": `bytes */${total}` }); return res.end(); }
+                res.writeHead(code, { "Content-Type": m.mime, "Content-Length": end - start + 1, "Accept-Ranges": "bytes", ...(code === 206 ? { "Content-Range": `bytes ${start}-${end}/${total}` } : {}),
+                    "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400", "Content-Disposition": "inline", "Content-Security-Policy": "sandbox; default-src 'none'" });
+                return createReadStream(mediaPath(m), { start, end }).pipe(res);
             }
 
             const icsMatch = req.method === "GET" ? /^\/calendar\/feed\/(svcc_[A-Za-z0-9_-]{43})\.ics$/.exec(url.pathname) : null;

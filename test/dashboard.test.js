@@ -1795,6 +1795,61 @@ test("staff chat: messages, edits, reactions, tickets and requests all work from
     await u.close();
 });
 
+test("staff chat media: pictures and clips are checked by their bytes, shown back, and removed with the message", async () => {
+    const { mkdtempSync, existsSync, readdirSync } = await import("node:fs"); const { tmpdir } = await import("node:os"); const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "chatmedia-"));
+    const o = await signedIn({ config: { ownerId: "u1", chatMediaDir: dir } });
+    const up = (bytes, type = "image/png", extra = {}) => fetch(o.base + "/api/admin/chat/upload", { method: "POST", headers: { Cookie: o.cookie(), "X-Requested-With": "dashboard", "Content-Type": type, ...extra }, body: bytes });
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40)]);
+    assert.equal((await up(Buffer.from("<svg onload=alert(1)>................"), "image/png")).status, 400, "not a real picture");
+    assert.equal((await up(png, "image/png", { "X-Requested-With": "nope" })).status, 403);
+    const r = await up(png); assert.equal(r.status, 200); const { id, kind } = await r.json(); assert.equal(kind, "image");
+    const sent = await o.request("/api/admin/chat/send", { method: "POST", body: { channel: "general", body: "", media: id } });
+    assert.equal(sent.status, 200, "a picture alone is a message");
+    assert.equal((await o.request("/api/admin/chat/send", { method: "POST", body: { channel: "general", body: "again", media: id } })).status, 400, "a file goes in one message only");
+    const msg = (await o.request("/api/admin/chat/messages?channel=general")).data.messages.at(-1);
+    assert.deepEqual(msg.media, { id, kind: "image" });
+    const got = await fetch(o.base + "/api/admin/chat/media?id=" + id, { headers: { Cookie: o.cookie() } });
+    assert.equal(got.status, 200); assert.equal(got.headers.get("content-type"), "image/png"); assert.equal(got.headers.get("x-content-type-options"), "nosniff");
+    assert.equal((await fetch(o.base + "/api/admin/chat/media?id=" + id)).status, 401, "not without signing in");
+    const ranged = await fetch(o.base + "/api/admin/chat/media?id=" + id, { headers: { Cookie: o.cookie(), Range: "bytes=0-9" } });
+    assert.equal(ranged.status, 206); assert.equal((await ranged.arrayBuffer()).byteLength, 10);
+    const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypisom"), Buffer.alloc(30)]);
+    assert.equal((await (await up(mp4, "video/mp4")).json()).kind, "video");
+    assert.equal(readdirSync(dir).length >= 1, true);
+    await o.request("/api/admin/chat/delete", { method: "POST", body: { id: sent.data.id } });
+    assert.equal((await fetch(o.base + "/api/admin/chat/media?id=" + id, { headers: { Cookie: o.cookie() } })).status, 404, "gone with its message");
+    await o.close();
+    const u = await signedIn();
+    assert.equal((await fetch(u.base + "/api/admin/chat/upload", { method: "POST", headers: { Cookie: u.cookie(), "X-Requested-With": "dashboard", "Content-Type": "image/png" }, body: png })).status, 403);
+    await u.close();
+});
+
+test("radio: SoundCloud links only, checked with SoundCloud, shared list, remove your own", async () => {
+    const calls = [];
+    const soundcloudFetch = async url => {
+        calls.push(url);
+        if (!/forss/.test(decodeURIComponent(url))) return { ok: false, status: 404 };
+        return { ok: true, json: async () => ({ title: "Flickermood by Forss", author_name: "Forss", thumbnail_url: "https://i1.sndcdn.com/artworks-1-t500x500.jpg", html: '<iframe src="https://w.soundcloud.com/player/?visual=true&url=https%3A%2F%2Fapi.soundcloud.com%2Ftracks%2F293&show_artwork=true"></iframe>' }) };
+    };
+    const o = await signedIn({ config: { ownerId: "u1", soundcloudFetch } });
+    assert.equal((await o.request("/api/admin/radio/add", { method: "POST", body: { url: "https://evil.example/x" } })).status, 400);
+    assert.equal(calls.length, 0, "never asks SoundCloud about other sites");
+    assert.equal((await o.request("/api/admin/radio/add", { method: "POST", body: { url: "http://soundcloud.com/forss/flickermood" } })).status, 400, "https only");
+    assert.equal((await o.request("/api/admin/radio/add", { method: "POST", body: { url: "https://soundcloud.com/nobody/nothing" } })).status, 400);
+    const ok = await o.request("/api/admin/radio/add", { method: "POST", body: { url: "https://soundcloud.com/forss/flickermood" } });
+    assert.equal(ok.status, 200);
+    assert.equal((await o.request("/api/admin/radio/add", { method: "POST", body: { url: "https://soundcloud.com/forss/flickermood" } })).status, 409, "no duplicates");
+    const list = (await o.request("/api/admin/radio")).data;
+    assert.equal(list.tracks.length, 1); assert.equal(list.tracks[0].title, "Flickermood"); assert.equal(list.tracks[0].embed, "https://api.soundcloud.com/tracks/293"); assert.equal(list.tracks[0].mine, true);
+    assert.equal((await o.request("/api/admin/radio/remove", { method: "POST", body: { id: list.tracks[0].id } })).status, 200);
+    assert.equal((await o.request("/api/admin/radio")).data.tracks.length, 0);
+    await o.close();
+    const u = await signedIn();
+    assert.equal((await u.request("/api/admin/radio")).status, 403);
+    await u.close();
+});
+
 test("admin network-wide giveaway: owner only, needs a confirm and a destination channel", async () => {
     const t = await signedIn();
     assert.equal((await t.request("/api/admin/giveaways")).status, 403);
