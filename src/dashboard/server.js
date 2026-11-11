@@ -1688,13 +1688,14 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             const { pages, days } = db.trafficReport();
+            const invites = inviteReport();
             const today = dayKey(), sum = (list, f) => list.reduce((n, x) => n + x[f], 0);
             const last = days.slice(-14), week = days.slice(-7);
             const top = pages.sort((a, b) => b.visits - a.visits || b.clicks - a.clicks).slice(0, 15).map(p => {
                 const row = p.path === "b" ? db.getFeedBundle(p.id) : db.getDeal(p.id);
                 return { ...p, title: row?.title ?? "(removed)", store: p.path === "b" ? row?.store ?? "" : row?.shop ?? "", kind: p.path === "b" ? "Bundle" : row?.kind === "free" ? "Free game" : "Deal", url: `${origin}/${p.path}/${p.id}` };
             });
-            return { today: days.find(d => d.day === today) ?? { day: today, visits: 0, clicks: 0, previews: 0 }, week: { visits: sum(week, "visits"), clicks: sum(week, "clicks"), previews: sum(week, "previews") }, total: { visits: sum(pages, "visits"), clicks: sum(pages, "clicks") }, days: last, top };
+            return { invites, today: days.find(d => d.day === today) ?? { day: today, visits: 0, clicks: 0, previews: 0 }, week: { visits: sum(week, "visits"), clicks: sum(week, "clicks"), previews: sum(week, "previews") }, total: { visits: sum(pages, "visits"), clicks: sum(pages, "clicks") }, days: last, top };
         },
         "GET /api/admin/xposter": async (req) => {
             const s = session(req);
@@ -4884,7 +4885,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         // The sale-dates page counts days, so it is rebuilt every hour instead of once.
         if (body && file.startsWith("seo/") && seoIsLive(file.slice(4, -5)) && Date.now() - (cache.get(file + ":at") ?? 0) > 3600_000) body = null;
         if (!body) {
-            if (file.startsWith("seo/")) { cache.set(file + ":at", Date.now()); const slug = file.slice(4, -5); let deals = null; if (slug === "steam-deals-this-week") { try { deals = pickDeals(await itad.getDealsPool({ country: "US", pages: 3 }), 20); } catch { /* the page says the list is loading */ } } const html = renderSeoPage(slug, { origin, invite: config.clientId ? botInviteUrl(config.clientId) : null, deals }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
+            if (file.startsWith("seo/")) { cache.set(file + ":at", Date.now()); const slug = file.slice(4, -5); let deals = null; if (slug === "steam-deals-this-week") { try { deals = pickDeals(await itad.getDealsPool({ country: "US", pages: 3 }), 20); } catch { /* the page says the list is loading */ } } const html = renderSeoPage(slug, { origin, invite: config.clientId ? `${origin}/invite` : null, deals }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
             if (file === "index.html" || file === "grabber.html" || file === "ai.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
@@ -4963,6 +4964,13 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     }
     // ---------- the page a bundle post on X links to ----------
     const bundlePics = new Map(); // id -> { at, buf, type }
+    /** Where "add the bot" clicks came from over the last 30 days, and how many servers it joined in that time. */
+    const inviteReport = () => {
+        const cut = new Date(now() - 30 * 86400_000).toISOString().slice(0, 10), by = new Map(); let clicks = 0, joins = 0;
+        for (const r of db.listMetaPrefix("invc:")) { const [, day, src] = r.key.split(":"); if (day < cut) continue; const n = Number(r.value) || 0; by.set(src, (by.get(src) ?? 0) + n); clicks += n; }
+        for (const r of db.listMetaPrefix("invj:")) if (r.key.slice(5) >= cut) joins += Number(r.value) || 0;
+        return { clicks, joins, sources: [...by].map(([source, n]) => ({ source, clicks: n })).sort((a, b) => b.clicks - a.clicks) };
+    };
     const bump = key => { try { db.setMeta(key, String((Number(db.getMeta(key)) || 0) + 1)); } catch { /* a missed count isn't worth failing the page */ } };
     const dayKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date()); // YYYY-MM-DD, Eastern
     const CRAWLER = /bot|crawl|spider|preview|discord|twitter|x\.com|facebook|slack|telegram|whatsapp|linkedin|embed|curl|python|node|go-http|headless/i;
@@ -5042,7 +5050,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             return send(res, 200, hit.buf, { "Content-Type": hit.type, "Cache-Control": "public, max-age=3600" });
         }
         countHit(kind, id, req, "page");
-        const opts = { origin, hasPicture: Boolean(src), inviteUrl: config.clientId ? botInviteUrl(config.clientId) : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null };
+        const opts = { origin, hasPicture: Boolean(src), inviteUrl: config.clientId ? `${origin}/invite?src=${kind === "b" ? "bundle-page" : "deal-page"}` : null, supportUrl: config.mainGuild?.inviteUrl?.() ?? null };
         void ended; // the page works the ended state out itself
         return send(res, 200, kind === "b" ? renderBundleLanding(row, opts) : renderDealLanding(row, opts), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
     }
@@ -5230,8 +5238,15 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             } }
             if (req.method === "GET" && FILES[url.pathname]) return await serveFile(res, url.pathname);
             if (req.method === "GET" && url.pathname === `/${indexNowKey(origin)}.txt`) return send(res, 200, indexNowKey(origin), { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+            if (req.method === "GET" && url.pathname === "/invite") {
+                // One address for "add the bot", so each page that offers it can say where the click came from. Link-preview robots aren't counted.
+                if (!config.clientId) throw new HttpError(404, "Not found.");
+                const src = String(url.searchParams.get("src") ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "direct";
+                if (!CRAWLER.test(String(req.headers?.["user-agent"] ?? ""))) bump(`invc:${dayKey()}:${src}`);
+                return send(res, 302, "", { Location: botInviteUrl(config.clientId), "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
+            }
             if (req.method === "GET" && url.pathname === "/robots.txt") {
-                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\nAllow: /support\nAllow: /help\nAllow: /about\nAllow: /status\nAllow: /tip\nAllow: /feed\nAllow: /discover\nAllow: /communities\nAllow: /licenses.html\nAllow: /indie\nDisallow: /indie/submit\nDisallow: /indie/mine\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                return send(res, 200, `# Public pages are open. The sign-in and data endpoints are not for crawlers.\nUser-agent: *\nAllow: /\nAllow: /grabber\nAllow: /ai\nAllow: /support\nAllow: /help\nAllow: /about\nAllow: /status\nAllow: /tip\nAllow: /feed\nAllow: /discover\nAllow: /communities\nAllow: /licenses.html\nAllow: /indie\nDisallow: /indie/submit\nDisallow: /indie/mine\n${seoSlugs().map(x => `Allow: /${x}\n`).join("")}Allow: /terms.html\nAllow: /privacy.html\nAllow: /.well-known/security.txt\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /music\nDisallow: /overlay\nDisallow: /invite\n\nSitemap: ${origin}/sitemap.xml\n`, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (req.method === "GET" && url.pathname === "/.well-known/security.txt") {
                 const expires = new Date(now() + 365 * 86400_000).toISOString();

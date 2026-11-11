@@ -230,7 +230,7 @@ ${ld.map(o => `<script type="application/ld+json">${JSON.stringify(o).replace(/<
 <h1>${esc(p.h1)}</h1>
 <p class="lead">${esc(p.lead)}</p>
 ${p.tool ? p.html : p.dynamic === "deals" ? dealsHtml(deals) : p.dynamic ? salesHtml() : ""}
-<div class="cta"><a class="btn go" href="${invite ? esc(invite) : "/"}">${invite ? "Add it to your server" : "Open the dashboard"}</a><a class="btn alt" href="/auth/steam">Sign in through Steam</a></div>
+<div class="cta"><a class="btn go" href="${invite ? esc(`${invite}?src=seo-${slug}`) : "/"}">${invite ? "Add it to your server" : "Open the dashboard"}</a><a class="btn alt" href="/auth/steam">Sign in through Steam</a></div>
 ${p.sections.map(([h, body]) => `<section><h2>${esc(h)}</h2>${body.length > 1 && body.every(x => x.length < 130) ? list(body) : body.map(t => `<p>${esc(t)}</p>`).join("")}</section>`).join("\n")}
 <section><h2>How to get started</h2><ol>${p.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></section>
 <section class="faq"><h2>Questions</h2>${p.faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</section>

@@ -485,6 +485,7 @@ client.on(Events.GuildCreate, async guild => {
         const key = `joinalert:${guild.id}:${guild.joinedTimestamp}`;
         if (db.getMeta(key)) return;
         db.setMeta(key, "1");
+        try { db.bumpMeta(`invj:${new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date())}`); } catch { /* a missed count is fine */ }
         const members = humanCount(guild);
         pushEvent(db, "adminlog:servers", { kind: "join", at: Date.now(), id: guild.id, name: guild.name, members }, 60);
         if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { embeds: [{ color: 0x57f287, title: "New server", description: `The bot was added to **${guild.name}**.`, fields: [{ name: "Members", value: String(members), inline: true }, { name: "Servers now", value: String(client.guilds.cache.size), inline: true }], footer: { text: `Server ${guild.id}` }, timestamp: new Date().toISOString() }] }).catch(() => {});
@@ -563,7 +564,7 @@ const xposter = createXPoster({ db, log: m => console.log(`[x] ${m}`) });
 const indieNews = createIndieNews({ db, dm: (id, p) => discord.sendDm(id, p), base: publicBase, log: m => console.log(`[indie news] ${m}`) });
 const indieSpotlight = createSpotlight({ db, xposter, postChannel: notifier.postChannel, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: m => console.log(`[indie spotlight] ${m}`) });
 const referrals = createReferrals({ db, supporters, dm: (id, p) => discord.sendDm(id, p), publicUrl: publicBase, log: t => console.log(`[referrals] ${t}`) });
-const weekly = createWeekly({ db, itad, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: t => console.log(`[weekly deals] ${t}`) });
+const weekly = createWeekly({ db, itad, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId && publicBase ? `${publicBase}/invite?src=weekly-post` : cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: t => console.log(`[weekly deals] ${t}`) });
 // every few minutes: send any scheduled posts that have come due, then the automatic free-game post if that's switched on
 setTimeout(() => setInterval(() => {
     ops.job("weekly deals", () => weekly.tick()).catch(() => {});

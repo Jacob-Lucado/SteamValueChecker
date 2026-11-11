@@ -3801,3 +3801,18 @@ test("the deals-this-week page lists real discounts, skips weak ones and is in t
     assert.ok((await (await t2.request("/steam-deals-this-week", { raw: true })).text()).includes("loading"), "a failed lookup still gives a page");
     await t2.close();
 });
+
+test("the invite link counts where clicks came from, skips robots and shows in the owner report", async () => {
+    const t = await signedIn({ config: { ownerId: "u1" } });
+    const hit = (src, ua) => t.request("/invite?src=" + src, { raw: true, headers: ua ? { "User-Agent": ua } : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0) Chrome/120" } });
+    const r = await hit("seo-free-game-alerts");
+    assert.equal(r.status, 302); assert.match(r.headers.get("location"), /discord\.com\/oauth2\/authorize\?client_id=123/);
+    await hit("seo-free-game-alerts"); await hit("weekly-post"); await hit("Weird<Src>!");
+    await hit("weekly-post", "Mozilla/5.0 (compatible; Discordbot/2.0)");
+    const html = await (await t.request("/free-game-alerts", { raw: true })).text();
+    assert.ok(html.includes("/invite?src=seo-free-game-alerts"), "page buttons go through the counter");
+    const rep = (await t.request("/api/admin/traffic")).data.invites;
+    assert.equal(rep.clicks, 4, "robots are left out");
+    assert.deepEqual(rep.sources.map(x => [x.source, x.clicks]).sort(), [["seo-free-game-alerts", 2], ["weekly-post", 1], ["weirdsrc", 1]]);
+    await t.close();
+});
