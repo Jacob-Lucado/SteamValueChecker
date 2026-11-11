@@ -147,7 +147,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     const listMirrors = id => all("SELECT kind, channel_id, message_id FROM giveaway_mirrors WHERE giveaway_id = ?", id).map(clean);
     const listGlobalGiveaways = (limit = 20) => all("SELECT * FROM giveaways WHERE is_global = 1 ORDER BY id DESC LIMIT ?", limit).map(clean);
     /** Every server that can take a global giveaway: its giveaway channel, or the alert channel when none is set. */
-    // Each server's giveaway channel, else its alert channel, else its announcements channel, so no server that has any channel set up is skipped.
+    // The bot's own start-here channel in each server also gets every global giveaway. Each server's giveaway channel, else its alert channel, else its announcements channel, so no server that has any channel set up is skipped.
     const giveawayDestinations = () => all(`
         SELECT guild_id, giveaway_channel_id AS channel_id FROM giveaway_settings WHERE giveaway_channel_id IS NOT NULL
         UNION
@@ -155,7 +155,9 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         UNION
         SELECT guild_id, announce_channel AS channel_id FROM community WHERE announce_channel IS NOT NULL
           AND guild_id NOT IN (SELECT guild_id FROM giveaway_settings WHERE giveaway_channel_id IS NOT NULL)
-          AND guild_id NOT IN (SELECT guild_id FROM guilds WHERE channel_id IS NOT NULL)`).map(clean).filter(d => !isHidden(d.guild_id));
+          AND guild_id NOT IN (SELECT guild_id FROM guilds WHERE channel_id IS NOT NULL)
+        UNION
+        SELECT substr(key, 12) AS guild_id, value AS channel_id FROM status_meta WHERE key LIKE 'startch_id:%' AND value <> ''`).map(clean).filter(d => !isHidden(d.guild_id));
     const setGiveawayMessage = (id, messageId) => run("UPDATE giveaways SET message_id = ? WHERE id = ?", messageId, id);
     const setAnnounceMessage = (id, messageId) => run("UPDATE giveaways SET announce_id = ? WHERE id = ?", messageId, id);
     const setGiveawayStatus = (id, status) => run("UPDATE giveaways SET status = ?, ended_at = ? WHERE id = ?", status, now(), id);
