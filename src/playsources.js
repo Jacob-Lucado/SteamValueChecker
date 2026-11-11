@@ -33,6 +33,8 @@ export function kindFromText(text) {
 /** What a post counts as, for not announcing the same thing twice: a demo, a free weekend, or a test (playtest, sign-up, alpha, beta). */
 export const kindGroup = kind => (kind === "demo" ? "demo" : kind === "weekend" ? "weekend" : "test");
 
+export { PLAYTEST_SOURCES, cleanSkipList } from "./playskip.js";
+
 // ---------- GamerPower: https://www.gamerpower.com/api/giveaways?type=beta ----------
 export const GAMERPOWER_URL = "https://www.gamerpower.com/api/giveaways?type=beta";
 export function parseGamerPower(json, { now = Date.now() } = {}) {
@@ -121,12 +123,14 @@ export function parsePlaytester(xml) {
         const url = safeUrl(tag(it, "link").trim()), date = Date.parse(tag(it, "pubDate"));
         if (!raw || !url || !Number.isFinite(date)) continue;
         const cut = raw.lastIndexOf(" - "), game = (cut > 0 ? raw.slice(0, cut) : raw).trim().slice(0, 100), type = cut > 0 ? raw.slice(cut + 3).trim() : "";
-        const kind = kindFromText(type || raw);
+        // Playtester has two kinds, demo and playtest, and it writes "Beta" in the title of every playtest, so a title that isn't a demo is a playtest.
+        const kind = /\bdemo\b/i.test(type || raw) ? "demo" : "playtest";
+        const shownType = kind === "demo" ? "Demo" : "Playtest";
         const image = safeUrl(/<media:content[^>]+url="(https:\/\/[^"]+)"/i.exec(it)?.[1] ?? "");
         const summary = decodeEntities(tag(it, "description").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 300);
         // Like Steam's and itch.io's, the demos come by the dozen, so they only count for games someone has on a wishlist.
         const tags = [...it.matchAll(/<category>([\s\S]*?)<\/category>/gi)].map(c => decodeEntities(c[1]).replace(/<!\[CDATA\[|\]\]>/g, "").trim()).filter(Boolean).slice(0, 12);
-        out.push({ id: `pt:${tag(it, "guid").trim() || url}`, source: "playtester", sourceName: "Playtester", game, type, kind, url, date, summary, image, tags, ...(kind === "demo" ? { wishlistOnly: true, label: "Demo" } : {}) });
+        out.push({ id: `pt:${tag(it, "guid").trim() || url}`, source: "playtester", sourceName: "Playtester", game, type: shownType, kind, url, date, summary, image, tags, ...(kind === "demo" ? { wishlistOnly: true, label: "Demo" } : {}) });
     }
     return out.sort((a, b) => b.date - a.date);
 }

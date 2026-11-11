@@ -5,7 +5,7 @@ Last updated: November 9, 2026
 By using Steam Value Checker ("the bot") you agree to these terms.
 
 1. **What it is.** The bot shows price information for games, using data from IsThereAnyDeal. It is a convenience tool, not financial or purchasing advice.
-2. **Accuracy.** Prices change quickly and can be wrong, out of date or missing. Title matching can pick the wrong game. The bot gives no guarantee that a price is available to you or that a store will honour it. Check the store before you buy.
+2. **Accuracy.** Prices change quickly and can be wrong, out of date or missing. Title matching can pick the wrong game. The bot gives no guarantee that a price is available to you or that a store will honor it. Check the store before you buy.
 3. **Your input.** Do not post game keys, passwords or other secrets to the bot. Do not use it to break the rules of Discord, Steam, IsThereAnyDeal or any store.
 4. **Fair use.** The bot limits how often you can run commands. Do not try to get around those limits or overload the bot or its data provider.
 5. **Availability.** The bot is provided as is, without warranty. It can change, stop working or be removed at any time without notice.

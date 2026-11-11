@@ -144,7 +144,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         }
         if (action === "cancel") {
             const r = await giveaways.cancel(g.id);
-            return i.editReply(`Cancelled.${r.unused ? ` ${r.unused} unused key${r.unused === 1 ? " was" : "s were"} sent to you by DM and deleted from the bot.` : ""}`);
+            return i.editReply(`Canceled.${r.unused ? ` ${r.unused} unused key${r.unused === 1 ? " was" : "s were"} sent to you by DM and deleted from the bot.` : ""}`);
         }
         if (action === "reroll") {
             const user = i.options.getUser("winner");

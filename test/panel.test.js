@@ -15,7 +15,7 @@ test("alerts panel opens, toggles extras, and switches pages", async () => {
     const { db, p } = setup();
     const o = fake(db, "x"); await p.open(o, "alerts");
     assert.match(o.out.reply.embeds[0].title, /What you get/);
-    assert.equal(o.out.reply.components.length, 4);
+    assert.equal(o.out.reply.components.length, 5);
     const t = fake(db, "pn:alerts:toggles", { values: ["free", "codes", "share"] }); await p.handle(t);
     const u = db.getUser("u1");
     assert.equal(u.free, 1); assert.equal(u.share, 1); assert.equal(u.bundles, 0); assert.equal(db.getAlertSubs("u1").codes, true);
@@ -33,6 +33,8 @@ test("alerts panel: quiet hours modal, digest, pause, bad input stays on the pan
     const u = db.getUser("u1"); assert.equal(u.tz, "America/New_York"); assert.notEqual(u.quiet_start, null);
     await p.handle(fake(db, "pn:alerts:digest", { values: ["5"] }));
     assert.equal(db.getUser("u1").digest, 1); assert.equal(db.getUser("u1").digest_day, 5);
+    const skip = fake(db, "pn:alerts:ptskip:types", { values: ["itch", "bogus"] }); await p.handle(skip);
+    assert.equal(db.getUser("u1")?.playtest_skip ?? db.getUser(skip.user?.id ?? "u1")?.playtest_skip, "itch", "the site picks are saved, unknown ones dropped");
     await p.handle(fake(db, "pn:alerts:pause:types"));
     assert.equal(db.getUser("u1").paused, 1);
     const bad = fake(db, "pn:alerts:quietm", { fields: { getTextInputValue: k => ({ start: "nope", end: "7am" })[k] ?? "" } }); await p.handle(bad);

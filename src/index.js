@@ -320,7 +320,7 @@ const gwDiscord = {
     }
 };
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
-// every message the bot sends gets the same finish: colour, name and logo in the footer, bare text turned into a card
+// every message the bot sends gets the same finish: color, name and logo in the footer, bare text turned into a card
 // links to free games and bundles go through a page on the site first (it shows the deal, counts the visit, then sends people to the store)
 if (publicBase) configureDeals({ base: publicBase, make: deal => { const id = db.upsertDeal(deal); return id ? `${publicBase}/d/${id}` : null; } });
 configureArt({ base: publicBase, dir: join(dirname(cfg.dbPath), "art") });
@@ -386,8 +386,11 @@ const ops = createOps({
 client.once(Events.ClientReady, c => {
     console.log(`Logged in as ${c.user.tag}`);
 
+    // After a reboot the jobs start one after another, not all at once, so the bot doesn't flood Discord or the stores the second it is back.
+    let startSlot = 0;
+    const sched = (fn, everyMs, opts = {}) => schedule(fn, everyMs, { firstRunMs: 60_000 + 20_000 * startSlot++, ...opts });
     // Price alerts
-    schedule(
+    sched(
         async () => {
             const s = await runCycle({ db, itad, notifier, voiceMap, log: m => console.log(`[alerts] ${m}`) });
             console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed, ${s.deferred} held for quiet hours`);
@@ -400,23 +403,23 @@ client.once(Events.ClientReady, c => {
 
     // Giveaways: ends them on time, passes unclaimed prizes on, sends "did it work?" follow-ups, deletes old keys
     if (giveaways) {
-        schedule(
+        sched(
             async () => { await giveaways.tick(); beat.giveaways = Date.now(); },
             60_000,
-            { onError: err => { console.error(`[giveaway] ${err.name}: ${err.message}`); ops.error("giveaways", err); } }
+            { firstRunMs: 15_000, onError: err => { console.error(`[giveaway] ${err.name}: ${err.message}`); ops.error("giveaways", err); } }
         );
     } else console.log("Giveaways are off (set KEY_ENCRYPTION_SECRET to turn them on).");
 
     // Support tickets: quiet ones resolve and close on their own
-    schedule(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
-    schedule(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
-    schedule(async () => { await pollBundles(); }, 30 * 60_000, { onError: err => { console.error(`[bundles] ${err.name}: ${err.message}`); ops.error("bundle feed", err); } });
-    schedule(async () => { await pollCodes(); }, 20 * 60_000, { onError: err => { console.error(`[codes] ${err.name}: ${err.message}`); ops.error("game codes", err); } });
-    schedule(async () => { await pollDrops(); }, 30 * 60_000, { onError: err => { console.error(`[promos] ${err.name}: ${err.message}`); ops.error("promo drops", err); } });
-    schedule(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
+    sched(async () => { await calendar.tick(); }, 5 * 60_000, { onError: err => { console.error(`[calendar] ${err.name}: ${err.message}`); ops.error("calendar", err); } });
+    sched(async () => { await lfg.tick(); }, 5 * 60_000, { onError: err => { console.error(`[lfg] ${err.name}: ${err.message}`); ops.error("lfg", err); } });
+    sched(async () => { await pollBundles(); }, 30 * 60_000, { onError: err => { console.error(`[bundles] ${err.name}: ${err.message}`); ops.error("bundle feed", err); } });
+    sched(async () => { await pollCodes(); }, 20 * 60_000, { onError: err => { console.error(`[codes] ${err.name}: ${err.message}`); ops.error("game codes", err); } });
+    sched(async () => { await pollDrops(); }, 30 * 60_000, { onError: err => { console.error(`[promos] ${err.name}: ${err.message}`); ops.error("promo drops", err); } });
+    sched(async () => { await tickets.tick(); }, 15 * 60_000, { onError: err => { console.error(`[tickets] ${err.name}: ${err.message}`); ops.error("tickets", err); } });
 
     // Bundles, giveaways, weekly digests, library snapshots, cleanup and the daily backup
-    schedule(
+    sched(
         async () => {
             const log = m => console.log(`[maintenance] ${m}`);
             const result = {};
@@ -482,6 +485,7 @@ client.on(Events.GuildCreate, async guild => {
         const key = `joinalert:${guild.id}:${guild.joinedTimestamp}`;
         if (db.getMeta(key)) return;
         db.setMeta(key, "1");
+        try { db.bumpMeta(`invj:${new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date())}`); } catch { /* a missed count is fine */ }
         const members = humanCount(guild);
         pushEvent(db, "adminlog:servers", { kind: "join", at: Date.now(), id: guild.id, name: guild.name, members }, 60);
         if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { embeds: [{ color: 0x57f287, title: "New server", description: `The bot was added to **${guild.name}**.`, fields: [{ name: "Members", value: String(members), inline: true }, { name: "Servers now", value: String(client.guilds.cache.size), inline: true }], footer: { text: `Server ${guild.id}` }, timestamp: new Date().toISOString() }] }).catch(() => {});
@@ -560,7 +564,7 @@ const xposter = createXPoster({ db, log: m => console.log(`[x] ${m}`) });
 const indieNews = createIndieNews({ db, dm: (id, p) => discord.sendDm(id, p), base: publicBase, log: m => console.log(`[indie news] ${m}`) });
 const indieSpotlight = createSpotlight({ db, xposter, postChannel: notifier.postChannel, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: m => console.log(`[indie spotlight] ${m}`) });
 const referrals = createReferrals({ db, supporters, dm: (id, p) => discord.sendDm(id, p), publicUrl: publicBase, log: t => console.log(`[referrals] ${t}`) });
-const weekly = createWeekly({ db, itad, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: t => console.log(`[weekly deals] ${t}`) });
+const weekly = createWeekly({ db, itad, xposter, base: publicBase, postDiscord: (id, p) => discord.sendChannel(id, p), inviteUrl: () => (cfg.clientId && publicBase ? `${publicBase}/invite?src=weekly-post` : cfg.clientId ? botInviteUrl(cfg.clientId) : null), log: t => console.log(`[weekly deals] ${t}`) });
 // every few minutes: send any scheduled posts that have come due, then the automatic free-game post if that's switched on
 setTimeout(() => setInterval(() => {
     ops.job("weekly deals", () => weekly.tick()).catch(() => {});
@@ -710,7 +714,7 @@ const status = createStatusMonitor({
             staleAfter(beat.alerts, cfg.checkEveryMinutes * 60_000) ? { state: "degraded", detail: "The last check is overdue" } : { state: "operational" } },
         ...(giveaways ? { giveaways: { name: "Giveaway engine", desc: "Ends giveaways on time and delivers prize keys", critical: false, check: () =>
             staleAfter(beat.giveaways, 60_000) ? { state: "degraded", detail: "The last run is overdue" } : { state: "operational" } } } : {}),
-        freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games, Steam news and Top.gg votes", critical: false, check: () => {
+        freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games, Steam news and Top.gg votes", critical: false, plural: true, check: () => {
             const bad = [["Amazon Luna", luna.health()], ["GamerPower", gamerPower.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()], ["Top.gg votes", topgg.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
             return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${h.lastError})`).join(" or ")}` } : { state: "operational" };
         } },

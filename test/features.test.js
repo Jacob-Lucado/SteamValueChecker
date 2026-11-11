@@ -843,7 +843,7 @@ test("slash command text fits Discord's limits (discord.js throws at startup oth
     for (const m of src.matchAll(/\{ name: "((?:[^"\\]|\\.)*)", value: "/g)) assert.ok(m[1].length <= 100, `choice name too long: ${m[1]}`);
 });
 
-test("friends: birthday maths, limits and a once-a-year reminder", async () => {
+test("friends: birthday math, limits and a once-a-year reminder", async () => {
     const { daysUntilBirthday } = await import("../src/friendstore.js");
     const { runFriendReminders, saveFriend, cleanBirthday } = await import("../src/friends.js");
     const day = (m, d, y = 2026) => Date.UTC(y, m - 1, d, 12);
@@ -1041,4 +1041,38 @@ test("GamerPower: IndieGala giveaways are kept even though the list only calls t
         { ...base, id: 4, title: "Dual Chroma (itch.io) Giveaway", platforms: "PC, Itch.io, DRM-Free" }
     ]);
     assert.deepEqual(out.map(x => [x.title, x.shop]), [["Last Room", "IndieGala"], ["Dual Chroma", "itch.io"]]);
+});
+
+test("birthdays: a member can share theirs with people who have their page on their friends list, and it feeds the reminders", async () => {
+    const { runFriendReminders, saveFriend, saveOwnBirthday, friendRows } = await import("../src/friends.js");
+    const { setProfile } = await import("../src/profile.js");
+    const db = openDb(":memory:");
+    db.ensureUser("me", null); db.ensureUser("pal", null);
+    setProfile(db, "pal", { enabled: true, slug: "pal" });
+    saveFriend(db, "me", { name: "Pal", page: "pal" });
+    const day = (m, d, y = 2026) => Date.UTC(y, m - 1, d, 12);
+    assert.equal(friendRows(db, "me")[0].birthday, null, "nothing known yet");
+    // Private by default: saving without sharing reveals nothing.
+    assert.deepEqual(saveOwnBirthday(db, "pal", { birthday: "03-27", share: false }), { birthday: "03-27", share: false });
+    assert.equal(friendRows(db, "me")[0].birthday, null);
+    assert.deepEqual(saveOwnBirthday(db, "pal", { birthday: "03-27", share: true }), { birthday: "03-27", share: true });
+    const row = friendRows(db, "me", day(3, 20))[0];
+    assert.equal(row.birthday, "03-27"); assert.equal(row.fromPage, true); assert.equal(row.daysToBirthday, 7);
+    // The friend's own entry wins over the shared one.
+    saveFriend(db, "me", { name: "Pal", birthday: "04-01" });
+    assert.equal(friendRows(db, "me")[0].birthday, "04-01"); assert.equal(friendRows(db, "me")[0].fromPage, false);
+    // The reminder uses the shared birthday for a friend who only has a page name.
+    db.ensureUser("me2", null); saveFriend(db, "me2", { name: "Pal", page: "pal" });
+    const sent = [];
+    const notifier = { deliver: async (u, p, type) => { sent.push(`${u.discord_id}:${p.embeds[0].title}`); return { ok: true }; } };
+    const r = await runFriendReminders({ db, itad: {}, notifier, now: () => day(3, 21) });
+    assert.ok(sent.some(t => t.startsWith("me2:") && /Pal/.test(t)), "me2 gets the reminder from the shared date"); assert.ok(r.sent >= 1);
+    // Turning sharing off, or the page off, hides it again; a bad date is refused.
+    db.setBirthday("pal", "03-27", false);
+    assert.equal(db.sharedBirthdayBySlug("pal"), null);
+    db.setBirthday("pal", "03-27", true); setProfile(db, "pal", { enabled: false });
+    assert.equal(db.sharedBirthdayBySlug("pal"), null, "a page that is off shares nothing");
+    assert.throws(() => saveOwnBirthday(db, "pal", { birthday: "13-40" }));
+    assert.deepEqual(saveOwnBirthday(db, "pal", { birthday: "" }), { birthday: null, share: false });
+    assert.equal(db.getBirthday("pal"), null);
 });

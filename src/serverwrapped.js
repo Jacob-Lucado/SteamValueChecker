@@ -22,7 +22,7 @@ export function buildServerWrapped(db, guildId, nowMs = Date.now()) {
 export async function renderServerWrapped(data, { guildName = "Your server", nameOf = id => id, fetchImpl } = {}) {
     const topMinutes = data.top[0]?.minutes || 1;
     const rows = data.top.map((g, i) => ({ label: `${i + 1}. ${g.title}`, sub: `${g.players} ${g.players === 1 ? "member" : "members"} played it`, value: `${n(hoursOf(g.minutes))} h`, pct: Math.max(6, g.minutes / topMinutes * 100) }));
-    if (data.everyonesGame && data.everyonesGame.title !== data.top[0].title) rows.push({ label: `Shared favourite: ${data.everyonesGame.title}`, sub: `${data.everyonesGame.players} members played it`, value: `${n(hoursOf(data.everyonesGame.minutes))} h` });
+    if (data.everyonesGame && data.everyonesGame.title !== data.top[0].title) rows.push({ label: `Shared favorite: ${data.everyonesGame.title}`, sub: `${data.everyonesGame.players} members played it`, value: `${n(hoursOf(data.everyonesGame.minutes))} h` });
     const mvp = data.mvp[0];
     return renderPanel({
         title: `${guildName}: ${data.year} wrapped`, sub: "The year so far, from members who share with this server",

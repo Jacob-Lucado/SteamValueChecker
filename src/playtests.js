@@ -101,8 +101,10 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
         }
         if (firstSteam) db.markSeen(id, "ptstart");
         const names = wished.get(id) ?? [], appids = new Set(mine.get(id)?.keys() ?? []);
+        const skipped = new Set(String(user.playtest_skip ?? "").split(",").filter(Boolean)); // sources this member doesn't want
         for (const item of site) {
             const key = `abg:${item.id}`;
+            if (skipped.has(item.source ?? "abg")) continue;
             if (db.hasSeen(id, key)) continue;
             const onList = names.some(n => sameGame(n, item.game)) || (item.appid != null && appids.has(item.appid));
             if (!all && !onList) continue;
@@ -147,8 +149,10 @@ export async function runPlaytests({ db, news, abg = null, notifier, now = () =>
             if (gk.check.some(k => db.getMeta(k) != null)) { db.setMeta(key, "1"); continue; }
             hits.push({ embed: playtestEmbed({ ...p, gameTitle: a.title }, kind, { watchers: a.watchers }), url: p.url, date: p.date, key, gk: gk.mark, group: kindGroup(kind), source: "steam", game: a.title });
         }
+        const skipped = new Set(String(db.getCommunity(gid)?.playtest_skip ?? "").split(",").filter(Boolean)); // sources this server doesn't want
         for (const item of site) {
             const key = `ptg:${gid}:abg:${item.id}`;
+            if (skipped.has(item.source ?? "abg")) continue;
             if (db.getMeta(key) != null) continue;
             const match = apps.find(a => sameGame(a.title, item.game) || (item.appid != null && a.appid === item.appid));
             const gk = gkey(item, now()), src = item.source ?? "abg";
@@ -206,6 +210,7 @@ export async function refreshPlaytestChannel({ db, news, abg = null, notifier, g
     for (const item of site) {
         const match = apps.find(a => sameGame(a.title, item.game) || (item.appid != null && a.appid === item.appid));
         if (item.wishlistOnly && !match && !String(c.playtest_full ?? "").split(",").includes(item.source)) continue;
+        if (String(c.playtest_skip ?? "").split(",").includes(item.source ?? "abg")) continue;
         const only = String(c.playtest_genres ?? "").split(",").filter(Boolean);
         if (item.source === "playtester" && !match && only.length && !(item.tags ?? []).some(t => only.includes(String(t).toLowerCase()))) continue;
         found.push({ embed: abgEmbed(item, { watchers: match?.watchers ?? 0 }), url: item.url, date: item.date, key: `ptg:${guildId}:abg:${item.id}`, game: item.game, kind: item.kind });

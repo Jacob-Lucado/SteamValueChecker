@@ -1,4 +1,4 @@
-// The bundle feed: one post per bundle per server, greyed out when the bundle ends. Same rhythm as the game code posts.
+// The bundle feed: one post per bundle per server, grayed out when the bundle ends. Same rhythm as the game code posts.
 import { bundlePageUrl } from "./deallinks.js";
 import { fetchAllBundles, BUNDLE_STORES, BUNDLE_STORE_KEYS } from "./bundlefeedsource.js";
 
@@ -15,7 +15,7 @@ export const describeStores = keys => (keys?.length ? keys.filter(k => BUNDLE_ST
 export const bundleFeedView = b => ({ id: b.id, store: b.store, storeName: BUNDLE_STORES[b.store]?.name ?? b.store, title: b.title, url: b.url, image: b.image, games: b.games, gameCount: b.game_count,
     price: b.price, expiresAt: b.expires_at, status: b.status === "active" && b.expires_at && b.expires_at < Date.now() ? "expired" : b.status, firstSeen: b.first_seen });
 
-/** The post for one bundle. `expired` greys it out and drops the buttons. */
+/** The post for one bundle. `expired` grays it out and drops the buttons. */
 export function bundleFeedEmbed(b, { expired = false } = {}) {
     const store = BUNDLE_STORES[b.store] ?? { name: b.store, emoji: "📦", color: 0x4da3ff, home: b.url };
     const count = b.game_count ?? (b.games?.length || null);

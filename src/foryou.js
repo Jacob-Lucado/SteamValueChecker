@@ -43,5 +43,5 @@ export async function forYou({ db, itad, userId, user, fetchImpl = globalThis.fe
         });
     }
     deals.sort((a, b) => b.rank - a.rank);
-    return { deals: deals.map(({ rank, ...x }) => x), pending, currency: deals[0]?.currency ?? "USD", genres: profile.genres.slice(0, 5).map(g => g.name), personalised: profile.genres.length > 0 };
+    return { deals: deals.map(({ rank, ...x }) => x), pending, currency: deals[0]?.currency ?? "USD", genres: profile.genres.slice(0, 5).map(g => g.name), personalized: profile.genres.length > 0 };
 }

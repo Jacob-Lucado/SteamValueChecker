@@ -45,12 +45,12 @@ export function createStatusMonitor({ db, probes, now = () => Date.now(), interv
         for (const [id, r] of next) {
             const tr = trouble.get(id);
             if (r.state === "operational") {
-                if (tr?.told) tell(`✅ ${probes[id].name} is back to normal after about ${Math.max(1, Math.round((t - tr.since) / 60_000))} minutes.`);
+                if (tr?.told) tell(`✅ ${probes[id].name} ${probes[id].plural ? "are" : "is"} back to normal after about ${Math.max(1, Math.round((t - tr.since) / 60_000))} minutes.`);
                 trouble.delete(id);
             } else {
                 const cur = tr ?? { since: t, ticks: 0, told: false };
                 cur.ticks++;
-                if (!cur.told && cur.ticks >= alertAfterTicks) { cur.told = true; tell(`⚠️ ${probes[id].name} has been ${r.state === "down" ? "down" : "degraded"} for ${cur.ticks} minutes${r.detail ? `: ${r.detail}` : ""}.`); }
+                if (!cur.told && cur.ticks >= alertAfterTicks) { cur.told = true; tell(`⚠️ ${probes[id].name} ${probes[id].plural ? "have" : "has"} been ${r.state === "down" ? "down" : "degraded"} for ${cur.ticks} minutes${r.detail ? `: ${r.detail}` : ""}.`); }
                 trouble.set(id, cur);
             }
         }

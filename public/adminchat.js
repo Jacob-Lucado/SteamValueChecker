@@ -134,7 +134,7 @@
       const p = h("div", { class: "sc-picker" }, ...REACTS.map(e => h("button", { type: "button", text: e, onclick: () => { p.remove(); react(m, e); } })));
       anchor.closest(".sc-bubble").append(p); setTimeout(() => document.addEventListener("click", () => p.remove(), { once: true }), 0);
     }
-    /** A round picture: their Discord avatar when we have one, otherwise a coloured circle with their initial. */
+    /** A round picture: their Discord avatar when we have one, otherwise a colored circle with their initial. */
     function face(key, name, ghost) {
       const url = person(key).avatar, a = h("span", { class: "sc-av" + (ghost ? " ghost" : ""), text: ghost ? "" : (name[0] || "?").toUpperCase() });
       if (ghost) return a;

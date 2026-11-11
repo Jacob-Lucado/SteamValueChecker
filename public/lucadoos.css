@@ -103,7 +103,7 @@ body.los-os { overflow: hidden; height: 100vh; background: #0b3f8f; }
 .los-icon-badge { position: absolute; top: 2px; right: 8px; font-style: normal; background: #e5484d; color: #fff; font-size: 11px; min-width: 18px; height: 18px; border-radius: 9px; display: grid; place-items: center; padding: 0 5px; }
 .los-icon-badge[hidden] { display: none; }
 .los-desk::after { content: "LucadoOS"; position: absolute; right: 24px; bottom: 56px; font-size: 38px; font-weight: 200; letter-spacing: .04em; color: rgba(255,255,255,.14); pointer-events: none; }
-/* ---- the original LucadoOS look: the site's own colours, rounded windows. Windows look is the same page with .los-orig off. ---- */
+/* ---- the original LucadoOS look: the site's own colors, rounded windows. Windows look is the same page with .los-orig off. ---- */
 body.los-os.los-orig { background: var(--bg); }
 .los-orig .los-desk { background: var(--wall, radial-gradient(900px 520px at 80% 0, var(--bg-glow), transparent 65%), radial-gradient(700px 480px at 0 100%, var(--glow-2), transparent 65%)), var(--bg); }
 .los-orig .los-desk::after { color: var(--muted); opacity: .25; }

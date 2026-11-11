@@ -1,4 +1,4 @@
-// The maths behind the indie tools. Plain functions, no page in sight, so they can be tested on their own.
+// The math behind the indie tools. Plain functions, no page in sight, so they can be tested on their own.
 // Fee tiers and review labels are Valve's published ones. Wishlist and sales ratios are rules of thumb from public talks and
 // post-mortems, so every one of them is shown as a range and never as a promise.
 (function (root) {

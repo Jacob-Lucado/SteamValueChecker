@@ -791,7 +791,7 @@ test("the page has share-preview tags with the real address, plus robots and sit
     assert.match(map, /<loc>[^<]+\/grabber<\/loc><lastmod>\d{4}-\d\d-\d\d<\/lastmod>/);
     assert.ok(map.includes(`<loc>${ORIGIN}/ai</loc>`));
     assert.match(robots, /Allow: \/ai\n/);
-    // The AI companion page: served with the real origin, labelled beta, and every file and picture it uses is there.
+    // The AI companion page: served with the real origin, labeled beta, and every file and picture it uses is there.
     const ai = await t.request("/ai", { raw: true });
     assert.equal(ai.status, 200);
     const aiHtml = await ai.text();
@@ -1206,7 +1206,7 @@ test("gift marks: need a Discord sign-in, one person per game, the owner sees a 
     const ids = (await t.request("/api/wishlist")).data.rows.map(r => r.itad_id);
     const pub = () => t.request("/api/public/wishlist?slug=jacob");
     const gift = (id, extra = {}) => t.request("/api/public/gift", { method: "POST", body: { slug: "jacob", id, ...extra } });
-    assert.match((await pub()).data.accent, /^#[0-9a-f]{6}$/i, "the profile page colour tints the wishlist page");
+    assert.match((await pub()).data.accent, /^#[0-9a-f]{6}$/i, "the profile page color tints the wishlist page");
     assert.equal((await gift(ids[0])).status, 400, "the list's owner does not mark their own gifts");
 
     await as("v-a");
@@ -1580,6 +1580,11 @@ test("profile song: saved songs show on the public page, and an owner is told wh
     await t.request("/api/profile", { method: "POST", body: { enabled: true, slug: "jacob" } });
     const saved = await t.request("/api/profile/page", { method: "POST", body: { song: { url: "https://youtu.be/dQw4w9WgXcQ", title: "Test" }, enter: true } });
     assert.equal(saved.status, 200); assert.equal(saved.data.config.song.provider, "youtube");
+    // a birthday saves on its own, comes back in the editor, and never shows on the public page
+    assert.equal((await t.request("/api/profile/birthday", { method: "POST", body: { birthday: "03-27", share: true } })).data.share, true);
+    assert.deepEqual((await t.request("/api/profile/page")).data.birthday, { value: "03-27", share: true });
+    assert.equal((await t.request("/api/profile/birthday", { method: "POST", body: { birthday: "99-99" } })).status, 400);
+    assert.ok(!JSON.stringify((await t.request("/api/public/profile?slug=jacob")).data).includes("03-27"), "not on the public page");
     let pub = (await t.request("/api/public/profile?slug=jacob")).data.profile;
     assert.equal(pub.song.provider, "youtube"); assert.equal(pub.enter, true);
     rt.set({ profile_songs: false });
@@ -3325,7 +3330,7 @@ test("every store link in any message goes through a landing page that shows wha
         assert.equal(p.components[0].components[1].url, "https://discord.gg/abc"); assert.match(e.description, /\]\(https:\/\/steamvaluechecker\.com\/d\/\d+\)/);
         assert.match(p.content, /\(https:\/\/steamvaluechecker\.com\/d\/\d+\)/); assert.match(p.content, /\(https:\/\/example\.com\/x\)/, "not a store, untouched");
         const id = e.url.split("/").pop(), html = await (await fetch(o.base + `/d/${id}`)).text();
-        assert.match(html, /Hades is 50% off/); assert.match(html, /\$12\.49/); assert.match(html, /Roguelike/); assert.ok(!/FREE ·/.test(html), "a sale isn't labelled free");
+        assert.match(html, /Hades is 50% off/); assert.match(html, /\$12\.49/); assert.match(html, /Roguelike/); assert.ok(!/FREE ·/.test(html), "a sale isn't labeled free");
         assert.match(html, /While you wait/); assert.match(html, /Take me there/);
         assert.match(html, /og:image" content="[^"]*\/d\/\d+\/img/);
     } finally { configureDeals(null); }
@@ -3778,4 +3783,36 @@ test("fortnite: the creator code is announced and checked live", async () => {
     assert.equal((await t.request("/api/fortnite/status")).data.creatorCode, "LUCADO");
     const c = await t.request("/api/fortnite/creator?code=LUCADO"); assert.equal(c.status, 200); assert.equal(c.data.status, "ACTIVE"); assert.equal(c.data.name, "Jacob Lucado");
     assert.equal((await t.request("/api/fortnite/creator?code=x")).status, 400);
+});
+
+test("the deals-this-week page lists real discounts, skips weak ones and is in the sitemap", async () => {
+    const pool = [
+        { id: "a", title: "Big <Game>", cut: 75, price: 15, regular: 60, currency: "USD", url: "https://store.steampowered.com/app/11/", appid: 11 },
+        { id: "b", title: "Tiny Sale", cut: 10, price: 18, regular: 20, currency: "USD", url: "https://store.steampowered.com/app/12/", appid: 12 }
+    ];
+    const t = await setup({ itadExtra: { getDealsPool: async () => pool } });
+    const html = await (await t.request("/steam-deals-this-week", { raw: true })).text();
+    assert.ok(html.includes("Big &lt;Game&gt;") && html.includes("-75%"), "shows the good deal, escaped");
+    assert.ok(!html.includes("Tiny Sale"), "leaves out a small discount");
+    assert.ok(/<link rel="canonical" href="[^"]+\/steam-deals-this-week">/.test(html));
+    assert.ok((await (await t.request("/sitemap.xml", { raw: true })).text()).includes("/steam-deals-this-week"));
+    await t.close();
+    const t2 = await setup({ itadExtra: { getDealsPool: async () => { throw new Error("down"); } } });
+    assert.ok((await (await t2.request("/steam-deals-this-week", { raw: true })).text()).includes("loading"), "a failed lookup still gives a page");
+    await t2.close();
+});
+
+test("the invite link counts where clicks came from, skips robots and shows in the owner report", async () => {
+    const t = await signedIn({ config: { ownerId: "u1" } });
+    const hit = (src, ua) => t.request("/invite?src=" + src, { raw: true, headers: ua ? { "User-Agent": ua } : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0) Chrome/120" } });
+    const r = await hit("seo-free-game-alerts");
+    assert.equal(r.status, 302); assert.match(r.headers.get("location"), /discord\.com\/oauth2\/authorize\?client_id=123/);
+    await hit("seo-free-game-alerts"); await hit("weekly-post"); await hit("Weird<Src>!");
+    await hit("weekly-post", "Mozilla/5.0 (compatible; Discordbot/2.0)");
+    const html = await (await t.request("/free-game-alerts", { raw: true })).text();
+    assert.ok(html.includes("/invite?src=seo-free-game-alerts"), "page buttons go through the counter");
+    const rep = (await t.request("/api/admin/traffic")).data.invites;
+    assert.equal(rep.clicks, 4, "robots are left out");
+    assert.deepEqual(rep.sources.map(x => [x.source, x.clicks]).sort(), [["seo-free-game-alerts", 2], ["weekly-post", 1], ["weirdsrc", 1]]);
+    await t.close();
 });

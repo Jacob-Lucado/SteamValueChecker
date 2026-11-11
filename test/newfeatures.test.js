@@ -321,7 +321,7 @@ test("For you ranks discounts by taste and wishlist, skips owned games and survi
     assert.equal(fit.shop, "GOG"); assert.equal(fit.price, 9); assert.equal(fit.atl, true);
     assert.equal(r.deals.find(d => d.id === "off").match < fit.match, true);
     assert.equal(r.deals.find(d => d.id === "new").match, null, "no genres yet: no score, still listed");
-    assert.equal(r.pending, 1); assert.equal(r.personalised, true);
+    assert.equal(r.pending, 1); assert.equal(r.personalized, true);
 });
 
 test("library totals add a floor estimate for games with no price paid, never touching real savings", async () => {

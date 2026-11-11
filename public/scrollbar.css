@@ -1,4 +1,4 @@
-/* Scroll bars in the colours of whatever page they are on. Each page sets --sb-a and --sb-b (its two accent colours) and its
+/* Scroll bars in the colors of whatever page they are on. Each page sets --sb-a and --sb-b (its two accent colors) and its
    background; this file turns them into the bar. Chrome, Edge, Safari and Opera get a gradient thumb, Firefox a plain one. */
 @supports selector(::-webkit-scrollbar) {
   * { scrollbar-width: auto; scrollbar-color: auto; }
