@@ -1800,11 +1800,12 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first.");
             try {
                 const text = String(body.text ?? ""), image = body.image ? String(body.image) : null;
+                if (body.at && body.video) throw new HttpError(400, "The promo video can only be posted right now, not scheduled.");
                 if (body.at) { const item = xposter.schedule({ text, at: Number(body.at), image }); return { ok: true, scheduled: item }; }
                 const bundle = body.bundle_id ? db.getFeedBundle(body.bundle_id) : null; // the picture comes from our own record of the bundle, never an address sent from the page
                 let free = null; // same for a free game: it's looked up in the bot's own list, and its picture comes from there
                 if (body.free_id) free = (await itad.getGiveawayList().catch(() => [])).find(g => String(g.id) === String(body.free_id)) ?? null;
-                return { ok: true, ...(await xposter.manual({ text, image, imageUrl: bundle?.image ?? (free ? freeArt(free) : null) ?? null, bundleId: bundle ? String(bundle.id) : null, freeId: free ? String(free.id) : null })) };
+                return { ok: true, ...(await xposter.manual({ text, image, video: body.video === "promo", imageUrl: bundle?.image ?? (free ? freeArt(free) : null) ?? null, bundleId: bundle ? String(bundle.id) : null, freeId: free ? String(free.id) : null })) };
             } catch (e) { if (e.user || e.status) throw new HttpError(400, e.message); throw e; }
         },
         "POST /api/admin/xposter/unschedule": async (req, body) => {

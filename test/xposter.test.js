@@ -272,3 +272,20 @@ test("a game that just launched free to play is posted as new; older always-free
     assert.match(x.peek([{ ...base, newFree: true }]).text, /New free-to-play game/);
     assert.deepEqual(x.peek([{ ...base, newFree: false }]), { nothing: true });
 });
+
+test("the promo video goes up in chunks, then rides on the post", async () => {
+    const db = openDb(":memory:"), calls = [];
+    const x = createXPoster({ env: ENV, db, fetchImpl: async (u, o) => {
+        calls.push([o.method, u, typeof o.body === "string" ? JSON.parse(o.body) : o.body]);
+        const out = u.endsWith("/initialize") ? { data: { id: "v9" } } : u.endsWith("/finalize") ? { data: { id: "v9", processing_info: { state: "succeeded" } } } : u.includes("/append") ? {} : { data: { id: "post1" } };
+        return { ok: true, json: async () => out };
+    } });
+    const r = await x.manual({ text: "Watch this", video: true });
+    assert.equal(r.id, "post1");
+    const urls = calls.map(c => c[1].replace("https://api.x.com/2/", ""));
+    assert.equal(urls[0], "media/upload/initialize");
+    assert.ok(urls.filter(u => u === "media/upload/v9/append").length >= 2, "a 4 MB video goes up in more than one piece");
+    assert.equal(urls.at(-2), "media/upload/v9/finalize");
+    assert.deepEqual(calls.at(-1)[2].media.media_ids, ["v9"]);
+    assert.equal(calls[0][2].media_category, "tweet_video");
+});

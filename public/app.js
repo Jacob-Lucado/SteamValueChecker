@@ -4703,6 +4703,9 @@ window.SVC_SITE = envIn => {
       const setImage = (b64, name) => { draft.image = b64; draft.imageName = name; refresh(); };
       const useGraphic = async url => { try { const blob = await (await fetch(url)).blob(); const r = new FileReader(); r.onload = () => setImage(String(r.result).split(",")[1], GRAPHICS.find(g => g[0] === url)?.[1] || "picture"); r.readAsDataURL(blob); } catch { toast("Couldn't load that picture."); } };
       pic.addEventListener("change", () => { if (pic.value) { fileIn.value = ""; useGraphic(pic.value); } else setImage(null, ""); });
+      const vidBox = h("input", { type: "checkbox" });
+      vidBox.checked = Boolean(draft.video);
+      vidBox.addEventListener("change", () => { draft.video = vidBox.checked; if (vidBox.checked) { fileIn.value = ""; pic.value = ""; draft.image = null; draft.imageName = ""; } refresh(); });
       const at = h("input", { type: "datetime-local" }); at.value = draft.at;
       const go = h("button", { class: "btn green", type: "button", text: "Post now" });
       const full = () => text.value.trim() + (addLink.checked && !hasLink(text.value) ? "\n\nsteamvaluechecker.com" : "");
@@ -4710,12 +4713,13 @@ window.SVC_SITE = envIn => {
         const t = full(), n = xLen(t);
         count.textContent = `${n} / 280`; count.className = n > 280 ? "bad small" : "muted small";
         cost.textContent = t ? `About ${money(hasLink(t) ? xs.linkCost : xs.plainCost)} on X${hasLink(t) ? " (it has a link)" : ""}.` : "";
-        go.textContent = at.value ? "Schedule it" : "Post now"; go.disabled = !xs.configured || !t || n > 280;
-        preview.textContent = draft.image ? `Picture: ${draft.imageName}` : draft.bundleId ? (/steamvaluechecker\.com\/[bd]\/\d+/i.test(draft.text) ? "The link will show the bundle's picture as a big card." : "The bundle's own picture will be attached.") : "No picture. Posts with one get noticed far more.";
+        go.textContent = at.value ? "Schedule it" : "Post now"; go.disabled = !xs.configured || !t || n > 280 || (draft.video && Boolean(at.value));
+        preview.textContent = draft.video ? (at.value ? "The promo video can only go out right now. Clear the time to post it." : "The 40 second promo video will be attached.") : draft.image ? `Picture: ${draft.imageName}` : draft.bundleId ? (/steamvaluechecker\.com\/[bd]\/\d+/i.test(draft.text) ? "The link will show the bundle's picture as a big card." : "The bundle's own picture will be attached.") : "No picture. Posts with one get noticed far more.";
         draft.text = text.value; draft.at = at.value;
       };
-      tpl.addEventListener("change", () => { const t = xs.templates.find(x => x.id === tpl.value); if (t) { draft.bundleId = null; text.value = t.text; if (!draft.image) { pic.value = GRAPHICS[0][0]; useGraphic(GRAPHICS[0][0]); } else refresh(); } });
+      tpl.addEventListener("change", () => { const t = xs.templates.find(x => x.id === tpl.value); if (t) { draft.bundleId = null; text.value = t.text; if (t.id === "promo") { draft.video = true; vidBox.checked = true; fileIn.value = ""; pic.value = ""; draft.image = null; draft.imageName = ""; refresh(); return; } if (!draft.image) { pic.value = GRAPHICS[0][0]; useGraphic(GRAPHICS[0][0]); } else refresh(); } });
       [text, addLink, at].forEach(el => el.addEventListener("input", refresh));
+      [pic, fileIn].forEach(el => el.addEventListener("change", () => { if (draft.video && (pic.value || fileIn.value)) { draft.video = false; vidBox.checked = false; refresh(); } }));
       fileIn.addEventListener("change", () => {
         const f = fileIn.files?.[0]; pic.value = ""; if (!f) { draft.image = null; draft.imageName = ""; return refresh(); }
         if (f.size > (at.value ? 2 : 5) * 1024 * 1024) { toast(`Pictures can be ${at.value ? 2 : 5} MB at most${at.value ? " on scheduled posts" : ""}.`); fileIn.value = ""; return; }
@@ -4725,8 +4729,8 @@ window.SVC_SITE = envIn => {
         const t = full(), sched = at.value ? new Date(at.value).getTime() : null;
         if (!confirm(sched ? `Schedule this post for ${when(sched)}?` : "Post this to X now? It goes out right away.")) return;
         try {
-          await api("/api/admin/xposter/post", { text: t, ...(sched ? { at: sched } : {}), ...(draft.image ? { image: draft.image } : {}), ...(!sched && draft.bundleId ? { bundle_id: draft.bundleId } : {}) });
-          toast(sched ? "Scheduled." : "Posted.", "ok"); draft = { text: "", image: null, imageName: "", at: "", bundleId: null }; await draw();
+          await api("/api/admin/xposter/post", { text: t, ...(sched ? { at: sched } : {}), ...(draft.image ? { image: draft.image } : {}), ...(draft.video ? { video: "promo" } : {}), ...(!sched && draft.bundleId ? { bundle_id: draft.bundleId } : {}) });
+          toast(sched ? "Scheduled." : "Posted.", "ok"); draft = { text: "", image: null, imageName: "", at: "", bundleId: null, video: false }; await draw();
         } catch (e) { toast(e.message); }
       }));
       refresh();
@@ -4737,6 +4741,7 @@ window.SVC_SITE = envIn => {
         h("div", { class: "row", style: "justify-content:space-between" }, count, cost),
         h("label", { class: "check" }, addLink, " Add the website link"),
         h("div", { class: "row" }, h("label", { text: "Picture " }), pic, fileIn), preview,
+        h("label", { class: "check" }, vidBox, " Attach the promo video instead (40 seconds, posts right now only)"),
         h("div", { class: "row" }, h("label", { text: "Send at " }), at, h("span", { class: "muted small", text: "Leave empty to post now. Scheduled posts go out within a few minutes of the time." })),
         h("div", { class: "row" }, go),
         h("p", { class: "muted small", text: "Pictures are uploaded when the post goes out. If X turns the picture down, nothing gets posted and you'll see why." }));

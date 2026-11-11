@@ -15,6 +15,8 @@ const ON = "xposter:on", CAP = "xposter:daily", LAST = "xposter:last", ERR = "xp
 const LINKS = "xposter:links", IMGERR = "xposter:imageerror", QIMG = "xposter:qimg:", FALLBACK_IMG = new URL("../public/icon-512.png", import.meta.url), MAX_QUEUE_IMAGE = 2 * 1024 * 1024;
 const BUNDLEDONE = "xposted:bundle:", HIST = "xposter:history", QUEUE = "xposter:queue", SPEND = "xposter:spend:", MANUAL = "xposter:manual:";
 export const DEFAULT_DAILY = 2, MAX_DAILY = 6, GAP_MS = 3 * 3_600_000, COST_PER_POST = 0.015, COST_LINK_POST = 0.20, MAX_MANUAL_PER_DAY = 20, MAX_QUEUED = 20, MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const PROMO_VIDEO = new URL("../public/video/promo.mp4", import.meta.url);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** What X counts: a link is always 23, and emoji and most non-Latin characters count double. */
 const LINK_RE = /https?:\/\/\S+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|gg|tv|me|co|app|dev|xyz)\b(?:\/\S*)?/gi;
@@ -67,6 +69,7 @@ export function bundleText(b, { tags = DEFAULT_TAGS, link = false, now = Date.no
 
 /** Ready-made posts for the page's "start from" list. The ones without a link cost 1.5 cents, so "link in bio" is the default. */
 export const TEMPLATES = [
+    { id: "promo", name: "Promo video (40 sec)", text: "What is your Steam library really worth? 💸\n\nSteam Value Checker is a free Discord bot. It totals your library, pings you at a game's lowest price, and posts every free game the moment it drops.\n\nLink in bio.\n\n#Steam #PCGaming #Discord" },
     { id: "intro", name: "Meet the bot", text: "What's your Steam library really worth? 💸\n\nSteam Value Checker is a free Discord bot that:\n\n🏷️ Adds up your library's value\n🔔 Alerts you to wishlist sales\n🎁 Posts free games and bundle deals\n✨ Makes a shareable profile card\n\nLink in bio.\n\n#Steam #PCGaming #Gaming" },
     { id: "wishlist", name: "Wishlist alerts", text: "Stop checking Steam every day for sales.\n\nAdd your wishlist to Steam Value Checker and the Discord bot pings you the moment a game drops to a price you like. Free to use. Link in bio. 🔔\n\n#SteamDeals #GameDeals #PCGaming" },
     { id: "library", name: "Library value game", text: "Quick question for Steam players: how much is your library worth?\n\nRun it through Steam Value Checker, then reply with your number. Highest one wins bragging rights. 💸\n\nLink in bio.\n\n#Steam #PCGaming #Gaming" },
@@ -181,6 +184,31 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         if (!id) throw new Error("X took the picture but didn't give an id back.");
         return String(id);
     }
+    /** Uploads the bundled promo video in pieces (X's chunked upload) and waits until X has finished processing it. Gives back its id. */
+    async function uploadVideo() {
+        if (!configured()) throw new Error("The four X keys aren't set yet.");
+        let bytes; try { bytes = readFileSync(PROMO_VIDEO); } catch { throw Object.assign(new Error("The promo video file isn't on this server."), { user: true }); }
+        const send = async (url, init) => {
+            const res = await fetchImpl(url, { ...init, headers: { Authorization: oauthHeader({ method: init.method, url, keys, timestamp: Math.floor(now() / 1000) }), ...(init.headers ?? {}) } });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw Object.assign(new Error(`X wouldn't take the video (${res.status}${json?.detail ? ": " + String(json.detail).slice(0, 140) : ""}).`), { status: res.status });
+            return json;
+        };
+        const init = await send(`${X_MEDIA_URL}/initialize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ media_type: "video/mp4", total_bytes: bytes.length, media_category: "tweet_video" }) });
+        const id = init?.data?.id; if (!id) throw new Error("X didn't start the video upload.");
+        const CHUNK = 4 * 1024 * 1024;
+        for (let i = 0, n = 0; i < bytes.length; i += CHUNK, n++) {
+            const form = new FormData(); form.append("segment_index", String(n)); form.append("media", new Blob([bytes.subarray(i, i + CHUNK)], { type: "video/mp4" }));
+            await send(`${X_MEDIA_URL}/${id}/append`, { method: "POST", body: form });
+        }
+        let fin = await send(`${X_MEDIA_URL}/${id}/finalize`, { method: "POST" });
+        for (let tries = 0; fin?.data?.processing_info && !["succeeded"].includes(fin.data.processing_info.state) && tries < 20; tries++) {
+            if (fin.data.processing_info.state === "failed") throw new Error("X couldn't process the video.");
+            await sleep(Math.max(1, Number(fin.data.processing_info.check_after_secs) || 3) * 1000);
+            fin = await send(`${X_MEDIA_URL}?command=STATUS&media_id=${id}`, { method: "GET" });
+        }
+        return String(id);
+    }
     function checkText(text) {
         const t = String(text ?? "").trim();
         if (!t) throw Object.assign(new Error("Write something to post first."), { user: true });
@@ -188,12 +216,12 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         return t;
     }
     /** A post the owner wrote. Not held to the daily limit of the automatic ones, but to a sane one of its own. */
-    async function manual({ text, image = null, imageUrl = null, kind = "manual", bundleId = null, freeId = null }) {
+    async function manual({ text, image = null, imageUrl = null, video = false, kind = "manual", bundleId = null, freeId = null }) {
         const t = checkText(text);
         const key = MANUAL + dayOf(now()), used = Number(db.getMeta(key)) || 0;
         if (used >= MAX_MANUAL_PER_DAY) throw Object.assign(new Error(`That's ${MAX_MANUAL_PER_DAY} manual posts today. Try again tomorrow.`), { user: true });
         const pic = image || (imageUrl && !hasCardLink(t) ? await pictureFor(imageUrl) : null); // a landing link brings its own card picture
-        const mediaIds = pic ? [await uploadImage(pic)] : []; // if the picture fails, the post doesn't go out without it
+        const mediaIds = video ? [await uploadVideo()] : pic ? [await uploadImage(pic)] : []; // if the picture or video fails, the post doesn't go out without it
         const r = await post(t, mediaIds);
         db.setMeta(key, String(used + 1));
         record({ id: r.id, text: t, at: now(), kind: bundleId ? "bundle" : freeId ? "auto" : kind, media: mediaIds.length > 0 });
@@ -322,5 +350,5 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
     }
     const freePosted = id => Boolean(db.getMeta(SEEN + id));
     const bundlePosted = id => Boolean(db.getMeta(BUNDLEDONE + id));
-    return { freePosted, bundlePosted, tags, configured, post, check, peek, tick, status, setSettings, manual, schedule, unschedule, flush, remove, uploadImage };
+    return { freePosted, bundlePosted, tags, configured, post, check, peek, tick, status, setSettings, manual, uploadVideo, schedule, unschedule, flush, remove, uploadImage };
 }
