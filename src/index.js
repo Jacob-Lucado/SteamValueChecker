@@ -36,6 +36,7 @@ import { storageReport } from "./storage.js";
 import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
 import { humanCount, warmMembers } from "./members.js";
+import { setGamePageOrigin } from "./render.js";
 import { renderWelcomeCard, renderRecap } from "./cardimg.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
@@ -218,6 +219,7 @@ for (const json of hubCommands.filter(c => HUB_MENUS.includes(c.name))) {
     panels.register("lib", { ...libraryPanel({ db }), back: back("me", meJson, "library") });
     panels.register("strm", { ...streamPanel({ db, replay: runFromPanel }), back: back("server", srvJson, "stream") });
 }
+setGamePageOrigin(cfg.dashboard?.publicUrl ?? null);
 const handlers = createHandlers({ ownerId: cfg.ownerId, panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });

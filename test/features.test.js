@@ -1076,3 +1076,12 @@ test("birthdays: a member can share theirs with people who have their page on th
     assert.deepEqual(saveOwnBirthday(db, "pal", { birthday: "" }), { birthday: null, share: false });
     assert.equal(db.getBirthday("pal"), null);
 });
+
+test("alert price-history button points at the public game page when one is configured", async () => {
+    const { alertButtons, setGamePageOrigin } = await import("../src/render.js");
+    setGamePageOrigin("https://example.com/");
+    try {
+        const row = alertButtons({ id: 1, appid: 620, title: "Portal 2" }, { url: "https://shop.example/x", shop: "Shop", slug: "portal-2" });
+        assert.equal(row.components.find(c => c.label === "Price history").url, "https://example.com/game/620");
+    } finally { setGamePageOrigin(null); }
+});

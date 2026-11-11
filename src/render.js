@@ -171,6 +171,9 @@ export function alertEmbed(item, now, { trigger, lower = false, verdict = null, 
     };
 }
 
+let gameOrigin = null;
+/** Where the public game pages live, so alerts can point at them. */
+export const setGamePageOrigin = url => { gameOrigin = url ? String(url).replace(/\/+$/, "") : null; };
 const linkButton = (label, url) => ({ type: 2, style: 5, label: String(label).slice(0, 80), url });
 const short = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 
@@ -181,7 +184,8 @@ export function alertButtons(item, now, { single = true, lang = "en" } = {}) {
     const deal = safeUrl(now.url);
     if (deal) row.push(linkButton(single ? `${L("View deal")}${now.shop ? " at " + short(now.shop, 30) : ""}` : `Deal: ${short(item.title, 30)}`, deal));
     if (single && Number.isInteger(item.appid)) row.push(linkButton(L("Steam page"), `https://store.steampowered.com/app/${item.appid}/`));
-    if (single && now.slug) row.push(linkButton(L("Price history"), `https://isthereanydeal.com/game/${encodeURIComponent(now.slug)}/info/`));
+    if (single && gameOrigin && Number.isInteger(item.appid)) row.push(linkButton(L("Price history"), `${gameOrigin}/game/${item.appid}`));
+    else if (single && now.slug) row.push(linkButton(L("Price history"), `https://isthereanydeal.com/game/${encodeURIComponent(now.slug)}/info/`));
     if (item.id != null) row.push({ type: 2, style: 2, label: single ? L("Stop watching") : `Stop: ${short(item.title, 30)}`, custom_id: `${STOP_ID}:${item.id}` });
     return row.length ? { type: 1, components: row } : null;
 }
