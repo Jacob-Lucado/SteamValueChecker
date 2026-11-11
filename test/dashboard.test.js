@@ -3889,3 +3889,13 @@ test("a public game page is served by Steam app id, and redirects to the clean a
         assert.equal((await t.request("/game/not-a-number")).status, 404);
     } finally { await t.close(); }
 });
+
+test("the Winter Sale prep page is public and links to the bot", async () => {
+    const t = await setup();
+    try {
+        const r = await t.request("/winter-sale");
+        assert.equal(r.status, 200);
+        assert.match(r.text, /Winter Sale/);
+        assert.match(r.text, /invite\?src=winter-sale/);
+    } finally { await t.close(); }
+});
