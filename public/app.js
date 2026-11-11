@@ -3875,6 +3875,10 @@ window.SVC_SITE = envIn => {
         list.replaceChildren(info.list.length ? table(["#", "Title", "Host", "Status", "Prizes", "Entries", "Shown in", "Ends"], info.list.map(g => [g.id, g.title, g.host || "-", g.status, g.outcome || "-", g.entries,
           `${g.channels} server${g.channels === 1 ? "" : "s"}, ${g.dms} DM${g.dms === 1 ? "" : "s"}${g.spread && !g.spread.done ? ` (sending ${g.spread.sent + g.spread.failed}/${g.spread.total})` : g.spread && g.spread.failed ? ` (${g.spread.failed} failed)` : ""}`, when(g.ends_at)])) : h("p", { class: "muted", text: "No network-wide giveaways yet." }));
         list.prepend(pendingPanel(info.pending, id => api("/api/admin/giveaways/remind", { key_id: id }), refresh));
+        // Why a send missed someone, so a server that didn't get it isn't a mystery.
+        const bad = info.list.filter(g => g.spread && g.spread.errors && g.spread.errors.length);
+        if (bad.length) list.prepend(h("div", { class: "notice warn" }, h("b", { text: "Some copies didn't go out. " }), ...bad.flatMap(g => [h("div", { class: "small", text: `#${g.id} ${g.title}:` }), h("ul", {}, [...new Set(g.spread.errors.map(e => `${e.what}: ${e.reason}`))].slice(0, 8).map(t => h("li", { text: t })))])));
+        if (info.skipped && info.skipped.length) list.prepend(h("div", { class: "notice" }, h("b", { text: "Not reached: " }), `${info.skipped.join(", ")}. These servers have no giveaway, alert or announcements channel set, so there was nowhere to post.`));
         // End buttons sit under the table so the table helper stays plain text.
         const active = info.list.filter(g => g.status === "active");
         if (active.length) list.append(h("div", { class: "row" }, ...active.map(g => { const b = h("button", { class: "btn gray small", type: "button", text: `End #${g.id} now and draw` }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/admin/giveaways/end", { id: g.id }); toast(`Ended. ${r.winners} winner${r.winners === 1 ? "" : "s"} drawn.`, "ok"); await refresh(); })); return b; })));

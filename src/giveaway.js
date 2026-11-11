@@ -98,6 +98,12 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         if (g.message_id) {
             try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(id), g.status)); } catch (e) { log(`giveaway edit failed: ${e?.name ?? "error"}`); }
         }
+        // Copies in other servers and DMs show the same live entry count as the home post.
+        if (g.status === "active") {
+            for (const m of db.listMirrors(id)) {
+                try { await discord.edit(m.channel_id, m.message_id, giveawayPayload(g, keys, entryCount(id), g.status)); } catch { /* a deleted copy is fine */ }
+            }
+        }
         if (g.announce_id) {
             try { const wp = winnersPayload(g, keys); await discord.edit(g.channel_id, g.announce_id, { ...wp, content: wp.content ?? "" }); } catch (e) { log(`winners edit failed: ${e?.name ?? "error"}`); }
         }
@@ -109,23 +115,25 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
      * Copies a running giveaway's entry post to other servers' channels and to members' DMs. Entries from every copy count toward
      * the same giveaway. Runs in the background (DMs go out slowly); `spreadStatus` shows progress.
      */
-    async function spread(id, { channelIds = [], dmUsers = [], delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+    async function spread(id, { channelIds = [], dmUsers = [], labels = new Map(), includeHost = true, delayMs = 1100, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
         const g = must(id);
         if (g.status !== "active") throw new UserError("Only a running giveaway can be sent out.");
         db.markGlobal(g.id);
         const channels = [...new Set(channelIds)].filter(c => c && c !== g.channel_id);
-        const users = [...new Set(dmUsers)].filter(u => u && u !== g.host_id);
-        const job = { total: channels.length + users.length, sent: 0, failed: 0, done: false };
+        // The host gets their own copy too, so they can see exactly what everyone else sees.
+        const users = [...new Set(dmUsers)].filter(u => u && (includeHost || u !== g.host_id));
+        const job = { total: channels.length + users.length, sent: 0, failed: 0, errors: [], done: false };
+        const why = (e, what) => { job.failed++; if (job.errors.length < 40) job.errors.push({ what, reason: String(e?.message ?? e ?? "unknown").replace(/\s+/g, " ").slice(0, 140) }); };
         spreads.set(g.id, job);
         (async () => {
             const row = db.getGiveaway(g.id);
             const payload = () => giveawayPayload(row, db.listKeys(g.id), 0, "active");
             for (const c of channels) {
-                try { const m = await discord.post(c, payload()); db.addMirror(g.id, "channel", c, m.id); job.sent++; } catch { job.failed++; }
+                try { const m = await discord.post(c, payload()); db.addMirror(g.id, "channel", c, m.id); job.sent++; } catch (e) { why(e, labels.get(c) || "a server channel"); }
                 await sleep(Math.min(delayMs, 400));
             }
             for (const u of users) {
-                try { const m = await discord.dm(u, payload()); if (m?.id && m?.channelId) db.addMirror(g.id, "dm", m.channelId, m.id); job.sent++; } catch { job.failed++; }
+                try { const m = await discord.dm(u, payload()); if (m?.id && m?.channelId) db.addMirror(g.id, "dm", m.channelId, m.id); job.sent++; } catch (e) { why(e, "a member DM"); }
                 await sleep(delayMs);
             }
         })().catch(() => {}).finally(() => { job.done = true; });

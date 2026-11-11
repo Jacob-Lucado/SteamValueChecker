@@ -4523,7 +4523,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const dest = db.giveawayDestinations().map(d => ({ id: d.guild_id, name: names.get(d.guild_id) ?? d.guild_id, channel_id: d.channel_id }));
             const list = db.listGlobalGiveaways(15).map(g => ({ id: g.id, title: g.title, host: g.host_name ?? null, steps: g.steps ? JSON.parse(g.steps).length : 0, status: g.status, ends_at: g.ends_at, entries: db.countEntries(g.id), prizes: db.listKeys(g.id).length, outcome: outcomeOf(g, db.listKeys(g.id)),
                 channels: db.listMirrors(g.id).filter(m => m.kind === "channel").length + 1, dms: db.listMirrors(g.id).filter(m => m.kind === "dm").length, spread: giveaways?.spreadStatus(g.id) ?? null }));
-            return { available: Boolean(giveaways), pending: await pendingClaimsFor(null), destinations: dest, dm: db.broadcastTargets().users.length, list, ownerName: config.creator?.name ?? "You", stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
+            const reached = new Set(dest.map(d => d.id));
+            const skipped = (guildList?.() ?? []).filter(g => !reached.has(g.id)).map(g => g.name).slice(0, 30);
+            return { available: Boolean(giveaways), pending: await pendingClaimsFor(null), destinations: dest, skipped, dm: db.broadcastTargets().users.length, list, ownerName: config.creator?.name ?? "You", stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
         "POST /api/admin/giveaways/remind": async (req, body) => {
             const s = session(req);
@@ -4556,7 +4558,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 });
                 const targets = db.broadcastTargets();
                 const sent = await giveaways.spread(r.id, {
-                    channelIds: audience === "dm" ? [] : dest.map(d => d.channel_id),
+                    channelIds: audience === "dm" ? [] : dest.map(d => d.channel_id), labels: new Map(dest.map(d => [d.channel_id, (guildList?.() ?? []).find(g => g.id === d.guild_id)?.name ?? d.guild_id])),
                     dmUsers: audience === "channels" ? [] : targets.users, delayMs: config.broadcastDelayMs ?? 1100
                 });
                 log(`Bot owner started global giveaway #${r.id}`);

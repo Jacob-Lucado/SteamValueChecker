@@ -439,6 +439,18 @@ test("a global giveaway is shown in other servers and DMs, draws from entrants a
     assert.ok(r.posts.some(p => p.channelId === "C2" && p.payload.embeds)); // winners shown in the other server
 });
 
+test("refreshing a global giveaway updates the entry count on every copy", async () => {
+    const r = rig();
+    const made = await r.make({ keys: [{ label: "Hades", key: "AAAAA-BBBBB-CCCCC" }] });
+    await r.svc.spread(made.id, { channelIds: ["C2"], dmUsers: [], delayMs: 0, sleep: async () => {} });
+    await new Promise(res => setTimeout(res, 20));
+    const copy = r.db.listMirrors(made.id)[0];
+    await r.enterAll(made.id, ["a", "b"]);
+    r.edits.length = 0;
+    await r.svc.refresh(made.id);
+    assert.ok(r.edits.some(e => e.channelId === copy.channel_id && e.messageId === copy.message_id));
+});
+
 test("prize types: Nitro, gift cards, money and other parse and get their own icons", () => {
     const r = parseKeys("Hades | AAAAA-BBBBB\nnitro: Discord Nitro (1 month) | https://discord.gift/abc\nnitro: https://discord.gift/xyz\nmoney: $25 PayPal | paid by PayPal\nother: Signed poster\ngiftcard: $20 Steam card | CODE-1", "Game");
     assert.deepEqual(r.keys.map(k => [k.kind, k.label, k.key]), [
