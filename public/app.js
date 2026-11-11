@@ -3148,6 +3148,51 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "panel" }, h("h3", { text: "What you have spent" }), out);
   }
 
+  // The page the extension's "Link now" button opens. One job: get the extension linked, with nothing else on the page.
+  function connectView() {
+    const box = h("div", { class: "panel" });
+    app.replaceChildren(pageHead("Link FanaticalGrabber", "Connect the extension to your account so prices, playtests and your library show up while you browse."), box);
+    const flag = on => { try { on ? localStorage.setItem("svc_connect", "1") : localStorage.removeItem("svc_connect"); } catch { /* storage blocked */ } };
+    if (!state.me) {
+      flag(true);
+      box.replaceChildren(h("p", {}, "Sign in first, then this page links the extension for you automatically."),
+        h("p", {}, steamLoginBtn("Sign in through Steam", "btn steam big"), " ", h("a", { class: "btn blue big", href: "/auth/login", text: "Sign in with Discord" })));
+      return;
+    }
+    flag(false);
+    const status = h("p", { class: "muted", text: "Looking for the extension…" });
+    const code = h("div"), retry = h("button", { class: "btn gray", text: "Try again" });
+    box.replaceChildren(status, h("p", {}, retry), code);
+    const ask = (type, extra = {}) => new Promise(res => {
+      const on = e => { if (fromExt(e) && e.data && e.data.svc === "ext" && (e.data.type === (type === "ping" ? "pong" : "connected"))) { window.removeEventListener("message", on); res(e.data); } };
+      window.addEventListener("message", on); extSend({ svc: "page", type, ...extra });
+      setTimeout(() => { window.removeEventListener("message", on); res(null); }, 1500);
+    });
+    async function manual() {
+      try {
+        const { token } = await api("/api/grabber/token", { action: "new" });
+        const input = h("input", { type: "text", readonly: "", value: token, style: "width:100%;font-family:monospace" });
+        input.addEventListener("focus", () => input.select());
+        const copy = h("button", { class: "btn blue small", text: "Copy code" });
+        copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(token); copy.textContent = "Copied"; } catch { input.select(); } });
+        code.replaceChildren(h("h4", { text: "Or paste a code" }), h("p", { class: "muted small", text: "Click the FanaticalGrabber icon in your toolbar (the puzzle piece menu if it is hidden), open \"Have a code? Paste it\", and paste this. It is shown once, and anyone with it can add games to your library." }), input, h("p", {}, copy));
+      } catch (e) { code.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+    async function go() {
+      status.className = "muted"; status.textContent = "Looking for the extension…"; code.replaceChildren();
+      const here = await ask("ping");
+      if (!here) { status.className = ""; status.replaceChildren(h("div", { class: "notice warn", text: "I can't see the extension on this page. Make sure FanaticalGrabber is installed and up to date, then reload. If it keeps happening, paste a code instead." })); manual(); return; }
+      try {
+        const { token } = await api("/api/grabber/token", { action: "new" });
+        const done = await ask("connect", { token });
+        if (done && done.ok) { status.className = ""; status.replaceChildren(h("div", { class: "notice" }, h("b", { text: "Linked. " }), "You can close this tab and go back to what you were doing.")); return; }
+      } catch (e) { status.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
+      status.replaceChildren(h("div", { class: "notice warn", text: "The extension did not accept the link. Update it, then try again, or paste a code instead." })); manual();
+    }
+    retry.addEventListener("click", go);
+    go();
+  }
+
   async function libraryView() {
     const body = h("div", { class: "muted", text: "Loading prices…" });
     const title = h("input", { type: "text", placeholder: "Game title", maxlength: "100" });
@@ -8158,7 +8203,7 @@ window.SVC_SITE = envIn => {
   const indieView = () => window.IndieUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
   const fortniteView = () => window.FortniteUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
   const devPanelView = () => window.DevPanel.view({ h, api, app, state, navigate, pageHead, toast, busy });
-  const VIEWS = { fortnite: fortniteView, devpanel: devPanelView, indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
+  const VIEWS = { fortnite: fortniteView, devpanel: devPanelView, indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, connect: connectView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
 
   /** Hands the whole page to the LucadoOS desktop: one icon for each section, and every page opens in its own window. */
   function osMount() {
@@ -8195,8 +8240,9 @@ window.SVC_SITE = envIn => {
       window.addEventListener("message", e => { if (e.source === window.parent && e.origin === location.origin && e.data && e.data.svc === "los-active") { window.__losOn = Boolean(e.data.on); apply(); } }); // the desktop says when this window is hidden behind another
     }
     }
+    if (state.me && !EMBED && view !== "connect") { let pend = false; try { pend = localStorage.getItem("svc_connect") === "1"; } catch { /* storage blocked */ } if (pend) { replaceUrl("/connect"); return route(); } }
     if (!view && state.me && !EMBED) { replaceUrl("/home"); return route(); } // signed in, the bare address (and the logo) lands on Home
-    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie" && view !== "fortnite") return landing();
+    if (!state.me && view !== "help" && view !== "about" && view !== "home" && view !== "status" && view !== "tip" && view !== "u" && view !== "feed" && view !== "discover" && view !== "communities" && view !== "indie" && view !== "fortnite" && view !== "connect") return landing();
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); scrollTop0(); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); scrollTop0(); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); scrollTop0(); return; }
