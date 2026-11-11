@@ -9,13 +9,18 @@ import { recordProblem } from "./adminlog.js";
 
 const HOUR = 12, FRIDAY = 5, MIN_CUT = 50, MIN_REGULAR = 10;
 
-/** The deals worth a post: a real discount on a game that isn't cheap to begin with. Biggest saving in dollars first, one per game. */
+const NOISE = /\b(bundle|packs?|soundtrack|ost|dlc|season pass|upgrade|art ?book|bonus content|starter|demo)\b/i;
+const EDITION = /\b(digital|deluxe|edition|ultimate|gold|complete|definitive|goty|game of the year|premium|collection|remastered|director'?s cut|standard)\b/gi;
+/** One key per game family, so "Rising Storm" and "Rising Storm: Digital Deluxe" count as the same one. */
+const familyKey = title => String(title).toLowerCase().replace(/&amp;/g, "&").replace(EDITION, " ").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).join(" ");
+
+/** The deals worth a post: a real discount on a game that isn't cheap to begin with. Biggest saving in dollars first, one per game family, no bundles or add-ons. */
 export function pickDeals(pool, n = 5) {
     const seen = new Set();
     return [...(pool ?? [])]
-        .filter(d => d && d.cut >= MIN_CUT && d.regular >= MIN_REGULAR && d.price >= 0 && d.title && /^https:\/\//.test(d.url ?? ""))
-        .sort((a, b) => (b.regular - b.price) - (a.regular - a.price))
-        .filter(d => { const k = d.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+        .filter(d => d && d.cut >= MIN_CUT && d.regular >= MIN_REGULAR && d.price >= 0 && d.title && !NOISE.test(d.title) && /^https:\/\//.test(d.url ?? ""))
+        .sort((a, b) => (b.regular - b.price) - (a.regular - a.price) || b.cut - a.cut || b.regular - a.regular)
+        .filter(d => { const k = familyKey(d.title) || d.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
         .slice(0, n);
 }
 

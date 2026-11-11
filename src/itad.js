@@ -405,7 +405,7 @@ export function createItad({
 
     /** A wide pool of current Steam discounts for personalized picks: up to `pages` x 100 deals, deepest cuts first. Cached for ten minutes. */
     async function getDealsPool({ country = "US", pages = 3 } = {}) {
-        const key = `pool:${country}`;
+        const key = `pool:${country}:${pages}`;
         const hit = getCached(key);
         if (hit !== undefined) return hit;
         const list = [], seen = new Set();

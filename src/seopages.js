@@ -143,7 +143,7 @@ export const SEO_PAGES = {
         desc: "The best Steam sales this week: big discounts on games that are worth the money, refreshed every hour. Get a Discord ping when a game on your wishlist drops to the price you want.",
         h1: "The best Steam deals this week",
         lead: "These are the biggest savings on Steam right now, sorted by how many dollars you keep. Cheap games and tiny discounts are left out, so what's here is worth a look. The list refreshes every hour.",
-        sections: [["How the list is picked", ["Only discounts of 50% or more on games that normally cost $10 or more. One entry per game, biggest dollar saving first.", "Prices come from IsThereAnyDeal and are shown in US dollars. Check the store page for your own region."]]],
+        sections: [["How the list is picked", ["Only discounts of 50% or more on games that normally cost $10 or more. Bundles, packs and add-ons are left out, each game shows once, and the biggest dollar saving comes first.", "Prices come from IsThereAnyDeal and are shown in US dollars. Check the store page for your own region."]]],
         steps: ["Add the bot to your server, or to your own account.", "Bring in your Steam wishlist.", "Pick the alert you want and get a message when a game on your list goes on sale."],
         faq: [["How often does this page change?", "Every hour. Steam deals can end without warning, so check the price on the store before you buy."], ["Are these all-time lows?", "Not always. The bot shows a year of price history and whether a game has hit its low, so you can tell a good deal from an average one."], ["Can I get these in Discord?", "Yes. A weekly roundup posts every Friday, and wishlist alerts fire the moment your own games go on sale."]],
         related: ["steam-sale-dates", "discord-game-deals-bot", "free-game-alerts"]
@@ -176,7 +176,7 @@ function salesHtml(now = Date.now()) {
 function dealsHtml(deals) {
     const rows = (deals ?? []).map(d => {
         const art = d.appid ? steamArt(d.appid) : null;
-        return `<li class="deal"><a href="${esc(d.url)}" rel="noopener noreferrer">${art ? `<img src="${esc(art)}" alt="" width="184" height="69" loading="lazy">` : ""}<span class="deal-name">${esc(d.title)}</span><span class="deal-price"><s>${esc(money(d.regular, d.currency))}</s> <b>${esc(money(d.price, d.currency))}</b> <em>-${Math.round(d.cut)}%</em></span></a></li>`;
+        return `<li class="deal"><a href="${esc(d.url)}" rel="noopener noreferrer">${art ? `<img src="${esc(art)}" alt="" width="184" height="69" loading="lazy">` : `<span class="deal-pic" aria-hidden="true">${esc([...String(d.title)][0] ?? "?")}</span>`}<span class="deal-name">${esc(d.title)}</span><span class="deal-price"><s>${esc(money(d.regular, d.currency))}</s> <b>${esc(money(d.price, d.currency))}</b> <em>-${Math.round(d.cut)}%</em></span></a></li>`;
     }).join("");
     if (!rows) return `<section class="tool"><p class="muted">The deals list is loading. Check back in a few minutes.</p></section>`;
     return `<section class="tool"><ul class="deals">${rows}</ul><p class="muted">Updated hourly. Prices in US dollars from IsThereAnyDeal.</p></section>`;
