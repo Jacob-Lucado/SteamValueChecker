@@ -3830,3 +3830,24 @@ test("assets: pages link files by fingerprint, which are kept for a year; plain 
     assert.match((await t.request("/")).text, /href="\/style\.css\?v=[0-9a-f]{10}"/);
     await t.close();
 });
+
+test("extension cross-store compare: prices for titles from any shop, other regions for one game", async () => {
+    const regionsSeen = [];
+    const t = await signedIn({ itadExtra: {
+        lookupTitles: async titles => titles.map(title => title === "Nope" ? { title, id: null } : { title, id: "id-" + title, matched: title }),
+        getPrices: async (ids, region) => { regionsSeen.push(region); return new Map(ids.map(id => [id, { deals: [{ shop: { name: "Steam" }, price: { amount: 20, currency: "USD" }, regular: { amount: 30 }, cut: 33, url: "https://s.example/a" }, { shop: { name: "GOG" }, price: { amount: 15, currency: "USD" }, regular: { amount: 30 }, cut: 50, url: "http://insecure" }], historyLow: { all: { amount: 10 }, y1: { amount: 12 } } }])); }
+    } });
+    const made = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+    const post = (code, body) => fetch(t.base + "/api/grabber/compare", { method: "POST", headers: { "Content-Type": "application/json", ...(code ? { Authorization: `Bearer ${code}` } : {}) }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, data: await r.json() }));
+    assert.equal((await post(null, { titles: ["A"] })).status, 401);
+    assert.equal((await post(made.data.token, { titles: [] })).status, 400);
+    t.advance(3_000);
+    const r = await post(made.data.token, { titles: ["Alpha", "Nope"] });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.items[0].best.shop, "GOG"); assert.equal(r.data.items[0].shops[0].url, null, "only https links pass through");
+    assert.equal(r.data.items[1].found, false);
+    t.advance(3_000);
+    const one = await post(made.data.token, { titles: ["Alpha"], regions: ["GB", "us", "x1"] });
+    assert.ok(one.data.regions.length >= 1 && one.data.regions.every(x => x.cc !== "US"), "own region left out");
+    await t.close();
+});

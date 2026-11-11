@@ -241,7 +241,7 @@ const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived t
 const STATE_COOKIE = "svc_state";
 const REF_COOKIE = "svc_ref", STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const MUTE_DAYS = 3650;
-const COOLDOWNS = { grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
+const COOLDOWNS = { grabbercompare: 1_500, grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -5455,6 +5455,37 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 if (price == null) return json(res, 200, { status: "no_price" });
                 const until = setSpotlight(db, uid, { appid, title: name, price, regular: sum.msrp, discount: sum.msrp ? Math.max(0, Math.round((1 - price / sum.msrp) * 100)) : 0, currency: sum.currency, shop: sum.best?.shop ?? "Steam" }, now());
                 return json(res, 200, { status: "ok", until });
+            }
+
+            if (key === "POST /api/grabber/compare") {
+                // The extension's cross-store card, used on other shops' pages: prices for games found by title, in every store we track.
+                const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
+                const uid = m ? db.grabberUserForToken(m[1]) : null;
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /me library grabber.");
+                if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
+                cooldown(uid, "grabbercompare");
+                const body = await readJson(req, 8_000);
+                const titles = [...new Set((Array.isArray(body.titles) ? body.titles : []).map(t => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, 120)).filter(Boolean))].slice(0, 30);
+                if (!titles.length) throw new HttpError(400, "No titles.");
+                const user = db.getUser(uid), cc = grabberRegion(user, body.cc);
+                const resolved = await itad.lookupTitles(titles);
+                const ids = resolved.filter(r => r.id).map(r => r.id);
+                const prices = ids.length ? await itad.getPrices(ids, cc) : new Map();
+                const owned = new Set(db.listLibrary(uid).map(g => g.itad_id)), wished = new Set(db.listItems(uid).map(g => g.itad_id));
+                const items = resolved.map(r => {
+                    if (!r.id) return { title: r.title, found: false };
+                    const entry = prices.get(r.id), sum = summarize(entry, { majorOnly: user?.stores === "major" });
+                    const shops = (Array.isArray(entry?.deals) ? entry.deals : []).filter(d => Number.isFinite(d?.price?.amount)).sort((a, b) => a.price.amount - b.price.amount).slice(0, 6)
+                        .map(d => ({ shop: String(d.shop?.name ?? "?"), price: d.price.amount, cut: d.cut ?? 0, url: /^https:\/\//.test(d.url ?? "") ? d.url : null }));
+                    return { title: r.title, matched: r.matched ?? r.title, approx: Boolean(r.approx), found: true, id: r.id, currency: sum.currency, msrp: sum.msrp, steam: sum.steam, best: sum.best ? { price: sum.best.price, shop: sum.best.shop } : null, atl: sum.atl, low1y: sum.low1y, shops, owned: owned.has(r.id), wishlisted: wished.has(r.id) };
+                });
+                // Other regions, for a single game only. This is just for comparing; each store decides who can buy where.
+                let regions = [];
+                const want = [...new Set((Array.isArray(body.regions) ? body.regions : []).map(c => String(c).toUpperCase()).filter(c => /^[A-Z]{2}$/.test(c) && c !== cc))].slice(0, 4);
+                if (items.length === 1 && items[0].found && want.length) {
+                    regions = (await Promise.all(want.map(async c => { try { const e = (await itad.getPrices([items[0].id], grabberRegion(null, c))).get(items[0].id); const sm = summarize(e); return sm.best ? { cc: c, price: sm.best.price, shop: sm.best.shop, currency: sm.currency } : null; } catch { return null; } }))).filter(Boolean);
+                }
+                return json(res, 200, { cc, items, regions });
             }
 
             if (key === "GET /api/grabber/game") {
