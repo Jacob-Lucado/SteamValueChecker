@@ -33,6 +33,8 @@ export function kindFromText(text) {
 /** What a post counts as, for not announcing the same thing twice: a demo, a free weekend, or a test (playtest, sign-up, alpha, beta). */
 export const kindGroup = kind => (kind === "demo" ? "demo" : kind === "weekend" ? "weekend" : "test");
 
+export { PLAYTEST_SOURCES, cleanSkipList } from "./playskip.js";
+
 // ---------- GamerPower: https://www.gamerpower.com/api/giveaways?type=beta ----------
 export const GAMERPOWER_URL = "https://www.gamerpower.com/api/giveaways?type=beta";
 export function parseGamerPower(json, { now = Date.now() } = {}) {

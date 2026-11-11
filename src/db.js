@@ -274,6 +274,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "ping_playtest", "TEXT");
     addColumn("community", "playtest_all", "INTEGER NOT NULL DEFAULT 0");
     addColumn("friends", "auto", "INTEGER NOT NULL DEFAULT 0"); // 1 when the friend came from following someone
+    addColumn("users", "playtest_skip", "TEXT");
+    addColumn("community", "playtest_skip", "TEXT");
     addColumn("community", "playtest_full", "TEXT");
     addColumn("community", "playtest_genres", "TEXT");
     addColumn("community", "playtest_channel", "TEXT");
@@ -426,7 +428,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["wish_sync", "wish_synced_at", "muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "playtest_skip", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -819,7 +821,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         db.exec(`VACUUM INTO '${String(path).replace(/'/g, "''")}'`);
     }
 
-    // What the shareable profile card shows: platform names, colour, picture links and which stats. One small JSON blob per member.
+    // What the shareable profile card shows: platform names, color, picture links and which stats. One small JSON blob per member.
     const getCardPrefs = discordId => { try { return JSON.parse(get("SELECT prefs FROM card_prefs WHERE discord_id = ?", discordId)?.prefs ?? "{}"); } catch { return {}; } };
     const setCardPrefs = (discordId, prefs) => run("INSERT INTO card_prefs (discord_id, prefs) VALUES (?, ?) ON CONFLICT(discord_id) DO UPDATE SET prefs = excluded.prefs", discordId, JSON.stringify(prefs));
 

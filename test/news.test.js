@@ -61,3 +61,13 @@ test("news cards: patch notes are green with a link, several become pages", () =
     const db = openDb(":memory:"); const many = newsPayload(posts, { pager: db });
     assert.match(many.content, /2 news posts/); assert.equal(newsPayload([]), null);
 });
+
+test("one blocked game does not flag the feed, and a block pauses new asks", async () => {
+    let t = 0, calls = 0;
+    const news = createNews({ now: () => t, fetchImpl: async url => { calls++; if (/appid=2&/.test(url)) return { ok: false, status: 403 }; return { ok: true, json: async () => feedJson([post("9", "Update 1", 1)]) }; } });
+    await news.forApps([1, 2, 3, 4]);
+    assert.equal(news.health().lastError, "http403");
+    assert.equal(news.health().lastErrorAt, null, "a single failure is not an outage");
+    const before = calls; t += 60_000; await news.forApps([5]);
+    assert.equal(calls, before, "paused for a while after a 403");
+});

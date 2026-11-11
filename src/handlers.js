@@ -968,7 +968,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             new ButtonBuilder().setCustomId("md_cancel").setLabel("Cancel").setStyle(ButtonStyle.Secondary)
         );
         const message = await i.reply({
-            content: "This deletes your wishlist, library, alert settings, giveaway entries and Steam profile ID from the bot. Giveaways you host are cancelled and their keys wiped. It cannot be undone.",
+            content: "This deletes your wishlist, library, alert settings, giveaway entries and Steam profile ID from the bot. Giveaways you host are canceled and their keys wiped. It cannot be undone.",
             components: [row],
             flags: MessageFlags.Ephemeral,
             fetchReply: true

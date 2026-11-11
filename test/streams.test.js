@@ -33,7 +33,7 @@ test("stream links must be https links to a streaming site", () => {
     for (const bad of ["http://twitch.tv/a", "https://evil.example/twitch.tv", "javascript:alert(1)", "not a link", "https://user:pw@twitch.tv/a"]) assert.throws(() => cleanStreamUrl(bad), UserError, bad);
 });
 
-test("going live posts once with a ping, a repeat edits the post, and ending greys it out", async () => {
+test("going live posts once with a ping, a repeat edits the post, and ending grays it out", async () => {
     const f = fake();
     const r = await f.streams.goLive("g", { id: "u1", name: "Jacob" }, { title: "Ranked grind", url: "https://twitch.tv/jacob", game: "Overwatch" });
     assert.deepEqual([r.posted, r.pinged, r.edited], [true, true, false]);

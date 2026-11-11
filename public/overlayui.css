@@ -1,4 +1,4 @@
-/* The stream overlay panel (public/overlayui.js). Uses the same colour variables as the dashboard and the music studio. */
+/* The stream overlay panel (public/overlayui.js). Uses the same color variables as the dashboard and the music studio. */
 .ovp { display: block; }
 .ovp[hidden] { display: none; }
 .ovp-note { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }

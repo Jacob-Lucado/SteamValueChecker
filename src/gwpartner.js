@@ -1,6 +1,6 @@
 // Cross-server giveaways can be hosted by a partner and can ask entrants to do something first (follow on X, join a Discord...).
 // These are the pure helpers: validating what the owner types, and turning it into the lines and buttons on the giveaway post.
-// The steps are an honour system: Discord cannot check an X follow, so the post says winners may be checked.
+// The steps are an honor system: Discord cannot check an X follow, so the post says winners may be checked.
 
 export const STEP_KINDS = {
     follow_x: { label: "Follow on X", icon: "𝕏", hosts: ["x.com", "twitter.com"], hint: "Link to the profile, e.g. https://x.com/name" },
@@ -78,7 +78,7 @@ export const linksOf = g => safeJson(g.host_links);
 
 const md = (label, url) => `[${label.replace(/[\[\]]/g, "")}](${url})`;
 
-/** The "how to enter" lines, the honour-system note and the link buttons for a giveaway's required steps. Works for any giveaway. */
+/** The "how to enter" lines, the honor-system note and the link buttons for a giveaway's required steps. Works for any giveaway. */
 export function stepParts(g) {
     const steps = stepsOf(g);
     if (!steps.length) return { howToEnter: null, stepsNote: null, buttons: [] };

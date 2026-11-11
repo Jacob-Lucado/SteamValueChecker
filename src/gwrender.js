@@ -88,7 +88,7 @@ export function giveawayPayload(g, keys, entryCount, state = g.status) {
     const embed = {
         color: state === "cancelled" ? GREY : state === "ended" ? (winners.length ? GREEN : GREY) : (g.color ?? th.color),
         author: cross?.author ?? { name: headline },
-        title: state === "cancelled" ? `${g.title} (cancelled)` : g.title,
+        title: state === "cancelled" ? `${g.title} (canceled)` : g.title,
         description,
         fields,
         image: safeUrl(g.image_url) && !video ? { url: g.image_url } : undefined,
@@ -212,7 +212,7 @@ export function infoPayload(g, keys, entryCount) {
     };
 }
 
-/** Sent to the host with prizes nobody won (or that were cancelled). */
+/** Sent to the host with prizes nobody won (or that were canceled). */
 export function leftoverMessage(g, rows, why) {
     const text = rows.map(r => (isCode(r.kind) ? `${r.label} | ${r.plain}` : `${r.label} | (nothing to send back, you pay this one yourself)`)).join("\n");
     return {

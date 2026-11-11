@@ -843,7 +843,7 @@ test("slash command text fits Discord's limits (discord.js throws at startup oth
     for (const m of src.matchAll(/\{ name: "((?:[^"\\]|\\.)*)", value: "/g)) assert.ok(m[1].length <= 100, `choice name too long: ${m[1]}`);
 });
 
-test("friends: birthday maths, limits and a once-a-year reminder", async () => {
+test("friends: birthday math, limits and a once-a-year reminder", async () => {
     const { daysUntilBirthday } = await import("../src/friendstore.js");
     const { runFriendReminders, saveFriend, cleanBirthday } = await import("../src/friends.js");
     const day = (m, d, y = 2026) => Date.UTC(y, m - 1, d, 12);

@@ -11,7 +11,7 @@ export function asksCreator(question) {
     return ASKS.some(r => r.test(String(question ?? "")));
 }
 
-// Colour matches the rest of the bot's embeds.
+// Color matches the rest of the bot's embeds.
 export function creatorEmbed({ creator, logo = null, color = 0xff9800, bot = "Steam Value Checker" }) {
     const e = {
         color,
