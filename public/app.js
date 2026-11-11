@@ -1100,10 +1100,6 @@ window.SVC_SITE = envIn => {
     const dlcOn = h("input", { type: "checkbox", checked: Boolean(s.dlc) });
     const refundOn = h("input", { type: "checkbox", checked: Boolean(s.refund) });
     const playSel = select([["0", "Off"], ["1", "Only games on my wishlist"], ["2", "Every playtest and demo found"]], String(s.playtest ?? 0));
-    const skipOn = new Set(s.playtest_skip || []);
-    const skipBoxes = PLAYTEST_SOURCES.map(([id, label]) => { const cb = h("input", { type: "checkbox", checked: skipOn.has(id) }); cb.dataset.src = id; return h("label", { class: "check" }, cb, " " + label); });
-    const skipField = h("div", { class: "field" }, h("label", { text: "Don't include listings from" }), h("div", { class: "stack" }, ...skipBoxes), h("p", { class: "muted small", text: "Tick a site and its playtests and demos are left out of your alerts. Steam announcements aren't affected." }));
-    const skipList = () => skipBoxes.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
     const achvOn = h("input", { type: "checkbox", checked: Boolean(s.achv) });
     const nudgeOn = h("input", { type: "checkbox", checked: Boolean(s.nudge) });
     const nowOn = h("input", { type: "checkbox", checked: Boolean(s.nowplaying) });
@@ -1133,7 +1129,7 @@ window.SVC_SITE = envIn => {
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), playtest_skip: skipList(), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
+        max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -1159,7 +1155,7 @@ window.SVC_SITE = envIn => {
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
         h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played, or when it drops below what I paid (that part needs the extension's purchase sync)"),
-        field("Playtests, demos and betas (Steam, Alpha Beta Gamer, Playtester, GamerPower and itch.io)", playSel), skipField,
+        field("Playtests, demos and betas (Steam, Alpha Beta Gamer, Playtester, GamerPower and itch.io)", playSel),
         h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
         h("label", { class: "check" }, nowOn, "Show the game I am in on my server's Now playing board (needs Steam linked, library sharing and public game details)"),
@@ -1900,7 +1896,6 @@ window.SVC_SITE = envIn => {
   // Playtests, betas, demos and free weekends. The list asks the server again every few minutes by itself, flags what is new
   // since the page opened, and pauses while the tab is hidden.
   const PLAYTEST_POLL_MS = 5 * 60_000;
-  const PLAYTEST_SOURCES = [["abg", "Alpha Beta Gamer"], ["gamerpower", "GamerPower"], ["itch", "itch.io"], ["playtester", "Playtester"], ["steamdemo", "Steam demos"]];
   async function playtestsView() {
     const F = { kind: "all", mine: false, hideOwned: false, q: "", genre: "" };
     let data = null, seen = null, fresh = new Set(), loadedAt = 0, timer = null, failed = false;
@@ -6996,16 +6991,11 @@ window.SVC_SITE = envIn => {
         const genreIn = h("input", { type: "text", maxlength: "300", placeholder: "Any genre. Or e.g. Co-op, Roguelike, Cozy", value: String(st.playtest_genres || "").split(",").filter(Boolean).join(", ") });
         const genreField = h("div", { class: "field" }, h("label", { text: "Only these genres from Playtester (optional)" }), genreIn,
           h("p", { class: "muted small", text: "Playtester tags every game with genres like Action, Co-op or Cozy. List the ones you want, separated by commas, and the rest of its listings are skipped. Games your members have on a wishlist always post. Leave it empty for everything." }));
-        const skipOnS = new Set(String(st.playtest_skip || "").split(",").filter(Boolean));
-        const skipBoxesS = PLAYTEST_SOURCES.map(([id, label]) => { const cb = h("input", { type: "checkbox", checked: skipOnS.has(id) }); cb.dataset.src = id; return h("label", { class: "check-row" }, cb, " " + label); });
-        const skipFieldS = h("div", { class: "field" }, h("label", { text: "Never post listings from" }), h("div", { class: "stack" }, ...skipBoxesS),
-          h("p", { class: "muted small", text: "Ticked sites are left out of this server's playtest posts, even for games your members watch. Leave them all empty to use every site." }));
-        const skipSources = () => skipBoxesS.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
         const fullSources = () => fullBoxes.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
         const pings = h("div", { class: "panel" }, h("h3", { text: "Ping roles" }),
           h("p", { class: "muted", text: "Members opt in to these roles in #roles. The bot pings them (and nobody else) when it posts." }),
-          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), fullField, genreField, skipFieldS, field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), field("Verified IndieDev role (the bot gives it to developers when their game is approved in the showcase)", pIndieDev), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
-          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { playtest_full: fullSources(), playtest_genres: genreIn.value, playtest_skip: skipSources(), free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_dev: pIndieDev.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
+          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), fullField, genreField, field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), field("Verified IndieDev role (the bot gives it to developers when their game is approved in the showcase)", pIndieDev), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
+          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { playtest_full: fullSources(), playtest_genres: genreIn.value, free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_dev: pIndieDev.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),

@@ -2,7 +2,6 @@
 import { xpForNext } from "../communitystore.js";
 import { buildAnnouncement } from "../announce.js";
 import { UserError } from "../errors.js";
-import { cleanSkipList } from "../playskip.js";
 import { backfillForum } from "../requestsync.js";
 import { postHoneypotNotice, HONEYPOT_TOPIC } from "../honeypot.js";
 import { aiLimits, aiUsedToday } from "../aichat.js";
@@ -125,7 +124,6 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         if (b.playtest_full !== undefined) patch.playtest_full = [...new Set((Array.isArray(b.playtest_full) ? b.playtest_full : []).map(String).filter(k => FULL_SOURCES.includes(k)))].join(",") || null;
         // Genres to keep from Playtester's full feed, lowercase and comma separated. Empty means every genre.
         if (b.playtest_genres !== undefined) patch.playtest_genres = [...new Set(String(b.playtest_genres ?? "").split(",").map(x => x.trim().toLowerCase().slice(0, 30)).filter(Boolean))].slice(0, 20).join(",") || null;
-        if (b.playtest_skip !== undefined) patch.playtest_skip = cleanSkipList(b.playtest_skip) || null;
         if (b.indie_dev !== undefined) patch.indie_dev_role = await roleOk(gid, b.indie_dev || null);
         if (b.indie_channel !== undefined) patch.indie_channel = await channelOk(gid, b.indie_channel || null);
         if (b.squad_channel !== undefined) patch.squad_channel = await channelOk(gid, b.squad_channel || null);

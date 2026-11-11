@@ -3,7 +3,6 @@
 import { ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from "discord.js";
 import { button, navRow, rowOf, select } from "./panel.js";
 import { UserError } from "./errors.js";
-import { PLAYTEST_SOURCES, cleanSkipList } from "./playskip.js";
 import { REGIONS } from "./constants.js";
 import { LANGS } from "./i18n.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
@@ -34,7 +33,6 @@ export const TOGGLES = [
     { key: "share", label: "Share with my server", hint: "Show my name in group alerts and on the leaderboard", ...col("share") }
 ];
 const NEWS = ["Off", "Patch notes only", "Every announcement"];
-const skipSet = u => new Set(String(u.playtest_skip ?? "").split(",").filter(Boolean));
 const PLAYTEST = ["Off", "Only games on my wishlist", "Every playtest and demo the bot finds"];
 const MINS = [0, 10, 25, 40, 50, 60, 75, 90];
 const CAPS = [0, 5, 10, 15, 20, 30, 40, 60];
@@ -49,7 +47,7 @@ export function alertPanel({ db }) {
         const head = [u.paused ? "**Alerts are paused.** Nothing is sent until you resume." : null, notice ? `> ${notice}` : null].filter(Boolean).join("\n");
         if (page === "types") {
             const lines = TOGGLES.map(t => `${t.read(u, s) ? "✅" : "▫️"} **${t.label}**  ${t.hint}`);
-            return { ...base, title: "Your alerts · What you get", description: [head, "Sale alerts for your wishlist are always on. Pick the extras you want from the first menu.", "", ...lines, "", `📰 **News:** ${NEWS[u.news ?? 0]}`, `🧪 **Playtests and demos:** ${PLAYTEST[u.playtest ?? 0]}${skipSet(u).size ? ` (leaving out ${PLAYTEST_SOURCES.filter(([id]) => skipSet(u).has(id)).map(x => x[1]).join(", ")})` : ""}`].filter(x => x !== null && x !== undefined).join("\n") };
+            return { ...base, title: "Your alerts · What you get", description: [head, "Sale alerts for your wishlist are always on. Pick the extras you want from the first menu.", "", ...lines, "", `📰 **News:** ${NEWS[u.news ?? 0]}`, `🧪 **Playtests and demos:** ${PLAYTEST[u.playtest ?? 0]}`].filter(x => x !== null && x !== undefined).join("\n") };
         }
         if (page === "delivery") {
             const guild = db.getGuild(u.guild_id);
@@ -75,7 +73,6 @@ export function alertPanel({ db }) {
                 rowOf(select(ID, "toggles", "", "Turn extras on or off", TOGGLES.map(t => ({ label: t.label, value: t.key, description: t.hint, default: t.read(u, s) })), { min: 0, max: TOGGLES.length })),
                 rowOf(select(ID, "news", "", "News and patch notes", NEWS.map((l, v) => ({ label: `News: ${l}`, value: v, default: (u.news ?? 0) === v })))),
                 rowOf(select(ID, "playtest", "", "Playtests, demos and betas", PLAYTEST.map((l, v) => ({ label: `Playtests: ${l}`, value: v, default: (u.playtest ?? 0) === v })))),
-                rowOf(select(ID, "ptskip", "", "Leave these sites out of playtest alerts", PLAYTEST_SOURCES.map(([id, label]) => ({ label, value: id, default: skipSet(u).has(id) })), { min: 0, max: PLAYTEST_SOURCES.length })),
                 nav
             ];
         }
@@ -133,7 +130,6 @@ export function alertPanel({ db }) {
                     return { page: "types", notice: "Saved." };
                 }
                 case "news": up({ news: Number(values[0]) }); return { page: "types", notice: `News: ${NEWS[Number(values[0])] ?? "Off"}.` };
-                case "ptskip": up({ playtest_skip: cleanSkipList(values) || null }); return { page: "types", notice: values.length ? `Leaving out: ${PLAYTEST_SOURCES.filter(([id]) => values.includes(id)).map(x => x[1]).join(", ")}.` : "Playtest alerts use every site." };
                 case "playtest": up({ playtest: Number(values[0]) }); return { page: "types", notice: `Playtests: ${PLAYTEST[Number(values[0])] ?? "Off"}.` };
                 case "delivery":
                     if (values[0] === "channel" && !ctx.db.getGuild(u.guild_id)) throw new UserError("This server has no alert channel yet. Ask an admin to run `/manage alertchannel set`.");
