@@ -36,8 +36,8 @@ test("song: YouTube, SoundCloud and Spotify embeds, or a live radio stream", () 
 test("profile settings are validated and merged", () => {
     const p = cleanProfile({ name: "  Jacob‮  ", bio: "line1\nline2", theme: "ocean", accent: "#AABBCC", bgstyle: "dots", layout: "wide", favorites: ["Hades", "Hades", "Celeste"], links: [{ kind: "x", url: "x.com/me" }] });
     assert.equal(p.name, "Jacob"); assert.equal(p.accent, "#aabbcc"); assert.deepEqual(p.favorites, ["Hades", "Celeste"]); assert.equal(p.links[0].url, "https://x.com/me");
-    assert.throws(() => cleanProfile({ theme: "neon" }), /color theme/);
-    assert.throws(() => cleanProfile({ accent: "red" }), /Colors/);
+    assert.throws(() => cleanProfile({ theme: "neon" }), /colour theme/);
+    assert.throws(() => cleanProfile({ accent: "red" }), /Colours/);
     assert.throws(() => cleanProfile({ links: Array.from({ length: 7 }, () => ({ kind: "website", url: "https://example.com" })) }), /up to 6/);
     const s = cleanProfile({ sections: [{ key: "steam", vis: "server" }, { key: "about", vis: "public" }, { key: "bogus", vis: "public" }] });
     assert.deepEqual(s.sections.slice(0, 2), [{ key: "steam", vis: "server" }, { key: "about", vis: "public" }]);

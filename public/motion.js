@@ -111,7 +111,7 @@
     b.append(d); setTimeout(() => d.remove(), 650);
   });
 
-  // ---------- page enter and ambient color ----------
+  // ---------- page enter and ambient colour ----------
   const hero = () => {
     const h = document.querySelector("main h1") ?? document.querySelector(".hero h1, .lx-hero h1");
     const box = h?.parentElement; if (!box || box.classList.contains("mo-hero")) return;

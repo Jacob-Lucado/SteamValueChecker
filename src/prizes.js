@@ -13,7 +13,7 @@ export const kindOf = k => (KINDS[k] ? k : "key");
 export const kindInfo = k => KINDS[kindOf(k)];
 export const isCode = k => kindInfo(k).code;
 
-/** One color and one headline for the whole giveaway, from what is being given away. */
+/** One colour and one headline for the whole giveaway, from what is being given away. */
 export function theme(keys) {
     const kinds = [...new Set(keys.map(k => kindOf(k.kind)))];
     if (kinds.length === 1) return { color: KINDS[kinds[0]].color, icon: KINDS[kinds[0]].icon, name: kinds[0] === "key" ? "GIVEAWAY" : KINDS[kinds[0]].name.toUpperCase() + " GIVEAWAY" };

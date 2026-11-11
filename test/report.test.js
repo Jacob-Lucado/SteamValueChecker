@@ -112,7 +112,7 @@ test("rendering: money, table, summary, csv", () => {
     assert.match(csv, /"Ghost","","no"/);
 });
 
-test("csv neutralizes spreadsheet formulas in titles", () => {
+test("csv neutralises spreadsheet formulas in titles", () => {
     const rows = buildRows([{ title: "=HYPERLINK(\"x\")", id: null }], new Map());
     assert.match(toCsv(rows, "USD"), /"'=HYPERLINK/);
 });

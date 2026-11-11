@@ -32,7 +32,7 @@ export function parseMoney(value) {
     return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-/** Splits one CSV line, honoring quotes and doubled quotes. */
+/** Splits one CSV line, honouring quotes and doubled quotes. */
 export function splitCsvLine(line) {
     const out = [];
     let cur = "";

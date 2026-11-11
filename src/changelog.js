@@ -1,6 +1,6 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
-    { version: "2026.11.56", date: "2026-11-10", title: "Giveaways, playtests and friends", items: [
+    { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
         "**Leave out a site:** you can now skip itch.io (or Alpha Beta Gamer, GamerPower, Playtester or Steam demos) in playtest alerts. Members do it under Alert settings or /alerts, and each server does it in its playtest settings, so a server can leave a site out even for games its members watch.",
         "**Your birthday:** the profile editor has a Birthday box (month and day only, never shown on your page). Tick the share option and anyone who has your page on their Friends list gets the reminder a week before, without having to type it in. A friend's own entry still wins, and turning sharing off or switching your page off hides it again.",
         "**Playtester labels:** Playtester writes \"Beta\" in the title of every playtest, so they all showed up as Betas. They're now listed as Playtests, and only its demos stay Demos.",
@@ -11,8 +11,6 @@ export const CHANGELOG = [
         "**Genre filters:** the Playtests page has a genre picker, and server managers can limit Playtester's full feed to the genres they want (games your members have on a wishlist always post).",
         "**Giveaway outcomes:** the giveaway lists on the dashboard and the admin panel now have a Prizes column saying what became of each prize: claimed, waiting on a winner (and whether they could be reached), or no winner.",
         "**Giveaway winners in other servers:** if a winner's DMs are closed, I now ping them in the channel they entered from (their own server) before trying the host's. The host gets a message right away when nobody could reach the winner, and the Waiting to be claimed panels show whether each winner was reached.",
-    ] },
-    { version: "2026.11.55", date: "2026-11-10", title: "Fortnite extras and licenses", items: [
         "**Buy links:** every Fortnite item has a Buy in the Fortnite shop button and a Copy link button, and the link opens Fortnite's shop with creator code LUCADO already applied.",
         "**Treasure tab:** per-chest odds, the Treasure Hour boosts, and the weekly Treasure Hunters prizes, with this week highlighted.",
         "**Licenses page:** credits for the services and data the site uses, trademark notes, and the license for every library it's built on. It's laid out like the terms and privacy pages, and linked from About and the footer.",
@@ -65,7 +63,7 @@ export const CHANGELOG = [
         "**Adult bundles:** they're left out by default. Server managers can switch them on with `/server promos bundles adult:true` or from the Game bundles panel on the dashboard.",
         "**Several streaming sites at once:** link your Twitch, Kick and YouTube channels together. The bot notices when you go live on any of them and makes one post that links to each, and it only closes the post once all of them are offline.",
         "**More free games:** IndieGala giveaways now show up with the other freebies.",
-        "**Supporters:** pick your own color for your price-alert cards on the Chip in page, and `/bot supporter` shows your pass and what it gives you. The page also says how many founding spots are left." ] },
+        "**Supporters:** pick your own colour for your price-alert cards on the Chip in page, and `/bot supporter` shows your pass and what it gives you. The page also says how many founding spots are left." ] },
     { version: "2026.11.47", date: "2026-11-09", title: "Every overlay in one studio", items: [
         "**One Overlay studio:** now playing, giveaway, deals and cards now live next to goal bars, stats and timers, as tabs. The streamer hub and music page just point there.",
         "**Share this deal:** sale alerts have a button that makes a tall picture of the deal, ready to post.",
@@ -74,7 +72,7 @@ export const CHANGELOG = [
         "**You both want:** right-click someone, choose See their wishlist, and the games on both your lists show up at the top.",
         "**Smaller things:** Ctrl+K opens search on the dashboard, locked supporter themes can be previewed, and the owner is no longer held back by cooldowns or blocks." ] },
     { version: "2026.11.46", date: "2026-11-08", title: "A page to chip in", items: [
-        "**Overlay studio:** build goal bars, server stats and timers for OBS under Streamers, with a live preview and your own colors, font and size. Each has its own private link.",
+        "**Overlay studio:** build goal bars, server stats and timers for OBS under Streamers, with a live preview and your own colours, font and size. Each has its own private link.",
         "**Supporter passes:** pay once through Square for 1, 3 or 12 months and get a Supporter role in the server, a glowing profile badge, three exclusive profile themes, 24 overlay slots and 25% more XP. Refunds are handled automatically and you get a heads-up DM before a pass runs out. Everything else stays free.",
         "**Chip in:** a new tab under Help, and a button on `/bot about`, for anyone who wants to help with the hosting costs. Everything stays free either way.",
         "**Library value badge:** if your profile's Library value section is public, it now has a small image link you can paste into a bio or signature." ] },
@@ -151,7 +149,7 @@ export const CHANGELOG = [
         "**Speaks as itself:** answers are first person now and no longer mention things that don't exist."
     ] },
     { version: "2026.11.33", date: "2026-11-05", title: "Profile card, guestbooks, feed alerts, leaderboards and pictures", items: [
-        "**Profile card:** `/me profilecard` now draws your profile page itself as a picture: banner, avatar, bio, links and the sections you switched on, in your colors and your order. The old card editor on My page is gone. Design everything on My profile instead.",
+        "**Profile card:** `/me profilecard` now draws your profile page itself as a picture: banner, avatar, bio, links and the sections you switched on, in your colours and your order. The old card editor on My page is gone. Design everything on My profile instead.",
         "**Guestbook:** a new section on profile pages where signed-in visitors leave a short note (no links). You can delete any note, close the guestbook, or block someone. Switch it on or off in your page editor.",
         "**Feed alerts:** replies, reactions, new followers and guestbook notes now land in your notifications. Under Feed settings you can also get them on Discord, at most five an hour.",
         "**Leaderboards:** the Communities page shows who has been posting, who finished the most games this month and who holds the most rare achievements, for every server or just one. Only members whose page is on are counted.",
@@ -193,7 +191,7 @@ export const CHANGELOG = [
         "**Live radio on profiles:** a radio stream set as a profile song now plays in a card that matches the OBS now-playing overlay, with a play and pause button, volume and the live strip."
     ] },
     { version: "2026.11.27", date: "2026-11-04", title: "Bundles feed, plus Destiny 2 and Warframe codes", items: [
-        "**Bundles feed:** new game bundles from Humble Bundle, Fanatical, IndieGala and the Steam store are posted once each in a channel, with the games inside, the price tiers when the store shows them, and when the bundle ends. Ended bundles are grayed out. Browse them on the new Bundles page, or set up the channel on your server's Codes & promos tab or with `/server promos bundles`.",
+        "**Bundles feed:** new game bundles from Humble Bundle, Fanatical, IndieGala and the Steam store are posted once each in a channel, with the games inside, the price tiers when the store shows them, and when the bundle ends. Ended bundles are greyed out. Browse them on the new Bundles page, or set up the channel on your server's Codes & promos tab or with `/server promos bundles`.",
         "**Community setup:** setup now makes a #bundles-feed channel and an opt-in **Bundle pings** role and connects them. Servers that were set up before get both the next time you run `/manage community setup`.",
         "**Destiny 2 and Warframe codes:** their promo codes are posted like the other game codes, with the reward, how to claim it and a button to Bungie.net or Warframe.com. Pick them in your server's game list, `/games codes games` or your code alerts."
     ] },
@@ -223,7 +221,7 @@ export const CHANGELOG = [
         "**Live preview:** you see every change as you make it, and your choices are remembered. It uses the same private link as your deals overlay and follows your latest stream giveaway by itself, so you set it up once."
     ] },
     { version: "2026.11.21", date: "2026-11-04", title: "Full giveaway tools for streamers", items: [
-        "**Stream giveaways grew up:** the Streamer hub's giveaway panel now takes several prizes (keys, Nitro, gift cards, money or anything else), a title and description, your own pictures or automatic artwork, a color and button text, with a live preview of the post.",
+        "**Stream giveaways grew up:** the Streamer hub's giveaway panel now takes several prizes (keys, Nitro, gift cards, money or anything else), a title and description, your own pictures or automatic artwork, a colour and button text, with a live preview of the post.",
         "**Required steps:** ask viewers to follow you on Twitch or X, join your Discord, subscribe on YouTube, wishlist a game or any link you like. They show on the post as numbered steps with link buttons. Discord can't check them, so it runs on trust and winners may be checked.",
         "**Rules:** minimum account age, minimum time in the server, boosters only, hours to claim, and for managers a required role, a bonus-entry role and a ping role. Choose whether it draws the moment your stream ends or runs for its full length.",
         "**Everywhere:** the server Giveaways page has the same required steps, and `/server stream giveaway` still gives away a single key quickly."
@@ -252,7 +250,7 @@ export const CHANGELOG = [
     { version: "2026.11.16", date: "2026-11-04", title: "AI companion (coming soon)", items: [
         "**Coming soon, with a preview already working:** the full AI turns on when the bot owner adds an AI key. Until then, when a server turns the companion on, the bot answers the common questions itself: game prices, the free games right now, your wishlist, your library and what to play next. Anything else gets a polite “coming soon” and a list of what works.",
         "**Ask the bot anything:** say `Hey AI` followed by a question, or mention the bot, and it answers in the channel. It is off until a server manager turns it on under Community in the dashboard (or `/manage community ai`), and managers can limit it to one channel.",
-        "**It uses the bot's real data:** it can look up live game prices and the cheapest store, list the free games right now, check your wishlist for sales, summarize your library and suggest what to play next from your backlog, show the server's savings leaderboard, and add a game to your wishlist when you ask it to. It only ever sees your own lists.",
+        "**It uses the bot's real data:** it can look up live game prices and the cheapest store, list the free games right now, check your wishlist for sales, summarise your library and suggest what to play next from your backlog, show the server's savings leaderboard, and add a game to your wishlist when you ask it to. It only ever sees your own lists.",
         "**Bring your own key:** a server manager can paste their own AI key under Community, from Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Mistral, xAI or DeepSeek. It is checked when saved, stored encrypted and never shown again. That server then pays Anthropic for its own answers and is not held to the bot's daily limit, and the AI companion can run even on a bot with no key of its own.",
         "**Support server button:** a Support server button now sits in the dashboard header and on the landing page, linking to the bot owner's own server. That server is never limited by the AI daily cap.",
         "**AI Plus (work in progress):** a preview in the Community page for servers that hit their daily limit. Payments are not live yet; managers can say they are interested, and the bot owner can switch Plus on for a server by hand.",
@@ -265,7 +263,7 @@ export const CHANGELOG = [
         "**Command descriptions in your Discord language:** the main commands now show their descriptions in the language your Discord app is set to. Discord decides that from your own app setting, so the bot cannot switch it per person. Command names stay the same everywhere.",
     ] },
     { version: "2026.11.14", date: "2026-11-03", title: "Public profiles", items: [
-        "**Your own profile page:** build it under Account, My profile, with a live preview. Pick a theme and accent color, background, layout and banner, write a bio, add up to six links (Twitch, Kick, YouTube, X, Bluesky, Steam, GitHub or a website) and pin up to five favorite games. Share it at `/u/yourname`; it shows a proper preview card when pasted into Discord.",
+        "**Your own profile page:** build it under Account, My profile, with a live preview. Pick a theme and accent colour, background, layout and banner, write a bio, add up to six links (Twitch, Kick, YouTube, X, Bluesky, Steam, GitHub or a website) and pin up to five favorite games. Share it at `/u/yourname`; it shows a proper preview card when pasted into Discord.",
         "**Profile song:** set a YouTube, SoundCloud or Spotify link, or the address of a live radio stream, and visitors get a play button on your page. Turn on the optional **Click to enter** screen and the song starts the moment they click it.",
         "**You choose who sees each part:** about, favorites, wishlist, recently finished, trophies, Steam stats, streaming and playing now are each public, server only or hidden, and can be reordered. Hidden parts are never sent to visitors.",
         "**Live ban counter in the trap channel:** the do-not-type-here notice now shows how many accounts it has banned so far, and updates itself within a few seconds of each ban.",
@@ -283,7 +281,7 @@ export const CHANGELOG = [
         "**Chat commands for streamers:** `/server stream chat` (and the hub) gives `!game`, `!deals`, `!free` and `!wishlist` lines to paste into Nightbot, StreamElements, Streamlabs or Fossabot, so viewers in Twitch, Kick or YouTube chat get answers.",
         "**Stream giveaways:** `/server stream giveaway` gives one key to your viewers while you are live. It draws when your stream ends. The deals overlay also has a Playing now card.",
         "**Streamer hub:** one page (Streamers in the menu) with go-live posts and pings, your channel link, the music overlay, the new deals overlay, your public gift-me wishlist and who is live.",
-        "**Deals overlay for OBS:** a private link that rotates the best deal on your wishlist, a free game right now and a gift-me card. Pick the cards, corner, colors and speed.",
+        "**Deals overlay for OBS:** a private link that rotates the best deal on your wishlist, a free game right now and a gift-me card. Pick the cards, corner, colours and speed.",
         "**Now playing:** `/server nowplaying` and a dashboard page show who in your server is in a game. Members opt in with `join:true`. Setup adds a #now-playing channel and Squad pings role for squad-up posts when two or more play the same game.",
     ] },
     { version: "2026.11.11", date: "2026-11-03", title: "Playtests page and a guided first run", items: [
@@ -297,7 +295,7 @@ export const CHANGELOG = [
         "**Playtest watcher:** `/alerts playtests` (off by default) now has two modes: only games on your wishlist, or every free playtest, beta and demo the bot finds. It reads Steam announcements and the Alpha Beta Gamer site (alphabetagamer.com), which lists sign-ups and demos Steam news never mentions. Every post links back to the site. Servers can also pick a **Playtests** ping role in the dashboard's Ping roles panel: the bot then posts those announcements in the alert channel for games the server's sharing members watch, and pings the role. There is also a switch to post every playtest, not only watched games. No member is named.",
         "**Vote on game night:** the game night card has a **Start a vote** button. It posts up to five games everyone owns, people tap to vote (and can change their vote), and the tally updates live for six hours.",
         "**Saved views:** on the Wishlist page, name your current sort and filters and bring them back from the Views menu. They are saved in the browser you use.",
-        "**Wishlist page color:** a member's public wishlist page now uses the color they picked for their profile card.",
+        "**Wishlist page colour:** a member's public wishlist page now uses the colour they picked for their profile card.",
         "**Refund and rebuy:** with `/alerts refund` on, you also hear when a game still inside its refund window drops below what you paid on Steam, so a refund and rebuy would save money. It needs prices from the extension's purchase sync; games without a recorded price are skipped, and `/alerts refund` tells you if none are recorded yet.",
         "**Achievement heads-up:** `/alerts achievements` (off by default) tells you when a game you have played for 5 hours or more is within 3 achievements of 100%. Counts come from your last Steam sync.",
         "**Press / to search:** on the dashboard, `/` jumps to the search box on pages that have one.",
@@ -336,7 +334,7 @@ export const CHANGELOG = [
         "**Subscriptions:** the bundle alerts now also tell you when a wishlist game joins a subscription like Game Pass or Prime Gaming, and when it's about to leave one. `/me wishlist check` shows which subscriptions include the game. The same switch as bundle alerts (`/alerts bundles`) controls them.",
         "**Go-live switch:** managers can turn the automatic go-live posts off (and back on) for their server, with the checkbox in the Streams page settings or `/server stream setup auto:`. Linked channels stay linked while it's off.",
         "**Amazon Luna claims:** the monthly games you can claim with Prime on Amazon Luna now show up with the other free games. You get an alert when a new one opens, a last-chance reminder before it ends, and they're in `/games freegames` (filter by Amazon Luna) and on the dashboard. Each card says which store the game is delivered through (Epic, GOG or Amazon Games).",
-        "**Fancier /help and embeds:** `/help` is now a branded card with the logo, a banner, a jump menu, Back / Next buttons and Dashboard, Add to a server and Support links. Every card and message the bot sends now gets the same orange color and a footer with the logo, and plain text replies show up as cards (messages that ping someone stay as text so the ping still works).",
+        "**Fancier /help and embeds:** `/help` is now a branded card with the logo, a banner, a jump menu, Back / Next buttons and Dashboard, Add to a server and Support links. Every card and message the bot sends now gets the same orange colour and a footer with the logo, and plain text replies show up as cards (messages that ping someone stay as text so the ping still works).",
         "**Commands grouped:** the long list is now a few short ones. `/games` (prices, deals, free games, sales, codes), `/me` (wishlist, library, Steam, friends, your data), `/server` (giveaways, game nights, levels, boards, events), `/manage` (setup and community for managers), `/bot` (status, changelog, support, ideas), plus `/alerts`, `/music`, `/play`, `/mod`, `/dashboard` and `/help`. Everything does what it did before, just under a group.",
         "**One card at a time:** messages that used to stack several cards (a batch of free games, several wishlist alerts, bundle and giveaway alerts, long replies) now show one card with Previous / Next buttons and a jump menu. Each page keeps its own buttons.",
         "**Emoji packs:** `/manage emoji packs` browses emoji.gg packs one at a time and imports the one you pick (still only, animated only, or both, in batches of 50). The dashboard's Community page has the same with tick boxes. Emoji links from any website now work too, and animated Discord emoji keep their movement.",
@@ -350,7 +348,7 @@ export const CHANGELOG = [
         "**Auto memes:** the bot now posts a fresh meme in #memes every hour (servers can pick 1 to 24 hours, another channel, or turn it off with `/manage memes setup` or on the dashboard's Community page; `/manage memes now` posts one right away). Nothing marked NSFW is used and a server never gets the same post twice.",
         "**Live radio:** more stations, with hip hop, R&B, dance, chill, rock, throwbacks and reggae. Filter by type in `/music live` and on the dashboard.",
         "**Music:** paste a SoundCloud profile link (like soundcloud.com/name) and the bot queues that artist's own uploads, not their reposts. Old now-playing cards are now deleted when the next song starts, so the channel stays clean.",
-        "**Stream overlay:** the music studio has a Stream tab with a compact now-playing card for OBS or any streaming software. It fades in when a song starts, swaps with a shine when the song changes, and fades out when the music stops. Preview it live with what is actually playing (or a demo reel, on a transparent, game or bright backdrop, close-up or as a full 1080p scene) and pick from nine looks (card, spinning record, neon outline, poster, square cover, wide bar, slim strip, small chip, minimal text), theme, color, size and where it sits, preview it live, then paste your server's private link into a Browser source. Managers can make a new link any time and the old one stops working.",
+        "**Stream overlay:** the music studio has a Stream tab with a compact now-playing card for OBS or any streaming software. It fades in when a song starts, swaps with a shine when the song changes, and fades out when the music stops. Preview it live with what is actually playing (or a demo reel, on a transparent, game or bright backdrop, close-up or as a full 1080p scene) and pick from nine looks (card, spinning record, neon outline, poster, square cover, wide bar, slim strip, small chip, minimal text), theme, colour, size and where it sits, preview it live, then paste your server's private link into a Browser source. Managers can make a new link any time and the old one stops working.",
         "**Streamers:** servers can have a **Streamer** role and a **#stream-live** channel (community setup makes both, and the `Stream pings` role). Streamers, moderators and managers use `/server stream live` or the dashboard's new **Streams** page to announce they're live; members who picked the Stream pings role (`/server stream ping`, the roles channel or the Streams page) get pinged. The OBS overlay settings are now only for moderators, managers, the bot owner and the streamer role, and everyone gets their own private overlay link instead of sharing one per server.",
         "**Chat on screen:** new messages in the big player's session chat now float up over the player like the emoji (links hidden, long messages cut, a few at a time, with an On screen button to turn it off). The song progress bar also no longer jumps back and forth.",
         "**Big player from Discord:** `/player` gives a button that opens the big music player for your server, and the now-playing post has a **Big player** button too, plus **Listen here** (and a **Listen now** button in the big player), which drops you into the voice channel the music is playing in.",
@@ -369,14 +367,14 @@ export const CHANGELOG = [
     ] },
     { version: "2026.11.03", date: "2026-11-01", title: "Promo drops", items: [
         "**Alerts to your DMs:** `/alerts codes` messages you when a new game code drops (all games, or only the ones you pick), and `/alerts promos` does the same for giveaway and code news. Both are on the dashboard's Alerts page, show up in Notifications, can be muted, and only send what is new from the moment you turn them on.",
-        "**Promo drops:** for key giveaways like SteelSeries or NVIDIA rewards. A server manager adds the code or link with `/server promos add` (or on the dashboard under Servers, Promo drops) and the bot posts it once in the promo channel, then grays it out when it ends.",
+        "**Promo drops:** for key giveaways like SteelSeries or NVIDIA rewards. A server manager adds the code or link with `/server promos add` (or on the dashboard under Servers, Promo drops) and the bot posts it once in the promo channel, then greys it out when it ends.",
         "**News watching:** turn on `/server promos news` and the bot also posts news that mentions a giveaway or a code: the NVIDIA and SteelSeries blogs, and the official Steam news for Dead by Daylight, Warframe, Destiny 2, Apex Legends, Rainbow Six Siege, Marvel Rivals, Wuthering Waves, Path of Exile and PUBG. It only posts new ones, and it can be wrong now and then, so each one links to the post.",
         "**Codes, tidied:** all the Borderlands games are now one entry in every picker and filter (the code card still names the exact game), and Genshin, Star Rail and Zenless codes show their game art on the dashboard and in Discord posts.",
         "**Ping roles:** community setup adds opt-in **Game code pings** and **Promo drop pings** roles to the role picker, and those are pinged by default (or pick your own role on the dashboard or with `/games codes ping` and `/server promos ping`). Run `/manage community setup` again to add them to an existing server.",
         "**Where they go:** community setup adds a #promo-drops channel (run `/manage community setup` again to add it to an existing server)."
     ] },
     { version: "2026.11.02", date: "2026-11-01", title: "Game codes", items: [
-        "**Limited-time game codes:** the bot now watches for SHiFT codes (Borderlands 2, 3, 4, The Pre-Sequel, Wonderlands and the GOTY edition) plus redeem codes for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, and posts each one once, with the right game's art, the reward, the platform and when it ends. When a code runs out, its post is grayed out.",
+        "**Limited-time game codes:** the bot now watches for SHiFT codes (Borderlands 2, 3, 4, The Pre-Sequel, Wonderlands and the GOTY edition) plus redeem codes for Genshin Impact, Honkai: Star Rail and Zenless Zone Zero, and posts each one once, with the right game's art, the reward, the platform and when it ends. When a code runs out, its post is greyed out.",
         "**Where they go:** servers get a #game-codes channel from community setup (run `/manage community setup` again to add it to an existing server). Managers can pick the channel, which games to include and a role to ping with `/games codes`, or on the dashboard under Servers, Game codes.",
         "**Dashboard:** a new **Game codes** page under Prices lists every working code with a copy button, and lets you look at ones that just ended. `/games codes latest` shows the same list in Discord.",
     ] },
@@ -394,7 +392,7 @@ export const CHANGELOG = [
     { version: "2026.10.31", date: "2026-10-29", title: "Sign in through Steam", items: [
         "**Sign in through Steam** on the dashboard: one click on Steam's own page and your library, hours and taste profile fill in. No profile links to paste. Wishlist import, `/me wishlist import` and `/me steam link` use the Steam account you signed in with.",
         "The Steam page has a new **Library analytics** view: games, hours, collection value, how much you have played, hours by genre, played versus backlog and your most played games.",
-        "Free DLC is now labeled, and if your Steam library is synced the alert says whether you own the base game.",
+        "Free DLC is now labelled, and if your Steam library is synced the alert says whether you own the base game.",
         "FanaticalGrabber 2.7: press **Connect the extension** on the Library page and the code is handed over for you. The cart check now says why when it cannot read a cart, and \"You're seeing the best deals available\" when you are well under Steam.",
         "**For you** page and `/me steam foryou`: live deals ranked by a match score from your library taste and wishlist, with filters for all-time lows, discount, price and store.",
         "Home page: a live count of free offers and a feature ticker. `/help` is now a full command list."
@@ -421,7 +419,7 @@ export const CHANGELOG = [
         "`/me library badges` and a Trophy case on the Library page. `/server leaderboard board:finished` is a monthly backlog league for members who opted in.",
         "Dashboard: a page for every game (click a wishlist title) and a Sale war room with a budget slider.",
         "Dashboard: a My page under Account lists every feature as a card with its status, switches for the simple ones, and links to set up the rest. Pin, reorder or hide cards.",
-        "My page also has a Profile card: pick what to show (games, finished, hours, percent saved, streak, badges, genres), choose a color and save it as an image.",
+        "My page also has a Profile card: pick what to show (games, finished, hours, percent saved, streak, badges, genres), choose a colour and save it as an image.",
         "My page pictures: add a banner and a profile card picture from any https image link, or let a Steam link fill them in (your profile picture and the art of your most played game). They refresh each time you sync.",
         "Profile card: add your gaming names (Steam, Xbox, PlayStation, Nintendo, Epic, GOG and more) and they show on the card. `/me profilecard` posts the same card as a picture (add `public:true` to share it).",
         "`/me steam value` now answers with a picture that looks like the Steam page's account value panel. The Steam page has a Save as image button for it too.",
@@ -458,7 +456,6 @@ export const LATEST = CHANGELOG[0].version;
 export function changelogEmbed(limit = 3) {
     return {
         color: 0xff9800, title: "What's new",
-        // Each version gets an equal share of the space, so one long entry can't push the others out.
-        description: CHANGELOG.slice(0, limit).map(e => `**${e.title}** (${e.date})\n${e.items.map(x => "• " + x).join("\n")}`.slice(0, Math.floor(3900 / Math.max(1, Math.min(limit, CHANGELOG.length))))).join("\n\n").slice(0, 4000)
+        description: CHANGELOG.slice(0, limit).map(e => `**${e.title}** (${e.date})\n${e.items.map(x => "• " + x).join("\n")}`).join("\n\n").slice(0, 4000)
     };
 }

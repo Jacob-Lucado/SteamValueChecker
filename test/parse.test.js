@@ -21,7 +21,7 @@ test("parseMoney handles common formats", () => {
     assert.equal(parseMoney(null), null);
 });
 
-test("splitCsvLine honors quotes", () => {
+test("splitCsvLine honours quotes", () => {
     assert.deepEqual(splitCsvLine('"Hades, the game",KEY,"say ""hi"""'), ["Hades, the game", "KEY", 'say "hi"']);
 });
 

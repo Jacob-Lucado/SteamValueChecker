@@ -135,7 +135,7 @@ test("supporters: when the role can't be given, it says why, and re-sending fixe
     assert.equal((await none.homeStatus()).why, "no-home-server");
 });
 
-test("supporters: the alert color is a supporter perk, validated, and gone with the pass", async () => {
+test("supporters: the alert colour is a supporter perk, validated, and gone with the pass", async () => {
     const { alertColor, alertColorHex } = await import("../src/supporters.js");
     const db = openDb(":memory:"); const t = 1_000_000;
     const sup = createSupporters({ db, now: () => t });
@@ -143,7 +143,7 @@ test("supporters: the alert color is a supporter perk, validated, and gone with 
     assert.equal(alertColor(db, "u1", t), null);
     assert.equal(sup.setAlertColor("u1", "#FF8800"), "#ff8800");
     assert.equal(alertColor(db, "u1", t), 0xff8800);
-    assert.throws(() => sup.setAlertColor("u1", "red"), /color/);
+    assert.throws(() => sup.setAlertColor("u1", "red"), /colour/);
     assert.equal(alertColor(db, "u1", t + 400 * 86_400_000), null);
     assert.equal(alertColor(db, "u2", t), null);
     assert.equal(sup.setAlertColor("u1", ""), null);

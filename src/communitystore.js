@@ -148,7 +148,7 @@ export function communityStore({ run, get, all, clean, now }) {
         return Number(get("SELECT COUNT(*) AS n FROM member_xp WHERE guild_id = ? AND (xp > ? OR (xp = ? AND user_id < ?))", guildId, me.xp, me.xp, userId).n) + 1;
     };
     const xpTop = (guildId, limit = 10) => all("SELECT user_id, xp, level, messages FROM member_xp WHERE guild_id = ? AND xp > 0 ORDER BY xp DESC, user_id LIMIT ?", guildId, limit).map(clean);
-    /** Servers where this person already has XP and leveling is on. */
+    /** Servers where this person already has XP and levelling is on. */
     const xpGuildsOf = userId => all("SELECT m.guild_id FROM member_xp m LEFT JOIN community c ON c.guild_id = m.guild_id WHERE m.user_id = ? AND COALESCE(c.xp_on, 1) = 1", userId).map(r => r.guild_id);
     const countXpMembers = guildId => Number(get("SELECT COUNT(*) AS n FROM member_xp WHERE guild_id = ? AND xp > 0", guildId).n);
 

@@ -27,7 +27,7 @@ export function codeView(c, at = Date.now()) {
         expiresAt: c.expires_at ?? null, status: c.status === "active" && c.expires_at && c.expires_at < at ? "expired" : c.status, firstSeen: c.first_seen, sourceUrl: c.source_url, redeemUrl: redeemUrlFor(game, c.code) };
 }
 
-/** The post for one code. `expired` grays it out, strikes the code through and drops the buttons. */
+/** The post for one code. `expired` greys it out, strikes the code through and drops the buttons. */
 export function codeEmbed(c, { expired = false, base = null } = {}) {
     const game = gameByKey(c.game);
     const ends = c.expires_at ? `<t:${unix(c.expires_at)}:D> (<t:${unix(c.expires_at)}:R>)` : "No end date listed";

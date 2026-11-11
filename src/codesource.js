@@ -19,7 +19,7 @@ export const SHIFT_GAMES = [
     { key: "bl2", title: "Borderlands 2", appid: 49520, match: /borderlands\s*2/i }
 ];
 
-/** HoYoverse games. Their lists mark a code as working or not, and carry no end date. There is no official art to link, so the dashboard uses an accent color. */
+/** HoYoverse games. Their lists mark a code as working or not, and carry no end date. There is no official art to link, so the dashboard uses an accent colour. */
 export const HOYO_GAMES = [
     { key: "genshin", title: "Genshin Impact", color: 0x4fc3b8, artFile: "/img/codes/genshin.jpg", ennead: "genshin", seria: "genshin", redeem: code => `https://genshin.hoyoverse.com/en/gift?code=${encodeURIComponent(code)}` },
     { key: "hsr", title: "Honkai: Star Rail", color: 0x8f7cf0, artFile: "/img/codes/hsr.jpg", ennead: "starrail", seria: "hkrpg", redeem: code => `https://hsr.hoyoverse.com/gift?code=${encodeURIComponent(code)}` },

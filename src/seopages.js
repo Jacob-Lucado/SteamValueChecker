@@ -3,7 +3,6 @@
 // needing the dashboard to run. Kept as data so a new page is a few lines.
 
 import { upcomingSales, SALES_UPDATED } from "./salescal.js";
-import { money, steamArt } from "./render.js";
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -50,7 +49,7 @@ export const SEO_PAGES = {
         h1: "Free game alerts in Discord",
         lead: "Stores give games away all the time and the offers disappear fast. The bot posts each free game once, with the store, the end date and a button to claim it, so you don't have to keep checking. Steam free weekends are covered too, with the date they end.",
         sections: [
-            ["What it covers", ["Free games on Epic, Steam, GOG and other stores", "Free weekends, demos and playtests", "Limited-time game codes like SHiFT codes, posted once and grayed out when they run out", "A /games freegames command that shows what's free right now"]],
+            ["What it covers", ["Free games on Epic, Steam, GOG and other stores", "Free weekends, demos and playtests", "Limited-time game codes like SHiFT codes, posted once and greyed out when they run out", "A /games freegames command that shows what's free right now"]],
             ["For your server", ["Point the free games feed at a channel and ping a role. Members who don't want pings can skip them."]]
         ],
         steps: ["Add the bot to your server.", "Choose the channel for free games with /manage alertchannel.", "Optionally pick a role to ping."],
@@ -100,7 +99,7 @@ export const SEO_PAGES = {
         title: "Discord timestamp generator: make timestamps that show in everyone's time zone",
         desc: "Free Discord timestamp generator. Pick a date, time and time zone and copy the code for any style, including the relative style that counts down. Shows each member the time in their own zone.",
         h1: "Discord timestamp generator",
-        lead: "Pick a date and time, and copy the code. Paste it into Discord and every member sees it in their own time zone, so nobody has to do the math for your game night.",
+        lead: "Pick a date and time, and copy the code. Paste it into Discord and every member sees it in their own time zone, so nobody has to do the maths for your game night.",
         html: `<section class="tool"><div class="fields"><label>Date and time<input type="datetime-local" id="when"></label><label>Time zone<select id="zone"></select></label></div>
 <p class="unix">Unix time: <code id="unix"></code></p><div id="styles" class="ts-list" aria-live="polite"></div><noscript><p>This tool needs JavaScript.</p></noscript></section>`,
         sections: [["How Discord timestamps work", ["A timestamp is a code like <t:1767225600:F>. Discord swaps it for the date and time in each reader's own time zone.", "The letter at the end picks the style. R is the relative style (\"in 3 hours\") and updates by itself."]],
@@ -137,17 +136,6 @@ export const SEO_PAGES = {
         faq: [["Does it work for DLC?", "Mostly yes, the same 14-day, 2-hour idea applies to DLC, though some in-game items are different."], ["Where do I see my hours played?", "In your Steam library, on the game's page, under Play Time."], ["Does Steam refund to my card?", "Usually to your original payment method, or to Steam Wallet if you pick that."]],
         related: ["steam-library-value", "discord-game-deals-bot", "free-game-alerts"]
     },
-    "steam-deals-this-week": {
-        dynamic: "deals",
-        title: "Best Steam deals this week: the biggest discounts right now | Steam Value Checker",
-        desc: "The best Steam sales this week: big discounts on games that are worth the money, refreshed every hour. Get a Discord ping when a game on your wishlist drops to the price you want.",
-        h1: "The best Steam deals this week",
-        lead: "These are the biggest savings on Steam right now, sorted by how many dollars you keep. Cheap games and tiny discounts are left out, so what's here is worth a look. The list refreshes every hour.",
-        sections: [["How the list is picked", ["Only discounts of 50% or more on games that normally cost $10 or more. One entry per game, biggest dollar saving first.", "Prices come from IsThereAnyDeal and are shown in US dollars. Check the store page for your own region."]]],
-        steps: ["Add the bot to your server, or to your own account.", "Bring in your Steam wishlist.", "Pick the alert you want and get a message when a game on your list goes on sale."],
-        faq: [["How often does this page change?", "Every hour. Steam deals can end without warning, so check the price on the store before you buy."], ["Are these all-time lows?", "Not always. The bot shows a year of price history and whether a game has hit its low, so you can tell a good deal from an average one."], ["Can I get these in Discord?", "Yes. A weekly roundup posts every Friday, and wishlist alerts fire the moment your own games go on sale."]],
-        related: ["steam-sale-dates", "discord-game-deals-bot", "free-game-alerts"]
-    },
     "steam-sale-dates": {
         dynamic: true,
         title: "Steam sale dates: when is the next Steam sale?",
@@ -161,7 +149,7 @@ export const SEO_PAGES = {
     }
 };
 
-const NAV_LABEL = { "steam-library-value": "Steam library value", "discord-game-deals-bot": "Game deal alerts", "free-game-alerts": "Free game alerts", "steam-verified-role": "Steam Verified role", "discord-giveaway-bot": "Giveaway bot", "discord-timestamp-generator": "Discord timestamp generator", "steam-id-finder": "Steam ID finder", "steam-refund-calculator": "Steam refund calculator", "steam-sale-dates": "Steam sale dates", "steam-deals-this-week": "Best Steam deals this week" };
+const NAV_LABEL = { "steam-library-value": "Steam library value", "discord-game-deals-bot": "Game deal alerts", "free-game-alerts": "Free game alerts", "steam-verified-role": "Steam Verified role", "discord-giveaway-bot": "Giveaway bot", "discord-timestamp-generator": "Discord timestamp generator", "steam-id-finder": "Steam ID finder", "steam-refund-calculator": "Steam refund calculator", "steam-sale-dates": "Steam sale dates" };
 
 const dayFmt = new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeZone: "UTC" });
 function salesHtml(now = Date.now()) {
@@ -173,19 +161,10 @@ function salesHtml(now = Date.now()) {
     return `<section class="tool"><ul class="sales">${rows}</ul><p class="muted">Dates checked ${dayFmt.format(Date.parse(SALES_UPDATED))}. Steam events start at 10am Pacific.</p></section>`;
 }
 
-function dealsHtml(deals) {
-    const rows = (deals ?? []).map(d => {
-        const art = d.appid ? steamArt(d.appid) : null;
-        return `<li class="deal"><a href="${esc(d.url)}" rel="noopener noreferrer">${art ? `<img src="${esc(art)}" alt="" width="184" height="69" loading="lazy">` : ""}<span class="deal-name">${esc(d.title)}</span><span class="deal-price"><s>${esc(money(d.regular, d.currency))}</s> <b>${esc(money(d.price, d.currency))}</b> <em>-${Math.round(d.cut)}%</em></span></a></li>`;
-    }).join("");
-    if (!rows) return `<section class="tool"><p class="muted">The deals list is loading. Check back in a few minutes.</p></section>`;
-    return `<section class="tool"><ul class="deals">${rows}</ul><p class="muted">Updated hourly. Prices in US dollars from IsThereAnyDeal.</p></section>`;
-}
-
 export const seoSlugs = () => Object.keys(SEO_PAGES);
 export const seoIsLive = slug => !!SEO_PAGES[slug]?.dynamic;
 
-export function renderSeoPage(slug, { origin, invite = null, deals = null } = {}) {
+export function renderSeoPage(slug, { origin, invite = null } = {}) {
     const p = SEO_PAGES[slug];
     if (!p) return null;
     const url = `${origin}/${slug}`;
@@ -229,8 +208,8 @@ ${ld.map(o => `<script type="application/ld+json">${JSON.stringify(o).replace(/<
 <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Steam Value Checker</a> / <span>${esc(NAV_LABEL[slug])}</span></nav>
 <h1>${esc(p.h1)}</h1>
 <p class="lead">${esc(p.lead)}</p>
-${p.tool ? p.html : p.dynamic === "deals" ? dealsHtml(deals) : p.dynamic ? salesHtml() : ""}
-<div class="cta"><a class="btn go" href="${invite ? esc(`${invite}?src=seo-${slug}`) : "/"}">${invite ? "Add it to your server" : "Open the dashboard"}</a><a class="btn alt" href="/auth/steam">Sign in through Steam</a></div>
+${p.tool ? p.html : p.dynamic ? salesHtml() : ""}
+<div class="cta"><a class="btn go" href="${invite ? esc(invite) : "/"}">${invite ? "Add it to your server" : "Open the dashboard"}</a><a class="btn alt" href="/auth/steam">Sign in through Steam</a></div>
 ${p.sections.map(([h, body]) => `<section><h2>${esc(h)}</h2>${body.length > 1 && body.every(x => x.length < 130) ? list(body) : body.map(t => `<p>${esc(t)}</p>`).join("")}</section>`).join("\n")}
 <section><h2>How to get started</h2><ol>${p.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></section>
 <section class="faq"><h2>Questions</h2>${p.faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</section>
@@ -239,7 +218,7 @@ ${p.sections.map(([h, body]) => `<section><h2>${esc(h)}</h2>${body.length > 1 &&
 <footer class="foot wrap"><span>Prices by <a href="https://isthereanydeal.com" rel="noopener noreferrer">IsThereAnyDeal</a>. Not affiliated with Valve, Steam or IsThereAnyDeal.</span>
 <span>${seoSlugs().map(s => `<a href="/${s}">${esc(NAV_LABEL[s])}</a>`).join(" · ")} · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></span></footer>
 <script src="/motion.js" defer></script>
-${p.script ? `<script src="${p.script}" defer></script>` : ""}${p.dynamic === true ? `<script src="/tools/sales.js" defer></script>` : ""}
+${p.script ? `<script src="${p.script}" defer></script>` : ""}${p.dynamic ? `<script src="/tools/sales.js" defer></script>` : ""}
 </body>
 </html>
 `;

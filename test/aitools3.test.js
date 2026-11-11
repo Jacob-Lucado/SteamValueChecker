@@ -38,7 +38,7 @@ test("AI extras: comparing two games names the cheaper and better reviewed, with
     assert.equal((await t.run("compare_games", { first: "A", second: "zzz" }, ctx())).found, false);
 });
 
-test("AI extras: the backlog plan favors started games, respects the hours, and filters by tag", async () => {
+test("AI extras: the backlog plan favours started games, respects the hours, and filters by tag", async () => {
     const { db, t } = mk();
     db.upsertLibrary("u1", [{ itad_id: "a", title: "Started", paid: 1 }, { itad_id: "b", title: "Untouched", paid: 1 }, { itad_id: "c", title: "Done", paid: 1 }]);
     db.syncSteamGames("u1", [{ itad_id: "a", title: "Started", appid: 1, minutes: 300 }, { itad_id: "b", title: "Untouched", appid: 2, minutes: 0 }, { itad_id: "c", title: "Done", appid: 3, minutes: 900 }]);

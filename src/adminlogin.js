@@ -66,7 +66,7 @@ export function totpCode(secret, step) {
     const o = h[h.length - 1] & 15;
     return String(((h[o] & 127) << 24 | h[o + 1] << 16 | h[o + 2] << 8 | h[o + 3]) % 1_000_000).padStart(6, "0");
 }
-/** The step number the code belongs to (this one or a neighbor, for clock drift), or null. A step can be used only once. */
+/** The step number the code belongs to (this one or a neighbour, for clock drift), or null. A step can be used only once. */
 export function matchTotp(secret, code, nowMs, lastStep = 0) {
     const c = String(code ?? "").replace(/\s/g, "");
     if (!/^\d{6}$/.test(c)) return null;

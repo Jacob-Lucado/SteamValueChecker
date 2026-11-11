@@ -39,7 +39,7 @@ export function analyzeBundle(bundle, { owned = new Set(), wanted = new Set(), p
 }
 
 /**
- * Bundles that include `gameIds` (a game you asked about, or your wishlist), analyzed for this member.
+ * Bundles that include `gameIds` (a game you asked about, or your wishlist), analysed for this member.
  * Returns { bundles, currency }. Throws UserError when there is nothing to look at.
  */
 export async function bundleCheck({ db, itad, user, gameIds }) {

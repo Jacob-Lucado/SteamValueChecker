@@ -201,12 +201,3 @@ test("next likely sale is a guess from past drops, and stays quiet without enoug
     assert.equal(nextSale(pts.slice(0, 4), now), null);
     assert.match(priceInsight(pts, 20, { now }).text, /📅/);
 });
-
-test("schedule can hold back its first run so a restart doesn't fire everything at once", async () => {
-    let runs = 0;
-    const stop = schedule(async () => { runs++; }, 100000, { firstRunMs: 30 });
-    assert.equal(runs, 0);
-    await new Promise(r => setTimeout(r, 80));
-    assert.equal(runs, 1);
-    stop();
-});

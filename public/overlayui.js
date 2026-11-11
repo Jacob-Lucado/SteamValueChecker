@@ -84,7 +84,7 @@
     const field = (label, control) => h("div", { class: "ovp-field" }, h("label", { text: label }), control);
     const sel = (key, opts) => { const s = h("select"); for (const [v, text] of opts) s.append(h("option", { value: v, text, selected: String(o[key]) === v })); s.addEventListener("change", () => { o[key] = s.value; refresh(); }); return s; };
     const box = (key, label) => { const i = h("input", { type: "checkbox", checked: o[key] === 1 }); i.addEventListener("change", () => { o[key] = i.checked ? 1 : 0; refresh(); }); return h("label", { class: "ovp-check" }, i, " " + label); };
-    const color = h("input", { type: "color", value: "#" + o.accent, "aria-label": "Accent color" });
+    const color = h("input", { type: "color", value: "#" + o.accent, "aria-label": "Accent colour" });
     color.addEventListener("input", () => { o.accent = color.value.slice(1); refresh(); });
     const range = (key, min, max, step, fmt, label) => { const r = h("input", { type: "range", min: String(min), max: String(max), step: String(step), value: String(o[key]), "aria-label": label }); const out = h("span", { class: "ovp-val", text: fmt(o[key]) }); r.addEventListener("input", () => { o[key] = Number(r.value); out.textContent = fmt(o[key]); refresh(); }); return h("div", { class: "ovp-inline" }, r, out); };
     const num = (key, min, max, fallback, label) => { const i = h("input", { type: "number", min: String(min), max: String(max), value: String(o[key]), "aria-label": label }); i.addEventListener("change", () => { o[key] = Math.max(min, Math.min(max, Number(i.value) || fallback)); refresh(); }); return i; };
@@ -123,7 +123,7 @@
     const options = h("div", { class: "ovp-grid" },
       field("Look", sel("style", [["card", "Card"], ["vinyl", "Spinning record"], ["neon", "Neon outline"], ["poster", "Poster (big cover)"], ["square", "Square cover"], ["bar", "Wide bar"], ["ticker", "Slim strip"], ["compact", "Small chip"], ["minimal", "Minimal text"]])),
       field("Theme", sel("theme", [["dark", "Dark"], ["light", "Light"], ["glass", "Frosted glass"], ["clear", "Clear (no background)"]])),
-      field("Accent color", color), field("Size", range("scale", 0.6, 2, 0.1, v => v + "×", "Size")),
+      field("Accent colour", color), field("Size", range("scale", 0.6, 2, 0.1, v => v + "×", "Size")),
       field("Card background opacity", range("bg", 0, 100, 5, v => v + "%", "Card background opacity")), field("Whole overlay opacity", range("opacity", 10, 100, 5, v => v + "%", "Whole overlay opacity")),
       field("Where it sits", anchors), field("When it shows", sel("mode", [["always", "Whenever music is playing"], ["popup", "Pop up for each new song"]])),
       field("Seconds to show each new song", num("hold", 3, 120, 10, "Seconds to show each new song")), field("Hide after pausing (seconds, 0 = stay)", num("pause", 0, 300, 0, "Seconds before it hides when paused")),

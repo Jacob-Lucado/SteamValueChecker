@@ -47,7 +47,7 @@ export function createDropHandlers({ db, runNow = null }) {
                 if (!d || d.guild_id !== gid) throw new UserError("I don't have a drop with that number in this server. `/server promos list` shows them.");
                 if (!db.endDrop(id)) throw new UserError("That one has already ended.");
                 runNow?.().catch(() => {});
-                return await eph(i, `Ended #${id}. Its post will be grayed out.`);
+                return await eph(i, `Ended #${id}. Its post will be greyed out.`);
             }
             if (sub === "channel") {
                 const ch = i.options.getChannel("channel");

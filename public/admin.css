@@ -1,4 +1,4 @@
-/* Admin panel layout: a sidebar, a top bar and a wide content area. Colors come from the dashboard's own variables. */
+/* Admin panel layout: a sidebar, a top bar and a wide content area. Colours come from the dashboard's own variables. */
 .adm-body { margin: 0; background: radial-gradient(1200px 500px at 70% -10%, var(--bg-glow), transparent 60%), var(--bg); color: var(--text); min-height: 100vh; }
 .adm-body::before { display: none; } /* no mascot watermark behind the data */
 .adm { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; }
@@ -96,7 +96,7 @@
 .adm-login .row.center { justify-content: center; margin-top: 14px; }
 .adm-login .theme-btn { flex: none; }
 .adm-login .adm-login-form input { width: 100%; box-sizing: border-box; }
-/* Signed out: centered, with the logo behind it like the rest of the dashboard */
+/* Signed out: centred, with the logo behind it like the rest of the dashboard */
 .adm-body.adm-bare-body::before { display: block; }
 .adm.adm-bare { position: relative; z-index: 1; }
 .adm.adm-bare .adm-main { align-items: center; justify-content: center; min-height: 100vh; }
@@ -335,7 +335,7 @@ body.adm-os { overflow: hidden; height: 100vh; background: #0b3f8f; }
 .sc-compose .sc-input { height: 40px; min-height: 40px; } .sc-tk .sc-input { height: 64px; }
 .sc .btn.small:not(.gray) { background: var(--accent); color: #fff; border: 0; }
 
-/* ---- the original LucadoOS look: the site's own colors, rounded windows. Windows look is the same page with .adm-orig off. ---- */
+/* ---- the original LucadoOS look: the site's own colours, rounded windows. Windows look is the same page with .adm-orig off. ---- */
 body.adm-os.adm-orig { background: var(--bg); }
 .adm-orig .adm-desk { background: var(--wall, radial-gradient(900px 520px at 80% 0, var(--bg-glow), transparent 65%), radial-gradient(700px 480px at 0 100%, var(--glow-2), transparent 65%)), var(--bg); }
 .adm-orig .adm-desk::after { color: var(--muted); opacity: .25; }
