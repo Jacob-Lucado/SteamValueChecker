@@ -4170,6 +4170,38 @@ window.SVC_SITE = envIn => {
   }
   new MutationObserver(() => { clearTimeout(idTimer); idTimer = setTimeout(() => nameAdminIds(document.body.classList.contains("adm-body") ? document.body : app), 250); }).observe(document.body, { childList: true, subtree: true });
 
+  /** For anyone who signs in to the admin panel without being on the list: a joke, a flock of geese, and a trip to the owner's X after ten seconds. */
+  function gooseScreen() {
+    const DEST = "https://x.com/twit_user69";
+    document.title = "Honk";
+    const count = h("strong", { text: "10" });
+    app.replaceChildren(h("div", { class: "adm-center" }, h("div", { class: "panel", style: "text-align:center;position:relative;z-index:2" },
+      h("div", { text: "🪿", style: "font-size:64px;line-height:1" }),
+      h("h2", { text: "You silly goose." }),
+      h("p", { class: "muted", text: "This page isn't for you. Honk." }),
+      h("p", { class: "muted" }, "Sending you somewhere better in ", count, " seconds..."),
+      h("div", { class: "row" }, h("a", { class: "btn gray", href: DEST, text: "Take me there now" })))));
+    const sky = h("div", { "aria-hidden": "true" }); sky.style.cssText = "position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1";
+    document.body.appendChild(sky);
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const geese = calm ? 8 : 26;
+    for (let i = 0; i < geese; i++) {
+      const g = h("div", { text: "🪿" }), size = 28 + Math.random() * 56, ltr = Math.random() < 0.5;
+      g.style.cssText = `position:absolute;left:0;top:0;font-size:${size}px;line-height:1;will-change:transform`;
+      sky.appendChild(g);
+      const w = innerWidth, hh = innerHeight, y0 = Math.random() * hh, y1 = Math.random() * hh, mid = Math.random() * hh;
+      const x0 = ltr ? -120 : w + 120, x1 = ltr ? w + 120 : -120, flip = ltr ? -1 : 1; // the emoji faces left
+      const frames = [
+        { transform: `translate(${x0}px, ${y0}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 40}deg)` },
+        { transform: `translate(${(x0 + x1) / 2}px, ${mid}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 60}deg)`, offset: 0.5 },
+        { transform: `translate(${x1}px, ${y1}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 40}deg)` }];
+      const run = () => g.animate(frames, { duration: 2600 + Math.random() * 3200, delay: Math.random() * 2500, easing: "ease-in-out" }).onfinish = run;
+      run();
+    }
+    let left = 10;
+    const tick = setInterval(() => { left -= 1; count.textContent = String(Math.max(left, 0)); if (left <= 0) { clearInterval(tick); location.href = DEST; } }, 1000);
+  }
+
   function adminCenter(title, text, ...actions) {
     app.replaceChildren(h("div", { class: "adm-center" }, h("div", { class: "panel" }, h("h2", { text: title }), h("p", { class: "muted", text }), h("div", { class: "row" }, actions))));
   }
@@ -4375,9 +4407,7 @@ window.SVC_SITE = envIn => {
     try { state.cfg = await api("/api/config"); } catch (e) { return adminCenter("Can't reach the bot", e.message); }
     try { state.me = await api("/api/me"); } catch { state.me = null; }
     if (!state.me) return adminLoginScreen();
-    if (!state.me.isOwner && !state.me.panel) return adminCenter("Owner only", "This account isn't the bot owner, so there's nothing to see here.",
-      h("a", { class: "btn gray", href: state.cfg.siteUrl || "/", text: "Back to Steam Value Checker" }),
-      h("button", { class: "btn gray", type: "button", text: "Sign out", onclick: async () => { try { await api("/auth/logout", {}); } catch { /* already out */ } location.reload(); } }));
+    if (!state.me.isOwner && !state.me.panel) return gooseScreen();
     if (state.me.panel) { // someone the owner let in: no page for managing admins; a username login gets "My password", a Discord login has nothing to change
       const drop = new Set(state.me.panel.kind === "password" ? ["admins"] : ["admins", "account"]);
       for (const g of ADMIN_NAV) g[1] = g[1].filter(([id]) => !drop.has(id));
