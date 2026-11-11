@@ -4547,6 +4547,8 @@ window.SVC_SITE = envIn => {
       chk.addEventListener("click", () => busy(chk, async () => { try { const r = await api("/api/admin/xposter/check", {}); note.textContent = "Connected" + (r.username ? " as @" + r.username : "") + "."; } catch (e) { note.textContent = e.message; } }));
       const sv = h("button", { class: "btn gray small", type: "button", text: "Save" }); sv.addEventListener("click", () => save({ daily: Number(per.value) }));
       const linksOn = h("input", { type: "checkbox" }); linksOn.checked = xs.links; linksOn.addEventListener("change", () => save({ links: linksOn.checked }));
+      const alwaysOn = h("input", { type: "checkbox" }); alwaysOn.checked = xs.always; alwaysOn.addEventListener("change", () => save({ always: alwaysOn.checked }));
+      const ingameOn = h("input", { type: "checkbox" }); ingameOn.checked = xs.ingame; ingameOn.addEventListener("change", () => save({ ingame: ingameOn.checked }));
       const tagsIn = h("input", { type: "text", value: xs.tags, class: "x-tags", placeholder: "#FreeGames #PCGaming …" });
       const tagsSave = h("button", { class: "btn gray small", type: "button", text: "Save tags" }); tagsSave.addEventListener("click", () => save({ tags: tagsIn.value }));
       const tagsReset = h("button", { class: "btn gray small", type: "button", text: "Reset" }); tagsReset.addEventListener("click", () => save({ tags: xs.defaultTags }));
@@ -4561,6 +4563,8 @@ window.SVC_SITE = envIn => {
         xs.imageError && h("p", { class: "bad small", text: "Last automatic post went out without a picture: " + xs.imageError.message }),
         h("label", { class: "check" }, on, " Post new free games automatically"),
         h("label", { class: "check" }, linksOn, " Put the game's link in automatic posts (about " + money(xs.linkCost) + " each instead of " + money(xs.plainCost) + ")"),
+        h("label", { class: "check" }, ingameOn, " Post free items and packs inside free-to-play games (worded as an in-game offer)"),
+        h("label", { class: "check" }, alwaysOn, " Also post games that are always free to play (off by default)"),
         h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
         h("div", { class: "row" }, h("label", { text: "Hashtags " }), tagsIn, tagsSave, tagsReset),
         h("p", { class: "muted small", text: "Each automatic post gets its store's own tag (like #EpicGames) plus up to three from this list, rotating so no two posts match. Bundles skip the free and giveaway ones. A few well-picked tags do better than a wall of them." }),

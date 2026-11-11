@@ -1,6 +1,7 @@
 // Posts the free games the bot finds to the project's X account. X charges for every post it takes through the API
 // (about 1.5 cents for plain text, and about 20 cents once a post has a link in it), so this only ever posts plain text,
 // at most a few a day, and does nothing until the owner switches it on and has added the four keys.
+import { offerKind } from "./freeinfo.js";
 import { dealUrl } from "./deallinks.js";
 import { freeArt } from "./render.js";
 import { recordProblem } from "./adminlog.js";
@@ -26,7 +27,7 @@ export function xLength(text) {
 const readList = v => { try { const a = JSON.parse(v ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; } };
 
 /** Hashtags: one for the store the game or bundle is from, then a few popular gaming ones that rotate, so no two posts carry the exact same set. */
-const TAGS = "xposter:tags";
+const TAGS = "xposter:tags", ALWAYS = "xposter:always", INGAME = "xposter:ingame";
 export const DEFAULT_TAGS = ["#FreeGames", "#PCGaming", "#Gaming", "#Giveaway", "#GameDeals", "#Freebie", "#SteamDeals"];
 const STORE_TAGS = [[/steam/i, "#Steam"], [/epic/i, "#EpicGames"], [/gog/i, "#GOG"], [/humble/i, "#HumbleBundle"], [/fanatical/i, "#Fanatical"], [/indie\s?gala/i, "#IndieGala"], [/itch/i, "#itchio"], [/ubisoft/i, "#Ubisoft"], [/prime/i, "#PrimeGaming"], [/battle\.?net|blizzard/i, "#Blizzard"]];
 export function cleanTags(input) {
@@ -100,7 +101,10 @@ export function freeGameText(g, now = Date.now(), tags = DEFAULT_TAGS, { link = 
     const left = g.expiry && g.expiry > now ? g.expiry - now : null;
     const when = left === null ? "" : left < 36 * 3_600_000 ? `\n⏳ Ends ${left < 3_600_000 ? "within the hour" : `in about ${Math.round(left / 3_600_000)} hours`}.` : `\n⏳ Ends ${new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }).format(new Date(g.expiry))}.`;
     let title = String(g.title).slice(0, 110);
-    const make = () => `🎁 Free right now: ${title}${shop}${when}\n\nKeep it forever once you claim it. Our Discord bot posts every free game as it drops.\n\n${link && g.url ? `Claim it: ${g.url}` : "Link in bio."}\n\n${hashtagsFor(g.shop, g.title, tags)}`;
+    const kind = offerKind(g);
+    const head = kind === "weekend" ? "🎮 Free to play this weekend" : kind === "ingame" ? "🎁 Free in-game offer" : "🎁 Free right now";
+    const body = kind === "weekend" ? "Play it free for a limited time. It goes back to full price after, so grab it before then." : kind === "ingame" ? "The game itself is always free. This is a limited-time freebie inside it. Our Discord bot catches these too." : kind === "always" ? "Free to play any time. Our Discord bot posts every free game as it drops." : "Keep it forever once you claim it. Our Discord bot posts every free game as it drops.";
+    const make = () => `${head}: ${title}${shop}${when}\n\n${body}\n\n${link && g.url ? `Claim it: ${g.url}` : "Link in bio."}\n\n${hashtagsFor(g.shop, g.title, tags)}`;
     let text = make();
     while (xLength(text) > 280 && title.length > 20) { title = title.slice(0, -10).trimEnd() + "…"; text = make(); }
     return text;
@@ -256,10 +260,12 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         const score = shopScores();
         return byEnd.sort((a, b) => (score.get(b.shop) ?? 0) - (score.get(a.shop) ?? 0))[0]; // a stable sort, so ties keep the soonest-ending first
     }
+    // Games that are free to play all the time are left out unless the owner turns that on; in-game freebies are on by default.
+    const offerOk = g => { const k = offerKind(g); return k === "always" ? db.getMeta(ALWAYS) === "1" : k === "ingame" ? db.getMeta(INGAME) !== "0" : true; };
     /** What the next automatic post would look like, without sending or marking anything. */
     function peek(list) {
         if (!enabled() || !configured()) return { off: true };
-        const fresh = (list ?? []).filter(g => g.type !== "dlc" && /^https:\/\//.test(g.url ?? "") && g.title && !db.getMeta(SEEN + g.id) && (!g.expiry || g.expiry - now() > 2 * 3_600_000));
+        const fresh = (list ?? []).filter(g => g.type !== "dlc" && offerOk(g) && /^https:\/\//.test(g.url ?? "") && g.title && !db.getMeta(SEEN + g.id) && (!g.expiry || g.expiry - now() > 2 * 3_600_000));
         const g = pickNext(fresh);
         if (!g) return { nothing: true };
         const link = linksOn();
@@ -272,7 +278,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         if (!enabled() || !configured()) return { skipped: "off" };
         if (postedToday() >= daily()) return { skipped: "cap" };
         if (now() - (Number(db.getMeta(LAST)) || 0) < GAP_MS) return { skipped: "gap" };
-        const fresh = (list ?? []).filter(g => g.type !== "dlc" && /^https:\/\//.test(g.url ?? "") && g.title && !db.getMeta(SEEN + g.id) && (!g.expiry || g.expiry - now() > 2 * 3_600_000));
+        const fresh = (list ?? []).filter(g => g.type !== "dlc" && offerOk(g) && /^https:\/\//.test(g.url ?? "") && g.title && !db.getMeta(SEEN + g.id) && (!g.expiry || g.expiry - now() > 2 * 3_600_000));
         const g = pickNext(fresh);
         if (!g) return { skipped: "nothing" };
         db.setMeta(SEEN + g.id, String(now())); // marked first, so a failure can't turn into a loop of retries that each cost money
@@ -299,10 +305,12 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
     function status() {
         let err = null; try { err = db.getMeta(ERR) ? JSON.parse(db.getMeta(ERR)) : null; } catch { /* none */ }
         const d = daily();
-        return { configured: configured(), enabled: enabled(), daily: d, postedToday: postedToday(), lastAt: Number(db.getMeta(LAST)) || null, error: err, links: linksOn(), imageError: (() => { try { return db.getMeta(IMGERR) ? JSON.parse(db.getMeta(IMGERR)) : null; } catch { return null; } })(), monthlyCost: Math.round(d * 30 * (linksOn() ? COST_LINK_POST : COST_PER_POST) * 100) / 100, maxDaily: MAX_DAILY, tags: tags().join(" "), defaultTags: DEFAULT_TAGS.join(" "),
+        return { configured: configured(), enabled: enabled(), daily: d, postedToday: postedToday(), lastAt: Number(db.getMeta(LAST)) || null, error: err, links: linksOn(), always: db.getMeta(ALWAYS) === "1", ingame: db.getMeta(INGAME) !== "0", imageError: (() => { try { return db.getMeta(IMGERR) ? JSON.parse(db.getMeta(IMGERR)) : null; } catch { return null; } })(), monthlyCost: Math.round(d * 30 * (linksOn() ? COST_LINK_POST : COST_PER_POST) * 100) / 100, maxDaily: MAX_DAILY, tags: tags().join(" "), defaultTags: DEFAULT_TAGS.join(" "),
             monthSpend: Math.round(spendCents()) / 100, history: readList(db.getMeta(HIST)), queue: readList(db.getMeta(QUEUE)), templates: TEMPLATES, manualToday: Number(db.getMeta(MANUAL + dayOf(now()))) || 0, manualMax: MAX_MANUAL_PER_DAY, linkCost: COST_LINK_POST, plainCost: COST_PER_POST };
     }
-    function setSettings({ enabled: on, daily: n, tags: tg, links: lk } = {}) {
+    function setSettings({ enabled: on, daily: n, tags: tg, links: lk, always, ingame } = {}) {
+        if (always !== undefined) db.setMeta(ALWAYS, always ? "1" : "0");
+        if (ingame !== undefined) db.setMeta(INGAME, ingame ? "1" : "0");
         if (lk !== undefined) db.setMeta(LINKS, lk ? "1" : "0");
         if (tg !== undefined) { const t = cleanTags(tg); db.setMeta(TAGS, t.join(" ")); }
         if (on !== undefined) db.setMeta(ON, on ? "1" : "0");

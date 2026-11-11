@@ -1709,7 +1709,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             if (body.enabled && !xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET).");
-            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily, tags: body.tags, links: body.links }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
+            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily, tags: body.tags, links: body.links, always: body.always, ingame: body.ingame }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
         },
         "GET /api/admin/xposter/bundles": async (req, _b, url) => {
             const s = session(req);
@@ -3976,7 +3976,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             let list = [];
-            try { list = await itad.getGiveawayList(); } catch { /* shown as nothing queued */ }
+            try { list = await enrichFree(await itad.getGiveawayList()); } catch { /* shown as nothing queued */ }
             return xposter.peek(list);
         },
         "GET /api/admin/datarequests": async (req) => {

@@ -241,3 +241,13 @@ test("peek shows the next automatic post without sending or marking anything, an
     assert.ok(r.error);
     assert.equal(readEvents(db, "adminlog:problems")[0].where, "X post");
 });
+
+test("free-weekend, always-free and in-game offers are worded and filtered correctly", () => {
+    const now = Date.UTC(2026, 10, 9);
+    const base = { id: "z", title: "Some Game", shop: "Steam", url: "https://store.steampowered.com/app/1/" };
+    assert.match(freeGameText({ ...base, weekend: true }, now), /Free to play this weekend/);
+    assert.doesNotMatch(freeGameText({ ...base, weekend: true }, now), /Keep it forever/);
+    assert.match(freeGameText({ ...base, alwaysFree: true, title: "Game $100 Starter Pack" }, now), /always free/);
+    assert.doesNotMatch(freeGameText({ ...base, alwaysFree: true }, now), /Keep it forever/);
+    assert.match(freeGameText(base, now), /Keep it forever/);
+});
