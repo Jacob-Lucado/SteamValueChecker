@@ -1,0 +1,40 @@
+# A manual deploy button for when the Fly dashboard deploy is stuck.
+# On GitHub: Actions, Deploy to Fly, Run workflow. It only runs when you press it.
+# Needs one secret, FLY_API_TOKEN (a Fly deploy token, made on the Tokens page in the Fly dashboard).
+name: Deploy to Fly
+on:
+  workflow_dispatch:
+    inputs:
+      recreate_builder:
+        description: Throw away the old Fly builder and make a fresh one
+        type: boolean
+        default: false
+      builder_region:
+        description: Put the builder in another region (for example ord, lax, ams). Blank keeps the default.
+        type: string
+        default: ""
+      use_depot:
+        description: Use Fly's newer Depot builder. Turn off to use the classic Fly builder.
+        type: boolean
+        default: true
+concurrency: fly-deploy
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_REMOTE_BUILDER_REGION: ${{ inputs.builder_region }}
+        run: |
+          set -e
+          if [ -z "$FLY_API_TOKEN" ]; then echo "Add the FLY_API_TOKEN secret first (repo Settings > Secrets and variables > Actions)."; exit 1; fi
+          args="--remote-only"
+          [ "${{ inputs.recreate_builder }}" = "true" ] && args="$args --recreate-builder"
+          [ "${{ inputs.use_depot }}" = "false" ] && args="$args --depot=false"
+          [ -z "$FLY_REMOTE_BUILDER_REGION" ] && unset FLY_REMOTE_BUILDER_REGION
+          echo "flyctl deploy $args"
+          flyctl deploy $args
