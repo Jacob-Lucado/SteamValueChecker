@@ -3784,3 +3784,20 @@ test("fortnite: the creator code is announced and checked live", async () => {
     const c = await t.request("/api/fortnite/creator?code=LUCADO"); assert.equal(c.status, 200); assert.equal(c.data.status, "ACTIVE"); assert.equal(c.data.name, "Jacob Lucado");
     assert.equal((await t.request("/api/fortnite/creator?code=x")).status, 400);
 });
+
+test("the deals-this-week page lists real discounts, skips weak ones and is in the sitemap", async () => {
+    const pool = [
+        { id: "a", title: "Big <Game>", cut: 75, price: 15, regular: 60, currency: "USD", url: "https://store.steampowered.com/app/11/", appid: 11 },
+        { id: "b", title: "Tiny Sale", cut: 10, price: 18, regular: 20, currency: "USD", url: "https://store.steampowered.com/app/12/", appid: 12 }
+    ];
+    const t = await setup({ itadExtra: { getDealsPool: async () => pool } });
+    const html = await (await t.request("/steam-deals-this-week", { raw: true })).text();
+    assert.ok(html.includes("Big &lt;Game&gt;") && html.includes("-75%"), "shows the good deal, escaped");
+    assert.ok(!html.includes("Tiny Sale"), "leaves out a small discount");
+    assert.ok(/<link rel="canonical" href="[^"]+\/steam-deals-this-week">/.test(html));
+    assert.ok((await (await t.request("/sitemap.xml", { raw: true })).text()).includes("/steam-deals-this-week"));
+    await t.close();
+    const t2 = await setup({ itadExtra: { getDealsPool: async () => { throw new Error("down"); } } });
+    assert.ok((await (await t2.request("/steam-deals-this-week", { raw: true })).text()).includes("loading"), "a failed lookup still gives a page");
+    await t2.close();
+});
