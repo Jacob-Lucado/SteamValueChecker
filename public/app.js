@@ -3178,18 +3178,27 @@ window.SVC_SITE = envIn => {
         code.replaceChildren(h("h4", { text: "Or paste a code" }), h("p", { class: "muted small", text: "Click the FanaticalGrabber icon in your toolbar (the puzzle piece menu if it is hidden), open \"Have a code? Paste it\", and paste this. It is shown once, and anyone with it can add games to your library." }), input, h("p", {}, copy));
       } catch (e) { code.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
-    async function go() {
+    const success = (ver, again) => {
+      const feats = ["Prices, all-time lows and your library status on Steam pages", "Playtest and demo badges", "How many people in your server own a game", "One-click wishlist and stream spotlight", "Free games to keep, with optional auto-claim", "Price and region checks on Fanatical"];
+      status.className = "";
+      status.replaceChildren(h("div", { class: "notice" }, h("b", { text: again ? "FanaticalGrabber is already connected. " : "Connected successfully. " }), `FanaticalGrabber${ver ? " " + String(ver).slice(0, 12) : ""} is linked to your account${state.me && state.me.name ? ", " + state.me.name : ""}. Only game names are ever sent, never your keys.`),
+        h("h4", { text: "Now switched on" }), h("ul", {}, feats.map(f => h("li", { text: f }))),
+        h("p", {}, h("a", { class: "btn steam", href: "https://store.steampowered.com", target: "_blank", rel: "noopener noreferrer", text: "Open the Steam store" }), " ", h("a", { class: "btn blue", href: "#/home", text: "Go to my dashboard" })),
+        again ? h("p", { class: "muted small", text: "Having trouble? Press Try again to make a fresh link." }) : h("p", { class: "muted small", text: "You can close this tab. The extension's toolbar icon now shows your free game and alert counts." }));
+    };
+    async function go(force) {
       status.className = "muted"; status.textContent = "Looking for the extension…"; code.replaceChildren();
       const here = await ask("ping");
       if (!here) { status.className = ""; status.replaceChildren(h("div", { class: "notice warn", text: "I can't see the extension on this page. Make sure FanaticalGrabber is installed and up to date, then reload. If it keeps happening, paste a code instead." })); manual(); return; }
+      if (here.linked && force !== true) { try { const { link } = await api("/api/grabber"); if (link) { success(here.version, true); return; } } catch { /* fall through and link again */ } }
       try {
         const { token } = await api("/api/grabber/token", { action: "new" });
         const done = await ask("connect", { token });
-        if (done && done.ok) { status.className = ""; status.replaceChildren(h("div", { class: "notice" }, h("b", { text: "Linked. " }), "You can close this tab and go back to what you were doing.")); return; }
+        if (done && done.ok) { success(here.version, false); return; }
       } catch (e) { status.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
       status.replaceChildren(h("div", { class: "notice warn", text: "The extension did not accept the link. Update it, then try again, or paste a code instead." })); manual();
     }
-    retry.addEventListener("click", go);
+    retry.addEventListener("click", () => go(true));
     go();
   }
 
