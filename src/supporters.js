@@ -36,7 +36,7 @@ export const isFounder = (db, userId) => Boolean(db.getMeta(FOUNDER + userId));
 /** How many founding spots are taken (the first 50 paid passes). */
 export const foundersTaken = db => db.listMetaPrefix(FOUNDER).filter(r => r.value).length;
 export const wallName = (db, userId) => db.getMeta(WALL + userId) || null;
-/** The color a supporter picked for their own price alerts, as a number Discord understands. Null once the pass is over or if none is set. */
+/** The colour a supporter picked for their own price alerts, as a number Discord understands. Null once the pass is over or if none is set. */
 export function alertColor(db, userId, now = Date.now()) {
     if (!isSupporter(db, userId, now) && !isFounder(db, userId)) return null;
     const hex = /^#[0-9a-f]{6}$/i.test(db.getMeta(COLOR + userId) ?? "") ? db.getMeta(COLOR + userId) : null;
@@ -187,10 +187,10 @@ export function createSupporters({ db, client = null, mainGuild = null, dm = nul
         return clean || null;
     }
 
-    /** Save (or clear, with an empty value) the color of a supporter's alert cards. Throws on anything that isn't a six-digit hex color. */
+    /** Save (or clear, with an empty value) the colour of a supporter's alert cards. Throws on anything that isn't a six-digit hex colour. */
     function setAlertColor(userId, hex) {
         const v = String(hex ?? "").trim().toLowerCase();
-        if (v && !/^#[0-9a-f]{6}$/.test(v)) throw new Error("Pick a color like #ff8800.");
+        if (v && !/^#[0-9a-f]{6}$/.test(v)) throw new Error("Pick a colour like #ff8800.");
         db.setMeta(COLOR + userId, v);
         return v || null;
     }

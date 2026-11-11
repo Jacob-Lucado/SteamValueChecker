@@ -1,4 +1,4 @@
-/* Music studio. Same colors as the dashboard (from style.css), laid out like a player. */
+/* Music studio. Same colours as the dashboard (from style.css), laid out like a player. */
 .mu-body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); overflow: clip; }
 html:has(.mu-body) { overflow: clip; }
 .mu-body::before { display: none; }

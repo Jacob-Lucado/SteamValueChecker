@@ -8,12 +8,6 @@ CREATE TABLE IF NOT EXISTS friends (
     birthday    TEXT,
     reminded_in INTEGER,
     UNIQUE (discord_id, name)
-);
--- A member's own birthday (month and day only). \`share\` = 1 lets people who have their page on their friends list get the reminder.
-CREATE TABLE IF NOT EXISTS user_birthdays (
-    discord_id TEXT PRIMARY KEY REFERENCES users(discord_id) ON DELETE CASCADE,
-    mmdd       TEXT NOT NULL,
-    share      INTEGER NOT NULL DEFAULT 0
 );`;
 
 export const MAX_FRIENDS = 100;
@@ -39,13 +33,6 @@ export function friendStore({ run, get, all, now }) {
         run("INSERT INTO friends (discord_id, name, slug, birthday) VALUES (?,?,?,?)", id, name, slug, birthday);
         return { added: true };
     }
-    const getBirthday = id => get("SELECT mmdd, share FROM user_birthdays WHERE discord_id = ?", id) ?? null;
-    function setBirthday(id, mmdd, share) {
-        if (!mmdd) return run("DELETE FROM user_birthdays WHERE discord_id = ?", id);
-        return run("INSERT INTO user_birthdays (discord_id, mmdd, share) VALUES (?,?,?) ON CONFLICT(discord_id) DO UPDATE SET mmdd = excluded.mmdd, share = excluded.share", id, mmdd, share ? 1 : 0);
-    }
-    /** The birthday a member chose to share, by their public page name. */
-    const sharedBirthdayBySlug = slug => get("SELECT b.mmdd FROM user_birthdays b JOIN users u ON u.discord_id = b.discord_id WHERE u.profile_slug = ? COLLATE NOCASE AND u.profile_public = 1 AND b.share = 1", slug)?.mmdd ?? null;
     const friendBySlug = (id, slug) => get("SELECT id, name, slug, birthday, auto FROM friends WHERE discord_id = ? AND slug = ? COLLATE NOCASE", id, slug) ?? null;
     /** A friend that came from following their page: skipped when they are already a friend or the list is full, and the nickname is made unique. */
     function addFollowedFriend(id, { name, slug }) {
@@ -62,7 +49,7 @@ export function friendStore({ run, get, all, now }) {
     const removeFriend = (id, name) => run("DELETE FROM friends WHERE discord_id = ? AND name = ? COLLATE NOCASE", id, name).changes > 0;
     const getFriend = (id, name) => get("SELECT id, name, slug, birthday FROM friends WHERE discord_id = ? AND name = ? COLLATE NOCASE", id, name) ?? null;
     /** Everyone with a birthday, for the daily reminder run. */
-    const friendsWithBirthdays = () => all("SELECT id, discord_id, name, slug, birthday, reminded_in FROM friends WHERE birthday IS NOT NULL OR slug IS NOT NULL");
+    const friendsWithBirthdays = () => all("SELECT id, discord_id, name, slug, birthday, reminded_in FROM friends WHERE birthday IS NOT NULL");
     const markFriendReminded = (id, year) => run("UPDATE friends SET reminded_in = ? WHERE id = ?", year, id);
-    return { getBirthday, setBirthday, sharedBirthdayBySlug, countFriends, listFriends, addFriend, friendBySlug, addFollowedFriend, dropFollowedFriend, setFriendBirthday, removeFriend, getFriend, friendsWithBirthdays, markFriendReminded };
+    return { countFriends, listFriends, addFriend, friendBySlug, addFollowedFriend, dropFollowedFriend, setFriendBirthday, removeFriend, getFriend, friendsWithBirthdays, markFriendReminded };
 }

@@ -40,11 +40,8 @@ export function birthdayEmbed(friend, days, deals) {
 export async function runFriendReminders({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
     const stats = { due: 0, sent: 0, failed: 0 };
     const year = new Date(now()).getUTCFullYear();
-    for (const row of db.friendsWithBirthdays()) {
-        const { birthday } = birthdayFor(db, row);
-        if (!birthday) continue;
-        const f = { ...row, birthday };
-        const days = daysUntilBirthday(birthday, now());
+    for (const f of db.friendsWithBirthdays()) {
+        const days = daysUntilBirthday(f.birthday, now());
         if (days > REMIND_DAYS || f.reminded_in === year) continue;
         const user = db.getUser(f.discord_id);
         if (!user || user.paused) continue;
@@ -71,21 +68,8 @@ export function syncFollowedFriends(db, userId, nameOf) {
     for (const f of db.listFollowing(userId)) if (f.slug) friendFromFollow(db, userId, { name: nameOf(f.discord_id) ?? f.slug, slug: f.slug });
 }
 
-/** Their own birthday wins, then one the person chose to share on their public page. */
-export function birthdayFor(db, f) {
-    if (f.birthday) return { birthday: f.birthday, fromPage: false };
-    const shared = f.slug ? db.sharedBirthdayBySlug(f.slug) : null;
-    return { birthday: shared, fromPage: Boolean(shared) };
-}
-
-export function saveOwnBirthday(db, userId, { birthday, share }) {
-    const b = cleanBirthday(birthday);
-    db.setBirthday(userId, b, b ? Boolean(share) : false);
-    return { birthday: b, share: Boolean(b && share) };
-}
-
 export function friendRows(db, userId, nowMs = Date.now()) {
-    return db.listFriends(userId).map(f => { const { birthday, fromPage } = birthdayFor(db, f); return { ...f, birthday, fromPage, daysToBirthday: birthday ? daysUntilBirthday(birthday, nowMs) : null }; })
+    return db.listFriends(userId).map(f => ({ ...f, daysToBirthday: f.birthday ? daysUntilBirthday(f.birthday, nowMs) : null }))
         .sort((a, b) => (a.daysToBirthday ?? 999) - (b.daysToBirthday ?? 999) || a.name.localeCompare(b.name));
 }
 

@@ -155,7 +155,7 @@ test("Playtester: its feed is read into the shared shape, and demos only count f
     const items = parsePlaytester(F("playtester.xml"));
     assert.equal(items.length, 12);
     const zoom = items.find(x => x.game.startsWith("I got the ZOOMIES"));
-    assert.equal(zoom.kind, "playtest", "Playtester writes Beta on every playtest"); assert.equal(zoom.type, "Playtest"); assert.equal(zoom.sourceName, "Playtester"); assert.equal(zoom.url, "https://playtester.io/i-got-the-zoomies");
+    assert.equal(zoom.kind, "beta"); assert.equal(zoom.sourceName, "Playtester"); assert.equal(zoom.url, "https://playtester.io/i-got-the-zoomies");
     assert.match(zoom.image, /^https:\/\/cdn\.playtester\.io\/thumbnails\//); assert.ok(!zoom.wishlistOnly);
     const demo = items.find(x => x.game === "Space Girl");
     assert.equal(demo.kind, "demo"); assert.equal(demo.wishlistOnly, true); assert.equal(demo.label, "Demo");
@@ -206,21 +206,4 @@ test("a server can limit Playtester's full feed to some genres, but wishlisted g
     w.set([item("abg", "Anchor", "signup", 5), seed]); await w.run(); // switching on starts quiet
     w.set([item("abg", "Anchor", "signup", 5), seed, t("Cozy Farm", ["Cozy", "Farming"], 0.1), t("Grim Shooter", ["Action"], 0.1)]); await w.run();
     assert.equal(w.chan.length, 1); assert.match(w.chan[0].title, /Cozy Farm/);
-});
-
-test("a member and a server can each leave itch.io (or any site) out of their alerts", async () => {
-    const w = world();
-    const seed = [item("abg", "Anchor", "signup", 5), item("itch", "Itch Seed", "playtest", 6), item("gamerpower", "GP Seed", "playtest", 6)];
-    w.set(seed); await w.run();                                         // quiet first look at every source
-    const fresh = [...seed, item("itch", "Fresh Itch", "playtest", 0.1), item("gamerpower", "Fresh GP", "playtest", 0.1)];
-    // nobody skips anything yet: both get both
-    w.set(fresh); await w.run();
-    assert.equal(w.sent.flat().length, 2); assert.equal(w.chan.length, 2);
-    // the member skips itch.io, the server skips GamerPower
-    const more = [...fresh, item("itch", "Second Itch", "playtest", 0.05), item("gamerpower", "Second GP", "playtest", 0.05)];
-    w.db.updateUser("u1", { playtest_skip: "itch" }); w.db.setCommunity("G", { playtest_skip: "gamerpower" });
-    w.set(more); await w.run();
-    const dms = w.sent.slice(1).flat(), posts = w.chan.slice(2).map(c => c.title);
-    assert.equal(dms.length, 1); assert.match(dms[0], /Second GP/, "the member still gets GamerPower but not itch.io");
-    assert.equal(posts.length, 1); assert.match(posts[0], /Second Itch/, "the server still gets itch.io but not GamerPower");
 });

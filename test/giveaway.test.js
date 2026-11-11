@@ -313,7 +313,7 @@ test("cancel: the host gets unused keys back and the post is closed", async () =
     const r = await t.svc.cancel(id);
     assert.equal(r.unused, 2);
     assert.equal(t.db.getGiveaway(id).status, "cancelled");
-    assert.ok(t.edits.some(e => /canceled/.test(JSON.stringify(e.payload))));
+    assert.ok(t.edits.some(e => /cancelled/.test(JSON.stringify(e.payload))));
     await assert.rejects(() => t.svc.cancel(id), /already over/);
 });
 
@@ -338,7 +338,7 @@ test("deleting your data removes entries and returns waiting prizes to the host"
     assert.equal(t.db.getKey(k.id).status, "available");
 });
 
-test("the giveaway post respects customization", () => {
+test("the giveaway post respects customisation", () => {
     const g = { id: 5, host_id: "h", title: "T", description: "D", color: 0x123456, image_url: "https://i.example/x.png", thumbnail_url: "http://insecure.example/t.png", button_label: "Join now!", ping_role_id: "P", status: "active", ends_at: 2e12, guild_id: "G", channel_id: "C", claim_hours: 48, bonus_entries: 1 };
     const p = giveawayPayload(g, [{ label: "Hades" }], 0, "active");
     assert.equal(p.embeds[0].color, 0x123456);
@@ -382,7 +382,7 @@ test("scheduled giveaway posts only when its time comes", async () => {
     await t.svc.enter(r.id, { userId: "u1", roleIds: [] });
 });
 
-test("a scheduled giveaway can be canceled and returns its keys", async () => {
+test("a scheduled giveaway can be cancelled and returns its keys", async () => {
     const t = rig();
     const r = await t.make({ start_in_ms: HOUR });
     const out = await t.svc.cancel(r.id);
@@ -478,7 +478,7 @@ test("a money prize: no code is kept for the host to pay, the host is told who c
     assert.equal(t.db.getKey(money.id).has_key, false);
 });
 
-test("a giveaway nobody entered ends grayed out and says so", async () => {
+test("a giveaway nobody entered ends greyed out and says so", async () => {
     const t = rig();
     const { id } = await t.make();
     t.advance(3 * HOUR); await t.svc.tick();

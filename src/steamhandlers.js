@@ -152,7 +152,7 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
                 if (!top.length) throw new UserError("No picks right now. Link Steam (`/me steam link`) so I know your taste, then try again.");
                 const lines = top.map(d => `${d.match ? `**${d.match}%**` : "•"} [${d.title}](${d.url ?? "https://store.steampowered.com/"}): ${money(d.price, d.currency)} at ${d.shop} (-${d.cut}%)${d.atl ? " · all-time low" : ""}${d.wishlist ? " · on your wishlist" : ""}`);
                 return void await i.editReply({ embeds: [{ color: 0x4da3ff, title: "Deals picked for you", description: lines.join("\n").slice(0, 3900),
-                    footer: { text: (r.personalized ? `Based on your ${r.genres.slice(0, 3).join(", ")} games` : "Link Steam to personalize this") + (r.pending ? `  •  still reading genres for ${r.pending} games` : "") + "  •  Prices by IsThereAnyDeal" } }] });
+                    footer: { text: (r.personalised ? `Based on your ${r.genres.slice(0, 3).join(", ")} games` : "Link Steam to personalise this") + (r.pending ? `  •  still reading genres for ${r.pending} games` : "") + "  •  Prices by IsThereAnyDeal" } }] });
             }
             if (sub === "taste") {
                 if (!link) throw new UserError("Link your profile first with `/me steam link`.");

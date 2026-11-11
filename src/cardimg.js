@@ -18,7 +18,7 @@ const cut = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + "…" 
 
 const chip = (x, y, w, h, fill, stroke) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
 
-// Colors of the website's dark theme, so the picture looks like the page.
+// Colours of the website's dark theme, so the picture looks like the page.
 const C = { bg: "#0f1724", panel: "#162134", tile: "#1b2a40", line: "#27384f", text: "#f4f8fd", mute: "#a3b3c8", accent: "#4da3ff" };
 
 /** The Steam account value page as a picture: the stat tiles and the "Estimated account value" panel. */

@@ -330,7 +330,7 @@ export async function runSnapshots({ db, itad, log = () => {} }) {
 }
 
 /** Runs `fn` now and then every `everyMs`, never overlapping itself. Returns a stop function. */
-export function schedule(fn, everyMs, { onError = () => {}, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, firstRunMs = 0 } = {}) {
+export function schedule(fn, everyMs, { onError = () => {}, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval } = {}) {
     let running = false;
     const tick = async () => {
         if (running) return;
@@ -339,10 +339,8 @@ export function schedule(fn, everyMs, { onError = () => {}, setIntervalImpl = se
     };
     const handle = setIntervalImpl(tick, everyMs);
     handle.unref?.();
-    // firstRunMs lets a restart spread its jobs out instead of firing them all in the same second.
-    let first = null;
-    if (firstRunMs > 0) { first = setTimeout(tick, firstRunMs); first.unref?.(); } else tick();
-    return () => { clearIntervalImpl(handle); if (first) clearTimeout(first); };
+    tick();
+    return () => clearIntervalImpl(handle);
 }
 
 

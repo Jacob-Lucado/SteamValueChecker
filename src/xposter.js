@@ -76,7 +76,7 @@ export const TEMPLATES = [
     { id: "indie-showcase", name: "Indie: weekly showcase", text: "Every Wednesday we put one indie game in the spotlight. 🌟\n\nNo big studio budget, just a game that deserves more eyes. Our Discord bot shares it with every server that opts in. Link in bio.\n\n#IndieGames #IndieShowcase #PCGaming" },
     { id: "indie-submit", name: "Indie: devs, submit your game", text: "Making an indie game? 🛠️\n\nSubmit it to the Steam Value Checker indie showcase. Approved games get their own page and a shot at the weekly spotlight. Link in bio.\n\n#IndieDev #IndieGames #gamedev" },
     { id: "indie-reply", name: "Indie: reply with yours", text: "Indie devs: reply with your game and one line on why people should play it. 👇\n\nWe'll boost the best ones and feature a few in our weekly spotlight.\n\n#IndieDev #IndieGames #Steam" },
-    { id: "profile", name: "Profile cards", text: "Your Steam profile, as a card you can actually share. 🎮\n\nSteam Value Checker builds a profile page with your library value, playtime and favorites, and a picture version for Discord or X. Link in bio.\n\n#Steam #PCGaming #Gaming" }
+    { id: "profile", name: "Profile cards", text: "Your Steam profile, as a card you can actually share. 🎮\n\nSteam Value Checker builds a profile page with your library value, playtime and favourites, and a picture version for Discord or X. Link in bio.\n\n#Steam #PCGaming #Gaming" }
 ];
 
 const enc = s => encodeURIComponent(String(s)).replace(/[!'()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());

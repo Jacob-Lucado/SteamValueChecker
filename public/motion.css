@@ -25,7 +25,7 @@ html.mo .mo-hero > * { animation: mo-rise .8s cubic-bezier(.16, 1, .3, 1) both; 
   .mo-tilt:hover { transform: translateY(-3px); }
 }
 
-/* Slow drifting color behind public pages. */
+/* Slow drifting colour behind public pages. */
 .mo-aurora { position: fixed; inset: -20vmax; z-index: -1; pointer-events: none; opacity: .55; filter: blur(60px);
   background: radial-gradient(40vmax 30vmax at 20% 20%, rgba(124, 108, 255, .35), transparent 70%), radial-gradient(35vmax 28vmax at 80% 30%, rgba(34, 211, 238, .22), transparent 70%), radial-gradient(40vmax 30vmax at 50% 90%, rgba(77, 163, 255, .25), transparent 70%);
   animation: mo-drift 28s ease-in-out infinite alternate; }

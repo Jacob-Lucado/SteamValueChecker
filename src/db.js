@@ -274,8 +274,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "ping_playtest", "TEXT");
     addColumn("community", "playtest_all", "INTEGER NOT NULL DEFAULT 0");
     addColumn("friends", "auto", "INTEGER NOT NULL DEFAULT 0"); // 1 when the friend came from following someone
-    addColumn("users", "playtest_skip", "TEXT");
-    addColumn("community", "playtest_skip", "TEXT");
     addColumn("community", "playtest_full", "TEXT");
     addColumn("community", "playtest_genres", "TEXT");
     addColumn("community", "playtest_channel", "TEXT");
@@ -428,7 +426,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["wish_sync", "wish_synced_at", "muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "playtest_skip", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -821,7 +819,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         db.exec(`VACUUM INTO '${String(path).replace(/'/g, "''")}'`);
     }
 
-    // What the shareable profile card shows: platform names, color, picture links and which stats. One small JSON blob per member.
+    // What the shareable profile card shows: platform names, colour, picture links and which stats. One small JSON blob per member.
     const getCardPrefs = discordId => { try { return JSON.parse(get("SELECT prefs FROM card_prefs WHERE discord_id = ?", discordId)?.prefs ?? "{}"); } catch { return {}; } };
     const setCardPrefs = (discordId, prefs) => run("INSERT INTO card_prefs (discord_id, prefs) VALUES (?, ?) ON CONFLICT(discord_id) DO UPDATE SET prefs = excluded.prefs", discordId, JSON.stringify(prefs));
 
@@ -829,7 +827,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, indie: indie.indieExport(discordId), community: community.communityExport(discordId), friends: friends.listFriends(discordId), birthday: friends.getBirthday(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId), overlays: streamOverlays.listOvs(discordId).map(o => ({ name: o.name, kind: o.kind, created: o.created })), supporter: supporterExport(discordId) };
+        return { user: u, indie: indie.indieExport(discordId), community: community.communityExport(discordId), friends: friends.listFriends(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId), overlays: streamOverlays.listOvs(discordId).map(o => ({ name: o.name, kind: o.kind, created: o.created })), supporter: supporterExport(discordId) };
     }
 
     /** Pass, founder mark, wall name and what was paid, for the data export. Payment records are kept as accounting entries without a name after deletion. */
@@ -842,7 +840,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     function deleteUser(discordId) {
         db.exec("BEGIN");
         try {
-            for (const t of ["ai_notes", "items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends", "user_birthdays"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            for (const t of ["ai_notes", "items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM gift_marks WHERE claimer_id = ?", discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);

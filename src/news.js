@@ -32,21 +32,16 @@ export function parseNews(json, appid) {
 export function createNews({ fetchImpl = globalThis.fetch, now = () => Date.now(), ttlMs = 50 * 60_000, parallel = 4, maxApps = 150, perGame = 4 } = {}) {
     const cache = new Map();
     const state = { lastOkAt: null, lastErrorAt: null, lastError: null };
-    // Steam answers 403 or 429 when it wants us to slow down, or for a single game it won't serve. Remember the last few
-    // outcomes so one odd game doesn't flag the whole feed, and stop asking for a while after a block.
-    const recent = []; let pausedUntil = 0;
-    const note = ok => { recent.push(ok); if (recent.length > 8) recent.shift(); };
     async function one(appid) {
         const hit = cache.get(appid);
         if (hit && now() - hit.at < ttlMs) return hit.items;
-        if (now() < pausedUntil) return hit?.items ?? [];
         try {
             const res = await fetchImpl(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appid}&count=${perGame}&maxlength=6000&feeds=steam_community_announcements`, { signal: AbortSignal.timeout(8000) });
             if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { code: `http${res.status}` });
             const items = parseNews(await res.json(), appid);
-            cache.set(appid, { at: now(), items }); state.lastOkAt = now(); note(true);
+            cache.set(appid, { at: now(), items }); state.lastOkAt = now();
             return items;
-        } catch (err) { state.lastErrorAt = now(); state.lastError = err.code ?? err.name ?? "error"; note(false); if (err.code === "http403" || err.code === "http429") pausedUntil = now() + 10 * 60_000; cache.set(appid, { at: now() - ttlMs + 5 * 60_000, items: hit?.items ?? [] }); return hit?.items ?? []; }
+        } catch (err) { state.lastErrorAt = now(); state.lastError = err.code ?? err.name ?? "error"; cache.set(appid, { at: now() - ttlMs + 5 * 60_000, items: hit?.items ?? [] }); return hit?.items ?? []; }
     }
     async function forApps(appids) {
         const ids = [...new Set(appids.filter(Number.isInteger))].slice(0, maxApps), out = new Map();
@@ -54,9 +49,7 @@ export function createNews({ fetchImpl = globalThis.fetch, now = () => Date.now(
         if (cache.size > 2000) for (const k of [...cache.keys()].slice(0, 500)) cache.delete(k);
         return out;
     }
-    // Only report trouble when most of the recent asks failed, not when a single game did.
-    const broken = () => { const bad = recent.filter(ok => !ok).length; return bad >= 3 && bad * 2 > recent.length; };
-    return { forApps, health: () => ({ ...state, lastErrorAt: broken() ? state.lastErrorAt : null }) };
+    return { forApps, health: () => ({ ...state }) };
 }
 
 /** The latest posts for the Steam games a member plays or wants, newest first: [{ ...post, gameTitle }]. */

@@ -52,7 +52,7 @@ test("topgg: without a token nothing is called, and status reads the vote window
     assert.equal((await t.tg.status("1111111111")).voted, false);
 });
 
-test("topgg: the bonus lands in every server where the voter already has XP and leveling is on", async () => {
+test("topgg: the bonus lands in every server where the voter already has XP and levelling is on", async () => {
     const db = openDb(":memory:", { now: () => NOW });
     for (const g of ["G1", "G2", "G3"]) db.addXp(g, "u1", 10);
     db.addXp("G1", "other", 10);

@@ -17,30 +17,6 @@ window.SVC_SITE = envIn => {
   const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
   const app = env.root || document.getElementById("app");
   // LucadoOS (the desktop theme) shows each site page in a frame inside a window. Inside one of those frames the page drops its own header and footer.
-  // Screen readers: after the page draws, give unlabeled fields a name from the text next to them, keep heading levels from skipping, and name picture-only links.
-  const a11yPass = () => {
-    try {
-      const text = e => (e?.textContent ?? "").replace(/\s+/g, " ").trim();
-      for (const f of app.querySelectorAll("input:not([type=hidden]):not([type=submit]):not([type=button]),select,textarea")) {
-        if (f.getAttribute("aria-label") || f.getAttribute("aria-labelledby") || f.title || f.closest("label") || (f.id && app.querySelector(`label[for="${CSS.escape(f.id)}"]`))) continue;
-        let name = "";
-        for (let node = f, hops = 0; node && node !== app && hops < 4 && !name; node = node.parentElement, hops++) {
-          for (let sib = node.previousElementSibling; sib && !name; sib = sib.previousElementSibling) { const t = text(sib); if (t && t.length <= 90 && !sib.querySelector("input,select,textarea,button")) name = t; else if (sib.matches("h2,h3,h4,.k,strong,b,label")) name = t.slice(0, 90); if (name) break; }
-        }
-        f.setAttribute("aria-label", name || f.placeholder || f.name || (f.type === "number" ? "Number" : f.tagName === "SELECT" ? "Choose an option" : "Text"));
-      }
-      let prev = 0;
-      for (const hd of app.querySelectorAll("h1,h2,h3,h4,h5")) { let lv = Number(hd.tagName[1]); if (prev && lv - prev > 1) { lv = prev + 1; hd.setAttribute("aria-level", String(lv)); } else hd.removeAttribute("aria-level"); prev = lv; }
-      for (const a of app.querySelectorAll("a[href]")) {
-        if (text(a) || a.getAttribute("aria-label") || a.title) continue;
-        const img = a.querySelector("img[alt]:not([alt=''])");
-        if (img) continue;
-        const near = text(a.closest("article,li,.card,[class*=card]")?.querySelector("h2,h3,h4,strong,b")) || "";
-        a.setAttribute("aria-label", near || "Open");
-      }
-    } catch { /* never let a helper break the page */ }
-  };
-  { let t = null; new MutationObserver(() => { clearTimeout(t); t = setTimeout(a11yPass, 150); }).observe(app, { childList: true, subtree: true }); }
   const EMBED_FRAME = !ADMIN_MODE && !NATIVE && window.self !== window.top, EMBED = EMBED_FRAME || NATIVE; // EMBED: no header or footer of its own
   // The FanaticalGrabber extension only listens in the top page. Inside a LucadoOS window the desktop passes its messages along in both directions.
   const extSend = msg => { if (EMBED_FRAME) window.parent.postMessage({ svcRelay: "page", msg }, location.origin); else window.postMessage(msg, location.origin); };
@@ -492,7 +468,7 @@ window.SVC_SITE = envIn => {
         ["Sale war room", "Set a budget before a Steam sale and plan the cart around it."],
         ["Bundle check", "Checks a bundle against what its games cost today, and skips the ones you own."],
         ["Playtests and demos", "Betas, demos, free weekends and sign-ups from Steam announcements and a few other sources."],
-        ["Game codes", "SHiFT codes and other limited-time game codes, posted once each with an end date, then grayed out."],
+        ["Game codes", "SHiFT codes and other limited-time game codes, posted once each with an end date, then greyed out."],
         ["DLC sales and news", "A heads-up when add-ons for games you play are heavily discounted, plus patch notes and release dates."]]],
       ["Your library", "#4ade80", [
         ["Library value", "The full price, what Steam charges today, the cheapest store right now, and what you saved on what you paid."],
@@ -687,7 +663,7 @@ window.SVC_SITE = envIn => {
       const next = h("button", { class: "pg-btn wide", text: "Next ›", onclick: () => { st.page++; draw(); host.scrollIntoView({ block: "start" }); } }); next.disabled = st.page >= pages - 1;
       host.className = "";
       host.replaceChildren(
-        !data.personalized ? h("div", { class: "notice" }, "These are the best current discounts. ", h("a", { href: "#/steam", text: "Sign in through Steam" }), " (or add wishlist games) and they will be ranked for you.") : null,
+        !data.personalised ? h("div", { class: "notice" }, "These are the best current discounts. ", h("a", { href: "#/steam", text: "Sign in through Steam" }), " (or add wishlist games) and they will be ranked for you.") : null,
         h("div", { class: "panel fy-filters" },
           h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Sort" }), sort,
             chip("All-time low", st.atl, set("atl", !st.atl)), chip("Strong match 80+", st.great, set("great", !st.great)), chip("On wishlist", st.wish, set("wish", !st.wish))),
@@ -1124,10 +1100,6 @@ window.SVC_SITE = envIn => {
     const dlcOn = h("input", { type: "checkbox", checked: Boolean(s.dlc) });
     const refundOn = h("input", { type: "checkbox", checked: Boolean(s.refund) });
     const playSel = select([["0", "Off"], ["1", "Only games on my wishlist"], ["2", "Every playtest and demo found"]], String(s.playtest ?? 0));
-    const skipOn = new Set(s.playtest_skip || []);
-    const skipBoxes = PLAYTEST_SOURCES.map(([id, label]) => { const cb = h("input", { type: "checkbox", checked: skipOn.has(id) }); cb.dataset.src = id; return h("label", { class: "check" }, cb, " " + label); });
-    const skipField = h("div", { class: "field" }, h("label", { text: "Don't include listings from" }), h("div", { class: "stack" }, ...skipBoxes), h("p", { class: "muted small", text: "Tick a site and its playtests and demos are left out of your alerts. Steam announcements aren't affected." }));
-    const skipList = () => skipBoxes.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
     const achvOn = h("input", { type: "checkbox", checked: Boolean(s.achv) });
     const nudgeOn = h("input", { type: "checkbox", checked: Boolean(s.nudge) });
     const nowOn = h("input", { type: "checkbox", checked: Boolean(s.nowplaying) });
@@ -1157,7 +1129,7 @@ window.SVC_SITE = envIn => {
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), playtest_skip: skipList(), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
+        max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -1183,7 +1155,7 @@ window.SVC_SITE = envIn => {
         h("label", { class: "check" }, free, "Any game is free to claim (Steam, Epic, GOG and others). Games from one store arrive together with a Claim all button."),
         h("label", { class: "check" }, freeDlc, "Include free DLC and add-ons (also controls what /games freegames and the Free games page show)"),
         h("label", { class: "check" }, refundOn, "A heads-up before the refund window closes on a new Steam game I barely played, or when it drops below what I paid (that part needs the extension's purchase sync)"),
-        field("Playtests, demos and betas (Steam, Alpha Beta Gamer, Playtester, GamerPower and itch.io)", playSel), skipField,
+        field("Playtests, demos and betas (Steam, Alpha Beta Gamer, Playtester, GamerPower and itch.io)", playSel),
         h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
         h("label", { class: "check" }, nowOn, "Show the game I am in on my server's Now playing board (needs Steam linked, library sharing and public game details)"),
@@ -1266,8 +1238,8 @@ window.SVC_SITE = envIn => {
         h("div", { class: "pf-rrow" }, h("span", { class: "pf-rvolicon", "aria-hidden": "true", text: "🔈" }), vol, song.link ? ext(song.link, "Open", "pf-open") : null)), h("div", { class: "pf-rprog", "aria-hidden": "true" }, h("i")));
       // On a real profile the player floats in the corner so it never sits in the middle of the page; the dash arrow folds it down to just the play tile.
       if (!preview) {
-        const fold = h("button", { type: "button", class: "pf-rfold", "aria-label": "Minimize the player", text: "–" });
-        fold.addEventListener("click", () => { const mini = card.classList.toggle("mini"); fold.textContent = mini ? "+" : "–"; fold.setAttribute("aria-label", mini ? "Open the player" : "Minimize the player"); });
+        const fold = h("button", { type: "button", class: "pf-rfold", "aria-label": "Minimise the player", text: "–" });
+        fold.addEventListener("click", () => { const mini = card.classList.toggle("mini"); fold.textContent = mini ? "+" : "–"; fold.setAttribute("aria-label", mini ? "Open the player" : "Minimise the player"); });
         card.append(fold);
       }
       const paint = on => { card.classList.toggle("playing", on); btn.textContent = on ? "❚❚" : "▶"; btn.setAttribute("aria-label", on ? "Pause" : "Play"); label.lastChild.textContent = "Live radio"; };
@@ -1353,8 +1325,8 @@ window.SVC_SITE = envIn => {
       paint(auto);
       box.classList.add("pf-song-radio"); box.classList.toggle("pf-float", !preview);
       if (!preview) {
-        const fold = h("button", { type: "button", class: "pf-rfold", "aria-label": "Minimize the player", text: "–" });
-        fold.addEventListener("click", () => { const mini = card.classList.toggle("mini"); fold.textContent = mini ? "+" : "–"; fold.setAttribute("aria-label", mini ? "Open the player" : "Minimize the player"); });
+        const fold = h("button", { type: "button", class: "pf-rfold", "aria-label": "Minimise the player", text: "–" });
+        fold.addEventListener("click", () => { const mini = card.classList.toggle("mini"); fold.textContent = mini ? "+" : "–"; fold.setAttribute("aria-label", mini ? "Open the player" : "Minimise the player"); });
         card.append(fold);
       }
       box.replaceChildren(card, frame);
@@ -1605,9 +1577,9 @@ window.SVC_SITE = envIn => {
       return b;
     }));
     drawStyles();
-    const accent = h("input", { type: "color", value: cfg.accent || (d.choices.themes.find(t => t.key === cfg.theme) || {}).accent || "#66c0f4", "aria-label": "Accent color" });
+    const accent = h("input", { type: "color", value: cfg.accent || (d.choices.themes.find(t => t.key === cfg.theme) || {}).accent || "#66c0f4", "aria-label": "Accent colour" });
     accent.addEventListener("input", () => { cfg.accent = accent.value; changed(); });
-    const accentReset = h("button", { type: "button", class: "btn gray small", text: "Use the theme color" });
+    const accentReset = h("button", { type: "button", class: "btn gray small", text: "Use the theme colour" });
     accentReset.addEventListener("click", () => { cfg.accent = null; accent.value = (d.choices.themes.find(t => t.key === cfg.theme) || {}).accent; changed(); });
     const pick = (label, key, options) => { const s = select(options, cfg[key]); s.addEventListener("change", () => { cfg[key] = s.value; changed(); }); return field(label, s); };
     const nice = x => x[0].toUpperCase() + x.slice(1);
@@ -1615,8 +1587,8 @@ window.SVC_SITE = envIn => {
     av.addEventListener("change", () => { cfg.avatar = av.checked; changed(); });
     const gateBox = h("input", { type: "checkbox", checked: Boolean(cfg.enter) });
     gateBox.addEventListener("change", () => { cfg.enter = gateBox.checked; changed(); });
-    const look = h("div", { class: "panel" }, h("h3", { text: "Look" }), field("Style", styleBox), h("p", { class: "muted small", text: "A style changes the whole look. Everything except Classic brings its own colors, and the accent below still tints it." }), field("Theme (Classic only)", themeBox), h("div", { class: "row" }, field("Accent color", accent), h("div", {}, h("label", { text: "\u00a0" }), accentReset)),
-      h("div", { class: "row" }, pick("Background", "bgstyle", d.choices.bgstyles.map(x => [x, nice(x)])), pick("Layout", "layout", d.choices.layouts.map(x => [x, nice(x)])), pick("Banner", "banner", [["gradient", "Color"], ["game", "First favorite game's art"], ["none", "None"]])),
+    const look = h("div", { class: "panel" }, h("h3", { text: "Look" }), field("Style", styleBox), h("p", { class: "muted small", text: "A style changes the whole look. Everything except Classic brings its own colors, and the accent below still tints it." }), field("Theme (Classic only)", themeBox), h("div", { class: "row" }, field("Accent colour", accent), h("div", {}, h("label", { text: "\u00a0" }), accentReset)),
+      h("div", { class: "row" }, pick("Background", "bgstyle", d.choices.bgstyles.map(x => [x, nice(x)])), pick("Layout", "layout", d.choices.layouts.map(x => [x, nice(x)])), pick("Banner", "banner", [["gradient", "Colour"], ["game", "First favorite game's art"], ["none", "None"]])),
       h("label", { class: "check" }, av, " ", "Show my Steam picture", d.steamLinked ? null : h("span", { class: "muted small", text: " (link Steam first)" })));
 
     // about
@@ -1626,14 +1598,6 @@ window.SVC_SITE = envIn => {
     const count = h("span", { class: "muted small", text: `${cfg.bio.length}/300` });
     bio.addEventListener("input", () => { cfg.bio = bio.value; count.textContent = `${bio.value.length}/300`; changed(); });
     const about = h("div", { class: "panel" }, h("h3", { text: "About you" }), field("Display name", name), field("Bio", bio), count);
-    // The birthday is kept apart from the page design: it saves on its own and never shows on the page.
-    const bdIn = h("input", { type: "text", maxlength: "5", placeholder: "MM-DD", value: (d.birthday && d.birthday.value) || "", "aria-label": "Your birthday" });
-    const bdShare = h("input", { type: "checkbox", checked: Boolean(d.birthday && d.birthday.share) });
-    const bdSave = h("button", { class: "btn gray small", type: "button", text: "Save birthday" });
-    bdSave.addEventListener("click", () => busy(bdSave, async () => { const r = await api("/api/profile/birthday", { birthday: bdIn.value.trim(), share: bdShare.checked }); bdShare.checked = r.share; toast(r.birthday ? (r.share ? "Saved. People with your page on their friends list will get a reminder." : "Saved. It stays private.") : "Birthday removed.", "ok"); }));
-    const birthday = h("div", { class: "panel" }, h("h3", { text: "Birthday" }),
-      h("p", { class: "muted small", text: "Month and day only, never the year. It never shows on your page." }),
-      field("Your birthday", bdIn), h("label", { class: "check" }, bdShare, " Remind people who have my page on their friends list (they only see a reminder, and you can turn this off any time)"), h("div", { class: "row" }, bdSave));
 
     // links
     const linkBox = h("div", { class: "pf-rows" });
@@ -1746,7 +1710,7 @@ window.SVC_SITE = envIn => {
     drawBg();
     const pageBgPanel = h("div", { class: "panel" }, h("h3", { text: "Page background" }), h("p", { class: "muted small", text: "The space around your profile card." }), bgBox);
     holder.replaceChildren(h("div", { class: "pf-editor" },
-      h("div", { class: "pf-form" }, look, pageBgPanel, about, birthday, links, favs, song, secs, h("div", { class: "row pf-save" }, saveBtn, open, copy)),
+      h("div", { class: "pf-form" }, look, pageBgPanel, about, links, favs, song, secs, h("div", { class: "row pf-save" }, saveBtn, open, copy)),
       h("div", { class: "pf-side" }, h("div", { class: "pf-sticky" }, h("h3", { text: "Preview" }), pv))));
     draw(d.profile);
     window.addEventListener("hashchange", () => { clearTimeout(timer); }, { once: true });
@@ -1924,7 +1888,6 @@ window.SVC_SITE = envIn => {
   // Playtests, betas, demos and free weekends. The list asks the server again every few minutes by itself, flags what is new
   // since the page opened, and pauses while the tab is hidden.
   const PLAYTEST_POLL_MS = 5 * 60_000;
-  const PLAYTEST_SOURCES = [["abg", "Alpha Beta Gamer"], ["gamerpower", "GamerPower"], ["itch", "itch.io"], ["playtester", "Playtester"], ["steamdemo", "Steam demos"]];
   async function playtestsView() {
     const F = { kind: "all", mine: false, hideOwned: false, q: "", genre: "" };
     let data = null, seen = null, fresh = new Set(), loadedAt = 0, timer = null, failed = false;
@@ -2431,7 +2394,7 @@ window.SVC_SITE = envIn => {
           holder.className = "";
           holder.replaceChildren(
             h("div", { class: "panel" }, h("h3", { text: "Game codes" }),
-              h("p", { class: "muted", text: "Limited-time codes for Borderlands, Genshin Impact, Star Rail, Zenless Zone Zero, Destiny 2 and Warframe, posted once each in the channel you pick. When a code ends, its post is grayed out. The same list is on the Game codes page for everyone." }),
+              h("p", { class: "muted", text: "Limited-time codes for Borderlands, Genshin Impact, Star Rail, Zenless Zone Zero, Destiny 2 and Warframe, posted once each in the channel you pick. When a code ends, its post is greyed out. The same list is on the Game codes page for everyone." }),
               field("Channel", chan), field("Ping this role for new codes", role),
               h("div", {}, h("label", { text: "Games" }), h("div", { class: "checks" }, boxes)),
               h("div", { class: "row" }, save)));
@@ -2459,7 +2422,7 @@ window.SVC_SITE = envIn => {
           }));
           holder.className = "";
           holder.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Game bundles" }),
-            h("p", { class: "muted", text: "New bundles from Humble, Fanatical, IndieGala and Steam, posted once each in the channel you pick, with the games inside and when it ends. When a bundle ends, its post is grayed out." }),
+            h("p", { class: "muted", text: "New bundles from Humble, Fanatical, IndieGala and Steam, posted once each in the channel you pick, with the games inside and when it ends. When a bundle ends, its post is greyed out." }),
             field("Channel", chan), field("Ping this role for new bundles", role),
             h("div", {}, h("label", { text: "Stores" }), h("div", { class: "checks" }, boxes)),
             h("div", {}, h("label", { class: "check" }, adult, " Include adult bundles"), h("p", { class: "muted small", text: "Off by default. Only turn this on if everyone in the server is 18 or older and the channel is marked age-restricted." })),
@@ -2502,7 +2465,7 @@ window.SVC_SITE = envIn => {
           holder.className = "";
           holder.replaceChildren(
             h("div", { class: "panel" }, h("h3", { text: "Promo drops" }),
-              h("p", { class: "muted", text: "Key giveaways from SteelSeries, NVIDIA and others. Add a code or a link and it is posted once in your promo channel, then grayed out when it ends." }),
+              h("p", { class: "muted", text: "Key giveaways from SteelSeries, NVIDIA and others. Add a code or a link and it is posted once in your promo channel, then greyed out when it ends." }),
               field("Channel", chan), field("Ping this role", role),
               h("label", { class: "check" }, news, " Also post news that mentions a giveaway or a code: NVIDIA, SteelSeries and games like Dead by Daylight (new ones only)"),
               h("div", { class: "row" }, save)),
@@ -3006,7 +2969,7 @@ window.SVC_SITE = envIn => {
         const run = h("button", { class: "btn green", text: "Run", disabled: !ext });
         run.addEventListener("click", () => { box.value = job.keys.join("\n"); refresh(); start(job.keys, true); });
         const drop = h("button", { class: "btn gray", text: "Cancel batch" });
-        drop.addEventListener("click", () => busy(drop, async () => { await api("/api/redeem/finish", { cancel: true }); queued = null; queuedBox.hidden = true; toast("Batch canceled.", "ok"); }));
+        drop.addEventListener("click", () => busy(drop, async () => { await api("/api/redeem/finish", { cancel: true }); queued = null; queuedBox.hidden = true; toast("Batch cancelled.", "ok"); }));
         queuedBox.hidden = false; queuedBox.className = "notice ok";
         queuedBox.replaceChildren(h("strong", { text: `${job.total} key${job.total === 1 ? "" : "s"} queued from Discord. ` }), "Log into Steam in this browser, then press Run. Results go to your Discord DMs. ", run, " ", drop);
       } catch { /* not signed in or offline: the page still works by hand */ }
@@ -3780,7 +3743,7 @@ window.SVC_SITE = envIn => {
       const claim = h("input", { type: "number", min: "1", max: "168", value: "48", "aria-label": "Hours to claim" });
       const gImage = h("input", { type: "url", maxlength: "500", placeholder: "https://… (picture, GIF or video)", "aria-label": "Big picture link" });
       const gThumb = h("input", { type: "url", maxlength: "500", placeholder: "https://… (small picture or GIF)", "aria-label": "Small picture link" });
-      const gColor = h("input", { type: "text", maxlength: "8", placeholder: "#ff9800", "aria-label": "Color" });
+      const gColor = h("input", { type: "text", maxlength: "8", placeholder: "#ff9800", "aria-label": "Colour" });
       const gLabel = h("input", { type: "text", maxlength: "40", placeholder: "Enter giveaway", "aria-label": "Enter button text" });
       const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: gImage.value, thumb: gThumb.value, color: gColor.value, label: gLabel.value.trim(), length: length.value.trim(), host: "you" }));
       for (const el of [title, desc, keys, gImage, gThumb, gColor, gLabel, length]) el.addEventListener("input", gp.paint);
@@ -3852,7 +3815,7 @@ window.SVC_SITE = envIn => {
             h("h4", { text: "Look" }),
             h("div", { class: "grid two" }, h("div", {},
               h("div", { class: "row" }, field("Big picture, GIF or video link", gImage), field("Small picture or GIF link", gThumb)),
-              h("div", { class: "row" }, field("Color", gColor), field("Enter button text", gLabel)),
+              h("div", { class: "row" }, field("Colour", gColor), field("Enter button text", gLabel)),
               h("p", { class: "muted small", text: "Leave the big picture empty to use the game's artwork. Use a direct, permanent link to a picture (.png, .jpg, .gif, .webp)." })),
               h("div", {}, h("b", { text: "Preview" }), gp.el)),
             field("Hosted by", hostKind), partnerBox,
@@ -4165,13 +4128,13 @@ window.SVC_SITE = envIn => {
     const save = async patch => { prefs = { ...prefs, ...patch }; os?.applyPrefs(prefs, data.walls); draw(); try { await api("/api/admin/prefs", prefs); } catch (e) { toast(e.message); } };
     const box = h("div", { class: "pz" });
     const draw = () => {
-      const looks = [["original", "Original", "The LucadoOS colors, rounded windows"], ["windows", "Windows", "Flat and square, like a PC"]].map(([id, name, sub]) => h("button", { type: "button", class: "pz-look" + (prefs.look === id ? " on" : ""), onclick: () => save({ look: id }) }, h("b", { text: name }), h("small", { text: sub })));
+      const looks = [["original", "Original", "The LucadoOS colours, rounded windows"], ["windows", "Windows", "Flat and square, like a PC"]].map(([id, name, sub]) => h("button", { type: "button", class: "pz-look" + (prefs.look === id ? " on" : ""), onclick: () => save({ look: id }) }, h("b", { text: name }), h("small", { text: sub })));
       const swatches = data.walls.map(w => { const b = h("button", { type: "button", class: "pz-wall" + (prefs.wall === w.id ? " on" : ""), title: w.name, "aria-label": w.name, onclick: () => save({ wall: w.id }) }, h("span", { text: w.name })); if (w.css) b.style.setProperty("background", w.css); return b; });
-      const color = h("input", { type: "color", "aria-label": "Pick any color", value: /^#/.test(prefs.wall) ? prefs.wall : "#1b2a4a" });
+      const color = h("input", { type: "color", "aria-label": "Pick any colour", value: /^#/.test(prefs.wall) ? prefs.wall : "#1b2a4a" });
       color.addEventListener("change", () => save({ wall: color.value }));
       const wv = h("input", { type: "checkbox" }); wv.checked = Boolean(prefs.waves); wv.addEventListener("change", () => save({ waves: wv.checked }));
-      box.replaceChildren(h("h3", { text: "Look" }), h("div", { class: "pz-row" }, ...looks), h("h3", { text: "Wallpaper" }), h("div", { class: "pz-row" }, ...swatches, h("label", { class: "pz-color" + (/^#/.test(prefs.wall) ? " on" : "") }, color, h("span", { text: "Your color" }))),
-        h("label", { class: "pz-waves" }, wv, h("span", {}, h("b", { text: "Neon waves" }), h("small", { text: "Glowing lines rolling over the wallpaper. Works with any color above, or on the default one." })))   ,
+      box.replaceChildren(h("h3", { text: "Look" }), h("div", { class: "pz-row" }, ...looks), h("h3", { text: "Wallpaper" }), h("div", { class: "pz-row" }, ...swatches, h("label", { class: "pz-color" + (/^#/.test(prefs.wall) ? " on" : "") }, color, h("span", { text: "Your colour" }))),
+        h("label", { class: "pz-waves" }, wv, h("span", {}, h("b", { text: "Neon waves" }), h("small", { text: "Glowing lines rolling over the wallpaper. Works with any colour above, or on the default one." })))   ,
         os?.active() ? null : h("p", { class: "muted small", text: "The desktop look only shows on a wider screen, in desktop view." }));
     };
     draw(); body.replaceChildren(box);
@@ -4510,10 +4473,6 @@ window.SVC_SITE = envIn => {
           tile("All time", t.total.visits, `${t.total.clicks} clicks`),
           tile("Link previews", t.week.previews, "robots reading a post, this week")),
         h("p", { class: "muted small", text: "A visit is a person opening one of the bot's links. Discord and X reading a link to build its preview is counted separately, so it doesn't inflate this." })),
-      t.invites && h("div", { class: "panel" }, h("h3", { text: "Where new servers come from" }),
-        h("div", { class: "grid four" }, tile("Add-bot clicks", t.invites.clicks, "last 30 days"), tile("Servers joined", t.invites.joins, "last 30 days")),
-        t.invites.sources.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Source", "Clicks"].map(c => h("th", { text: c })))), h("tbody", {}, ...t.invites.sources.map(x => h("tr", {}, h("td", { text: x.source }), h("td", { text: String(x.clicks) }))))) : h("p", { class: "muted", text: "No clicks yet. Every Add the bot button on the site and in the weekly post now counts here." }),
-        h("p", { class: "muted small", text: "Discord doesn't say which link a server came from, so joins are a total. Compare it with the clicks to see roughly how many turn into servers. Link-preview robots aren't counted." })),
       h("div", { class: "panel" }, h("h3", { text: "Visits per day" }), t.days.length ? bars : h("p", { class: "muted", text: "Nothing yet. Counts start once the bot has posted a few links." })),
       h("div", { class: "panel" }, h("h3", { text: "Most opened links" }),
         t.top.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Page", "Type", "Store", "Visits", "Clicks", "Through", ""].map(c => h("th", { text: c })))),
@@ -5042,7 +5001,7 @@ window.SVC_SITE = envIn => {
     const servers = state.me.servers.filter(g => g.manageable);
     const holder = h("div");
     const guild = serverPicker(servers);
-    const statusLabel = { active: "Running", scheduled: "Scheduled", ended: "Ended", cancelled: "Canceled" };
+    const statusLabel = { active: "Running", scheduled: "Scheduled", ended: "Ended", cancelled: "Cancelled" };
 
     // Entry counts tick up live while a giveaway runs, without touching the form.
     const liveTimer = setInterval(async () => {
@@ -5274,7 +5233,7 @@ window.SVC_SITE = envIn => {
         holder.className = "status-page";
         holder.replaceChildren(...[
           h("div", { class: "st-banner " + d.overall },
-            h("div", {}, h("span", { class: "st-dot " + d.overall }), h("h1", { class: "st-head", text: HEAD[d.overall] || "Checking…" })),
+            h("div", {}, h("span", { class: "st-dot " + d.overall }), h("strong", { text: HEAD[d.overall] || "Checking…" })),
             h("div", { class: "st-meta" }, h("span", { class: "muted small", text: d.checkedAt ? "Last checked " + ago(d.checkedAt) : "Starting up…" }), refresh)),
           st && h("div", { class: "grid four" },
             tile("", "Servers", n(st.servers)), tile("", "Members served", n(st.members)), tile("", "Games watched", n(st.gamesWatched)),
@@ -5318,7 +5277,7 @@ window.SVC_SITE = envIn => {
         h("div", { class: "about-banner-live", role: "img", "aria-label": "Steam Value Checker: MSRP, sale price and cheapest price now" },
           h("i", { class: "ab-ring r1", "aria-hidden": "true" }), h("i", { class: "ab-ring r2", "aria-hidden": "true" }),
           h("img", { class: "ab-tag", src: "/tag.svg", alt: "", width: "108", height: "120" }),
-          h("div", { class: "ab-text" }, h("h1", { class: "ab-title", text: "Steam Value Checker" }), h("div", { class: "ab-sub", text: "MSRP, sale price and cheapest price now" }), h("div", { class: "ab-note", text: "Works with FanaticalGrabber exports" }))),
+          h("div", { class: "ab-text" }, h("div", { class: "ab-title", text: "Steam Value Checker" }), h("div", { class: "ab-sub", text: "MSRP, sale price and cheapest price now" }), h("div", { class: "ab-note", text: "Works with FanaticalGrabber exports" }))),
         h("div", { class: "panel about" },
           h("div", { class: "about-head" },
             h("img", { class: "about-logo", src: "/logo.png", alt: "", width: "84", height: "84" }),
@@ -5463,7 +5422,7 @@ window.SVC_SITE = envIn => {
         routeText().includes("thanks=gift") ? h("div", { class: "notice ok", text: "Thank you! Your gift is on its way. They get a DM when it lands, and so do you." }) : routeText().includes("thanks=1") ? h("div", { class: "notice ok", text: "Thank you! Your pass shows up within a minute or two, and the bot will DM you when it does." }) : null,
         s.founder ? h("p", {}, h("span", { class: "pf-badge founder", text: "✦ Founding supporter" }), " You were one of the first 50, so this stays on your profile for good.") : null,
         s.until ? h("p", {}, h("strong", { text: "You're a supporter until " + fmt(s.until) + "." }), " Buying another pass adds to the time you have left.") : null,
-        h("p", { class: "muted", text: `A pass gives you a Supporter role in the Steam Value Checker server, a badge and glowing ring on your profile, three exclusive profile themes, 24 overlay slots instead of 12, your own color on your price-alert cards and ${Math.round((s.boost - 1) * 100)}% more XP. Everything else stays free for everyone.` }),
+        h("p", { class: "muted", text: `A pass gives you a Supporter role in the Steam Value Checker server, a badge and glowing ring on your profile, three exclusive profile themes, 24 overlay slots instead of 12, your own colour on your price-alert cards and ${Math.round((s.boost - 1) * 100)}% more XP. Everything else stays free for everyone.` }),
         s.enabled && !s.founder && s.founding_left > 0 ? h("p", { class: "muted small", text: s.founding_left === 50 ? "The first 50 paid passes earn a Founding supporter mark that never expires." : `${s.founding_left} of 50 Founding supporter spots left. It's a mark that never expires.` }) : null,
         s.enabled ? h("div", { class: "row" }, ...s.plans.map(p => h("button", { class: "btn blue", type: "button", text: `${p.name} · $${(p.cents / 100).toFixed(p.cents % 100 ? 2 : 0)}`, onclick: e => busy(e.currentTarget, async () => { const r = await api("/api/supporter/checkout", { plan: p.id }); location.href = r.url; }) }))) : null,
         s.enabled ? (() => {
@@ -5479,11 +5438,11 @@ window.SVC_SITE = envIn => {
             h("div", { class: "row" }, nm, h("button", { class: "btn gray", type: "button", text: "Save", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/wall", { name: nm.value }); toast(nm.value.trim() ? "You're on the wall." : "Removed from the wall.", "ok"); tipView(); } catch (err) { toast(err.message, "error"); } }) })));
         })() : null,
         (s.until || s.founder) ? (() => {
-          const pick = h("input", { type: "color", value: s.alert_color || "#57f287", "aria-label": "Alert color" });
-          return h("div", { class: "pass-wall-opt" }, h("h4", { text: "Alert color" }), h("p", { class: "muted small", text: "Your own price alerts from the bot get the color you pick down the side of the card." }),
+          const pick = h("input", { type: "color", value: s.alert_color || "#57f287", "aria-label": "Alert colour" });
+          return h("div", { class: "pass-wall-opt" }, h("h4", { text: "Alert colour" }), h("p", { class: "muted small", text: "Your own price alerts from the bot get the colour you pick down the side of the card." }),
             h("div", { class: "row" }, pick,
-              h("button", { class: "btn gray", type: "button", text: "Save", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/alertcolor", { color: pick.value }); toast("Your alerts will use that color.", "ok"); } catch (err) { toast(err.message, "error"); } }) }),
-              h("button", { class: "btn gray", type: "button", text: "Back to the default", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/alertcolor", { color: "" }); toast("Back to the usual colors.", "ok"); tipView(); } catch (err) { toast(err.message, "error"); } }) })));
+              h("button", { class: "btn gray", type: "button", text: "Save", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/alertcolor", { color: pick.value }); toast("Your alerts will use that colour.", "ok"); } catch (err) { toast(err.message, "error"); } }) }),
+              h("button", { class: "btn gray", type: "button", text: "Back to the default", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/supporter/alertcolor", { color: "" }); toast("Back to the usual colours.", "ok"); tipView(); } catch (err) { toast(err.message, "error"); } }) })));
         })() : null);
     } catch { /* the pass is optional, so the rest of the page stands on its own */ }
     try {
@@ -6287,7 +6246,7 @@ window.SVC_SITE = envIn => {
   }
 
   // My page: every feature as a card with its status, a switch where one is simple, and a link to set it up. Cards can be pinned, hidden and reordered (kept on this device).
-  // First-run guide: a centered dialog with a detailed tour of the dashboard, then a short setup. The tour can be skipped (after a
+  // First-run guide: a centred dialog with a detailed tour of the dashboard, then a short setup. The tour can be skipped (after a
   // confirmation); setup always follows. Shown once per account, and "Take the tour" on My page replays it.
   const WIZ_KEY = "svc.wizard";
   const TOUR_SLIDES = [
@@ -6306,7 +6265,7 @@ window.SVC_SITE = envIn => {
     { nav: "Early access", title: "Playtests, demos and news", lead: "Hear about a game before it launches, or when something changes in one you already play.",
       points: [["Playtest watcher", "Betas, demos, free weekends and sign-ups from Steam announcements, Alpha Beta Gamer, Playtester, GamerPower and itch.io. Choose wishlist games only, or every one found."], ["News and patch notes", "Announcements for the Steam games you own or wishlist. Patch notes only, or everything."], ["DLC sales", "A heads-up when add-ons for games you really play are heavily discounted."], ["Release dates", "Told when a wishlist game gets a date, or when it moves."]] },
     { nav: "Friends", title: "Friends, gifts and sharing", lead: "Games are better shared. None of this is on unless you turn it on.",
-      points: [["Friends and gifts", "Save birthdays and public wishlist links, then see what is on sale for them before the day."], ["Your public page", "Share a wishlist page with a link. Friends can quietly claim a gift so nobody buys it twice, and the page uses your profile card color."], ["Profile card", "A picture of your library with the stats and colors you choose, ready to post."], ["Compare libraries", "See what you and a friend both own, with hours side by side."]] },
+      points: [["Friends and gifts", "Save birthdays and public wishlist links, then see what is on sale for them before the day."], ["Your public page", "Share a wishlist page with a link. Friends can quietly claim a gift so nobody buys it twice, and the page uses your profile card colour."], ["Profile card", "A picture of your library with the stats and colours you choose, ready to post."], ["Compare libraries", "See what you and a friend both own, with hours side by side."]] },
     { nav: "Servers", title: "Servers and Discord", lead: "Add the bot to a server and it becomes a community toolkit. The dashboard is where managers run it.",
       points: [["Community setup", "One click builds channels, roles, a welcome flow, an XP system, support tickets, music and a playtests channel."], ["Share with your server", "Opt in with Share and members can compare libraries, see who owns a game, find co-op picks and plan game night with a vote."], ["Right-click shortcuts", "Right-click a member in Discord for Compare libraries, Play together, See their wishlist and Gift ideas. Right-click a game title to price it, add it or see who owns it."], ["Commands", "Everything here also has a slash command: /games, /me, /server and /alerts. /help lists them all."]] }
   ];
@@ -6326,7 +6285,7 @@ window.SVC_SITE = envIn => {
     const remember = () => { try { localStorage.setItem(WIZ_KEY, JSON.stringify({ n })); } catch { /* optional */ } };
 
     const root = h("div", { id: "wiz", class: "wiz", role: "presentation" });
-    const dlg = h("div", { class: "wiz-dialog", role: "dialog", "aria-modal": "true", "aria-labeledby": "wiz-title", tabindex: "-1" });
+    const dlg = h("div", { class: "wiz-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "wiz-title", tabindex: "-1" });
     root.append(dlg);
     document.body.append(root); document.body.classList.add("wiz-open");
 
@@ -6456,7 +6415,7 @@ window.SVC_SITE = envIn => {
     function confirmBox() {
       const keep = h("button", { class: "btn blue", type: "button", text: "Keep going", onclick: () => { confirming = false; draw(); } });
       const yes = h("button", { class: "btn gray", type: "button", text: "Yes, skip the tutorial", onclick: () => { confirming = false; n = firstSetup; remember(); draw(); } });
-      return h("div", { class: "wiz-confirm", role: "alertdialog", "aria-labeledby": "wiz-title", "aria-describedby": "wiz-confirm-text" },
+      return h("div", { class: "wiz-confirm", role: "alertdialog", "aria-labelledby": "wiz-title", "aria-describedby": "wiz-confirm-text" },
         h("h2", { id: "wiz-title", text: "Are you sure you want to skip the tutorial?" }),
         h("p", { id: "wiz-confirm-text", text: "It only takes a couple of minutes and covers things that are easy to miss, like per-game rules, quiet hours and the server tools. You can replay it any time from My page. Either way, you will still go through setup next." }),
         h("div", { class: "row" }, keep, yes));
@@ -6593,7 +6552,7 @@ window.SVC_SITE = envIn => {
         const bd = h("input", { type: "text", maxlength: "5", placeholder: "MM-DD", "aria-label": "Birthday for " + f.name, class: "fr-bday" });
         const bdSave = h("button", { class: "btn gray small", type: "button", text: "Set birthday" });
         bdSave.addEventListener("click", () => busy(bdSave, async () => { await api("/api/friends/birthday", { name: f.name, birthday: bd.value }); toast("Birthday saved. You'll get a reminder a week before.", "ok"); load(); }));
-        return h("div", { class: "panel" }, h("strong", { text: f.name }), f.auto ? h("span", { class: "chip dim", text: " Following" }) : null, h("span", { class: "muted", text: f.birthday ? "  " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") + (f.fromPage ? ", shared on their page" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, f.birthday ? null : bd, f.birthday ? null : bdSave, show, del));
+        return h("div", { class: "panel" }, h("strong", { text: f.name }), f.auto ? h("span", { class: "chip dim", text: " Following" }) : null, h("span", { class: "muted", text: f.birthday ? "  " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, f.birthday ? null : bd, f.birthday ? null : bdSave, show, del));
       }));
     }
     const add = h("button", { class: "btn blue", text: "Save friend" });
@@ -6917,14 +6876,14 @@ window.SVC_SITE = envIn => {
       return h("div", { class: "panel" }, h("h3", { text: "Member growth, last 30 days" }),
         h("div", { class: "grid four" }, tile("Joined", String(g.joins)), tile("Left", String(g.leaves)), tile("Net", (g.net > 0 ? "+" : "") + g.net, g.net >= 0 ? "growing" : "shrinking"), tile("Tracked here now", String(g.trackedHere), `of ${g.trackedEver} the bot has seen join`)),
         g.trackedEver ? bars : h("p", { class: "muted", text: "Nothing yet. The bot records people as they join, so this fills in from now on." }),
-        h("p", { class: "muted small", text: "People only: bots are never counted. Green is joining, gray is leaving." }));
+        h("p", { class: "muted small", text: "People only: bots are never counted. Green is joining, grey is leaving." }));
     }
     let mgrTab = 0;
     /** The announcement designer: every part of the embed is editable, with a live preview that looks like Discord. */
     function announceDesigner({ chSel, roSel, defaultCh, history, roleName, chName }) {
       const inp = (ph, max = 256, type = "text") => h("input", { type, maxlength: String(max), placeholder: ph, "aria-label": ph });
       const ch = chSel(defaultCh), title = inp("Title", 256), body = h("textarea", { rows: "6", maxlength: "4000", placeholder: "Message (Discord formatting works: **bold**, *italic*, > quote)", "aria-label": "Message" });
-      const color = h("input", { type: "color", value: "#4d8cff", "aria-label": "Color" });
+      const color = h("input", { type: "color", value: "#4d8cff", "aria-label": "Colour" });
       const author = inp("Small text above the title (optional)", 100), footer = inp("Footer text (optional)", 200), image = inp("Big image link, https (optional)", 500, "url");
       const thumbKind = select([["", "No small image"], ["server", "This server's icon"], ["url", "A link"]], ""), thumb = inp("Small image link, https", 500, "url");
       const linkUrl = inp("Make the title a link (optional)", 500, "url"), bLabel = inp("Button text (optional)", 40), bUrl = inp("Button link, https", 500, "url");
@@ -6974,7 +6933,7 @@ window.SVC_SITE = envIn => {
       paint();
       return h("div", { class: "panel" }, h("h3", { text: "Announcements" }),
         h("p", { class: "muted", text: "Design a message and post it as an embed. Needs the bot to have Send Messages and Embed Links in the channel (and Mention Everyone to ping @everyone)." }),
-        h("div", { class: "grid two" }, h("div", {}, field("Post in", ch), field("Title", title), field("Message", body), h("div", { class: "row" }, field("Color", color), field("Ping", ping), pingRole),
+        h("div", { class: "grid two" }, h("div", {}, field("Post in", ch), field("Title", title), field("Message", body), h("div", { class: "row" }, field("Colour", color), field("Ping", ping), pingRole),
           field("Small text above the title", author), field("Footer", footer), h("label", { class: "muted small" }, stamp, " Show the time"), field("Big image", image), field("Small image", thumbKind), thumb, field("Title link", linkUrl),
           h("div", { class: "row" }, field("Button text", bLabel), field("Button link", bUrl)), h("h4", { text: "Fields" }), fieldBox, addField),
           h("div", {}, h("h4", { text: "Preview" }), pv, h("div", { class: "row" }, sendBtn), h("h4", { text: "Recently posted" }), hist)));
@@ -7024,16 +6983,11 @@ window.SVC_SITE = envIn => {
         const genreIn = h("input", { type: "text", maxlength: "300", placeholder: "Any genre. Or e.g. Co-op, Roguelike, Cozy", value: String(st.playtest_genres || "").split(",").filter(Boolean).join(", ") });
         const genreField = h("div", { class: "field" }, h("label", { text: "Only these genres from Playtester (optional)" }), genreIn,
           h("p", { class: "muted small", text: "Playtester tags every game with genres like Action, Co-op or Cozy. List the ones you want, separated by commas, and the rest of its listings are skipped. Games your members have on a wishlist always post. Leave it empty for everything." }));
-        const skipOnS = new Set(String(st.playtest_skip || "").split(",").filter(Boolean));
-        const skipBoxesS = PLAYTEST_SOURCES.map(([id, label]) => { const cb = h("input", { type: "checkbox", checked: skipOnS.has(id) }); cb.dataset.src = id; return h("label", { class: "check-row" }, cb, " " + label); });
-        const skipFieldS = h("div", { class: "field" }, h("label", { text: "Never post listings from" }), h("div", { class: "stack" }, ...skipBoxesS),
-          h("p", { class: "muted small", text: "Ticked sites are left out of this server's playtest posts, even for games your members watch. Leave them all empty to use every site." }));
-        const skipSources = () => skipBoxesS.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
         const fullSources = () => fullBoxes.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
         const pings = h("div", { class: "panel" }, h("h3", { text: "Ping roles" }),
           h("p", { class: "muted", text: "Members opt in to these roles in #roles. The bot pings them (and nobody else) when it posts." }),
-          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), fullField, genreField, skipFieldS, field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), field("Verified IndieDev role (the bot gives it to developers when their game is approved in the showcase)", pIndieDev), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
-          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { playtest_full: fullSources(), playtest_genres: genreIn.value, playtest_skip: skipSources(), free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_dev: pIndieDev.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
+          field("Free games feed", pFree), field("Deals (big discounts, sale starts, group alerts)", pDeals), field("New giveaways (used unless a giveaway picks its own)", pGw), field("Looking-for-group posts", pLfg), field("Playtest channel (every playtest, demo and beta is posted here, and the role below is pinged)", pPlayCh), fullField, genreField, field("Playtest ping role", pPlay), field("Now playing channel (squad-up posts when two or more members are in the same game)", pSquadCh), field("Squad ping role", pSquad), field("Indie spotlight channel (the weekly indie game is posted here every Wednesday)", pIndieCh), field("Indie ping role", pIndie), field("Verified IndieDev role (the bot gives it to developers when their game is approved in the showcase)", pIndieDev), h("label", { class: "check" }, pPlayAll, "No playtest channel? Post every playtest in the alert channel too, not just games your members watch"),
+          h("div", { class: "row" }, h("button", { class: "btn gray", type: "button", text: "Post current playtests now", title: "Posts the newest listed playtests, demos and betas in the playtest channel, without pinging the role", onclick: ev => busy(ev.currentTarget, async () => { const r = await post("/api/community/playtests", { count: 8 }); toast(r.posted ? `Posted ${r.posted} of ${r.found} listed. New ones are posted on their own.` : "Nothing is listed right now.", "ok"); }) }), save("Save ping roles", () => post("/api/community/pings", { playtest_full: fullSources(), playtest_genres: genreIn.value, free: pFree.value, deals: pDeals.value, giveaway: pGw.value, lfg: pLfg.value, playtest: pPlay.value, squad: pSquad.value, squad_channel: pSquadCh.value, indie: pIndie.value, indie_dev: pIndieDev.value, indie_channel: pIndieCh.value, playtest_all: pPlayAll.checked, playtest_channel: pPlayCh.value }))));
         // referral
         const bonus = h("input", { type: "number", min: "0", max: "1000", value: String(st.referral_xp) }), rCount = h("input", { type: "number", min: "1", max: "1000", placeholder: "Invited members" }), rRole = roSel("", "Choose a role");
         const referral = h("div", { class: "panel" }, h("h3", { text: "Invites and referrals" }),
@@ -7214,7 +7168,7 @@ window.SVC_SITE = envIn => {
           field("Memes channel", mCh), field("How often", mHours), h("label", { class: "check" }, mOn, " Post memes automatically"),
           h("p", { class: "muted small", text: st.meme_at ? "Last meme " + new Date(st.meme_at).toLocaleString() + "." : "None posted yet." }),
           h("div", { class: "row" }, save("Save", () => post("/api/community/memes", mBody())), save("Save and post one now", () => post("/api/community/memes", { ...mBody(), now: true }), "btn green small")));
-        // group everything a manager can customize into tabs
+        // group everything a manager can customise into tabs
         // Guides managers write for their own server: the bot answers matching questions by itself, and the AI can use them too
         const gTitle = h("input", { type: "text", maxlength: "80", placeholder: "How do I get the Raider role?" });
         const gKeys = h("textarea", { rows: "2", maxlength: "400", placeholder: "get raider role, raider role, how to join raids" });
@@ -7228,7 +7182,7 @@ window.SVC_SITE = envIn => {
         const tabBar = h("div", { class: "tabs" }), body = h("div");
         const show = n => { mgrTab = n; [...tabBar.children].forEach((b, k) => b.classList.toggle("active", k === n)); body.replaceChildren(...groups[n][1]); };
         groups.forEach(([label], n) => tabBar.append(h("button", { class: "tab small", type: "button", text: label, onclick: () => show(n) })));
-        box.replaceChildren(h("h2", { text: "Server settings" }), h("p", { class: "muted", text: "Everything you can customize for this server, in one place." }), tabBar, body);
+        box.replaceChildren(h("h2", { text: "Server settings" }), h("p", { class: "muted", text: "Everything you can customise for this server, in one place." }), tabBar, body);
         show(Math.min(mgrTab, groups.length - 1));
       })();
       return box;
