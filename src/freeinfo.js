@@ -12,11 +12,11 @@ async function steamKind(appid, fetchImpl) {
     if (cache.has(appid)) return cache.get(appid);
     if (Date.now() - (negative.get(appid) ?? 0) < 10 * 60_000) return null;
     try {
-        const res = await fetchImpl(`https://store.steampowered.com/api/appdetails?appids=${appid}&filters=basic&l=english`, { headers: { "Accept-Language": "en" }, signal: AbortSignal.timeout(6000) });
+        const res = await fetchImpl(`https://store.steampowered.com/api/appdetails?appids=${appid}&filters=basic,release_date&l=english`, { headers: { "Accept-Language": "en" }, signal: AbortSignal.timeout(6000) });
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json())?.[String(appid)];
         const d = data?.success ? data.data : null;
-        const out = d ? { dlc: d.type === "dlc", isFree: d.is_free === true, base: d.fullgame?.appid ? { appid: Number(d.fullgame.appid), name: String(d.fullgame.name ?? "").slice(0, 100) } : null } : null;
+        const out = d ? { dlc: d.type === "dlc", isFree: d.is_free === true, released: d.release_date?.coming_soon ? null : (Date.parse(d.release_date?.date) || null), base: d.fullgame?.appid ? { appid: Number(d.fullgame.appid), name: String(d.fullgame.name ?? "").slice(0, 100) } : null } : null;
         cache.set(appid, out);
         return out;
     } catch { negative.set(appid, Date.now()); return null; }
@@ -30,7 +30,7 @@ export async function enrichFree(list, fetchImpl = globalThis.fetch) {
         const k = appid ? await steamKind(appid, fetchImpl) : null;
         const next = k?.dlc ? { ...g, type: "dlc", base: k.base } : k?.base ? { ...g, base: k.base } : g;
         // A game that is free to play all the time isn't a giveaway; if it shows up here, what's free is something inside it.
-        out.push(k?.isFree && !k.dlc ? { ...next, alwaysFree: true } : next);
+        out.push(k?.isFree && !k.dlc ? { ...next, alwaysFree: true, newFree: Boolean(k.released && Date.now() - k.released < 21 * 86400_000 && k.released <= Date.now() + 86400_000) } : next);
     }
     return out;
 }
@@ -47,6 +47,7 @@ const INGAME = /\b(pack|in-game|loot|skins?|cosmetics?|starter|reward|rewards|pe
  *  "always" (a game that is free to play all the time) or "keep" (claim it and it's yours). */
 export function offerKind(g) {
     if (g?.weekend) return "weekend";
+    if (g?.alwaysFree && g.newFree) return "newfree"; // just released as free to play: a real launch, not an old game
     if (g?.alwaysFree) return INGAME.test(`${g.title ?? ""} ${g.blurb ?? ""}`) ? "ingame" : "always";
     return "keep";
 }

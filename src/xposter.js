@@ -104,8 +104,8 @@ export function freeGameText(g, now = Date.now(), tags = DEFAULT_TAGS, { link = 
     const when = left === null ? "" : left < 36 * 3_600_000 ? `\n⏳ Ends ${left < 3_600_000 ? "within the hour" : `in about ${Math.round(left / 3_600_000)} hours`}.` : `\n⏳ Ends ${new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }).format(new Date(g.expiry))}.`;
     let title = String(g.title).slice(0, 110);
     const kind = offerKind(g);
-    const head = kind === "weekend" ? "🎮 Free to play this weekend" : kind === "ingame" ? "🎁 Free in-game offer" : "🎁 Free right now";
-    const body = kind === "weekend" ? "Play it free for a limited time. It goes back to full price after, so grab it before then." : kind === "ingame" ? "The game itself is always free. This is a limited-time freebie inside it. Our Discord bot catches these too." : kind === "always" ? "Free to play any time. Our Discord bot posts every free game as it drops." : "Keep it forever once you claim it. Our Discord bot posts every free game as it drops.";
+    const head = kind === "weekend" ? "🎮 Free to play this weekend" : kind === "newfree" ? "🆕 New free-to-play game" : kind === "ingame" ? "🎁 Free in-game offer" : "🎁 Free right now";
+    const body = kind === "weekend" ? "Play it free for a limited time. It goes back to full price after, so grab it before then." : kind === "newfree" ? "Just launched and free to play. No purchase needed. Our Discord bot catches new free games as they drop." : kind === "ingame" ? "The game itself is always free. This is a limited-time freebie inside it. Our Discord bot catches these too." : kind === "always" ? "Free to play any time. Our Discord bot posts every free game as it drops." : "Keep it forever once you claim it. Our Discord bot posts every free game as it drops.";
     const make = () => `${head}: ${title}${shop}${when}\n\n${body}\n\n${link && g.url ? `Claim it: ${g.url}` : "Link in bio."}\n\n${hashtagsFor(g.shop, g.title, tags)}`;
     let text = make();
     while (xLength(text) > 280 && title.length > 20) { title = title.slice(0, -10).trimEnd() + "…"; text = make(); }
@@ -263,7 +263,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         return byEnd.sort((a, b) => (score.get(b.shop) ?? 0) - (score.get(a.shop) ?? 0))[0]; // a stable sort, so ties keep the soonest-ending first
     }
     // Games that are free to play all the time are left out unless the owner turns that on; in-game freebies are on by default.
-    const offerOk = g => { if (db.getMeta(STEAMONLY) === "1" && !isSteam(g)) return false; const k = offerKind(g); return k === "always" ? db.getMeta(ALWAYS) === "1" : k === "ingame" ? db.getMeta(INGAME) !== "0" : true; };
+    const offerOk = g => { if (db.getMeta(STEAMONLY) === "1" && !isSteam(g)) return false; const k = offerKind(g); return k === "newfree" ? true : k === "always" ? db.getMeta(ALWAYS) === "1" : k === "ingame" ? db.getMeta(INGAME) !== "0" : true; };
     /** What the next automatic post would look like, without sending or marking anything. */
     function peek(list) {
         if (!enabled() || !configured()) return { off: true };

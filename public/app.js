@@ -4566,7 +4566,7 @@ window.SVC_SITE = envIn => {
         h("label", { class: "check" }, linksOn, " Put the game's link in automatic posts (about " + money(xs.linkCost) + " each instead of " + money(xs.plainCost) + ")"),
         h("label", { class: "check" }, steamOnly, " Only post Steam games (skip Epic, GOG and the rest)"),
         h("label", { class: "check" }, ingameOn, " Post free items and packs inside free-to-play games (worded as an in-game offer)"),
-        h("label", { class: "check" }, alwaysOn, " Also post games that are always free to play (off by default)"),
+        h("label", { class: "check" }, alwaysOn, " Also post older games that are always free to play (new free launches are always posted)"),
         h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
         h("div", { class: "row" }, h("label", { text: "Hashtags " }), tagsIn, tagsSave, tagsReset),
         h("p", { class: "muted small", text: "Each automatic post gets its store's own tag (like #EpicGames) plus up to three from this list, rotating so no two posts match. Bundles skip the free and giveaway ones. A few well-picked tags do better than a wall of them." }),
