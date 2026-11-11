@@ -48,10 +48,10 @@ export async function badgeFor({ db, itad, abg, userId, now = Date.now(), fetchI
     let giveaways = [];
     try { giveaways = await itad.getGiveawayList(); } catch { /* none */ }
     free = giveaways.filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => String(g.id)).slice(0, 40);
-    // Steam games that are free to keep right now, which the extension can add to the account with one click (never free weekends or always-free games).
+    // Steam games that are free to keep right now, which the extension can add to the account with one click (never free weekends; always-free games only in their first three weeks).
     try {
         const steam = giveaways.filter(g => !g.weekend && steamAppid(g)).slice(0, 12);
-        for (const g of await enrichFree(steam, fetchImpl)) if (!g.alwaysFree && !g.weekend) claimable.push({ appid: steamAppid(g), title: String(g.title).slice(0, 100), dlc: g.type === "dlc" });
+        for (const g of await enrichFree(steam, fetchImpl)) if ((!g.alwaysFree || g.newFree) && !g.weekend) claimable.push({ appid: steamAppid(g), title: String(g.title).slice(0, 100), dlc: g.type === "dlc" });
     } catch { /* none */ }
     try { tests = ((await abg?.latest?.()) ?? []).filter(x => x.date >= now - 14 * 86400_000 && !x.wishlistOnly).map(x => String(x.id)).slice(0, 40); } catch { /* none */ }
     // Wishlist games that are on sale now: at or under their alert price, or at least half off.

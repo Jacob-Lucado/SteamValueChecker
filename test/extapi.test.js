@@ -19,3 +19,13 @@ test("gift board: offer, duplicate, claim, own listing, withdraw", async () => {
     for (let i = 0; i < 10; i++) offerGift(db, "g1", "u1", "G" + i);
     assert.ok(offerGift(db, "g1", "u1", "One more").error, "ten at a time");
 });
+
+test("claimable freebies: new free-to-play launches count, old always-free games and weekends don't", async () => {
+    const { openDb } = await import("../src/db.js");
+    const { badgeFor } = await import("../src/extapi.js");
+    const db = openDb(":memory:"); db.ensureUser("u1");
+    const mk = (id, extra) => ({ id, title: "G" + id, shop: "Steam", url: `https://store.steampowered.com/app/${id}/`, type: "game", ...extra });
+    const appdetails = async url => { const id = /appids=(\d+)/.exec(url)[1]; const r = { 1: { is_free: false }, 2: { is_free: true, release_date: { date: new Date(Date.now() - 5 * 86400_000).toDateString() } }, 3: { is_free: true, release_date: { date: "Jan 1, 2015" } } }[id]; return { ok: true, json: async () => ({ [id]: { success: true, data: { type: "game", ...r } } }) }; };
+    const out = await badgeFor({ db, itad: { getGiveawayList: async () => [mk(1), mk(2), mk(3), mk(4, { weekend: true })] }, userId: "u1", fetchImpl: appdetails });
+    assert.deepEqual(out.claimable.map(c => c.appid), [1, 2]);
+});
