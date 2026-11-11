@@ -15,7 +15,7 @@ import { indexNowKey } from "../indexnow.js";
 import { PAGE_SEO } from "../pageseo.js";
 import { SEO_PAGES, seoSlugs, seoIsLive, renderSeoPage } from "../seopages.js";
 import { pickDeals } from "../weeklydeals.js";
-import { fillArt } from "../dealart.js";
+import { fillArt, withPictures } from "../dealart.js";
 import { brotliCompressSync, gzipSync, constants as zc } from "node:zlib";
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync, createReadStream } from "node:fs";
 import { tmpdir } from "node:os";
@@ -4886,7 +4886,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         // The sale-dates page counts days, so it is rebuilt every hour instead of once.
         if (body && file.startsWith("seo/") && seoIsLive(file.slice(4, -5)) && Date.now() - (cache.get(file + ":at") ?? 0) > 3600_000) body = null;
         if (!body) {
-            if (file.startsWith("seo/")) { cache.set(file + ":at", Date.now()); const slug = file.slice(4, -5); let deals = null; if (slug === "steam-deals-this-week") { try { deals = await fillArt(pickDeals(await itad.getDealsPool({ country: "US", pages: 6 }), 20)); } catch { /* the page says the list is loading */ } } const html = renderSeoPage(slug, { origin, invite: config.clientId ? `${origin}/invite` : null, deals }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
+            if (file.startsWith("seo/")) { cache.set(file + ":at", Date.now()); const slug = file.slice(4, -5); let deals = null; if (slug === "steam-deals-this-week") { try { deals = withPictures(await fillArt(pickDeals(await itad.getDealsPool({ country: "US", pages: 6 }), 45), { max: 45 }), 20); } catch { /* the page says the list is loading */ } } const html = renderSeoPage(slug, { origin, invite: config.clientId ? `${origin}/invite` : null, deals }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
             if (file === "index.html" || file === "grabber.html" || file === "ai.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));

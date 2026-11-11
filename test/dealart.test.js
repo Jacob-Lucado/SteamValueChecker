@@ -29,3 +29,12 @@ test("answers are remembered so the same title isn't searched twice", async () =
     await fillArt([{ title: "Same Game" }], { fetchImpl: f }); await fillArt([{ title: "Same Game" }], { fetchImpl: f });
     assert.equal(calls, 1);
 });
+
+test("the list prefers games with pictures and only pads with the rest when too few have one", async () => {
+    const { withPictures } = await import("../src/dealart.js");
+    const mk = (n, art) => Array.from({ length: n }, (_, i) => ({ title: `${art ? "A" : "B"}${i}`, appid: art ? i + 1 : null }));
+    const plenty = withPictures([...mk(5, false), ...mk(15, true)], 10, 8);
+    assert.equal(plenty.length, 10); assert.ok(plenty.every(d => d.appid), "all have pictures");
+    const few = withPictures([...mk(5, false), ...mk(3, true)], 10, 8);
+    assert.equal(few.length, 8); assert.equal(few.filter(d => d.appid).length, 3, "padded so the page isn't tiny");
+});

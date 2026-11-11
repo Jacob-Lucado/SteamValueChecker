@@ -9,7 +9,7 @@ const known = new Map(); // title -> appid or null
 /** Fills in `appid` for deals that lack one, when Steam's search finds the same game. Never throws. */
 export async function fillArt(deals, { fetchImpl = globalThis.fetch, max = 12 } = {}) {
     const need = deals.filter(d => !d.appid && d.title).slice(0, max);
-    await Promise.all(need.map(async d => {
+    for (let i = 0; i < need.length; i += 4) await Promise.all(need.slice(i, i + 4).map(async d => { // a few at a time, so Steam isn't hit all at once
         const key = d.title.toLowerCase();
         if (!known.has(key)) {
             let id = null;
@@ -24,5 +24,11 @@ export async function fillArt(deals, { fetchImpl = globalThis.fetch, max = 12 } 
         if (id) d.appid = id;
     }));
     return deals;
+}
+
+/** The deals that have a picture, topped up with picture-less ones only when too few have one. */
+export function withPictures(deals, n = 20, atLeast = 12) {
+    const pics = deals.filter(d => d.appid);
+    return (pics.length >= atLeast ? pics : [...pics, ...deals.filter(d => !d.appid)]).slice(0, n);
 }
 export const _forgetArt = () => known.clear();
