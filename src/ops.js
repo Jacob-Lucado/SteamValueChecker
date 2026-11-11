@@ -65,9 +65,9 @@ export function createOps({ now = () => Date.now(), sendOwner = async () => {}, 
                     await incident("prices", `Steam Value Checker: price checks have failed ${state.priceFailStreak} times in a row (last error: ${stats.lastErrorCode ?? "unknown"}).`);
                 }
             } else state.priceFailStreak = 0;
-            if (stats.delivered === 0 && stats.failed >= 5) {
-                error("delivery", `${stats.failed} alerts not delivered`);
-                await incident("delivery", `Steam Value Checker: ${stats.failed} alerts could not be delivered in the last check and none got through. Members may have DMs closed with no alert channel set, or the bot lost permission to post.`);
+            if (stats.delivered === 0 && stats.failed - (stats.unreachable ?? 0) >= 5) {
+                error("delivery", `${stats.failed - (stats.unreachable ?? 0)} alerts not delivered`);
+                await incident("delivery", `Steam Value Checker: ${stats.failed - (stats.unreachable ?? 0)} alerts could not be delivered in the last check and none got through. The bot may have lost permission to post, or Discord may be having trouble.`);
             }
         },
 

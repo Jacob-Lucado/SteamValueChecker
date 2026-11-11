@@ -64,7 +64,9 @@ export function parseHumbleDetail(html) {
     return { games, price: prices.length ? prices.map(money).join(" / ") : null };
 }
 export async function fetchHumble({ fetchImpl, now, timeoutMs }) {
-    const list = parseHumbleList(await (await get(fetchImpl, BUNDLE_STORES.humble.home, timeoutMs)).text(), now);
+    let list = [];
+    try { list = parseHumbleList(await (await get(fetchImpl, BUNDLE_STORES.humble.home, timeoutMs)).text(), now); } catch { /* Humble sometimes turns servers away; IsThereAnyDeal's bundle pages cover it */ }
+    if (!list.length) return fetchViaItad("Humble", "humble", { fetchImpl, now, timeoutMs });
     for (const b of list.slice(0, 10)) {
         try { const d = parseHumbleDetail(await (await get(fetchImpl, b.url, timeoutMs)).text()); if (d.games.length) { b.games = d.games.slice(0, 60); b.gameCount = d.games.length; } if (d.price) b.price = d.price; } catch { /* the bundle still posts without its game list */ }
     }

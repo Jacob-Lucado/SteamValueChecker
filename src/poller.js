@@ -34,7 +34,7 @@ const chunked = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_
  */
 export async function runCycle({ db, itad, notifier, voiceMap = null, now = () => Date.now(), log = () => {} }) {
     const items = db.activeItems();
-    const stats = { checked: items.length, alerts: 0, delivered: 0, failed: 0, deferred: 0, priceErrors: 0, groupPosts: 0 };
+    const stats = { checked: items.length, alerts: 0, delivered: 0, failed: 0, deferred: 0, priceErrors: 0, groupPosts: 0, unreachable: 0 };
     if (!items.length) return stats;
 
     const byRegion = new Map();
@@ -81,6 +81,8 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
         const sendable = quiet ? list.filter(h => h.item.priority) : list;
         stats.deferred += list.length - sendable.length;
         if (!sendable.length) continue;
+        // Someone whose DMs keep failing and who has no alert channel gets one try a day instead of an hourly one that only burns price lookups.
+        if (user.delivery !== "channel" && (user.dm_failures ?? 0) >= 5 && !db.getGuild(user.guild_id) && Math.floor(now() / 3600_000) % 24 !== 0) { stats.unreachable += sendable.length; stats.failed += sendable.length; continue; }
         for (const part of chunked(sendable, MAX_CARDS)) {
             const profile = part.some(h => h.item.appid) ? (() => { try { return tasteProfile(db, userId); } catch { return null; } })() : null;
             // History is fetched only for alerts that are really being sent, and a failure just leaves the note off.
@@ -102,6 +104,8 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 }
             } else {
                 stats.failed += part.length;
+                // A member with DMs closed and no alert channel is on them, not a bot fault, so it isn't counted toward an outage alert.
+                if (res.reason === "dm_failed_no_channel" || res.reason === "restricted") stats.unreachable += part.length;
                 log(`delivery failed (${res.reason})`);
             }
         }
