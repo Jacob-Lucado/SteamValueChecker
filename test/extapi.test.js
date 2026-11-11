@@ -29,3 +29,20 @@ test("claimable freebies: new free-to-play launches count, old always-free games
     const out = await badgeFor({ db, itad: { getGiveawayList: async () => [mk(1), mk(2), mk(3), mk(4, { weekend: true })] }, userId: "u1", fetchImpl: appdetails });
     assert.deepEqual(out.claimable.map(c => c.appid), [1, 2]);
 });
+
+test("claimable freebies: demos are left out, and DLC only shows when its base game is known and owned", async () => {
+    const { openDb } = await import("../src/db.js");
+    const { badgeFor } = await import("../src/extapi.js");
+    const db = openDb(":memory:"); db.ensureUser("u1");
+    const mk = (id, extra) => ({ id, title: "G" + id, shop: "Steam", url: `https://store.steampowered.com/app/${id}/`, type: "game", ...extra });
+    const kinds = { 7001: { type: "game", is_free: false }, 7002: { type: "demo", is_free: true }, 7003: { type: "dlc", is_free: false, fullgame: { appid: 900, name: "Base A" } }, 7004: { type: "dlc", is_free: false, fullgame: { appid: 901, name: "Base B" } }, 7005: { type: "dlc", is_free: false } };
+    const fetchImpl = async url => { const id = /appids=(\d+)/.exec(url)[1]; return { ok: true, json: async () => ({ [id]: { success: true, data: kinds[id] } }) }; };
+    const run = () => badgeFor({ db, itad: { getGiveawayList: async () => [7001, 7002, 7003, 7004, 7005].map(i => mk(i)).concat([mk(7006, { title: "Cool Game Demo" })]) }, userId: "u1", fetchImpl });
+    // Nothing synced yet: DLC with a known base passes through for the extension to check, DLC with no base is dropped.
+    assert.deepEqual((await run()).claimable.map(c => c.appid).sort(), [7001, 7003, 7004]);
+    // Once the library is synced and owns only base A, DLC for base B is dropped.
+    const synced = { ...db, listLibrary: () => [{ appid: 900 }] };
+    const out = (await badgeFor({ db: synced, itad: { getGiveawayList: async () => [7003, 7004].map(i => mk(i)) }, userId: "u1", fetchImpl })).claimable;
+    assert.deepEqual(out.map(c => c.appid), [7003]);
+    assert.equal(out[0].base.appid, 900);
+});

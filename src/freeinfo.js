@@ -16,7 +16,7 @@ async function steamKind(appid, fetchImpl) {
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json())?.[String(appid)];
         const d = data?.success ? data.data : null;
-        const out = d ? { dlc: d.type === "dlc", isFree: d.is_free === true, released: d.release_date?.coming_soon ? null : (Date.parse(d.release_date?.date) || null), base: d.fullgame?.appid ? { appid: Number(d.fullgame.appid), name: String(d.fullgame.name ?? "").slice(0, 100) } : null } : null;
+        const out = d ? { dlc: d.type === "dlc", demo: d.type === "demo", isFree: d.is_free === true, released: d.release_date?.coming_soon ? null : (Date.parse(d.release_date?.date) || null), base: d.fullgame?.appid ? { appid: Number(d.fullgame.appid), name: String(d.fullgame.name ?? "").slice(0, 100) } : null } : null;
         cache.set(appid, out);
         return out;
     } catch { negative.set(appid, Date.now()); return null; }
@@ -28,7 +28,8 @@ export async function enrichFree(list, fetchImpl = globalThis.fetch) {
     for (const g of list) {
         const appid = steamAppid(g);
         const k = appid ? await steamKind(appid, fetchImpl) : null;
-        const next = k?.dlc ? { ...g, type: "dlc", base: k.base } : k?.base ? { ...g, base: k.base } : g;
+        const next0 = k?.dlc ? { ...g, type: "dlc", base: k.base } : k?.base ? { ...g, base: k.base } : g;
+        const next = k?.demo ? { ...next0, demo: true } : next0;
         // A game that is free to play all the time isn't a giveaway; if it shows up here, what's free is something inside it.
         out.push(k?.isFree && !k.dlc ? { ...next, alwaysFree: true, newFree: Boolean(k.released && Date.now() - k.released < 21 * 86400_000 && k.released <= Date.now() + 86400_000) } : next);
     }
