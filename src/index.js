@@ -448,7 +448,7 @@ client.once(Events.ClientReady, c => {
             result.epicSoon = await ops.job("epic soon", () => runEpicSoon({ db, soon: epicSoon, notifier, log }));
             result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log }));
             result.hotDeals = await ops.job("hot deals", () => runHotDeals({ db, itad, notifier, log }));
-            result.saleStarts = await ops.job("sale starts", () => runSaleStarts({ db, notifier, log }));
+            result.saleStarts = await ops.job("sale starts", () => runSaleStarts({ db, notifier, log, prepUrl: cfg.dashboard?.publicUrl ? `${String(cfg.dashboard.publicUrl).replace(/\/+$/, "")}/winter-sale` : null }));
             result.serverDigests = await ops.job("server digests", () => runServerDigests({ db, itad, notifier, names: id => client.guilds.cache.get(id)?.name, log }));
             result.friends = await ops.job("friend reminders", () => runFriendReminders({ db, itad, notifier, log }));
             result.digests = await ops.job("digests", () => runDigests({ db, itad, notifier, log }));

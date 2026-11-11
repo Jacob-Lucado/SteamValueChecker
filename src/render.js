@@ -883,6 +883,19 @@ export function hotDealsPayload(deals) {
 }
 
 /** "A Steam sale just started", from the sale calendar. */
+/** A week-ahead heads-up for a sale: when it starts and what to do before it does. */
+export function saleSoonPayload(ev, prepUrl = null) {
+    const t = (ms, f) => `<t:${Math.floor(ms / 1000)}:${f}>`;
+    const row = [linkButton("Sale calendar", saleUrl(ev))];
+    if (prepUrl) row.unshift(linkButton("Plan your budget", prepUrl));
+    return { embeds: [{
+        color: 0x1b9aaa, title: `🏷️ ${ev.name} starts ${t(ev.start, "R")}`,
+        url: saleUrl(ev),
+        description: `It begins ${t(ev.start, "f")}.${ev.note ? "\n" + ev.note : ""}\nWishlist what you want now and set a price you would pay, so a fake discount does not pull you in.`,
+        footer: { text: "Dates from Valve's published schedule" }
+    }], components: [{ type: 1, components: row }] };
+}
+
 export function saleStartPayload(ev) {
     const t = (ms, f) => `<t:${Math.floor(ms / 1000)}:${f}>`;
     const fest = ev.kind === "fest";

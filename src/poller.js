@@ -14,7 +14,7 @@ import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
 import { epicSoonPayload, newsPayload } from "./render.js";
 import { isPatchNote } from "./news.js";
-import { releaseEmbed, releaseDateEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload } from "./render.js";
+import { releaseEmbed, releaseDateEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload, saleSoonPayload } from "./render.js";
 import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";
@@ -410,11 +410,20 @@ export async function runHotDeals({ db, itad, notifier, log = () => {} }) {
 }
 
 /** When a Steam sale or festival from the calendar is live, servers that asked get one post for it. */
-export async function runSaleStarts({ db, notifier, now = () => Date.now(), log = () => {} }) {
+export async function runSaleStarts({ db, notifier, now = () => Date.now(), log = () => {}, prepUrl = null }) {
     const stats = { posted: 0 };
     const guilds = db.guildsWithSaleFeed();
     if (!guilds.length) return stats;
-    const live = upcomingSales(now(), { limit: 6 }).filter(e => e.live);
+    const all = upcomingSales(now(), { limit: 6 });
+    for (const ev of all.filter(e => !e.live && e.kind === "sale" && e.start - now() <= 7 * 86400_000)) {
+        const key = `salesoon:${ev.name}:${ev.start}`;
+        for (const guild of guilds) {
+            if (db.guildHasSeen(guild.guild_id, key)) continue;
+            if (await notifier.postGuild(guild.guild_id, saleSoonPayload(ev, prepUrl), "deals")) { db.guildMarkSeen(guild.guild_id, key); stats.posted++; }
+            else log("sale heads-up post failed for a server");
+        }
+    }
+    const live = all.filter(e => e.live);
     for (const ev of live) {
         const key = `salestart:${ev.name}:${ev.start}`;
         for (const guild of guilds) {

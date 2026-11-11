@@ -187,6 +187,11 @@ test("hot deals and sale-start posts go once per deal to servers that turned the
     assert.match(posts.at(-1)[1].embeds[0].title, /Scream V Fest has started/);
     assert.equal((await runSaleStarts({ db, notifier, now: () => during })).posted, 0);
     assert.equal((await runSaleStarts({ db, notifier, now: () => Date.parse("2026-11-20T12:00:00Z") })).posted, 0); // nothing live
+    const soon = Date.parse("2026-12-11T12:00:00Z"); // six days before the Winter Sale
+    assert.equal((await runSaleStarts({ db, notifier, now: () => soon, prepUrl: "https://x.test/winter-sale" })).posted, 1);
+    assert.match(posts.at(-1)[1].embeds[0].title, /Winter Sale starts/);
+    assert.equal(posts.at(-1)[1].components[0].components[0].url, "https://x.test/winter-sale");
+    assert.equal((await runSaleStarts({ db, notifier, now: () => soon })).posted, 0); // only once
 });
 
 test("itad hot deals keep only Steam games at or above the discount", async () => {
