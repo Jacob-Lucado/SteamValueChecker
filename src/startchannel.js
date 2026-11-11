@@ -33,6 +33,7 @@ export async function createStartChannel({ api, discord, db, guild, everyoneId =
         const payload = { embeds: [startEmbed({ guildName: guild.name, url, ready })] };
         if (url) payload.components = [{ type: 1, components: [{ type: 2, style: 5, label: "Open the dashboard", url: `${url}/#/setup/${guild.id}` }] }];
         db.setMeta(`startch_id:${guild.id}`, ch.id); // global giveaways are posted here too
+        db.funnelMark?.(guild.id, "start");
         await discord.sendChannel(ch.id, payload);
         return { channelId: ch.id };
     } catch (e) {

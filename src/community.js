@@ -357,6 +357,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.bumpUsage?.(fresh ? "setup_auto" : "setup_manual");
     db.bumpUsage?.("channels_created", created.channels.length);
     await removeStartChannel({ api, db, guildId }); // the bot's start-here channel has done its job
+    db.funnelMark?.(guildId, "setup");
     return { created, channels: chIds, roles: roleIds, notes };
 }
 

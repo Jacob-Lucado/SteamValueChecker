@@ -440,6 +440,20 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     /** People who imported their Steam wishlist before and have not turned syncing off, least recently synced first. */
     const wishSyncDue = (before, limit) => all("SELECT discord_id, steam_id FROM users WHERE steam_id IS NOT NULL AND steam_id <> '' AND wish_sync <> 0 AND (wish_synced_at IS NULL OR wish_synced_at < ?) ORDER BY COALESCE(wish_synced_at, 0) LIMIT ?", before, limit);
     const countItems = id => get("SELECT COUNT(*) AS n FROM items WHERE discord_id = ?", id).n;
+    /** Setup funnel: the first time each step happens in a server (join, start channel made, setup run), kept as a timestamp. */
+    const funnelMark = (guildId, step) => { try { const k = `funnel:${step}:${guildId}`; if (!getMeta(k)) setMeta(k, String(now())); } catch { /* a missed mark is fine */ } };
+    const funnelStats = (sinceMs = 0) => {
+        const g = new Map();
+        for (const r of all("SELECT key, value FROM status_meta WHERE key LIKE 'funnel:%'")) {
+            const [, step, id] = String(r.key).split(":");
+            if (!g.has(id)) g.set(id, {});
+            g.get(id)[step] = Number(r.value) || 0;
+        }
+        const joined = [...g.entries()].filter(([, v]) => v.join && v.join >= sinceMs).map(([id, v]) => ({ id, ...v }));
+        return { joined: joined.length, started: joined.filter(v => v.start).length, setup: joined.filter(v => v.setup).length, recent: joined.sort((a, b) => b.join - a.join).slice(0, 25) };
+    };
+    /** The games the most people are watching, for the public sitemap. Steam app ids only. */
+    const popularApps = (limit = 300) => all("SELECT appid, MIN(title) AS title, COUNT(DISTINCT discord_id) AS n FROM items WHERE appid IS NOT NULL GROUP BY appid ORDER BY n DESC, appid LIMIT ?", Math.min(2000, Math.max(1, limit))).map(clean);
     const listItems = id => all("SELECT * FROM items WHERE discord_id = ? ORDER BY priority DESC, title COLLATE NOCASE", id).map(clean);
 
     /** Adds games, skipping ones already on the list. Returns { added, existing, skippedForLimit }. */
@@ -906,7 +920,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     return {
         uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
-        markAlerted, clearAlerted, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
+        markAlerted, clearAlerted, popularApps, funnelMark, funnelStats, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,

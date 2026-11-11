@@ -97,6 +97,7 @@ export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId =
         } catch (e) { if (e?.status === 403) throw Object.assign(new Error("I need the Manage Channels permission to create channels. Give it to my role in Server Settings, or pick existing channels instead."), { userFacing: true }); forumNote = " The feature requests forum could not be made (forums need the server's Community features turned on)."; }
     }
     await removeStartChannel({ api, db, guildId });
+    db.funnelMark?.(guildId, "setup");
     return { created, note: `Created ${created.map(c => `<#${c.id}>`).join(", ") || "nothing new"}.${need.support ? " #support-tickets is private to you and the bot; add your staff to it." : ""}${forumNote}` };
 }
 

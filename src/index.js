@@ -502,6 +502,7 @@ client.on(Events.GuildCreate, async guild => {
         if (MEMBERS_INTENT) guild.members.fetch({ time: 30_000 }).catch(() => {}); // so its bots can be left out of the member count
         if (db.getMeta(`welcomed:${guild.id}`)) return;
         db.setMeta(`welcomed:${guild.id}`, "1");
+        db.funnelMark(guild.id, "join");
         // A brand-new server (only Discord's default channels) is built for them right away: the usual gaming layout, welcome, XP, and the bot's own channels.
         let auto = null, autoNote = null;
         try {

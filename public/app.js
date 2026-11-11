@@ -3599,7 +3599,18 @@ window.SVC_SITE = envIn => {
         h("p", { text: `${n0(ins.idle.noWishlistOrLibrary)} member${ins.idle.noWishlistOrLibrary === 1 ? " has" : "s have"} no wishlist and no library games.` }),
         h("p", { text: `${n0(ins.idle.dmFailing)} member${ins.idle.dmFailing === 1 ? " has" : "s have"} DMs that keep failing.` }))];
 
-    const servers = () => [h("div", { class: "panel" }, h("h3", { text: `Servers (${ins.servers.length})` }),
+    const funnelPanel = () => {
+      const f = ins.funnel || { joined: 0, started: 0, setup: 0, recent: [] };
+      const pct = n => (f.joined ? Math.round((n / f.joined) * 100) + "%" : "-");
+      const when = t => (t ? new Date(t).toLocaleString() : "-");
+      const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), h("div", { class: "s", text: sub }));
+      return h("div", { class: "panel" }, h("h3", { text: "Setup funnel, last 30 days" }),
+        h("p", { class: "muted small", text: "Servers that added the bot, got the start-here channel, and then ran a setup command. Counted from when this started being tracked." }),
+        h("div", { class: "tiles" }, tile("Added the bot", f.joined, "new servers"), tile("Got the start channel", f.started, pct(f.started)), tile("Ran setup", f.setup, pct(f.setup))),
+        f.recent.length ? h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Added", "Start channel", "Setup"].map(c => h("th", { text: c })))),
+          h("tbody", {}, f.recent.map(r => h("tr", {}, h("td", { text: r.name || r.id }), h("td", { text: when(r.join) }), h("td", { text: when(r.start) }), h("td", { text: r.setup ? when(r.setup) : "not yet" }))))) : h("p", { class: "muted", text: "No new servers tracked yet." }));
+    };
+    const servers = () => [funnelPanel(), h("div", { class: "panel" }, h("h3", { text: `Servers (${ins.servers.length})` }),
       ins.servers.length ? h("div", { class: "scroll-y tall" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "Members", "Using the bot", "Alert channel", "Free feed", "Group alerts", "Digest", ""].map((c, i) => h("th", { class: i === 1 || i === 2 ? "num" : "", text: c })))),
         h("tbody", {}, ins.servers.map(g => h("tr", {}, h("td", {}, g.name || "Unknown server", h("div", { class: "muted small", text: g.id + (g.inServer === false ? " · bot has left" : "") })), h("td", { class: "num", text: n0(g.members) }), h("td", { class: "num", text: String(g.tracked) }),
           h("td", { text: g.channel ? "Yes" : "No" }), h("td", { text: g.freeFeed ? "On" : "Off" }), h("td", { text: g.groupMin ? "At " + g.groupMin : "Off" }), h("td", { text: g.digest ? "On" : "Off" }), h("td", {}, g.inServer === false ? null : (() => {

@@ -47,3 +47,16 @@ test("setup removes the start channel and stops it receiving giveaways", async (
     assert.equal(t.db.getMeta("startch_id:G5"), "");
     assert.equal(await removeStartChannel({ api: { deleteChannel: async id => gone.push(id) }, db: t.db, guildId: "G5" }), false);
 });
+
+test("the setup funnel counts servers that joined, got the start channel and ran setup", async () => {
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:");
+    db.funnelMark("A", "join"); db.funnelMark("A", "start"); db.funnelMark("A", "setup");
+    db.funnelMark("B", "join"); db.funnelMark("B", "start");
+    db.funnelMark("C", "join");
+    db.funnelMark("OLD", "setup"); // setup in a server that was never tracked joining is not counted
+    const f = db.funnelStats(0);
+    assert.deepEqual([f.joined, f.started, f.setup], [3, 2, 1]);
+    db.funnelMark("A", "setup"); // a second mark never moves the first
+    assert.equal(db.funnelStats(0).recent.length, 3);
+});

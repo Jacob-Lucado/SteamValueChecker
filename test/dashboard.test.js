@@ -3874,3 +3874,18 @@ test("extension library sync adds only new games; gift board lists, claims and h
     assert.equal(none.status, 200);
     await t.close();
 });
+
+test("a public game page is served by Steam app id, and redirects to the clean address", async () => {
+    const t = await setup({ itadExtra: { lookupShopIds: async (shop, ids) => new Map(ids.map(i => [i, i === "app/4242" ? "id-celeste" : null])), getTitle: async id => (id === "id-celeste" ? { title: "Celeste", appid: 4242 } : null) } });
+    try {
+        const odd = await t.request("/game/4242", { raw: true });
+        assert.equal(odd.status, 301);
+        assert.equal(odd.headers.get("location"), "/game/4242-celeste");
+        const page = await t.request("/game/4242-celeste");
+        assert.equal(page.status, 200);
+        assert.match(page.text, /<title>Celeste price history/);
+        assert.match(page.headers.get("content-security-policy"), /style-src 'unsafe-inline'/);
+        assert.equal((await t.request("/game/999999")).status, 404);
+        assert.equal((await t.request("/game/not-a-number")).status, 404);
+    } finally { await t.close(); }
+});

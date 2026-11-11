@@ -104,6 +104,7 @@ import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_TITLE as REQ_TITLE, MAX_BODY a
 import { summarize } from "../report.js";
 import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
+import { renderGamePage, slugify } from "../gamepage.js";
 import { saveOwnBirthday, friendDeals, friendRows, saveFriend, friendFromFollow, syncFollowedFriends, cleanFriendName, cleanBirthday } from "../friends.js";
 import { spendSummary, regionCurrency, grabberRegion } from "../spend.js";
 import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
@@ -439,6 +440,32 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const CSP =
 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
         "media-src 'self' blob: https:; connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self' https://www.youtube-nocookie.com https://w.soundcloud.com https://open.spotify.com; object-src 'self'; frame-ancestors 'none'";
+    // ---------- public game pages ----------
+    const gamePages = new Map(); // appid -> { at, page }; a few hundred at most, an hour or three old at most
+    async function publicGamePage(appid) {
+        const hit = gamePages.get(appid);
+        if (hit && Date.now() - hit.at < 3 * 3600_000) return hit.page;
+        let page = null;
+        try {
+            const id = (await itad.lookupShopIds(61, [`app/${appid}`])).get(`app/${appid}`);
+            if (id) {
+                const info = await itad.getTitle(id);
+                if (info?.title) {
+                    const [prices, history] = await Promise.all([itad.getPrices([id], "US").catch(() => new Map()), itad.getHistory(id, "US").catch(() => [])]);
+                    const sum = summarize(prices.get(id), {});
+                    const cur = sum.currency || "USD", fmt = n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } };
+                    const price = sum.best?.price ?? null, step = Math.max(1, Math.ceil(history.length / MAX_HISTORY_POINTS));
+                    const data = { title: info.title, appid, itadId: id, currency: cur, price, shop: sum.best?.shop ?? null, shopUrl: /^https:\/\//i.test(sum.best?.url ?? "") ? sum.best.url : null,
+                        msrp: sum.msrp, low1y: sum.low1y, atl: sum.atl, image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`,
+                        points: history.filter((_, i) => i % step === 0 || i === history.length - 1).map(p => ({ t: p.t, price: p.price })),
+                        advice: price !== null ? buyOrWait(history, price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: fmt }) : null };
+                    page = { path: `/game/${appid}-${slugify(info.title)}`, html: renderGamePage(data, { origin }) };
+                }
+            }
+        } catch { page = null; }
+        if (page) { if (gamePages.size >= 400) gamePages.delete(gamePages.keys().next().value); gamePages.set(appid, { at: Date.now(), page }); }
+        return page;
+    }
     const send = (res, status, body, headers = {}) => {
         const type = String(headers["Content-Type"] ?? "");
         if (COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && body && Buffer.byteLength(body) > 1024) {
@@ -4344,7 +4371,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const blocked = new Map(db.blockedGuilds().map(b => [b.id, b]));
             const servers = [...new Set([...live.map(g => g.id), ...rows.keys(), ...blocked.keys()])].map(id => ({ blocked: blocked.has(id) ? blocked.get(id).reason || "blocked" : null, id, name: byId.get(id)?.name ?? null, members: byId.get(id)?.members ?? null, tracked: rows.get(id)?.members ?? 0, channel: rows.has(id), freeFeed: Boolean(rows.get(id)?.free_feed), groupMin: rows.get(id)?.group_min ?? 0, digest: Boolean(rows.get(id)?.weekly_digest), inServer: guildList ? byId.has(id) : null }))
                 .sort((a, b) => (b.members ?? 0) - (a.members ?? 0) || b.tracked - a.tracked);
-            return { ...ins, servers, bot: { version: info?.version ?? null, uptime: info?.uptime ?? null, pingMs: info?.pingMs ?? null, servers: info?.servers ?? null, rssMb: Math.round(mem.rss / 1048576), node: process.version } };
+            const fun = db.funnelStats(Date.now() - 30 * 86400_000);
+            return { ...ins, funnel: { joined: fun.joined, started: fun.started, setup: fun.setup, recent: fun.recent.map(r => ({ id: r.id, name: byId.get(r.id)?.name ?? null, join: r.join, start: r.start ?? null, setup: r.setup ?? null })) }, servers, bot: { version: info?.version ?? null, uptime: info?.uptime ?? null, pingMs: info?.pingMs ?? null, servers: info?.servers ?? null, rssMb: Math.round(mem.rss / 1048576), node: process.version } };
         },
         // What the community features are being used for, across every server (counts only, never messages).
         "GET /api/admin/community": async (req) => {
@@ -5232,6 +5260,15 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 const name = withDefaults(db.getProfileData(owner.discord_id).data).name || owner.profile_slug;
                 return send(res, 200, valueBadgeSvg({ name, ...v }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
             }
+            // Public price page for one game, by Steam app id. Rendered on the server so search engines and link previews can read it.
+            if (req.method === "GET" && /^\/game\/\d{1,9}(-[a-z0-9-]{0,80})?$/.test(url.pathname)) {
+                if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const appid = url.pathname.split("/")[2].split("-")[0];
+                const page = await publicGamePage(appid);
+                if (!page) return send(res, 404, "That game was not found.", { "Content-Type": "text/plain; charset=utf-8" });
+                if (url.pathname !== page.path) return send(res, 301, "", { Location: page.path });
+                return send(res, 200, page.html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=1800", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src https: data: 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" });
+            }
             if (req.method === "GET" && /^\/indie\/game\/\d{1,9}\/badge\.svg$/.test(url.pathname)) {
                 if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
                 const g = db.indieGet(url.pathname.split("/")[3]);
@@ -5283,7 +5320,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : k === "fortnite" ? "0.7" : "0.5"]), ["/indie", "page-indie.jpg", "daily", "0.7"], ["/indie/tools", "page-indie-tools.jpg", "monthly", "0.7"], ...INDIE_TOOLS.map(t => [`/indie/tools/${t.id}`, "page-indie-tools.jpg", "monthly", "0.6"]), ...db.indieList({ limit: 60, sort: "new" }).games.map(g => [`/indie/game/${g.id}`, "page-indie.jpg", "weekly", "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, slug === "steam-deals-this-week" ? "daily" : "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"], ["/licenses.html", "licenses.pdf", "yearly", "0.2"]];
                 const day = f => { try { return statSync(f.startsWith("seo/") ? SEO_SRC : join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
                 const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
-                return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+                let games = ""; try { games = db.popularApps(400).map(g => `<url><loc>${origin}/game/${g.appid}-${slugify(g.title)}</loc><changefreq>daily</changefreq><priority>0.6</priority></url>`).join("\n"); } catch { /* the static pages are enough */ }
+                return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n${games}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (url.pathname.startsWith("/auth/")) {
                 const r = authLimit.hit(clientIp(req));
