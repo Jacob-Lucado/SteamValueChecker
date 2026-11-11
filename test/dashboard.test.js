@@ -2782,7 +2782,7 @@ test("extension extras: playtest badge, server counts, wishlist add, stream spot
     t.advance(11 * 60_000);
     assert.ok(!(await (await fetch(t.base + "/api/streamcard/data?token=" + card.token)).json()).cards.some(c => c.spot), "it fades after ten minutes");
     const b = (await call("/api/grabber/badge")).data;
-    assert.deepEqual(Object.keys(b).sort(), ["free", "playtests", "unread"]); assert.ok(b.free.length >= 1); assert.ok(b.playtests.includes("p1") && !b.playtests.includes("d1"), "wishlist-only demos are not counted for everyone");
+    assert.deepEqual(Object.keys(b).sort(), ["claimable", "free", "hits", "playtests", "unread"]); assert.ok(b.free.length >= 1); assert.ok(b.playtests.includes("p1") && !b.playtests.includes("d1"), "wishlist-only demos are not counted for everyone");
     await t.close();
 });
 
@@ -3849,5 +3849,28 @@ test("extension cross-store compare: prices for titles from any shop, other regi
     t.advance(3_000);
     const one = await post(made.data.token, { titles: ["Alpha"], regions: ["GB", "us", "x1"] });
     assert.ok(one.data.regions.length >= 1 && one.data.regions.every(x => x.cc !== "US"), "own region left out");
+    await t.close();
+});
+
+test("extension library sync adds only new games; gift board lists, claims and hides claimed copies", async () => {
+    const t = await signedIn({ itadExtra: {
+        lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, i === "app/999" ? null : "id-" + i.slice(4)])),
+        getTitle: async id => ({ title: "Game " + id }),
+        getGiveawayList: async () => [{ id: "f1", title: "Free Thing", shop: "Steam", url: "https://store.steampowered.com/app/77/", type: "game" }, { id: "f2", title: "Weekend", shop: "Steam", url: "https://store.steampowered.com/app/78/", type: "game", weekend: true }]
+    } });
+    const made = await t.request("/api/grabber/token", { method: "POST", body: { action: "new" } });
+    const call = (path, body, method = "POST") => fetch(t.base + path, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${made.data.token}` }, body: method === "GET" ? undefined : JSON.stringify(body) }).then(async r => ({ status: r.status, data: await r.json() }));
+    const s1 = await call("/api/grabber/sync", { appids: [10, 20, 999] });
+    assert.equal(s1.status, 200); assert.equal(s1.data.added, 2); assert.equal(s1.data.notFound, 1);
+    t.advance(5_000);
+    const s2 = await call("/api/grabber/sync", { appids: [10, 20, 30] });
+    assert.equal(s2.data.added, 1); assert.equal(s2.data.already, 2, "known games are left alone");
+    t.advance(5_000);
+    const badge = await call("/api/grabber/badge", null, "GET");
+    assert.deepEqual(badge.data.claimable.map(c => c.appid), [77], "free weekends are not offered for claiming");
+    assert.ok(Array.isArray(badge.data.hits));
+    // no server on the account: an empty board, not an error
+    const none = await call("/api/grabber/gifts", null, "GET");
+    assert.equal(none.status, 200);
     await t.close();
 });

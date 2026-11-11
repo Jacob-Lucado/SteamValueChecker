@@ -4,6 +4,9 @@ import { sameGame } from "./abgfeed.js";
 import { whoIsPlaying } from "./nowplaying.js";
 import { clubProgress, monthOf } from "./gameclub.js";
 import { isDlc } from "./freemenu.js";
+import { enrichFree } from "./freeinfo.js";
+import { steamAppid } from "./freeinfo.js";
+import { viewRows } from "./wishlist.js";
 
 const SPOT_MS = 10 * 60_000;
 const WINDOW_MS = 45 * 86400_000;
@@ -40,9 +43,67 @@ export function getSpotlight(db, userId, now = Date.now()) {
 }
 
 /** Toolbar badge: what is new that the member may not have looked at. Ids let the extension count only what it has not shown yet. */
-export async function badgeFor({ db, itad, abg, userId, now = Date.now() }) {
-    let free = [], tests = [];
-    try { free = (await itad.getGiveawayList()).filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => String(g.id)).slice(0, 40); } catch { /* none */ }
+export async function badgeFor({ db, itad, abg, userId, now = Date.now(), fetchImpl = globalThis.fetch }) {
+    let free = [], tests = [], claimable = [], hits = [];
+    let giveaways = [];
+    try { giveaways = await itad.getGiveawayList(); } catch { /* none */ }
+    free = giveaways.filter(g => /^https:\/\//i.test(g.url ?? "") && !isDlc(g)).map(g => String(g.id)).slice(0, 40);
+    // Steam games that are free to keep right now, which the extension can add to the account with one click (never free weekends or always-free games).
+    try {
+        const steam = giveaways.filter(g => !g.weekend && steamAppid(g)).slice(0, 12);
+        for (const g of await enrichFree(steam, fetchImpl)) if (!g.alwaysFree && !g.weekend) claimable.push({ appid: steamAppid(g), title: String(g.title).slice(0, 100), dlc: g.type === "dlc" });
+    } catch { /* none */ }
     try { tests = ((await abg?.latest?.()) ?? []).filter(x => x.date >= now - 14 * 86400_000 && !x.wishlistOnly).map(x => String(x.id)).slice(0, 40); } catch { /* none */ }
-    return { free, playtests: tests, unread: db.unreadNotifications(userId) };
+    // Wishlist games that are on sale now: at or under their alert price, or at least half off.
+    try {
+        const user = db.getUser(userId);
+        if (user) hits = (await viewRows(db, itad, user)).rows.filter(r => !r.owned && r.best && (r.discount >= 50 || (r.trigger_type === "price" && r.best.price <= Number(r.trigger_value)))).slice(0, 6)
+            .map(r => ({ title: r.title, price: r.best.price, shop: r.best.shop, cut: Math.round(r.discount), currency: r.currency, appid: r.appid }));
+    } catch { /* none */ }
+    return { free, playtests: tests, unread: db.unreadNotifications(userId), claimable, hits };
+}
+
+/** Adds Steam games to a member's library from their app numbers, which the extension reads from the Steam page they are signed in to.
+ *  Only new games are added; nothing already in the library (or what was paid for it) is touched. */
+export async function syncFromApps({ db, itad, userId, appids, limit = 150 }) {
+    const ids = [...new Set(appids.filter(n => Number.isInteger(n) && n > 0 && n < 1e9))];
+    const map = await itad.lookupShopIds(61, ids.map(a => `app/${a}`));
+    const have = new Set(db.listLibrary(userId).map(g => g.itad_id));
+    const fresh = [], notFound = [];
+    for (const a of ids) { const id = map.get(`app/${a}`); if (!id) notFound.push(a); else if (!have.has(id)) fresh.push(id); }
+    const take = fresh.slice(0, limit), games = [];
+    for (let i = 0; i < take.length; i += 5) await Promise.all(take.slice(i, i + 5).map(async id => { try { const t = await itad.getTitle(id); if (t?.title) games.push({ itad_id: id, title: t.title, paid: null }); } catch { /* skipped, next sync retries */ } }));
+    const r = games.length ? db.upsertLibrary(userId, games) : { added: 0, skippedForLimit: 0 };
+    return { added: r.added, already: ids.length - notFound.length - fresh.length, notFound: notFound.length, remaining: fresh.length - take.length, skippedForLimit: r.skippedForLimit };
+}
+
+// A small board for spare copies: members list a game they have extra of, others in the server claim it, and they sort the key out in
+// Discord. Keys never touch the bot; the board only holds game names.
+const GIFT_MAX = 40;
+const giftKey = guildId => `gifts:${guildId}`;
+export function listGifts(db, guildId) { try { const l = JSON.parse(db.getMeta(giftKey(guildId)) ?? "[]"); return Array.isArray(l) ? l : []; } catch { return []; } }
+export function offerGift(db, guildId, userId, title, now = Date.now()) {
+    const t = String(title ?? "").replace(/\s+/g, " ").trim().slice(0, 100);
+    if (!t) return { error: "I need a game name." };
+    const list = listGifts(db, guildId);
+    if (list.filter(g => g.user === userId && !g.claimedBy).length >= 10) return { error: "You already have 10 spare copies listed." };
+    if (list.some(g => g.user === userId && !g.claimedBy && g.title.toLowerCase() === t.toLowerCase())) return { error: "That one is already listed." };
+    const gift = { id: `${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`, user: userId, title: t, at: now, claimedBy: null };
+    db.setMeta(giftKey(guildId), JSON.stringify([gift, ...list].slice(0, GIFT_MAX)));
+    return { gift };
+}
+export function claimGift(db, guildId, userId, id, now = Date.now()) {
+    const list = listGifts(db, guildId), g = list.find(x => x.id === id);
+    if (!g) return { error: "That one is gone." };
+    if (g.claimedBy) return { error: "Someone already claimed that." };
+    if (g.user === userId) return { error: "That's your own listing." };
+    g.claimedBy = userId; g.claimedAt = now;
+    db.setMeta(giftKey(guildId), JSON.stringify(list));
+    return { gift: g };
+}
+export function withdrawGift(db, guildId, userId, id) {
+    const list = listGifts(db, guildId), g = list.find(x => x.id === id && x.user === userId);
+    if (!g) return { error: "That isn't yours." };
+    db.setMeta(giftKey(guildId), JSON.stringify(list.filter(x => x !== g)));
+    return { ok: true };
 }

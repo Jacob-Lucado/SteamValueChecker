@@ -82,7 +82,7 @@ import { whoIsPlaying } from "../nowplaying.js";
 import { streamCardData, streamCardLine, chatCommandSets, STREAMCARD_KINDS } from "../streamcard.js";
 import { clubProgress, setPick } from "../gameclub.js";
 import { createStreamGiveaways } from "../streamgiveaway.js";
-import { playtestFor, socialFor, setSpotlight, getSpotlight, badgeFor } from "../extapi.js";
+import { playtestFor, socialFor, setSpotlight, getSpotlight, badgeFor, syncFromApps, listGifts, offerGift, claimGift, withdrawGift } from "../extapi.js";
 import { createPlaytestSources } from "../playsources.js";
 import { goalProgress } from "../steamstore.js";
 import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
@@ -241,7 +241,7 @@ const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived t
 const STATE_COOKIE = "svc_state";
 const REF_COOKIE = "svc_ref", STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const MUTE_DAYS = 3650;
-const COOLDOWNS = { grabbercompare: 1_500, grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
+const COOLDOWNS = { grabbersync: 4_000, grabbergifts: 1_000, grabbercompare: 1_500, grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -614,6 +614,13 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         if (req.headers.origin && req.headers.origin !== origin && req.headers.origin !== adminOrigin && req.headers.origin !== musicOrigin) throw new HttpError(403, "Request blocked.");
     }
 
+    // The board with names filled in. A claimed copy shows who claimed it only to the lister and the claimer.
+    async function giftRows(guildId, me) {
+        const name = async id => (await remember("mname:" + guildId + ":" + id, 10 * 60_000, () => rest.memberName(guildId, id)).catch(() => null)) || "a member";
+        const out = [];
+        for (const g of listGifts(db, guildId).filter(x => !x.claimedBy || x.user === me || x.claimedBy === me)) out.push({ id: g.id, title: g.title, at: g.at, mine: g.user === me, from: g.user === me ? null : await name(g.user), claimed: Boolean(g.claimedBy), claimedByMe: g.claimedBy === me, claimedBy: g.user === me && g.claimedBy ? await name(g.claimedBy) : null });
+        return out;
+    }
     function cooldown(userId, key) {
         const k = `${key}:${userId}`;
         const wait = COOLDOWNS[key] - (now() - (lastRun.get(k) ?? 0));
@@ -5434,7 +5441,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
                 const uid = m ? db.grabberUserForToken(m[1]) : null;
                 if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /me library grabber.");
-                if (key === "GET /api/grabber/badge") { cooldown(uid, "grabberbadge"); return json(res, 200, await badgeFor({ db, itad, abg: abg ?? null, userId: uid, now: now() })); }
+                if (key === "GET /api/grabber/badge") { cooldown(uid, "grabberbadge"); return json(res, 200, await badgeFor({ db, itad, abg: abg ?? null, userId: uid, now: now(), fetchImpl: steamFetch })); }
                 if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
                 cooldown(uid, "grabberact");
                 const body = await readJson(req, 2_000);
@@ -5455,6 +5462,31 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 if (price == null) return json(res, 200, { status: "no_price" });
                 const until = setSpotlight(db, uid, { appid, title: name, price, regular: sum.msrp, discount: sum.msrp ? Math.max(0, Math.round((1 - price / sum.msrp) * 100)) : 0, currency: sum.currency, shop: sum.best?.shop ?? "Steam" }, now());
                 return json(res, 200, { status: "ok", until });
+            }
+
+            if (key === "POST /api/grabber/sync" || key === "GET /api/grabber/gifts" || key === "POST /api/grabber/gifts") {
+                // Extension helpers with the member's link code: add owned Steam games to the library, and the spare-copy board for their server.
+                const m = /^Bearer (\S+)$/.exec(String(req.headers.authorization ?? ""));
+                const uid = m ? db.grabberUserForToken(m[1]) : null;
+                if (!uid) throw new HttpError(401, "That link code is not valid. Make a new one with /me library grabber.");
+                db.ensureUser(uid);
+                if (key === "POST /api/grabber/sync") {
+                    if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
+                    cooldown(uid, "grabbersync");
+                    const body = await readJson(req, 80_000);
+                    const appids = (Array.isArray(body.appids) ? body.appids : []).map(Number).slice(0, 5000);
+                    if (!appids.length) throw new HttpError(400, "No app numbers.");
+                    return json(res, 200, await syncFromApps({ db, itad, userId: uid, appids }));
+                }
+                const gid = db.getUser(uid)?.guild_id;
+                if (!gid) return json(res, 200, { gifts: [], noServer: true });
+                cooldown(uid, "grabbergifts");
+                if (key === "GET /api/grabber/gifts") return json(res, 200, { gifts: await giftRows(gid, uid) });
+                if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(400, "Bad request.");
+                const body = await readJson(req, 2_000);
+                const r = body.action === "claim" ? claimGift(db, gid, uid, String(body.id ?? "")) : body.action === "withdraw" ? withdrawGift(db, gid, uid, String(body.id ?? "")) : offerGift(db, gid, uid, body.title);
+                if (r.error) throw new HttpError(400, r.error);
+                return json(res, 200, { gifts: await giftRows(gid, uid) });
             }
 
             if (key === "POST /api/grabber/compare") {
