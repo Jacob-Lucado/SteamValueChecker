@@ -27,7 +27,7 @@ export function xLength(text) {
 const readList = v => { try { const a = JSON.parse(v ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; } };
 
 /** Hashtags: one for the store the game or bundle is from, then a few popular gaming ones that rotate, so no two posts carry the exact same set. */
-const TAGS = "xposter:tags", ALWAYS = "xposter:always", INGAME = "xposter:ingame";
+const TAGS = "xposter:tags", ALWAYS = "xposter:always", STEAMONLY = "xposter:steamonly", INGAME = "xposter:ingame";
 export const DEFAULT_TAGS = ["#FreeGames", "#PCGaming", "#Gaming", "#Giveaway", "#GameDeals", "#Freebie", "#SteamDeals"];
 const STORE_TAGS = [[/steam/i, "#Steam"], [/epic/i, "#EpicGames"], [/gog/i, "#GOG"], [/humble/i, "#HumbleBundle"], [/fanatical/i, "#Fanatical"], [/indie\s?gala/i, "#IndieGala"], [/itch/i, "#itchio"], [/ubisoft/i, "#Ubisoft"], [/prime/i, "#PrimeGaming"], [/battle\.?net|blizzard/i, "#Blizzard"]];
 export function cleanTags(input) {
@@ -96,6 +96,8 @@ export function oauthHeader({ method, url, keys, nonce = randomBytes(16).toStrin
 const dayOf = ms => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(ms));
 
 /** The text of an automatic free-game post. With `link`, it has the claim link in it, which X bills as a link post. */
+const isSteam = g => /^steam$/i.test(g?.shop ?? "") || /store\.steampowered\.com/i.test(g?.url ?? "");
+
 export function freeGameText(g, now = Date.now(), tags = DEFAULT_TAGS, { link = false } = {}) {
     const shop = g.shop ? ` on ${g.shop}` : "";
     const left = g.expiry && g.expiry > now ? g.expiry - now : null;
@@ -261,7 +263,7 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
         return byEnd.sort((a, b) => (score.get(b.shop) ?? 0) - (score.get(a.shop) ?? 0))[0]; // a stable sort, so ties keep the soonest-ending first
     }
     // Games that are free to play all the time are left out unless the owner turns that on; in-game freebies are on by default.
-    const offerOk = g => { const k = offerKind(g); return k === "always" ? db.getMeta(ALWAYS) === "1" : k === "ingame" ? db.getMeta(INGAME) !== "0" : true; };
+    const offerOk = g => { if (db.getMeta(STEAMONLY) === "1" && !isSteam(g)) return false; const k = offerKind(g); return k === "always" ? db.getMeta(ALWAYS) === "1" : k === "ingame" ? db.getMeta(INGAME) !== "0" : true; };
     /** What the next automatic post would look like, without sending or marking anything. */
     function peek(list) {
         if (!enabled() || !configured()) return { off: true };
@@ -305,10 +307,11 @@ export function createXPoster({ env = process.env, db, fetchImpl = globalThis.fe
     function status() {
         let err = null; try { err = db.getMeta(ERR) ? JSON.parse(db.getMeta(ERR)) : null; } catch { /* none */ }
         const d = daily();
-        return { configured: configured(), enabled: enabled(), daily: d, postedToday: postedToday(), lastAt: Number(db.getMeta(LAST)) || null, error: err, links: linksOn(), always: db.getMeta(ALWAYS) === "1", ingame: db.getMeta(INGAME) !== "0", imageError: (() => { try { return db.getMeta(IMGERR) ? JSON.parse(db.getMeta(IMGERR)) : null; } catch { return null; } })(), monthlyCost: Math.round(d * 30 * (linksOn() ? COST_LINK_POST : COST_PER_POST) * 100) / 100, maxDaily: MAX_DAILY, tags: tags().join(" "), defaultTags: DEFAULT_TAGS.join(" "),
+        return { configured: configured(), enabled: enabled(), daily: d, postedToday: postedToday(), lastAt: Number(db.getMeta(LAST)) || null, error: err, links: linksOn(), always: db.getMeta(ALWAYS) === "1", steamOnly: db.getMeta(STEAMONLY) === "1", ingame: db.getMeta(INGAME) !== "0", imageError: (() => { try { return db.getMeta(IMGERR) ? JSON.parse(db.getMeta(IMGERR)) : null; } catch { return null; } })(), monthlyCost: Math.round(d * 30 * (linksOn() ? COST_LINK_POST : COST_PER_POST) * 100) / 100, maxDaily: MAX_DAILY, tags: tags().join(" "), defaultTags: DEFAULT_TAGS.join(" "),
             monthSpend: Math.round(spendCents()) / 100, history: readList(db.getMeta(HIST)), queue: readList(db.getMeta(QUEUE)), templates: TEMPLATES, manualToday: Number(db.getMeta(MANUAL + dayOf(now()))) || 0, manualMax: MAX_MANUAL_PER_DAY, linkCost: COST_LINK_POST, plainCost: COST_PER_POST };
     }
-    function setSettings({ enabled: on, daily: n, tags: tg, links: lk, always, ingame } = {}) {
+    function setSettings({ enabled: on, daily: n, tags: tg, links: lk, always, ingame, steamOnly } = {}) {
+        if (steamOnly !== undefined) db.setMeta(STEAMONLY, steamOnly ? "1" : "0");
         if (always !== undefined) db.setMeta(ALWAYS, always ? "1" : "0");
         if (ingame !== undefined) db.setMeta(INGAME, ingame ? "1" : "0");
         if (lk !== undefined) db.setMeta(LINKS, lk ? "1" : "0");

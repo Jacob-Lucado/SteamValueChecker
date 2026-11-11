@@ -3816,3 +3816,17 @@ test("the invite link counts where clicks came from, skips robots and shows in t
     assert.deepEqual(rep.sources.map(x => [x.source, x.clicks]).sort(), [["seo-free-game-alerts", 2], ["weekly-post", 1], ["weirdsrc", 1]]);
     await t.close();
 });
+
+test("assets: pages link files by fingerprint, which are kept for a year; plain and wrong fingerprints are not", async () => {
+    const t = await setup();
+    const page = await t.request("/");
+    const m = /src="(\/app\.js\?v=[0-9a-f]{10})"/.exec(page.text);
+    assert.ok(m, "the page points at a fingerprinted app.js");
+    assert.equal(page.headers.get("cache-control"), "no-cache", "the page itself always revalidates");
+    const fp = await t.request(m[1]);
+    assert.equal(fp.status, 200); assert.match(fp.headers.get("cache-control"), /max-age=31536000, immutable/);
+    assert.equal((await t.request("/app.js")).headers.get("cache-control"), "no-cache");
+    assert.equal((await t.request("/app.js?v=0000000000")).headers.get("cache-control"), "no-cache", "an old fingerprint never gets pinned to new code");
+    assert.match((await t.request("/")).text, /href="\/style\.css\?v=[0-9a-f]{10}"/);
+    await t.close();
+});

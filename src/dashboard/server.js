@@ -1709,7 +1709,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!xposter) throw new HttpError(503, "X posting isn't available on this bot.");
             if (body.enabled && !xposter.configured()) throw new HttpError(400, "Add the four X keys in Fly first (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET).");
-            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily, tags: body.tags, links: body.links, always: body.always, ingame: body.ingame }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
+            try { return xposter.setSettings({ enabled: body.enabled, daily: body.daily, tags: body.tags, links: body.links, always: body.always, ingame: body.ingame, steamOnly: body.steamOnly }); } catch (e) { if (e.user) throw new HttpError(400, e.message); throw e; }
         },
         "GET /api/admin/xposter/bundles": async (req, _b, url) => {
             const s = session(req);
@@ -4881,6 +4881,20 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
 
     // ---------- static ----------
     const zcache = new Map(); // `${file}:${encoding}:${etag}` -> the compressed page code, made once
+    // Pages point at their scripts, styles and pictures as /app.js?v=<fingerprint of the file>. The address changes only when the
+    // file does, so browsers can keep each one for a year, and a new deploy still reaches everyone on their next page load.
+    async function versionAssets(buf) {
+        const html = buf.toString("utf8"), want = new Set();
+        for (const m of html.matchAll(/(?:src|href)="(\/[A-Za-z0-9_\-\/.]+\.(?:js|css|png|webp|svg))"/g)) if (FILES[m[1]]) want.add(m[1]);
+        const stamp = new Map();
+        for (const path of want) {
+            const file = FILES[path][0];
+            if (file.endsWith(".html")) continue;
+            const data = await loadFile(file);
+            if (data) stamp.set(path, createHash("sha1").update(data).digest("hex").slice(0, 10));
+        }
+        return Buffer.from(html.replace(/((?:src|href)=")(\/[A-Za-z0-9_\-\/.]+\.(?:js|css|png|webp|svg))(")/g, (all, a, path, z) => stamp.has(path) ? `${a}${path}?v=${stamp.get(path)}${z}` : all));
+    }
     async function loadFile(file) {
         let body = cache.get(file);
         // The sale-dates page counts days, so it is rebuilt every hour instead of once.
@@ -4890,6 +4904,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
             if (file === "index.html" || file === "grabber.html" || file === "ai.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
+            if (file.endsWith(".html")) body = await versionAssets(body);
             cache.set(file, body);
             cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`);
         }
@@ -5074,7 +5089,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         if (!body) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
         const etag = cache.get(file + ":etag");
         const text = /\.(js|css|html)$/.test(file);
-        const headers = { "Content-Type": type, "Cache-Control": text ? "no-cache" : "public, max-age=3600", ETag: etag, ...extra };
+        const pinned = !/\.html$/.test(file) && res.req?.url?.split("?")[1] === `v=${createHash("sha1").update(body).digest("hex").slice(0, 10)}`; // only when the fingerprint is this file's own // asked for by its fingerprint: this address never changes meaning
+        const headers = { "Content-Type": type, "Cache-Control": pinned ? "public, max-age=31536000, immutable" : text ? "no-cache" : "public, max-age=3600", ETag: etag, ...extra };
         if (res.req?.headers?.["if-none-match"] === etag) return send(res, 304, "", { ETag: etag, "Cache-Control": headers["Cache-Control"] });
         const enc = COMPRESSIBLE.test(type) ? encodingOf(res.req) : null;
         if (enc) {

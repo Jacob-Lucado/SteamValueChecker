@@ -251,3 +251,14 @@ test("free-weekend, always-free and in-game offers are worded and filtered corre
     assert.doesNotMatch(freeGameText({ ...base, alwaysFree: true }, now), /Keep it forever/);
     assert.match(freeGameText(base, now), /Keep it forever/);
 });
+
+test("steam-only mode skips other stores", async () => {
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:");
+    const x = createXPoster({ env: ENV, db, fetchImpl: async () => ({ ok: true, json: async () => ({ data: { id: "1" } }) }), now: () => Date.UTC(2026, 10, 9) });
+    x.setSettings({ enabled: true, steamOnly: true });
+    const epic = { id: "e", title: "Epic Thing", shop: "Epic", url: "https://store.epicgames.com/p/z", type: "game" };
+    assert.deepEqual(x.peek([epic]), { nothing: true });
+    assert.equal(x.status().steamOnly, true);
+    assert.ok(x.peek([{ ...epic, id: "s", shop: "Steam", url: "https://store.steampowered.com/app/5/" }]).title);
+});

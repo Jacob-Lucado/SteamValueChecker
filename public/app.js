@@ -4549,6 +4549,7 @@ window.SVC_SITE = envIn => {
       const linksOn = h("input", { type: "checkbox" }); linksOn.checked = xs.links; linksOn.addEventListener("change", () => save({ links: linksOn.checked }));
       const alwaysOn = h("input", { type: "checkbox" }); alwaysOn.checked = xs.always; alwaysOn.addEventListener("change", () => save({ always: alwaysOn.checked }));
       const ingameOn = h("input", { type: "checkbox" }); ingameOn.checked = xs.ingame; ingameOn.addEventListener("change", () => save({ ingame: ingameOn.checked }));
+      const steamOnly = h("input", { type: "checkbox" }); steamOnly.checked = xs.steamOnly; steamOnly.addEventListener("change", () => save({ steamOnly: steamOnly.checked }));
       const tagsIn = h("input", { type: "text", value: xs.tags, class: "x-tags", placeholder: "#FreeGames #PCGaming …" });
       const tagsSave = h("button", { class: "btn gray small", type: "button", text: "Save tags" }); tagsSave.addEventListener("click", () => save({ tags: tagsIn.value }));
       const tagsReset = h("button", { class: "btn gray small", type: "button", text: "Reset" }); tagsReset.addEventListener("click", () => save({ tags: xs.defaultTags }));
@@ -4563,6 +4564,7 @@ window.SVC_SITE = envIn => {
         xs.imageError && h("p", { class: "bad small", text: "Last automatic post went out without a picture: " + xs.imageError.message }),
         h("label", { class: "check" }, on, " Post new free games automatically"),
         h("label", { class: "check" }, linksOn, " Put the game's link in automatic posts (about " + money(xs.linkCost) + " each instead of " + money(xs.plainCost) + ")"),
+        h("label", { class: "check" }, steamOnly, " Only post Steam games (skip Epic, GOG and the rest)"),
         h("label", { class: "check" }, ingameOn, " Post free items and packs inside free-to-play games (worded as an in-game offer)"),
         h("label", { class: "check" }, alwaysOn, " Also post games that are always free to play (off by default)"),
         h("div", { class: "row" }, h("label", { text: "Posts per day, at most " }), per, sv, chk),
