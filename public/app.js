@@ -17,6 +17,30 @@ window.SVC_SITE = envIn => {
   const ADMIN_MODE = document.documentElement.dataset.mode === "admin"; // admin.html: the owner's panel, not the member dashboard
   const app = env.root || document.getElementById("app");
   // LucadoOS (the desktop theme) shows each site page in a frame inside a window. Inside one of those frames the page drops its own header and footer.
+  // Screen readers: after the page draws, give unlabeled fields a name from the text next to them, keep heading levels from skipping, and name picture-only links.
+  const a11yPass = () => {
+    try {
+      const text = e => (e?.textContent ?? "").replace(/\s+/g, " ").trim();
+      for (const f of app.querySelectorAll("input:not([type=hidden]):not([type=submit]):not([type=button]),select,textarea")) {
+        if (f.getAttribute("aria-label") || f.getAttribute("aria-labelledby") || f.title || f.closest("label") || (f.id && app.querySelector(`label[for="${CSS.escape(f.id)}"]`))) continue;
+        let name = "";
+        for (let node = f, hops = 0; node && node !== app && hops < 4 && !name; node = node.parentElement, hops++) {
+          for (let sib = node.previousElementSibling; sib && !name; sib = sib.previousElementSibling) { const t = text(sib); if (t && t.length <= 90 && !sib.querySelector("input,select,textarea,button")) name = t; else if (sib.matches("h2,h3,h4,.k,strong,b,label")) name = t.slice(0, 90); if (name) break; }
+        }
+        f.setAttribute("aria-label", name || f.placeholder || f.name || (f.type === "number" ? "Number" : f.tagName === "SELECT" ? "Choose an option" : "Text"));
+      }
+      let prev = 0;
+      for (const hd of app.querySelectorAll("h1,h2,h3,h4,h5")) { let lv = Number(hd.tagName[1]); if (prev && lv - prev > 1) { lv = prev + 1; hd.setAttribute("aria-level", String(lv)); } else hd.removeAttribute("aria-level"); prev = lv; }
+      for (const a of app.querySelectorAll("a[href]")) {
+        if (text(a) || a.getAttribute("aria-label") || a.title) continue;
+        const img = a.querySelector("img[alt]:not([alt=''])");
+        if (img) continue;
+        const near = text(a.closest("article,li,.card,[class*=card]")?.querySelector("h2,h3,h4,strong,b")) || "";
+        a.setAttribute("aria-label", near || "Open");
+      }
+    } catch { /* never let a helper break the page */ }
+  };
+  { let t = null; new MutationObserver(() => { clearTimeout(t); t = setTimeout(a11yPass, 150); }).observe(app, { childList: true, subtree: true }); }
   const EMBED_FRAME = !ADMIN_MODE && !NATIVE && window.self !== window.top, EMBED = EMBED_FRAME || NATIVE; // EMBED: no header or footer of its own
   // The FanaticalGrabber extension only listens in the top page. Inside a LucadoOS window the desktop passes its messages along in both directions.
   const extSend = msg => { if (EMBED_FRAME) window.parent.postMessage({ svcRelay: "page", msg }, location.origin); else window.postMessage(msg, location.origin); };
@@ -5250,7 +5274,7 @@ window.SVC_SITE = envIn => {
         holder.className = "status-page";
         holder.replaceChildren(...[
           h("div", { class: "st-banner " + d.overall },
-            h("div", {}, h("span", { class: "st-dot " + d.overall }), h("strong", { text: HEAD[d.overall] || "Checking…" })),
+            h("div", {}, h("span", { class: "st-dot " + d.overall }), h("h1", { class: "st-head", text: HEAD[d.overall] || "Checking…" })),
             h("div", { class: "st-meta" }, h("span", { class: "muted small", text: d.checkedAt ? "Last checked " + ago(d.checkedAt) : "Starting up…" }), refresh)),
           st && h("div", { class: "grid four" },
             tile("", "Servers", n(st.servers)), tile("", "Members served", n(st.members)), tile("", "Games watched", n(st.gamesWatched)),
@@ -5294,7 +5318,7 @@ window.SVC_SITE = envIn => {
         h("div", { class: "about-banner-live", role: "img", "aria-label": "Steam Value Checker: MSRP, sale price and cheapest price now" },
           h("i", { class: "ab-ring r1", "aria-hidden": "true" }), h("i", { class: "ab-ring r2", "aria-hidden": "true" }),
           h("img", { class: "ab-tag", src: "/tag.svg", alt: "", width: "108", height: "120" }),
-          h("div", { class: "ab-text" }, h("div", { class: "ab-title", text: "Steam Value Checker" }), h("div", { class: "ab-sub", text: "MSRP, sale price and cheapest price now" }), h("div", { class: "ab-note", text: "Works with FanaticalGrabber exports" }))),
+          h("div", { class: "ab-text" }, h("h1", { class: "ab-title", text: "Steam Value Checker" }), h("div", { class: "ab-sub", text: "MSRP, sale price and cheapest price now" }), h("div", { class: "ab-note", text: "Works with FanaticalGrabber exports" }))),
         h("div", { class: "panel about" },
           h("div", { class: "about-head" },
             h("img", { class: "about-logo", src: "/logo.png", alt: "", width: "84", height: "84" }),
