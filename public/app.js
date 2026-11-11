@@ -4170,6 +4170,42 @@ window.SVC_SITE = envIn => {
   }
   new MutationObserver(() => { clearTimeout(idTimer); idTimer = setTimeout(() => nameAdminIds(document.body.classList.contains("adm-body") ? document.body : app), 250); }).observe(document.body, { childList: true, subtree: true });
 
+  /** A flock of geese flying back and forth across the whole screen. Returns a function that clears them. */
+  function honkFlock(geese) {
+    const sky = h("div", { "aria-hidden": "true" }); sky.style.cssText = "position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1";
+    document.body.appendChild(sky);
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) geese = Math.min(geese, 8);
+    for (let i = 0; i < geese; i++) {
+      const g = h("div", { text: "🪿" }), size = 28 + Math.random() * 56, ltr = Math.random() < 0.5;
+      g.style.cssText = `position:absolute;left:0;top:0;font-size:${size}px;line-height:1;will-change:transform`;
+      sky.appendChild(g);
+      const w = innerWidth, hh = innerHeight, y0 = Math.random() * hh, y1 = Math.random() * hh, mid = Math.random() * hh;
+      const x0 = ltr ? -120 : w + 120, x1 = ltr ? w + 120 : -120, flip = ltr ? -1 : 1; // the emoji faces left
+      const frames = [
+        { transform: `translate(${x0}px, ${y0}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 40}deg)` },
+        { transform: `translate(${(x0 + x1) / 2}px, ${mid}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 60}deg)`, offset: 0.5 },
+        { transform: `translate(${x1}px, ${y1}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 40}deg)` }];
+      const run = () => { if (sky.isConnected) g.animate(frames, { duration: 2600 + Math.random() * 3200, delay: Math.random() * 2500, easing: "ease-in-out" }).onfinish = run; };
+      run();
+    }
+    return () => sky.remove();
+  }
+
+  /** Wrong username or password on the admin sign-in: geese everywhere and a pop-up asking if they should be here. */
+  function wrongPasswordGeese() {
+    if (document.getElementById("honkPop")) return;
+    const clear = honkFlock(innerWidth < 700 ? 12 : 26);
+    const pop = h("div", { id: "honkPop", role: "alertdialog", "aria-modal": "true" });
+    pop.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50;background:rgba(0,0,0,.35);padding:16px";
+    const card = h("div", { class: "panel", style: "text-align:center;max-width:380px;position:relative;z-index:60" },
+      h("div", { text: "🪿", style: "font-size:56px;line-height:1" }),
+      h("h2", { text: "You silly goose." }),
+      h("p", { text: "That's the wrong password. Should you even be here?" }),
+      h("div", { class: "row", style: "justify-content:center" }, h("button", { class: "btn gray", type: "button", text: "Honk, I'll go", onclick: () => { clear(); pop.remove(); } })));
+    pop.appendChild(card); document.body.appendChild(pop);
+    card.querySelector("button").focus();
+  }
+
   /** For anyone who signs in to the admin panel without being on the list: a joke, a flock of geese, and a trip to the owner's X after ten seconds. */
   function gooseScreen() {
     const DEST = "https://x.com/twit_user69";
@@ -4181,23 +4217,7 @@ window.SVC_SITE = envIn => {
       h("p", { class: "muted", text: "This page isn't for you. Honk." }),
       h("p", { class: "muted" }, "Sending you somewhere better in ", count, " seconds..."),
       h("div", { class: "row" }, h("a", { class: "btn gray", href: DEST, text: "Take me there now" })))));
-    const sky = h("div", { "aria-hidden": "true" }); sky.style.cssText = "position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1";
-    document.body.appendChild(sky);
-    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const geese = calm ? 8 : 26;
-    for (let i = 0; i < geese; i++) {
-      const g = h("div", { text: "🪿" }), size = 28 + Math.random() * 56, ltr = Math.random() < 0.5;
-      g.style.cssText = `position:absolute;left:0;top:0;font-size:${size}px;line-height:1;will-change:transform`;
-      sky.appendChild(g);
-      const w = innerWidth, hh = innerHeight, y0 = Math.random() * hh, y1 = Math.random() * hh, mid = Math.random() * hh;
-      const x0 = ltr ? -120 : w + 120, x1 = ltr ? w + 120 : -120, flip = ltr ? -1 : 1; // the emoji faces left
-      const frames = [
-        { transform: `translate(${x0}px, ${y0}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 40}deg)` },
-        { transform: `translate(${(x0 + x1) / 2}px, ${mid}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 60}deg)`, offset: 0.5 },
-        { transform: `translate(${x1}px, ${y1}px) scaleX(${flip}) rotate(${(Math.random() - 0.5) * 40}deg)` }];
-      const run = () => g.animate(frames, { duration: 2600 + Math.random() * 3200, delay: Math.random() * 2500, easing: "ease-in-out" }).onfinish = run;
-      run();
-    }
+    honkFlock(innerWidth < 700 ? 12 : 26);
     let left = 10;
     const tick = setInterval(() => { left -= 1; count.textContent = String(Math.max(left, 0)); if (left <= 0) { clearInterval(tick); location.href = DEST; } }, 1000);
   }
@@ -4225,7 +4245,7 @@ window.SVC_SITE = envIn => {
         const r = await api("/api/admin/login", { username: user.value, password: pass.value, code: code.value });
         if (r.needCode) { codeRow.hidden = false; code.focus(); msg.textContent = "Enter the 6-digit code from your authenticator app."; msg.hidden = false; return; }
         location.reload();
-      } catch (err) { msg.textContent = err.message || "Could not sign in."; msg.hidden = false; }
+      } catch (err) { msg.textContent = err.message || "Could not sign in."; msg.hidden = false; wrongPasswordGeese(); }
       finally { go.disabled = false; }
     });
     // The sign-in screen looks like an operating system's: wallpaper, a big clock, a round picture and the fields underneath.
