@@ -1,5 +1,6 @@
 // Community features that do not need discord.js, so the dashboard and the tests can share them:
 // the server template and its builder, welcome messages, invite attribution, XP and emoji import.
+import { removeStartChannel } from "./startchannel.js";
 import { levelFromXp, xpForNext } from "./communitystore.js";
 
 export { levelFromXp, xpForNext };
@@ -355,6 +356,7 @@ export async function communitySetup({ api, db, guildId, botId, userId = null, f
     db.setCommunity(guildId, { setup_keys: JSON.stringify(Object.keys(chIds)) });
     db.bumpUsage?.(fresh ? "setup_auto" : "setup_manual");
     db.bumpUsage?.("channels_created", created.channels.length);
+    await removeStartChannel({ api, db, guildId }); // the bot's start-here channel has done its job
     return { created, channels: chIds, roles: roleIds, notes };
 }
 

@@ -36,3 +36,14 @@ test("the start channel is also a global giveaway destination", async () => {
     const d = db.giveawayDestinations().filter(x => x.guild_id === "G9").map(x => x.channel_id).sort();
     assert.deepEqual(d, ["555", "alerts1"]);
 });
+
+test("setup removes the start channel and stops it receiving giveaways", async () => {
+    const { removeStartChannel } = await import("../src/startchannel.js");
+    const t = mk(); const gone = [];
+    await createStartChannel({ ...t, guild: { id: "G5", name: "X" }, botId: "B" });
+    assert.match(t.sent[0].p.embeds[0].fields[0].value, /manage community setup/);
+    assert.equal(await removeStartChannel({ api: { deleteChannel: async id => gone.push(id) }, db: t.db, guildId: "G5" }), true);
+    assert.deepEqual(gone, ["ch1"]);
+    assert.equal(t.db.getMeta("startch_id:G5"), "");
+    assert.equal(await removeStartChannel({ api: { deleteChannel: async id => gone.push(id) }, db: t.db, guildId: "G5" }), false);
+});

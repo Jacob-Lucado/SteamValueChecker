@@ -7,12 +7,12 @@ export const START_CHANNEL = "steam-value-checker";
 export function startEmbed({ guildName, url = null, ready = false }) {
     const steps = ready
         ? ["Your server was set up automatically, so the channels are already in place.", "Members can run `/me wishlist import` to bring in their Steam wishlist.", "Use `/games value` to see what a Steam library is worth.", "Open the dashboard to fine-tune channels, roles and alerts."]
-        : ["A server manager runs **`/manage setup`** and presses **Create the channels for me**. That makes the alert and giveaway channels.", "Want the full gaming layout (welcome, XP, invites, giveaways)? Run **`/manage community setup`**.", "Members run **`/me wishlist import`** to bring in their Steam wishlist and get deal alerts.", "Anyone can try **`/games value`** to see what a Steam library is worth. **`/help`** lists everything."];
+        : ["The quickest way: a server manager runs **`/manage community setup`** and the bot builds everything for you (channels, roles, welcome, XP, invites, giveaways).", "Prefer to keep your own layout? Run **`/manage setup`** and press **Create the channels for me**, or pick existing channels from the menus.", "Members run **`/me wishlist import`** to bring in their Steam wishlist and get deal alerts.", "Anyone can try **`/games value`** to see what a Steam library is worth. **`/help`** lists everything."];
     return {
         color: 0xff9800,
         title: `Welcome to ${guildName ? `${guildName}'s` : "your"} Steam Value Checker corner`,
         description: "Deal alerts, free game drops, giveaways and library values, all in one bot. Here's how to get going:",
-        fields: [{ name: "Getting set up", value: steps.map((s, i) => `**${i + 1}.** ${s}`).join("\n") }, { name: "Good to know", value: "You can delete this channel once you're set up. The bot won't make it again." }],
+        fields: [{ name: "Getting set up", value: steps.map((s, i) => `**${i + 1}.** ${s}`).join("\n") }, { name: "Good to know", value: "Once you run a setup command, I delete this channel automatically. The bot won't make it again." }],
         ...(url ? { footer: { text: "Dashboard: " + url.replace(/^https?:\/\//, "") } } : {})
     };
 }
@@ -38,4 +38,15 @@ export async function createStartChannel({ api, discord, db, guild, everyoneId =
     } catch (e) {
         return { skipped: String(e?.message ?? e).slice(0, 100) }; // no Manage Channels permission is the usual reason
     }
+}
+
+/** Once a server has been set up, the start channel has done its job: delete it and stop using it as a giveaway destination. Never throws. */
+export async function removeStartChannel({ api, db, guildId }) {
+    try {
+        const id = db.getMeta(`startch_id:${guildId}`);
+        if (!id || typeof api?.deleteChannel !== "function") return false;
+        db.setMeta(`startch_id:${guildId}`, "");
+        await api.deleteChannel(id).catch(() => {});
+        return true;
+    } catch { return false; }
 }

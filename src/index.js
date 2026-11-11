@@ -510,7 +510,7 @@ client.on(Events.GuildCreate, async guild => {
                 auto = await communitySetup({ api: botRest, db, guildId: guild.id, botId: client.user.id, userId: guild.ownerId, fresh: true, baseUrl: publicBase });
             }
         } catch (e) { autoNote = e.userFacing ? e.message : "I tried to set the server up but hit a problem. Run /manage community setup to try again."; }
-        createStartChannel({ api: botRest, discord, db, guild, botId: client.user.id, url: publicBase || null, ready: Boolean(auto) }).then(r => { if (r.skipped) console.warn(`[start-channel] ${r.skipped}`); }).catch(() => {});
+        if (!auto) createStartChannel({ api: botRest, discord, db, guild, botId: client.user.id, url: publicBase || null }).then(r => { if (r.skipped) console.warn(`[start-channel] ${r.skipped}`); }).catch(() => {});
         const link = publicBase ? `${publicBase}/#/setup/${guild.id}` : null;
         let embed = { color: 0xff9800, title: `Steam Value Checker is now in ${guild.name}`,
             description: ["It takes about a minute to set up:", "1. In your server, run **`/manage setup`** and press **Create the channels for me** (or pick existing channels from the menus).", link ? "2. Or do the same on the web: press the button below." : "", "", "Members can then use `/me wishlist import`, `/games value` and `/bot support open`. `/help` lists everything."].filter(x => x !== "" || true).join("\n") };

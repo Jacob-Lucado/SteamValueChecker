@@ -1,5 +1,6 @@
 // Guided server setup: the same checklist in Discord (/manage setup, channel pickers) and on the dashboard (Setup page).
 // No discord.js import here: the dashboard shares setupStatus, and it runs without discord.js.
+import { removeStartChannel } from "./startchannel.js";
 const EPHEMERAL = 64;
 const PermissionFlagsBits = { ManageGuild: 1n << 5n, ViewChannel: 1n << 10n, SendMessages: 1n << 11n, EmbedLinks: 1n << 14n };
 
@@ -95,6 +96,7 @@ export async function autoSetup({ api, db, guildId, botId, userId, staffRoleId =
             if (api.createForumPost) await backfillForum({ db, api, guildId }).catch(() => {});
         } catch (e) { if (e?.status === 403) throw Object.assign(new Error("I need the Manage Channels permission to create channels. Give it to my role in Server Settings, or pick existing channels instead."), { userFacing: true }); forumNote = " The feature requests forum could not be made (forums need the server's Community features turned on)."; }
     }
+    await removeStartChannel({ api, db, guildId });
     return { created, note: `Created ${created.map(c => `<#${c.id}>`).join(", ") || "nothing new"}.${need.support ? " #support-tickets is private to you and the bot; add your staff to it." : ""}${forumNote}` };
 }
 
@@ -133,7 +135,7 @@ export function createSetupHandlers({ db, publicUrl = null }) {
             await i.deferUpdate();
             try {
                 const api = { createChannel: (g, body) => i.client.rest.post(`/guilds/${g}/channels`, { body }), // a DiscordAPIError carries status 403 when permission is missing
-                    sendMessage: (c, body) => i.client.rest.post(`/channels/${c}/messages`, { body }),
+                    sendMessage: (c, body) => i.client.rest.post(`/channels/${c}/messages`, { body }), deleteChannel: c => i.client.rest.delete(`/channels/${c}`),
                     allChannels: g => i.client.rest.get(`/guilds/${g}/channels`), getChannel: c => i.client.rest.get(`/channels/${c}`), editChannel: (c, body) => i.client.rest.patch(`/channels/${c}`, { body }),
                     createForumPost: (c, body) => i.client.rest.post(`/channels/${c}/threads`, { body }), editMessage: (c, m, body) => i.client.rest.patch(`/channels/${c}/messages/${m}`, { body }) };
                 const r = await autoSetup({ api, db, guildId: i.guildId, botId: i.client.user.id, userId: i.user.id });
