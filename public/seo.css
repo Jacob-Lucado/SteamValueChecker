@@ -52,11 +52,11 @@ ul,ol{padding-left:22px}li{margin:6px 0}
 .sale div{display:flex;flex-direction:column;min-width:0}.sale b{color:var(--white)}.sale span{color:var(--muted);font-size:14px}
 .sale time{font-weight:800;color:var(--white);white-space:nowrap;font-variant-numeric:tabular-nums}
 .deals{list-style:none;padding:0;margin:0;display:grid;gap:10px}
-.deal{margin:0}.deal a{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:6px 14px;padding:10px 14px 10px 10px;border:1px solid var(--line);border-radius:14px;background:var(--bg);text-decoration:none;color:inherit}
+.deal{margin:0}.deal a{display:flex;align-items:center;gap:6px 14px;padding:10px 14px 10px 10px;border:1px solid var(--line);border-radius:14px;background:var(--bg);text-decoration:none;color:inherit}
 .deal a:hover,.deal a:focus-visible{border-color:var(--accent,#ff7a18)}
-.deal img{width:92px;height:auto;border-radius:8px;display:block}
-.deal-name{font-weight:700;color:var(--white);min-width:0;overflow-wrap:anywhere}
-.deal-price{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.deal-price s{color:var(--muted)}.deal-price b{color:var(--white)}.deal-price em{font-style:normal;font-weight:800;color:#3ddc84;margin-left:4px}
+.deal img{width:92px;height:auto;border-radius:8px;display:block;flex:none}
+.deal-name{flex:1 1 0;font-weight:700;color:var(--white);min-width:0;overflow-wrap:anywhere;padding-left:4px}.deal img+.deal-name{padding-left:0}
+.deal-price{flex:none;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.deal-price s{color:var(--muted)}.deal-price b{color:var(--white)}.deal-price em{font-style:normal;font-weight:800;color:#3ddc84;margin-left:4px}
 :root[data-theme="light"] .deal-price em{color:#0b7a3d}
-@media(max-width:560px){.deal a{grid-template-columns:72px 1fr}.deal img{width:72px}.deal-price{grid-column:1/-1;text-align:left}}
+@media(max-width:560px){.deal a{flex-wrap:wrap}.deal img{width:72px}.deal-name{flex-basis:calc(100% - 100px)}.deal-price{flex-basis:100%;text-align:left}}
 @media(max-width:560px){.ts-row{grid-template-columns:1fr auto}.ts-row code{grid-column:1/-1;order:3}.tool .fields.row{grid-template-columns:1fr}.sale{flex-direction:column;align-items:flex-start}}
