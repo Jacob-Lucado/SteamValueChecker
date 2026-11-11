@@ -54,6 +54,23 @@ export function parseHumbleList(html, now = Date.now()) {
             kind: "tiered", expiresAt: time(p["end_date|datetime"] ?? p.end_date) }, now);
         if (b) out.push(b);
     }
+    return out.length ? out : parseHumbleCards(html, now);
+}
+/** Humble's newer bundles page has no JSON block, only product cards: a /games/ link, a title in the footer, and a line like "9 Items • $289.00 Value". */
+export function parseHumbleCards(html, now = Date.now()) {
+    const out = [], seen = new Set();
+    for (const card of String(html ?? "").split('data-testid="product-card"').slice(1)) {
+        const slug = /href="\/games\/([a-z0-9_-]+)"/i.exec(card)?.[1];
+        if (!slug || seen.has(slug) || !/Pay What You Want|\d+(?:<!-- -->|\s)*Items?(?:<!-- -->|\s)*•/i.test(card)) continue; // plain store listings aren't bundles
+        const foot = card.split('data-testid="product-card-footer"')[1] ?? "";
+        const title = text(/<a[^>]*data-testid="product-link"[^>]*>([\s\S]*?)<\/a>/i.exec(foot)?.[1]);
+        const img = /src="\/_next\/image\?url=([^&"]+)/i.exec(card)?.[1];
+        const items = /(\d+)(?:<!-- -->|\s)*Items?(?:<!-- -->|\s)*•/i.exec(card)?.[1];
+        const value = /\$\s?([\d,.]+)(?:<!-- -->|\s)*Value/i.exec(card)?.[1];
+        let image = null; try { image = img ? decodeURIComponent(img) : null; } catch { /* no image */ }
+        const b = tidy({ store: "humble", id: slug, title, url: `https://www.humblebundle.com/games/${slug}`, image, gameCount: items ? Number(items) : null, kind: "tiered", price: value ? `$${value} value` : null, expiresAt: null }, now);
+        if (b) { seen.add(slug); out.push(b); }
+    }
     return out;
 }
 /** A bundle's own page names every game in it and each tier's price. */
