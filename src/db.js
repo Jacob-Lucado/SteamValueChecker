@@ -224,6 +224,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const db = new DatabaseSync(path);
     db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     db.exec(SCHEMA);
+    // Dashboard sign-ins, so a restart doesn't sign everyone out. The id is a hash of the cookie, never the cookie itself.
+    db.exec("CREATE TABLE IF NOT EXISTS web_sessions (id TEXT PRIMARY KEY, user_id TEXT, data TEXT NOT NULL, expires INTEGER NOT NULL)");
 
     // Columns added after the first release. Safe to run on every start.
     const cols = t => db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
@@ -870,6 +872,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         try {
             for (const t of ["ai_notes", "items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends", "user_birthdays"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM push_subs WHERE user_id = ?", discordId);
+            run("DELETE FROM web_sessions WHERE user_id = ?", discordId);
             run("DELETE FROM gift_marks WHERE claimer_id = ?", discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
@@ -921,6 +924,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const getMeta = key => get("SELECT value FROM status_meta WHERE key = ?", key)?.value ?? null;
     const bumpMeta = key => run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", key);
     const listMetaPrefix = prefix => all("SELECT key, value FROM status_meta WHERE key LIKE ? ESCAPE '\\'", prefix.replace(/[%_\\]/g, c => "\\" + c) + "%");
+    const saveSession = (id, userId, data, expires) => run("INSERT INTO web_sessions (id, user_id, data, expires) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET user_id = excluded.user_id, data = excluded.data, expires = excluded.expires", id, userId ?? null, data, expires);
+    const dropSession = id => run("DELETE FROM web_sessions WHERE id = ?", id);
+    const loadSessions = (at = now()) => { run("DELETE FROM web_sessions WHERE expires < ?", at); return all("SELECT id, data FROM web_sessions ORDER BY expires"); };
     const setMeta = (key, value) => run("INSERT INTO status_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, String(value));
 
     // One time: an earlier version marked every Steam game with an hour or more as "playing". Only games touched in the last
@@ -931,7 +937,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
 
     return {
-        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta,
+        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta, saveSession, dropSession, loadSessions,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, popularApps, funnelMark, funnelStats, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,

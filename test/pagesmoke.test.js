@@ -172,6 +172,8 @@ test("the page speaks the browser's language and fetches only that language file
             const errors = [], packs = []; page.on("pageerror", e => errors.push(e.message)); page.on("request", r => { const m = /\/i18n-([a-z]{2})\.js/.exec(r.url()); if (m) packs.push(m[1]); });
             await page.goto(`${o.base}/`, { waitUntil: "load" });
             await page.waitForFunction(() => (document.getElementById("app")?.innerText ?? "").trim().length > 200, null, { timeout: 15000 });
+            // The English placeholder is already longer than that, so also wait for the translated page itself.
+            if (code) await page.waitForFunction(c => document.documentElement.lang === c && /[\u3040-\u30ff\u4e00-\u9fff]/.test(document.getElementById("app")?.innerText ?? ""), code, { timeout: 15000 });
             assert.deepEqual(errors, []);
             assert.deepEqual(packs, code ? [code] : [], `${locale} fetched ${packs.join(",") || "no"} language file`);
             if (code) assert.equal(await page.evaluate(() => document.documentElement.lang), code);

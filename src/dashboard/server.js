@@ -433,7 +433,27 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
     const onAdminHost = req => Boolean(adminHost) && String(req?.headers?.host ?? "").toLowerCase() === adminHost;
     const adminHome = adminOrigin ? adminOrigin + "/" : "/admin";
     const secure = origin.startsWith("https://");
-    const sessions = new Map();
+    // Sign-ins live in memory and in the database, so a deploy or restart doesn't sign everyone out.
+    // The database only ever sees a hash of the cookie, so a copy of it (a backup, say) can't be used to sign in as someone.
+    const sidKey = id => (typeof id === "string" && id.startsWith("h:") ? id : "h:" + createHash("sha256").update(String(id ?? "")).digest("hex"));
+    class SessionStore extends Map {
+        get(id) { return super.get(sidKey(id)); }
+        has(id) { return super.has(sidKey(id)); }
+        set(id, s) {
+            const k = sidKey(id);
+            try { db.saveSession?.(k, s?.userId, JSON.stringify(s), s?.expires ?? 0); } catch { /* still signed in until the next restart */ }
+            return super.set(k, s);
+        }
+        delete(id) {
+            const k = sidKey(id);
+            try { db.dropSession?.(k); } catch { /* it expires by itself */ }
+            return super.delete(k);
+        }
+    }
+    const sessions = new SessionStore();
+    try {
+        for (const row of db.loadSessions?.(now()) ?? []) { try { Map.prototype.set.call(sessions, row.id, JSON.parse(row.data)); } catch { /* a row that can't be read is just a sign-in lost */ } }
+    } catch { /* an older database without the table: everyone signs in once more */ }
     const states = new Map();
     const steamKnown = new Map();   // one-time token -> { user, exp }: a Steam sign-in of a known member, waiting for the Discord half
     const steamPending = new Map(); // one-time token -> { steamid, exp }: a Steam sign-in that still needs a Discord account to attach to

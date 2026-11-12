@@ -1,5 +1,6 @@
 // Two small things for the bot owner: a Monday summary DM, and posting new release notes to a channel of their choosing.
 import { readEvents } from "./adminlog.js";
+import { calendarRunningOut } from "./salescal.js";
 
 const WEEK = 7 * 86_400_000;
 
@@ -24,7 +25,7 @@ export function trafficOf(db) {
 
 export function indieOf(db) { try { return db.indieWeek(); } catch { return null; } }
 
-export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, openTickets, week, traffic = null, indie = null }) {
+export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, openTickets, week, traffic = null, indie = null, calendarLow = false }) {
     const fields = [
         { name: "🌐 Servers", value: `**${servers ?? "-"}**${joined || left ? `  (+${joined} / -${left} this week)` : ""}`, inline: true },
         { name: "🗳️ Votes", value: `**${votes}**`, inline: true },
@@ -41,6 +42,7 @@ export function summaryEmbed({ servers, joined, left, votes, errors, diskPct, op
             indie.pending ? `**${indie.pending}** waiting for you` : null, indie.reports ? `**${indie.reports}** open report${indie.reports === 1 ? "" : "s"}` : null].filter(Boolean);
         fields.push({ name: "🕹️ Indie showcase, last 7 days", value: bits.join(" · ") });
     }
+    if (calendarLow) fields.push({ name: "🗓️ Sale calendar", value: "No Steam sale or fest is listed more than two months out. Valve has probably published new dates: add them to the sale calendar so countdowns and buy-or-wait advice stay right." });
     return { color: 0xff9800, title: "Your week with Steam Value Checker", description: `Week of ${week}`, fields, footer: { text: "Sent Mondays. Details are on the Admin pages." } };
 }
 
@@ -57,7 +59,7 @@ export async function runOwnerSummary({ db, ownerId, sendDm, gather, now = () =>
     let live = {};
     try { live = (await gather?.()) ?? {}; } catch { /* the numbers that need a live connection just show a dash */ }
     db.setMeta(key, String(t));
-    await sendDm(ownerId, { embeds: [summaryEmbed({ ...live, joined: srv.filter(e => e.kind === "join").length, left: srv.filter(e => e.kind === "leave").length, votes, week: wk.key, traffic: trafficOf(db), indie: indieOf(db) })] });
+    await sendDm(ownerId, { embeds: [summaryEmbed({ ...live, joined: srv.filter(e => e.kind === "join").length, left: srv.filter(e => e.kind === "leave").length, votes, week: wk.key, traffic: trafficOf(db), indie: indieOf(db), calendarLow: calendarRunningOut(t) })] });
     return { sent: true };
 }
 

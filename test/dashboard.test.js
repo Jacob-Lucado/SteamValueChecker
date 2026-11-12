@@ -4089,3 +4089,21 @@ test("the sitemap lists a game page only by its official address, and leaves out
     assert.ok(map.includes(`<loc>${ORIGIN}/game/367520-hollow-knight</loc>`));
     assert.ok(!map.includes("/game/999-"), "an app with no page is not listed");
 });
+
+test("a restart keeps people signed in: the sign-in is read back from the database", async () => {
+    const t = await setup();
+    await t.signIn();
+    assert.equal((await t.request("/api/me")).data.user.id, "u1");
+    await t.close();
+    assert.ok(!JSON.stringify(t.db.loadSessions(0)).includes(t.cookie().split("=").pop()), "the cookie itself is never stored");
+    // The same database under a fresh dashboard, as after a deploy.
+    const again = createDashboard({ db: t.db, itad: {}, rest: {}, config: { publicUrl: ORIGIN, clientId: "cid", ownerId: null }, now: () => 1_000_000 });
+    const addr = await again.listen(0, "127.0.0.1");
+    try {
+        const me = await (await fetch(`http://127.0.0.1:${addr.port}/api/me`, { headers: { Cookie: t.cookie() } })).json();
+        assert.equal(me.user.id, "u1");
+        const out = await fetch(`http://127.0.0.1:${addr.port}/auth/logout`, { method: "POST", headers: { Cookie: t.cookie(), "Content-Type": "application/json", "X-Requested-With": "dashboard" }, body: "{}" });
+        assert.equal(out.status, 200);
+        assert.equal(t.db.loadSessions(0).length, 0, "signing out removes it from the database too");
+    } finally { await again.close(); }
+});
