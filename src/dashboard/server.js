@@ -2305,7 +2305,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
             let body = {};
             if (req.method === "POST") {
                 checkWrite(req);
-                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" ? 14_500_000 : key === "POST /api/admin/xposter/post" ? 7_200_000 : key === "POST /api/profile/background" || key === "POST /api/social/post" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
+                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" || key === "POST /api/streams/giveaway" || key === "POST /api/admin/giveaways/create" ? 14_500_000 : key === "POST /api/admin/xposter/post" ? 7_200_000 : key === "POST /api/profile/background" || key === "POST /api/social/post" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
             }
             const out = await handler(req, body, url);
             if (req.method === "POST" && url.pathname.startsWith("/api/admin/")) auditAdmin(req, url.pathname, body);

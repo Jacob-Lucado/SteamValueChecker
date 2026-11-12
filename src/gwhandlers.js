@@ -190,7 +190,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
     async function list(i) {
         needManager(i);
         const rows = db.listGiveaways(i.guildId, { limit: 15 });
-        const lines = rows.map(g => `**#${g.id}** ${g.title}: ${g.status}${g.status === "active" ? `, ends <t:${Math.floor(g.ends_at / 1000)}:R>` : ""}, ${db.countEntries(g.id)} entries`);
+        const lines = rows.map(g => `**#${g.id}** ${g.title}: ${g.status}${g.status === "active" ? `, ends <t:${Math.floor(g.ends_at / 1000)}:R>` : ""}, ${db.countEntries(g.id)} entries${g.regions ? `, 🌍 ${describeRegions(g.regions)}` : ""}`);
         return i.reply({ embeds: [{ color: 0xff9800, title: "Giveaways", description: lines.join("\n") || "None yet. Start one with `/server giveaway create`." }], flags: MessageFlags.Ephemeral });
     }
 

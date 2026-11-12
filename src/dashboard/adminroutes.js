@@ -1,5 +1,7 @@
 // The owner admin panel's API: indie review, admin accounts and sign-in, the staff chat and radio, bans and broadcasts, tickets, giveaways and logs.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
+import { parseRegions } from "../gwregion.js";
+import { videoFromBody } from "../gwmedia.js";
 import { HttpError } from "./http.js";
 import { MAX_BODY } from "../broadcast.js";
 import { PANEL_AREAS, cleanEdit } from "../paneluser.js";
@@ -663,7 +665,7 @@ export function createAdminRoutes(ctx) {
                 const r = await giveaways.create({
                     guild_id: home.guild_id, channel_id: home.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
                     game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
-                    color: parseColor(body.color), button_label: text(body.button_label),
+                    color: parseColor(body.color), button_label: text(body.button_label), regions: parseRegions(body.regions), video: videoFromBody(body),
                     claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true, is_global: true, host, steps, require_steam: Boolean(body.steam_verified)
                 });
                 const targets = db.broadcastTargets();

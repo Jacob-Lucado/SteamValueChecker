@@ -315,8 +315,10 @@
         const gThumb = h("input", { type: "url", maxlength: "500", placeholder: "https://… (small picture or GIF)", "aria-label": "Small picture link" });
         const gColor = h("input", { type: "text", maxlength: "8", placeholder: "#ff9800", "aria-label": "Color" });
         const gLabel = h("input", { type: "text", maxlength: "40", placeholder: "Enter giveaway", "aria-label": "Enter button text" });
-        const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: gImage.value, thumb: gThumb.value, color: gColor.value, label: gLabel.value.trim(), length: length.value.trim(), host: "you" }));
-        for (const el of [title, desc, keys, gImage, gThumb, gColor, gLabel, length]) el.addEventListener("input", gp.paint);
+        const gRegions = h("input", { type: "text", maxlength: "200", placeholder: "US, CA, EU (blank = anywhere)", "aria-label": "Regions allowed" }), gVideo = window.GwExtras.videoInput();
+        const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: gImage.value, thumb: gThumb.value, color: gColor.value, regions: gRegions.value, hasVideo: Boolean(gVideo.files && gVideo.files.length), label: gLabel.value.trim(), length: length.value.trim(), host: "you" }));
+        for (const el of [title, desc, keys, gImage, gThumb, gColor, gLabel, length, gRegions]) el.addEventListener("input", gp.paint);
+        gVideo.addEventListener("change", gp.paint);
         const steamOnly = h("input", { type: "checkbox" });
         const who = select([["both", "Every server's giveaway channel and DMs"], ["channels", "Server giveaway channels only"], ["dm", "DMs only"]], "both");
         const confirm = h("input", { type: "text", placeholder: "SEND", maxlength: "4", autocomplete: "off", "aria-label": "Type SEND to confirm" });
@@ -369,7 +371,8 @@
           if (info.list.some(g => g.spread && !g.spread.done) && document.body.contains(box)) timer = setTimeout(() => refresh().catch(() => {}), 2500);
         }
         go.addEventListener("click", () => busy(go, async () => {
-          const r = await api("/api/admin/giveaways/create", { title: title.value, game: game.value, description: desc.value, image: gImage.value, thumbnail: gThumb.value, color: gColor.value, button_label: gLabel.value, steam_verified: steamOnly.checked, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value,
+          const vid = await window.GwExtras.videoBody(gVideo);
+          const r = await api("/api/admin/giveaways/create", { ...vid, regions: gRegions.value, title: title.value, game: game.value, description: desc.value, image: gImage.value, thumbnail: gThumb.value, color: gColor.value, button_label: gLabel.value, steam_verified: steamOnly.checked, keys: keys.value, length: length.value, claim_hours: claim.value, audience: who.value, confirm: confirm.value,
             host: hostKind.value === "partner" ? { kind: "partner", name: pName.value, logo: pLogo.value, links: [["Website", pWeb.value], ["Discord", pDiscord.value], ["X", pX.value], ["", pOther.value]].filter(l => l[1].trim()).map(l => ({ label: l[0], url: l[1] })) } : { kind: "network" },
             steps: stepList.map(e => ({ kind: e.sel.value, url: e.url.value, label: e.label.value })) });
           toast(`Your giveaway is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. Sending it out to ${r.total} more place${r.total === 1 ? "" : "s"}.`, "ok");
@@ -383,12 +386,14 @@
               h("p", { class: "muted small", text: `One giveaway, shown in every server's giveaway channel (or its alert channel if none is set) and in DMs. Entries from everywhere count together, and winners are drawn once. It is posted in ${info.destinations.length} server${info.destinations.length === 1 ? "" : "s"} and ${info.dm} member DM${info.dm === 1 ? "" : "s"}. Winners claim their key by DM.` }),
               info.destinations.length ? null : h("div", { class: "notice warn", text: "No server has a giveaway or alert channel yet. Set one on the Giveaways page (Server settings) first." }),
               field("Title", title), field("Game (for the artwork)", game), field("Description", desc),
+              field("Regions allowed", gRegions), h("p", { class: "muted small", text: window.GwExtras.regionHelp }),
               h("label", { class: "check" }, steamOnly, " Only Steam Verified members can enter (checked on their account, so it works in every server)"),
               field("Prizes (one per line)", keys), prizeButtons(keys, gp.paint),
               h("p", { class: "muted small", text: "Game keys, Nitro links and gift card codes are handed out by the Claim button. Money and other prizes have no code: you get a DM when a winner claims one and you send it yourself." }),
               h("h4", { text: "Look" }),
               h("div", { class: "grid two" }, h("div", {},
                 h("div", { class: "row" }, field("Big picture, GIF or video link", gImage), field("Small picture or GIF link", gThumb)),
+                field("Or upload a video (MP4, WebM or MOV, up to 10 MB)", gVideo),
                 h("div", { class: "row" }, field("Color", gColor), field("Enter button text", gLabel)),
                 h("p", { class: "muted small", text: "Leave the big picture empty to use the game's artwork. Use a direct, permanent link to a picture (.png, .jpg, .gif, .webp)." })),
                 h("div", {}, h("b", { text: "Preview" }), gp.el)),

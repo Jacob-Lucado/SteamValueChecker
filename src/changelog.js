@@ -2,8 +2,8 @@
 export const CHANGELOG = [
     { version: "2026.11.62", date: "2026-11-12", title: "Region locks, videos in giveaways, and proof from winners", items: [
         "**Add proof:** after a winner confirms their prize they can reply to the bot's DM with a screenshot or short video (up to 10 MB) within 30 minutes. It is posted in the vouches channel and the host is told.",
-        "**Region locks:** hosts can limit a giveaway to certain countries or groups like EU and NA, on /server giveaway create or the dashboard form. The post lists the regions, and people are checked against their Steam profile country (or the region they set). Add Steam Verified to count only verified countries.",
-        "**Giveaway videos:** attach a video file (MP4, WebM or MOV, up to 10 MB) when you create a giveaway, with /server giveaway create or on the dashboard form. It is posted with the giveaway.",
+        "**Region locks:** hosts can limit a giveaway to certain countries or groups like EU and NA, on /server giveaway create, /server giveaway rules, and every giveaway form on the dashboard (servers, streams and network-wide). The post lists the regions, and people are checked against their Steam profile country (or the region they set). Add Steam Verified to count only verified countries.",
+        "**Giveaway videos:** attach a video file (MP4, WebM or MOV, up to 10 MB) when you create a giveaway, on /server giveaway create or any giveaway form on the dashboard. It is posted with the giveaway.",
         "**Fixed:** giveaway problems (like not being able to post the winners) were not being reported to the server's problem list."
     ] },
     { version: "2026.11.61", date: "2026-11-12", title: "Sharper prices, Steam Family and server switches", items: [

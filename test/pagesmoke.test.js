@@ -237,3 +237,45 @@ test("the Setup page's area switches and the Steam page's family list work in a 
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the giveaway form takes a region list and a video file, and saves both", { timeout: 180_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createGiveawayService } = await import("../src/giveaway.js");
+    const { createVault } = await import("../src/vault.js");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    let svc;
+    const posts = [];
+    const o = await signedIn({
+        port, config: { publicUrl: `http://127.0.0.1:${port}` },
+        giveawayService: db => (svc = createGiveawayService({ db, vault: createVault("test-secret-at-least-16-chars"),
+            discord: { post: async (c, p) => { posts.push(p); return { id: String(posts.length) }; }, edit: async () => {}, dm: async () => ({}), memberOk: async () => true, findChannelByName: async () => null } })),
+        extra: { botGuilds: () => true }
+    });
+    try {
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/giveaways`, { waitUntil: "load" });
+        const regions = page.locator("input[placeholder^='Regions allowed']").first();
+        await regions.waitFor({ state: "attached", timeout: 40_000 });
+        await page.waitForLoadState("networkidle"); await page.waitForTimeout(800); // the page may redraw once while its lists arrive
+        await page.evaluate(() => document.querySelectorAll("details").forEach(d => { d.open = true; }));
+        await regions.fill("us, eu");
+        await page.locator("textarea[placeholder^='Hades']").fill("Hades | AAAAA-BBBBB-CCCCC");
+        await page.locator("input[type=file]").first().setInputFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("fake-mp4-bytes") });
+        assert.match(await page.locator(".dpreview").innerText(), /Regions: US, EU/);
+        assert.match(await page.locator(".dpreview").innerText(), /video is attached/);
+        await page.getByRole("button", { name: "Start giveaway" }).evaluate(el => el.click());
+        for (let n = 0; n < 120 && !o.db.listGiveaways("g-admin").length; n++) await page.waitForTimeout(250);
+        const g = o.db.listGiveaways("g-admin")[0];
+        assert.ok(g, `no giveaway was created: ${errors.join(" | ")} ${(await page.evaluate(() => [...document.querySelectorAll('.toast,.notice,[role=alert]')].map(e => e.innerText).join(' / ')))}`);
+        assert.equal(g.regions, "US,EU");
+        assert.equal(o.db.hasVideo(g.id), true);
+        assert.equal(posts[0].files[0].name, "giveaway.mp4");
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});

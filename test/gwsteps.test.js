@@ -75,3 +75,11 @@ test("the dashboard form's video is decoded and checked", async () => {
     assert.throws(() => videoFromBody({ video_b64: "A".repeat(15 * 1024 * 1024), video_type: "video/mp4" }), /too big/);
     assert.ok(giveawayInput({ keys: "A | B", video_b64: "AAAA", video_type: "video/webm" }).input.video);
 });
+
+test("region lock and video ride along on every giveaway form (server and stream input)", () => {
+    const { input } = giveawayInput({ keys: "A | B", regions: "us, eu", video_b64: "AAAA", video_type: "video/mp4" });
+    assert.equal(input.regions, "US,EU");
+    assert.equal(input.video.type, "video/mp4");
+    assert.equal(giveawayInput({ keys: "A | B" }).input.regions, null);
+    assert.throws(() => giveawayInput({ keys: "A | B", regions: "Narnia" }), /isn't a region/);
+});

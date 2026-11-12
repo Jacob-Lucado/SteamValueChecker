@@ -54,6 +54,7 @@
         }, 500);
       };
       const desc = h("textarea", { placeholder: "Extra text on the giveaway (optional)", maxlength: "1500" });
+      const regions = text("Regions allowed, e.g. US, CA, EU (blank = anywhere)", 200), video = window.GwExtras.videoInput();
       const image = text("Your own image, GIF or video link, https (optional)", 500), thumb = text("Your own small picture or GIF link, https (optional)", 500);
       const auto = h("input", { type: "checkbox", checked: true });
       const color = text("#5865F2", 8), label = text("Enter giveaway", 40);
@@ -65,8 +66,9 @@
       const startIn = text("Start later, e.g. 2h or 1d (blank = now)", 20), rounds = text("1", 2, "number"), repeatEvery = text("e.g. 7d", 20);
       const keys = h("textarea", { placeholder: "Hades | AAAAA-BBBBB-CCCCC\nCeleste | DDDDD-EEEEE-FFFFF\n(a key on its own uses the game name)", maxlength: "20000", autocomplete: "off", spellcheck: "false" });
       for (const el of [keys, game, image]) el.addEventListener("input", refreshPreview);
-      const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), length: length.value.trim(), host: "@you", artUrl: preview.querySelector("img")?.src || "" }));
-      for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
+      const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), regions: regions.value, hasVideo: Boolean(video.files && video.files.length), length: length.value.trim(), host: "@you", artUrl: preview.querySelector("img")?.src || "" }));
+      for (const el of [title, desc, keys, image, thumb, color, label, length, regions]) el.addEventListener("input", gp.paint);
+      video.addEventListener("change", gp.paint);
       auto.addEventListener("change", () => { previewKey = ""; refreshPreview(); });
       // Templates keep everything except the prize keys.
       const FIELDS = { title, length, game, desc, image, thumb, auto, color, label, claim, acct, memb, bonusN, reqRole, reqAll, overRole, bonusRole, pingRole, vouchSel, regions, boosters, startIn, rounds, repeatEvery, chSel };
@@ -80,20 +82,9 @@
       tplSel.addEventListener("change", () => { const t = tpls.find(x => String(x.id) === tplSel.value); if (t) { apply(t.data); toast(`Loaded "${t.name}".`, "ok"); } });
       const saveTpl = h("button", { type: "button", class: "btn gray small", text: "Save as template", onclick: () => busy(saveTpl, async () => { const r = await api("/api/giveaways/templates", { guild_id: guild.value, name: tplName.value, data: grab() }); tpls = r.templates; paintTpls(); toast("Template saved. Prize keys are never saved in it.", "ok"); }) });
       const delTpl = h("button", { type: "button", class: "btn red small", text: "Delete", onclick: () => busy(delTpl, async () => { if (!tplSel.value) return; const r = await api("/api/giveaways/templates", { guild_id: guild.value, remove: Number(tplSel.value) }); tpls = r.templates; paintTpls(); }) });
-      const regions = text("Regions allowed, e.g. US, CA, EU (blank = anywhere)", 200);
-      const video = h("input", { type: "file", accept: "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" });
-      const readVideo = () => new Promise((ok, no) => {
-        const f = video.files?.[0];
-        if (!f) return ok({});
-        if (f.size > 10 * 1024 * 1024) return no(new Error("That video is too big. Keep it under 10 MB."));
-        const r = new FileReader();
-        r.onerror = () => no(new Error("I couldn't read that video."));
-        r.onload = () => ok({ video_b64: String(r.result).split(",")[1] ?? "", video_type: f.type || ({ mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime" }[f.name.split(".").pop().toLowerCase()] ?? ""), video_name: f.name });
-        r.readAsDataURL(f);
-      });
       const create = h("button", { class: "btn green", text: "Start giveaway", onclick: () => busy(create, async () => {
         const num = el => (el.value === "" ? undefined : Number(el.value));
-        const vid = await readVideo();
+        const vid = await window.GwExtras.videoBody(video);
         const r = await api("/api/giveaways/create", {
           ...vid, guild_id: guild.value, channel_id: chSel.value, title: title.value, length: length.value, game: game.value, description: desc.value,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
@@ -132,8 +123,8 @@
           h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),
           h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb)),
           h("label", { class: "check" }, boosters, "Only server boosters can enter"),
-          field("Regions allowed (country codes like US, CA, DE or a group: EU, EUROPE, NA, LATAM, OCEANIA, ASIA)", regions),
-          h("p", { class: "muted small", text: "People are checked against the country on their Steam profile, or the region they set for the bot. Tick Steam Verified below to count only Steam-verified countries." }),
+          field("Regions allowed", regions),
+          h("p", { class: "muted small", text: window.GwExtras.regionHelp }),
           h("label", { class: "check" }, steamV, "Only Steam Verified members can enter"),
           h("h4", { text: "Schedule" }),
           h("div", { class: "row" }, field("Start in", startIn), field("Rounds (prizes are split across them)", rounds), field("Repeat every", repeatEvery))),
@@ -146,12 +137,13 @@
       const mode = select([["any", "Any one of them"], ["all", "All of them"]], "any");
       const extra = h("input", { type: "number", min: "2", max: "10", placeholder: "Extra entries (2-10)" });
       const steam = h("input", { type: "checkbox" });
+      const rg = h("input", { type: "text", maxlength: "200", placeholder: "Regions allowed, e.g. US, EU (type worldwide to clear)", value: g.regions || "" });
       const save = h("button", { class: "btn blue small", type: "button", text: "Save rules" }), wipe = h("button", { class: "btn red small", type: "button", text: "Remove all rules" });
       const send = (b, extraBody, msg) => busy(b, async () => { await api("/api/giveaways/rules", { guild_id: guild.value, id: g.id, ...extraBody }); toast(msg, "ok"); into.replaceChildren(); });
-      save.addEventListener("click", () => send(save, { require_role_ids: req.value, require_all: mode.value === "all", override_role_ids: over.value, bonus_role_ids: bonus.value, bonus_entries: extra.value || undefined, steam_verified: steam.checked ? true : undefined }, "Rules updated. The giveaway message now shows them."));
+      save.addEventListener("click", () => send(save, { require_role_ids: req.value, require_all: mode.value === "all", override_role_ids: over.value, bonus_role_ids: bonus.value, bonus_entries: extra.value || undefined, regions: rg.value.trim() ? rg.value : undefined, steam_verified: steam.checked ? true : undefined }, "Rules updated. The giveaway message now shows them."));
       wipe.addEventListener("click", () => send(wipe, { clear: true }, "All rules removed."));
       into.replaceChildren(h("div", { class: "panel" }, h("h4", { text: `Rules for #${g.id} (only what you fill in is added)` }),
-        field("Roles needed to enter", req), field("Entrants need", mode), field("Skip every rule with this role", over), field("Roles that get extra entries", bonus), field("Bonus entries", extra),
+        field("Roles needed to enter", req), field("Entrants need", mode), field("Skip every rule with this role", over), field("Roles that get extra entries", bonus), field("Bonus entries", extra), field("Regions allowed", rg), h("p", { class: "muted small", text: window.GwExtras.regionHelp }),
         h("label", { class: "check" }, steam, "Only Steam Verified members can enter"), h("div", { class: "row" }, save, wipe)));
     }
 
@@ -165,7 +157,7 @@
       const body = rows.map(g => {
         const details = h("button", { class: "btn gray small", text: "Details" });
         details.addEventListener("click", () => busy(details, () => showDetails(g, detail)));
-        return h("tr", {}, h("td", { text: "#" + g.id }), h("td", { text: g.title }), h("td", { text: statusLabel[g.status] || g.status }), h("td", { class: "muted small", text: g.outcome || "" }),
+        return h("tr", {}, h("td", { text: "#" + g.id }), h("td", {}, g.title, g.regions ? h("span", { class: "muted small", text: "  🌍 " + g.regions.split(",").join(", ") }) : null), h("td", { text: statusLabel[g.status] || g.status }), h("td", { class: "muted small", text: g.outcome || "" }),
           h("td", { class: "num live-entries", "data-gid": String(g.id), text: String(g.entries) }), h("td", { class: "num", text: `${g.redeemed}/${g.prizes}` }),
           h("td", { text: g.status === "active" ? new Date(g.ends_at).toLocaleString() : g.status === "scheduled" ? "Starts " + new Date(g.starts_at).toLocaleString() : "" }),
           h("td", { class: "actions" }, details,

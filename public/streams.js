@@ -22,21 +22,24 @@
       const auto = h("input", { type: "checkbox", checked: true }), color = text("#9146ff", 8), label = text("Enter giveaway", 40);
       const claim = text("24", 3, "number"), acct = text("0", 4, "number"), memb = text("0", 4, "number"), bonusN = text("2", 2, "number");
       const boosters = h("input", { type: "checkbox" }), steamV = h("input", { type: "checkbox" });
+      const regions = text("Regions allowed, e.g. US, CA, EU (blank = anywhere)", 200), video = window.GwExtras.videoInput();
       const roles = d.roles || null, roleSel = () => select([["", "None"], ...(roles || []).map(r => [r.id, r.name])], "");
       const reqRole = roleMulti(roles || []), bonusRole = roleMulti(roles || []), overRole = roleMulti(roles || []), pingRole = roleSel();
       const reqAll = select([["any", "Any one of them"], ["all", "All of them"]], "any");
       const tw = (d.links || []).find(l => l.platform === "twitch"), yt = (d.links || []).find(l => l.platform === "youtube");
       const prefill = tw ? [{ kind: "follow_twitch", url: tw.url }] : yt ? [{ kind: "youtube", url: yt.url }] : [];
       const steps = stepsEditor(d.stepKinds || [], { prefill });
-      const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), length: length.value.trim(), host: "you" }));
-      for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
+      const gp = giveawayPreview(() => ({ title: title.value.trim(), desc: desc.value.trim(), keys: keys.value, image: image.value, thumb: thumb.value, color: color.value, label: label.value.trim(), regions: regions.value, hasVideo: Boolean(video.files && video.files.length), length: length.value.trim(), host: "you" }));
+      for (const el of [title, desc, keys, image, thumb, color, label, length, regions]) el.addEventListener("input", gp.paint);
+      video.addEventListener("change", gp.paint);
       const isTwitch = Boolean(tw);
       const chatOn = h("input", { type: "checkbox", id: "sgw-chat", disabled: !isTwitch }), chatInvite = text("https://discord.gg/yourserver", 120, "url");
       const go = h("button", { class: "btn blue", type: "button", text: "🎁 Start the giveaway", disabled: unset });
       go.addEventListener("click", () => run(go, async () => {
         const num = el => (el.value === "" ? undefined : Number(el.value));
+        const vid = await window.GwExtras.videoBody(video);
         const r = await post("/api/streams/giveaway", {
-          keys: keys.value, game: game.value, title: title.value, description: desc.value, length: length.value, end_with_stream: endWith.checked,
+          ...vid, regions: regions.value, keys: keys.value, game: game.value, title: title.value, description: desc.value, length: length.value, end_with_stream: endWith.checked,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
           claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN), boosters: boosters.checked, steam_verified: steamV.checked,
           require_role_ids: reqRole.value, require_all: reqAll.value === "all", override_role_ids: overRole.value, bonus_role_ids: bonusRole.value, ping_role_id: pingRole.value, steps: steps.get(), chat_enter: chatOn.checked, chat_invite: chatInvite.value
@@ -55,6 +58,7 @@
         h("div", { class: "grid two" }, h("div", {},
           field("Description", desc),
           h("div", { class: "row" }, field("Big picture, GIF or video link (https)", image), field("Small picture or GIF link (https)", thumb)),
+          field("Or upload a video (MP4, WebM or MOV, up to 10 MB)", video),
           h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color (#9146ff)", color)),
           h("label", { class: "check" }, auto, " Find artwork automatically when I don't give an image")),
           h("div", {}, h("b", { text: "Preview" }), gp.el)),
@@ -69,6 +73,7 @@
         h("details", { class: "more" }, h("summary", { text: "Rules (all optional)" }),
           h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb), field("Hours to claim", claim)),
           h("label", { class: "check" }, boosters, " Only server boosters can enter"),
+          field("Regions allowed", regions), h("p", { class: "muted small", text: window.GwExtras.regionHelp }),
           h("label", { class: "check" }, steamV, " Only Steam Verified members can enter"),
           roles ? h("div", {}, h("div", { class: "row" }, field("Roles needed to enter (pick as many as you like)", reqRole), field("Entrants need", reqAll)), h("div", { class: "row" }, field("Skip every rule with this role (like Booster)", overRole)), h("div", { class: "row" }, field("Roles that get extra entries", bonusRole), field("Bonus entries (2-10)", bonusN), field("Ping role", pingRole))) : h("p", { class: "muted small", text: "Role rules and pings are set by a server manager." })),
         h("p"), h("div", { class: "row" }, go));

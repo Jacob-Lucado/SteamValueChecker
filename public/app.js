@@ -1309,6 +1309,20 @@ window.SVC_SITE = envIn => {
     return out;
   }
   /** A Discord-style preview of the giveaway post that follows the form. get() returns the current values. */
+  // Region lock and video upload helpers shared by every giveaway form (server, stream, network-wide).
+  window.GwExtras = {
+    videoInput: () => h("input", { type: "file", accept: "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" }),
+    videoBody: input => new Promise((ok, no) => {
+      const f = input.files && input.files[0];
+      if (!f) return ok({});
+      if (f.size > 10 * 1024 * 1024) return no(new Error("That video is too big. Keep it under 10 MB."));
+      const r = new FileReader();
+      r.onerror = () => no(new Error("I couldn't read that video."));
+      r.onload = () => ok({ video_b64: String(r.result).split(",")[1] || "", video_type: f.type || ({ mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime" }[f.name.split(".").pop().toLowerCase()] || ""), video_name: f.name });
+      r.readAsDataURL(f);
+    }),
+    regionHelp: "Country codes like US, CA, DE, or a group: EU, EUROPE, NA, LATAM, OCEANIA, ASIA. Blank means anywhere. People are checked against the country on their Steam profile, or the region they set for the bot; tick Steam Verified to count only Steam-verified countries."
+  };
   function giveawayPreview(get) {
     const pv = h("div", { class: "dpreview" });
     const THEME = { key: ["#ff9800", "🎮", "GIVEAWAY"], nitro: ["#5865f2", "💎", "DISCORD NITRO GIVEAWAY"], giftcard: ["#eb459e", "🎁", "GIFT CARD GIVEAWAY"], money: ["#2ecc71", "💰", "MONEY GIVEAWAY"], other: ["#fee75c", "🏅", "OTHER PRIZE GIVEAWAY"] };
@@ -1326,8 +1340,10 @@ window.SVC_SITE = envIn => {
         h("div", { class: "dp-title", text: v.title || (prizes[0] ? prizes[0].label + (prizes.length > 1 ? ` + ${prizes.length - 1} more` : "") : "Your giveaway") }),
         v.desc ? h("div", { class: "dp-body", text: v.desc }) : null,
         h("div", { class: "dp-body" }, h("b", { text: `🏆 ${prizes.length === 1 ? "PRIZE" : `PRIZES (${prizes.length || 0})`}` }), h("div", { class: "dp-quote", text: lines.join("\n") || "Add a prize above" })),
+        v.regions && v.regions.trim() ? h("div", { class: "dp-body" }, h("b", { text: "📋 To enter" }), h("div", { class: "dp-quote", text: "🌍 Regions: " + v.regions.trim().toUpperCase().split(/[\s,;]+/).filter(Boolean).join(", ") })) : null,
         h("div", { class: "dp-fields" }, [["⏰ Ends", "in " + (v.length || "24h")], ["👑 Hosted by", v.host || "you"], ["🎟️ Entries", "0"]].map(([a, b]) => h("div", { class: "dp-field inline" }, h("b", { text: a }), h("div", { text: b })))),
         ok(v.image) ? h("img", { class: "dp-image", src: v.image.trim(), alt: "", referrerpolicy: "no-referrer" }) : (v.artUrl ? h("img", { class: "dp-image", src: v.artUrl, alt: "", referrerpolicy: "no-referrer" }) : null),
+        v.hasVideo ? h("div", { class: "dp-body muted small", text: "🎬 Your video is attached under the post." }) : null,
         h("div", { class: "dp-foot muted small", text: "Giveaway #1  •  Press the button to enter, press it again to leave" }),
         h("div", { class: "dp-btn", text: "🎉 " + (v.label || "Enter giveaway") }));
       if (ok(v.thumb)) card.classList.add("has-thumb"), card.append(h("img", { class: "dp-thumb", src: v.thumb.trim(), alt: "", referrerpolicy: "no-referrer" }));

@@ -24,7 +24,7 @@ export function createGiveawayRoutes(ctx) {
             const g = managerGuild(s, url.searchParams.get("guild"));
             const rows = db.listGiveaways(g.id, { limit: 50 }).map(x => {
                 const keys = db.listKeys(x.id);
-                return { id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length, outcome: outcomeOf(x, keys) };
+                return { id: x.id, title: x.title, regions: x.regions ?? null, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length, outcome: outcomeOf(x, keys) };
             });
             return { giveaways: rows, pending: await pendingClaimsFor(g.id), settings: db.getGiveawaySettings(g.id), max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
@@ -58,7 +58,7 @@ export function createGiveawayRoutes(ctx) {
             const g = managerGuild(s, url.searchParams.get("guild"));
             const x = giveawayOf(g, url.searchParams.get("id"));
             // names only, never key values
-            return { id: x.id, title: x.title, status: x.status, entries: db.countEntries(x.id), keys: db.listKeys(x.id).map(k => ({ position: k.position, label: k.label, status: k.status, winner_id: k.winner_id })) };
+            return { id: x.id, title: x.title, regions: x.regions ?? null, status: x.status, entries: db.countEntries(x.id), keys: db.listKeys(x.id).map(k => ({ position: k.position, label: k.label, status: k.status, winner_id: k.winner_id })) };
         },
         "POST /api/giveaways/create": async (req, body) => {
             const s = session(req);
