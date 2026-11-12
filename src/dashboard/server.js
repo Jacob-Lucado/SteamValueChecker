@@ -50,7 +50,7 @@ import { parseHost, stepsOf, parseSteps, StepError, STEP_KINDS } from "../gwpart
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
-import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS } from "../overlays.js";
+import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS, SCENE_KINDS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
 import { supporterUntil, isSupporter, isFounder, wallName, alertColorHex, foundersTaken, FOUNDERS_MAX, endOfDayEastern } from "../supporters.js";
 import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, PROFILE_STYLES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
@@ -393,7 +393,27 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const steamPending = new Map(); // one-time token -> { steamid, exp }: a Steam sign-in that still needs a Discord account to attach to
     const lastRun = new Map();
     const cache = new Map();
-    const overlayLimit = createLimiter({ windowMs: 60_000, max: 30, now });
+    const overlayLimit = createLimiter({ windowMs: 60_000, max: 120, now });
+    // Studio overlays: when each link was last opened (so the studio can say "connected"), and the live feed the alerts overlay reads.
+    // The feed is worked out from member and boost counts every time an overlay asks, so nothing runs while nobody is streaming.
+    const ovSeen = new Map(), ovFeed = new Map(), ovTest = new Map();
+    let ovSeq = 1;
+    function feedFor(guildId, g) {
+        if (!guildId || !g) return { ev: [], seq: ovSeq };
+        let f = ovFeed.get(guildId);
+        if (!f) { f = { m: g.members ?? null, b: g.boosts ?? null, ev: [] }; ovFeed.set(guildId, f); }
+        const add = (type, count, by) => f.ev.push({ seq: ++ovSeq, type, count, by, at: now() });
+        if (g.members != null && f.m != null && g.members > f.m) add("join", g.members, g.members - f.m);
+        if (g.boosts != null && f.b != null && g.boosts > f.b) add("boost", g.boosts, g.boosts - f.b);
+        if (g.members != null) f.m = g.members;
+        if (g.boosts != null) f.b = g.boosts;
+        f.ev = f.ev.filter(e => now() - e.at < 10 * 60_000).slice(-30);
+        return f;
+    }
+    function overlayPayload(o) {
+        const g = o.guild_id && guildList ? guildList().find(x => x.id === o.guild_id) ?? null : null;
+        return { kind: o.kind, name: o.name, config: o.config, data: overlayData(o, g ? { members: g.members ?? null, boosts: g.boosts ?? null } : null, now()), g };
+    }
     const idFinderLimit = createLimiter({ windowMs: 60_000, max: 15, now });
     const indieApi = indieSvc ?? createIndie();
     const fortniteCall = async fn => { try { return await fn(); } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; } };
@@ -1451,12 +1471,12 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "GET /api/overlays": async (req) => {
             const s = session(req);
             const guilds = (await Promise.all(s.guilds.filter(g => botGuilds?.(g.id)).map(async g => (await mayStream(s, g)) ? { id: g.id, name: g.name } : null))).filter(Boolean);
-            return { overlays: db.listOvs(s.userId).map(o => ({ token: o.token, kind: o.kind, name: o.name, guild_id: o.guild_id, value: o.value, config: o.config, url: `${origin}/ov?token=${o.token}` })), kinds: OVERLAY_KINDS, fonts: OVERLAY_FONTS, guilds };
+            return { overlays: db.listOvs(s.userId).map(o => ({ token: o.token, kind: o.kind, name: o.name, guild_id: o.guild_id, value: o.value, config: o.config, url: `${origin}/ov?token=${o.token}`, seen: ovSeen.has(o.token) ? now() - ovSeen.get(o.token) : null })), kinds: OVERLAY_KINDS, fonts: OVERLAY_FONTS, guilds };
         },
         "POST /api/overlays": async (req, body) => {
             const s = session(req), action = String(body.action ?? "");
             const guildId = body.guild_id ? String((await streamAccess(s, body.guild_id)).id) : null;
-            const wants = (kind, cfg) => kind === "stats" || (kind === "goal" && ["members", "boosts"].includes(cfg?.source));
+            const wants = (kind, cfg) => kind === "stats" || kind === "alerts" || (kind === "goal" && ["members", "boosts"].includes(cfg?.source));
             try {
                 if (action === "create") {
                     if (!OVERLAY_KINDS.includes(body.kind)) throw new HttpError(400, "Pick an overlay type.");
@@ -1472,6 +1492,12 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                     return { ok: true };
                 }
                 if (action === "bump") { db.updateOv(s.userId, mine.token, { value: Math.max(0, Number(mine.value) + Math.max(-1_000_000, Math.min(1_000_000, Number(body.by) || 0))) }); return { value: db.ovById(s.userId, mine.token).value }; }
+                if (action === "test") {
+                    if (mine.kind !== "alerts") throw new HttpError(400, "Only an alerts overlay has test alerts.");
+                    const list = ovTest.get(mine.token) ?? []; list.push({ seq: ++ovSeq, type: ["join", "boost"][list.length % 2], count: 1281 + list.length, by: 1, at: now(), test: true });
+                    ovTest.set(mine.token, list.slice(-5));
+                    return { ok: true, seen: ovSeen.has(mine.token) ? now() - ovSeen.get(mine.token) : null };
+                }
                 if (action === "reset") return { token: db.resetOvToken(s.userId, mine.token) };
                 if (action === "delete") { db.removeOv(s.userId, mine.token); return { ok: true }; }
             } catch (e) { if (e instanceof HttpError) throw e; throw new HttpError(400, e.message || "That didn't work."); }
@@ -1482,8 +1508,21 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
             const o = db.ovByToken(String(url.searchParams.get("token") ?? ""));
             if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Overlay studio page.");
-            const g = o.guild_id && guildList ? guildList().find(x => x.id === o.guild_id) ?? null : null;
-            return { kind: o.kind, name: o.name, config: o.config, data: overlayData(o, g ? { members: g.members ?? null, boosts: g.boosts ?? null } : null, now()), now: now() };
+            ovSeen.set(o.token, now());
+            const p = overlayPayload(o);
+            if (o.kind === "alerts") {
+                const since = url.searchParams.has("since") ? Number(url.searchParams.get("since")) : NaN;
+                const f = feedFor(o.guild_id, p.g), mine = ovTest.get(o.token) ?? [];
+                const all = [...f.ev, ...mine].sort((a, b) => a.seq - b.seq);
+                const events = Number.isFinite(since) && since >= 0 ? all.filter(e => e.seq > since && (e.type !== "join" || o.config.showJoins) && (e.type !== "boost" || o.config.showBoosts)).slice(-8).map(({ seq, type, count, by }) => ({ seq, type, count, by })) : [];
+                ovTest.set(o.token, mine.filter(e => now() - e.at < 60_000));
+                return { kind: o.kind, name: o.name, config: o.config, data: { seq: ovSeq, events }, now: now() };
+            }
+            if (o.kind === "scene") {
+                const kids = o.config.items.map(t => db.ovByToken(t)).filter(k => k && k.user_id === o.user_id && SCENE_KINDS.includes(k.kind)).map(k => { const q = overlayPayload(k); return { kind: q.kind, name: q.name, config: q.config, data: q.data }; });
+                return { kind: o.kind, name: o.name, config: o.config, data: { children: kids }, now: now() };
+            }
+            return { kind: o.kind, name: o.name, config: o.config, data: p.data, now: now() };
         },
         // The OBS overlay link for a server. Only people with Manage Server can see or change it.
         "GET /api/music/overlay": async (req, _b, url) => {

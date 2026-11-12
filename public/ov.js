@@ -8,10 +8,10 @@
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const n = v => Number(v ?? 0).toLocaleString("en-US");
   const hexOk = v => /^#[0-9a-f]{6}$/i.test(v) ? v : null;
-  let state = null, offset = 0, tick = 0, poll = 0;
+  let state = null, offset = 0, poll = 0;
 
-  function look(c) {
-    const s = root.style;
+  function look(c, target = root) {
+    const s = target.style;
     s.setProperty("--accent", hexOk(c.accent) || "#5865f2"); s.setProperty("--text", hexOk(c.text) || "#ffffff"); s.setProperty("--muted", hexOk(c.muted) || "#94a3b8");
     s.setProperty("--bg", hexOk(c.bg) || "#0b0e14"); s.setProperty("--border", hexOk(c.border) || "#1e2638");
     s.setProperty("--bgop", Math.max(0, Math.min(100, Number(c.bgOpacity ?? 85))) + "%"); s.setProperty("--font", FONTS[c.font] || FONTS.Inter);
@@ -25,11 +25,10 @@
     return (d ? d + "d " : "") + two(h) + ":" + two(m) + ":" + two(s % 60);
   }
 
-  function draw() {
-    if (!state) return;
-    const { kind, config: c, data: d } = state;
-    look(c);
+  /** One card for one overlay. Used on its own and, for a scene, once per overlay in the rotation. */
+  function build(kind, c, d, timers) {
     const card = el("div", "card" + (c.showBorder ? " bordered" : "") + (c.shadow ? " shadow" : ""));
+    look(c, card);
     if (kind === "goal") {
       const head = el("div", "head"); head.append(el("div", "label", c.label || "Goal"));
       const nums = el("div", "nums"); const cur = el("b", "", n(d.current));
@@ -46,6 +45,17 @@
       if (c.showBoosts && d.boosts != null) { const t = el("div", "tile accent"); t.append(el("b", "", n(d.boosts)), el("span", "", c.boostsLabel)); tiles.append(t); }
       if (!tiles.children.length) tiles.append(el("div", "nums", "Nothing to show yet"));
       card.append(tiles);
+    } else if (kind === "sale") {
+      const head = el("div", "head sub"); head.style.justifyContent = "center";
+      const big = el("div", "clock"), sub = el("div", "pct"); sub.style.textAlign = "center";
+      if (!d.name) { head.append(el("div", "label", c.label || "Steam sale")); big.textContent = "Soon"; big.style.fontSize = "34px"; card.append(head, big); }
+      else {
+        head.append(el("div", "label", c.label || d.name)); card.append(head, big, sub);
+        const when = d.live ? d.end : d.start;
+        sub.textContent = d.live ? "until it ends" : (c.showDate ? "until " + d.name + " · " + new Date(d.start).toLocaleDateString(undefined, { month: "long", day: "numeric" }) : "until it starts");
+        const paint = () => { const ms = when - (Date.now() + offset); if (ms <= 0) { big.textContent = d.live ? "Ended" : (c.endText || "On now"); sub.textContent = ""; big.style.fontSize = "34px"; return; } big.textContent = clock(ms); };
+        paint(); timers.push(setInterval(paint, 250));
+      }
     } else if (kind === "timer") {
       const head = el("div", "head sub"); head.style.justifyContent = "center"; head.append(el("div", "label", c.label || ""));
       const big = el("div", "clock"); card.append(head, big);
@@ -55,16 +65,78 @@
         if (c.mode === "countdown" && ms <= 0) { big.textContent = c.endText || "00:00:00"; big.classList.add("done"); head.classList.add("hide"); return; }
         big.classList.remove("done"); head.classList.remove("hide"); big.textContent = clock(Math.max(0, ms));
       };
-      paint(); clearInterval(tick); tick = setInterval(paint, 250);
+      paint(); timers.push(setInterval(paint, 250));
     }
-    root.replaceChildren(card);
+    return card;
+  }
+
+  let timers = [], sceneTimer = 0;
+  const stopTimers = () => { timers.forEach(clearInterval); timers = []; clearInterval(sceneTimer); sceneTimer = 0; };
+
+  function draw() {
+    if (!state) return;
+    const { kind, config: c, data: d } = state;
+    if (kind === "alerts") return;
+    stopTimers();
+    if (kind === "scene") return drawScene(c, d.children || []);
+    root.replaceChildren(build(kind, c, d, timers));
+  }
+
+  /** A scene shows its overlays one after another in the same spot. */
+  function drawScene(c, kids) {
+    root.replaceChildren();
+    if (!kids.length) return;
+    let i = 0;
+    const show = first => {
+      const k = kids[i % kids.length];
+      timers.forEach(clearInterval); timers = [];
+      const card = build(k.kind, k.config, k.data, timers);
+      card.classList.add("sc", c.transition === "slide" ? "sc-slide" : "sc-fade");
+      const old = root.firstElementChild;
+      if (old && !first) { old.classList.add("sc-out"); setTimeout(() => old.remove(), 450); }
+      else root.replaceChildren();
+      root.append(card);
+      requestAnimationFrame(() => card.classList.add("sc-in"));
+      i++;
+    };
+    show(true);
+    if (kids.length > 1) sceneTimer = setInterval(() => show(false), Math.max(4, c.seconds || 10) * 1000);
+  }
+
+  // ---- alerts: a pop-up for each new member or boost, one at a time ----
+  let since = null, queue = [], busy = false;
+  const ICON = { join: "👋", boost: "🚀" };
+  function pump(c) {
+    if (busy || !queue.length) return;
+    busy = true;
+    const e = queue.shift();
+    const tmpl = e.type === "boost" ? c.boostText : c.joinText;
+    const card = el("div", "card alertcard" + (c.showBorder ? " bordered" : "") + (c.shadow ? " shadow" : ""));
+    look(c, card);
+    const body = el("div", "abody");
+    body.append(el("div", "label", String(tmpl || "").replace(/\{count\}/g, n(e.count)).replace(/\{n\}/g, String(e.by || 1))));
+    if (e.by > 1) body.append(el("div", "nums", "+" + e.by + (e.type === "boost" ? " new boosts" : " new members")));
+    card.append(el("div", "aicon", ICON[e.type] || "✨"), body);
+    const wrap = el("div", "alertwrap " + (c.position === "bottom" ? "bottom" : "top")); wrap.append(card);
+    root.replaceChildren(wrap);
+    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add("in")));
+    setTimeout(() => card.classList.remove("in"), Math.max(3, c.hold || 6) * 1000);
+    setTimeout(() => { root.replaceChildren(); busy = false; pump(c); }, Math.max(3, c.hold || 6) * 1000 + 600);
+  }
+  function onAlerts(j) {
+    const prev = since; since = j.data.seq;
+    if (prev === null) return;
+    queue.push(...(j.data.events || []));
+    if (queue.length > 8) queue.splice(0, queue.length - 8);
+    pump(j.config);
   }
 
   async function load() {
     try {
-      const r = await fetch("/api/ov/data?token=" + encodeURIComponent(q.get("token") || ""), { cache: "no-store" });
+      const r = await fetch("/api/ov/data?token=" + encodeURIComponent(q.get("token") || "") + (since !== null ? "&since=" + since : ""), { cache: "no-store" });
       if (!r.ok) { root.replaceChildren(); return; }
       const j = await r.json(); offset = j.now - Date.now();
+      if (j.kind === "alerts") { state = j; onAlerts(j); poll = setTimeout(load, Math.max(5, Math.min(60, Number(j.config.refresh) || 5)) * 1000); return; }
       const same = state && JSON.stringify(state.data) === JSON.stringify(j.data) && JSON.stringify(state.config) === JSON.stringify(j.config);
       state = j; if (!same) draw();
       poll = setTimeout(load, Math.max(5, Math.min(120, Number(j.config.refresh) || 10)) * 1000);
@@ -74,11 +146,18 @@
   if (demo) {
     // The studio preview: everything comes from the address, nothing is fetched.
     let c = {}, v = {}; try { c = JSON.parse(q.get("c") || "{}"); v = JSON.parse(q.get("v") || "{}"); } catch { /* an empty preview is fine */ }
-    const kind = ["goal", "stats", "timer"].includes(q.get("k")) ? q.get("k") : "goal";
+    const kind = ["goal", "stats", "timer", "alerts", "sale", "scene"].includes(q.get("k")) ? q.get("k") : "goal";
     const target = Math.max(1, Number(c.target) || 100), current = Number(v.current) || 0;
-    const data = kind === "goal" ? { current, target, pct: Math.max(0, Math.min(100, Math.round(current / target * 100))) }
-      : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : { at: c.at, mode: c.mode };
-    state = { kind, config: c, data };
-    draw();
+    if (kind === "alerts") {
+      look(c); let k = 0;
+      const fire = () => { k++; queue.push({ type: k % 2 ? "join" : "boost", count: k % 2 ? 1280 + k : 14 + k, by: 1 }); pump(c); };
+      fire(); setInterval(() => { if (queue.length < 2) fire(); }, Math.max(4, (c.hold || 6) + 2) * 1000);
+    } else {
+      const sale = v.sale || { name: "Steam Winter Sale", start: Date.now() + 6 * 86400_000 + 4 * 3600_000, end: Date.now() + 24 * 86400_000, live: false };
+      const data = kind === "goal" ? { current, target, pct: Math.max(0, Math.min(100, Math.round(current / target * 100))) }
+        : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : kind === "sale" ? sale : kind === "scene" ? { children: Array.isArray(v.children) ? v.children : [] } : { at: c.at, mode: c.mode };
+      state = { kind, config: c, data };
+      draw();
+    }
   } else load();
 })();

@@ -53,3 +53,14 @@ test("deleting a person's data removes their overlays", () => {
     db.deleteUser("a");
     assert.equal(db.listOvs("a").length, 0);
 });
+
+test("overlay settings for alerts, sale and scene stay inside their limits", async () => {
+    const { cleanConfig, SCENE_MAX_ITEMS } = await import("../src/overlays.js");
+    const a = cleanConfig("alerts", { hold: 99, refresh: 1, position: "sideways", joinText: "  Hi\n{count} " });
+    assert.equal(a.hold, 20); assert.equal(a.refresh, 5); assert.equal(a.position, "top"); assert.equal(a.joinText, "Hi {count}");
+    const tok = n => "svcx_" + String(n).padStart(32, "a");
+    const s = cleanConfig("scene", { seconds: 1, transition: "spin", items: [...Array.from({ length: 12 }, (_, i) => tok(i)), tok(0), "nope"] });
+    assert.equal(s.seconds, 4); assert.equal(s.transition, "fade"); assert.equal(s.items.length, SCENE_MAX_ITEMS);
+    assert.equal(new Set(s.items).size, s.items.length);
+    assert.equal(cleanConfig("sale", {}).includeFests, false);
+});

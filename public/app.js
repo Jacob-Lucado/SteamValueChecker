@@ -5621,11 +5621,14 @@ window.SVC_SITE = envIn => {
 
   // Goal bars, server stats and timers for OBS, each with its own link and look, and a live preview that follows every change.
   async function overlaysView() {
-    app.replaceChildren(pageHead("Overlay studio", "Build a goal bar, server stats or a timer, style it, and paste its link into OBS as a Browser source."), h("div", { class: "muted", text: "Loading…" }));
+    app.replaceChildren(pageHead("Overlay studio", "Build a goal bar, server stats, timer, alerts, sale countdown or a rotating scene, style it, and paste its link into OBS as a Browser source."), h("div", { class: "muted", text: "Loading…" }));
     let d;
     try { d = await api("/api/overlays"); } catch (e) { return app.replaceChildren(pageHead("Overlay studio", ""), h("div", { class: "notice warn", text: e.message })); }
-    const KIND = { goal: ["Goal bar", "A progress bar toward a number you pick"], stats: ["Server stats", "Live member and boost counts"], timer: ["Timer", "Count down to a time, or count up from one"] };
-    let sel = d.overlays[0]?.token ?? null, draft = null, frameTimer = 0;
+    const KIND = { goal: ["Goal bar", "A progress bar toward a number you pick"], stats: ["Server stats", "Live member and boost counts"], timer: ["Timer", "Count down to a time, or count up from one"],
+      alerts: ["Alerts", "A pop-up for each new member or boost"], sale: ["Sale countdown", "Counts down to the next big Steam sale"], scene: ["Scene", "One link that rotates through your other overlays"] };
+    const SIZE = { goal: [520, 120], stats: [380, 140], timer: [440, 150], alerts: [900, 150], sale: [480, 180], scene: [520, 180] };
+    const sampleData = (k, cfg, value) => k === "goal" ? { current: cfg.source === "manual" ? Number(value) || 0 : Math.round(cfg.target * 0.6), target: cfg.target, pct: cfg.source === "manual" ? Math.max(0, Math.min(100, Math.round((Number(value) || 0) / cfg.target * 100))) : 60 } : k === "stats" ? { members: 1280, boosts: 14 } : k === "sale" ? { name: "Steam Winter Sale", start: Date.now() + 6 * 86400_000 + 4 * 3600_000, end: Date.now() + 24 * 86400_000, live: false } : { at: cfg.at, mode: cfg.mode };
+    let sel = d.overlays[0]?.token ?? null, draft = null, frameTimer = 0, connTimer = 0;
     const list = h("div", { class: "ovs-list" }), editor = h("div", { class: "ovs-edit" });
     const find = tok => d.overlays.find(o => o.token === tok);
     const pad = v => String(v).padStart(2, "0");
@@ -5635,23 +5638,48 @@ window.SVC_SITE = envIn => {
     function paintList() {
       list.replaceChildren(
         ...d.overlays.map(o => h("button", { type: "button", class: "ovs-item" + (o.token === sel ? " on" : ""), onclick: () => { sel = o.token; paintList(); paintEditor(); } },
-          h("strong", { text: o.name }), h("span", { class: "muted small", text: KIND[o.kind][0] }))),
+          h("strong", { text: (o.seen != null && o.seen < 30_000 ? "● " : "") + o.name }), h("span", { class: "muted small", text: KIND[o.kind][0] + (o.seen != null && o.seen < 30_000 ? " · live in OBS" : "") }))),
         d.overlays.length ? null : h("p", { class: "muted small", text: "Nothing yet. Add one below." }),
         h("div", { class: "ovs-add" }, h("div", { class: "muted small", text: "Add an overlay" }),
           ...d.kinds.map(k => h("button", { type: "button", class: "btn gray small", title: KIND[k][1], text: "+ " + KIND[k][0], onclick: e => busy(e.currentTarget, async () => {
             const cfg = k === "timer" ? { at: Date.now() + 30 * 60_000 } : k === "goal" ? { target: 100 } : {};
-            try { const r = await api("/api/overlays", { action: "create", kind: k, guild_id: k === "stats" ? d.guilds[0]?.id : undefined, config: cfg }); await reload(r.token); }
+            try { const r = await api("/api/overlays", { action: "create", kind: k, guild_id: k === "stats" || k === "alerts" ? d.guilds[0]?.id : undefined, config: cfg }); await reload(r.token); }
             catch (err) { toast(err.message, "error"); }
-          }) }))));
+          }) })),
+          d.overlays.length ? h("div", { class: "ovs-add" }, h("div", { class: "muted small", text: "Get them into OBS" }),
+            h("button", { type: "button", class: "btn blue small", text: "Download an OBS scene", title: "A scene collection with every overlay already placed as a Browser source", onclick: downloadObs }),
+            h("button", { type: "button", class: "btn gray small", text: "Copy all links", onclick: async () => { try { await navigator.clipboard.writeText(d.overlays.map(o => o.name + ": " + o.url).join("\n")); toast("All links copied.", "ok"); } catch { toast("Your browser wouldn't let me copy.", "warn"); } } })) : null));
+    }
+
+    /** An OBS scene collection with each overlay already set up as a Browser source. In OBS: Scene Collection, Import, pick the file. */
+    function downloadObs() {
+      const sources = [], items = []; let y = 20, id = 0;
+      for (const o of d.overlays) {
+        const [w0, h0] = SIZE[o.kind] || [500, 150], sc = o.config.scale || 1, w = Math.round(w0 * sc), hh = Math.round(h0 * sc);
+        const name = "SVC " + o.name; id++;
+        sources.push({ balance: 0.5, deinterlace_field_order: 0, deinterlace_mode: 0, enabled: true, flags: 0, hotkeys: {}, id: "browser_source", mixers: 255, monitoring_type: 0, muted: false, name, prev_ver: 536936448, private_settings: {}, "push-to-mute": false, "push-to-mute-delay": 0, "push-to-talk": false, "push-to-talk-delay": 0, settings: { url: o.url, width: w, height: hh, fps: 30, css: "", shutdown: false, restart_when_active: false, reroute_audio: false }, sync: 0, versioned_id: "browser_source", volume: 1.0 });
+        items.push({ align: 5, blend_method: "default", blend_type: "normal", bounds: { x: 0, y: 0 }, bounds_align: 0, bounds_crop: false, bounds_type: 0, crop_bottom: 0, crop_left: 0, crop_right: 0, crop_top: 0, group_item_backup: false, hide_transition: { duration: 0 }, id, locked: false, name, pos: { x: 20, y }, private_settings: {}, rot: 0, scale: { x: 1, y: 1 }, scale_filter: "disable", scale_ref: { x: 1920, y: 1080 }, show_transition: { duration: 0 }, visible: true });
+        y += hh + 20; if (y > 1000) y = 20;
+      }
+      sources.unshift({ balance: 0.5, deinterlace_field_order: 0, deinterlace_mode: 0, enabled: true, flags: 0, hotkeys: {}, id: "scene", mixers: 0, monitoring_type: 0, muted: false, name: "Steam Value Checker", prev_ver: 536936448, private_settings: {}, "push-to-mute": false, "push-to-mute-delay": 0, "push-to-talk": false, "push-to-talk-delay": 0, settings: { custom_size: false, id_counter: id, items }, sync: 0, versioned_id: "scene", volume: 1.0 });
+      const json = { current_program_scene: "Steam Value Checker", current_scene: "Steam Value Checker", current_transition: "Fade", groups: [], modules: {}, name: "Steam Value Checker", preview_locked: false, quick_transitions: [], saved_projectors: [], scaling_enabled: false, scene_order: [{ name: "Steam Value Checker" }], sources, transition_duration: 300, transitions: [] };
+      const a = h("a", { href: URL.createObjectURL(new Blob([JSON.stringify(json, null, 4)], { type: "application/json" })), download: "Steam-Value-Checker-overlays.json" });
+      document.body.append(a); a.click(); a.remove();
+      toast("Downloaded. In OBS: Scene Collection, Import, then pick the file. This file holds your private links, so keep it to yourself.", "ok");
     }
 
     function paintEditor() {
       const o = find(sel);
       if (!o) { editor.replaceChildren(h("div", { class: "panel" }, h("p", { class: "muted", text: "Pick an overlay on the left, or add a new one." }))); return; }
       draft = { name: o.name, guild_id: o.guild_id, config: { ...o.config }, value: o.value };
+      clearInterval(connTimer);
+      const conn = h("p", { class: "small" });
+      const paintConn = () => { const live = o.seen != null && o.seen < 30_000; conn.textContent = live ? `● Connected. OBS loaded this overlay ${Math.max(1, Math.round(o.seen / 1000)) === 1 ? "a second" : Math.round(o.seen / 1000) + " seconds"} ago.` : o.seen != null ? "○ Not open right now. OBS last loaded it a while ago." : "○ Not connected yet. Paste the link into OBS and this turns green by itself."; conn.style.color = live ? "var(--good, #3ddc97)" : "var(--muted, #94a3b8)"; };
+      paintConn();
+      connTimer = setInterval(async () => { if (!conn.isConnected) return clearInterval(connTimer); try { const r = await api("/api/overlays"); const m = r.overlays.find(x => x.token === o.token); if (m) { o.seen = m.seen; d.overlays.forEach(x => { const y = r.overlays.find(z => z.token === x.token); if (y) x.seen = y.seen; }); paintConn(); paintList(); } } catch { /* try again next time */ } }, 5000);
       const c = draft.config;
       const frame = h("iframe", { class: "ovs-frame", title: "Preview", loading: "lazy" });
-      const sample = () => ({ current: o.kind === "goal" && c.source === "manual" ? draft.value : Math.round(c.target * 0.6), members: 1280, boosts: 14 });
+      const sample = () => ({ current: o.kind === "goal" && c.source === "manual" ? draft.value : Math.round(c.target * 0.6), members: 1280, boosts: 14, children: o.kind === "scene" ? (c.items || []).map(t => find(t)).filter(Boolean).map(k => ({ kind: k.kind, config: k.config, data: sampleData(k.kind, k.config, k.value) })) : undefined });
       const refresh = () => { clearTimeout(frameTimer); frameTimer = setTimeout(() => { frame.src = "/ov?demo=1&k=" + o.kind + "&c=" + encodeURIComponent(JSON.stringify(c)) + "&v=" + encodeURIComponent(JSON.stringify(sample())); }, 120); };
       const row = (label, input) => h("label", { class: "ovs-row" }, h("span", { text: label }), input);
       const text = (key, max, ph) => { const i = h("input", { type: "text", maxlength: String(max), value: c[key] ?? "", placeholder: ph || "" }); i.addEventListener("input", () => { c[key] = i.value; refresh(); }); return i; };
@@ -5661,7 +5689,7 @@ window.SVC_SITE = envIn => {
       const name = h("input", { type: "text", maxlength: "40", value: o.name }); name.addEventListener("input", () => { draft.name = name.value; });
       const server = h("select"); server.append(h("option", { value: "", text: "No server" }), ...d.guilds.map(g => h("option", { value: g.id, text: g.name, selected: g.id === o.guild_id })));
       server.addEventListener("change", () => { draft.guild_id = server.value || null; });
-      const needsServer = o.kind === "stats" || (o.kind === "goal" && c.source !== "manual");
+      const needsServer = o.kind === "stats" || o.kind === "alerts" || (o.kind === "goal" && c.source !== "manual");
 
       const specific = [];
       if (o.kind === "goal") {
@@ -5677,6 +5705,20 @@ window.SVC_SITE = envIn => {
         }
       } else if (o.kind === "stats") {
         specific.push(row("Heading", text("label", 40, "Optional")), check("showMembers", "Show members"), row("Members label", text("membersLabel", 20)), check("showBoosts", "Show boosts"), row("Boosts label", text("boostsLabel", 20)));
+      } else if (o.kind === "alerts") {
+        const pos = select([["top", "Top of the screen"], ["bottom", "Bottom of the screen"]], c.position); pos.addEventListener("change", () => { c.position = pos.value; refresh(); });
+        specific.push(check("showJoins", "Show new members"), row("New member text", text("joinText", 60, "New member! We're at {count}")), check("showBoosts", "Show new boosts"), row("Boost text", text("boostText", 60, "Server boosted! {count} boosts")), row("Seconds on screen", range("hold", 3, 20, 1, "s")), row("Where", pos),
+          h("p", { class: "muted small", text: "{count} is the new total. Alerts show when the bot sees your server's member or boost count go up while the overlay is open." }),
+          h("div", { class: "row" }, h("button", { type: "button", class: "btn gray small", text: "Send a test alert", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/overlays", { action: "test", token: o.token }); toast("Sent. It appears on your stream within a few seconds if OBS has the link open.", "ok"); } catch (err) { toast(err.message, "error"); } }) })));
+      } else if (o.kind === "sale") {
+        specific.push(row("Heading", text("label", 40, "Leave empty to use the sale's name")), check("showDate", "Show the start date"), check("includeFests", "Include festivals like Next Fest"), row("When it starts", text("endText", 40, "The sale is on!")),
+          h("p", { class: "muted small", text: "It counts down to the next Steam sale on Valve's published schedule, then to the end while it runs, and moves on to the next one by itself." }));
+      } else if (o.kind === "scene") {
+        const pickable = d.overlays.filter(x => ["goal", "stats", "timer", "sale"].includes(x.kind));
+        const sec = h("input", { type: "number", min: "4", max: "120", value: String(c.seconds) }); sec.addEventListener("input", () => { c.seconds = Math.max(4, Math.min(120, Number(sec.value) || 10)); refresh(); });
+        const tr = select([["fade", "Fade"], ["slide", "Slide"]], c.transition); tr.addEventListener("change", () => { c.transition = tr.value; refresh(); });
+        specific.push(row("Seconds each", sec), row("Change with", tr), h("div", { class: "muted small", text: "Pick the overlays to rotate through (up to 8). They show in this order, each in its own style." }),
+          ...(pickable.length ? pickable.map(x => { const i = h("input", { type: "checkbox", checked: (c.items || []).includes(x.token) }); i.addEventListener("change", () => { c.items = (c.items || []).filter(t => t !== x.token); if (i.checked) c.items.push(x.token); refresh(); }); return h("label", { class: "ovs-check" }, i, ` ${x.name} (${KIND[x.kind][0]})`); }) : [h("p", { class: "muted small", text: "Add a goal bar, server stats, timer or sale countdown first, then come back." })]));
       } else {
         const mode = select([["countdown", "Count down to a time"], ["countup", "Count up from a time"]], c.mode); mode.addEventListener("change", () => { c.mode = mode.value; refresh(); });
         const at = h("input", { type: "datetime-local", value: toLocal(c.at) }); at.addEventListener("input", () => { const ms = new Date(at.value).getTime(); if (Number.isFinite(ms)) { c.at = ms; refresh(); } });
@@ -5691,13 +5733,13 @@ window.SVC_SITE = envIn => {
       }) });
       editor.replaceChildren(
         h("div", { class: "panel" }, h("h3", { text: KIND[o.kind][0] }), row("Name", name), needsServer ? row("Server", server) : null, ...specific),
-        h("div", { class: "panel" }, h("h3", { text: "Look" }),
+        o.kind === "scene" ? null : h("div", { class: "panel" }, h("h3", { text: "Look" }),
           h("div", { class: "ovs-grid" }, row("Accent", color("accent")), row("Text", color("text")), row("Muted text", color("muted")), row("Background", color("bg")), row("Border", color("border")), row("Font", font)),
           row("Background opacity", range("bgOpacity", 0, 100, 1, "%")), row("Corner radius", range("radius", 0, 40, 1, "px")), row("Padding", range("padding", 4, 48, 1, "px")), row("Size", range("scale", 0.5, 3, 0.1, "×")),
           row("Refresh every", range("refresh", 5, 120, 5, "s")), h("div", { class: "row" }, check("showBorder", "Border"), check("shadow", "Drop shadow"))),
         h("div", { class: "panel" }, h("h3", { text: "Live preview" }), h("div", { class: "ovs-stage" }, frame),
           o.kind !== "timer" && (o.kind === "stats" || c.source !== "manual") ? h("p", { class: "muted small", text: "The preview uses sample numbers. On stream it shows your real ones." }) : null),
-        h("div", { class: "panel" }, h("h3", { text: "OBS link" }), h("p", { class: "muted small", text: "In OBS: Sources, Add, Browser. Paste this as the URL, set the width and height to fit, and leave the background transparent. Keep the link private." }),
+        h("div", { class: "panel" }, h("h3", { text: "OBS link" }), conn, h("p", { class: "muted small", text: "In OBS: Sources, Add, Browser. Paste this as the URL, set the width and height to fit, and leave the background transparent. Keep the link private." }),
           h("div", { class: "row" }, url, h("button", { type: "button", class: "btn gray", text: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(o.url); toast("Link copied.", "ok"); } catch { url.select(); toast("Select the link and copy it by hand.", "warn"); } } })),
           h("div", { class: "row" }, save,
             h("button", { type: "button", class: "btn gray", text: "New link", title: "The old link stops working", onclick: e => busy(e.currentTarget, async () => { if (!confirm("Make a new link? The old one stops working, so you'll need to paste the new one into OBS.")) return; try { const r = await api("/api/overlays", { action: "reset", token: o.token }); await reload(r.token); toast("New link made.", "ok"); } catch (err) { toast(err.message, "error"); } }) }),

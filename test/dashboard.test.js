@@ -3899,3 +3899,37 @@ test("the Winter Sale prep page is public and links to the bot", async () => {
         assert.match(r.text, /invite\?src=winter-sale/);
     } finally { await t.close(); }
 });
+
+test("overlay studio: alerts show new members and boosts, a scene rotates your overlays, the sale countdown follows the calendar", async () => {
+    let members = 100, boosts = 5;
+    const o = await signedIn({ extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members, boosts }] } });
+    try {
+        const mk = body => o.request("/api/overlays", { method: "POST", body });
+        const data = async (token, since) => (await fetch(o.base + "/api/ov/data?token=" + token + (since !== undefined ? "&since=" + since : ""))).json();
+        assert.equal((await mk({ action: "create", kind: "alerts" })).status, 400, "alerts need a server");
+        const al = (await mk({ action: "create", kind: "alerts", guild_id: "g-admin" })).data.token;
+        const first = await data(al);
+        assert.deepEqual(first.data.events, [], "the first look only takes a baseline");
+        members = 103; boosts = 6;
+        const next = await data(al, first.data.seq);
+        assert.deepEqual(next.data.events.map(e => [e.type, e.count, e.by]), [["join", 103, 3], ["boost", 6, 1]]);
+        assert.deepEqual((await data(al, next.data.seq)).data.events, [], "nothing is shown twice");
+        // a test alert goes to that link only
+        assert.equal((await mk({ action: "test", token: al })).status, 200);
+        const t = await data(al, next.data.seq);
+        assert.equal(t.data.events.length, 1);
+        const goal = (await mk({ action: "create", kind: "goal" })).data.token;
+        assert.equal((await mk({ action: "test", token: goal })).status, 400);
+        // seen
+        assert.ok((await o.request("/api/overlays")).data.overlays.find(x => x.token === al).seen < 5000, "the studio can tell the link is open");
+        // sale
+        const sale = (await mk({ action: "create", kind: "sale" })).data.token;
+        const sj = await data(sale);
+        assert.equal(sj.kind, "sale"); assert.ok("name" in sj.data);
+        // scene
+        const scene = (await mk({ action: "create", kind: "scene", config: { items: [goal, sale, al, "svcx_" + "z".repeat(32)], seconds: 3 } })).data.token;
+        const sc = await data(scene);
+        assert.deepEqual(sc.data.children.map(c => c.kind), ["goal", "sale"], "alerts and unknown links are left out");
+        assert.equal(sc.config.seconds, 4, "no faster than four seconds");
+    } finally { await o.close(); }
+});
