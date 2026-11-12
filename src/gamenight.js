@@ -134,7 +134,7 @@ export function pollTally(state) {
 export function pollEmbed(state, now = Date.now()) {
     const counts = pollTally(state), total = counts.reduce((a, b) => a + b, 0), open = now <= state.until, top = Math.max(...counts);
     const lines = state.options.map((o, i) => `${counts[i] === top && top > 0 ? "🏆" : "▫️"} **${o.title}**: ${counts[i]} vote${counts[i] === 1 ? "" : "s"}`);
-    return { color: 0xff9800, title: "What should we play?", description: `${lines.join("\n")}\n\n${total} vote${total === 1 ? "" : "s"} so far. ${open ? "Tap a game to vote. You can change your vote." : "Voting is closed."}`, footer: { text: "Games everyone in the voice channel owns  •  Voting stays open for 6 hours" } };
+    return { color: 0xff9800, title: state.question || "What should we play?", description: `${lines.join("\n")}\n\n${total} vote${total === 1 ? "" : "s"} so far. ${open ? "Tap a game to vote. You can change your vote." : "Voting is closed."}`, footer: { text: "Games everyone in the voice channel owns  •  Voting stays open for 6 hours" } };
 }
 
 export const pollButtons = (options, open = true) => {

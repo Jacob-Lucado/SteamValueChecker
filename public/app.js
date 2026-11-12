@@ -5625,8 +5625,8 @@ window.SVC_SITE = envIn => {
     let d;
     try { d = await api("/api/overlays"); } catch (e) { return app.replaceChildren(pageHead("Overlay studio", ""), h("div", { class: "notice warn", text: e.message })); }
     const KIND = { goal: ["Goal bar", "A progress bar toward a number you pick"], stats: ["Server stats", "Live member and boost counts"], timer: ["Timer", "Count down to a time, or count up from one"],
-      alerts: ["Alerts", "A pop-up for each new member or boost"], board: ["Leaderboard", "Your server's top XP members"], playing: ["Who is playing", "Members playing a game right now"], sale: ["Sale countdown", "Counts down to the next big Steam sale"], scene: ["Scene", "One link that rotates through your other overlays"] };
-    const SIZE = { board: [420, 330], playing: [460, 220], goal: [520, 120], stats: [380, 140], timer: [440, 150], alerts: [900, 150], sale: [480, 180], scene: [520, 180] };
+      alerts: ["Alerts", "A pop-up for each new member or boost"], board: ["Leaderboard", "Your server's top XP members"], poll: ["Poll", "Ask your Discord a question and show the votes live"], playing: ["Who is playing", "Members playing a game right now"], sale: ["Sale countdown", "Counts down to the next big Steam sale"], scene: ["Scene", "One link that rotates through your other overlays"] };
+    const SIZE = { poll: [460, 280], board: [420, 330], playing: [460, 220], goal: [520, 120], stats: [380, 140], timer: [440, 150], alerts: [900, 150], sale: [480, 180], scene: [520, 180] };
     const sampleData = (k, cfg, value) => k === "goal" ? { current: cfg.source === "manual" ? Number(value) || 0 : Math.round(cfg.target * 0.6), target: cfg.target, pct: cfg.source === "manual" ? Math.max(0, Math.min(100, Math.round((Number(value) || 0) / cfg.target * 100))) : 60 } : k === "stats" ? { members: 1280, boosts: 14 } : k === "board" ? { rows: [["Alex", 12, 4210], ["Sam", 9, 2890], ["Riley", 7, 1760], ["Jo", 5, 940], ["Kai", 3, 410]].slice(0, cfg.limit || 5).map(([name, level, xp]) => ({ name, level, xp })) } : k === "playing" ? { games: [{ game: "Deep Rock Galactic", count: 4, names: ["Alex", "Sam", "Riley"] }, { game: "Hades II", count: 1, names: ["Jo"] }] } : k === "sale" ? { name: "Steam Winter Sale", start: Date.now() + 6 * 86400_000 + 4 * 3600_000, end: Date.now() + 24 * 86400_000, live: false } : { at: cfg.at, mode: cfg.mode };
     let sel = d.overlays[0]?.token ?? null, draft = null, frameTimer = 0, connTimer = 0;
     const list = h("div", { class: "ovs-list" }), editor = h("div", { class: "ovs-edit" });
@@ -5643,7 +5643,7 @@ window.SVC_SITE = envIn => {
         h("div", { class: "ovs-add" }, h("div", { class: "muted small", text: "Add an overlay" }),
           ...d.kinds.map(k => h("button", { type: "button", class: "btn gray small", title: KIND[k][1], text: "+ " + KIND[k][0], onclick: e => busy(e.currentTarget, async () => {
             const cfg = k === "timer" ? { at: Date.now() + 30 * 60_000 } : k === "goal" ? { target: 100 } : {};
-            try { const r = await api("/api/overlays", { action: "create", kind: k, guild_id: ["stats", "alerts", "board", "playing"].includes(k) ? d.guilds[0]?.id : undefined, config: cfg }); await reload(r.token); }
+            try { const r = await api("/api/overlays", { action: "create", kind: k, guild_id: ["stats", "alerts", "board", "playing", "poll"].includes(k) ? d.guilds[0]?.id : undefined, config: cfg }); await reload(r.token); }
             catch (err) { toast(err.message, "error"); }
           }) })),
           d.overlays.length ? h("div", { class: "ovs-add" }, h("div", { class: "muted small", text: "Get them into OBS" }),
@@ -5689,7 +5689,7 @@ window.SVC_SITE = envIn => {
       const name = h("input", { type: "text", maxlength: "40", value: o.name }); name.addEventListener("input", () => { draft.name = name.value; });
       const server = h("select"); server.append(h("option", { value: "", text: "No server" }), ...d.guilds.map(g => h("option", { value: g.id, text: g.name, selected: g.id === o.guild_id })));
       server.addEventListener("change", () => { draft.guild_id = server.value || null; });
-      const needsServer = ["stats", "alerts", "board", "playing"].includes(o.kind) || (o.kind === "goal" && c.source !== "manual");
+      const needsServer = ["stats", "alerts", "board", "playing", "poll"].includes(o.kind) || (o.kind === "goal" && c.source !== "manual");
 
       const specific = [];
       if (o.kind === "goal") {
@@ -5710,6 +5710,17 @@ window.SVC_SITE = envIn => {
         specific.push(check("showJoins", "Show new members"), check("showNames", "Show their name and picture"), row("New member text", text("joinText", 60, "Welcome {name}! We're at {count}")), check("showBoosts", "Show new boosts"), row("Boost text", text("boostText", 60, "{name} boosted the server! {count} boosts")), row("Seconds on screen", range("hold", 3, 20, 1, "s")), row("Where", pos),
           h("p", { class: "muted small", text: "{name} is the person, {count} is the new total. Alerts show as people join or boost while the overlay is open." }),
           h("div", { class: "row" }, h("button", { type: "button", class: "btn gray small", text: "Send a test alert", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/overlays", { action: "test", token: o.token }); toast("Sent. It appears on your stream within a few seconds if OBS has the link open.", "ok"); } catch (err) { toast(err.message, "error"); } }) })));
+      } else if (o.kind === "poll") {
+        const q = h("input", { type: "text", maxlength: "120", placeholder: "What should we play next?" });
+        const opts = h("textarea", { rows: "4", placeholder: "One option per line (2 to 5)", maxlength: "400" });
+        const mins = select([["1", "1 minute"], ["2", "2 minutes"], ["5", "5 minutes"], ["10", "10 minutes"], ["30", "30 minutes"], ["60", "1 hour"]], "5");
+        const chan = h("select"); chan.append(h("option", { value: "", text: o.guild_id ? "Loading channels…" : "Pick a server above, save, then choose a channel" }));
+        if (o.guild_id) api("/api/overlays/channels?guild=" + encodeURIComponent(o.guild_id)).then(r => { chan.replaceChildren(h("option", { value: "", text: "Choose a channel" }), ...r.channels.map(ch => h("option", { value: ch.id, text: "#" + ch.name }))); }).catch(e => { chan.replaceChildren(h("option", { value: "", text: e.message })); });
+        specific.push(check("showPercent", "Show percentages"), h("div", { class: "muted small", text: "Start a poll: the bot posts it in the channel you pick with a button for each option. Members vote there and the bars move on stream." }),
+          row("Question", q), row("Options", opts), row("Open for", mins), row("Post it in", chan),
+          h("div", { class: "row" },
+            h("button", { type: "button", class: "btn blue small", text: o.config.pollId ? "Start a new poll" : "Start the poll", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/overlays", { action: "poll", token: o.token, question: q.value, options: opts.value.split("\n"), minutes: Number(mins.value), channel_id: chan.value }); toast("Poll posted. The bars show on stream within seconds.", "ok"); await reload(o.token); } catch (err) { toast(err.message, "error"); } }) }),
+            o.config.pollId ? h("button", { type: "button", class: "btn gray small", text: "End it now", onclick: e => busy(e.currentTarget, async () => { try { await api("/api/overlays", { action: "endpoll", token: o.token }); toast("Voting closed.", "ok"); } catch (err) { toast(err.message, "error"); } }) }) : null));
       } else if (o.kind === "board") {
         const lim = h("input", { type: "number", min: "3", max: "10", value: String(c.limit) }); lim.addEventListener("input", () => { c.limit = Math.max(3, Math.min(10, Number(lim.value) || 5)); refresh(); });
         specific.push(row("Heading", text("label", 40, "Top members")), row("How many", lim), check("showLevel", "Show levels"), h("p", { class: "muted small", text: "Ranks your server's members by the XP they earn from chatting (turn XP on under Servers, Community). Names are the ones people use in your server." }));

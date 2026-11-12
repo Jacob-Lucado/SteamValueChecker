@@ -47,3 +47,9 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 .ov .row .rank { width: 22px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
 .ov .row .who { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
 .ov .row .val { color: var(--muted); font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ov .bars { display: grid; gap: 12px; min-width: 360px; }
+.ov .bartop { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 4px; font-size: 17px; font-weight: 600; }
+.ov .bartop .val { color: var(--muted); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; }
+.ov .bar .track { height: 12px; }
+.ov .bar.win .fill { background: linear-gradient(90deg, #3ddc97, #8af0c2); }
+.ov .bar.win .who::before { content: "🏆 "; }

@@ -50,6 +50,7 @@ import { parseHost, stepsOf, parseSteps, StepError, STEP_KINDS } from "../gwpart
 import { HELP, ABOUT, PRIVACY } from "../text.js";
 import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
+import { pollEmbed, pollButtons } from "../gamenight.js";
 import { nextSeq, currentSeq, hasNamedFeed, overlayEventsFor } from "../ovfeed.js";
 import { overlayData, OVERLAY_KINDS, OVERLAY_FONTS, MAX_SUPPORTER_OVERLAYS, SCENE_KINDS } from "../overlays.js";
 import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
@@ -397,7 +398,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const overlayLimit = createLimiter({ windowMs: 60_000, max: 120, now });
     // Studio overlays: when each link was last opened (so the studio can say "connected"), and the live feed the alerts overlay reads.
     // The feed is worked out from member and boost counts every time an overlay asks, so nothing runs while nobody is streaming.
-    const ovSeen = new Map(), ovFeed = new Map(), ovTest = new Map();
+    const ovSeen = new Map(), ovFeed = new Map(), ovTest = new Map(), ovPolls = new Map();
     function feedFor(guildId, g) {
         if (!guildId || !g) return { ev: [] };
         let f = ovFeed.get(guildId);
@@ -419,6 +420,10 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (o.kind === "board" && o.guild_id) {
                 const top = db.xpTop(o.guild_id, o.config.limit);
                 data = { rows: await Promise.all(top.map(async r => ({ name: await nameOf(r.user_id), level: r.level, xp: r.xp }))) };
+            } else if (o.kind === "poll") {
+                let st = null; try { st = o.config.pollId ? JSON.parse(db.getMeta(`poll:${o.config.pollId}`) || "null") : null; } catch { st = null; }
+                if (st) { const counts = st.options.map(() => 0); for (const v of Object.values(st.votes ?? {})) if (counts[v] !== undefined) counts[v]++; data = { on: true, question: st.question || "What should we play?", open: now() <= st.until, until: st.until, total: counts.reduce((a, b) => a + b, 0), options: st.options.map((x, i) => ({ title: x.title, count: counts[i] })) }; }
+                else data = { on: false };
             } else if (o.kind === "playing" && o.guild_id) {
                 const r = nowPlaying?.enabled ? await whoIsPlaying(db, nowPlaying, o.guild_id) : { games: [] };
                 data = { games: await Promise.all(r.games.slice(0, o.config.limit).map(async x => ({ game: x.game, count: x.players.length, names: await Promise.all(x.players.slice(0, 3).map(p => nameOf(p.userId))) }))) };
@@ -1488,7 +1493,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "POST /api/overlays": async (req, body) => {
             const s = session(req), action = String(body.action ?? "");
             const guildId = body.guild_id ? String((await streamAccess(s, body.guild_id)).id) : null;
-            const wants = (kind, cfg) => kind === "stats" || kind === "alerts" || kind === "board" || kind === "playing" || (kind === "goal" && ["members", "boosts"].includes(cfg?.source));
+            const wants = (kind, cfg) => kind === "stats" || kind === "alerts" || kind === "board" || kind === "playing" || kind === "poll" || (kind === "goal" && ["members", "boosts"].includes(cfg?.source));
             try {
                 if (action === "create") {
                     if (!OVERLAY_KINDS.includes(body.kind)) throw new HttpError(400, "Pick an overlay type.");
@@ -1500,7 +1505,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 if (action === "save") {
                     const cfg = body.config ?? mine.config;
                     if (wants(mine.kind, cfg) && !(guildId ?? mine.guild_id)) throw new HttpError(400, "Pick a server for this overlay.");
-                    db.updateOv(s.userId, mine.token, { name: body.name, guildId: body.guild_id === undefined ? undefined : guildId, config: body.config, value: body.value });
+                    db.updateOv(s.userId, mine.token, { name: body.name, guildId: body.guild_id === undefined ? undefined : guildId, config: body.config ? { ...body.config, pollId: body.config.pollId ?? mine.config.pollId } : body.config, value: body.value });
                     return { ok: true };
                 }
                 if (action === "bump") { db.updateOv(s.userId, mine.token, { value: Math.max(0, Number(mine.value) + Math.max(-1_000_000, Math.min(1_000_000, Number(body.by) || 0))) }); return { value: db.ovById(s.userId, mine.token).value }; }
@@ -1510,10 +1515,38 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                     ovTest.set(mine.token, list.slice(-5));
                     return { ok: true, seen: ovSeen.has(mine.token) ? now() - ovSeen.get(mine.token) : null };
                 }
+                if (action === "poll") {
+                    if (mine.kind !== "poll" || !mine.guild_id) throw new HttpError(400, "Pick a server for this poll first.");
+                    const question = String(body.question ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+                    const options = (Array.isArray(body.options) ? body.options : []).map(x => String(x ?? "").replace(/\s+/g, " ").trim().slice(0, 60)).filter(Boolean).slice(0, 5);
+                    const minutes = [1, 2, 5, 10, 30, 60].includes(Number(body.minutes)) ? Number(body.minutes) : 5;
+                    if (!question) throw new HttpError(400, "Write the question first.");
+                    if (options.length < 2) throw new HttpError(400, "Give at least two options.");
+                    const channels = await rest.listChannels(mine.guild_id).catch(() => { throw new HttpError(400, "The bot can't see that server right now."); });
+                    if (!channels.some(c => String(c.id) === String(body.channel_id))) throw new HttpError(400, "Pick a channel to post the poll in.");
+                    const state = { question, options: options.map(title => ({ title })), votes: {}, until: now() + minutes * 60_000 };
+                    let sent; try { sent = await rest.sendMessage(String(body.channel_id), { embeds: [pollEmbed(state, now())], components: pollButtons(state.options), allowed_mentions: { parse: [] } }); } catch { throw new HttpError(400, "I couldn't post there. Check that the bot can send messages in that channel."); }
+                    if (!sent?.id) throw new HttpError(400, "I couldn't post there.");
+                    db.setMeta(`poll:${sent.id}`, JSON.stringify(state));
+                    try { db.prunePolls(); } catch { /* old votes can wait */ }
+                    db.updateOv(s.userId, mine.token, { config: { ...mine.config, pollId: String(sent.id) } });
+                    ovPolls.set(mine.token, { channel: String(body.channel_id), id: String(sent.id) });
+                    return { ok: true, pollId: String(sent.id) };
+                }
+                if (action === "endpoll") {
+                    const st = mine.config.pollId ? JSON.parse(db.getMeta(`poll:${mine.config.pollId}`) || "null") : null;
+                    if (st) { st.until = now() - 1; db.setMeta(`poll:${mine.config.pollId}`, JSON.stringify(st)); const at = ovPolls.get(mine.token); if (at && at.id === mine.config.pollId) { try { await rest.editMessage?.(at.channel, at.id, { embeds: [pollEmbed(st, now())], components: pollButtons(st.options, false) }); } catch { /* the next click closes it anyway */ } } }
+                    return { ok: true };
+                }
                 if (action === "reset") return { token: db.resetOvToken(s.userId, mine.token) };
                 if (action === "delete") { db.removeOv(s.userId, mine.token); return { ok: true }; }
             } catch (e) { if (e instanceof HttpError) throw e; throw new HttpError(400, e.message || "That didn't work."); }
             throw new HttpError(400, "Unknown action.");
+        },
+        "GET /api/overlays/channels": async (req, _b, url) => {
+            const s = session(req);
+            await streamAccess(s, String(url.searchParams.get("guild") ?? ""));
+            try { return { channels: await rest.listChannels(String(url.searchParams.get("guild"))) }; } catch { throw new HttpError(400, "The bot can't see that server right now."); }
         },
         // What the OBS page asks for every few seconds. Only the chosen look and the numbers on screen, nothing about the owner.
         "GET /api/ov/data": async (req, _b, url) => {

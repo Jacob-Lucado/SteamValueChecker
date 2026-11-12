@@ -45,6 +45,21 @@
       if (c.showBoosts && d.boosts != null) { const t = el("div", "tile accent"); t.append(el("b", "", n(d.boosts)), el("span", "", c.boostsLabel)); tiles.append(t); }
       if (!tiles.children.length) tiles.append(el("div", "nums", "Nothing to show yet"));
       card.append(tiles);
+    } else if (kind === "poll") {
+      const head = el("div", "head"); head.append(el("div", "label", d.on ? d.question : "No poll running")); card.append(head);
+      if (d.on) {
+        const top = Math.max(0, ...d.options.map(o => o.count)), rows = el("div", "bars");
+        d.options.forEach(o => {
+          const pct = d.total ? Math.round(o.count / d.total * 100) : 0, row = el("div", "bar" + (!d.open && o.count === top && top > 0 ? " win" : ""));
+          const top2 = el("div", "bartop"); top2.append(el("span", "who", o.title), el("span", "val", o.count + (c.showPercent ? " · " + pct + "%" : "")));
+          const track = el("div", "track"), fill = el("div", "fill"); track.append(fill); row.append(top2, track); rows.append(row);
+          requestAnimationFrame(() => { fill.style.width = pct + "%"; });
+        });
+        card.append(rows);
+        const foot = el("div", "pct"); foot.style.textAlign = "left";
+        const paint = () => { const ms = d.until - (Date.now() + offset); foot.textContent = d.total + (d.total === 1 ? " vote" : " votes") + (d.open && ms > 0 ? " · " + clock(ms).replace(/^00:/, "") + " left" : " · voting closed"); };
+        paint(); timers.push(setInterval(paint, 1000)); card.append(foot);
+      } else card.append(el("div", "nums", "Start one in the Overlay studio"));
     } else if (kind === "board") {
       const head = el("div", "head"); head.append(el("div", "label", c.label || "Top members")); card.append(head);
       const rows = el("div", "rows");
@@ -162,7 +177,7 @@
   if (demo) {
     // The studio preview: everything comes from the address, nothing is fetched.
     let c = {}, v = {}; try { c = JSON.parse(q.get("c") || "{}"); v = JSON.parse(q.get("v") || "{}"); } catch { /* an empty preview is fine */ }
-    const kind = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing"].includes(q.get("k")) ? q.get("k") : "goal";
+    const kind = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll"].includes(q.get("k")) ? q.get("k") : "goal";
     const target = Math.max(1, Number(c.target) || 100), current = Number(v.current) || 0;
     if (kind === "alerts") {
       look(c); let k = 0;
@@ -171,7 +186,7 @@
     } else {
       const sale = v.sale || { name: "Steam Winter Sale", start: Date.now() + 6 * 86400_000 + 4 * 3600_000, end: Date.now() + 24 * 86400_000, live: false };
       const data = kind === "goal" ? { current, target, pct: Math.max(0, Math.min(100, Math.round(current / target * 100))) }
-        : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : kind === "sale" ? sale : kind === "board" ? { rows: [["Alex", 12, 4210], ["Sam", 9, 2890], ["Riley", 7, 1760], ["Jo", 5, 940], ["Kai", 3, 410]].slice(0, Math.max(3, Number(c.limit) || 5)).map(([name, level, xp]) => ({ name, level, xp })) } : kind === "playing" ? { games: [{ game: "Deep Rock Galactic", count: 4, names: ["Alex", "Sam", "Riley"] }, { game: "Hades II", count: 1, names: ["Jo"] }] } : kind === "scene" ? { children: Array.isArray(v.children) ? v.children : [] } : { at: c.at, mode: c.mode };
+        : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : kind === "sale" ? sale : kind === "poll" ? { on: true, question: "What should we play next?", open: true, until: Date.now() + 240000, total: 24, options: [{ title: "Deep Rock Galactic", count: 11 }, { title: "Hades II", count: 8 }, { title: "Balatro", count: 5 }] } : kind === "board" ? { rows: [["Alex", 12, 4210], ["Sam", 9, 2890], ["Riley", 7, 1760], ["Jo", 5, 940], ["Kai", 3, 410]].slice(0, Math.max(3, Number(c.limit) || 5)).map(([name, level, xp]) => ({ name, level, xp })) } : kind === "playing" ? { games: [{ game: "Deep Rock Galactic", count: 4, names: ["Alex", "Sam", "Riley"] }, { game: "Hades II", count: 1, names: ["Jo"] }] } : kind === "scene" ? { children: Array.isArray(v.children) ? v.children : [] } : { at: c.at, mode: c.mode };
       state = { kind, config: c, data };
       draw();
     }

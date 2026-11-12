@@ -3973,3 +3973,27 @@ test("overlay studio: a leaderboard ranks server XP with names, and works inside
         assert.deepEqual((await data(scene)).data.children.map(c => c.kind), ["board", "playing"]);
     } finally { await o.close(); }
 });
+
+test("overlay studio: a poll is posted by the bot and its votes show on the overlay", async () => {
+    const posted = [];
+    const o = await signedIn({ restExtra: { sendMessage: async (id, p) => { posted.push([id, p]); return { id: "998877665544" }; }, editMessage: async () => ({}) }, extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members: 10, boosts: 0 }] } });
+    try {
+        const mk = body => o.request("/api/overlays", { method: "POST", body });
+        const data = async token => (await fetch(o.base + "/api/ov/data?token=" + token)).json();
+        const poll = (await mk({ action: "create", kind: "poll", guild_id: "g-admin" })).data.token;
+        assert.equal((await data(poll)).data.on, false);
+        assert.equal((await mk({ action: "poll", token: poll, question: "", options: ["a", "b"], channel_id: "c1" })).status, 400);
+        assert.equal((await mk({ action: "poll", token: poll, question: "Next?", options: ["only one"], channel_id: "c1" })).status, 400);
+        assert.equal((await mk({ action: "poll", token: poll, question: "Next?", options: ["A", "B"], channel_id: "nope" })).status, 400, "only a channel the bot can see");
+        assert.equal((await mk({ action: "poll", token: poll, question: "Next game?", options: ["Hades", "Balatro", ""], minutes: 5, channel_id: "c1" })).status, 200);
+        assert.equal(posted.length, 1); assert.equal(posted[0][0], "c1"); assert.match(posted[0][1].embeds[0].title, /Next game\?/);
+        assert.equal(posted[0][1].components[0].components.length, 2);
+        o.db.setMeta("poll:998877665544", JSON.stringify({ question: "Next game?", options: [{ title: "Hades" }, { title: "Balatro" }], votes: { a: 0, b: 0, c: 1 }, until: 5_000_000 })); // the test clock is fake, so the real-time prune had cleared the original
+        const j = await data(poll);
+        assert.equal(j.data.on, true); assert.equal(j.data.total, 3); assert.deepEqual(j.data.options.map(x => x.count), [2, 1]);
+        assert.equal((await mk({ action: "endpoll", token: poll })).status, 200);
+        assert.equal((await data(poll)).data.open, false);
+        const channels = await o.request("/api/overlays/channels?guild=g-admin");
+        assert.equal(channels.status, 200); assert.ok(channels.data.channels.length);
+    } finally { await o.close(); }
+});
