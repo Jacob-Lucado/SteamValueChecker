@@ -183,7 +183,11 @@ Run it in (or point it at) a voice channel. It looks at who is in the channel an
 ### Community: a full gaming server (`/manage community`, `/server rank`, `/server levels`, `/server invites`, `/manage emoji`)
 - **Fresh server setup.** When the bot is added to a brand-new server (only Discord's default channels) it builds the usual gaming community straight away and DMs the owner a summary: categories for Information (`#welcome`, `#rules`, `#announcements`, `#roles`), Community (`#general`, `#introductions`, `#memes`, `#clips-and-screenshots`, `#off-topic`, `#bot-commands`), Gaming (`#looking-for-group`, `#game-chat`, `#game-night`, `#wishlists-and-deals`), Deals and Giveaways (`#deal-alerts`, `#giveaways`, `#vouches`), Music (`#music-commands`, which gets an intro post listing every music command, and two Music voice channels; now-playing posts go there), Voice (Lobby, three Gaming rooms, Chill, AFK) and a private Staff area (`#staff-chat`, `#mod-log`, `#support-tickets`, `#bot-logs`). It also makes Moderator, Member, Regular, Veteran and Legend roles, a role picker (platforms and ping roles), posts the rules and a welcome, and connects the bot's own features. A server that already has channels is not touched until a manager runs **`/manage community setup`** (or **Build my server** on the dashboard's Community page); running it again only adds what is missing.
 - **Bot status.** Under its name the bot rotates every 30 seconds through how many servers it is in, how many members, how many players it watches deals for, its uptime, a few commands to try and your X link (`CREATOR_X_URL`). Set `PRESENCE=off` to turn it off. Discord's Rich Presence images and Ask to Join are for games; bots only get a status line, so this is text.
-- **Moderation (`/mod`).** `warn`, `warnings`, `clearwarns`, `timeout` (1 minute to 28 days), `untimeout`, `kick`, `ban` (optionally deleting 0-7 days of messages), `unban`, `purge` (up to 100 messages newer than 14 days, optionally one person's), `cases` and `log`. Each needs the matching Discord permission (Moderate Members, Kick Members, Ban Members, Manage Messages; `log` needs Manage Server). Every action is saved as a numbered case, posted to the mod log (`#mod-log` in a built server; older servers keep using their log channel until one is chosen), and warned, timed-out, kicked and banned members get a private message. Nobody can act on themselves, the owner, the bot, or anyone whose top role is at or above theirs, and the bot's role has to be above the target. The dashboard's **Moderation** page does the same, needs the same permissions, and shows the case log.
+- **Moderation (`/mod`).** `warn`, `warnings`, `clearwarns`, `timeout` (1 minute to 28 days), `untimeout`, `kick`, `ban` (optionally deleting 0-7 days of messages), `unban`, `purge` (up to 100 messages newer than 14 days, optionally one person's), `note`, `slowmode`, `lock`, `unlock`, `automod`, `cases` and `log`. Each needs the matching Discord permission (Moderate Members, Kick Members, Ban Members, Manage Messages; `slowmode`, `lock` and `unlock` need Manage Channels; `log` needs Manage Server). Every action is saved as a numbered case, posted to the mod log (`#mod-log` in a built server; older servers keep using their log channel until one is chosen), and warned, timed-out, kicked and banned members get a private message. Nobody can act on themselves, the owner, the bot, or anyone whose top role is at or above theirs, and the bot's role has to be above the target. The dashboard's **Moderation** page does the same, needs the same permissions, and shows the case log.
+- **Auto-moderator (`/mod automod`, dashboard Moderation page).** Off until a server turns it on. Rules: message spam, mass mentions, Discord invite links, links outside an allow-list, blocked words and too many capitals. A message that breaks a rule is deleted and the person can be warned or timed out; each hit is logged as a case. Staff, exempt roles and exempt channels are never touched. **Escalation** acts on its own after a chosen number of active warnings (timeout, kick or ban). **Raid guard** times out or kicks each newcomer when a burst of accounts joins within seconds (optionally only brand-new accounts). The content rules need the Message Content intent (see Setup); the raid guard does not. Settings are one JSON value per server (`automod:<guildId>` in the meta table), cleaned by `cleanAutomod` in `src/automod.js`; the dashboard reads and saves them at `GET/POST /api/mod/automod`.
+- **Mod tools.** `/mod note` saves a private staff note that never reaches the member, `/mod slowmode` sets a channel's slowmode, and `/mod lock` and `/mod unlock` stop or allow @everyone from sending in a channel (`src/moderation.js`). All are numbered cases and appear in the dashboard's action list.
+- **Needs your attention.** When the bot cannot do something in a server because of a missing permission or a role set too high (give a role, post the welcome message, write to the mod log, post a meme, trivia, leaderboard, go-live, trap or giveaway message), it keeps a short note per server (`src/guildproblems.js`, meta key `gprob:<guildId>`, at most 12, repeats throttled to once a minute). The dashboard's Community page shows them with a Dismiss button (`POST /api/community/problems/clear`).
+- **Auto memes.** Every hour (or the server's pick) one meme goes in `#memes`, from a short list of real meme subreddits only (`MEME_SUBS` in `src/memes.js`), with at least 500 upvotes, nothing NSFW or spoiler, nothing that looks like a photo, question or showcase, and never the same post twice per server.
 - **Steam Verified.** A new server gets a Steam Verified role and a `#verify` channel with a button. Members sign in through Steam first, then press it (or run `/me steam verify`). The Steam page also offers **Linked Roles** as an extra option: their Steam shows on their Discord profile, and a server admin can require it for a role (Server Settings, Roles, the role, Links; Discord has no bot API for that step). Normal linking is unchanged. If the bot cannot set the Linked Roles Verification URL itself, set it to `<PUBLIC_URL>/auth/linked` in the Developer Portal. Administrator is not required; Manage Roles is enough.
 - **Welcome messages.** New members are greeted in `#welcome` with their avatar, member number and who invited them (`/manage community welcome` sets the channel, text with `{user} {username} {server} {count} {inviter}`, an optional private welcome and leave notes). `/manage community autorole` gives every new member a role.
 - **Levels and XP.** Members earn 15-25 XP per message (once a minute) and 5 XP a minute in voice with others. `/server rank` shows level, progress and place, `/server levels` the top ten. `/manage community xp` sets speed and where level-ups are announced, `/manage community levelrole` gives a role at a level.
@@ -254,7 +258,7 @@ A bundle price works as a single `paid` total. For per-game amounts, add a `Paid
 
 You need Node 22.13 or newer (the bot uses Node's built-in SQLite), a Discord application, and an IsThereAnyDeal API key.
 
-1. **Create the Discord app** at the [Developer Portal](https://discord.com/developers/applications). Add a Bot, copy its token, and leave every Privileged Gateway Intent off. The bot only uses slash commands.
+1. **Create the Discord app** at the [Developer Portal](https://discord.com/developers/applications). Add a Bot and copy its token. Every Privileged Gateway Intent is optional: **Server Members** powers welcome messages, invite tracking and the raid guard; **Message Content** powers the auto-moderator's content rules, "Hey AI" and chat voting. The bot checks at startup and runs without whichever is off. Slash commands need none.
 2. **Get an ITAD key** at [isthereanydeal.com/apps/my](https://isthereanydeal.com/apps/my/).
 3. **Install:**
    ```bash
@@ -278,34 +282,39 @@ The bot has to keep running to answer and to send alerts. A small VPS, Railway, 
 npm test
 ```
 
-The tests cover input parsing, price summarizing, the savings math, rendering limits, the ITAD and Steam clients (with a fake `fetch`), the database, alert rules and the delivery fallback (with fake Discord senders), and need no Discord token or API key.
+About a thousand tests run in roughly two minutes. They cover input parsing, price summarizing, the savings math, rendering limits, the ITAD and Steam clients (with a fake `fetch`), the database, alert rules and the delivery fallback (with fake Discord senders), and need no Discord token or API key.
+
+The code is plain ES modules with no build step. Roughly:
 
 ```
-src/
-  index.js      Discord client and the /value flow
-  commands.js   Slash command definitions
-  register.js   Registers the commands with Discord
-  parse.js      Reads titles from typed text or an export; drops anything key-shaped
-  itad.js       IsThereAnyDeal client: lookup, fuzzy matching, prices, cache, retries
-  report.js     Rows, totals and the paid-vs-value comparison
-  render.js     Embeds and the CSV download
-  db.js         SQLite storage for wishlists, settings and alert channels
-  steam.js      Reads a public Steam wishlist
-  alerts.js     Alert rules and the anti-spam logic
-  notify.js     DM delivery with the server-channel fallback
-  poller.js     The scheduled price check
-  wishlist.js   Finding games and building the wishlist view
-  handlers.js   Discord handlers for the wishlist, library, server list and alert commands
-  library.js, serverlist.js, prefs.js, timeutil.js   Library tracker, shared server list, settings validation, time zones
-  ops.js, backup.js, ratelimit.js   Owner alerts and health, daily database backups, dashboard rate limiting
-  value.js      The /value pipeline, shared with the dashboard
-  constants.js  Regions, alert types and links shared by the bot and dashboard
-  dashboard/    Web dashboard: server.js (API and Discord sign-in), discord.js (REST calls)
-public/         Dashboard pages: index.html, style.css, app.js
-  text.js       /help, /about and /privacy copy
-test/           node:test suites
-branding/       Logo and banner
+src/                 The bot. One file per feature, grouped by name:
+  index.js           Discord client, event hooks and startup
+  commands.js        Slash command definitions (legacyRoute maps the grouped form back to each feature)
+  *handlers.js       Discord handlers for a feature (wishlist, cards, giveaways, community, mod, ...)
+  *store.js          SQLite tables for a feature; db.js is the connection and the shared tables
+  poller.js, ops.js  The scheduled price check, background jobs, owner alerts and health
+  itad.js, steam*.js Price data (IsThereAnyDeal) and Steam lookups, with caches that are capped
+  automod.js, moderation.js, guildproblems.js, memes.js   Moderation, auto-mod and the problem notes
+  dashboard/
+    server.js        HTTP server, sign-in, static files, SEO pages, sitemap and the route table
+    *routes.js       Route groups, one factory per area (createXRoutes(ctx)), spread into the table
+    discord.js       REST calls the dashboard makes to Discord
+public/              The web app, no bundler
+  index.html, app.js Shell, router and shared helpers
+  *ui.js, *.js       One page or panel each, loaded on demand (window.XUI.view(shared, ...))
+  style.css          Styles; the page's strict security policy allows no inline styles or scripts
+test/                node:test suites, including real-browser smoke tests
+branding/            Logo and banner
 ```
+
+**Routes.** `server.js` builds one `routes` table. Route files are named `*routes.js` and exported as `createXRoutes(ctx)` factories; add a route to the matching file, and pass anything it needs through `ctx` (by value, so use a getter for anything that changes).
+
+**Pages.** `app.js` keeps a one-line wrapper per page that loads its script the first time it is opened and prefetches it in the background, so the first screen stays small. Add a new file to the static table in `server.js` and to `index.html`.
+
+**Caches.** Every in-memory cache is capped or expires, so a long-running server stays quick. Keep that when adding one.
+
+**Public pages.** Every game has a page at `/game/<appid>-<name>` with its price history and a buy-or-wait verdict. `/sitemap.xml` lists each game only by its official address (resolved in the background and kept in the meta table as `gpath:<appid>`), so search engines never see a redirect or a 404.
+
 
 ## Privacy
 
