@@ -4073,3 +4073,19 @@ test("the page's soft sign-in check answers 200 when nobody is signed in, and st
         assert.equal(me.status, 200); assert.ok(me.data.user?.id);
     } finally { await t.close(); }
 });
+
+test("the sitemap lists a game page only by its official address, and leaves out apps with no page", async () => {
+    const t = await setup({ itadExtra: {
+        lookupShopIds: async (_shop, keys) => new Map(keys.map(k => [k, k === "app/999" ? null : `id-${k.slice(4)}`])),
+        getTitle: async id => ({ title: id === "id-524220" ? "NieR:Automata - Game of the YoRHa Edition" : "Hollow Knight" })
+    } });
+    await t.signIn();
+    t.db.addItems("u1", [{ itad_id: "a", title: "NieR Automata", appid: 524220 }, { itad_id: "b", title: "hollow knight", appid: 367520 }, { itad_id: "c", title: "Mystery", appid: 999 }]);
+    const first = await (await t.request("/sitemap.xml", { raw: true })).text();
+    assert.ok(!first.includes("/game/524220-nier-automata</loc>"), "the library's own title is never used for the address");
+    for (let i = 0; i < 50 && !(t.db.getMeta("gpath:524220") && t.db.getMeta("gpath:367520") && t.db.getMeta("gpath:999")); i++) await new Promise(r => setTimeout(r, 100));
+    const map = await (await t.request("/sitemap.xml", { raw: true })).text();
+    assert.ok(map.includes(`<loc>${ORIGIN}/game/524220-nier-automata-game-of-the-yorha-edition</loc>`), "the official title decides the address");
+    assert.ok(map.includes(`<loc>${ORIGIN}/game/367520-hollow-knight</loc>`));
+    assert.ok(!map.includes("/game/999-"), "an app with no page is not listed");
+});

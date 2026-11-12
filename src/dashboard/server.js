@@ -477,6 +477,24 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
 "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: https://cdn.discordapp.com https://cdn.akamai.steamstatic.com https://shared.akamai.steamstatic.com https://cdn.cloudflare.steamstatic.com https://shared.akamai.steamstatic.com https://assets.isthereanydeal.com https://media.discordapp.net https: data:; " +
         "media-src 'self' blob: https:; connect-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-src 'self' https://www.youtube-nocookie.com https://w.soundcloud.com https://open.spotify.com; object-src 'self'; frame-ancestors 'none'";
     // ---------- public game pages ----------
+    // The sitemap only lists a game page by its official address. Library titles differ from the store's (those links just redirect) and
+    // some apps have no page at all, so each app is looked up once in the background and the answer is remembered ("-" = no page).
+    const gamePathOf = appid => db.getMeta(`gpath:${appid}`) ?? null;
+    let resolvingPaths = false;
+    async function resolveGamePaths(appids) {
+        if (resolvingPaths) return;
+        resolvingPaths = true;
+        try {
+            for (const appid of appids) {
+                try {
+                    const id = (await itad.lookupShopIds(61, [`app/${appid}`])).get(`app/${appid}`);
+                    const info = id ? await itad.getTitle(id) : null;
+                    db.setMeta(`gpath:${appid}`, info?.title ? `/game/${appid}-${slugify(info.title)}` : "-");
+                } catch { /* the lookup failed, not the app: ask again on a later sitemap request */ }
+                await new Promise(r => setTimeout(r, 400));
+            }
+        } finally { resolvingPaths = false; }
+    }
     const gamePages = new Map(); // appid -> { at, page }; a few hundred at most, an hour or three old at most
     async function publicGamePage(appid) {
         const hit = gamePages.get(appid);
@@ -1540,6 +1558,12 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         buildSeo(file).catch(() => {}).finally(() => seoBuilding.delete(file));
     }
     setTimeout(() => refreshSeo("seo/steam-deals-this-week.html"), 20_000).unref?.();
+    // Work out the sitemap's game addresses soon after start-up, a batch at a time, so crawlers see a full list.
+    const warmGamePaths = () => {
+        let todo = []; try { todo = db.popularApps(400).map(g => g.appid).filter(a => gamePathOf(a) === null).slice(0, 60); } catch { /* try again later */ }
+        if (todo.length) resolveGamePaths(todo).then(() => setTimeout(warmGamePaths, 30_000).unref?.()).catch(() => {});
+    };
+    setTimeout(warmGamePaths, 45_000).unref?.();
     async function loadFile(file) {
         let body = cache.get(file);
         // The sale-dates page counts days, so it is rebuilt every hour instead of once.
@@ -1923,7 +1947,11 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : k === "fortnite" ? "0.7" : "0.5"]), ["/indie", "page-indie.jpg", "daily", "0.7"], ["/winter-sale", "index.html", "weekly", "0.7"], ["/indie/tools", "page-indie-tools.jpg", "monthly", "0.7"], ...INDIE_TOOLS.map(t => [`/indie/tools/${t.id}`, "page-indie-tools.jpg", "monthly", "0.6"]), ...db.indieList({ limit: 60, sort: "new" }).games.map(g => [`/indie/game/${g.id}`, "page-indie.jpg", "weekly", "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, slug === "steam-deals-this-week" ? "daily" : "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"], ["/licenses.html", "licenses.pdf", "yearly", "0.2"]];
                 const day = f => { try { return statSync(f.startsWith("seo/") ? SEO_SRC : join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
                 const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
-                let games = ""; try { games = db.popularApps(400).map(g => `<url><loc>${origin}/game/${g.appid}-${slugify(g.title)}</loc><changefreq>daily</changefreq><priority>0.6</priority></url>`).join("\n"); } catch { /* the static pages are enough */ }
+                let games = ""; try {
+                    const apps = db.popularApps(400), unknown = [];
+                    games = apps.map(g => { const path = gamePathOf(g.appid); if (path === null) unknown.push(g.appid); return path && path !== "-" ? `<url><loc>${origin}${path}</loc><changefreq>daily</changefreq><priority>0.6</priority></url>` : null; }).filter(Boolean).join("\n");
+                    if (unknown.length) resolveGamePaths(unknown.slice(0, 60)).catch(() => {}); // the rest fill in on later requests
+                } catch { /* the static pages are enough */ }
                 return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n${games}\n</urlset>\n`, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
             }
             if (url.pathname.startsWith("/auth/")) {
