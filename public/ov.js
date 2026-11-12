@@ -66,6 +66,20 @@
       (d.rows || []).forEach((r, i) => { const row = el("div", "row"); row.append(el("span", "rank", String(i + 1)), el("span", "who", r.name), el("span", "val", (c.showLevel ? "Lv " + r.level + " · " : "") + n(r.xp) + " XP")); rows.append(row); });
       if (!(d.rows || []).length) rows.append(el("div", "nums", "No one has earned XP yet"));
       card.append(rows);
+    } else if (kind === "price") {
+      const g = d.game, money = (v, cur) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur || "USD" }).format(v); } catch { return String(v); } };
+      const head = el("div", "head"); head.append(el("div", "label", g ? g.title : (c.gameName || "Game price"))); card.append(head);
+      const rows = el("div", "rows");
+      if (!g || g.price == null) rows.append(el("div", "nums", g ? "No price right now" : "Pick a game in the studio"));
+      else {
+        const add = (a, b) => { const row = el("div", "row"); row.append(el("span", "who", a), el("span", "val", b)); rows.append(row); };
+        add("Best price" + (g.shop ? " · " + g.shop : ""), money(g.price, g.currency));
+        if (g.msrp && g.msrp > g.price) add("Regular price", money(g.msrp, g.currency));
+        if (g.atl != null) add("Lowest ever", money(g.atl, g.currency));
+        const V = { buy: "Good time to buy", lean_buy: "Fair price, lean buy", wait: "Worth waiting", lean_wait: "Lean wait" };
+        if (c.showVerdict !== false && V[g.verdict]) add("Verdict", V[g.verdict]);
+      }
+      card.append(rows);
     } else if (kind === "deals") {
       const head = el("div", "head"); head.append(el("div", "label", c.label || "Best deals right now")); card.append(head);
       const rows = el("div", "rows");
@@ -190,7 +204,7 @@
   if (demo) {
     // The studio preview: everything comes from the address, nothing is fetched.
     let c = {}, v = {}; try { c = JSON.parse(q.get("c") || "{}"); v = JSON.parse(q.get("v") || "{}"); } catch { /* an empty preview is fine */ }
-    const kind = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll", "free", "deals"].includes(q.get("k")) ? q.get("k") : "goal";
+    const kind = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll", "free", "deals", "price"].includes(q.get("k")) ? q.get("k") : "goal";
     const target = Math.max(1, Number(c.target) || 100), current = Number(v.current) || 0;
     if (kind === "alerts") {
       look(c); let k = 0;
@@ -199,7 +213,7 @@
     } else {
       const sale = v.sale || { name: "Steam Winter Sale", start: Date.now() + 6 * 86400_000 + 4 * 3600_000, end: Date.now() + 24 * 86400_000, live: false };
       const data = kind === "goal" ? { current, target, pct: Math.max(0, Math.min(100, Math.round(current / target * 100))) }
-        : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : kind === "sale" ? sale : kind === "poll" ? { on: true, question: "What should we play next?", open: true, until: Date.now() + 240000, total: 24, options: [{ title: "Deep Rock Galactic", count: 11 }, { title: "Hades II", count: 8 }, { title: "Balatro", count: 5 }] } : kind === "board" ? { rows: [["Alex", 12, 4210], ["Sam", 9, 2890], ["Riley", 7, 1760], ["Jo", 5, 940], ["Kai", 3, 410]].slice(0, Math.max(3, Number(c.limit) || 5)).map(([name, level, xp]) => ({ name, level, xp })) } : kind === "deals" ? { deals: [{ title: "Hades II", cut: 40, price: 17.99, currency: "USD" }, { title: "Balatro", cut: 25, price: 10.49, currency: "USD" }, { title: "Elden Ring", cut: 35, price: 38.99, currency: "USD" }, { title: "Hollow Knight", cut: 50, price: 7.49, currency: "USD" }].slice(0, Math.max(2, Number(c.limit) || 4)) } : kind === "free" ? { games: [{ title: "Hades", shop: "Epic", expiry: new Date(Date.now() + 2 * 86400000).toISOString() }, { title: "Balatro", shop: "GOG", expiry: null }, { title: "Dead Cells", shop: "Steam", expiry: new Date(Date.now() + 5 * 3600000).toISOString() }].slice(0, Math.max(2, Number(c.limit) || 4)) } : kind === "playing" ? { games: [{ game: "Deep Rock Galactic", count: 4, names: ["Alex", "Sam", "Riley"] }, { game: "Hades II", count: 1, names: ["Jo"] }] } : kind === "scene" ? { children: Array.isArray(v.children) ? v.children : [] } : { at: c.at, mode: c.mode };
+        : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : kind === "sale" ? sale : kind === "poll" ? { on: true, question: "What should we play next?", open: true, until: Date.now() + 240000, total: 24, options: [{ title: "Deep Rock Galactic", count: 11 }, { title: "Hades II", count: 8 }, { title: "Balatro", count: 5 }] } : kind === "board" ? { rows: [["Alex", 12, 4210], ["Sam", 9, 2890], ["Riley", 7, 1760], ["Jo", 5, 940], ["Kai", 3, 410]].slice(0, Math.max(3, Number(c.limit) || 5)).map(([name, level, xp]) => ({ name, level, xp })) } : kind === "price" ? { game: { title: "Hades II", price: 17.99, currency: "USD", shop: "Steam", msrp: 29.99, atl: 14.99, verdict: "lean_buy" } } : kind === "deals" ? { deals: [{ title: "Hades II", cut: 40, price: 17.99, currency: "USD" }, { title: "Balatro", cut: 25, price: 10.49, currency: "USD" }, { title: "Elden Ring", cut: 35, price: 38.99, currency: "USD" }, { title: "Hollow Knight", cut: 50, price: 7.49, currency: "USD" }].slice(0, Math.max(2, Number(c.limit) || 4)) } : kind === "free" ? { games: [{ title: "Hades", shop: "Epic", expiry: new Date(Date.now() + 2 * 86400000).toISOString() }, { title: "Balatro", shop: "GOG", expiry: null }, { title: "Dead Cells", shop: "Steam", expiry: new Date(Date.now() + 5 * 3600000).toISOString() }].slice(0, Math.max(2, Number(c.limit) || 4)) } : kind === "playing" ? { games: [{ game: "Deep Rock Galactic", count: 4, names: ["Alex", "Sam", "Riley"] }, { game: "Hades II", count: 1, names: ["Jo"] }] } : kind === "scene" ? { children: Array.isArray(v.children) ? v.children : [] } : { at: c.at, mode: c.mode };
       state = { kind, config: c, data };
       draw();
     }

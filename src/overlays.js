@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { upcomingSales } from "./salescal.js";
 
-export const OVERLAY_KINDS = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll", "free", "deals"];
+export const OVERLAY_KINDS = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll", "free", "deals", "price"];
 export const SCENE_MAX_ITEMS = 8;
 export const SCENE_KINDS = ["goal", "stats", "timer", "sale", "board", "playing", "free", "deals"]; // what a scene may rotate through (alerts need their own live feed)
 export const OVERLAY_FONTS = ["Inter", "System", "Georgia", "Mono"];
@@ -47,6 +47,7 @@ export function cleanConfig(kind, input = {}) {
     if (kind === "sale") return { ...look, label: text(c.label, "", 40), includeFests: flag(c.includeFests, false), showDate: flag(c.showDate, true), endText: text(c.endText, "The sale is on!", 40) };
     if (kind === "board") return { ...look, label: text(c.label, "Top members", 40), limit: Math.round(num(c.limit, 5, 3, 10)), showLevel: flag(c.showLevel, true) };
     if (kind === "poll") return { ...look, refresh: num(c.refresh, 5, 5, 60), pollId: /^\d{5,25}$/.test(String(c.pollId ?? "")) ? String(c.pollId) : "", showPercent: flag(c.showPercent, true) };
+    if (kind === "price") return { ...look, appid: /^\d{1,9}$/.test(String(c.appid ?? "")) ? String(c.appid) : "", gameName: text(c.gameName, "", 80), showVerdict: flag(c.showVerdict, true) };
     if (kind === "deals") return { ...look, label: text(c.label, "Best deals right now", 40), limit: Math.round(num(c.limit, 4, 2, 8)) };
     if (kind === "free") return { ...look, label: text(c.label, "Free right now", 40), limit: Math.round(num(c.limit, 4, 2, 8)), showDlc: flag(c.showDlc, false) };
     if (kind === "playing") return { ...look, label: text(c.label, "Playing now", 40), limit: Math.round(num(c.limit, 4, 2, 8)) };
@@ -68,7 +69,7 @@ export function streamOverlayStore({ run, get, all, now }) {
             if (!OVERLAY_KINDS.includes(kind)) throw new Error("Unknown overlay type.");
             if (get("SELECT COUNT(*) AS n FROM stream_overlays WHERE user_id = ?", String(userId)).n >= max) throw new Error(`You can have up to ${max} overlays. Delete one first.${max === MAX_OVERLAYS ? " Supporters get more." : ""}`);
             const token = "svcx_" + randomBytes(24).toString("base64url");
-            run("INSERT INTO stream_overlays (token, user_id, kind, name, guild_id, config, value, created) VALUES (?,?,?,?,?,?,0,?)", token, String(userId), kind, text(name, ({ goal: "Goal", stats: "Server stats", timer: "Timer", alerts: "Alerts", sale: "Sale countdown", scene: "Scene", board: "Leaderboard", playing: "Who is playing", poll: "Poll", free: "Free games", deals: "Best deals" })[kind], 40), guildId, JSON.stringify(cleanConfig(kind, config)), now());
+            run("INSERT INTO stream_overlays (token, user_id, kind, name, guild_id, config, value, created) VALUES (?,?,?,?,?,?,0,?)", token, String(userId), kind, text(name, ({ goal: "Goal", stats: "Server stats", timer: "Timer", alerts: "Alerts", sale: "Sale countdown", scene: "Scene", board: "Leaderboard", playing: "Who is playing", poll: "Poll", free: "Free games", deals: "Best deals", price: "Game price" })[kind], 40), guildId, JSON.stringify(cleanConfig(kind, config)), now());
             return token;
         },
         updateOv(userId, token, { name, guildId, config, value }) {

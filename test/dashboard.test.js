@@ -4040,3 +4040,24 @@ test("overlay studio: the best deals overlay lists the top discounts", async () 
         assert.deepEqual(j.data.deals.map(d => d.title), ["Big Game"]);
     } finally { await o.close(); }
 });
+
+test("overlay studio: the game price overlay looks up a pasted Steam link", async () => {
+    const o = await signedIn({ itadExtra: {
+        lookupShopIds: async (_s, ids) => new Map(ids.map(i => [i, i === "app/999999" ? null : "id-" + i.slice(4)])),
+        getTitle: async () => ({ title: "Hades II" }),
+        getPrices: async ids => new Map(ids.map(id => [id, { deals: [deal(17.99, 29.99)], historyLow: { all: { amount: 14.99 } } }])),
+        getHistory: async () => []
+    } });
+    try {
+        const mk = body => o.request("/api/overlays", { method: "POST", body });
+        const tok = (await mk({ action: "create", kind: "price" })).data.token;
+        const read = async () => (await (await fetch(o.base + "/api/ov/data?token=" + tok)).json());
+        assert.equal((await read()).data.game, null, "nothing until a game is picked");
+        assert.equal((await mk({ action: "game", token: tok, game: "not a link" })).status, 400);
+        assert.equal((await mk({ action: "game", token: tok, game: "https://store.steampowered.com/app/999999/Nope/" })).status, 400);
+        const ok = await mk({ action: "game", token: tok, game: "https://store.steampowered.com/app/1145350/Hades_II/" });
+        assert.equal(ok.status, 200); assert.equal(ok.data.title, "Hades II");
+        const j = await read();
+        assert.equal(j.config.appid, "1145350"); assert.equal(j.data.game.title, "Hades II"); assert.equal(j.data.game.price, 17.99);
+    } finally { await o.close(); }
+});

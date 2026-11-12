@@ -412,6 +412,15 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         f.ev = f.ev.filter(e => now() - e.at < 10 * 60_000).slice(-30);
         return { ev: [...f.ev, ...overlayEventsFor(guildId, now())] };
     }
+    // One game's price for the price overlay: best price now, the lowest ever, and the buy-or-wait call. Looked up at most every 30 minutes per game.
+    const gamePrice = appid => remember("ovprice:" + appid, 30 * 60_000, async () => {
+        const id = (await itad.lookupShopIds(61, [`app/${appid}`])).get(`app/${appid}`); if (!id) return null;
+        const info = await itad.getTitle(id); if (!info?.title) return null;
+        const [prices, history] = await Promise.all([itad.getPrices([id], "US").catch(() => new Map()), itad.getHistory(id, "US").catch(() => [])]);
+        const sum = summarize(prices.get(id), {}), price = sum.best?.price ?? null, cur = sum.currency || "USD";
+        const advice = price !== null ? buyOrWait(history, price, { sales: upcomingSales(Date.now()), past: salesBefore() }) : null;
+        return { title: info.title, price, currency: cur, shop: sum.best?.shop ?? null, msrp: sum.msrp ?? null, atl: sum.atl ?? null, verdict: advice?.verdict ?? null };
+    });
     async function overlayPayload(o) {
         const g = o.guild_id && guildList ? guildList().find(x => x.id === o.guild_id) ?? null : null;
         let data = overlayData(o, g ? { members: g.members ?? null, boosts: g.boosts ?? null } : null, now());
@@ -424,6 +433,8 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 let st = null; try { st = o.config.pollId ? JSON.parse(db.getMeta(`poll:${o.config.pollId}`) || "null") : null; } catch { st = null; }
                 if (st) { const counts = st.options.map(() => 0); for (const v of Object.values(st.votes ?? {})) if (counts[v] !== undefined) counts[v]++; data = { on: true, question: st.question || "What should we play?", open: now() <= st.until, until: st.until, total: counts.reduce((a, b) => a + b, 0), options: st.options.map((x, i) => ({ title: x.title, count: counts[i] })) }; }
                 else data = { on: false };
+            } else if (o.kind === "price") {
+                data = o.config.appid ? { game: await gamePrice(o.config.appid) } : { game: null };
             } else if (o.kind === "deals") {
                 const list = await remember("ovdeals", 30 * 60_000, async () => pickDeals(await itad.getDealsPool({ country: "US", pages: 3 }), 8).map(d => ({ title: String(d.title).slice(0, 80), cut: Math.round(d.cut), price: d.price, currency: String(d.currency || "USD").slice(0, 3) })));
                 data = { deals: list.slice(0, o.config.limit) };
@@ -1520,6 +1531,15 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                     const list = ovTest.get(mine.token) ?? []; list.push({ seq: nextSeq(), type: ["join", "boost", "level"][list.length % 3], count: 1281 + list.length, by: 1, name: "Test Member", avatar: null, at: now(), test: true });
                     ovTest.set(mine.token, list.slice(-5));
                     return { ok: true, seen: ovSeen.has(mine.token) ? now() - ovSeen.get(mine.token) : null };
+                }
+                if (action === "game") {
+                    if (mine.kind !== "price") throw new HttpError(400, "That isn't a price overlay.");
+                    const m = /(?:app\/)?(\d{1,9})(?:[\/?#]|$)/.exec(String(body.game ?? "").trim());
+                    if (!m) throw new HttpError(400, "Paste the game's Steam store link or its app number.");
+                    const g = await gamePrice(m[1]).catch(() => null);
+                    if (!g) throw new HttpError(400, "I couldn't find that game. Check the link.");
+                    db.updateOv(s.userId, mine.token, { config: { ...mine.config, appid: m[1], gameName: g.title } });
+                    return { ok: true, title: g.title };
                 }
                 if (action === "poll") {
                     if (mine.kind !== "poll" || !mine.guild_id) throw new HttpError(400, "Pick a server for this poll first.");
