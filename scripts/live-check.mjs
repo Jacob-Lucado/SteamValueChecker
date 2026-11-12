@@ -58,7 +58,17 @@ export async function liveCheck({ itad, igdb = null, fetchImpl = globalThis.fetc
     });
     await step("Steam: review summary", async () => {
         const r = await steamReviews(APP, { fetchFn: fetchImpl });
-        need(r && r.total > 1000 && r.pct > 0, "no review summary");
+        if (!r) {
+            // The bot's own lookup stays quiet when it fails, so ask Steam again here and say what actually came back.
+            let why = "no answer";
+            try {
+                const t0 = Date.now(), res = await fetchImpl(`https://store.steampowered.com/appreviews/${APP}?json=1&language=all&purchase_type=all&num_per_page=0`, { signal: AbortSignal.timeout(20000) });
+                const text = await res.text();
+                why = `HTTP ${res.status} after ${Date.now() - t0} ms: ${text.slice(0, 300).replace(/\s+/g, " ")}`;
+            } catch (err) { why = `${err.name}: ${err.message}`; }
+            need(false, `no review summary (${why})`);
+        }
+        need(r.total > 1000 && r.pct > 0, "the review summary has no numbers");
         return `${r.pct}% of ${r.total}`;
     });
     await step("Steam: players right now", async () => {
