@@ -153,10 +153,15 @@ export function createDiscordRest({ clientId, clientSecret, redirectUri, botToke
         timeoutMember: (guildId, userId, untilIso, reason) => call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`, { method: "PATCH", headers: { ...bot, ...audit(reason), "Content-Type": "application/json" }, body: JSON.stringify({ communication_disabled_until: untilIso }) }),
         kickMember: (guildId, userId, reason) => call(`/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`, { method: "DELETE", headers: { ...bot, ...audit(reason) } }),
         banMember: (guildId, userId, { deleteSeconds = 0, reason } = {}) => call(`/guilds/${encodeURIComponent(guildId)}/bans/${encodeURIComponent(userId)}`, { method: "PUT", headers: { ...bot, ...audit(reason), "Content-Type": "application/json" }, body: JSON.stringify({ delete_message_seconds: deleteSeconds }) }),
+        /** The ban on one person, or null when they are not banned. */
+        getBan: async (guildId, userId) => { try { return await call(`/guilds/${encodeURIComponent(guildId)}/bans/${encodeURIComponent(userId)}`, { headers: bot }); } catch (e) { if (e?.status === 404) return null; throw e; } },
         unbanMember: (guildId, userId, reason) => call(`/guilds/${encodeURIComponent(guildId)}/bans/${encodeURIComponent(userId)}`, { method: "DELETE", headers: { ...bot, ...audit(reason) } }),
         /** Sets one permission overwrite on a channel (type 0 = a role, 1 = a member). allow/deny are permission bit strings. */
         setOverwrite: (channelId, targetId, { type = 0, allow = "0", deny = "0" } = {}) => call(`/channels/${encodeURIComponent(channelId)}/permissions/${encodeURIComponent(targetId)}`, { method: "PUT", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify({ type, allow: String(allow), deny: String(deny) }) }),
         getMessages: (channelId, limit = 100) => call(`/channels/${encodeURIComponent(channelId)}/messages?limit=${Math.min(100, Math.max(1, limit))}`, { headers: bot }),
+        getMessage: (channelId, messageId) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { headers: bot }),
+        /** The people who used one emoji on a message (the first 100). `emoji` is a unicode emoji or name:id for a custom one. */
+        reactionUsers: (channelId, messageId, emoji) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeURIComponent(emoji)}?limit=100`, { headers: bot }),
         bulkDelete: (channelId, ids) => call(`/channels/${encodeURIComponent(channelId)}/messages/bulk-delete`, { method: "POST", headers: { ...bot, "Content-Type": "application/json" }, body: JSON.stringify({ messages: ids }) }),
         deleteMessage: (channelId, messageId) => call(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, { method: "DELETE", headers: bot }),
 

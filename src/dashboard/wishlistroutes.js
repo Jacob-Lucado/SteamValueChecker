@@ -1,6 +1,7 @@
 // Wishlists, price alerts and Steam linking.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
 import { HttpError } from "./http.js";
+import { wrappedData, SLIDES } from "../wrapped.js";
 import { SAMPLE_KINDS, sampleAlert } from "../samples.js";
 import { addGameByTitle, applySteamImport, viewRows } from "../wishlist.js";
 import { artUrl } from "../render.js";
@@ -238,6 +239,14 @@ export function createWishlistRoutes(ctx) {
             const goalHours = db.getHourGoal(s.userId), thisYear = year === new Date(now()).getUTCFullYear();
             const rec = db.playRecap(s.userId, year);
             return { ...rec, goal: goalHours && thisYear ? goalProgress(goalHours, rec.totalMinutes, now()) : null, allTime: { totalMinutes: all.totalMinutes, games: all.games, activeDays: all.activeDays }, since: db.getSteamLink(s.userId).linked_at };
+        },
+        "GET /api/steam/wrapped": async (req, _body, url) => {
+            const s = session(req);
+            if (!db.getSteamLink(s.userId)) throw new HttpError(400, "Link your Steam profile first.");
+            const year = Number(url.searchParams.get("year")) || new Date(now()).getUTCFullYear();
+            if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new HttpError(400, "Pick a year from 2020 on.");
+            const d = wrappedData({ db, userId: s.userId, year, now: now() });
+            return { year, slides: SLIDES, data: d ? { hours: d.hours, games: d.games, activeDays: d.activeDays, archetype: d.archetype.name, line: d.archetype.line, partial: d.partial } : null };
         },
         "POST /api/steam/goal": async (req, body) => {
             const s = session(req);

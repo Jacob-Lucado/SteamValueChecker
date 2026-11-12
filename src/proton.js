@@ -17,3 +17,21 @@ export async function protonTier(appid, { fetchFn = globalThis.fetch, now = Date
     return tier;
 }
 export const protonLabel = tier => (LABEL[tier] ? `🐧 Linux and Steam Deck: ${LABEL[tier]} on ProtonDB` : null);
+
+const deckCache = new Map();
+const DECK = { 3: "verified", 2: "playable", 1: "unsupported" };
+/** Valve's own Steam Deck rating for a game (verified, playable, unsupported), or null when unknown. Failures are silent. */
+export async function deckStatus(appid, { fetchFn = globalThis.fetch, now = Date.now } = {}) {
+    if (!Number.isInteger(appid) || !fetchFn) return null;
+    const hit = deckCache.get(appid);
+    if (hit && now() - hit.at < TTL) return hit.status;
+    let status = null;
+    try {
+        const res = await fetchFn(`https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=${appid}`, { signal: AbortSignal.timeout(3000) });
+        if (res.ok) status = DECK[Number((await res.json())?.results?.resolved_category)] ?? null;
+    } catch { /* optional */ }
+    if (deckCache.size > 2000) deckCache.clear();
+    deckCache.set(appid, { at: now(), status });
+    return status;
+}
+export const DECK_LABEL = { verified: "Steam Deck Verified", playable: "Steam Deck Playable", unsupported: "Not supported on Steam Deck" };

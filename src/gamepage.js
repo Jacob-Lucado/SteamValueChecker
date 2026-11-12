@@ -29,6 +29,31 @@ export function chartSvg(points, cur = "USD", { w = 760, h = 260 } = {}) {
  * data: { title, appid, itadId, currency, price, shop, shopUrl, msrp, low1y, atl, points, advice, image }
  * Returns a full HTML document.
  */
+const TIER = { platinum: "Platinum", gold: "Gold", silver: "Silver", bronze: "Bronze", borked: "Borked", native: "Native Linux" };
+const DECK_TEXT = { verified: ["#57f287", "Steam Deck Verified"], playable: ["#ffab1f", "Steam Deck Playable"], unsupported: ["#ff7a7a", "Not supported on Steam Deck"] };
+const TIER_COLOR = { platinum: "#9fe8ff", gold: "#ffd24a", silver: "#c9d4e4", bronze: "#d99a6c", borked: "#ff7a7a", native: "#57f287" };
+const compatBadges = c => {
+    const out = [];
+    if (c?.deck && DECK_TEXT[c.deck]) out.push(`<span class="cb" style="border-color:${DECK_TEXT[c.deck][0]}">🎮 ${DECK_TEXT[c.deck][1]}</span>`);
+    if (c?.proton && TIER[c.proton]) out.push(`<span class="cb" style="border-color:${TIER_COLOR[c.proton]}">🐧 ProtonDB: ${TIER[c.proton]}</span>`);
+    return out.length ? `<div class="compat">${out.join("")}</div>` : "";
+};
+
+/** A small price card for a streamer's overlay or a blog post. Self-contained, refreshes itself, themeable with ?theme=. */
+export function renderWidget(data, { origin, theme = "dark" } = {}) {
+    const cur = data.currency || "USD", price = Number.isFinite(data.price) ? money(data.price, cur) : null;
+    const cut = Number.isFinite(data.price) && Number.isFinite(data.msrp) && data.msrp > data.price ? Math.round((1 - data.price / data.msrp) * 100) : 0;
+    const light = theme === "light", clear = theme === "transparent";
+    const verdict = data.advice?.label ? `<div class="v">${esc(data.advice.label)}</div>` : "";
+    const link = `${origin}/game/${data.appid}-${slugify(data.title)}`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="900"><meta name="robots" content="noindex"><title>${esc(data.title)} price</title><style>
+*{box-sizing:border-box}html,body{margin:0;background:${clear ? "transparent" : light ? "#fff" : "#0b111b"}}body{font-family:Inter,system-ui,sans-serif;color:${light ? "#10151f" : "#e8eefc"}}
+a.w{display:flex;gap:12px;align-items:center;padding:10px;text-decoration:none;color:inherit;border:1px solid ${light ? "#d5dbe6" : "rgba(255,255,255,.14)"};border-radius:12px;background:${clear ? "rgba(11,17,27,.72)" : "transparent"};max-width:420px}
+img{width:96px;border-radius:8px;flex:none}.t{font-weight:700;font-size:15px;line-height:1.2}.p{font-size:26px;font-weight:800;line-height:1.1}.p span{background:#248046;color:#fff;border-radius:6px;padding:1px 7px;font-size:14px;margin-left:6px;vertical-align:middle}
+.s{font-size:12px;opacity:.75}.v{font-size:12px;font-weight:700;margin-top:2px}
+</style></head><body><a class="w" href="${esc(link)}" target="_blank" rel="noopener">${data.image ? `<img src="${esc(data.image)}" alt="">` : ""}<div><div class="t">${esc(data.title)}</div>${price ? `<div class="p">${esc(price)}${cut ? `<span>-${cut}%</span>` : ""}</div>` : ""}<div class="s">${data.shop ? `at ${esc(data.shop)}` : ""}${Number.isFinite(data.low1y) ? ` · 12-month low ${esc(money(data.low1y, cur))}` : ""}</div>${verdict}<div class="s">Steam Value Checker</div></div></a></body></html>`;
+}
+
 export function renderGamePage(data, { origin, nonce = "" } = {}) {
     const cur = data.currency || "USD";
     const slug = slugify(data.title), canonical = `${origin}/game/${data.appid}-${slug}`;
@@ -58,6 +83,7 @@ h1{font-size:clamp(28px,5vw,44px);line-height:1.1;margin:0 0 6px}.sub{color:#a9b
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}.stat{background:rgba(255,255,255,.05);border-radius:12px;padding:14px 16px}.stat small{display:block;color:#8e9bb3}.stat b{font-size:22px}
 .card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:18px;margin-top:18px}.card h2{margin:0 0 10px;font-size:20px}
 .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}.btn{display:inline-block;padding:13px 22px;border-radius:10px;font-weight:700;text-decoration:none;color:#fff;background:#5865f2}.btn.o{background:#ffab1f;color:#1b1200}.btn.g{background:rgba(255,255,255,.1)}
+.compat{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.cb{border:1px solid;border-radius:999px;padding:3px 12px;font-size:14px;font-weight:600;background:rgba(255,255,255,.04)}code.embed{display:block;overflow:auto;background:rgba(0,0,0,.35);border-radius:8px;padding:10px 12px;font-size:13px;color:#c9d4e4;white-space:pre-wrap;word-break:break-all}
 .foot{margin-top:40px;color:#8e9bb3;font-size:14px}
 </style></head><body><div class="wrap">
 <div class="top"><img src="/logo.png" alt=""><a href="${esc(origin)}/">Steam Value Checker</a></div>
@@ -66,10 +92,12 @@ h1{font-size:clamp(28px,5vw,44px);line-height:1.1;margin:0 0 6px}.sub{color:#a9b
 ${price ? `<div class="big">${esc(price)}${cut ? `<span class="badge">-${cut}%</span>` : ""}${cut && Number.isFinite(data.msrp) ? `<s>${esc(money(data.msrp, cur))}</s>` : ""}</div><div style="color:#a9b8d4">${data.shop ? `Best price right now at <b>${esc(data.shop)}</b>` : ""}</div>` : `<div class="big">No price right now</div>`}
 ${data.shopUrl ? `<div class="cta"><a class="btn g" href="${esc(data.shopUrl)}" rel="nofollow noopener" target="_blank">Go to ${esc(data.shop || "store")}</a></div>` : ""}</div></div>
 ${data.advice ? `<div class="verdict"><b>${esc(data.advice.label)}</b><ul>${data.advice.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul></div>` : ""}
+${compatBadges(data.compat)}
 <div class="stats">${stat("12-month low", Number.isFinite(data.low1y) ? money(data.low1y, cur) : "")}${stat("All-time low", Number.isFinite(data.atl) ? money(data.atl, cur) : "")}${stat("Usual price", Number.isFinite(data.msrp) ? money(data.msrp, cur) : "")}</div>
 ${data.points?.length > 1 ? `<div class="card"><h2>Price over the last year</h2>${chartSvg(data.points, cur)}<div style="color:#8e9bb3;font-size:13px;margin-top:6px">Green dot marks the lowest price in this period.</div></div>` : ""}
 <div class="card"><h2>Get an alert when it drops</h2><p style="margin:0 0 6px;color:#c9d4e4">Set the price you want and Steam Value Checker messages you on Discord the moment it hits.</p>
 <div class="cta"><a class="btn" href="${esc(invite)}">Add the bot to Discord</a><a class="btn o" href="${esc(wish)}">Add to my wishlist alerts</a></div></div>
+<div class="card"><h2>Show this price on your stream or site</h2><p style="margin:0 0 8px;color:#c9d4e4">Add it as an OBS browser source or paste it into a page. It updates on its own. Add <b>?theme=light</b> or <b>?theme=transparent</b> to change the look.</p><code class="embed">${esc(`<iframe src="${origin}/widget/${data.appid}" width="420" height="130" style="border:0" loading="lazy"></iframe>`)}</code></div>
 <p class="foot">Prices come from many stores and are checked regularly, but they can change at any time. Check the store before you buy. Made by Jacob Lucado.</p>
 </div></body></html>`;
 }

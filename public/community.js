@@ -273,6 +273,7 @@
         const ai = d.ai || {};
         const aiOn = h("input", { type: "checkbox", checked: Boolean(st.ai_on), disabled: !ai.available && !ai.lite });
         const guidesOn = h("input", { type: "checkbox", checked: st.guides_on !== 0 });
+        const unfurlOn = h("input", { type: "checkbox", checked: Boolean(st.unfurl_on) });
         const aiCh = chSel(st.ai_channel);
         const provs = ai.providers || [{ id: "anthropic", label: "Anthropic (Claude)", needsModel: false, keyHelp: "console.anthropic.com" }];
         const provNow = ai.keySet ? ai.keyProvider : "anthropic";
@@ -311,13 +312,14 @@
             ai.keySet ? save("Remove key", () => post("/api/community/places", { ai_key_clear: true })) : null) : null);
         const aiP = h("div", { class: "panel" }, h("h3", {}, "AI companion", ai.available ? null : h("span", { class: "pill", text: "Coming soon" })),
           ai.available ? null : h("div", { class: "notice", text: "The full AI is coming soon. Until then, when you switch this on, the bot answers the common questions itself: game prices, the free games right now, and a member's own wishlist and library (try “Hey AI is Hades on sale?”). Anything else gets a polite “coming soon”. Want the full AI today? Add your own AI key below (Anthropic, OpenAI, Gemini and more)." }),
+          h("label", { class: "check" }, unfurlOn, " Reply to Steam store links with the price, the lows and a buy-or-wait verdict (needs the Message Content intent)"),
           h("label", { class: "check" }, guidesOn, " Answer how-to questions with a step by step guide (no AI needed), like “how do I get Steam Verified”"),
           h("label", { class: "check" }, aiOn, " Answer when members say “Hey AI” followed by a question"),
           field("Only answer in this channel (leave empty for every channel)", aiCh),
           h("p", { class: "muted small", text: "The bot needs View Channel, Read Message History and Send Messages in the channel. If it can't send there, it tells the person who asked (by DM) what to allow." }),
           h("p", { class: "muted small", text: ai.phrase ? "Members write “Hey AI, …” or mention the bot." : "Members mention the bot, because this bot can't read “Hey AI” yet (it needs the Message Content intent)." }),
           (ai.available || ai.lite) ? h("p", { class: "ai-use", text: ai.main ? `Answers today: ${ai.usedToday}. This is the bot owner's own server, so it has no daily limit.` : ai.keySet && ai.unlimited ? `Answers today: ${ai.usedToday}. No daily limit while your own key is used.` : `Used today: ${ai.usedToday} of ${ai.dailyCap} answers (resets at midnight UTC).${ai.plus ? " AI Plus is on for this server." : ""}` }) : null,
-          h("div", { class: "row" }, save("Save AI settings", () => post("/api/community/places", { ai_on: aiOn.checked, ai_channel: aiCh.value, guides_on: guidesOn.checked }))),
+          h("div", { class: "row" }, save("Save AI settings", () => post("/api/community/places", { ai_on: aiOn.checked, ai_channel: aiCh.value, guides_on: guidesOn.checked, unfurl_on: unfurlOn.checked }))),
           h("h4", { text: "Your own API key" }), keyBox,
           h("h4", { text: "How it works and its limits" }),
           h("ul", { class: "ai-limits" },

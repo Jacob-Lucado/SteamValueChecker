@@ -33,6 +33,7 @@ import { steamSchema, steamStore } from "./steamstore.js";
 import { grabberSchema, grabberStore } from "./grabberstore.js";
 import { redeemSchema, redeemStore } from "./redeemstore.js";
 import { calendarSchema, calendarStore } from "./calendarstore.js";
+import { toolsSchema, toolsStore } from "./toolsstore.js";
 import { lfgSchema, lfgStore } from "./lfgstore.js";
 import { hiddenGuilds, isHidden } from "./hidden.js";
 import { giftSchema, giftStore } from "./giftstore.js";
@@ -207,6 +208,7 @@ ${steamSchema}
 ${grabberSchema}
 ${redeemSchema}
 ${calendarSchema}
+${toolsSchema}
 ${giftSchema}
 ${socialSchema}
 ${friendSchema}
@@ -328,6 +330,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("community", "verified_role_id", "TEXT");
     addColumn("community", "mod_log_channel", "TEXT");
+    addColumn("community", "warn_days", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("community", "appeals_on", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "last_seen", "INTEGER");
     addColumn("steam_links", "country", "TEXT");
     addColumn("notifications", "extra", "TEXT");
@@ -343,6 +347,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("community", "honeypot_channel", "TEXT");
     addColumn("community", "ai_on", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "ai_channel", "TEXT");
+    addColumn("community", "unfurl_on", "INTEGER NOT NULL DEFAULT 0"); // the bot replies to pasted Steam store links with the price and a verdict
     addColumn("community", "guides_on", "INTEGER NOT NULL DEFAULT 1"); // the bot answers how-to questions with a guide by itself
     addColumn("community", "ai_key", "TEXT");        // the server's own API key, encrypted
     addColumn("community", "ai_key_last4", "TEXT");
@@ -392,6 +397,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const grabber = grabberStore({ run, get, clean, now });
     const redeem = redeemStore({ run, get, all, clean, now });
     const calendar = calendarStore({ run, get, all, clean, now });
+    const tools = toolsStore({ run, get, all, clean, now, getMeta: k => getMeta(k), setMeta: (k, v) => setMeta(k, v) });
     const bans = banStore({ run, get, all, clean, now });
     const music = musicStore({ run, get, all, clean, now });
     const pager = pagerStore({ run, get, now });
@@ -862,6 +868,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         db.exec("BEGIN");
         try {
             for (const t of ["ai_notes", "items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends", "user_birthdays"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
+            run("DELETE FROM push_subs WHERE user_id = ?", discordId);
             run("DELETE FROM gift_marks WHERE claimer_id = ?", discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
@@ -930,6 +937,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...tools, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

@@ -36,11 +36,11 @@
       const showFor = () => {
         const a = act.value;
         const chanActs = ["purge", "slowmode", "lock", "unlock"];
-        const on = { user: !["slowmode", "lock", "unlock"].includes(a), reason: a !== "purge", duration: ["timeout", "slowmode"].includes(a), days: a === "ban", channel: chanActs.includes(a), amount: a === "purge" };
+        const on = { user: !["slowmode", "lock", "unlock"].includes(a), reason: a !== "purge", duration: ["timeout", "slowmode", "ban"].includes(a), days: a === "ban", channel: chanActs.includes(a), amount: a === "purge" };
         for (const k of Object.keys(rows)) rows[k].hidden = !on[k];
         user.placeholder = a === "purge" ? "Only this person's messages (optional)" : a === "unban" ? "The banned person's user ID" : "User ID or @mention";
         reason.placeholder = a === "note" ? "The note (only staff see it)" : "Why (shown in the log and sent to them)";
-        dur.placeholder = a === "slowmode" ? "5s, 30s, 2m, 1h or off" : "10m, 2h, 3d";
+        dur.placeholder = a === "ban" ? "Empty = permanent, or 12h, 7d, 30d (lifts itself)" : a === "slowmode" ? "5s, 30s, 2m, 1h or off" : "10m, 2h, 3d";
       };
       act.addEventListener("change", showFor); showFor();
       const go = h("button", { class: "btn red", text: "Do it" });
@@ -105,6 +105,29 @@
           edit ? h("div", { class: "row" }, save) : null
         );
       })();
+      // ---- appeals, warning expiry and moderator activity ----
+      const teamPanel = h("div", { class: "panel" }, h("h3", { text: "Appeals and team" }), h("p", { class: "muted", text: "Loading…" }));
+      (async () => {
+        const canBan = d.perms.includes("ban"), canSet = d.perms.includes("manageGuild");
+        const [st, ap] = await Promise.all([api("/api/mod/stats?guild=" + encodeURIComponent(guild.value)).catch(() => null), canBan ? api("/api/mod/appeals?guild=" + encodeURIComponent(guild.value)).catch(() => null) : null]);
+        const parts = [h("h3", { text: "Appeals and team" })];
+        if (ap) {
+          const wd = h("input", { type: "number", min: "0", max: "365", value: String(ap.warnDays), class: "narrow" }), on = h("input", { type: "checkbox", checked: ap.appealsOn });
+          const save = h("button", { class: "btn blue small", text: "Save" });
+          save.addEventListener("click", () => busy(save, async () => { await post("/api/mod/settings", { warn_days: Number(wd.value), appeals_on: on.checked }); toast("Saved.", "ok"); }));
+          if (canSet) parts.push(h("label", { class: "check" }, on, " Let banned people appeal on the website (permanent bans tell them where)"), h("div", { class: "row" }, "Warnings stop counting after ", wd, " days (0 = never) ", save));
+          parts.push(h("h4", { text: `Open appeals (${ap.appeals.length})` }));
+          parts.push(ap.appeals.length ? h("ul", { class: "plain" }, ap.appeals.map(a => {
+            const note = h("input", { type: "text", maxlength: "300", placeholder: "Message back (optional)" }), yes = h("button", { class: "btn blue small", text: "Accept and unban" }), no = h("button", { class: "btn gray small", text: "Deny" });
+            const decide = accept => busy(accept ? yes : no, async () => { await post("/api/mod/appeals/decide", { id: a.id, accept, note: note.value }); toast(accept ? "Appeal accepted, they are unbanned." : "Appeal denied.", "ok"); load(); });
+            yes.addEventListener("click", () => decide(true)); no.addEventListener("click", () => decide(false));
+            return h("li", {}, h("b", { text: `#${a.id} ${a.name || a.user_id}` }), h("span", { class: "muted small", text: ` · ${new Date(a.created_at).toLocaleString()}` }), h("div", { text: a.text }), h("div", { class: "row" }, note, yes, no));
+          })) : h("p", { class: "muted small", text: "Nothing waiting." }));
+          if (ap.tempBans.length) parts.push(h("h4", { text: "Temporary bans" }), h("ul", { class: "plain" }, ap.tempBans.map(t => h("li", {}, `${t.user_id} · lifts ${new Date(t.lift_at).toLocaleString()}`))));
+        }
+        if (st) { parts.push(h("h4", { text: "Moderator activity, last 30 days" }), st.stats.length ? h("ul", { class: "plain" }, st.stats.map(r => h("li", {}, h("b", { text: r.name || r.mod_id }), " · " + r.total + " (" + Object.entries(r.actions).map(([k, n]) => n + " " + (LABEL[k] || k).toLowerCase()).join(", ") + ")"))) : h("p", { class: "muted small", text: "No actions yet." })); }
+        teamPanel.replaceChildren(...parts);
+      })();
       const list = h("div"), pager = h("div", { class: "row" });
       const fUser = h("input", { type: "text", placeholder: "Filter by user ID or @mention", maxlength: "40" }); fUser.value = filterUser;
       const fBtn = h("button", { class: "btn gray", text: "Filter" });
@@ -122,7 +145,7 @@
       fBtn.addEventListener("click", () => { filterUser = fUser.value.trim(); page = 1; loadCases(); });
       clearBtn.addEventListener("click", () => busy(clearBtn, async () => { const r = await post("/api/mod/clearwarns", { user: filterUser }); toast(`Cleared ${r.cleared} warning${r.cleared === 1 ? "" : "s"}.`, "ok"); loadCases(); }));
       const casesPanel = h("div", { class: "panel" }, h("h3", { text: "Cases" }), h("div", { class: "row" }, fUser, fBtn, clearBtn), list, pager);
-      holder.replaceChildren(...[servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null, stats, actionPanel, autoPanel, logPanel, casesPanel].filter(Boolean));
+      holder.replaceChildren(...[servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null, stats, actionPanel, teamPanel, autoPanel, logPanel, casesPanel].filter(Boolean));
       loadCases();
     }
     guild.addEventListener("change", () => { page = 1; filterUser = ""; load(); });

@@ -14,6 +14,7 @@ import { LibraryError } from "./library.js";
 import { money } from "./render.js";
 import { AttachmentBuilder } from "discord.js";
 import { renderSteamValue, renderRecap } from "./cardimg.js";
+import { renderWrapped, wrappedData } from "./wrapped.js";
 
 const COOLDOWN_MS = 60_000;
 const last = new Map();
@@ -182,6 +183,24 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
                     return void await i.editReply({ embeds: [recapEmbed({ ...rec, allTime: all })] });
                 }
                 return void await i.reply({ embeds: [recapEmbed({ ...rec, allTime: all })], ...flags });
+            }
+            if (sub === "wrapped") {
+                if (!link) throw new UserError("Link your profile first with `/me steam link`.");
+                const year = i.options.getInteger("year") ?? new Date().getUTCFullYear();
+                const shared = i.options.getBoolean("public") === true;
+                const flags = shared ? {} : { flags: MessageFlags.Ephemeral };
+                const d = wrappedData({ db, userId: i.user.id, year });
+                if (!d) throw new UserError(`Nothing is tracked for ${year}. Hours count from the day you link Steam, so check back after you have played some games.`);
+                await i.deferReply(flags);
+                const name = i.member?.displayName ?? i.user.username;
+                let files = [];
+                try {
+                    const pngs = await renderWrapped({ db, userId: i.user.id, year, name, fetchImpl }) ?? [];
+                    files = pngs.map((png, k) => new AttachmentBuilder(Buffer.from(png), { name: `wrapped-${year}-${k + 1}.png`, description: `Slide ${k + 1} of your ${year} in games` }));
+                } catch (err) { console.error(`[steam wrapped] ${err.name}: ${err.message}`); }
+                const text = `**Your ${year} in games${d.partial ? " so far" : ""}:** ${d.hours.toLocaleString("en-US")} hours across ${d.games} games. You are **${d.archetype.name}**.`;
+                if (!files.length) return void await i.editReply({ content: text });
+                return void await i.editReply({ content: text, files });
             }
             if (sub === "goal") {
                 if (!link) throw new UserError("Link your profile first with `/me steam link`.");

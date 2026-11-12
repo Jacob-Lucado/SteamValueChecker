@@ -3,12 +3,14 @@
 // Discord is injected, so the logic can be tested without a connection.
 
 export const MAX_DM_FAILURES_BEFORE_NOTE = 3;
+/** A notification may open our own pages or a store page; the service worker only follows same-site paths, so others fall back to the alerts page. */
+const safeUrl = u => { try { const x = new URL(u); return /(^|\.)steamvaluechecker\.com$/.test(x.hostname) ? x.pathname + x.search : "/alerts"; } catch { return String(u).startsWith("/") ? u : "/alerts"; } };
 
 /**
  * `discord` needs: sendDm(userId, payload) and sendChannel(channelId, payload), both throwing on failure.
  * Returns { ok, via: "dm" | "channel" | null, reason? }.
  */
-export function createNotifier({ db, discord }) {
+export function createNotifier({ db, discord, push = null }) {
     async function viaChannel(user, payload) {
         const guild = db.getGuild(user.guild_id);
         if (!guild) return { ok: false, via: null, reason: "no_channel" };
@@ -39,6 +41,14 @@ export function createNotifier({ db, discord }) {
         if (db.isBanned?.(user.discord_id)) return { ok: false, via: null, reason: "restricted" };
         const muted = String(user.muted ?? "").split(",").includes(type);
         if (muted) { record(user, type, payload, meta); return { ok: true, via: "inbox" }; }
+        // A browser the person turned notifications on in gets it there instead of a DM; if that fails the DM goes out as usual.
+        if (push && db.countPushSubs?.(user.discord_id)) {
+            try {
+                const e = payload.embeds?.[0];
+                const n = await push.send(user.discord_id, { title: e?.title ?? "Steam Value Checker", body: e?.description ?? payload.content ?? "", url: e?.url ? safeUrl(e.url) : "/alerts", tag: type });
+                if (n > 0) { record(user, type, payload, meta); return { ok: true, via: "push" }; }
+            } catch { /* fall back to the DM */ }
+        }
         const r = await send(user, payload);
         if (r.ok) record(user, type, payload, meta);
         return r;

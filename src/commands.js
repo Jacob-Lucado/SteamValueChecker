@@ -105,6 +105,9 @@ const steam = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("taste").setDescription("Your taste in games from what you play, and wishlist picks that fit it"))
     .addSubcommand(s => s.setName("recap").setDescription("Hours tracked this year and since you linked Steam, per month, and your top games")
         .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it")))
+    .addSubcommand(s => s.setName("wrapped").setDescription("Your year in games as five shareable pictures: hours, top games, best month and player type")
+        .addIntegerOption(o => o.setName("year").setDescription("Which year (default: this one)").setMinValue(2020).setMaxValue(2100))
+        .addBooleanOption(o => o.setName("public").setDescription("Post it in the channel so others can see it")))
     .addSubcommand(s => s.setName("goal").setDescription("Set a goal for hours played this year and see how you are tracking")
         .addIntegerOption(o => o.setName("hours").setDescription("Hours to play this year (1 to 5000). 0 clears it. Leave empty to see progress").setMinValue(0).setMaxValue(5000)))
     .addSubcommand(s => s.setName("view").setDescription("Your Steam library: games, hours played, what you never played and what it is worth"))
@@ -540,6 +543,8 @@ const community = new SlashCommandBuilder()
         .addChannelOption(o => o.setName("channel").setDescription("Only answer in this channel").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
         .addBooleanOption(o => o.setName("anywhere").setDescription("Answer in every channel instead of just one"))
         .addBooleanOption(o => o.setName("guides").setDescription("Answer how-to questions (like getting Steam Verified) with a step by step guide, no AI needed")))
+    .addSubcommand(s => s.setName("links").setDescription("Reply to Steam store links with the price, its lows and a buy-or-wait verdict")
+        .addBooleanOption(o => o.setName("on").setDescription("On or off (needs the Message Content intent on this bot)").setRequired(true)))
     .addSubcommand(s => s.setName("xp").setDescription("Levels and XP settings")
         .addBooleanOption(o => o.setName("enabled").setDescription("Turn XP on or off"))
         .addNumberOption(o => o.setName("multiplier").setDescription("XP speed, 1 is normal").setMinValue(0.1).setMaxValue(5))
@@ -580,6 +585,82 @@ const invitesCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("top").setDescription("Who has brought in the most members"))
     .addSubcommand(s => s.setName("link").setDescription("Get your own invite link; joins through it count for you"));
 
+const rolemenuCmd = new SlashCommandBuilder()
+    .setName("rolemenu")
+    .setDescription("Role menus: members pick their own roles with buttons")
+    .addSubcommand(s => s.setName("create").setDescription("Post a new role menu in a channel")
+        .addStringOption(o => o.setName("title").setDescription("What the menu is for, like Pick your platforms").setRequired(true).setMaxLength(100))
+        .addChannelOption(o => o.setName("channel").setDescription("Where to post it").setRequired(true).addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addStringOption(o => o.setName("mode").setDescription("How picking works").addChoices({ name: "Pick as many as you like", value: "toggle" }, { name: "Pick one at a time", value: "single" }))
+        .addStringOption(o => o.setName("description").setDescription("A line of text above the roles").setMaxLength(500)))
+    .addSubcommand(s => s.setName("add").setDescription("Add a role to a menu")
+        .addIntegerOption(o => o.setName("menu").setDescription("The menu number (see /manage rolemenu list)").setRequired(true).setMinValue(1))
+        .addRoleOption(o => o.setName("role").setDescription("The role members can pick").setRequired(true))
+        .addStringOption(o => o.setName("label").setDescription("Button text (default: the role name)").setMaxLength(80))
+        .addStringOption(o => o.setName("emoji").setDescription("An emoji for the button").setMaxLength(60)))
+    .addSubcommand(s => s.setName("remove").setDescription("Take a role off a menu")
+        .addIntegerOption(o => o.setName("menu").setDescription("The menu number").setRequired(true).setMinValue(1))
+        .addRoleOption(o => o.setName("role").setDescription("The role to remove").setRequired(true)))
+    .addSubcommand(s => s.setName("delete").setDescription("Delete a menu and its message")
+        .addIntegerOption(o => o.setName("menu").setDescription("The menu number").setRequired(true).setMinValue(1)))
+    .addSubcommand(s => s.setName("list").setDescription("All the role menus in this server"));
+
+const starboardCmd = new SlashCommandBuilder()
+    .setName("starboard")
+    .setDescription("Starboard: the messages members love most get their own channel")
+    .addSubcommand(s => s.setName("setup").setDescription("Turn it on or change it")
+        .addChannelOption(o => o.setName("channel").setDescription("Where starred messages are posted").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addIntegerOption(o => o.setName("threshold").setDescription("How many reactions it takes (1 to 25, default 3)").setMinValue(1).setMaxValue(25))
+        .addStringOption(o => o.setName("emoji").setDescription("The emoji to count (default ⭐)").setMaxLength(60))
+        .addBooleanOption(o => o.setName("selfstar").setDescription("Count the author's own reaction (default no)")))
+    .addSubcommand(s => s.setName("off").setDescription("Turn the starboard off"))
+    .addSubcommand(s => s.setName("status").setDescription("The settings and the top posts"));
+
+const suggestionsCmd = new SlashCommandBuilder()
+    .setName("suggestions")
+    .setDescription("Suggestion box: members propose ideas, everyone votes, you answer")
+    .addSubcommand(s => s.setName("setup").setDescription("Choose where suggestions are posted")
+        .addChannelOption(o => o.setName("channel").setDescription("The suggestions channel").setRequired(true).addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+        .addRoleOption(o => o.setName("role").setDescription("A role to mention in the setup message (optional)")))
+    .addSubcommand(s => s.setName("decide").setDescription("Answer a suggestion")
+        .addIntegerOption(o => o.setName("id").setDescription("The suggestion number").setRequired(true).setMinValue(1))
+        .addStringOption(o => o.setName("status").setDescription("What happens to it").setRequired(true).addChoices({ name: "Open", value: "open" }, { name: "Considering", value: "considering" }, { name: "Approved", value: "approved" }, { name: "Done", value: "done" }, { name: "Not planned", value: "denied" }))
+        .addStringOption(o => o.setName("note").setDescription("A short answer shown on it").setMaxLength(500)))
+    .addSubcommand(s => s.setName("list").setDescription("The latest suggestions")
+        .addStringOption(o => o.setName("status").setDescription("Only this status").addChoices({ name: "Open", value: "open" }, { name: "Considering", value: "considering" }, { name: "Approved", value: "approved" }, { name: "Done", value: "done" }, { name: "Not planned", value: "denied" })));
+
+const tagsCmd = new SlashCommandBuilder()
+    .setName("tags")
+    .setDescription("Custom commands: your own short answers members can call up")
+    .addSubcommand(s => s.setName("add").setDescription("Make or change a custom command")
+        .addStringOption(o => o.setName("name").setDescription("The name, like rules or ip").setRequired(true).setMaxLength(32))
+        .addStringOption(o => o.setName("response").setDescription("What it says").setRequired(true).setMaxLength(1800)))
+    .addSubcommand(s => s.setName("remove").setDescription("Delete a custom command")
+        .addStringOption(o => o.setName("name").setDescription("The name").setRequired(true).setMaxLength(32)))
+    .addSubcommand(s => s.setName("list").setDescription("All the custom commands"));
+
+const pollCmd = new SlashCommandBuilder()
+    .setName("poll")
+    .setDescription("Polls with live results")
+    .addSubcommand(s => s.setName("create").setDescription("Start a poll (Manage Messages)")
+        .addStringOption(o => o.setName("question").setDescription("What are you asking?").setRequired(true).setMaxLength(240))
+        .addStringOption(o => o.setName("options").setDescription("Two to ten choices, separated by |").setRequired(true).setMaxLength(900))
+        .addIntegerOption(o => o.setName("hours").setDescription("End after this many hours (0 = until you end it)").setMinValue(0).setMaxValue(720))
+        .addBooleanOption(o => o.setName("multi").setDescription("Let people pick more than one"))
+        .addChannelOption(o => o.setName("channel").setDescription("Where to post it (default: here)").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
+    .addSubcommand(s => s.setName("end").setDescription("End a poll now and show the result")
+        .addIntegerOption(o => o.setName("id").setDescription("The poll number").setRequired(true).setMinValue(1)));
+
+const suggestCmd = new SlashCommandBuilder()
+    .setName("suggest")
+    .setDescription("Send an idea to this server's suggestion box")
+    .addStringOption(o => o.setName("idea").setDescription("Your idea").setRequired(true).setMinLength(10).setMaxLength(1500));
+
+const tagCmd = new SlashCommandBuilder()
+    .setName("tag")
+    .setDescription("Use one of this server's custom commands")
+    .addStringOption(o => o.setName("name").setDescription("Which one").setRequired(true).setAutocomplete(true).setMaxLength(32));
+
 const memesCmd = new SlashCommandBuilder()
     .setName("memes")
     .setDescription("Auto memes: the bot posts a fresh meme in the memes channel on a timer")
@@ -593,21 +674,21 @@ const streamCmd = new SlashCommandBuilder()
     .setName("stream")
     .setDescription("Tell the server you're live, or choose pings")
     .addSubcommand(s => s.setName("live").setDescription("Announce your stream in the live channel")
-        .addStringOption(o => o.setName("link").setDescription("Your stream address, like https://twitch.tv/yourname").setRequired(true).setMaxLength(300))
+        .addStringOption(o => o.setName("link").setDescription("Your stream link").setRequired(true).setMaxLength(300))
         .addStringOption(o => o.setName("title").setDescription("What you're streaming").setMaxLength(120))
         .addStringOption(o => o.setName("game").setDescription("The game").setMaxLength(60)))
-    .addSubcommand(s => s.setName("link").setDescription("Link Twitch, Kick, YouTube so I post when you go live")
-        .addStringOption(o => o.setName("channel").setDescription("Your channel link, like https://twitch.tv/yourname").setRequired(true).setMaxLength(200)))
+    .addSubcommand(s => s.setName("link").setDescription("Post when you go live on Twitch, Kick or YouTube")
+        .addStringOption(o => o.setName("channel").setDescription("Your channel link").setRequired(true).setMaxLength(200)))
     .addSubcommand(s => s.setName("unlink").setDescription("Stop posting when you go live")
         .addStringOption(o => o.setName("site").setDescription("Just this site (empty: all)").addChoices({ name: "Twitch", value: "twitch" }, { name: "Kick", value: "kick" }, { name: "YouTube", value: "youtube" })))
     .addSubcommand(s => s.setName("end").setDescription("Mark your stream as finished"))
-    .addSubcommand(s => s.setName("ping").setDescription("Get pinged when someone here goes live, or stop")
+    .addSubcommand(s => s.setName("ping").setDescription("Get pinged when someone goes live")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off (leave empty to switch)")))
     .addSubcommand(s => s.setName("list").setDescription("Who is live right now"))
-    .addSubcommand(s => s.setName("giveaway").setDescription("Give a key to viewers, drawn when your stream ends")
+    .addSubcommand(s => s.setName("giveaway").setDescription("Give a key to viewers when your stream ends")
         .addStringOption(o => o.setName("game").setDescription("Which game the key is for").setRequired(true).setMaxLength(80))
         .addStringOption(o => o.setName("key").setDescription("The key. Only the winner ever sees it").setRequired(true).setMaxLength(200))
-        .addIntegerOption(o => o.setName("minutes").setDescription("Longest it runs if you stay live (default 60)").setMinValue(5).setMaxValue(720)))
+        .addIntegerOption(o => o.setName("minutes").setDescription("Max minutes (default 60)").setMinValue(5).setMaxValue(720)))
     .addSubcommand(s => s.setName("chat").setDescription("Chat commands for your stream bot")
         .addStringOption(o => o.setName("bot").setDescription("Which chat bot (default: all)").addChoices({ name: "Nightbot", value: "nightbot" }, { name: "StreamElements", value: "streamelements" }, { name: "Streamlabs Cloudbot", value: "streamlabs" }, { name: "Fossabot", value: "fossabot" })))
     .addSubcommand(s => s.setName("setup").setDescription("Managers: streamer role, live channel and ping role")
@@ -642,7 +723,17 @@ const modCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("ban").setDescription("Ban a member")
         .addUserOption(o => o.setName("user").setDescription("Who").setRequired(true))
         .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400))
-        .addIntegerOption(o => o.setName("delete_days").setDescription("Also delete their messages from the last 0 to 7 days").setMinValue(0).setMaxValue(7)))
+        .addIntegerOption(o => o.setName("delete_days").setDescription("Also delete their messages from the last 0 to 7 days").setMinValue(0).setMaxValue(7))
+        .addStringOption(o => o.setName("length").setDescription("Temporary ban, lifts itself: 12h, 7d, 30d (empty = permanent)").setMaxLength(10)))
+    .addSubcommand(s => s.setName("stats").setDescription("What each moderator has done lately")
+        .addIntegerOption(o => o.setName("days").setDescription("How far back, 1 to 365 (default 30)").setMinValue(1).setMaxValue(365)))
+    .addSubcommand(s => s.setName("appeals").setDescription("See and answer ban appeals")
+        .addIntegerOption(o => o.setName("id").setDescription("The appeal to answer"))
+        .addStringOption(o => o.setName("answer").setDescription("Accept (unbans them) or deny").addChoices({ name: "Accept and unban", value: "accept" }, { name: "Deny", value: "deny" }))
+        .addStringOption(o => o.setName("note").setDescription("A short message back to them").setMaxLength(300)))
+    .addSubcommand(s => s.setName("settings").setDescription("Warnings expire after some days, and whether bans can be appealed")
+        .addIntegerOption(o => o.setName("warn_expiry_days").setDescription("Warnings stop counting after this many days (0 = never)").setMinValue(0).setMaxValue(365))
+        .addBooleanOption(o => o.setName("appeals").setDescription("Let banned people appeal on the website")))
     .addSubcommand(s => s.setName("unban").setDescription("Lift a ban")
         .addStringOption(o => o.setName("user_id").setDescription("The banned person's user ID").setRequired(true).setMaxLength(25))
         .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(400)))
@@ -844,7 +935,7 @@ const playerCmd = new SlashCommandBuilder()
 
 export const commands = [
     ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, supporterCmd, mydata, help, about, vote, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
-    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, coop, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh].map(serverOnly),
+    ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, coop, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh, rolemenuCmd, starboardCmd, suggestionsCmd, tagsCmd, pollCmd, suggestCmd, tagCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
 
@@ -855,8 +946,8 @@ export const commands = [
 const HUBS = [
     { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
-    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "coop", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
-    { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes"] },
+    { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "coop", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard", "suggest", "tag"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
+    { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes", "rolemenu", "starboard", "suggestions", "tags", "poll"] },
     { name: "bot", description: "About the bot, its status, changelog, support and ideas", kind: "everywhere", flat: ["about", "privacy", "status", "changelog", "supporter", "bug", "grabberad"], groups: ["support", "feature"] }
 ];
 const KEEP = ["help", "dashboard", "alerts", "language", "vote", "mod", "music", "play", "player"];

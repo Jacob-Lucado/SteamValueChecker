@@ -40,6 +40,7 @@ import { createModRoutes } from "./modroutes.js";
 import { createRedeemRoutes } from "./redeemroutes.js";
 import { createPlayRoutes } from "./playroutes.js";
 import { createProfileRoutes } from "./profileroutes.js";
+import { createToolsRoutes } from "./toolsroutes.js";
 import { createAdminExtraRoutes } from "./adminextraroutes.js";
 import { createFortniteRoutes } from "./fortniteroutes.js";
 import { createWishlistRoutes } from "./wishlistroutes.js";
@@ -75,6 +76,7 @@ import { createStreams, canStreamIn } from "../streamlive.js";
 import { sanitize } from "../parse.js";
 import { prefsView } from "../prefs.js";
 import { renderSteamValue, renderRecap, renderProfileShare } from "../cardimg.js";
+import { renderWrapped } from "../wrapped.js";
 import { createBroadcaster } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
 import { noticePreset } from "../noticepresets.js";
@@ -92,7 +94,9 @@ import { publicWishlist } from "../profile.js";
 import { steamArt } from "../render.js";
 import { summarize } from "../report.js";
 import { buyOrWait } from "../advice.js";
-import { renderGamePage, slugify } from "../gamepage.js";
+import { renderGamePage, renderWidget, slugify } from "../gamepage.js";
+import { protonTier, deckStatus } from "../proton.js";
+import { loadGameData } from "../gamedata.js";
 import { grabberRegion } from "../spend.js";
 import { monthKey } from "../challenge.js";
 import { MAX_CLAIMS_PER_LIST, MAX_CLAIMS_TOTAL, accountOldEnough } from "../giftstore.js";
@@ -176,6 +180,9 @@ const FILES = {
     "/nowplayingui.js": ["nowplayingui.js", "text/javascript; charset=utf-8"],
     "/santaui.js": ["santaui.js", "text/javascript; charset=utf-8"],
     "/clubui.js": ["clubui.js", "text/javascript; charset=utf-8"],
+    "/toolsui.js": ["toolsui.js", "text/javascript; charset=utf-8"],
+    "/sw.js": ["sw.js", "text/javascript; charset=utf-8"],
+    "/wrappedui.js": ["wrappedui.js", "text/javascript; charset=utf-8"],
     "/foryouui.js": ["foryouui.js", "text/javascript; charset=utf-8"],
     "/valueui.js": ["valueui.js", "text/javascript; charset=utf-8"],
     "/bundlesui.js": ["bundlesui.js", "text/javascript; charset=utf-8"],
@@ -286,7 +293,7 @@ const ADMIN_SESSION_MS = 12 * 3600_000; // a password sign-in is shorter lived t
 const STATE_COOKIE = "svc_state";
 const REF_COOKIE = "svc_ref", STEAM_STATE_COOKIE = "svc_steamstate", STEAM_PENDING_COOKIE = "svc_steampending", STEAM_KNOWN_COOKIE = "svc_steamknown", NEXT_COOKIE = "svc_next";
 const MUTE_DAYS = 3650;
-const COOLDOWNS = { grabbersync: 4_000, grabbergifts: 1_000, grabbercompare: 1_500, grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
+const COOLDOWNS = { appeal: 30_000, wrapped: 15_000, grabbersync: 4_000, grabbergifts: 1_000, grabbercompare: 1_500, grabberact: 1_500, grabberbadge: 20_000, streamgw: 5_000, sample: 5_000, libnews: 3_000, streamlink: 2_000, ptrefresh: 60_000, memenow: 10_000, cemojipackimp: 300, cemojipacks: 300, cemojipack: 300, music: 800, musicsearch: 3_000, musicplay: 2_000, musicsubmit: 2_500, musicauto: 4_000, musicstations: 5_000, request: 20_000, requestvote: 1_000, broadcast: 120_000, value: 15_000, import: 60_000, add: 3_000, hist: 2_000, lib: 3_000, steam: 60_000, grabber: 10_000, grabbergame: 1_000, gamepage: 1_500, taste: 5_000, steamlookup: 8_000, grabberprices: 2_000, grabbertoken: 5_000, deals: 3_000, bundles: 3_000, regions: 3_000, saleprep: 3_000, cardimg: 4_000, analytics: 2_500, foryou: 2_500, csetup: 20_000, cemoji: 8_000, clink: 3_000, cpage: 2_000, mod: 1_000, announce: 5_000, lbrefresh: 15_000, streamlive: 4_000, streamping: 3_000 };
 const MAX_HISTORY_POINTS = 180;
 const MANAGE_GUILD = 0x20n;
 const ADMINISTRATOR = 0x8n;
@@ -308,7 +315,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ referrals = null, weekly = null, indieSvc = null, fortniteSvc = null, indieNews = null, spotlight = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, automod = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ push = null, referrals = null, weekly = null, indieSvc = null, fortniteSvc = null, indieNews = null, spotlight = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, automod = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -502,25 +509,20 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         const hit = gamePages.get(appid);
         if (hit && Date.now() - hit.at < 3 * 3600_000) return hit.page;
         let page = null;
-        try {
-            const id = (await itad.lookupShopIds(61, [`app/${appid}`])).get(`app/${appid}`);
-            if (id) {
-                const info = await itad.getTitle(id);
-                if (info?.title) {
-                    const [prices, history] = await Promise.all([itad.getPrices([id], "US").catch(() => new Map()), itad.getHistory(id, "US").catch(() => [])]);
-                    const sum = summarize(prices.get(id), {});
-                    const cur = sum.currency || "USD", fmt = n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } };
-                    const price = sum.best?.price ?? null, step = Math.max(1, Math.ceil(history.length / MAX_HISTORY_POINTS));
-                    const data = { title: info.title, appid, itadId: id, currency: cur, price, shop: sum.best?.shop ?? null, shopUrl: /^https:\/\//i.test(sum.best?.url ?? "") ? sum.best.url : null,
-                        msrp: sum.msrp, low1y: sum.low1y, atl: sum.atl, image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`,
-                        points: history.filter((_, i) => i % step === 0 || i === history.length - 1).map(p => ({ t: p.t, price: p.price })),
-                        advice: price !== null ? buyOrWait(history, price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: fmt }) : null };
-                    page = { path: `/game/${appid}-${slugify(info.title)}`, html: renderGamePage(data, { origin }) };
-                }
-            }
-        } catch { page = null; }
+        const [data, proton, deck] = await Promise.all([loadGameData(itad, appid), protonTier(Number(appid)).catch(() => null), deckStatus(Number(appid)).catch(() => null)]);
+        if (data) data.compat = { proton, deck };
+        if (data) page = { path: `/game/${appid}-${slugify(data.title)}`, html: renderGamePage(data, { origin }) };
         if (page) { if (gamePages.size >= 400) gamePages.delete(gamePages.keys().next().value); gamePages.set(appid, { at: Date.now(), page }); }
         return page;
+    }
+    const widgets = new Map(); // appid -> { at, data }
+    async function widgetData(appid) {
+        const hit = widgets.get(appid);
+        if (hit && Date.now() - hit.at < 10 * 60_000) return hit.data;
+        const data = await loadGameData(itad, appid);
+        if (widgets.size >= 400) widgets.delete(widgets.keys().next().value);
+        widgets.set(appid, { at: Date.now(), data });
+        return data;
     }
     const send = (res, status, body, headers = {}) => {
         const type = String(headers["Content-Type"] ?? "");
@@ -533,7 +535,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         const ownFrame = res.req?.headers?.["sec-fetch-dest"] === "iframe" && res.req?.headers?.["sec-fetch-site"] === "same-origin" && !onAdminHost(res.req) && !onMusicHost(res.req);
         res.writeHead(status, {
             "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": "DENY",
+            ...(/^\/widget\/\d{1,9}(\?|$)/.test(path) ? {} : { "X-Frame-Options": "DENY" }), // the price widget is made to be embedded
             "Referrer-Policy": "no-referrer",
             "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
             "Cross-Origin-Opener-Policy": "same-origin",
@@ -1015,6 +1017,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const dayKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date()); // YYYY-MM-DD, Eastern
 
     const adminExtraRoutes = createAdminExtraRoutes({ ai, authorCard, bundleFeed, codes, config, dayKey, db, dm, guildList, health, inviteReport, isOwner, itad, logs, music, musicCall, now, ops, origin, rest, rt, session, square, storage, supporters, topgg, weekly, xposter });
+    const toolsRoutes = createToolsRoutes({ db, guildFor, isManager, isOwner, rest, session, now, push });
     const profileRoutes = createProfileRoutes({ authorCard, bgLimit, config, cooldown, db, guildFor, isManager, isOwner, itad, mayPost, notifySocial, now, nowPlaying, profileEditorPayload, rest, session, slugOwner, socialRoutes, socialWrite, steamFetch, userRow });
     const playRoutes = createPlayRoutes({ botGuilds, calendar, cooldown, db, dm, guildFor, isManager, isOwner, itad, lfg, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow });
     const redeemRoutes = createRedeemRoutes({ adminExtraRoutes, botGuilds, codes, cooldown, db, dm, fortniteRoutes, indieRoutes, isOwner, itad, musicRoutes, now, overlayRoutes, serverRoutes, session, userRow, wishlistRoutes });
@@ -1173,6 +1176,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         },
 
         ...profileRoutes,
+        ...toolsRoutes,
 
 
 
@@ -1727,6 +1731,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         void ended; // the page works the ended state out itself
         return send(res, 200, kind === "b" ? renderBundleLanding(row, opts) : renderDealLanding(row, opts), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
     }
+    const wrappedCache = new Map(); // `${userId}:${year}` -> { at, pngs }, the five Wrapped pictures
     const shareCache = new Map(); // slug -> { at, png }
     async function serveProfileShare(res, slug) {
         const owner = publicOwner(slug);
@@ -1891,6 +1896,13 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Steam Winter Sale prep | Steam Value Checker</title><meta name="description" content="Get ready for the Steam Winter Sale: build a wishlist budget, see which games are at their lowest price, and get alerts when they drop."><link rel="canonical" href="${origin}/winter-sale"><meta property="og:title" content="${head}"><meta property="og:description" content="Plan your Steam sale budget and get alerted at the lowest price."><style>body{margin:0;background:#0f1722;color:#e6edf5;font:16px/1.55 system-ui,sans-serif}main{max-width:640px;margin:0 auto;padding:48px 20px}h1{font-size:2rem;margin:0 0 8px}.big{font-size:3.4rem;font-weight:800;color:#66c0f4;margin:24px 0 4px}p{color:#aab8c8}li{margin:8px 0;color:#c7d2de}a.b{display:inline-block;margin:20px 12px 0 0;padding:12px 20px;border-radius:8px;background:#66c0f4;color:#0f1722;font-weight:700;text-decoration:none}a.g{background:#243246;color:#e6edf5}</style></head><body><main><h1>${head}</h1>${ev && days > 0 ? `<div class="big">${days}</div><p>days until ${esc(when)}</p>` : ""}<p>Do this before it starts and you will not impulse-buy at a fake discount.</p><ol><li>Wishlist everything you actually want.</li><li>Set a budget, and let the bot pick the best use of it.</li><li>Get a ping only when a game hits its real lowest price, not just a big percentage.</li></ol><a class="b" href="${origin}/invite?src=winter-sale">Add the bot</a><a class="b g" href="${origin}/">Open the dashboard</a></main></body></html>`;
                 return send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=1800", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" });
             }
+            if (req.method === "GET" && /^\/widget\/\d{1,9}$/.test(url.pathname)) {
+                if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const data = await widgetData(url.pathname.split("/")[2]);
+                if (!data) return send(res, 404, "That game was not found.", { "Content-Type": "text/plain; charset=utf-8" });
+                const theme = ["light", "transparent"].includes(url.searchParams.get("theme")) ? url.searchParams.get("theme") : "dark";
+                return send(res, 200, renderWidget(data, { origin, theme }), { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; frame-ancestors *; base-uri 'none'; form-action 'none'" });
+            }
             if (req.method === "GET" && /^\/game\/\d{1,9}(-[a-z0-9-]{0,80})?$/.test(url.pathname)) {
                 if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
                 const appid = url.pathname.split("/")[2].split("-")[0];
@@ -1985,6 +1997,26 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                     if (!png) throw new HttpError(404, "Link your Steam profile and sync first, so there is something to draw.");
                     return send(res, 200, Buffer.from(png), { "Content-Type": "image/png", "Cache-Control": "no-store", "Content-Disposition": `inline; filename="${key.includes("card") ? "my-game-profile" : key.includes("recap") ? "my-year-in-games" : "steam-account-value"}.png"` });
                 } catch (err) { undo(); throw err; }
+            }
+
+            // Steam Wrapped: all five pictures are drawn together and kept for ten minutes, so flipping through them costs one render.
+            const wrappedPng = req.method === "GET" ? /^\/api\/steam\/wrapped\/([1-5])\.png$/.exec(url.pathname) : null;
+            if (wrappedPng) {
+                const s = session(req); userRow(s);
+                const year = Number(url.searchParams.get("year")) || new Date(now()).getUTCFullYear();
+                if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new HttpError(400, "Pick a year from 2020 on.");
+                const ck = `${s.userId}:${year}`;
+                let hit = wrappedCache.get(ck);
+                if (!hit || now() - hit.at > 600_000) {
+                    const undo = cooldown(s.userId, "wrapped");
+                    try {
+                        const pngs = await renderWrapped({ db, userId: s.userId, year, name: s.username, fetchImpl: steamFetch, now: now() });
+                        if (!pngs) throw new HttpError(404, "Nothing is tracked for that year yet. Link your Steam profile and play something first.");
+                        if (wrappedCache.size > 60) wrappedCache.delete(wrappedCache.keys().next().value);
+                        wrappedCache.set(ck, hit = { at: now(), pngs });
+                    } catch (err) { undo(); throw err; }
+                }
+                return send(res, 200, Buffer.from(hit.pngs[Number(wrappedPng[1]) - 1]), { "Content-Type": "image/png", "Cache-Control": "private, max-age=300", "Content-Disposition": `inline; filename="wrapped-${year}-${wrappedPng[1]}.png"` });
             }
 
             if (key === "GET /api/mydata/download") {

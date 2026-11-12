@@ -1,5 +1,14 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.59", date: "2026-11-12", title: "Wrapped, server tools and push", items: [
+        "**Steam Wrapped:** /games steam wrapped (or Library > Wrapped) makes five shareable slides from your year: hours, top games, streaks, genres and your gamer type.",
+        "**Server tools:** role menus with buttons (/manage rolemenu), a starboard, polls that close themselves (/manage poll), a suggestion box (/server suggest) and custom commands (/server tag). All of it is on the new Servers > Server tools page.",
+        "**Store link replies:** turn on link replies in /manage community and a Steam store link in chat gets a card with the best price and a buy-or-wait verdict.",
+        "**Moderation:** temporary bans that lift themselves (/mod ban length:7d), warnings that expire, /mod stats, and ban appeals people can file at /appeal. Moderators answer them on the Moderation page.",
+        "**Browser notifications:** turn them on under Alert settings and price alerts show up on that device, even with Discord closed.",
+        "**Ctrl+K:** now jumps to any page, with arrow keys and Enter, as well as searching.",
+        "**Game pages:** Steam Deck and ProtonDB badges, and a price card you can embed on a stream overlay or website."
+    ] },
     { version: "2026.11.58", date: "2026-11-12", title: "More moderation", items: [
         "**Auto-moderator:** the bot can now watch for message spam, mass mentions, Discord invite links, links outside your allow-list, blocked words and SHOUTING. A message that breaks a rule is deleted, and the person can also be warned or timed out. Staff, chosen roles and chosen channels are never touched. Turn it on in the dashboard's Moderation page or with /mod automod.",
         "**Escalation:** after a set number of active warnings the bot can time the person out, kick them or ban them on its own.",

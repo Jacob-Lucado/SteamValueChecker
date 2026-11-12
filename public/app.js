@@ -234,11 +234,11 @@ window.SVC_SITE = envIn => {
   // and the bar stays short.
   const NAV = [
     { id: "home", label: "Home", pages: [["home", "Home"]] },
-    { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
+    { id: "library", label: "Library", pages: [["library", "My library"], ["steam", "Steam"], ["wrapped", "Wrapped"], ["value", "Value Checker"], ["redeem", "Batch redeem"]] },
     { id: "deals", label: "Deals", pages: [["wishlist", "Wishlist"], ["foryou", "For you"], ["deals", "Check a deal"], ["warroom", "Sale planner"], ["free", "Free games"], ["bundles", "Bundles"], ["playtests", "Playtests"], ["codes", "Codes & promos"]] },
     { id: "feed", label: "Social", pages: [["feed", "Feed"], ["people", "People"], ["friends", "Friends"], ["compare", "Compare"], ["communities", "Communities"], ["discover", "Discover"]] },
     { id: "social", label: "Play together", pages: [["gamenight", "Game night"], ["nowplaying", "Now playing"], ["club", "Game club"], ["trivia", "Trivia"], ["lfg", "Looking for group"], ["calendar", "Calendar"], ["fortnite", "Fortnite"]] },
-    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["giveaways", "Giveaways"], ["music", "Music"]] },
+    { id: "servers", label: "Servers", pages: [["servers", "My servers"], ["setup", "Setup"], ["community", "Community"], ["santa", "Secret Santa"], ["xp", "Server XP"], ["mod", "Moderation"], ["tools", "Server tools"], ["giveaways", "Giveaways"], ["music", "Music"]] },
     { id: "indie", label: "Creators", pages: [["indie", "Indie showcase & tools"], ["devpanel", "Dev panel"], ["streamer", "Streamer hub"], ["overlays", "Overlay studio"], ["streams", "Go live"], ["streamers", "Who is live"]] },
     { id: "account", label: "Account", pages: [["profile", "My profile"], ["mypage", "My page"], ["notifications", "Notifications"], ["alerts", "Alert settings"], ["mydata", "My data"]] },
     { id: "help", label: "Help", pages: [["help", "Help"], ["support", "Support"], ["tip", "Chip in"], ["requests", "Feature requests"], ["status", "Status"], ["changelog", "What's new"], ["about", "About"]] },
@@ -590,6 +590,10 @@ window.SVC_SITE = envIn => {
 
   /** Buttons that send one sample alert of each kind to the member's own DMs. */
   function samplePanel() {
+    const samples = samplePanelBase();
+    return h("div", {}, samples, pushPanel());
+  }
+  function samplePanelBase() {
     const KINDS = [["sale", "Sale"], ["free", "Free game"], ["bundle", "Bundle"], ["sub", "Subscription"], ["news", "Patch notes"], ["release", "Release day"]];
     return h("div", { class: "panel" }, h("h3", { text: "See how alerts look" }),
       h("p", { class: "muted small", text: "Send yourself a sample of any alert by Discord DM. It is marked as a sample and isn't a real deal." }),
@@ -598,6 +602,39 @@ window.SVC_SITE = envIn => {
         b.addEventListener("click", () => busy(b, async () => { await api("/api/alerts/test", { kind }); toast("Sample sent. Check your DMs.", "ok"); }));
         return b;
       })));
+  }
+
+  /** Turns browser notifications on or off for price alerts (a service worker plus a push subscription). */
+  function pushPanel() {
+    const box = h("div", { class: "panel" }, h("h3", { text: "Browser notifications" }), h("p", { class: "muted small", text: "Get price alerts as a notification on this device, even when Discord is closed." }));
+    const ok = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    if (!ok) { box.append(h("p", { class: "muted small", text: "This browser can't show push notifications. On an iPhone, add the site to your Home Screen first." })); return box; }
+    const row = h("div", { class: "row" });
+    const reg = () => navigator.serviceWorker.register("/sw.js");
+    const toKey = b64 => { const p = "=".repeat((4 - b64.length % 4) % 4), r = atob((b64 + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+    async function draw() {
+      row.replaceChildren();
+      let info, sub = null;
+      try { info = await api("/api/push"); sub = await (await reg()).pushManager.getSubscription(); } catch (e) { row.append(h("span", { class: "muted small", text: "Not available right now." })); return; }
+      if (!info.available) { row.append(h("span", { class: "muted small", text: "Not available right now." })); return; }
+      if (sub) {
+        const test = h("button", { type: "button", class: "btn gray small", text: "Send a test" }), off = h("button", { type: "button", class: "btn gray small", text: "Turn off on this device" });
+        test.addEventListener("click", () => busy(test, async () => { await api("/api/push/test", {}); toast("Sent. It should appear in a moment.", "ok"); }));
+        off.addEventListener("click", () => busy(off, async () => { const ep = sub.endpoint; await sub.unsubscribe().catch(() => {}); await api("/api/push/unsubscribe", { endpoint: ep }); toast("Turned off here.", "ok"); await draw(); }));
+        row.append(h("span", { class: "muted small", text: "On for this device. " }), test, off);
+      } else {
+        const on = h("button", { type: "button", class: "btn blue small", text: "Turn on" });
+        on.addEventListener("click", () => busy(on, async () => {
+          if (await Notification.requestPermission() !== "granted") { toast("Notifications are blocked for this site in your browser settings.", "error"); return; }
+          const r = await reg(); await navigator.serviceWorker.ready;
+          const s = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toKey(info.key) });
+          await api("/api/push/subscribe", { subscription: s.toJSON() });
+          toast("Browser notifications are on.", "ok"); await draw();
+        }));
+        row.append(on);
+      }
+    }
+    box.append(row); draw(); return box;
   }
 
   function publicPagePanel() {
@@ -834,6 +871,14 @@ window.SVC_SITE = envIn => {
   async function playtestsView() { return (await lazy("PlaytestsUI")).view({ PLAYTEST_POLL_MS, api, app, currentView, ext, h, pageHead, state, toast }); }
 
   /** The server's game of the month: the pick, who is playing or finished, and (for managers) the controls. */
+  async function wrappedView() { return (await lazy("WrappedUI")).view({ api, app, field, h, pageHead, select, state }); }
+  function appealView() {
+    let gid = ""; try { gid = new URLSearchParams(location.search).get("guild") || ""; } catch { /* no query */ }
+    const text = h("textarea", { rows: "6", maxlength: "1000", placeholder: "Why should the moderators lift your ban?" }), id = h("input", { type: "text", maxlength: "25", placeholder: "Server ID", value: gid }), go = h("button", { class: "btn blue", text: "Send appeal" });
+    go.addEventListener("click", () => busy(go, async () => { await api("/api/appeal", { guild_id: id.value.trim(), text: text.value }); text.value = ""; toast("Sent. The moderators will answer you in Discord.", "ok"); }));
+    app.replaceChildren(pageHead("Ban appeal", "Banned from a server that takes appeals? Tell its moderators why you should come back. You must be signed in with the Discord account that was banned. You get an answer by direct message."), h("div", { class: "panel" }, gid ? null : field("Server ID", id), field("Your appeal", text), h("div", { class: "row" }, go)));
+  }
+  async function toolsView() { return (await lazy("ToolsUI")).view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
   async function clubView() { return (await lazy("ClubUI")).view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
 
   // Secret Santa for a server: sign up, draw, and see who you're buying for.
@@ -1547,18 +1592,44 @@ window.SVC_SITE = envIn => {
   let searchEl = null;
   function openSearch() {
     if (!state.me || searchEl) return;
-    const input = h("input", { type: "search", placeholder: "Search games, tickets, servers, pages…", "aria-label": "Search" });
+    const input = h("input", { type: "search", placeholder: "Jump to a page or search games, tickets, servers…", "aria-label": "Search" });
     const list = h("div", { class: "search-results" });
     searchEl = h("div", { class: "search-overlay", role: "dialog", "aria-label": "Search", onclick: e => { if (e.target === searchEl) closeSearch(); } }, h("div", { class: "search-box" }, input, list));
     document.body.append(searchEl); input.focus();
-    let timer = null;
+    let timer = null, found = [];
+    // Pages first (instant, from the menu), then what the server finds. Arrow keys move, Enter opens.
+    const pageHits = q => {
+      const all = NAV.flatMap(sec => sec.pages.map(([id, label]) => ({ id, label, section: sec.label }))).filter(p => p.id !== "home" && pageVisible(p.id));
+      const t = q.trim().toLowerCase();
+      return (t ? all.filter(p => p.label.toLowerCase().includes(t) || p.id.includes(t) || p.section.toLowerCase().includes(t)) : all.slice(0, 6)).slice(0, 7);
+    };
+    const draw = (q, results, note) => {
+      const pages = pageHits(q).map(p => h("a", { href: "#/" + p.id, onclick: closeSearch }, h("span", { class: "chip dim", text: "Go to" }), " ", p.label, h("span", { class: "muted small", text: " · " + p.section })));
+      const hits = results.map(r => h("a", { href: r.href, onclick: closeSearch }, h("span", { class: "chip dim", text: r.kind }), " ", r.title));
+      found = [...pages, ...hits];
+      list.replaceChildren(...found, ...(note ? [h("p", { class: "muted", text: note })] : []));
+      if (found[0]) found[0].classList.add("sel");
+    };
+    draw("", []);
+    input.addEventListener("keydown", e => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
+      const i = found.findIndex(x => x.classList.contains("sel"));
+      if (e.key === "Enter") { e.preventDefault(); if (found[i]) found[i].click(); return; }
+      e.preventDefault();
+      const n = Math.max(0, Math.min(found.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+      found.forEach((x, k) => x.classList.toggle("sel", k === n)); found[n]?.scrollIntoView({ block: "nearest" });
+    });
     input.addEventListener("input", () => {
       clearTimeout(timer);
+      const q = input.value;
+      draw(q, [], q.trim().length >= 2 ? "Searching…" : "");
+      if (q.trim().length < 2) return;
       timer = setTimeout(async () => {
         try {
-          const d = await api("/api/search?q=" + encodeURIComponent(input.value));
-          list.replaceChildren(...(d.results.length ? d.results.map(r => h("a", { href: r.href, onclick: closeSearch }, h("span", { class: "chip dim", text: r.kind }), " ", r.title)) : [h("p", { class: "muted", text: input.value.trim().length < 2 ? "Type at least 2 letters." : "No matches." })]));
-        } catch (e) { list.replaceChildren(h("p", { class: "muted", text: e.message })); }
+          const d = await api("/api/search?q=" + encodeURIComponent(q));
+          if (input.value !== q) return;
+          draw(q, d.results, d.results.length || pageHits(q).length ? "" : "No matches.");
+        } catch (e) { draw(q, [], e.message); }
       }, 200);
     });
   }
@@ -1930,7 +2001,7 @@ window.SVC_SITE = envIn => {
   const indieView = () => window.IndieUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
   const fortniteView = () => window.FortniteUI.view({ h, api, app, state, navigate, pageHead, toast, busy });
   const devPanelView = () => window.DevPanel.view({ h, api, app, state, navigate, pageHead, toast, busy });
-  const VIEWS = { fortnite: fortniteView, devpanel: devPanelView, indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, connect: connectView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
+  const VIEWS = { appeal: appealView, tools: toolsView, wrapped: wrappedView, fortnite: fortniteView, devpanel: devPanelView, indie: indieView, feed: feedView, communities: communitiesView, discover: discoverView, people: peopleView, bundles: bundlesView, streamer: streamerHubView, streams: streamsView, streamers: streamersView, music: musicView, promos: codesView, codes: codesView, mod: modView, xp: xpView, community: communityView, gamenight: gameNightView, lfg: lfgView, setup: setupView, notifications: notificationsView, changelog: changelogView, support: supportView, tip: tipView, overlays: overlaysView, requests: requestsView, value: valueView, wishlist: wishlistView, library: libraryView, connect: connectView, redeem: redeemView, compare: compareView, calendar: calendarView, friends: friendsView, steam: steamView, foryou: forYouView, deals: dealsView, free: freeView, playtests: playtestsView, nowplaying: nowPlayingView, club: clubView, santa: santaView, trivia: triviaView, warroom: warRoomView, alerts: alertsView, servers: serversView, giveaways: giveawaysView, mydata: myDataView, help: helpView, about: aboutView, status: statusView, home: landing, mypage: myPageView, profile: profileEditorView, admin: adminRedirect };
 
   /** Hands the whole page to the LucadoOS desktop: one icon for each section, and every page opens in its own window. */
   function osMount() {

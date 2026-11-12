@@ -434,6 +434,11 @@ test("every slash command has a dashboard counterpart", async () => {
     const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
     // command or command/subcommand -> a dashboard route (or page) that does the same job
     const MAP = {
+        "steam/wrapped": "GET /api/steam/wrapped", "community/links": "POST /api/community/places", "mod/stats": "GET /api/mod/stats", "mod/appeals": "POST /api/mod/appeals/decide", "mod/settings": "POST /api/mod/settings",
+        "rolemenu/create": "POST /api/tools/rolemenu", "rolemenu/add": "POST /api/tools/rolemenu", "rolemenu/remove": "POST /api/tools/rolemenu", "rolemenu/delete": "POST /api/tools/rolemenu", "rolemenu/list": "GET /api/tools",
+        "starboard/setup": "POST /api/tools/starboard", "starboard/off": "POST /api/tools/starboard", "starboard/status": "GET /api/tools",
+        "suggestions/setup": "POST /api/tools/suggest", "suggestions/decide": "POST /api/tools/suggest", "suggestions/list": "GET /api/tools",
+        "tags/add": "POST /api/tools/tag", "tags/remove": "POST /api/tools/tag", "tags/list": "GET /api/tools", "poll/create": "POST /api/tools/poll", "poll/end": "POST /api/tools/poll", suggest: "POST /api/tools/suggest", tag: "GET /api/tools",
         value: "POST /api/value", "wishlist/import": "POST /api/wishlist/import", "wishlist/add": "POST /api/wishlist/add",
         "wishlist/remove": "POST /api/wishlist/remove", "wishlist/view": "GET /api/wishlist", "wishlist/check": "GET /api/wishlist/history",
         "wishlist/alert": "POST /api/wishlist/alert", "wishlist/cleanup": "POST /api/wishlist/cleanup", "wishlist/priority": "POST /api/wishlist/priority",
@@ -577,7 +582,7 @@ test("commands: personal ones can be installed on an account, server ones stay i
     const personal = block.match(/\.\.\.\[([^\]]*)\]\.map\(everywhere\)/)?.[1].split(",").map(s => s.trim());
     const server = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOnly\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(personal.sort(), ["about", "alerts", "bug", "bundle", "changelog", "codes", "currency", "dashCmd(\"dash\")", "dashCmd(\"dashboard\")", "feature", "freegames", "friendCmd", "grabberAd", "help", "languageCmd", "library", "mydata", "privacy", "profileCmd", "profilecard", "publicpage", "redeem", "regions", "saleprep", "sales", "status", "steam", "support", "supporterCmd", "value", "vote", "watch", "wishlist"]);
-    assert.deepEqual(server.sort(), ["alertchannel", "clubCmd", "community", "compare", "coop", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "memesCmd", "modCmd", "musicCmd", "nowplayingCmd", "playCmd", "playerCmd", "promos", "rank", "santaCmd", "setup", "streamCmd", "triviaCmd"]);
+    assert.deepEqual(server.sort(), ["alertchannel", "clubCmd", "community", "compare", "coop", "emojiCmd", "gamenight", "giveaway", "invitesCmd", "lbRefresh", "levels", "lfgCmd", "memesCmd", "modCmd", "musicCmd", "nowplayingCmd", "playCmd", "playerCmd", "pollCmd", "promos", "rank", "rolemenuCmd", "santaCmd", "setup", "starboardCmd", "streamCmd", "suggestCmd", "suggestionsCmd", "tagCmd", "tagsCmd", "triviaCmd"]);
     const dmToo = block.match(/\.\.\.\[([^\]]*)\]\.map\(serverOrDm\)/)?.[1].split(",").map(s => s.trim());
     assert.deepEqual(dmToo.sort(), ["calendarCmd", "leaderboard", "serverlist", "serverstats"]);
     assert.match(src, /const serverOnly = b => b[\s\S]*?setContexts\(InteractionContextType\.Guild\);/, "server-only commands stay out of DMs");

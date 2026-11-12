@@ -34,6 +34,9 @@ import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
 import { humanCount, warmMembers } from "./members.js";
 import { setGamePageOrigin } from "./render.js";
+import { createUnfurl } from "./unfurl.js";
+import { createRoleMenus, createStarboard, createPolls, createSuggestions } from "./servertools.js";
+import { createToolsHandlers } from "./toolshandlers.js";
 import { pushOverlayEvent, setNamedFeed } from "./ovfeed.js";
 import { renderWelcomeCard, renderRecap } from "./cardimg.js";
 import { parseTyped, sanitize } from "./parse.js";
@@ -68,6 +71,7 @@ import { dirname, join } from "node:path";
 import { configureArt } from "./art.js";
 import { BG_INACTIVE_MS } from "./profilebg.js";
 import { createNotifier } from "./notify.js";
+import { createPush } from "./webpush.js";
 import { refreshDlc, runDlcSales } from "./dlc.js";
 import { runYearInGames } from "./yearly.js";
 import { runServerWrapped } from "./serverwrapped.js";
@@ -191,12 +195,13 @@ const CONTENT_INTENT = Boolean(APP_FLAGS & ((1 << 18) | (1 << 19)));
 console.log(CONTENT_INTENT ? "[ai] Message Content intent is on: \"Hey AI\" and mentions work." : "[ai] Message Content intent is off: only mentions of the bot work. Turn it on in the Developer Portal (Bot > Privileged Gateway Intents) so \"Hey AI\" works too.");
 console.log(cfg.anthropicKey ? "[ai] The bot has its own AI key." : "[ai] No bot AI key: the bot answers common questions itself, and servers can bring their own key.");
 console.log(MEMBERS_INTENT ? "[community] Server Members intent is on: welcome messages and invite tracking are active." : "[community] Server Members intent is off: turn it on in the Developer Portal (Bot > Privileged Gateway Intents) for welcome messages and invite tracking.");
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : []), ...(CONTENT_INTENT ? [GatewayIntentBits.MessageContent] : [])] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMessageReactions, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : []), ...(CONTENT_INTENT ? [GatewayIntentBits.MessageContent] : [])] });
 client.setMaxListeners(30); // each feature adds its own startup listener, and there are now more than the default ten
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 const offsite = createOffsite({ ...offsiteConfig(), secret: cfg.keySecret, db, log: t => console.log(`[offsite] ${t}`) });
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
+setInterval(() => moderation.liftDueBans().catch(() => {}), 60_000).unref();
 setInterval(() => { try { db.purgeHiddenGuilds(); } catch { /* try again next time */ } }, 30 * 60_000).unref();
 const nowPlaying = createNowPlaying({ apiKey: cfg.steamApiKey });
 const panels = createPanels({ db });
@@ -221,6 +226,7 @@ for (const json of hubCommands.filter(c => HUB_MENUS.includes(c.name))) {
 }
 setGamePageOrigin(cfg.dashboard?.publicUrl ?? null);
 const handlers = createHandlers({ ownerId: cfg.ownerId, panels, db, itad, nowPlaying, publicUrl: cfg.dashboard?.publicUrl ?? null, getStatus: () => status, getAbout: () => aboutInfo(), news });
+const unfurl = createUnfurl({ db, itad, origin: cfg.dashboard?.publicUrl ?? null });
 const redeemUi = createRedeemHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const steamUi = createSteamHandlers({ db, itad, apiKey: cfg.steamApiKey, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const profileUi = createProfileHandlers({ db, publicUrl: cfg.dashboard?.publicUrl ?? null });
@@ -240,9 +246,13 @@ const discord = {
         await channel.send(payload);
     }
 };
-const notifier = createNotifier({ db, discord });
+const push = createPush({ db, contact: cfg.dashboard?.publicUrl ? `mailto:admin@${new URL(cfg.dashboard.publicUrl).hostname}` : undefined });
+push.publicKey(); // makes the keys once, before anything shares them
+const notifier = createNotifier({ db, discord, push });
 // Community features (welcome, XP, invites, emoji) use the bot's REST helper, the same one the dashboard uses.
 const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.dashboard?.clientSecret ?? "", botToken: cfg.token, redirectUri: "http://localhost/unused" });
+const toolsMenus = createRoleMenus({ db, api: botRest }), toolsStar = createStarboard({ db, api: botRest }), toolsPolls = createPolls({ db, api: botRest }), toolsSuggest = createSuggestions({ db, api: botRest });
+const toolsUi = createToolsHandlers({ db, api: botRest, menus: toolsMenus, starboard: toolsStar, polls: toolsPolls, suggestions: toolsSuggest, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const community = createCommunity({ db, api: botRest, renderCard: renderWelcomeCard, dm: (id, p) => discord.sendDm(id, p), dashboardUrl: cfg.dashboard?.publicUrl ?? null, ownerId: cfg.ownerId });
 // Top.gg votes: thank each voter with bonus XP. Needs the TOPGG_TOKEN secret; without it this stays quiet.
 let voterRole = null; // made once the main server helper exists, a few lines further down
@@ -255,7 +265,7 @@ const topgg = createTopgg({
         await discord.sendDm(userId, voteThanksEmbed({ got, expiresAt: v.expiresAt, total: v.total, voteUrl: `https://top.gg/bot/${client.user?.id ?? cfg.clientId}/vote` }));
     }
 });
-const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
+const moderation = createModeration({ db, api: botRest, appealUrl: cfg.dashboard?.publicUrl ?? null, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
 const automod = createAutomod({ db, api: botRest, mod: moderation, botId: () => client.user?.id ?? cfg.clientId, log: t => console.warn(`[automod] ${t}`) });
 const modUi = createModHandlers({ db, mod: moderation, automod, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const streamGw = createStreamGiveaways({ db, giveaways: () => giveaways });
@@ -456,7 +466,7 @@ client.once(Events.ClientReady, c => {
             result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
-            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
+            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneStarPosts(); db.prunePolls2(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
             result.watchdog = await ops.job("watchdog", () => runWatchdog({ ops, logs, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }) }));
             result.ownerSummary = await ops.job("owner summary", () => runOwnerSummary({ db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), gather: async () => ({
                 servers: client.guilds.cache.size, errors: logs.recent({ level: "error", limit: 500 }).filter(l => l.at >= Date.now() - 7 * 86_400_000).length,
@@ -677,6 +687,7 @@ client.on(Events.MessageCreate, async m => {
         let guided = false;
         {
             const c = db.getCommunity(m.guildId);
+            if (c.unfurl_on && m.content) unfurl.handle(m).catch(err => console.error(`[unfurl] ${err.message}`));
             if (c.guides_on !== 0 && m.content) guided = await guideReply(m, c);
             if (!guided && c.ai_on && rt.get("ai_enabled") && (!c.ai_channel || c.ai_channel === m.channelId)) {
                 const t = parseTrigger(m.content, client.user.id, { phrase: CONTENT_INTENT, max: rt.get("ai_max_question") });
@@ -796,6 +807,12 @@ client.once(Events.ClientReady, () => { // post a meme in every server whose tim
     const tick = () => { if (busy) return; busy = true; tickMemes({ db, api: botRest, memes, has: id => client.guilds.cache.has(id), log: m => console.log(`[memes] ${m}`) }).catch(() => {}).finally(() => { busy = false; }); };
     setTimeout(tick, 90_000).unref?.(); setInterval(tick, 5 * 60_000).unref?.();
 });
+// Starboard: reactions arrive as raw gateway events, so they count on messages the bot never saw too. Polls close themselves when their time is up.
+client.on(Events.Raw, p => {
+    if (p?.t === "MESSAGE_REACTION_ADD" || p?.t === "MESSAGE_REACTION_REMOVE") toolsStar.onReaction(p.d).catch(() => {});
+    else if (p?.t === "MESSAGE_REACTION_REMOVE_ALL" || p?.t === "MESSAGE_REACTION_REMOVE_EMOJI") toolsStar.onCleared(p.d).catch(() => {});
+});
+client.once(Events.ClientReady, () => { let busy = false; setInterval(() => { if (busy) return; busy = true; toolsPolls.tick().catch(() => {}).finally(() => { busy = false; }); }, 60_000).unref?.(); });
 client.once(Events.ClientReady, async () => { if (!MEMBERS_INTENT) return; for (const g of client.guilds.cache.values()) { await community.refreshInvites(g.id); await new Promise(r => setTimeout(r, 300)); } });
 const aboutInfo = () => collectAbout({ client, db, cfg, startedAt: STARTED_AT, version: VERSION });
 /** Splits long text at line breaks so each piece fits one embed description (4096). Discord allows 6000 characters across a message's embeds. */
@@ -916,7 +933,7 @@ async function onInteraction(i, again = false) {
         }
     }
     if (i.isAutocomplete()) {
-        try { await (i.commandName === "giveaway" ? gw.handleAutocomplete(i) : i.commandName === "music" ? (musicUi?.handleAutocomplete(i) ?? i.respond([])) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
+        try { await (i.commandName === "tag" ? toolsUi.tagAutocomplete(i) : i.commandName === "giveaway" ? gw.handleAutocomplete(i) : i.commandName === "music" ? (musicUi?.handleAutocomplete(i) ?? i.respond([])) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
     }
     if ((i.isButton() || i.isAnySelectMenu?.() || i.isModalSubmit()) && i.customId.startsWith(PANEL_PREFIX)) return panels.handle(i);
@@ -938,6 +955,7 @@ async function onInteraction(i, again = false) {
         return i.reply({ content: "Done. I won't send you promotions again. Alerts you set up yourself are not affected.", flags: MessageFlags.Ephemeral });
     }
     if (i.isButton() && i.customId.startsWith("rr:")) return communityUi.roleButton(i);
+    if (i.isButton() && /^(rm|pl|sg):/.test(i.customId)) return toolsUi.button(i);
     if (i.isButton() && i.customId.startsWith("emp:")) return communityUi.packButton(i);
     if (i.isButton() && i.customId === communityUi.verifyButtonId) return communityUi.verify(i);
     if (i.isButton() && i.customId.startsWith("tk_")) return ticketUi.handleButton(i);
@@ -1031,6 +1049,13 @@ async function onInteraction(i, again = false) {
             case "lfg": return await lfgUi.handleCommand(i);
             case "stream": return await streamUi.handleCommand(i);
             case "memes": return await memeUi.handleCommand(i);
+            case "rolemenu": return await toolsUi.rolemenu(i);
+            case "starboard": return await toolsUi.starboard(i);
+            case "suggestions": return await toolsUi.suggestions(i);
+            case "tags": return await toolsUi.tags(i);
+            case "poll": return await toolsUi.poll(i);
+            case "suggest": return await toolsUi.suggest(i);
+            case "tag": return await toolsUi.tag(i);
             case "calendar": return await calendarUi.handle(i);
             case "setup": return await setupUi.handleCommand(i);
             case "mod": return await modUi.handleCommand(i);
@@ -1087,7 +1112,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ push, referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

@@ -90,6 +90,23 @@ CREATE TABLE IF NOT EXISTS announcements (
 );
 CREATE INDEX IF NOT EXISTS announcements_guild ON announcements (guild_id, id);
 CREATE INDEX IF NOT EXISTS mod_cases_guild ON mod_cases (guild_id, case_no);
+CREATE TABLE IF NOT EXISTS temp_bans (
+    guild_id TEXT NOT NULL,
+    user_id  TEXT NOT NULL,
+    lift_at  INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS ban_appeals (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id   TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'open',
+    decided_by TEXT,
+    created_at INTEGER NOT NULL,
+    decided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS ban_appeals_guild ON ban_appeals (guild_id, status);
 CREATE INDEX IF NOT EXISTS mod_cases_user ON mod_cases (guild_id, user_id);
 CREATE TABLE IF NOT EXISTS self_roles (
     guild_id TEXT NOT NULL,
@@ -99,7 +116,7 @@ CREATE TABLE IF NOT EXISTS self_roles (
 );
 `;
 
-const SETTABLE = new Set(["guides_on", "ai_on", "ai_channel", "ai_key", "ai_key_last4", "ai_provider", "ai_model", "ai_plus", "ai_plus_interest", "welcome_card", "welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
+const SETTABLE = new Set(["warn_days", "appeals_on", "unfurl_on", "guides_on", "ai_on", "ai_channel", "ai_key", "ai_key_last4", "ai_provider", "ai_model", "ai_plus", "ai_plus_interest", "welcome_card", "welcome_on", "welcome_channel", "welcome_msg", "welcome_dm", "leave_on", "autorole_id", "log_channel", "xp_on", "xp_mult",
     "playtest_full", "playtest_genres", "playtest_skip", "levelup_mode", "levelup_channel", "referral_xp", "mod_role_id", "member_role_id", "setup_at", "verified_role_id", "mod_log_channel", "ping_deals", "ping_free", "ping_giveaway", "ping_lfg", "ping_codes", "ping_bundles", "ping_promos", "ping_playtest", "ping_squad", "squad_channel", "ping_indie", "indie_channel", "indie_dev_role", "playtest_all", "playtest_channel", "streamer_role_id", "live_channel", "ping_stream", "stream_auto", "meme_channel", "meme_on", "meme_hours", "meme_at", "announce_channel", "rules_channel", "rules_text", "lb_channel", "requests_channel", "honeypot_channel", "setup_keys", "lb_message_id", "lb_hours", "lb_at"]);
 
 /** XP needed to go from `level` to the next one. */
@@ -244,10 +261,25 @@ export function communityStore({ run, get, all, clean, now }) {
     const countCases = (guildId, userId = null) => (userId
         ? get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND user_id = ?", guildId, userId)
         : get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ?", guildId)).n;
-    const warnCount = (guildId, userId) => get("SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).n;
+    /** Active warnings: not cleared, and (when the server set an expiry) not older than that many days. */
+    const warnCount = (guildId, userId, now = Date.now()) => {
+        const days = get("SELECT warn_days FROM community WHERE guild_id = ?", guildId)?.warn_days ?? 0;
+        return get(`SELECT COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0${days > 0 ? " AND created_at > ?" : ""}`, ...(days > 0 ? [guildId, userId, now - days * 86400_000] : [guildId, userId])).n;
+    };
     const clearWarns = (guildId, userId) => run("UPDATE mod_cases SET cleared = 1 WHERE guild_id = ? AND user_id = ? AND action = 'warn' AND cleared = 0", guildId, userId).changes;
     const addAnnouncement = (guildId, userId, channelId, messageId, title) => isHidden(guildId) ? 0 : Number(run("INSERT INTO announcements (guild_id, user_id, channel_id, message_id, title, at) VALUES (?,?,?,?,?,?)", guildId, userId, channelId, messageId, title || null, now()).lastInsertRowid);
     const listAnnouncements = (guildId, limit = 10) => all("SELECT id, user_id, channel_id, message_id, title, at FROM announcements WHERE guild_id = ? ORDER BY id DESC LIMIT ?", guildId, limit).map(clean);
+    const addTempBan = (guildId, userId, liftAt) => run("INSERT INTO temp_bans (guild_id, user_id, lift_at) VALUES (?,?,?) ON CONFLICT(guild_id, user_id) DO UPDATE SET lift_at = excluded.lift_at", guildId, userId, liftAt);
+    const dueTempBans = now => all("SELECT guild_id, user_id FROM temp_bans WHERE lift_at <= ? LIMIT 50", now).map(clean);
+    const dropTempBan = (guildId, userId) => run("DELETE FROM temp_bans WHERE guild_id = ? AND user_id = ?", guildId, userId).changes;
+    const tempBans = guildId => all("SELECT user_id, lift_at FROM temp_bans WHERE guild_id = ? ORDER BY lift_at", guildId).map(clean);
+    /** Per-moderator action counts for one server (the bot's own automatic actions are left out). */
+    const modStats = (guildId, since = 0) => all("SELECT mod_id, action, COUNT(*) AS n FROM mod_cases WHERE guild_id = ? AND mod_id IS NOT NULL AND created_at >= ? AND action NOT IN ('automod','raid') AND (reason IS NULL OR reason NOT LIKE '[auto]%') GROUP BY mod_id, action", guildId, since).map(r => ({ mod_id: r.mod_id, action: r.action, n: Number(r.n) }));
+    const addAppeal = (guildId, userId, text, now) => { run("INSERT INTO ban_appeals (guild_id, user_id, text, created_at) VALUES (?,?,?,?)", guildId, userId, text, now); return get("SELECT * FROM ban_appeals WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1", guildId, userId); };
+    const openAppeal = (guildId, userId) => clean(get("SELECT * FROM ban_appeals WHERE guild_id = ? AND user_id = ? AND status = 'open'", guildId, userId)) ?? null;
+    const listAppeals = (guildId, status = "open") => all("SELECT * FROM ban_appeals WHERE guild_id = ? AND status = ? ORDER BY id DESC LIMIT 50", guildId, status).map(clean);
+    const getAppeal = (guildId, id) => clean(get("SELECT * FROM ban_appeals WHERE guild_id = ? AND id = ?", guildId, id)) ?? null;
+    const decideAppeal = (guildId, id, status, by, now) => run("UPDATE ban_appeals SET status = ?, decided_by = ?, decided_at = ? WHERE guild_id = ? AND id = ? AND status = 'open'", status, by, now, guildId, id).changes;
     const modCounts = guildId => Object.fromEntries(all("SELECT action, COUNT(*) AS n FROM mod_cases WHERE guild_id = ? GROUP BY action", guildId).map(r => [r.action, r.n]));
 
     const communityExport = userId => ({
@@ -270,5 +302,5 @@ export function communityStore({ run, get, all, clean, now }) {
 
     return { getCommunity, setCommunity, allCommunity, getXp, addXp, setXp, xpGuildsOf, xpRank, xpTop, countXpMembers, listLevelRoles, setLevelRole, removeLevelRole,
         recordJoin, recordLeave, growth, everJoined, inviteStats, inviteTop, whoInvited, getInviteLink, setInviteLink, inviteLinkOwner, listRewards, setReward, removeReward,
-        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, modCounts, addAnnouncement, listAnnouncements, communityExport, forgetCommunityUser, forgetCommunityGuild };
+        listSelfRoles, addSelfRole, isSelfRole, xpPage, xpTotals, bumpUsage, usageCounts, adminCommunity, addCase, getCase, listCases, countCases, warnCount, clearWarns, addTempBan, dueTempBans, dropTempBan, tempBans, modStats, addAppeal, openAppeal, listAppeals, getAppeal, decideAppeal, modCounts, addAnnouncement, listAnnouncements, communityExport, forgetCommunityUser, forgetCommunityGuild };
 }

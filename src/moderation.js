@@ -54,7 +54,7 @@ const idOk = v => /^\d{15,25}$/.test(String(v ?? ""));
 export function parseUserId(v) { const m = /^\s*(?:<@!?)?(\d{15,25})>?\s*$/.exec(String(v ?? "")); return m ? m[1] : null; }
 const snowflakeMs = id => Number((BigInt(id) >> 22n) + 1420070400000n);
 
-export function createModeration({ db, api, dm = null, botId = () => null, now = () => Date.now() }) {
+export function createModeration({ db, api, dm = null, botId = () => null, now = () => Date.now(), appealUrl = null }) {
     const fail = (status, m) => { throw new ModError(status, m); };
     const top = (member, roles, guildId) => {
         if (!member) return -1;
@@ -143,18 +143,38 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         try { await api.kickMember(guildId, userId, why); } catch (e) { discordFail(e, "kick that person"); }
         return { case: await record({ guildId, guild, userId, modId: actorId, action: "kick", reason: why }), dmSent: dmd };
     }
-    async function ban({ guildId, actorId, userId, reason, deleteDays = 0 }) {
+    async function ban({ guildId, actorId, userId, reason, deleteDays = 0, duration = null }) {
         const days = Math.min(7, Math.max(0, Math.trunc(Number(deleteDays)) || 0));
+        const given = !(duration === null || duration === undefined || duration === "");
+        const secs = given ? (typeof duration === "number" ? duration : parseDuration(duration)) : null;
+        if (given && (!secs || secs < MIN_TIMEOUT_S || secs > 365 * DAY / 1000)) fail(400, "Give a ban length from 1 minute to 1 year, like 12h, 7d or 30d, or leave it empty for a permanent ban.");
         const { guild } = await gate({ guildId, actorId, targetId: userId, needMember: false });
         const why = clean(reason);
-        const dmd = await tell(userId, guild, "banned", why);
+        const appeal = !secs && appealUrl && db.getCommunity(guildId).appeals_on ? `\nYou can appeal this ban: ${appealUrl}/appeal?guild=${guildId}` : "";
+        const dmd = await tell(userId, guild, "banned", why, secs ? ` for ${fmtDuration(secs)}` : appeal);
         try { await api.banMember(guildId, userId, { deleteSeconds: days * 86400, reason: why }); } catch (e) { discordFail(e, "ban that person"); }
-        return { case: await record({ guildId, guild, userId, modId: actorId, action: "ban", reason: why }), dmSent: dmd };
+        if (secs) db.addTempBan(guildId, userId, now() + secs * 1000); else db.dropTempBan(guildId, userId);
+        return { case: await record({ guildId, guild, userId, modId: actorId, action: "ban", reason: why, durationS: secs }), dmSent: dmd };
+    }
+    /** Lifts every temporary ban whose time is up. Run on a timer. A ban someone already lifted by hand is just forgotten. */
+    async function liftDueBans() {
+        let n = 0;
+        for (const b of db.dueTempBans(now())) {
+            try {
+                const guild = await api.getGuild(b.guild_id).catch(() => null);
+                await api.unbanMember(b.guild_id, b.user_id, "Temporary ban ended").catch(e => { if (e?.status !== 404) throw e; });
+                db.dropTempBan(b.guild_id, b.user_id);
+                await record({ guildId: b.guild_id, guild, userId: b.user_id, modId: botId(), action: "unban", reason: "[auto] Temporary ban ended" });
+                n++;
+            } catch (e) { if (e?.status === 403 || e?.status === 404) db.dropTempBan(b.guild_id, b.user_id); /* anything else: try again next tick */ }
+        }
+        return n;
     }
     async function unban({ guildId, actorId, userId, reason }) {
         if (!idOk(userId)) fail(400, "Paste the banned person's user ID.");
         const guild = await api.getGuild(guildId).catch(() => fail(400, "The bot is not in that server yet. Invite it first."));
         const why = clean(reason);
+        db.dropTempBan(guildId, userId);
         try { await api.unbanMember(guildId, userId, why); } catch (e) { if (e?.status === 404) fail(404, "That person is not banned."); discordFail(e, "unban that person"); }
         return { case: await record({ guildId, guild, userId, modId: actorId, action: "unban", reason: why }) };
     }
@@ -218,6 +238,42 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         return { case: c, warnings: db.warnCount(guildId, userId) };
     }
 
+    /** A banned person asks to come back. Only people who really are banned, one open appeal at a time. */
+    async function appeal({ guildId, userId, text }) {
+        if (!guildId || !idOk(userId)) fail(400, "That server could not be found.");
+        if (!db.getCommunity(guildId).appeals_on) fail(403, "This server is not taking ban appeals.");
+        const why = clean(text);
+        if (!why || why.length < 10) fail(400, "Tell the moderators in a sentence or two why you should come back.");
+        const ban = await api.getBan(guildId, userId).catch(() => fail(502, "Discord did not answer. Try again in a moment."));
+        if (!ban) fail(404, "You are not banned from that server.");
+        if (db.openAppeal(guildId, userId)) fail(409, "You already have an appeal waiting. The moderators will get to it.");
+        const guild = await api.getGuild(guildId).catch(() => null);
+        const a = db.addAppeal(guildId, userId, why.slice(0, 1000), now());
+        db.bumpUsage("mod_appeal");
+        const ch = logChannel(guildId);
+        if (ch) await api.sendMessage(ch, { embeds: [{ color: 0x5865f2, title: `📨 Ban appeal #${a.id}`, description: why.slice(0, 1000), fields: [{ name: "Member", value: `<@${userId}>\n\`${userId}\``, inline: true }, { name: "Banned for", value: String(ban.reason ?? "No reason given").slice(0, 300), inline: true }], footer: { text: `Decide it on the Moderation page${guild?.name ? ` · ${guild.name}` : ""}` } }], allowed_mentions: { parse: [] } }).catch(noteFailure(db, guildId, "modlog", "post in the mod log channel"));
+        return { appeal: a };
+    }
+    /** A moderator answers an appeal. Accepting lifts the ban. */
+    async function decideAppeal({ guildId, actorId, id, accept, note: n = "" }) {
+        const a = db.getAppeal(guildId, Math.trunc(Number(id)));
+        if (!a) fail(404, "That appeal could not be found.");
+        if (a.status !== "open") fail(409, "That appeal was already answered.");
+        const why = clean(n);
+        if (accept) await unban({ guildId, actorId, userId: a.user_id, reason: `Appeal #${a.id} accepted${why ? `: ${why}` : ""}` });
+        db.decideAppeal(guildId, a.id, accept ? "accepted" : "denied", actorId, now());
+        const guild = await api.getGuild(guildId).catch(() => null);
+        if (dm) { try { await dm(a.user_id, { embeds: [{ color: accept ? 0x57f287 : 0xed4245, title: accept ? "Your ban appeal was accepted" : "Your ban appeal was denied", description: `${guild?.name ?? "The server"}${why ? `\n${why}` : ""}${accept ? "\nYou can join again." : ""}`.slice(0, 1000) }] }); } catch { /* DMs closed */ } }
+        return { appeal: { ...a, status: accept ? "accepted" : "denied" } };
+    }
+    /** How much each moderator has done in the last `days` days. */
+    function stats(guildId, days = 30) {
+        const since = now() - Math.max(1, Math.min(365, Math.trunc(Number(days)) || 30)) * DAY;
+        const by = new Map();
+        for (const r of db.modStats(guildId, since)) { const m = by.get(r.mod_id) ?? { mod_id: r.mod_id, total: 0, actions: {} }; m.actions[r.action] = r.n; m.total += r.n; by.set(r.mod_id, m); }
+        return [...by.values()].sort((a, b) => b.total - a.total);
+    }
+
     function history(guildId, { userId = null, page = 1, perPage = 10 } = {}) {
         const total = db.countCases(guildId, userId), pages = Math.max(1, Math.ceil(total / perPage));
         const p = Math.min(pages, Math.max(1, Math.trunc(Number(page)) || 1));
@@ -230,5 +286,5 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         return { cleared: n };
     }
 
-    return { warn, timeout, untimeout, kick, ban, unban, purge, note, slowmode, lock, auto, history, clearWarnings, caseEmbed, logChannel, parseDuration };
+    return { warn, timeout, untimeout, kick, ban, unban, liftDueBans, appeal, decideAppeal, stats, purge, note, slowmode, lock, auto, history, clearWarnings, caseEmbed, logChannel, parseDuration };
 }

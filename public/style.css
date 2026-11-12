@@ -459,6 +459,7 @@ pre.logs { max-height: 220px; overflow: auto; font-size: 12px; white-space: pre-
 .search-results { margin-top: 10px; display: grid; gap: 2px; max-height: 50vh; overflow: auto; }
 .search-results a { padding: 8px 10px; border-radius: 8px; color: var(--text); }
 .search-results a:hover, .search-results a:focus { background: var(--hover-row); outline: none; }
+.search-results a.sel { background: var(--hover-row); }
 :root[data-contrast] { --text: #ffffff; --muted: #d6e2f2; --line: rgba(255, 255, 255, .55); --accent: #7dc0ff; --panel: #000000; --panel-2: #0b0b0b; --bg: #000000; --bg-glow: #000000; --input-bg: #000000; --good: #5dffb0; --warn: #ffd166; --bad: #ff8a8a; }
 :root[data-contrast][data-theme="light"] { --text: #000000; --muted: #1b2a40; --line: rgba(0, 0, 0, .65); --accent: #0047b3; --panel: #ffffff; --panel-2: #ffffff; --bg: #ffffff; --bg-glow: #ffffff; --input-bg: #ffffff; --white: #000000; --good: #00573a; --warn: #7a4a00; --bad: #a40000; }
 :root[data-contrast] a { text-decoration: underline; }
@@ -2099,3 +2100,11 @@ a.fd-name:hover { text-decoration: underline; }
 .pick { font: inherit; font-size: 12.5px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.14)); background: var(--soft, transparent); color: var(--muted); cursor: pointer; }
 .pick.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--text); }
 .pick:disabled { cursor: default; opacity: .7; }
+
+/* Steam Wrapped */
+.wrapped { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 16px 0; }
+.wrapped-slide { width: min(100%, 460px); aspect-ratio: 4 / 5; border-radius: 16px; background: var(--panel, #141f33); box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
+.wrapped-dots { display: flex; gap: 8px; }
+.wrapped-dots .dot { width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 0; background: var(--line, #27384f); cursor: pointer; }
+.wrapped-dots .dot.on { background: var(--accent, #4da3ff); }
+.wrapped .row.center { justify-content: center; }

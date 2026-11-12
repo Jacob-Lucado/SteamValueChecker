@@ -39,7 +39,7 @@ export function createModDash({ db, rest, mod, automod = null }) {
             if (action === "timeout") return mod.timeout({ ...common, duration: body.duration });
             if (action === "untimeout") return mod.untimeout(common);
             if (action === "kick") return mod.kick(common);
-            if (action === "ban") return mod.ban({ ...common, deleteDays: body.delete_days });
+            if (action === "ban") return mod.ban({ ...common, deleteDays: body.delete_days, duration: body.duration || null });
             if (action === "unban") return mod.unban(common);
             return fail(400, "Choose an action.");
         });
@@ -61,5 +61,24 @@ export function createModDash({ db, rest, mod, automod = null }) {
         db.bumpUsage("dash_automod");
         return { settings: automod.save(gid, settings) };
     }
-    return { overview, cases, act, clearWarns, setLog, automodGet, automodSave };
+    async function stats(gid, days) {
+        const rows = mod.stats(gid, days);
+        const names = new Map(await Promise.all(rows.map(async r => [r.mod_id, await nameOf(gid, r.mod_id)])));
+        return { stats: rows.map(r => ({ ...r, name: names.get(r.mod_id) ?? null })) };
+    }
+    async function appeals(gid) {
+        const list = db.listAppeals(gid), c = db.getCommunity(gid);
+        const names = new Map(await Promise.all(list.map(async a => [a.user_id, await nameOf(gid, a.user_id)])));
+        return { appeals: list.map(a => ({ ...a, name: names.get(a.user_id) ?? null })), appealsOn: Boolean(c.appeals_on), warnDays: c.warn_days ?? 0, tempBans: db.tempBans(gid) };
+    }
+    const decideAppeal = (gid, actorId, body) => wrap(async () => mod.decideAppeal({ guildId: gid, actorId, id: body.id, accept: body.accept === true, note: String(body.note ?? "") }));
+    function saveSettings(gid, body) {
+        const patch = {};
+        if (body.warn_days !== undefined) { const n = Math.trunc(Number(body.warn_days)); if (!Number.isInteger(n) || n < 0 || n > 365) fail(400, "Warnings can expire after 0 to 365 days."); patch.warn_days = n; }
+        if (body.appeals_on !== undefined) patch.appeals_on = body.appeals_on ? 1 : 0;
+        if (Object.keys(patch).length) db.setCommunity(gid, patch);
+        return { warnDays: db.getCommunity(gid).warn_days ?? 0, appealsOn: Boolean(db.getCommunity(gid).appeals_on) };
+    }
+    const submitAppeal = (gid, userId, text) => wrap(async () => mod.appeal({ guildId: gid, userId, text }));
+    return { stats, appeals, decideAppeal, saveSettings, submitAppeal, overview, cases, act, clearWarns, setLog, automodGet, automodSave };
 }

@@ -4,7 +4,7 @@ import { ModError, ACTIONS, fmtDuration } from "./moderation.js";
 const EPHEMERAL = 64;
 const BIT = { kick: 1n << 1n, ban: 1n << 2n, manageGuild: 1n << 5n, manageMessages: 1n << 13n, manageChannels: 1n << 4n, moderate: 1n << 40n };
 /** What each /mod command needs, the same permissions Discord's own moderation uses. */
-export const NEEDS = { warn: "moderate", warnings: "moderate", clearwarns: "moderate", cases: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", purge: "manageMessages", log: "manageGuild" , note: "moderate", slowmode: "manageChannels", lock: "manageChannels", unlock: "manageChannels", automod: "manageGuild" };
+export const NEEDS = { warn: "moderate", warnings: "moderate", clearwarns: "moderate", cases: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", stats: "moderate", appeals: "ban", settings: "manageGuild", purge: "manageMessages", log: "manageGuild" , note: "moderate", slowmode: "manageChannels", lock: "manageChannels", unlock: "manageChannels", automod: "manageGuild" };
 export const PERMISSION_TEXT = { moderate: "Moderate Members", kick: "Kick Members", ban: "Ban Members", manageMessages: "Manage Messages", manageChannels: "Manage Channels", manageGuild: "Manage Server" };
 
 export const caseLine = c => {
@@ -66,6 +66,24 @@ export function createModHandlers({ db, mod, automod = null, publicUrl = null })
                 const h = mod.history(gid, { userId: u?.id ?? null, page: o.getInteger("page") ?? 1 });
                 return i.reply({ embeds: [historyEmbed(u ? `Cases for ${u.username}` : "Recent cases", h, Boolean(u))], flags: EPHEMERAL, allowedMentions: { parse: [] } });
             }
+            if (sub === "stats") {
+                const days = o.getInteger("days") ?? 30, rows = mod.stats(gid, days).slice(0, 15);
+                return i.reply({ embeds: [{ color: 0x5865f2, title: `Moderator activity, last ${days} days`, description: rows.length ? rows.map(r => `<@${r.mod_id}> · **${r.total}** · ${Object.entries(r.actions).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${ACTIONS[k]?.label?.toLowerCase() ?? k}`).join(", ")}`).join("\n") : "No moderator actions in that time." }], flags: EPHEMERAL, allowedMentions: { parse: [] } });
+            }
+            if (sub === "settings") {
+                const days = o.getInteger("warn_expiry_days"), ap = o.getBoolean("appeals"), patch = {};
+                if (days !== null && days !== undefined) patch.warn_days = days;
+                if (ap !== null && ap !== undefined) patch.appeals_on = ap ? 1 : 0;
+                if (Object.keys(patch).length) db.setCommunity(gid, patch);
+                const c = db.getCommunity(gid);
+                return eph(i, `Warnings ${c.warn_days ? `stop counting after ${c.warn_days} days` : "never expire"}. Ban appeals are ${c.appeals_on ? "on (permanent bans tell the person where to appeal)" : "off"}.`);
+            }
+            if (sub === "appeals") {
+                const id = o.getInteger("id"), ans = o.getString("answer");
+                if (id && ans) { const r = await mod.decideAppeal({ guildId: gid, actorId, id, accept: ans === "accept", note: o.getString("note") ?? "" }); return eph(i, `Appeal #${r.appeal.id} ${r.appeal.status}.`); }
+                const list = db.listAppeals(gid);
+                return i.reply({ embeds: [{ color: 0x5865f2, title: "Open ban appeals", description: list.length ? list.map(a => `**#${a.id}** <@${a.user_id}> · <t:${Math.floor(a.created_at / 1000)}:R>\n${a.text.slice(0, 300)}`).join("\n\n") : "Nothing waiting.", footer: { text: "Answer with /mod appeals id:<number> answer:accept or deny" } }], flags: EPHEMERAL, allowedMentions: { parse: [] } });
+            }
             if (sub === "clearwarns") { const r = mod.clearWarnings({ guildId: gid, userId: user() }); return eph(i, r.cleared ? `Cleared ${r.cleared} warning${r.cleared === 1 ? "" : "s"}. They stay in the case history.` : "That person has no active warnings."); }
             if (sub === "purge") {
                 await i.deferReply({ flags: EPHEMERAL });
@@ -78,7 +96,7 @@ export function createModHandlers({ db, mod, automod = null, publicUrl = null })
             else if (sub === "timeout") { r = await mod.timeout({ guildId: gid, actorId, userId: user(), duration: o.getString("duration", true), reason: reason() }); text = `Timed out <@${r.case.user_id}> for ${fmtDuration(r.case.duration_s)} (case #${r.case.case_no}).`; }
             else if (sub === "untimeout") { r = await mod.untimeout({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `Lifted the timeout on <@${r.case.user_id}> (case #${r.case.case_no}).`; }
             else if (sub === "kick") { r = await mod.kick({ guildId: gid, actorId, userId: user(), reason: reason() }); text = `Kicked <@${r.case.user_id}> (case #${r.case.case_no}).`; }
-            else if (sub === "ban") { r = await mod.ban({ guildId: gid, actorId, userId: user(), reason: reason(), deleteDays: o.getInteger("delete_days") ?? 0 }); text = `Banned <@${r.case.user_id}> (case #${r.case.case_no}).`; }
+            else if (sub === "ban") { r = await mod.ban({ guildId: gid, actorId, userId: user(), reason: reason(), deleteDays: o.getInteger("delete_days") ?? 0, duration: o.getString("length") }); text = `Banned <@${r.case.user_id}>${r.case.duration_s ? ` for ${fmtDuration(r.case.duration_s)} (lifts itself)` : ""} (case #${r.case.case_no}).`; }
             else if (sub === "unban") { r = await mod.unban({ guildId: gid, actorId, userId: o.getString("user_id", true).trim(), reason: reason() }); text = `Unbanned <@${r.case.user_id}> (case #${r.case.case_no}).`; }
             else return i.editReply({ content: "I do not know that command." });
             return i.editReply({ content: text, allowedMentions: { parse: [] } });

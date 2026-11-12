@@ -119,6 +119,11 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             const how = aiPhrase() ? "Members write **Hey AI** followed by a question, or mention me." : "This bot can't read \"Hey AI\" yet, so members mention me instead.";
             return eph(i, `AI companion is **${c.ai_on ? "on" : "off"}**${c.ai_on ? `, answering ${where}. ${how} Answers are short, nobody is pinged, and there is a daily limit for the server.${aiAvailable() || c.ai_key ? "" : "\n**Coming soon:** the full AI is not switched on yet. For now I answer prices, free games, your wishlist and your library myself."}` : ". Turn it on with `on:true`."}${guideNote}`);
         }
+        if (sub === "links") {
+            const on = i.options.getBoolean("on") === true;
+            db.setCommunity(gid, { unfurl_on: on ? 1 : 0 });
+            return eph(i, on ? "I will now answer Steam store links with the price, the lows and a buy-or-wait verdict. I never touch the original message." + (aiPhrase() ? "" : "\n**Heads up:** this bot can't read message text yet (the Message Content intent is off), so replies won't appear until that is turned on.") : "I will leave Steam store links alone.");
+        }
         if (sub === "autorole") {
             const role = i.options.getRole("role");
             if (i.options.getBoolean("clear")) { db.setCommunity(gid, { autorole_id: null }); return eph(i, "New members will not get a role automatically."); }
