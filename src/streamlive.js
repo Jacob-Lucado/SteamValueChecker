@@ -1,5 +1,6 @@
 // "I'm live": a streamer announces a stream in the server's live channel. Members who opted in (they hold the stream pings role) are pinged.
 import { UserError } from "./errors.js";
+import { noteFailure } from "./guildproblems.js";
 
 export const PING_COOLDOWN_MS = 30 * 60_000; // going live again within half an hour edits the post instead of pinging everyone twice
 const HOSTS = ["twitch.tv", "youtube.com", "youtu.be", "kick.com", "tiktok.com", "facebook.com", "fb.watch", "trovo.live", "rumble.com", "x.com", "twitter.com"];
@@ -66,7 +67,7 @@ export function createStreams({ db, api, now = () => Date.now(), onEnd = null })
         const row = db.endStreamLive(guildId, who.id);
         if (!row) throw new UserError("You aren't marked as live. Use `/server stream live` when you start.");
         if (onEnd) await onEnd(guildId, who.id);
-        if (row.message_id) await api.editMessage(row.channel_id, row.message_id, endedPayload({ userId: who.id, name: who.name, title: row.title, url: row.url, ms: now() - row.started })).catch(() => {});
+        if (row.message_id) await api.editMessage(row.channel_id, row.message_id, endedPayload({ userId: who.id, name: who.name, title: row.title, url: row.url, ms: now() - row.started })).catch(noteFailure(db, guildId, "streamlive", "update the go-live post when a stream ends"));
         return row;
     }
 

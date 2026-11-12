@@ -8,6 +8,7 @@ import { steamArt } from "./art.js";
 import { stepsOf } from "./gwpartner.js";
 import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
+import { reportProblem } from "./guildproblems.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
 import { roleIds, roleList, hasAnyRole, hasAllRoles } from "./gwroles.js";
@@ -96,7 +97,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         if (!g) return;
         const keys = db.listKeys(id);
         if (g.message_id) {
-            try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(id), g.status)); } catch (e) { log(`giveaway edit failed: ${e?.name ?? "error"}`); }
+            try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(id), g.status)); } catch (e) { log(`giveaway edit failed: ${e?.name ?? "error"}`); reportProblem(db, g.guild_id, "giveaway", "update a giveaway post", e); }
         }
         // Copies in other servers and DMs show the same live entry count as the home post.
         if (g.status === "active") {
@@ -105,7 +106,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             }
         }
         if (g.announce_id) {
-            try { const wp = winnersPayload(g, keys); await discord.edit(g.channel_id, g.announce_id, { ...wp, content: wp.content ?? "" }); } catch (e) { log(`winners edit failed: ${e?.name ?? "error"}`); }
+            try { const wp = winnersPayload(g, keys); await discord.edit(g.channel_id, g.announce_id, { ...wp, content: wp.content ?? "" }); } catch (e) { log(`winners edit failed: ${e?.name ?? "error"}`); reportProblem(db, g.guild_id, "giveaway", "update the winners post", e); }
         }
     }
 
@@ -363,12 +364,12 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             won.push({ keyId: k.id, label: k.label, userId: winner });
         }
         const keys = db.listKeys(g.id);
-        if (g.message_id) { try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(g.id), "ended")); } catch { /* ignore */ } }
+        if (g.message_id) { try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(g.id), "ended")); } catch (e) { reportProblem(db, g.guild_id, "giveaway", "mark a giveaway post as ended", e); } }
         if (won.length) {
             try {
                 const m = await discord.post(g.channel_id, winnersPayload(g, keys));
                 db.setAnnounceMessage(g.id, m.id);
-            } catch (e) { log(`winners post failed: ${e?.name ?? "error"}`); }
+            } catch (e) { log(`winners post failed: ${e?.name ?? "error"}`); reportProblem(db, g.guild_id, "giveaway-winners", "announce the giveaway winners", e); }
         } else {
             await announceNew(g, `**${g.title}** ended with no valid entries.`);
         }

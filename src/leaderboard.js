@@ -1,6 +1,7 @@
 // The #leaderboard channel: one embed with the XP top ten and top inviters that the bot edits on a timer (default every 5 hours).
 // Managers can refresh it at once with /manage leaderboardrefresh or from the dashboard.
 import { UserError } from "./errors.js";
+import { noteFailure, reportProblem } from "./guildproblems.js";
 
 export const LB_DEFAULT_HOURS = 5, LB_MIN_HOURS = 1, LB_MAX_HOURS = 48;
 const MEDAL = ["🥇", "🥈", "🥉"];
@@ -39,7 +40,7 @@ export async function refreshLeaderboard({ db, api, guildId, base = null, now = 
     if (c.lb_message_id) { try { await api.editMessage(c.lb_channel, c.lb_message_id, payload); } catch { posted = true; } } else posted = true;
     let messageId = c.lb_message_id;
     if (posted) {
-        const m = await api.sendMessage(c.lb_channel, payload).catch(() => null);
+        const m = await api.sendMessage(c.lb_channel, payload).catch(e => { noteFailure(db, guildId, "leaderboard", "post the leaderboard")(e); return null; });
         if (!m) throw new UserError("I could not post in the leaderboard channel. Give me View Channel, Send Messages and Embed Links there.");
         messageId = m.id;
     }
@@ -56,7 +57,7 @@ export async function tickLeaderboards({ db, api, base = null, now = () => Date.
         const every = (c.lb_hours || LB_DEFAULT_HOURS) * 3_600_000;
         if (c.lb_at && now() - c.lb_at < every) continue;
         try { await refreshLeaderboard({ db, api, guildId: c.guild_id, base, now }); done++; }
-        catch (e) { db.setCommunity(c.guild_id, { lb_at: now() }); log(`leaderboard ${c.guild_id}: ${e.message}`); } // try again next time round, not every tick
+        catch (e) { db.setCommunity(c.guild_id, { lb_at: now() }); log(`leaderboard ${c.guild_id}: ${e.message}`); reportProblem(db, c.guild_id, "leaderboard", "refresh the leaderboard", e); } // try again next time round, not every tick
         await sleep(500);
     }
     return done;

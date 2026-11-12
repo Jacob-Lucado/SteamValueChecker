@@ -1,5 +1,7 @@
 // The trap channel: a visible channel that says, loudly, "do not type here". Spam and scam accounts that post in every channel they can see
 // get banned the moment they write in it, with their last day of messages removed. Staff are never touched.
+import { noteFailure } from "./guildproblems.js";
+
 
 export const HONEYPOT_NAME = "do-not-type-here";
 export const HONEYPOT_TOPIC = "⛔ TRAP CHANNEL: do NOT type here. Anyone who sends a message in this channel is banned automatically. It only exists to catch spam and scam bots.";
@@ -20,7 +22,7 @@ export function honeypotPayload(bans = 0) {
 
 /** Posts the notice (with the current count) and remembers its message so the count can be kept up to date. */
 export async function postHoneypotNotice({ db, api, guildId, channelId }) {
-    const m = await api.sendMessage(channelId, { embeds: honeypotPayload(honeypotBans(db, guildId)).embeds, allowed_mentions: { parse: [] } }).catch(() => null);
+    const m = await api.sendMessage(channelId, { embeds: honeypotPayload(honeypotBans(db, guildId)).embeds, allowed_mentions: { parse: [] } }).catch(e => { noteFailure(db, guildId, "trap", "post the trap channel notice")(e); return null; });
     if (m?.id) db.setMeta(`hpmsg:${guildId}`, m.id);
     return m ?? null;
 }

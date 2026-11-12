@@ -3,6 +3,7 @@
 // score more. Facts come from the public Steam store and are cached, so a game only costs a lookup the first time.
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
+import { noteFailure } from "./guildproblems.js";
 
 export const triviaSchema = `
 CREATE TABLE IF NOT EXISTS trivia_facts (
@@ -176,7 +177,7 @@ export function createTrivia({ db, fetchImpl = fetch, sendMessage, editMessage, 
                 }).catch(() => {});
                 if (g.index < g.rounds.length - 1) await pause(g, breakMs);
             }
-            if (!g.stopped) await sendMessage(g.channelId, { embeds: [scoreboard(g, { title: "🏆 Trivia results" })], allowed_mentions: { parse: [] } }).catch(() => {});
+            if (!g.stopped) await sendMessage(g.channelId, { embeds: [scoreboard(g, { title: "🏆 Trivia results" })], allowed_mentions: { parse: [] } }).catch(noteFailure(db, g.guildId, "trivia", "post the trivia results"));
         } catch (e) {
             log(`round failed in ${g.guildId}: ${e.message}`);
             await sendMessage(g.channelId, { content: "Trivia hit a snag and had to stop. Scores so far are saved." }).catch(() => {});
