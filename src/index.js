@@ -37,6 +37,7 @@ import { createEpicSoon } from "./epicsoon.js";
 import { createNews } from "./news.js";
 import { humanCount, warmMembers } from "./members.js";
 import { setGamePageOrigin } from "./render.js";
+import { pushOverlayEvent, setNamedFeed } from "./ovfeed.js";
 import { renderWelcomeCard, renderRecap } from "./cardimg.js";
 import { parseTyped, sanitize } from "./parse.js";
 import { readUpload } from "./upload.js";
@@ -186,6 +187,7 @@ const APP_FLAGS = await (async () => {
     } catch { return 0; }
 })();
 const MEMBERS_INTENT = Boolean(APP_FLAGS & ((1 << 14) | (1 << 15))); // GATEWAY_GUILD_MEMBERS or the limited version
+setNamedFeed(MEMBERS_INTENT);
 // "Hey AI ..." needs the Message Content intent (another Developer Portal switch). Mentioning the bot works without it.
 const CONTENT_INTENT = Boolean(APP_FLAGS & ((1 << 18) | (1 << 19)));
 console.log(CONTENT_INTENT ? "[ai] Message Content intent is on: \"Hey AI\" and mentions work." : "[ai] Message Content intent is off: only mentions of the bot work. Turn it on in the Developer Portal (Bot > Privileged Gateway Intents) so \"Hey AI\" works too.");
@@ -671,7 +673,11 @@ client.on(Events.MessageCreate, async m => {
         await target?.send({ content: `🎉 <@${m.author.id}> reached **level ${r.level}**!`, allowedMentions: { users: [m.author.id] } }).catch(() => {});
     } catch (err) { console.error(`[xp] ${err.name}: ${err.message}`); }
 });
+client.on(Events.GuildMemberUpdate, (before, after) => {
+    if (!before?.premiumSince && after?.premiumSince && !after.user?.bot) pushOverlayEvent(after.guild.id, { type: "boost", name: after.displayName ?? after.user?.username, avatar: after.displayAvatarURL?.({ size: 128, extension: "png" }), count: after.guild.premiumSubscriptionCount ?? null });
+});
 client.on(Events.GuildMemberAdd, async member => {
+    if (!member.user?.bot) pushOverlayEvent(member.guild.id, { type: "join", name: member.displayName ?? member.user?.username, avatar: member.displayAvatarURL?.({ size: 128, extension: "png" }), count: member.guild.memberCount ?? null });
     if (member.id === cfg.ownerId) ensureCreatorRole(member.guild, cfg.ownerId, console.warn);
     if (member.guild.id === mainGuild.detect?.()) supporters.onJoin(member.id);
     try { await community.onJoin({ guildId: member.guild.id, guildName: member.guild.name, count: humanCount(member.guild), member: { id: member.id, username: member.user.username, avatar: member.user.avatar, bot: member.user.bot } }); }

@@ -110,13 +110,16 @@
     if (busy || !queue.length) return;
     busy = true;
     const e = queue.shift();
-    const tmpl = e.type === "boost" ? c.boostText : c.joinText;
+    let tmpl = e.type === "boost" ? c.boostText : c.joinText;
+    if (!e.name && /\{name\}/.test(tmpl)) tmpl = e.type === "boost" ? "Server boosted! {count} boosts" : "New member! We're at {count}"; // no name to show (the bot can't see it, or it is switched off)
     const card = el("div", "card alertcard" + (c.showBorder ? " bordered" : "") + (c.shadow ? " shadow" : ""));
     look(c, card);
     const body = el("div", "abody");
-    body.append(el("div", "label", String(tmpl || "").replace(/\{count\}/g, n(e.count)).replace(/\{n\}/g, String(e.by || 1))));
+    body.append(el("div", "label", String(tmpl || "").replace(/\{name\}/g, e.name || "").replace(/\{count\}/g, e.count == null ? "" : n(e.count)).replace(/\{n\}/g, String(e.by || 1)).replace(/\s+/g, " ").trim()));
     if (e.by > 1) body.append(el("div", "nums", "+" + e.by + (e.type === "boost" ? " new boosts" : " new members")));
-    card.append(el("div", "aicon", ICON[e.type] || "✨"), body);
+    const icon = el("div", "aicon", ICON[e.type] || "✨");
+    if (e.avatar && /^https:\/\/cdn\.discordapp\.com\//.test(e.avatar)) { const im = el("img"); im.alt = ""; im.referrerPolicy = "no-referrer"; im.src = e.avatar; im.onerror = () => im.remove(); icon.textContent = ""; icon.append(im); }
+    card.append(icon, body);
     const wrap = el("div", "alertwrap " + (c.position === "bottom" ? "bottom" : "top")); wrap.append(card);
     root.replaceChildren(wrap);
     requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add("in")));
@@ -150,7 +153,7 @@
     const target = Math.max(1, Number(c.target) || 100), current = Number(v.current) || 0;
     if (kind === "alerts") {
       look(c); let k = 0;
-      const fire = () => { k++; queue.push({ type: k % 2 ? "join" : "boost", count: k % 2 ? 1280 + k : 14 + k, by: 1 }); pump(c); };
+      const fire = () => { k++; queue.push({ type: k % 2 ? "join" : "boost", count: k % 2 ? 1280 + k : 14 + k, by: 1, name: c.showNames === false ? "" : ["Alex", "Sam", "Riley"][k % 3] }); pump(c); };
       fire(); setInterval(() => { if (queue.length < 2) fire(); }, Math.max(4, (c.hold || 6) + 2) * 1000);
     } else {
       const sale = v.sale || { name: "Steam Winter Sale", start: Date.now() + 6 * 86400_000 + 4 * 3600_000, end: Date.now() + 24 * 86400_000, live: false };

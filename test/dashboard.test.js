@@ -3933,3 +3933,25 @@ test("overlay studio: alerts show new members and boosts, a scene rotates your o
         assert.equal(sc.config.seconds, 4, "no faster than four seconds");
     } finally { await o.close(); }
 });
+
+test("alerts name the person when the bot reports joins itself, and hide the name when asked", async () => {
+    const { setNamedFeed, pushOverlayEvent } = await import("../src/ovfeed.js");
+    let members = 100;
+    const o = await signedIn({ extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members, boosts: 5 }] } });
+    setNamedFeed(true);
+    try {
+        const mk = body => o.request("/api/overlays", { method: "POST", body });
+        const data = async (token, since) => (await fetch(o.base + "/api/ov/data?token=" + token + (since !== undefined ? "&since=" + since : ""))).json();
+        const al = (await mk({ action: "create", kind: "alerts", guild_id: "g-admin" })).data.token;
+        const hidden = (await mk({ action: "create", kind: "alerts", guild_id: "g-admin", config: { showNames: false } })).data.token;
+        const a0 = await data(al), h0 = await data(hidden);
+        members = 101; // the count alone no longer makes an alert: the bot reports the join with a name
+        pushOverlayEvent("g-admin", { type: "join", name: "  Alex\nthe Great ", avatar: "https://cdn.discordapp.com/avatars/1/x.png", count: 101 });
+        pushOverlayEvent("g-admin", { type: "join", name: "Evil", avatar: "https://evil.example/x.png", count: 102 });
+        const a = await data(al, a0.data.seq), h = await data(hidden, h0.data.seq);
+        assert.deepEqual(a.data.events.map(e => e.name), ["Alex the Great", "Evil"]);
+        assert.equal(a.data.events[0].avatar, "https://cdn.discordapp.com/avatars/1/x.png");
+        assert.equal(a.data.events[1].avatar, null, "only Discord's own picture host is allowed");
+        assert.ok(h.data.events.length === 2 && h.data.events.every(e => !("name" in e)), "names stay off when switched off");
+    } finally { setNamedFeed(false); await o.close(); }
+});
