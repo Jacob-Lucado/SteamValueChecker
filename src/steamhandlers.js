@@ -17,7 +17,7 @@ import { renderSteamValue, renderRecap } from "./cardimg.js";
 
 const COOLDOWN_MS = 60_000;
 const last = new Map();
-const wait = userId => { const w = COOLDOWN_MS - (Date.now() - (last.get(userId) ?? 0)); if (w > 0) throw new UserError(`Slow down a little. Try again in ${Math.ceil(w / 1000)}s.`); last.set(userId, Date.now()); };
+const wait = userId => { const w = COOLDOWN_MS - (Date.now() - (last.get(userId) ?? 0)); if (w > 0) throw new UserError(`Slow down a little. Try again in ${Math.ceil(w / 1000)}s.`); if (last.size > 5000) { const cut = Date.now() - COOLDOWN_MS; for (const [k, t] of last) if (t < cut) last.delete(k); } last.set(userId, Date.now()); };
 
 const achievementsLine = v => `**${v.achDone.toLocaleString("en-US")}** of **${v.achTotal.toLocaleString("en-US")}** unlocked (${Math.round(v.achDone / v.achTotal * 100)}%) across ${v.achGames} games`;
 const line = (r, f) => `• **${r.title}** ${f(r)}`;

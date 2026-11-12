@@ -453,7 +453,22 @@ window.SVC_SITE = envIn => {
   function landing() { return window.LandingUI.view({ LOC, api, app, ext, fanaticalCard, h, newsBanner, osPreview, setupCard, state, steamLoginBtn }); }
 
   // ---------- for you: discounts ranked by your taste and wishlist ----------
-  async function forYouView() { return window.ForYouUI.view({ api, app, h, money, pageHead, select, steamArt }); }
+  // Page scripts load the first time their page opens. index.html prefetches them quietly so they are usually cached by then.
+  const lazyJs = new Map();
+  const lazy = name => {
+    if (window[name]) return Promise.resolve(window[name]);
+    if (!lazyJs.has(name)) lazyJs.set(name, new Promise((resolve, reject) => {
+      const link = document.querySelector(`link[data-lazy="${name}"]`);
+      if (!link) return reject(new Error("That page is missing. Reload and try again."));
+      const s = document.createElement("script");
+      s.src = link.getAttribute("href");
+      s.onload = () => (window[name] ? resolve(window[name]) : reject(new Error("That page did not load. Reload and try again.")));
+      s.onerror = () => { lazyJs.delete(name); reject(new Error("Could not load that page. Check your connection and try again.")); };
+      document.head.append(s);
+    }));
+    return lazyJs.get(name);
+  };
+  async function forYouView() { return (await lazy("ForYouUI")).view({ api, app, h, money, pageHead, select, steamArt }); }
 
   // ---------- value checker ----------
   function valueView() { return window.ValueUI.view({ api, app, busy, fanaticalCard, field, h, pageHead, renderValue, select, state, voteCard }); }
@@ -551,7 +566,7 @@ window.SVC_SITE = envIn => {
     return [type, value, save];
   }
 
-  async function wishlistView() { return window.WishlistUI.view({ api, app, busy, field, h, pageHead, ruleControl, select, state, steamLoginBtn, toast, wishCard }); }
+  async function wishlistView() { return (await lazy("WishlistUI")).view({ api, app, busy, field, h, pageHead, ruleControl, select, state, steamLoginBtn, toast, wishCard }); }
 
   function wishCard(r, cur, reload, onPick, isPicked) { return window.WishCardUI.view({ api, busy, h, lineChart, money, ruleControl, select, state, steamArt, toast, verdictBadge }, r, cur, reload, onPick, isPicked); }
 
@@ -690,10 +705,10 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "pf-slider" }, count, h("div", { class: "pf-slide-wrap" }, prev, track, next));
   }
 
-  async function publicProfileView(slug) { return window.PublicProfileUI.view({ api, app, h, renderProfile }, slug); }
+  async function publicProfileView(slug) { return (await lazy("PublicProfileUI")).view({ api, app, h, renderProfile }, slug); }
 
   /** The editor: every choice on the left, the real page on the right, updated as you go. */
-  async function profileEditorView() { return window.ProfileEditorUI.view({ PAGE_PRESET_CSS, PF_TITLE, PF_VIS, api, app, busy, field, h, pageHead, publicPagePanel, renderProfile, route, select, toast }); }
+  async function profileEditorView() { return (await lazy("ProfileEditorUI")).view({ PAGE_PRESET_CSS, PF_TITLE, PF_VIS, api, app, busy, field, h, pageHead, publicPagePanel, renderProfile, route, select, toast }); }
 
   /** The gift mark under a game on a public wishlist. Needs a Discord sign-in; the list's owner can release a mark but is never told who made it. */
   function regionNote(r) {
@@ -772,9 +787,9 @@ window.SVC_SITE = envIn => {
   }
 
   // One page per game: price, history and verdict, bundles, free offers and who in the server is watching it.
-  async function gameView(id) { return window.GameUI.view({ api, app, busy, ext, h, lineChart, money, pageHead, steamArt, toast }, id); }
+  async function gameView(id) { return (await lazy("GameUI")).view({ api, app, busy, ext, h, lineChart, money, pageHead, steamArt, toast }, id); }
 
-  async function publicWishlistView(slug) { return window.PublicWishlistUI.view({ api, app, ext, giftButton, h, pageHead, soonControl }, slug); }
+  async function publicWishlistView(slug) { return (await lazy("PublicWishlistUI")).view({ api, app, ext, giftButton, h, pageHead, soonControl }, slug); }
 
   async function loadFree(panel) {
     try {
@@ -808,7 +823,7 @@ window.SVC_SITE = envIn => {
   }
 
   // Free games: everything free to claim right now, with the store filter and sort, and the two settings that matter here.
-  async function freeView() { return window.FreeUI.view({ api, app, h, loadFree, pageHead, soonPanel, state, toast }); }
+  async function freeView() { return (await lazy("FreeUI")).view({ api, app, h, loadFree, pageHead, soonPanel, state, toast }); }
 
 
   // ---------- playtests ----------
@@ -816,19 +831,19 @@ window.SVC_SITE = envIn => {
   // since the page opened, and pauses while the tab is hidden.
   const PLAYTEST_POLL_MS = 5 * 60_000;
   const PLAYTEST_SOURCES = [["abg", "Alpha Beta Gamer"], ["gamerpower", "GamerPower"], ["itch", "itch.io"], ["playtester", "Playtester"], ["steamdemo", "Steam demos"]];
-  async function playtestsView() { return window.PlaytestsUI.view({ PLAYTEST_POLL_MS, api, app, currentView, ext, h, pageHead, state, toast }); }
+  async function playtestsView() { return (await lazy("PlaytestsUI")).view({ PLAYTEST_POLL_MS, api, app, currentView, ext, h, pageHead, state, toast }); }
 
   /** The server's game of the month: the pick, who is playing or finished, and (for managers) the controls. */
-  async function clubView() { return window.ClubUI.view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
+  async function clubView() { return (await lazy("ClubUI")).view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
 
   // Secret Santa for a server: sign up, draw, and see who you're buying for.
-  async function santaView() { return window.SantaUI.view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
+  async function santaView() { return (await lazy("SantaUI")).view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
 
-  async function triviaView() { return window.TriviaUI.view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
+  async function triviaView() { return (await lazy("TriviaUI")).view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
 
   const NOWPLAYING_POLL_MS = 60_000;
   /** Who in a server is in a game right now. Reads Steam through the bot, so it stays current without a refresh. */
-  async function nowPlayingView() { return window.NowPlayingUI.view({ NOWPLAYING_POLL_MS, api, app, busy, currentView, ext, field, h, pageHead, serverPicker, state, toast }); }
+  async function nowPlayingView() { return (await lazy("NowPlayingUI")).view({ NOWPLAYING_POLL_MS, api, app, busy, currentView, ext, field, h, pageHead, serverPicker, state, toast }); }
 
   // ---------- game codes ----------
   /** Giveaway and code news the bot spotted, plus drops added in the member's own servers. Fills `into`. */
@@ -850,9 +865,9 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- bundles: what the storefronts have running ----------
-  async function bundlesView() { return window.BundlesUI.view({ api, app, busy, h, pageHead, state, toast }); }
+  async function bundlesView() { return (await lazy("BundlesUI")).view({ api, app, busy, h, pageHead, state, toast }); }
 
-  async function codesView() { return window.CodesUI.view({ api, app, busy, ext, h, pageHead, promoBlock, state, toast }); }
+  async function codesView() { return (await lazy("CodesUI")).view({ api, app, busy, ext, h, pageHead, promoBlock, state, toast }); }
 
   // ---------- servers ----------
   const guildInvite = g => (state.cfg.inviteUrl ? `${state.cfg.inviteUrl}&guild_id=${encodeURIComponent(g.id)}&disable_guild_select=true` : null);
@@ -923,7 +938,7 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- bundles and sale prep ----------
-  async function dealsView() { return window.DealsUI.view({ api, app, busy, ext, field, h, money, pageHead }); }
+  async function dealsView() { return (await lazy("DealsUI")).view({ api, app, busy, ext, field, h, money, pageHead }); }
 
   // ---------- steam link ----------
   // Steam game art. Newer games are not on the old path, so try the others in turn and show a quiet placeholder if none load.
@@ -1059,7 +1074,7 @@ window.SVC_SITE = envIn => {
     return box;
   }
 
-  async function steamView() { return window.SteamUI.view({ LOC, analyticsPanel, api, app, busy, field, h, hoursText, money, pageHead, recapPanel, replaceUrl, state, steamArt, steamLoginBtn, steamProfileCard, toast, twitchLinkPanel }); }
+  async function steamView() { return (await lazy("SteamUI")).view({ LOC, analyticsPanel, api, app, busy, field, h, hoursText, money, pageHead, recapPanel, replaceUrl, state, steamArt, steamLoginBtn, steamProfileCard, toast, twitchLinkPanel }); }
 
   // ---------- batch redeem ----------
   // Steam only takes keys from the owner's logged-in browser, so the FanaticalGrabber extension does the redeeming.
@@ -1160,7 +1175,7 @@ window.SVC_SITE = envIn => {
   // The page the extension's "Link now" button opens. One job: get the extension linked, with nothing else on the page.
   function connectView() { return window.ConnectUI.view({ api, app, extSend, fromExt, h, pageHead, state, steamLoginBtn }); }
 
-  async function libraryView() { return window.LibraryUI.view({ api, app, badgesPanel, bundlesPanel, busy, challengePanel, extSend, field, fromExt, h, hoursText, lineChart, money, pageHead, select, spendPanel, state, steamArt, toast }); }
+  async function libraryView() { return (await lazy("LibraryUI")).view({ api, app, badgesPanel, bundlesPanel, busy, challengePanel, extSend, field, fromExt, h, hoursText, lineChart, money, pageHead, select, spendPanel, state, steamArt, toast }); }
 
   // ---------- owner ----------
   // Recent bot logs (errors and crashes by default), owner only.
@@ -1279,16 +1294,16 @@ window.SVC_SITE = envIn => {
     return { el: pv, paint };
   }
 
-  async function giveawaysView() { return window.GiveawaysUI.view({ api, app, busy, field, giveawayPreview, h, pageHead, pendingPanel, prizeButtons, roleMulti, select, serverPicker, state, stepsEditor, toast }); }
+  async function giveawaysView() { return (await lazy("GiveawaysUI")).view({ api, app, busy, field, giveawayPreview, h, pageHead, pendingPanel, prizeButtons, roleMulti, select, serverPicker, state, stepsEditor, toast }); }
 
   // ---------- my data ----------
   function myDataView() { return window.MyDataUI.view({ api, app, boot, busy, field, h, pageHead, state, toast }); }
 
   // ---------- help ----------
   // The About page: the same numbers as the /bot about command in Discord.
-  async function statusView() { return window.StatusUI.view({ api, app, busy, currentView, h }); }
+  async function statusView() { return (await lazy("StatusUI")).view({ api, app, busy, currentView, h }); }
 
-  async function aboutView() { return window.AboutUI.view({ api, app, ext, h, md, safeHref, state }); }
+  async function aboutView() { return (await lazy("AboutUI")).view({ api, app, ext, h, md, safeHref, state }); }
 
   /** Every command menu, as the bot shows it: hub, area, and how to type each command. Loaded from the bot's real command list. */
   function commandGuidePanel() {
@@ -1363,15 +1378,15 @@ window.SVC_SITE = envIn => {
     try { await load(); } catch (e) { box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
-  async function requestsView() { return window.RequestsUI.view({ app, h, pageHead, requestList }); }
+  async function requestsView() { return (await lazy("RequestsUI")).view({ app, h, pageHead, requestList }); }
 
   // The same words as the Support page on the shop site.
-  async function tipView() { return window.TipUI.view({ api, app, busy, ext, h, pageHead, routeText, select, state, toast }); }
+  async function tipView() { return (await lazy("TipUI")).view({ api, app, busy, ext, h, pageHead, routeText, select, state, toast }); }
 
   // Goal bars, server stats and timers for OBS, each with its own link and look, and a live preview that follows every change.
   const overlaysView = () => window.OverlayStudio.view({ h, api, app, state, pageHead, toast, busy, select, field, serverPicker, currentParam, currentView, overlayAssets, giveawayOverlayPanel, streamCardPanel });
 
-  async function supportView() { return window.SupportUI.view({ STATUS_ICON, api, app, busy, currentParam, field, h, navigate, pageHead, select, state, ticketSettingsPanel, ticketThread, toast }); }
+  async function supportView() { return (await lazy("SupportUI")).view({ STATUS_ICON, api, app, busy, currentParam, field, h, navigate, pageHead, select, state, ticketSettingsPanel, ticketThread, toast }); }
 
   function ticketSettingsPanel(d) {
     const scopes = [...(d.ownerSettings ? [{ id: "*", name: "Tickets with no server queue (you, the owner)", ...d.ownerSettings }] : []), ...d.guilds];
@@ -1477,12 +1492,12 @@ window.SVC_SITE = envIn => {
       h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${when}${n.body ? " · " + plainDiscord(n.body).slice(0, 160) : ""}` })));
   }
 
-  async function notificationsView() { return window.NotificationsUI.view({ PRIZE_STATUS, api, app, ext, h, noteCard, pageHead, renderChrome, state }); }
+  async function notificationsView() { return (await lazy("NotificationsUI")).view({ PRIZE_STATUS, api, app, ext, h, noteCard, pageHead, renderChrome, state }); }
 
   // ---------- music ----------
-  async function musicView() { return window.MusicUI.view({ api, app, busy, currentView, field, h, pageHead, select, state, toast }); }
+  async function musicView() { return (await lazy("MusicUI")).view({ api, app, busy, currentView, field, h, pageHead, select, state, toast }); }
 
-  async function changelogView() { return window.ChangelogUI.view({ api, app, h, inline, pageHead, renderChrome, state }); }
+  async function changelogView() { return (await lazy("ChangelogUI")).view({ api, app, h, inline, pageHead, renderChrome, state }); }
 
   function newsBanner() {
     if (!state.me || !state.me.news || currentView() === "changelog") return null;
@@ -1598,16 +1613,16 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- game night ----------
-  async function gameNightView() { return window.GameNightUI.view({ api, app, busy, field, h, pageHead, serverPicker, state, toast }); }
+  async function gameNightView() { return (await lazy("GameNightUI")).view({ api, app, busy, field, h, pageHead, serverPicker, state, toast }); }
 
   // ---------- compare with a friend ----------
-  async function compareView() { return window.CompareUI.view({ api, app, busy, field, h, pageHead, serverPicker, state }); }
+  async function compareView() { return (await lazy("CompareUI")).view({ api, app, busy, field, h, pageHead, serverPicker, state }); }
 
   // ---------- calendar ----------
   // Built in: wishlist release dates, Steam sales, server events and group games. Managers add server events here.
   // The private feed link (for Google, Apple or Outlook calendar) is optional.
   // Sale war room: your buy-now list with a budget slider. Ticked games are the cart; the slider auto-fills the best savings first.
-  async function warRoomView() { return window.WarRoomUI.view({ api, app, busy, currentView, field, h, money, pageHead, select }); }
+  async function warRoomView() { return (await lazy("WarRoomUI")).view({ api, app, busy, currentView, field, h, money, pageHead, select }); }
 
   // My page: every feature as a card with its status, a switch where one is simple, and a link to set it up. Cards can be pinned, hidden and reordered (kept on this device).
   // First-run guide: a centered dialog with a detailed tour of the dashboard, then a short setup. The tour can be skipped (after a
@@ -1636,15 +1651,15 @@ window.SVC_SITE = envIn => {
 
   function startTour(opts) { return window.TourUI.view({ TOUR_SLIDES, WIZ_KEY, api, busy, currentView, ext, field, h, route, select, state, steamLoginBtn, toast }, opts); }
 
-  async function myPageView() { return window.MyPageUI.view({ api, app, busy, h, pageHead, publicPagePanel, startTour, state }); }
+  async function myPageView() { return (await lazy("MyPageUI")).view({ api, app, busy, h, pageHead, publicPagePanel, startTour, state }); }
 
 
-  async function friendsView() { return window.FriendsUI.view({ api, app, busy, field, h, money, pageHead, toast }); }
+  async function friendsView() { return (await lazy("FriendsUI")).view({ api, app, busy, field, h, money, pageHead, toast }); }
 
-  async function calendarView() { return window.CalendarUI.view({ api, app, busy, field, h, pageHead, select, toast }); }
+  async function calendarView() { return (await lazy("CalendarUI")).view({ api, app, busy, field, h, pageHead, select, toast }); }
 
   // ---------- looking for group ----------
-  async function lfgView() { return window.LfgUI.view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
+  async function lfgView() { return (await lazy("LfgUI")).view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
 
   // ---------- guided server setup (same checklist as /manage setup in Discord) ----------
   /** One row per thing the bot posts, grouped, each with its own channel. Empty rows say what happens instead. */
@@ -1684,10 +1699,10 @@ window.SVC_SITE = envIn => {
       ...body, h("div", { class: "row" }, saveAll, hint));
   }
 
-  async function setupView() { return window.SetupUI.view({ api, app, busy, channelPanel, currentParam, ext, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
+  async function setupView() { return (await lazy("SetupUI")).view({ api, app, busy, channelPanel, currentParam, ext, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
 
   // ---------- community: welcome, levels, invites, emoji, and the one-click server build ----------
-  async function communityView() { return window.CommunityUI.view({ PLAYTEST_SOURCES, api, app, busy, currentParam, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
+  async function communityView() { return (await lazy("CommunityUI")).view({ PLAYTEST_SOURCES, api, app, busy, currentParam, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
 
   // ---------- server XP: leaderboard, your card, level rewards, how XP works, and the prize shop teaser ----------
   // ---------- streams: go live, pings, and the streamer settings ----------
@@ -1698,7 +1713,7 @@ window.SVC_SITE = envIn => {
     return () => (p ??= Promise.all([window.SvcOverlayPanel ? 0 : load("script", { src: "/overlayui.js" }), document.querySelector('link[href="/overlayui.css"]') ? 0 : load("link", { rel: "stylesheet", href: "/overlayui.css" })]).catch(e => { p = null; throw e; }));
   })();
 
-  async function streamsView(opts = {}) { return window.StreamsUI.view({ api, app, busy, currentParam, field, giveawayPreview, h, pageHead, prizeButtons, roleMulti, select, serverPicker, state, stepsEditor, toast }, opts = {}); }
+  async function streamsView(opts = {}) { return (await lazy("StreamsUI")).view({ api, app, busy, currentParam, field, giveawayPreview, h, pageHead, prizeButtons, roleMulti, select, serverPicker, state, stepsEditor, toast }, opts = {}); }
 
   // ---------- streamer hub: everything for streamers on one page ----------
   /** The deals overlay panel: a private link for OBS that rotates the best wishlist deal, a free game and a "gift me" card. */
@@ -1707,15 +1722,15 @@ window.SVC_SITE = envIn => {
   /** The giveaway overlay for OBS: shows the streamer's stream giveaway (entries, time left, how to enter, then the winners). Same private link as the deals cards. */
   function giveawayOverlayPanel() { return window.GiveawayOverlayPanelUI.view({ api, busy, field, h, select, state, toast }); }
 
-  async function streamerHubView() { return window.StreamerHubUI.view({ app, currentParam, field, h, pageHead, publicPagePanel, serverPicker, state, streamersView, streamsView }); }
+  async function streamerHubView() { return (await lazy("StreamerHubUI")).view({ app, currentParam, field, h, pageHead, publicPagePanel, serverPicker, state, streamersView, streamsView }); }
 
   // ---------- streamers: everyone who linked a channel in a server, and who is live ----------
-  async function streamersView(opts = {}) { return window.StreamersUI.view({ api, app, currentParam, currentView, field, h, pageHead, serverPicker, state }, opts = {}); }
+  async function streamersView(opts = {}) { return (await lazy("StreamersUI")).view({ api, app, currentParam, currentView, field, h, pageHead, serverPicker, state }, opts = {}); }
 
-  async function xpView() { return window.XpUI.view({ api, app, busy, currentParam, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
+  async function xpView() { return (await lazy("XpUI")).view({ api, app, busy, currentParam, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
 
   // ---------- moderation: take an action, see the case log, choose the mod log channel ----------
-  async function modView() { return window.ModUI.view({ api, app, busy, currentParam, field, h, pageHead, select, serverPicker, state, toast }); }
+  async function modView() { return (await lazy("ModUI")).view({ api, app, busy, currentParam, field, h, pageHead, select, serverPicker, state, toast }); }
 
 
   // ---------- community feed ----------
@@ -1789,7 +1804,7 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "fd-compose" }, box, preview, h("div", { class: "fd-compose-row" }, pick, attach, file, count, send));
   }
 
-  async function feedView() { return window.FeedUI.view({ FEED_STATE, NATIVE, api, app, busy, env, feedCard, feedComposer, h, pageHead, serverCard, state, toast }); }
+  async function feedView() { return (await lazy("FeedUI")).view({ FEED_STATE, NATIVE, api, app, busy, env, feedCard, feedComposer, h, pageHead, serverCard, state, toast }); }
 
 
   /** A server's card: what it is, how active it is, a way in, and the members who have public pages. */
@@ -1802,7 +1817,7 @@ window.SVC_SITE = envIn => {
       people.length ? h("div", { class: "fd-people fd-compact" }, people.slice(0, 8).map(p => personRow(p))) : null);
   }
 
-  async function communitiesView() { return window.CommunitiesUI.view({ FEED_STATE, api, app, ext, h, leaderboardPanel, manageRow, navigate, pageHead }); }
+  async function communitiesView() { return (await lazy("CommunitiesUI")).view({ FEED_STATE, api, app, ext, h, leaderboardPanel, manageRow, navigate, pageHead }); }
 
   /** Who is posting, finishing and unlocking the most, for every server or one of them. Only members with a public page appear. */
   function leaderboardPanel(servers) {
@@ -1826,7 +1841,7 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "fd-manage" }, h("strong", { text: g.name }), h("label", { class: "fd-check" }, on, h("span", { text: "Show this server in the community directory" })), field("Description", about), field("Invite link", invite), save);
   }
 
-  async function discoverView() { return window.DiscoverUI.view({ FEED_STATE, api, app, h, httpsOnly, navigate, pageHead, personRow, pfArt, state }); }
+  async function discoverView() { return (await lazy("DiscoverUI")).view({ FEED_STATE, api, app, h, httpsOnly, navigate, pageHead, personRow, pfArt, state }); }
 
   /** A person in a list, with a follow button. */
   function personRow(p, note) {
@@ -1837,7 +1852,7 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "fd-person" }, feedAvatar(p), h("div", { class: "fd-who" }, feedName(p), note ? h("span", { class: "muted small", text: note }) : null), state.me ? btn : null);
   }
 
-  async function peopleView() { return window.PeopleUI.view({ api, app, busy, h, pageHead, personRow, toast }); }
+  async function peopleView() { return (await lazy("PeopleUI")).view({ api, app, busy, h, pageHead, personRow, toast }); }
 
   /** The follow button, counts, library comparison and block on someone's public page. */
   function pfSocial(p, social) {
@@ -1965,16 +1980,23 @@ window.SVC_SITE = envIn => {
     if (view === "u" && currentParam()) { publicProfileView(currentParam()); scrollTop0(); return; }
     if (view === "g" && state.me && currentParam()) { gameView(currentParam()); scrollTop0(); return; }
     if (view === "servers" && state.me && currentParam()) { serverDetail(currentParam()); scrollTop0(); return; }
-    (VIEWS[view] || (state.me ? valueView : landing))();
-    const nb = newsBanner();
-    if (nb && view !== "home") app.prepend(nb);
-    const sn = state.cfg && state.cfg.notice && state.cfg.notice.text ? h("div", { class: "notice site-notice" + (state.cfg.notice.level === "warn" ? " warn" : ""), role: "status", text: state.cfg.notice.text }) : null;
-    if (sn) app.prepend(sn);
-    const db = discordBanner();
-    if (db && view !== "home") app.prepend(db);
+    const seq = ++routeSeq;
+    const started = (VIEWS[view] || (state.me ? valueView : landing))();
+    // The banners go on top once the page has drawn (a page that loads its script on demand draws a moment later and would wipe them).
+    const banners = () => {
+      if (seq !== routeSeq) return; // they already moved on to another page
+      const nb = newsBanner();
+      if (nb && view !== "home") app.prepend(nb);
+      const sn = state.cfg && state.cfg.notice && state.cfg.notice.text ? h("div", { class: "notice site-notice" + (state.cfg.notice.level === "warn" ? " warn" : ""), role: "status", text: state.cfg.notice.text }) : null;
+      if (sn) app.prepend(sn);
+      const db = discordBanner();
+      if (db && view !== "home") app.prepend(db);
+    };
+    if (started && typeof started.then === "function") started.then(banners, banners); else banners();
     scrollTop0();
   }
 
+  let routeSeq = 0;
   async function boot() {
     if (NATIVE) { route(); return; } // the desktop already loaded the settings and the account
     try {

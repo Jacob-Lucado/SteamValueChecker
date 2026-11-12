@@ -11,6 +11,7 @@ const MISS_MS = 60 * 60_000, MEM_MAX = 400, MAX_BYTES = 3_000_000;
 const state = { base: null, dir: null };
 const mem = new Map();      // "kind:id" -> { buf, type }
 const misses = new Map();   // "kind:id" -> when it was last not found
+const noteMiss = key => { if (misses.size >= 3000) { const cut = Date.now() - MISS_MS; for (const [k, t] of misses) if (t < cut) misses.delete(k); if (misses.size >= 3000) misses.clear(); } misses.set(key, Date.now()); }
 const inflight = new Map();
 
 export function configureArt({ base = null, dir = null } = {}) {
@@ -52,7 +53,7 @@ export async function resolveArt(appid, kind = "header", { fetchImpl = globalThi
     if (Date.now() - (misses.get(key) ?? 0) < MISS_MS) return null;
     if (!inflight.has(key)) inflight.set(key, (async () => {
         const buf = await find(appid, kind, fetchImpl);
-        if (!buf) { misses.set(key, Date.now()); return null; }
+        if (!buf) { noteMiss(key); return null; }
         if (file) { try { writeFileSync(file, buf); } catch { /* still served from memory */ } }
         return remember(key, { buf, type: typeOf(buf) });
     })().finally(() => inflight.delete(key)));
@@ -73,7 +74,7 @@ export async function resolveUrlArt(key, url, { fetchImpl = globalThis.fetch } =
     if (Date.now() - (misses.get(memKey) ?? 0) < MISS_MS) return null;
     if (!inflight.has(memKey)) inflight.set(memKey, (async () => {
         const buf = await grab(fetchImpl, url);
-        if (!buf) { misses.set(memKey, Date.now()); return null; }
+        if (!buf) { noteMiss(memKey); return null; }
         if (file) { try { writeFileSync(file, buf); } catch { /* memory only */ } }
         return remember(memKey, { buf, type: typeOf(buf) });
     })().finally(() => inflight.delete(memKey)));

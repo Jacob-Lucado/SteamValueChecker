@@ -91,16 +91,18 @@ test("every dashboard page opens without script errors", { timeout: 240_000 }, a
         await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
         const page = await ctx.newPage();
         await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
-        const errors = [], empty = [];
+        const errors = [], empty = [], noise = [];
         page.on("pageerror", e => errors.push(`${page.url()} ${e.message}`));
+        page.on("console", m => { if (m.type() === "error") noise.push(m.text()); }); page.on("requestfailed", r => noise.push(`failed ${r.url()}`)); page.on("response", r => { if (r.status() >= 400) noise.push(`${r.status()} ${r.url()}`); });
         for (const id of (process.env.ONLY ? process.env.ONLY.split(",") : PAGES)) {
             await page.goto(`${o.base}/${id === "home" ? "" : id}`, { waitUntil: "load" });
-            await page.waitForTimeout(500);
+            await page.waitForFunction(() => (document.getElementById("app")?.innerText ?? "").trim().length >= 30, null, { timeout: 4000 }).catch(() => {});
+            await page.waitForTimeout(250);
             const len = await page.evaluate(() => (document.getElementById("app")?.innerText ?? "").trim().length);
             if (len < 30) { empty.push(id); if (process.env.ONLY) console.log(await page.evaluate(() => document.body.innerText.slice(0, 300)), page.url()); }
         }
         assert.deepEqual(errors, []);
-        assert.deepEqual(empty, []);
+        assert.deepEqual(empty, [], noise.join(" | "));
     } finally { await browser.close(); await o.close(); }
 });
 

@@ -18,6 +18,7 @@ export function createCardHandlers({ db, itad = null, nowPlaying = null, fetchIm
             if (!profilesOn()) throw new UserError("Profile pages are switched off right now.");
             if (!owner?.profile_slug || !owner.profile_public) throw new UserError(`The card is your profile page as a picture, so turn your page on first. Choose a name, switch it on and design it at ${link}.`);
             if (db.getProfileData(i.user.id).blocked) throw new UserError("Your profile page is not available right now.");
+            if (last.size > 5000) { const cut = Date.now() - COOLDOWN_MS; for (const [k, t] of last) if (t < cut) last.delete(k); }
             last.set(i.user.id, Date.now());
             await i.deferReply(shared ? {} : { flags: MessageFlags.Ephemeral });
             const profile = await buildProfile({ db, itad, nowPlaying }, owner, { owner: false, sameServer: false });
