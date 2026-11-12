@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.57", date: "2026-11-11", title: "A tidier menu", items: [
+        "**Fewer sections:** the top menu went from 13 sections to 9. Free games, Bundles, Playtests and Codes & promos now sit under Deals with the rest of the money-saving pages.",
+        "**Creators:** the indie showcase and dev panel share a section with the streamer pages (Streamer hub, Overlay studio, Go live, Who is live).",
+        "**Play together:** Fortnite moved in with Game night, Game club and the other things you do with other people. Every page keeps its old address, so your bookmarks still work.",
+        "**Game pages:** every game now has a public page with its price history and a buy-or-wait verdict, and the Price history button on alerts opens it. There is also a Winter Sale countdown at /winter-sale."
+    ] },
     { version: "2026.11.56", date: "2026-11-10", title: "Giveaways, playtests and friends", items: [
         "**Leave out a site:** you can now skip itch.io (or Alpha Beta Gamer, GamerPower, Playtester or Steam demos) in playtest alerts. Members do it under Alert settings or /alerts, and each server does it in its playtest settings, so a server can leave a site out even for games its members watch.",
         "**Your birthday:** the profile editor has a Birthday box (month and day only, never shown on your page). Tick the share option and anyone who has your page on their Friends list gets the reminder a week before, without having to type it in. A friend's own entry still wins, and turning sharing off or switching your page off hides it again.",

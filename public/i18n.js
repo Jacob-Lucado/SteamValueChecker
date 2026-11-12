@@ -7,6 +7,8 @@
     // top bar and sections
     // community feed, servers and people
     ["Social", "Social", "Social", "Community", "Social", "Social", "Сообщество", "Społeczność", "Sosyal", "ソーシャル", "소셜", "社交"],
+    ["Creators", "Creadores", "Créateurs", "Creator", "Criadores", "Creator", "Авторам", "Twórcy", "Üreticiler", "クリエイター", "크리에이터", "创作者"],
+    ["Indie showcase & tools", "Escaparate indie y herramientas", "Vitrine indé et outils", "Indie-Schaufenster und Tools", "Vitrine indie e ferramentas", "Vetrina indie e strumenti", "Инди-витрина и инструменты", "Wystawa indie i narzędzia", "Indie vitrini ve araçlar", "インディー紹介とツール", "인디 쇼케이스 및 도구", "独立游戏展示与工具"],
     ["Play together", "Jugar juntos", "Jouer ensemble", "Zusammen spielen", "Jogar juntos", "Giocare insieme", "Играть вместе", "Grajmy razem", "Birlikte oyna", "一緒に遊ぶ", "함께 플레이", "一起玩"],
     ["Feed", "Novedades", "Fil d'actu", "Feed", "Feed", "Feed", "Лента", "Aktualności", "Akış", "フィード", "피드", "动态"],
     ["People", "Personas", "Personnes", "Personen", "Pessoas", "Persone", "Люди", "Ludzie", "Kişiler", "ユーザー", "사람들", "用户"],
