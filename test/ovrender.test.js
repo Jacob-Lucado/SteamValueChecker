@@ -3,22 +3,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { readFile, access } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
-import { createRequire } from "node:module";
+import { launchBrowser } from "./helpers/browser.js";
 import { OVERLAY_KINDS, OVERLAY_THEMES, cleanConfig } from "../src/overlays.js";
 
 const PUBLIC = new URL("../public/", import.meta.url).pathname;
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 
-async function launch() {
-    const exe = [process.env.CHROMIUM_PATH, process.env.LUNA_CHROMIUM, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].filter(Boolean);
-    for (const p of exe) { try { await access(p); } catch { continue; } try { const { chromium } = createRequire(import.meta.url)("playwright-core"); return await chromium.launch({ executablePath: p }); } catch { /* try the next one */ } }
-    try { return await createRequire("/usr/lib/node_modules/")("playwright").chromium.launch(); } catch { return null; }
-}
-
 test("every overlay draws in every theme without errors", { timeout: 180_000 }, async t => {
-    const browser = await launch();
+    const browser = await launchBrowser();
     if (!browser) return t.skip("no Chromium here");
     const server = createServer(async (req, res) => {
         const u = new URL(req.url, "http://x"); const file = u.pathname === "/ov" ? "ov.html" : u.pathname.slice(1);

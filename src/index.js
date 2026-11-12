@@ -179,9 +179,9 @@ const itad = withoutInflated(withFreeWeekends(withGamerPower(withLuna(createItad
 const APP_FLAGS = await (async () => {
     try {
         const r = await fetch("https://discord.com/api/v10/applications/@me", { headers: { Authorization: `Bot ${cfg.token}` }, signal: AbortSignal.timeout(10_000) });
-        if (!r.ok) return 0;
+        if (!r.ok) { console.error(`[start] Discord answered ${r.status} when reading the app's intent flags. Member and message features stay off until the next start.`); return 0; }
         return (await r.json()).flags ?? 0;
-    } catch { return 0; }
+    } catch (e) { console.error(`[start] Could not read the app's intent flags (${e?.message ?? e}). Member and message features stay off until the next start.`); return 0; }
 })();
 const MEMBERS_INTENT = Boolean(APP_FLAGS & ((1 << 14) | (1 << 15))); // GATEWAY_GUILD_MEMBERS or the limited version
 setNamedFeed(MEMBERS_INTENT);

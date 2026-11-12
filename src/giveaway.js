@@ -209,7 +209,8 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             const row = db.getGiveaway(id);
             const msg = await discord.post(g.channel_id, giveawayPayload(row, db.listKeys(id), 0, "active"));
             db.setGiveawayMessage(id, msg.id);
-        } catch {
+        } catch (e) {
+            log(`giveaway post failed in ${g.channel_id}: ${e?.message ?? e}`);
             db.deleteGiveaway(id); // nothing was announced, so no keys are kept
             throw new UserError("I could not post in that channel. Give the bot View Channel, Send Messages and Embed Links there, then try again.");
         }
@@ -274,7 +275,8 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             const msg = await discord.post(row.channel_id, giveawayPayload(row, db.listKeys(g.id), 0, "active"));
             db.setGiveawayMessage(g.id, msg.id);
             return true;
-        } catch {
+        } catch (e) {
+            log(`scheduled giveaway ${g.id} could not start in ${g.channel_id}: ${e?.message ?? e}`);
             db.setGiveawayStatus(g.id, "cancelled");
             await returnUnused(g, ["available"], "It could not be posted in the channel (check the bot's permissions there).");
             await dmHost(g, hostNote(g, "A scheduled giveaway could not start because I could not post in its channel. Its keys were returned to you."));

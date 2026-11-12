@@ -4061,3 +4061,15 @@ test("overlay studio: the game price overlay looks up a pasted Steam link", asyn
         assert.equal(j.config.appid, "1145350"); assert.equal(j.data.game.title, "Hades II"); assert.equal(j.data.game.price, 17.99);
     } finally { await o.close(); }
 });
+
+test("the page's soft sign-in check answers 200 when nobody is signed in, and still 401s the plain call", async () => {
+    const t = await setup();
+    try {
+        const soft = await t.request("/api/me?soft=1");
+        assert.equal(soft.status, 200); assert.equal(soft.data.signedOut, true);
+        assert.equal((await t.request("/api/me")).status, 401);
+        await t.signIn();
+        const me = await t.request("/api/me?soft=1");
+        assert.equal(me.status, 200); assert.ok(me.data.user?.id);
+    } finally { await t.close(); }
+});

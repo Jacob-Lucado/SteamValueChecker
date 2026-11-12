@@ -6665,7 +6665,7 @@ window.SVC_SITE = envIn => {
       if (shared && shared.cfg && !shared.restricted) { state.cfg = shared.cfg; state.about = shared.about; state.creator = shared.creator; state.freeNow = shared.freeNow ?? null; state.me = shared.me; }
       else { if (!state.cfg) state.cfg = await api("/api/config");
       try { const x = await api("/api/about"); state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null; } catch { state.about = null; state.creator = null; }
-      try { state.me = await api("/api/me"); if (state.me?.adminOnly) state.me = null; } catch { state.me = null; } } // a password sign-in opens the admin panel only
+      try { state.me = await api("/api/me?soft=1"); if (state.me?.adminOnly || state.me?.signedOut) state.me = null; } catch { state.me = null; } } // a password sign-in opens the admin panel only
       // No choice made in this browser yet: follow the language already set for the bot on this account.
       const mine = state.me?.settings?.lang;
       if (!I18N.hasChoice() && mine && mine !== "en" && I18N.valid(mine)) { LANG = mine; I18N.remember(mine); document.documentElement.lang = mine; }

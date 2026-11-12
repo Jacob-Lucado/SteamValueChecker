@@ -964,7 +964,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const st = await topgg.status(u.id);
             return { enabled: true, voted: st.voted, nextAt: st.nextAt, votes: st.votes, xp: VOTE_XP, url: `https://top.gg/bot/${encodeURIComponent(config.clientId ?? "")}/vote` };
         },
-        "GET /api/me": async (req) => {
+        "GET /api/me": async (req, _b, url) => {
+            // The page asks with ?soft=1 on load. Signed out is then an ordinary answer instead of a 401, so visitors' consoles stay clean.
+            if (url.searchParams.get("soft") === "1" && !softSession(req) && !sessions.get(cookies(req)[COOKIE])) return { user: null, signedOut: true };
             const s = session(req);
             const panel = isOwner(s) ? null : db.getAdminAccess(s.userId);
             const panelInfo = panel ? { kind: panel.kind, edit: panel.edit, areas: PANEL_AREAS.map(a => a.id) } : null;
