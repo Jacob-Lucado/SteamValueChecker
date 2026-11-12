@@ -46,6 +46,10 @@ import { createModDash, ModDashError } from "./moddash.js";
 import { HttpError } from "./http.js";
 import { createOverlayRoutes } from "./overlayroutes.js";
 import { createAdminRoutes } from "./adminroutes.js";
+import { createMusicRoutes } from "./musicroutes.js";
+import { createStreamRoutes } from "./streamroutes.js";
+import { createServerRoutes } from "./serverroutes.js";
+import { createSocialRoutes } from "./socialroutes.js";
 import { createIndieRoutes } from "./indieroutes.js";
 import { createCommunityRoutes } from "./communityroutes.js";
 import { createGiveawayRoutes } from "./giveawayroutes.js";
@@ -942,6 +946,10 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const giveawayRoutes = createGiveawayRoutes({ cooldown, db, giveawayOf, giveaways, itad, managerGuild, needGiveaways, outcomeOf, pendingClaimsFor, rest, session });
     const communityRoutes = createCommunityRoutes({ botGuilds, botIn, cd, comm, cooldown, guildFor, guildList, isManager, managerGuild, playtests, session });
     const indieRoutes = createIndieRoutes({ CRAWLER, adminRoutes, clientIp, config, db, decideKeyRequest, devSession, indieApi, indieHerald, indieKeyLimit, indieLookupLimit, indiePublic, indieReportLimit, indieSyncLimit, indieUpdateLimit, indieVerifyLimit, indieWriteLimit, isOwner, now, origin, session, socialWrite, softSession, syncIndieDev });
+    const socialRoutes = createSocialRoutes({ authorCard, clientIp, config, db, directory, guildList, isManager, isOwner, mayPost, notifySocial, now, peopleList, reactSeen, serverFilter, session, shapeItems, slugOwner, socialRead, socialWrite, softSession, userRow });
+    const serverRoutes = createServerRoutes({ botGuilds, bundleFeed, cd, codes, comm, communityRoutes, config, cooldown, db, drops, guildChoices, guildFor, isManager, itad, managedGuild, managerGuild, names, now, rest, session, userRow });
+    const streamRoutes = createStreamRoutes({ cardsFor, clientIp, cooldown, db, guildChoices, gwOverlayPicks, isManager, isOwner, musicCall, musicMember, now, origin, overlayLimit, remember, rest, rolesIn, session, streamAccess, streamGw, streams, twitchReply, userRow });
+    const musicRoutes = createMusicRoutes({ botGuilds, chat, cooldown, db, guildChoices, isManager, isOwner, managedGuild, mayStream, music, musicCall, musicGuild, musicMember, musicOrigin, origin, remember, rest, session, stations, streamAccess, streamRoutes });
     const routes = {
         // The extension asks this (no sign-in, nothing sent about the person) to remind its users to update.
         "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
@@ -1192,108 +1200,13 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             db.expireDueBundles(now()); // anything that ended since the last poll should not show as live
             return { status, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), bundles: db.listFeedBundles({ status, stores: store ? [store] : null, limit: 100 }).map(bundleFeedView), counts: db.bundleFeedCounts() };
         },
-        "GET /api/servers/bundles": async (req, _b, url) => {
-            const s = session(req);
-            const g = s.guilds.find(x => x.id === url.searchParams.get("guild"));
-            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            let channels, roles = [];
-            try { channels = await rest.listChannels(g.id); roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []); }
-            catch (err) {
-                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-                throw err;
-            }
-            const settings = db.getBundleFeedSettings(g.id);
-            return { settings, channels, roles, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), latest: db.listFeedBundles({ status: "active", stores: settings.stores, limit: 6, adult: settings.adult }).map(bundleFeedView) };
-        },
-        "POST /api/servers/bundles": async (req, body) => {
-            const s = session(req);
-            const g = s.guilds.find(x => x.id === body.guild_id);
-            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            const patch = {};
-            if (body.channel_id !== undefined) {
-                if (body.channel_id) {
-                    let channels;
-                    try { channels = await rest.listChannels(g.id); }
-                    catch (err) {
-                        if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-                        throw err;
-                    }
-                    const channel = channels.find(c => c.id === body.channel_id);
-                    if (!channel) throw new HttpError(400, "Pick a text channel from the list.");
-                    if (channel.id !== db.getBundleFeedSettings(g.id).channel_id) {
-                        try { await rest.sendMessage(channel.id, { content: `Game bundles will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
-                        catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
-                    }
-                }
-                patch.channel_id = body.channel_id || null;
-            }
-            if (body.role_id !== undefined) {
-                if (body.role_id) {
-                    const roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []);
-                    if (!roles.some(r => r.id === body.role_id)) throw new HttpError(400, "Pick a role from the list.");
-                }
-                patch.role_id = body.role_id || null;
-            }
-            if (body.stores !== undefined) patch.stores = body.stores;
-            if (body.adult !== undefined) patch.adult = body.adult;
-            let settings;
-            try { settings = applyBundleFeedSettings(db, g.id, patch); } catch (err) { throw new HttpError(400, err.message); }
-            if (patch.channel_id) bundleFeed?.poll?.().catch(() => {}); // post what is current right away
-            return { settings };
-        },
+        ...serverRoutes,
         "POST /api/admin/bundles/poll": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
             if (!bundleFeed?.poll) throw new HttpError(400, "The bundle poll is not running on this bot.");
             const r = await bundleFeed.poll({ deep: true });
             return { result: r ?? { skipped: true } };
-        },
-        "GET /api/servers/codes": async (req, _b, url) => {
-            const s = session(req);
-            const g = s.guilds.find(x => x.id === url.searchParams.get("guild"));
-            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            let channels, roles = [];
-            try { channels = await rest.listChannels(g.id); roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []); }
-            catch (err) {
-                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-                throw err;
-            }
-            return { settings: db.getCodeSettings(g.id), channels, roles, games: codeGames(), families: codeFamilies() };
-        },
-        "POST /api/servers/codes": async (req, body) => {
-            const s = session(req);
-            const g = s.guilds.find(x => x.id === body.guild_id);
-            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            const patch = {};
-            if (body.channel_id !== undefined) {
-                if (body.channel_id) {
-                    let channels;
-                    try { channels = await rest.listChannels(g.id); }
-                    catch (err) {
-                        if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-                        throw err;
-                    }
-                    const channel = channels.find(c => c.id === body.channel_id);
-                    if (!channel) throw new HttpError(400, "Pick a text channel from the list.");
-                    if (channel.id !== db.getCodeSettings(g.id).channel_id) {
-                        try { await rest.sendMessage(channel.id, { content: `Game codes will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
-                        catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
-                    }
-                }
-                patch.channel_id = body.channel_id || null;
-            }
-            if (body.role_id !== undefined) {
-                if (body.role_id) {
-                    const roles = await Promise.resolve(rest.listRoles?.(g.id) ?? []).catch(() => []);
-                    if (!roles.some(r => r.id === body.role_id)) throw new HttpError(400, "Pick a role from the list.");
-                }
-                patch.role_id = body.role_id || null;
-            }
-            if (body.games !== undefined) patch.games = body.games;
-            let settings;
-            try { settings = applyCodeSettings(db, g.id, patch); } catch (err) { throw new HttpError(400, err.message); }
-            if (patch.channel_id) codes?.poll?.().catch(() => {}); // post what is current right away
-            return { settings };
         },
         "POST /api/codes/retire": async (req, body) => {
             const s = session(req);
@@ -1313,50 +1226,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         },
 
 
-        // ----- music (SoundCloud in voice channels) -----
-        "GET /api/music": async (req, _b, url) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const gid = url.searchParams.get("guild");
-            if (!gid) {
-                // the servers this person is in where the bot is too
-                return { guilds: s.guilds.filter(g => !isHidden(g.id) && botGuilds?.(g.id)).map(g => ({ id: g.id, name: g.name, icon: g.icon, manager: isManager(g), active: music.status(g.id).active })) };
-            }
-            const g = musicMember(s, gid);
-            await musicGuild?.(gid)?.warm?.(s.userId);
-            const { autodj_playlist: _skip, last_radio: lastRadio, ...settings } = db.getMusicSettings(gid);
-            const subs = db.listSubmissions(gid);
-            const names = Object.fromEntries(await Promise.all([...new Set(subs.slice(0, 50).map(r => r.user_id))].map(async id => [id, (await remember("name:" + g.id + ":" + id, 10 * 60_000, () => rest.memberName(g.id, id)).catch(() => null)) || "Member " + id.slice(-4)])));
-            const out = {
-                guild: { id: g.id, name: g.name }, settings, status: music.status(gid), access: { ...music.access(gid, s.userId), isBotOwner: isOwner(s), canStream: await mayStream(s, g) }, playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })),
-                autodj: { playlist: db.getAutoPlaylist(gid).slice(0, 100), count: db.getAutoPlaylist(gid).length, lastStation: (() => { try { return lastRadio ? JSON.parse(lastRadio).title ?? null : null; } catch { return null; } })() },
-                submissions: subs.slice(0, 50).map(r => ({ id: r.id, userId: r.user_id, name: names[r.user_id], title: r.title, artist: r.artist, url: r.url, thumb: r.thumb, duration: r.duration, mine: r.user_id === s.userId }))
-            };
-            if (isManager(g)) { const c = await remember("choices:" + gid, 60_000, () => guildChoices(gid)); out.channels = c.channels; out.roles = c.roles; out.voiceChannels = await remember("voice:" + gid, 60_000, () => Promise.resolve(rest.listVoiceChannels?.(gid) ?? [])).catch(() => []); }
-            return out;
-        },
-        // ----- the chat beside the player: in memory, one room per server, plain text only -----
-        "GET /api/music/chat": async (req, _b, url) => {
-            const s = session(req);
-            const g = musicMember(s, url.searchParams.get("guild"));
-            return chat.poll(g.id, { id: s.userId, name: s.username, avatar: s.avatar }, Number(url.searchParams.get("since")) || 0);
-        },
-        "POST /api/music/chat": async (req, body) => {
-            const s = session(req);
-            const g = musicMember(s, body.guild_id);
-            const who = { id: s.userId, name: s.username, avatar: s.avatar };
-            const r = body.react ? chat.react(g.id, who, String(body.react)) : chat.say(g.id, who, body.text);
-            if (r.error) throw new HttpError(r.wait ? 429 : 400, r.error);
-            return { message: r.msg };
-        },
-        "POST /api/music/chat/delete": async (req, body) => {
-            const s = session(req);
-            const g = musicMember(s, body.guild_id);
-            const a = music.access(g.id, s.userId), mod = Boolean(a.dj || a.isManager || isOwner(s));
-            if (body.clear) { if (!mod) throw new HttpError(403, "Only DJs, moderators and managers can clear the chat."); chat.clear(g.id); return { ok: true }; }
-            if (!chat.remove(g.id, body.id, { by: s.userId, mod })) throw new HttpError(403, "You can only remove your own messages.");
-            return { ok: true };
-        },
+        ...musicRoutes,
         // ----- supporter passes -----
         "GET /api/supporter": async (req) => {
             const s = session(req), until = supporterUntil(db, s.userId);
@@ -1467,240 +1337,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             return { until: r.until, role: r.role };
         },
         ...overlayRoutes,
-        // The OBS overlay link for a server. Only people with Manage Server can see or change it.
-        "GET /api/music/overlay": async (req, _b, url) => {
-            const s = session(req), g = await streamAccess(s, url.searchParams.get("guild"));
-            const o = db.getOverlay(g.id, s.userId);
-            return { on: Boolean(o), token: o?.token ?? null, base: musicOrigin ? musicOrigin + "/overlay" : origin + "/overlay" };
-        },
-        "POST /api/music/overlay": async (req, body) => {
-            const s = session(req), g = await streamAccess(s, body.guild_id);
-            if (body.action === "remove") { db.removeOverlay(g.id, s.userId); return { on: false, token: null }; }
-            if (body.action !== "create" && body.action !== "reset") throw new HttpError(400, "Unknown action.");
-            return { on: true, token: db.resetOverlay(g.id, s.userId, isOwner(s) ? "owner" : isManager(g) ? "manager" : "role") };
-        },
-        // ----- going live: the streamer role, the live channel and the opt-in ping -----
-        "GET /api/streams": async (req, _b, url) => {
-            const s = session(req); const g = musicMember(s, url.searchParams.get("guild"));
-            const c = db.getCommunity(g.id), mgr = isManager(g) || isOwner(s), roleIds = mgr ? [] : await rolesIn(g.id, s.userId);
-            const out = {
-                guild: { id: g.id, name: g.name }, me: s.userId,
-                settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream, auto: c.stream_auto !== 0 },
-                live: db.listStreamLive(g.id).map(r => ({ userId: r.user_id, title: r.title, url: r.url, game: r.game, since: r.started, mine: r.user_id === s.userId })),
-                can: { go: canStreamIn(c, { roleIds, isManager: isManager(g), isBotOwner: isOwner(s) }), manage: mgr },
-                optedIn: streams ? await streams.optedIn(g.id, s.userId) : null,
-                links: db.getStreamLinks(g.id, s.userId).map(l => ({ platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) })),
-                link: (l => (l ? { platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) } : null))(db.getStreamLink(g.id, s.userId)),
-                watch: watchable(process.env),
-                chatReplies: Boolean(twitchReply), stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint }))
-            };
-            if (mgr) { const ch = await remember("choices:" + g.id, 60_000, () => guildChoices(g.id)); out.channels = ch.channels; out.roles = ch.roles; }
-            return out;
-        },
-        "POST /api/streams/live": async (req, body) => {
-            const s = session(req); const g = await streamAccess(s, body.guild_id);
-            if (!streams) throw new HttpError(503, "Streams aren't available on this bot right now.");
-            cooldown(s.userId, "streamlive");
-            const me = (await remember("mname:" + g.id + ":" + s.userId, 10 * 60_000, () => rest.memberName(g.id, s.userId)).catch(() => null)) || s.username || "Someone";
-            return musicCall(() => streams.goLive(g.id, { id: s.userId, name: me, avatarUrl: null }, { title: body.title, url: body.url, game: body.game }));
-        },
-        // A giveaway for the viewers of this stream: one key, drawn when the stream ends.
-        "POST /api/streams/giveaway": async (req, body) => {
-            const s = session(req); const g = await streamAccess(s, body.guild_id);
-            if (!streamGw.enabled()) throw new HttpError(503, "Giveaways aren't set up on this bot.");
-            cooldown(s.userId, "streamgw");
-            const me = (await remember("mname:" + g.id + ":" + s.userId, 10 * 60_000, () => rest.memberName(g.id, s.userId)).catch(() => null)) || s.username || "Someone";
-            // The full form sends `keys` (a list of prizes) and every option; the short one sends a single `key`.
-            if (body.keys === undefined) {
-                const r = await musicCall(() => streamGw.start(g.id, { id: s.userId, name: me }, { game: body.game, key: body.key, minutes: body.minutes }));
-                return { ok: true, channelId: r.channelId, endsAt: r.endsAt, endsWithStream: true, prizes: 1 };
-            }
-            const form = { ...body };
-            if (!(isManager(g) || isOwner(s))) for (const k of ["require_role_id", "require_role_ids", "require_all", "bonus_role_id", "bonus_role_ids", "override_role_id", "override_role_ids", "ping_role_id", "vouch_channel_id"]) delete form[k]; // server rules are the managers' call
-            const r = await musicCall(async () => {
-                const { input } = giveawayInput(form, { defaults: { length: "1h", prize: "Prize" } });
-                // Chat entry: viewers type !enter in the streamer's Twitch chat. Needs their Twitch channel linked here, and a Discord invite to point newcomers at.
-                let chat = null;
-                if (body.chat_enter) {
-                    if (!db.getStreamLink(g.id, s.userId, "twitch")) throw new UserError("Link your Twitch channel first (the Your channel box above), so I know which chat to listen to.");
-                    let invite = null;
-                    if (String(body.chat_invite ?? "").trim()) { try { invite = parseSteps([{ kind: "join_discord", url: body.chat_invite }])[0].url; } catch (e) { if (e instanceof StepError) throw new UserError("The Discord link for chat must be an invite, like https://discord.gg/yourserver."); throw e; } }
-                    chat = { invite };
-                }
-                return streamGw.start(g.id, { id: s.userId, name: me }, { input, endWithStream: body.end_with_stream !== false, chat });
-            });
-            return { ok: true, channelId: r.channelId, endsAt: r.endsAt, endsWithStream: r.endsWithStream, prizes: r.prizes, chat: r.chat, chatReplies: Boolean(twitchReply) };
-        },
-        // everyone linked in a server, with who is live right now (any member may look: it is only public channel names)
-        "GET /api/streams/roster": async (req, _b, url) => {
-            const s = session(req); const g = musicMember(s, url.searchParams.get("guild"));
-            const live = new Map(db.listStreamLive(g.id).map(r => [r.user_id, r]));
-            const watch = watchable(process.env);
-            const people = (await Promise.all([...new Map(db.listStreamLinks(g.id).map(l => [l.user_id, l])).values()].map(async l => { // one card per person, however many channels they linked
-                const m = await remember("smem:" + g.id + ":" + l.user_id, 10 * 60_000, () => rest.getMember(g.id, l.user_id)).catch(() => undefined);
-                if (m === null) return null; // left the server
-                const u = m?.user ?? {};
-                const avatar = m?.avatar ? `https://cdn.discordapp.com/guilds/${g.id}/users/${l.user_id}/avatars/${m.avatar}.png?size=96` : u.avatar ? `https://cdn.discordapp.com/avatars/${l.user_id}/${u.avatar}.png?size=96` : null;
-                const row = live.get(l.user_id);
-                return { userId: l.user_id, name: m?.nick || u.global_name || u.username || "Streamer", avatar, platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle).replace(/\/live$/, ""), checked: Boolean(watch[l.platform]), mine: l.user_id === s.userId,
-                    channels: db.getStreamLinks(g.id, l.user_id).map(x => ({ platform: x.platform, handle: x.handle, url: channelUrl(x.platform, x.handle).replace(/\/live$/, ""), checked: Boolean(watch[x.platform]) })),
-                    live: row ? { title: row.title, game: row.game, url: row.url, since: row.started, also: row.also ?? [] } : null };
-            }))).filter(Boolean);
-            people.sort((a, b) => Number(Boolean(b.live)) - Number(Boolean(a.live)) || a.name.localeCompare(b.name));
-            return { guild: { id: g.id, name: g.name }, people, liveChannel: db.getCommunity(g.id).live_channel ? true : false, now: now() };
-        },
-        "POST /api/streams/link": async (req, body) => {
-            const s = session(req); const g = await streamAccess(s, body.guild_id);
-            cooldown(s.userId, "streamlink");
-            if (!db.getCommunity(g.id).live_channel) throw new HttpError(400, "This server has no live channel yet. A manager can pick one below.");
-            let ch; try { ch = parseChannel(body.channel); } catch (e) { throw new HttpError(400, e.message); }
-            db.setStreamLink(g.id, s.userId, { platform: ch.platform, handle: ch.handle, via: isOwner(s) ? "owner" : isManager(g) ? "manager" : "role", added: now() });
-            return { link: { platform: ch.platform, handle: ch.handle, url: channelUrl(ch.platform, ch.handle) }, links: db.getStreamLinks(g.id, s.userId).map(l => ({ platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) })), watch: watchable(process.env) };
-        },
-        "POST /api/streams/unlink": async (req, body) => {
-            const s = session(req); const g = musicMember(s, body.guild_id);
-            const site = ["twitch", "kick", "youtube"].includes(body.platform) ? body.platform : null;
-            db.removeStreamLink(g.id, s.userId, site);
-            return { ok: true, links: db.getStreamLinks(g.id, s.userId).map(l => ({ platform: l.platform, handle: l.handle, url: channelUrl(l.platform, l.handle) })) };
-        },
-        "POST /api/streams/end": async (req, body) => {
-            const s = session(req); const g = musicMember(s, body.guild_id);
-            if (!streams) throw new HttpError(503, "Streams aren't available on this bot right now.");
-            const target = body.user_id && body.user_id !== s.userId ? String(body.user_id) : s.userId;
-            if (target !== s.userId && !(isManager(g) || isOwner(s))) throw new HttpError(403, "Only managers can end someone else's stream.");
-            const me = (await remember("mname:" + g.id + ":" + target, 10 * 60_000, () => rest.memberName(g.id, target)).catch(() => null)) || "Someone";
-            await musicCall(() => streams.endLive(g.id, { id: target, name: me }));
-            return { ok: true };
-        },
-        "POST /api/streams/ping": async (req, body) => {
-            const s = session(req); const g = musicMember(s, body.guild_id);
-            if (!streams) throw new HttpError(503, "Streams aren't available on this bot right now.");
-            cooldown(s.userId, "streamping");
-            const r = await musicCall(() => streams.setOptIn(g.id, s.userId, Boolean(body.on)));
-            return { optedIn: r.on };
-        },
-        "POST /api/streams/settings": async (req, body) => {
-            const s = session(req); const g = musicMember(s, body.guild_id);
-            if (!(isManager(g) || isOwner(s))) throw new HttpError(403, "You need the Manage Server permission there.");
-            const ch = await remember("choices:" + g.id, 60_000, () => guildChoices(g.id));
-            const patch = {};
-            const pick = (k, list) => { if (!(k in body)) return; const v = body[k] ? String(body[k]) : null; if (v && !list.some(x => x.id === v)) throw new HttpError(400, "That isn't in this server."); return v; };
-            for (const [k, list] of [["streamer_role_id", ch.roles], ["live_channel", ch.channels], ["ping_stream", ch.roles]]) { const v = pick(k, list); if (v !== undefined) patch[k] = v; }
-            if ("auto" in body) patch.stream_auto = body.auto ? 1 : 0;
-            const c = db.setCommunity(g.id, patch);
-            return { settings: { streamer_role_id: c.streamer_role_id, live_channel: c.live_channel, ping_stream: c.ping_stream, auto: c.stream_auto !== 0 } };
-        },
-        "GET /api/music/search": async (req, _b, url) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            musicMember(s, url.searchParams.get("guild"));
-            cooldown(s.userId, "musicsearch");
-            return { results: await musicCall(() => music.search(url.searchParams.get("q"))) };
-        },
-        "POST /api/music/play": async (req, body) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const g = musicMember(s, body.guild_id);
-            cooldown(s.userId, "musicplay");
-            await musicGuild?.(g.id)?.warm?.(s.userId);
-            const tracks = Array.isArray(body.tracks) && body.tracks.length ? body.tracks.slice(0, 1).map(t => ({ url: String(t.url ?? ""), title: String(t.title ?? "").slice(0, 150), artist: String(t.artist ?? "").slice(0, 80), duration: Number(t.duration) || null, thumb: typeof t.thumb === "string" && t.thumb.startsWith("https://") ? t.thumb : null })).filter(t => isSoundcloudUrl(t.url)) : null;
-            const r = await musicCall(() => music.enqueue({ guildId: g.id, userId: s.userId, textChannelId: null, query: body.query, tracks: tracks?.length ? tracks : null, playNext: Boolean(body.next), shuffleAdded: Boolean(body.shuffle) }));
-            if (r.title) chat.note(g.id, `${s.username} added ${r.kind === "playlist" ? `${r.added} songs from ${r.title}` : r.title}`);
-            return { added: r.added, kind: r.kind, title: r.title, startedNow: r.startedNow, status: music.status(g.id) };
-        },
-        "POST /api/music/control": async (req, body) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const g = musicMember(s, body.guild_id);
-            cooldown(s.userId, "music");
-            await musicGuild?.(g.id)?.warm?.(s.userId);
-            const id = g.id, u = s.userId, n = Number(body.n ?? body.value);
-            const acts = {
-                pause: () => music.pause(id, u), resume: () => music.resume(id, u), skip: () => music.skip(id, u), stop: () => music.stop(id, u), leave: () => music.leave(id, u),
-                previous: () => music.previous(id, u), shuffle: () => music.shuffle(id, u), clear: () => music.clear(id, u), loop: () => music.setLoop(id, u, String(body.value)),
-                volume: () => music.setVolume(id, u, n), seek: () => music.seek(id, u, n), skipto: () => music.skipTo(id, u, n), remove: () => music.remove(id, u, n), move: () => music.move(id, u, Number(body.from), Number(body.to))
-            };
-            if (!Object.hasOwn(acts, String(body.action))) throw new HttpError(400, "Unknown action.");
-            const result = await musicCall(async () => acts[body.action]());
-            return { result: result && typeof result === "object" && "skipped" in result ? { skipped: result.skipped, votes: result.votes, need: result.need } : null, status: music.status(id) };
-        },
-        "POST /api/music/playlists": async (req, body) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const g = musicMember(s, body.guild_id);
-            const name = String(body.name ?? "").trim();
-            if (body.action === "save") {
-                const st = music.status(g.id); const tracks = [st.current, ...st.next].filter(Boolean);
-                if (!tracks.length) throw new HttpError(400, "Nothing is playing or queued to save.");
-                try { var saved = db.savePlaylist(s.userId, name, tracks); } catch (e) { throw new HttpError(400, e.message); }
-                return { saved, playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })) };
-            }
-            if (body.action === "delete") {
-                if (!db.deletePlaylist(s.userId, name)) throw new HttpError(404, "You don't have a playlist with that name.");
-                return { playlists: db.listPlaylists(s.userId).map(p => ({ name: p.name, count: p.tracks.length })) };
-            }
-            if (body.action === "load") {
-                const p = db.getPlaylist(s.userId, name);
-                if (!p) throw new HttpError(404, "You don't have a playlist with that name.");
-                cooldown(s.userId, "musicplay");
-                await musicGuild?.(g.id)?.warm?.(s.userId);
-                const r = await musicCall(() => music.enqueue({ guildId: g.id, userId: s.userId, textChannelId: null, tracks: p.tracks }));
-                return { added: r.added, status: music.status(g.id) };
-            }
-            throw new HttpError(400, "Unknown action.");
-        },
-        "GET /api/music/stations": async (req, _b, url) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            musicMember(s, url.searchParams.get("guild"));
-            cooldown(s.userId, "musicstations");
-            return { categories: CATEGORIES.map(([id, name]) => ({ id, name })), stations: stations ? (await stations.working()).map(t => ({ title: t.title, genre: t.genre, cat: t.cat ?? "", url: t.url, name: t.title })) : [] };
-        },
-        "POST /api/music/submit": async (req, body) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const g = musicMember(s, body.guild_id);
-            cooldown(s.userId, "musicsubmit");
-            await musicGuild?.(g.id)?.warm?.(s.userId);
-            const tracks = Array.isArray(body.tracks) && body.tracks.length ? body.tracks.slice(0, 1).map(t => ({ url: String(t.url ?? ""), title: String(t.title ?? "").slice(0, 150), artist: String(t.artist ?? "").slice(0, 80), duration: Number(t.duration) > 0 ? Math.round(Number(t.duration)) : null, thumb: typeof t.thumb === "string" && t.thumb.startsWith("https://") ? t.thumb : null })).filter(t => isSoundcloudUrl(t.url)) : null;
-            const r = await musicCall(() => music.submit(g.id, s.userId, { query: body.query, tracks: tracks?.length ? tracks : null }));
-            return { added: r.added, title: r.title, pending: r.pending };
-        },
-        "POST /api/music/submission": async (req, body) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const g = musicMember(s, body.guild_id);
-            await musicGuild?.(g.id)?.warm?.(s.userId);
-            if (body.action === "clear") { const n = await musicCall(async () => music.clearSubmissions(g.id, s.userId)); return { cleared: n }; }
-            await musicCall(async () => music.removeSubmission(g.id, s.userId, body.id));
-            return { removed: true };
-        },
-        "POST /api/music/autodj": async (req, body) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const g = managedGuild(req, body.guild_id);
-            cooldown(s.userId, "musicauto");
-            const patch = {};
-            const flag = k => { if (body[k] !== undefined) patch[k] = body[k] ? 1 : 0; };
-            flag("autodj"); flag("autodj_submit"); flag("autodj_shuffle"); flag("radio");
-            if (body.autodj_idle !== undefined) { const n = Math.round(Number(body.autodj_idle)); if (!(n >= 5 && n <= 600)) throw new HttpError(400, "Idle time must be between 5 and 600 seconds."); patch.autodj_idle = n; }
-            if (body.autodj_channel_id !== undefined) {
-                if (body.autodj_channel_id) { const vcs = await Promise.resolve(rest.listVoiceChannels?.(g.id) ?? []).catch(() => []); if (!vcs.some(c => c.id === body.autodj_channel_id)) throw new HttpError(400, "Pick a voice channel from the list."); }
-                patch.autodj_channel_id = body.autodj_channel_id || null;
-            }
-            if (Object.keys(patch).length) db.setMusicSettings(g.id, patch);
-            let note = null;
-            if (body.clear_playlist) { music.clearAutoPlaylist(g.id); note = "Playlist removed."; }
-            else if (body.playlist_url) { const r = await musicCall(() => music.setAutoPlaylist(g.id, { link: body.playlist_url })); note = `Playlist set: ${r.count} songs.`; }
-            else if (body.saved_playlist) {
-                const p = db.getPlaylist(s.userId, String(body.saved_playlist));
-                if (!p) throw new HttpError(404, "You don't have a saved playlist with that name.");
-                const r = await musicCall(() => music.setAutoPlaylist(g.id, { tracks: p.tracks, label: p.name })); note = `Playlist set from ${p.name}: ${r.count} songs.`;
-            }
-            if (db.getMusicSettings(g.id).autodj) music.autoJoin(g.id).catch(() => {});
-            const { autodj_playlist: _skip, ...settings } = db.getMusicSettings(g.id);
-            return { settings, note, count: db.getAutoPlaylist(g.id).length };
-        },
         "GET /api/admin/traffic": async (req) => {
             const s = session(req);
             if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
@@ -1823,121 +1459,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             await musicCall(async () => music.adminForce(String(body.guild_id ?? ""), String(body.action ?? "")));
             return { ok: true, sessions: music.sessions().filter(x => !isHidden(x.guildId)).length };
         },
-        "POST /api/music/settings": async (req, body) => {
-            const s = session(req);
-            if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");
-            const g = managedGuild(req, body.guild_id);
-            const patch = {};
-            const int = (k, lo, hi, label) => { if (body[k] === undefined) return; const n = Math.round(Number(body[k])); if (!(n >= lo && n <= hi)) throw new HttpError(400, `${label} must be between ${lo} and ${hi}.`); patch[k] = n; };
-            if (body.enabled !== undefined) patch.enabled = body.enabled ? 1 : 0;
-            if (body.announce !== undefined) patch.announce = body.announce ? 1 : 0;
-            if (body.vc_status !== undefined) patch.vc_status = body.vc_status ? 1 : 0;
-            if (body.stay !== undefined) patch.stay = body.stay ? 1 : 0;
-            if (body.radio !== undefined) patch.radio = body.radio ? 1 : 0;
-            int("volume", 1, 100, "Starting volume"); int("max_queue", 5, 500, "Queue size"); int("max_minutes", 0, 600, "Song length limit"); int("leave_minutes", 1, 60, "Leave time");
-            if (body.dj_role_id !== undefined || body.channel_id !== undefined) {
-                const { channels, roles } = await guildChoices(g.id);
-                if (body.dj_role_id !== undefined) { if (body.dj_role_id && !roles.some(r => r.id === body.dj_role_id)) throw new HttpError(400, "Pick a role from the list."); patch.dj_role_id = body.dj_role_id || null; }
-                if (body.channel_id !== undefined) { if (body.channel_id && !channels.some(c => c.id === body.channel_id)) throw new HttpError(400, "Pick a text channel from the list."); patch.channel_id = body.channel_id || null; }
-            }
-            return { settings: Object.keys(patch).length ? db.setMusicSettings(g.id, patch) : db.getMusicSettings(g.id) };
-        },
 
-        // ----- promo drops (SteelSeries, NVIDIA and the like) -----
-        "GET /api/servers/drops": async (req, _b, url) => {
-            const g = managedGuild(req, url.searchParams.get("guild"));
-            const { channels, roles } = await guildChoices(g.id);
-            const at = now();
-            db.expireDrops(at);
-            return { settings: db.getDropSettings(g.id), channels, roles, drops: db.listDrops(g.id, { limit: 25 }).map(d => dropView(d, at)), news: db.listNews(8) };
-        },
-        "POST /api/servers/drops": async (req, body) => {
-            const s = session(req);
-            const g = managedGuild(req, body.guild_id);
-            const patch = {};
-            if (body.channel_id !== undefined) {
-                if (body.channel_id) {
-                    const { channels } = await guildChoices(g.id, false);
-                    const channel = channels.find(c => c.id === body.channel_id);
-                    if (!channel) throw new HttpError(400, "Pick a text channel from the list.");
-                    if (channel.id !== db.getDropSettings(g.id).channel_id) {
-                        try { await rest.sendMessage(channel.id, { content: `Promo drops will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
-                        catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
-                    }
-                }
-                patch.channel_id = body.channel_id || null;
-            }
-            if (body.role_id !== undefined) {
-                if (body.role_id) {
-                    const { roles } = await guildChoices(g.id);
-                    if (!roles.some(r => r.id === body.role_id)) throw new HttpError(400, "Pick a role from the list.");
-                }
-                patch.role_id = body.role_id || null;
-            }
-            if (body.news !== undefined) patch.news = Boolean(body.news);
-            if (patch.news && !(patch.channel_id ?? db.getDropSettings(g.id).channel_id)) throw new HttpError(400, "Pick a channel first, then turn blog watching on.");
-            const settings = applyDropSettings(db, g.id, patch);
-            if (patch.channel_id) drops?.poll?.().catch(() => {});
-            return { settings };
-        },
-        "POST /api/servers/drops/add": async (req, body) => {
-            const s = session(req);
-            const g = managedGuild(req, body.guild_id);
-            let clean;
-            try { clean = cleanDrop(body, now()); } catch (err) { throw new HttpError(400, err.message); }
-            if (!db.getDropSettings(g.id).channel_id) throw new HttpError(400, "Pick a promo channel first, then add the drop.");
-            const id = db.addDrop({ guildId: g.id, ...clean, createdBy: s.userId });
-            drops?.poll?.().catch(() => {});
-            return { id };
-        },
-        "POST /api/servers/drops/end": async (req, body) => {
-            const g = managedGuild(req, body.guild_id);
-            const d = db.getDrop(Number(body.id));
-            if (!d || d.guild_id !== g.id) throw new HttpError(404, "No such drop in this server.");
-            if (!db.endDrop(d.id)) throw new HttpError(400, "That one has already ended.");
-            drops?.poll?.().catch(() => {});
-            return { id: d.id, status: "ended" };
-        },
 
-        "GET /api/servers/channels": async (req, _b, url) => {
-            const s = session(req);
-            const g = s.guilds.find(x => x.id === url.searchParams.get("guild"));
-            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            try {
-                return { channels: await rest.listChannels(g.id), current: db.getGuild(g.id)?.channel_id ?? null };
-            } catch (err) {
-                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-                throw err;
-            }
-        },
 
-        "POST /api/servers/channel": async (req, body) => {
-            const s = session(req);
-            const g = s.guilds.find(x => x.id === body.guild_id);
-            if (!g || !isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            if (body.clear) return { cleared: db.clearGuildChannel(g.id) };
-
-            let channels;
-            try { channels = await rest.listChannels(g.id); }
-            catch (err) {
-                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-                throw err;
-            }
-            const channel = channels.find(c => c.id === body.channel_id);
-            if (!channel) throw new HttpError(400, "Pick a text channel from the list.");
-
-            // Posting a message proves the bot can use the channel, and tells the server who changed it.
-            try {
-                await rest.sendMessage(channel.id, {
-                    content: `Wishlist alert channel set from the dashboard by <@${s.userId}>. Members get sale alerts here when a DM cannot be delivered, or when they choose channel delivery.`,
-                    allowed_mentions: { parse: [] }
-                });
-            } catch {
-                throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`);
-            }
-            db.setGuildChannel(g.id, channel.id, s.userId);
-            return { channel };
-        },
 
         // ----- price history, bulk actions, alert history -----
         "GET /api/wishlist/history": async (req, _b, url) => {
@@ -2403,184 +1927,20 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             return { removed: item.title };
         },
 
-        // ----- shared server list, leaderboard, group alerts -----
-        "GET /api/servers/list": async (req, _b, url) => {
-            const s = session(req);
-            const g = guildFor(s, url.searchParams.get("guild"));
-            const u = userRow(s);
-            return { ...(await serverListView(db, itad, g.id, u)), manager: isManager(g) };
-        },
 
-        "POST /api/servers/list/add": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            cooldown(s.userId, "add");
-            userRow(s);
-            return await addToServerList(db, itad, g.id, s.userId, body.title);
-        },
 
-        "POST /api/servers/list/vote": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            const game = db.listServerGames(g.id, s.userId).find(x => x.itad_id === body.itad_id);
-            if (!game) throw new HttpError(404, "That game is not on the server list.");
-            const voted = db.toggleVote(game.id, s.userId);
-            return { voted, votes: game.votes + (voted ? 1 : -1) };
-        },
 
-        "POST /api/servers/list/remove": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            const game = db.listServerGames(g.id, s.userId).find(x => x.itad_id === body.itad_id);
-            if (!game) throw new HttpError(404, "That game is not on the server list.");
-            return removeFromServerList(db, g.id, s.userId, game.title, isManager(g));
-        },
 
-        "GET /api/servers/leaderboard": async (req, _b, url) => {
-            const s = session(req);
-            const g = guildFor(s, url.searchParams.get("guild"));
-            const which = url.searchParams.get("board");
-            const finished = which === "finished";
-            const entries = finished ? finishedLeague(db, g.id, now()) : EXTRA_BOARDS[which] ? extraBoard(db, g.id, which, now()) : leaderboard(db, g.id);
-            const t = now();
-            const out = [];
-            for (const e of entries) {
-                const key = `${g.id}:${e.discord_id}`;
-                let hit = names.get(key);
-                if (!hit || hit.until < t) {
-                    hit = { name: await rest.memberName(g.id, e.discord_id).catch(() => null), until: t + 10 * 60_000 };
-                    names.set(key, hit);
-                    if (names.size > 2000) names.delete(names.keys().next().value);
-                }
-                out.push({ name: hit.name ?? "A member", savedPct: e.savedPct, games: e.games, done: e.done, label: e.label, you: e.discord_id === s.userId });
-            }
-            return { entries: out, joined: Boolean(userRow(s).share) };
-        },
 
-        "POST /api/servers/group": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
-            const n = Number(body.minimum);
-            if (!Number.isInteger(n) || n < 0 || n === 1 || n > 20) throw new HttpError(400, "Use 2 to 20, or 0 to turn it off.");
-            db.setGroupMin(g.id, n);
-            return { groupMin: n };
-        },
 
-        "POST /api/servers/hot": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
-            const n = Math.round(Number(body.minimum));
-            if (!Number.isFinite(n) || n < 0 || n > 95 || (n !== 0 && n < 30)) throw new HttpError(400, "Pick 30 to 95, or 0 to turn it off.");
-            db.setHotMin(g.id, n);
-            return { hotMin: n };
-        },
-        "POST /api/servers/sales": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
-            db.setSaleFeed(g.id, Boolean(body.enabled));
-            return { saleFeed: Boolean(body.enabled) };
-        },
-        "POST /api/servers/feed": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
-            db.setFreeFeed(g.id, Boolean(body.enabled));
-            return { freeFeed: Boolean(body.enabled) };
-        },
 
-        "POST /api/servers/digest": async (req, body) => {
-            const s = session(req);
-            const g = guildFor(s, body.guild_id);
-            if (!isManager(g)) throw new HttpError(403, "You need the Manage Server permission there.");
-            if (!db.getGuild(g.id)) throw new HttpError(400, "Set an alert channel for that server first.");
-            db.setWeeklyDigest(g.id, Boolean(body.enabled));
-            return { weeklyDigest: Boolean(body.enabled) };
-        },
 
-        // The same checklist as /manage setup in Discord.
-        "GET /api/servers/channelmap": async (req, _b, url) => {
-            const g = managerGuild(session(req), url.searchParams.get("guild"));
-            return { guild: g.id, channels: cd.channelMap(g.id), alert: db.getGuild(g.id)?.channel_id ?? null };
-        },
-        "POST /api/servers/channelmap": async (req, body) => {
-            const g = managerGuild(session(req), String(body.guild_id));
-            return comm(() => cd.setChannel(g.id, String(body.key), body.channel_id || null));
-        },
-        "GET /api/servers/setup": async (req, _b, url) => {
-            const s = session(req);
-            const g = managerGuild(s, url.searchParams.get("guild"));
-            return { ...setupStatus(db, g.id), gameNightOn: db.gameNightOn(g.id), staffRole: db.getTicketSettings(g.id).staff_role_id, bot: botGuilds ? Boolean(botGuilds(g.id)) : null };
-        },
 
-        "POST /api/servers/gamenight": async (req, body) => {
-            const g = managerGuild(session(req), String(body.guild_id));
-            db.setGameNight(g.id, Boolean(body.enabled));
-            return { gameNight: Boolean(body.enabled) };
-        },
         // Game night on the dashboard: pick opted-in members of a server and see what they can play and buy together.
         "GET /api/gamenight/members": async (req, _b, url) => {
             const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
             const ids = db.sharingMembers(g.id).slice(0, 60);
             return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
-        },
-        // The streamer's deals overlay for OBS: their own private link, no server needed.
-        "GET /api/streamcard": async (req) => {
-            const s = session(req), o = db.getStreamCard(s.userId), u = userRow(s);
-            return { on: Boolean(o), token: o?.token ?? null, kinds: o?.kinds ?? STREAMCARD_KINDS, base: origin + "/streamcard", chat: o ? chatCommandSets(k => `${origin}/api/streamcard/text?token=${o.token}&kind=${k}`) : null, slug: u.profile_slug ?? null, public: Boolean(u.profile_public) };
-        },
-        "POST /api/streamcard": async (req, body) => {
-            const s = session(req); userRow(s);
-            if (body.action === "remove") { db.removeStreamCard(s.userId); return { on: false, token: null }; }
-            if (body.action === "save") { if (!db.getStreamCard(s.userId)) throw new HttpError(404, "Make your link first."); db.setStreamCardKinds(s.userId, Array.isArray(body.kinds) ? body.kinds : []); return { on: true, kinds: db.getStreamCard(s.userId).kinds }; }
-            if (body.action !== "create" && body.action !== "reset") throw new HttpError(400, "Unknown action.");
-            const had = db.getStreamCard(s.userId), token = db.resetStreamCard(s.userId);
-            if (had && body.action === "reset") db.setStreamCardKinds(s.userId, had.kinds);
-            return { on: true, token, kinds: db.getStreamCard(s.userId).kinds };
-        },
-        // What the overlay page asks for. No sign-in: the long random link is the key. Answers are kept five minutes so OBS can ask often.
-        "GET /api/streamcard/data": async (req, _b, url) => {
-            if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const o = db.streamCardByToken(String(url.searchParams.get("token") ?? ""));
-            if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
-            return await cardsFor(o, o.kinds);
-        },
-        // The giveaway overlay's numbers: the giveaways the streamer picked (or, with no pick, their latest stream giveaway), with winners once drawn.
-        "GET /api/giveawayoverlay/data": async (req, _b, url) => {
-            if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const o = db.streamCardByToken(String(url.searchParams.get("token") ?? ""));
-            if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Streamer hub.");
-            const HOLD = 10 * 60_000, picked = gwOverlayPicks(o.user_id);
-            let rows = picked.map(id => db.getGiveaway(id)).filter(g => g && (g.status === "active" || g.status === "scheduled" || now() - (g.ended_at ?? g.ends_at) <= HOLD));
-            if (!rows.length) { const l = streamGw.latest(o.user_id); rows = l ? [l] : []; }
-            const card = async g => {
-                const keys = db.listKeys(g.id), over = g.status !== "active" && g.status !== "scheduled";
-                const winners = over ? await Promise.all(keys.filter(k => k.winner_id).map(async k => ({ prize: k.label, name: (await remember("mname:" + g.guild_id + ":" + k.winner_id, 10 * 60_000, () => rest.memberName(g.guild_id, k.winner_id)).catch(() => null)) || "A viewer" }))) : [];
-                return { id: g.id, title: g.title, game: g.game_title ?? null, prizes: keys.map(k => k.label), entries: db.countEntries(g.id), endsAt: g.ends_at, startedAt: g.starts_at ?? g.created_at, status: over ? "ended" : g.status, steps: stepsOf(g).map(x => ({ label: x.label, kind: x.kind })), winners, chat: Boolean(streamGw.chatFor(g.id)) };
-            };
-            return { giveaways: await Promise.all(rows.slice(0, 6).map(card)), now: now() };
-        },
-        // Which giveaways in a server the streamer can put on screen, and which are picked now.
-        "GET /api/giveawayoverlay/pick": async (req, _b, url) => {
-            const s = session(req), g = await streamAccess(s, url.searchParams.get("guild"));
-            const picked = new Set(gwOverlayPicks(s.userId));
-            const rows = db.listGiveaways(g.id, { limit: 50 }).filter(x => x.status === "active" || x.status === "scheduled");
-            return { giveaways: rows.map(x => ({ id: x.id, title: x.title, status: x.status, endsAt: x.ends_at, entries: db.countEntries(x.id), prizes: db.listKeys(x.id).length, mine: x.host_id === s.userId, picked: picked.has(x.id) })) };
-        },
-        "POST /api/giveawayoverlay/pick": async (req, body) => {
-            const s = session(req), g = await streamAccess(s, body.guild_id);
-            const want = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(Number).filter(Number.isInteger))].slice(0, 6);
-            for (const id of want) { const x = db.getGiveaway(id); if (!x || x.guild_id !== g.id || !["active", "scheduled"].includes(x.status)) throw new HttpError(400, "One of those giveaways isn't running in this server."); }
-            const keep = gwOverlayPicks(s.userId).filter(id => db.getGiveaway(id)?.guild_id !== g.id);
-            const all = [...keep, ...want].slice(-6);
-            db.setMeta("gwov:" + s.userId, JSON.stringify(all));
-            return { ok: true, ids: all };
         },
         // The viewer's Twitch account, as Discord shows it. It is read from their Discord connections (never typed in), so it can't be faked.
         "GET /api/twitchlink": async (req) => { const s = session(req), l = db.getTwitchLink(s.userId); return { linked: Boolean(l), login: l?.login ?? null }; },
@@ -2770,24 +2130,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 buy: r.buy.map(b => ({ title: b.title, wanters: b.wanters.map(n), price: b.now?.price ?? null, currency: b.now?.currency ?? "USD", shop: b.now?.shop ?? null, discount: b.now?.discount ?? 0 })) };
         },
 
-        "GET /api/servers/forums": async (req, _b, url) => {
-            const s = session(req);
-            const g = managerGuild(s, url.searchParams.get("guild"));
-            try { return { forums: await rest.listForums(g.id) }; }
-            catch (err) { if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first."); throw err; }
-        },
 
-        "POST /api/servers/setup/auto": async (req, body) => {
-            const s = session(req);
-            const g = managerGuild(s, String(body.guild_id));
-            if (botGuilds && !botGuilds(g.id)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-            const roles = body.staff_role_id ? await rest.listRoles(g.id).catch(() => []) : [];
-            const staffRoleId = body.staff_role_id && roles.some(r => r.id === body.staff_role_id) ? body.staff_role_id : null;
-            try { return { ...(await autoSetup({ api: rest, db, guildId: g.id, botId: config.clientId, userId: s.userId, staffRoleId })), status: setupStatus(db, g.id) }; }
-            catch (e) { if (e.userFacing) throw new HttpError(400, e.message); if (e instanceof DiscordApiError && e.status === 403) throw new HttpError(400, "I need the Manage Channels permission to create channels."); throw e; }
-        },
-
-        ...communityRoutes,
         "GET /api/mod": async (req, _b, url) => {
             const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate"); botIn(g);
             return modr(() => md.overview(g.id, { manager: isManager(g), perms: Object.keys(MOD_PERMS).filter(k => hasGuildPerm(g, k)) }));
@@ -2813,11 +2156,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         },
 
 
-        "GET /api/servers/stats": async (req, _b, url) => {
-            const s = session(req);
-            const g = guildFor(s, url.searchParams.get("guild"));
-            return serverStats(db, g.id);
-        },
 
         // ----- free games right now, grouped by platform -----
         // Live numbers for the About panel. Aggregate only, so it is open to everyone like the Help page.
@@ -3068,135 +2406,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (!r.released) throw new HttpError(404, "Nobody has marked that one.");
             return { released: true, reported: Boolean(body.report) };
         },
-        // ---- the community feed
-        "GET /api/social/feed": async (req, _b, url) => {
-            const sess = softSession(req);
-            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const asked = url.searchParams.get("scope");
-            const scope = asked === "servers" ? "servers" : ["following", "mine"].includes(asked) && sess ? asked : "everyone";
-            const servers = directory();
-            const guilds = scope === "servers" ? serverFilter(sess, url.searchParams.get("server")) : null;
-            const author = url.searchParams.get("author") ? slugOwner(url.searchParams.get("author")).discord_id : null;
-            const r = db.feed(sess?.userId ?? null, { scope, before: url.searchParams.get("before"), appid: Number(url.searchParams.get("game")) || null, author, limit: 20, guilds });
-            const following = sess ? db.followCounts(sess.userId).following : 0;
-            return { items: shapeItems(r.items, sess?.userId, servers), more: r.more, signedIn: Boolean(sess), following, reactions: REACTIONS, servers: servers.map(g => ({ id: g.id, name: g.name })) };
-        },
-        // The games a member can tag a post with: their own library, most played first.
-        "GET /api/social/mygames": async (req) => {
-            const s = session(req); userRow(s);
-            return { games: db.listLibrary(s.userId).filter(g => g.appid).sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 300).map(g => ({ appid: g.appid, title: g.title })) };
-        },
-        // Every server the bot is in (that has not opted out), busiest first, so anyone can find a community to join.
-        "GET /api/social/servers": async (req) => {
-            const sess = softSession(req);
-            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const dir = directory(), stats = db.socialGuildStats(dir.map(g => g.id), now() - 7 * 86400_000);
-            const list = dir.map(g => { const st = stats.get(g.id) ?? { people: 0, active: 0 }, gs = db.guildSocial(g.id); return { id: g.id, name: g.name, members: g.members, people: st.people, active: st.active, about: gs.about, invite: gs.invite || null }; })
-                .sort((a, b) => b.active - a.active || b.people - a.people || (b.members ?? 0) - (a.members ?? 0) || a.name.localeCompare(b.name));
-            const mine = sess ? (sess.guilds ?? []).filter(g => isManager(g) && (guildList?.() ?? []).some(x => x.id === g.id)).map(g => ({ id: g.id, name: g.name, ...db.guildSocial(g.id) })) : [];
-            return { servers: list, manage: mine };
-        },
-        "GET /api/social/server": async (req, _b, url) => {
-            const sess = softSession(req);
-            const id = String(url.searchParams.get("id") ?? "");
-            const g = directory().find(x => x.id === id);
-            if (!g) throw new HttpError(404, "That server isn't in the community directory.");
-            const st = db.socialGuildStats([id], now() - 7 * 86400_000).get(id) ?? { people: 0, active: 0 }, gs = db.guildSocial(id);
-            return { server: { id, name: g.name, members: g.members, people: st.people, active: st.active, about: gs.about, invite: gs.invite || null }, people: peopleList(db.guildMembers(id, 24), sess?.userId ?? null) };
-        },
-        // A server's managers choose whether it is listed, what it says about itself and where people can join.
-        "POST /api/social/server": async (req, body) => {
-            const s = session(req);
-            const g = s.guilds.find(x => x.id === String(body.guild ?? ""));
-            if (!g || !isManager(g)) throw new HttpError(403, "Only people who manage that server can change this.");
-            const r = db.setGuildSocial(g.id, { listed: body.listed === undefined ? undefined : Boolean(body.listed), about: body.about, invite: body.invite });
-            if (r.error) throw new HttpError(400, r.error);
-            return { settings: r };
-        },
-        "GET /api/social/item": async (req, _b, url) => {
-            const sess = softSession(req);
-            const t = db.thread(url.searchParams.get("id"), sess?.userId ?? null);
-            if (!t) throw new HttpError(404, "That post is gone.");
-            const servers = directory();
-            return { item: shapeItems([t.item], sess?.userId, servers)[0], replies: shapeItems(t.replies, sess?.userId, servers), reactions: REACTIONS };
-        },
-        "POST /api/social/post": async (req, body) => {
-            const s = session(req); userRow(s); mayPost(s);
-            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            let appid = null, game = null;
-            if (body.appid && !body.parent) {
-                const g = db.listLibrary(s.userId).find(x => x.appid === Number(body.appid));
-                if (!g) throw new HttpError(400, "Pick a game from your own library.");
-                appid = g.appid; game = g.title;
-            }
-            let img = null;
-            if (body.image) {
-                if (body.parent) throw new HttpError(400, "Pictures go on posts, not replies.");
-                try { img = decodeUpload(body.image); } catch (e) { throw new HttpError(400, e.message); }
-            }
-            const r = db.createPost(s.userId, { body: body.body, appid, game, parentId: body.parent ?? null, hasImage: Boolean(img) }, { staff: s.userId === config.ownerId });
-            if (r.error) throw new HttpError(r.status ?? 400, r.error);
-            if (img) db.addPostImage(r.id, s.userId, img.mime, img.buf);
-            if (r.parentAuthor && r.parentAuthor !== s.userId) notifySocial(r.parentAuthor, { title: `${authorCard(s.userId).name} replied to your post`, body: String(body.body ?? "").trim().slice(0, 140), url: "/feed" });
-            return { id: r.id };
-        },
-        "POST /api/social/react": async (req, body) => {
-            const s = session(req); userRow(s);
-            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            const emoji = body.emoji === null || body.emoji === undefined ? null : String(body.emoji);
-            if (emoji !== null && !REACTIONS.includes(emoji)) throw new HttpError(400, "Pick one of the reactions.");
-            const id = Number(body.id);
-            const item = db.getItem(id);
-            const visible = item && (item.hidden === 0 || item.discord_id === s.userId) && !db.blockedEither(s.userId, item.discord_id);
-            if (!visible) throw new HttpError(404, "That post is gone.");
-            const mine = db.react(id, s.userId, emoji);
-            if (mine && item.discord_id !== s.userId && !reactSeen.has(`${s.userId}:${id}`)) {
-                reactSeen.add(`${s.userId}:${id}`); if (reactSeen.size > 20000) reactSeen.clear();
-                notifySocial(item.discord_id, { title: `${authorCard(s.userId).name} reacted ${mine} to your ${item.parent_id ? "reply" : "post"}`, body: String(item.body ?? "").slice(0, 100) || null, url: "/feed" });
-            }
-            return { mine };
-        },
-        "POST /api/social/delete": async (req, body) => {
-            const s = session(req);
-            const item = db.getItem(Number(body.id));
-            if (!item) throw new HttpError(404, "That post is gone.");
-            if (item.discord_id !== s.userId && !isOwner(s)) throw new HttpError(403, "That one is not yours.");
-            db.deleteItem(item.id);
-            return { deleted: true };
-        },
-        "POST /api/social/report": async (req, body) => {
-            const s = session(req);
-            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            const r = db.report(Number(body.id), s.userId, body.reason);
-            if (!r) throw new HttpError(404, "Nothing to report there.");
-            return { reported: true };
-        },
-        "POST /api/social/follow": async (req, body) => {
-            const s = session(req); userRow(s);
-            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            const o = slugOwner(body.slug);
-            const r = db.follow(s.userId, o.discord_id, body.on !== false);
-            if (r === "self") throw new HttpError(400, "That's you.");
-            if (r === "blocked") throw new HttpError(403, "You can't follow this person.");
-            if (r === "limit") throw new HttpError(429, "You are following as many people as you can. Unfollow someone first.");
-            if (r === "new") friendFromFollow(db, s.userId, { name: authorCard(o.discord_id).name, slug: o.profile_slug ?? body.slug });
-            if (r === "ok" && body.on === false) db.dropFollowedFriend(s.userId, String(o.profile_slug ?? body.slug).toLowerCase());
-            if (r === "new") { const me = authorCard(s.userId); notifySocial(o.discord_id, { title: `${me.name} followed you`, url: me.slug ? "/u/" + me.slug : "/feed" }); }
-            return { following: body.on !== false, ...db.followCounts(o.discord_id) };
-        },
-        "POST /api/social/block": async (req, body) => {
-            const s = session(req);
-            const o = db.getProfileBySlug(String(body.slug ?? "").toLowerCase());
-            if (!o) throw new HttpError(404, "That page does not exist.");
-            if (o.discord_id === s.userId) throw new HttpError(400, "That's you.");
-            db.setBlock(s.userId, o.discord_id, body.on !== false);
-            return { blocked: body.on !== false };
-        },
-        "GET /api/social/people": async (req) => {
-            const s = session(req); userRow(s);
-            return { ...db.followCounts(s.userId), followers: peopleList(db.listFollowers(s.userId), s.userId), following: peopleList(db.listFollowing(s.userId).filter(x => x.slug), s.userId),
-                blocked: db.listBlocks(s.userId).map(b => ({ slug: b.slug, name: b.slug ?? "Someone" })).filter(b => b.slug), prefs: db.getPrefs(s.userId) };
-        },
+        ...socialRoutes,
         // ---- guestbook
         "GET /api/public/guestbook": async (req, _b, url) => {
             const sess = softSession(req);
@@ -3225,48 +2435,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (e.author !== s.userId && e.owner !== s.userId && !isOwner(s)) throw new HttpError(403, "That one is not yours to remove.");
             db.guestbookDelete(e.id);
             return { deleted: true };
-        },
-        "POST /api/social/prefs": async (req, body) => {
-            const s = session(req); userRow(s);
-            return { prefs: db.setPrefs(s.userId, { events: body.events, digest: body.digest, notify: body.notify, dm: body.dm, guestbook: body.guestbook }) };
-        },
-        "GET /api/social/leaderboards": async (req, _b, url) => {
-            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const guilds = serverFilter(softSession(req), url.searchParams.get("server"));
-            const b = db.leaderboards(guilds, { postsSince: now() - 7 * 86400_000, finishedSince: now() - 30 * 86400_000 });
-            const shape = rows => rows.map(r => ({ by: authorCard(r.id), n: r.n })).filter(r => r.by.slug);
-            return { boards: [
-                { key: "active", title: "Most active this week", unit: "posts", rows: shape(b.active) },
-                { key: "finished", title: "Most games finished this month", unit: "finished", rows: shape(b.finished) },
-                { key: "rare", title: "Most rare achievements", unit: "rare", rows: shape(b.rare) }] };
-        },
-        "GET /api/social/discover": async (req, _b, url) => {
-            const sess = softSession(req);
-            if (!socialRead.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
-            const week = now() - 7 * 86400_000;
-            const which = url.searchParams.get("server");
-            const guilds = sess && which ? serverFilter(sess, which) : null;
-            return {
-                servers: directory().map(g => ({ id: g.id, name: g.name })),
-                trending: db.trendingGames(week, 10, guilds).map(g => ({ appid: g.appid, game: g.game, people: g.people, posts: g.posts, finishes: g.finishes, art: steamArt(g.appid) })),
-                rare: db.rareBoard(10, 2, guilds).map(r => ({ ...authorCard(r.discord_id), game: r.game, achievement: r.name, icon: r.icon, pct: r.pct })),
-                similar: sess ? peopleList(db.similarPeople(sess.userId, 8), sess.userId) : []
-            };
-        },
-        "GET /api/social/game": async (req, _b, url) => {
-            const sess = softSession(req);
-            const appid = Number(url.searchParams.get("appid"));
-            if (!Number.isInteger(appid) || appid <= 0) throw new HttpError(400, "Which game?");
-            return { appid, art: steamArt(appid), owners: db.ownerCount(appid), people: peopleList(db.gameOwners(appid, 12), sess?.userId ?? null) };
-        },
-        // Two libraries side by side. Only for members who chose to show their Steam stats, since this shows what they own.
-        "GET /api/social/compare": async (req, _b, url) => {
-            const s = session(req); userRow(s);
-            const o = slugOwner(url.searchParams.get("slug"));
-            if (o.discord_id === s.userId) throw new HttpError(400, "That's you.");
-            const shows = (db.getProfileData(o.discord_id).data.sections ?? []).some(x => x.key === "steam" && x.vis === "public");
-            if (!shows) throw new HttpError(403, "This member keeps their library to themselves.");
-            return { them: authorCard(o.discord_id), ...db.compareLibraries(s.userId, o.discord_id) };
         },
         "GET /api/admin/social": async (req) => {
             const s = session(req);
@@ -3426,14 +2594,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
 
 
 
-        "GET /api/servers/roles": async (req, _b, url) => {
-            const g = managerGuild(session(req), url.searchParams.get("guild"));
-            try { return { roles: await rest.listRoles(g.id) }; }
-            catch (err) {
-                if (err instanceof DiscordApiError && [403, 404].includes(err.status)) throw new HttpError(400, "The bot is not in that server yet. Invite it first.");
-                throw err;
-            }
-        },
 
         // ----- owner -----
         // A trail of what the owner did in the admin panel. Only short, harmless fields are kept: never prize keys or message text.
