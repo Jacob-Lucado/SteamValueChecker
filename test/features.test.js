@@ -912,7 +912,8 @@ test("bot status rotates through servers, members, uptime and the support link, 
     const sent = [];
     const client = { guilds: { cache: { size: 2, reduce: (f, a) => [{ memberCount: 5 }, { memberCount: 7 }].reduce(f, a) } }, user: { setPresence: p => sent.push(p.activities.find(a => a.type === 4).state) } };
     const stop = startPresence({ client, db: { stats: () => ({ users: 9 }) }, supportUrl: "https://x.com/a", every: 5 });
-    await new Promise(r => setTimeout(r, 40)); stop();
+    for (let i = 0; i < 200 && !(sent.length >= 3 && sent.includes("👥 12 members across servers")); i++) await new Promise(r => setTimeout(r, 10));
+    stop();
     assert.equal(sent[0], "🌐 In 2 servers"); assert.ok(sent.includes("👥 12 members across servers") && sent.length >= 3);
 });
 

@@ -58,3 +58,11 @@ test("memes only go to servers the bot is in, and a failed post waits a full int
     r.advance(30 * 60_000);
     assert.equal(await tickMemes({ db: r.db, api: r.api, memes: r.memes, now: r.now, has: () => true, sleep: async () => {} }), 0, "waits the full hour after a failure");
 });
+
+test("photos, questions and showcase posts are not treated as memes", () => {
+    for (const title of ["My new gaming setup", "I finally built my PC", "Does anyone know how to fix this?", "[OC] my drawing", "Steam sale news", "Rate my build"])
+        assert.equal(chooseMeme([good("x", { title })]), null, title);
+    assert.equal(chooseMeme([good("y", { subreddit: "pcmasterrace" })]), null);
+    assert.equal(chooseMeme([good("z", { ups: 120 })]), null);
+    assert.equal(chooseMeme([good("w", { title: "When the wishlist hits 90% off" })]).postLink, "https://redd.it/w");
+});

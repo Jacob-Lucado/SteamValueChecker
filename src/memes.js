@@ -3,19 +3,25 @@
 // pictures must sit on Reddit's or Imgur's own image hosts, and a server never gets the same post twice.
 import { UserError } from "./errors.js";
 
-export const MEME_SUBS = ["memes", "gaming", "pcmasterrace", "wholesomememes", "dankmemes", "me_irl", "Steam"];
+// Only subreddits that are actually for memes. General ones (r/gaming, r/pcmasterrace, r/Steam) are mostly builds, screenshots and news.
+export const MEME_SUBS = ["memes", "dankmemes", "wholesomememes", "gamingmemes", "ProgrammerHumor", "me_irl"];
 export const MEME_HOURS = [1, 2, 3, 6, 12, 24];
 const IMAGE_URL = /^https:\/\/(?:i\.redd\.it|i\.imgur\.com|preview\.redd\.it)\/[\w./-]+\.(?:png|jpe?g|gif|webp)$/i;
 const BLOCKED_WORDS = /\b(nsfw|porn|nude|sex|rape|gore|suicide|nazi|hitler|slur)\b/i;
-const MIN_UPS = 50;
+const MIN_UPS = 500;
+// Titles that mean it's a photo, a question or a showcase and not a meme.
+const NOT_A_MEME = /\b(?:my (?:first|new|latest|setup|build|collection|dog|cat|art|drawing|painting)|i (?:made|built|drew|painted|finally|just (?:got|bought|made|finished))|rate my|ama|eli5|help|how (?:do|can|to)|why (?:do|does|is)|what (?:is|are|do)|anyone|does anyone|question|thoughts|discussion|psa|news|update|megathread|official|giveaway|announcement|review|screenshot|oc art|fanart|commission|selfie|pic of)\b|\?\s*$|^\[/i;
 
 const sourceFetch = (fetchImpl, url) => fetchImpl(url, { signal: AbortSignal.timeout(10_000), headers: { "user-agent": "SteamValueChecker/1.0 (discord bot)" } });
 
 /** Picks a usable meme out of whatever the API returned, or null. `seen` is a Set of post links this server already got. */
 export function chooseMeme(list, seen = new Set(), rnd = Math.random) {
     const ok = (Array.isArray(list) ? list : []).filter(m => m && !m.nsfw && !m.spoiler && IMAGE_URL.test(String(m.url ?? "")) && typeof m.postLink === "string"
-        && /^https:\/\/(?:redd\.it|www\.reddit\.com)\//.test(m.postLink) && !seen.has(m.postLink) && Number(m.ups) >= MIN_UPS && !BLOCKED_WORDS.test(String(m.title ?? "")));
-    return ok.length ? ok[Math.floor(rnd() * ok.length)] : null;
+        && /^https:\/\/(?:redd\.it|www\.reddit\.com)\//.test(m.postLink) && !seen.has(m.postLink) && Number(m.ups) >= MIN_UPS && !BLOCKED_WORDS.test(String(m.title ?? "")) && !NOT_A_MEME.test(String(m.title ?? "").trim()) && String(m.title ?? "").length <= 140
+        && (!m.subreddit || MEME_SUBS.some(x => x.toLowerCase() === String(m.subreddit).toLowerCase())));
+    // favor the better half by upvotes so the feed stays funny, but still vary it
+    const top = ok.sort((a, b) => Number(b.ups) - Number(a.ups)).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
+    return top.length ? top[Math.floor(rnd() * top.length)] : null;
 }
 
 export function memeEmbed(m) {
@@ -28,10 +34,10 @@ export function memeEmbed(m) {
 export function createMemes({ fetchImpl = globalThis.fetch, rnd = Math.random } = {}) {
     /** One meme this server hasn't had yet. Tries a few subreddits before giving up. */
     async function pick(seen = new Set()) {
-        const subs = [...MEME_SUBS].sort(() => rnd() - 0.5).slice(0, 3);
+        const subs = [...MEME_SUBS].sort(() => rnd() - 0.5).slice(0, 4);
         for (const sub of subs) {
             try {
-                const res = await sourceFetch(fetchImpl, `https://meme-api.com/gimme/${encodeURIComponent(sub)}/20`);
+                const res = await sourceFetch(fetchImpl, `https://meme-api.com/gimme/${encodeURIComponent(sub)}/30`);
                 if (!res.ok) continue;
                 const data = await res.json();
                 const m = chooseMeme(data.memes ?? (data.url ? [data] : []), seen, rnd);

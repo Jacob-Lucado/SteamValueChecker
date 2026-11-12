@@ -1490,84 +1490,7 @@ window.SVC_SITE = envIn => {
   // since the page opened, and pauses while the tab is hidden.
   const PLAYTEST_POLL_MS = 5 * 60_000;
   const PLAYTEST_SOURCES = [["abg", "Alpha Beta Gamer"], ["gamerpower", "GamerPower"], ["itch", "itch.io"], ["playtester", "Playtester"], ["steamdemo", "Steam demos"]];
-  async function playtestsView() {
-    const F = { kind: "all", mine: false, hideOwned: false, q: "", genre: "" };
-    let data = null, seen = null, fresh = new Set(), loadedAt = 0, timer = null, failed = false;
-    const list = h("div"), stamp = h("span", { class: "muted small" }), bar = h("div", { class: "row free-bar" });
-    const alive = () => document.body.contains(list) && currentView() === "playtests";
-    const when = ms => { const m = Math.max(1, Math.round((Date.now() - ms) / 60000)); return m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago"; };
-    const KINDS = [["all", "All"], ["playtest", "Playtests"], ["demo", "Demos"], ["beta", "Betas"], ["weekend", "Free weekends"]];
-    const search = h("input", { type: "search", placeholder: "Search games", "aria-label": "Search playtests" });
-    search.addEventListener("input", () => { F.q = search.value.trim().toLowerCase(); draw(); });
-    const mineBox = h("input", { type: "checkbox" }), ownBox = h("input", { type: "checkbox" });
-    mineBox.addEventListener("change", () => { F.mine = mineBox.checked; draw(); });
-    ownBox.addEventListener("change", () => { F.hideOwned = ownBox.checked; draw(); });
-    const genreSel = h("select", { "aria-label": "Filter by genre" });
-    genreSel.addEventListener("change", () => { F.genre = genreSel.value; draw(); });
-    const fillGenres = () => {
-      const count = new Map();
-      for (const x of data.items) for (const t of x.tags || []) count.set(t, (count.get(t) || 0) + 1);
-      const names = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a.localeCompare(b));
-      genreSel.replaceChildren(h("option", { value: "", text: names.length ? "Any genre" : "Genres load with Playtester" }), ...names.map(n => h("option", { value: n, text: `${n} (${count.get(n)})` })));
-      genreSel.value = names.includes(F.genre) ? F.genre : ""; F.genre = genreSel.value; genreSel.hidden = !names.length;
-    };
-    const refreshBtn = h("button", { class: "btn gray small", type: "button", text: "Refresh", onclick: () => load(true) });
-    const tick = () => { stamp.textContent = !loadedAt ? "" : (failed ? "Could not refresh. Showing the last list. " : "") + "Updated " + (Date.now() - loadedAt < 60000 ? "just now" : when(loadedAt)) + ". Refreshes by itself."; };
-
-    function card(x) {
-      const tag = h("span", { class: "pt-kind pt-" + x.kind, text: x.label });
-      return h("div", { class: "free-card pt-card" },
-        x.image ? h("img", { src: x.image, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : null,
-        h("div", { class: "free-info" },
-          h("div", { class: "pt-tags" }, tag, fresh.has(x.id) ? h("span", { class: "chip", text: "New" }) : null, x.wishlist ? h("span", { class: "chip ok", text: "On your wishlist" }) : null, x.owned ? h("span", { class: "chip dim", text: "You own it" }) : null),
-          h("strong", { text: x.game }),
-          h("span", { class: "muted small", text: x.title !== x.game ? x.title : "" }),
-          x.summary ? h("span", { class: "muted small pt-sum", text: x.summary }) : null,
-          x.tags && x.tags.length ? h("span", { class: "muted small", text: x.tags.slice(0, 5).join(" · ") }) : null,
-          h("span", { class: "muted small", text: `${x.source} · ${when(x.date)}` }),
-          ext(x.url, "How to join", "btn green small")));
-    }
-    function draw() {
-      if (!data) return;
-      bar.replaceChildren(
-        h("div", { class: "chips" }, KINDS.map(([id, label]) => { const n = data.items.filter(x => id === "all" || x.kind === id).length; return h("button", { class: "tab small" + (F.kind === id ? " active" : ""), type: "button", text: `${label} (${n})`, onclick: () => { F.kind = id; draw(); } }); })));
-      const rows = data.items.filter(x => (F.kind === "all" || x.kind === F.kind) && (!F.mine || x.wishlist) && (!F.hideOwned || !x.owned) && (!F.q || x.game.toLowerCase().includes(F.q)) && (!F.genre || (x.tags || []).includes(F.genre)));
-      list.replaceChildren(rows.length ? h("div", { class: "free-grid" }, rows.map(card))
-        : h("div", { class: "empty", text: data.items.length ? "Nothing matches those filters." : "No playtests or demos found right now. This page checks again by itself." }));
-    }
-    async function load(manual) {
-      try {
-        const d = await api("/api/playtests");
-        if (!alive()) return;
-        const ids = new Set(d.items.map(x => x.id));
-        if (seen) {
-          const added = d.items.filter(x => !seen.has(x.id));
-          for (const x of added) fresh.add(x.id);
-          if (added.length) toast(added.length === 1 ? "1 new playtest or demo." : added.length + " new playtests and demos.", "ok");
-          else if (manual) toast("Already up to date.", "ok");
-        }
-        seen = ids; data = d; failed = false; loadedAt = Date.now();
-        notes.replaceChildren(...[!d.sources.abg && h("div", { class: "notice warn", text: "The playtest sites could not be reached just now, so only Steam announcements are shown." }), !d.sources.steam && d.watching === 0 && h("p", { class: "muted small", text: "Add games to your wishlist or link Steam and their Steam announcements show up here too." })].filter(Boolean));
-        fillGenres(); draw();
-      } catch (e) { failed = true; if (!data) list.replaceChildren(h("div", { class: "notice warn", text: e.message })); else if (manual) toast(e.message, "error"); }
-      tick();
-    }
-    const notes = h("div");
-    const schedule = () => {
-      clearInterval(timer);
-      timer = setInterval(() => { if (!alive()) { clearInterval(timer); document.removeEventListener("visibilitychange", onVis); return; } tick(); if (!document.hidden && Date.now() - loadedAt >= PLAYTEST_POLL_MS - 1000) load(false); }, 30_000);
-    };
-    const onVis = () => { if (!alive()) return document.removeEventListener("visibilitychange", onVis); if (!document.hidden && Date.now() - loadedAt >= PLAYTEST_POLL_MS) load(false); };
-    document.addEventListener("visibilitychange", onVis);
-    const on = state.me && state.me.settings && state.me.settings.playtest;
-    app.replaceChildren(pageHead("Playtests", "Playtests, betas, demos and free weekends happening now. It reads the Steam announcements of games on your wishlist or in your library, and Alpha Beta Gamer, Playtester, GamerPower, itch.io and Steam's new demos for games Steam news never mentions."),
-      h("div", { class: "panel" }, h("div", { class: "row free-bar" }, search, genreSel,
-        h("label", { class: "check" }, mineBox, " ", h("span", { text: "On my wishlist" })), h("label", { class: "check" }, ownBox, " ", h("span", { text: "Hide games I own" })), refreshBtn, stamp),
-        h("p", { class: "muted small" }, on ? "Your playtest alerts are on. " : "Want a message when one shows up? ", h("a", { href: "#/alerts", text: on ? "Change them in Alert settings." : "Turn on playtest alerts." }))),
-      notes, bar, list);
-    list.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
-    await load(false); schedule();
-  }
+  async function playtestsView() { return window.PlaytestsUI.view({ PLAYTEST_POLL_MS, api, app, currentView, ext, h, pageHead, state, toast }); }
 
   /** The server's game of the month: the pick, who is playing or finished, and (for managers) the controls. */
   async function clubView() {
@@ -1652,40 +1575,7 @@ window.SVC_SITE = envIn => {
     guild.addEventListener("change", load); await load();
   }
 
-  async function triviaView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const guild = serverPicker(servers), out = h("div");
-    app.replaceChildren(pageHead("Trivia", "Guess the game from clues that get easier. Tap the right title; the sooner you get it, the more points. Scores add up per server. In Discord: /server trivia.",),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null), out);
-    async function load() {
-      if (!servers.length) { out.replaceChildren(h("p", { class: "muted", text: "Invite the bot to a server first." })); return; }
-      let d;
-      try { d = await api("/api/trivia?guild=" + encodeURIComponent(guild.value)); } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
-      const post = body => api("/api/trivia", { guild_id: guild.value, ...body });
-      const parts = [];
-      if (d.active) parts.push(h("div", { class: "notice ok", text: `A game is going: round ${d.active.round} of ${d.active.rounds}.` }));
-      if (d.canManage && d.enabled) {
-        if (d.active) {
-          const stop = h("button", { class: "btn red", type: "button", text: "Stop the game" });
-          stop.addEventListener("click", () => busy(stop, async () => { await post({ action: "stop" }); toast("Stopped. Scores so far are saved.", "ok"); load(); }));
-          parts.push(h("div", { class: "panel" }, h("h3", { text: "Manage (Manage Server)" }), h("div", { class: "row" }, stop)));
-        } else {
-          const chSel = select(d.channels.map(c => [c.id, "#" + c.name]), d.channels[0] ? d.channels[0].id : "");
-          const rounds = select([["3", "3 questions"], ["5", "5 questions"], ["8", "8 questions"], ["10", "10 questions"]], "5");
-          const go = h("button", { class: "btn green", type: "button", text: "Start trivia" });
-          go.addEventListener("click", () => busy(go, async () => { await post({ action: "start", channel_id: chSel.value, rounds: Number(rounds.value) }); toast("Trivia started.", "ok"); load(); }));
-          parts.push(h("div", { class: "panel" }, h("h3", { text: "Start a game" }), field("Play in", chSel), field("Length", rounds), h("div", { class: "row" }, go)));
-        }
-      } else if (!d.canManage) parts.push(h("p", { class: "muted", text: "A server manager starts the games. Watch for the clues in the channel they pick." }));
-      const medal = i => ["🥇", "🥈", "🥉"][i] || String(i + 1) + ".";
-      parts.push(h("div", { class: "panel" }, h("h3", { text: "Leaderboard" }),
-        d.top.length ? h("ul", { class: "plain" }, d.top.map((r, i) => h("li", { text: `${medal(i)} ${r.name}: ${r.points} pts, ${r.correct} right, ${r.wins} win${r.wins === 1 ? "" : "s"}` })))
-          : h("p", { class: "muted", text: "No games played yet." }),
-        d.mine ? h("p", { class: "muted small", text: `You: ${d.mine.points} pts from ${d.mine.played} game${d.mine.played === 1 ? "" : "s"}.` }) : null));
-      out.replaceChildren(...parts);
-    }
-    guild.addEventListener("change", load); await load();
-  }
+  async function triviaView() { return window.TriviaUI.view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
 
   const NOWPLAYING_POLL_MS = 60_000;
   /** Who in a server is in a game right now. Reads Steam through the bot, so it stays current without a refresh. */
@@ -1746,72 +1636,9 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- bundles: what the storefronts have running ----------
-  async function bundlesView() {
-    const st = { store: "", status: "active" };
-    const list = h("div", { class: "muted", text: "Loading…" });
-    const head = h("div", { class: "chips" });
-    const owner = Boolean(state.me && state.me.isOwner);
-    const when = ms => { const d = ms - Date.now(); if (d < 0) return "ended"; const days = Math.floor(d / 86400_000); return days >= 1 ? `ends in ${days} day${days === 1 ? "" : "s"}` : `ends in ${Math.max(1, Math.round(d / 3600_000))} h`; };
-    async function load() {
-      const d = await api("/api/bundlefeed?status=" + st.status + (st.store ? "&store=" + encodeURIComponent(st.store) : ""));
-      head.replaceChildren(
-        h("button", { class: "tab small" + (!st.store ? " active" : ""), text: "All stores", onclick: () => { st.store = ""; load().catch(fail); } }),
-        ...d.stores.map(x => h("button", { class: "tab small" + (st.store === x.key ? " active" : ""), text: x.name, onclick: () => { st.store = x.key; load().catch(fail); } })),
-        h("button", { class: "tab small" + (st.status === "expired" ? " active" : ""), text: st.status === "expired" ? "Showing ended" : "Show ended", onclick: () => { st.status = st.status === "expired" ? "active" : "expired"; load().catch(fail); } }));
-      list.className = "";
-      list.replaceChildren(d.bundles.length ? h("div", { class: "free-grid" }, d.bundles.map(b => h("div", { class: "free-card" + (b.status === "expired" ? " ended" : "") },
-        b.image ? (() => { const img = h("img", { src: "/art/bundle/" + b.id + ".jpg", alt: "", loading: "lazy" }); let direct = false; img.addEventListener("error", () => { if (!direct) { direct = true; img.src = b.image; } else img.replaceWith(h("div", { class: "free-noart", text: b.storeName })); }); return img; })() : h("div", { class: "free-noart", text: b.storeName }),
-        h("div", { class: "free-info" }, h("strong", { text: b.title }), h("div", { class: "muted small", text: b.storeName + (b.gameCount ? ` · ${b.gameCount} games` : "") }),
-          b.price ? h("div", { text: b.price }) : null,
-          b.games.length ? h("details", {}, h("summary", { class: "muted small", text: "See the games" }), h("ul", { class: "muted small" }, ...b.games.slice(0, 12).map(g => h("li", { text: g })), b.games.length > 12 ? h("li", { text: `and ${b.games.length - 12} more` }) : null)) : null,
-          h("span", { class: "muted small", text: b.expiresAt ? when(b.expiresAt) : "no end date listed" }),
-          h("div", { class: "row" }, b.status === "active" ? h("a", { class: "btn blue small", href: b.url, target: "_blank", rel: "noopener noreferrer", text: "Open on " + b.storeName }) : h("span", { class: "chip dim", text: "Ended" })))))
-      ) : h("p", { class: "muted", text: st.status === "expired" ? "No ended bundles in the last week." : "No bundles listed right now. New ones show up here as soon as a store lists them." }));
-    }
-    const fail = e => list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
-    const poll = owner ? h("button", { class: "btn gray small", text: "Check for new bundles now" }) : null;
-    if (poll) poll.addEventListener("click", () => busy(poll, async () => { const r = await api("/api/admin/bundles/poll", {}); toast(r.result.skipped ? "A check is already running." : `Checked: ${r.result.added} new, ${r.result.posted} posted.${r.result.feedError ? " Problems: " + r.result.feedError : ""}`, r.result.feedError ? "warn" : "ok"); await load(); }));
-    app.replaceChildren(pageHead("Bundles", "Game bundles that are running now on Humble Bundle, Fanatical, IndieGala and the Steam store. Each one is listed once, with the games inside and when it ends where the store says. Server managers can have new ones posted in a channel from the Codes & promos tab of their server."),
-      h("div", { class: "row" }, head, poll), list);
-    load().catch(fail);
-  }
+  async function bundlesView() { return window.BundlesUI.view({ api, app, busy, h, pageHead, state, toast }); }
 
-  async function codesView() {
-    const st = { game: "", status: "active" };
-    const list = h("div", { class: "muted", text: "Loading…" });
-    const head = h("div", { class: "chips" });
-    const owner = Boolean(state.me && state.me.isOwner);
-    const when = ms => { const d = ms - Date.now(); if (d < 0) return "ended"; const days = Math.floor(d / 86400_000); return days >= 1 ? `ends in ${days} day${days === 1 ? "" : "s"}` : `ends in ${Math.max(1, Math.round(d / 3600_000))} h`; };
-    async function load() {
-      const d = await api("/api/codes?status=" + st.status + (st.game ? "&game=" + encodeURIComponent(st.game) : ""));
-      head.replaceChildren(
-        h("button", { class: "tab small" + (!st.game ? " active" : ""), text: "All games", onclick: () => { st.game = ""; load().catch(fail); } }),
-        ...d.families.map(x => h("button", { class: "tab small" + (st.game === x.key ? " active" : ""), text: x.title, onclick: () => { st.game = x.key; load().catch(fail); } })),
-        h("button", { class: "tab small" + (st.status === "expired" ? " active" : ""), text: st.status === "expired" ? "Showing ended" : "Show ended", onclick: () => { st.status = st.status === "expired" ? "active" : "expired"; load().catch(fail); } }));
-      list.className = "";
-      list.replaceChildren(d.codes.length ? h("div", { class: "free-grid" }, d.codes.map(c => {
-        const copy = h("button", { class: "btn blue small", text: "Copy code" });
-        copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(c.code); toast("Copied.", "ok"); } catch { toast("Select the code and copy it by hand.", "warn"); } });
-        const retire = owner && c.status === "active" ? h("button", { class: "btn red small", text: "Mark ended" }) : null;
-        if (retire) retire.addEventListener("click", () => busy(retire, async () => { await api("/api/codes/retire", { id: c.id }); toast("Marked as ended. Server posts are being updated.", "ok"); await load(); }));
-        return h("div", { class: "free-card" + (c.status === "expired" ? " ended" : "") },
-          c.art ? h("img", { src: c.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart code-tile code-" + c.game, text: c.gameTitle }),
-          h("div", { class: "free-info" }, h("strong", { text: c.gameTitle }), h("div", { text: c.reward || "Unknown reward" }),
-            h("code", { class: "code-text", text: c.code }),
-            h("span", { class: "muted small", text: `${c.platform || "All platforms"} · ${c.expiresAt ? when(c.expiresAt) : "no end date listed"}` }),
-            c.note ? h("span", { class: "muted small", text: c.note + ". May only work on that region's account." }) : null,
-            h("div", { class: "row" }, c.status === "active" ? copy : null, c.status === "active" ? ext(c.redeemUrl, c.provider === "hoyo" ? "Redeem" : c.provider === "community" ? "Redeem" : "Redeem on SHiFT", "btn gray small") : h("span", { class: "chip dim", text: "Ended" }), retire)));
-      })) : h("p", { class: "muted", text: st.status === "expired" ? "No ended codes in the last two weeks." : "No working codes right now. New ones show up here as soon as they are listed." }));
-    }
-    const fail = e => list.replaceChildren(h("div", { class: "notice warn", text: e.message }));
-    const poll = owner ? h("button", { class: "btn gray small", text: "Check for new codes now" }) : null;
-    if (poll) poll.addEventListener("click", () => busy(poll, async () => { const r = await api("/api/admin/codes/poll", {}); toast(r.result.skipped ? "A check is already running." : `Checked: ${r.result.added} new, ${r.result.posted} posted.`, "ok"); await load(); }));
-    const news = h("div");
-    app.replaceChildren(pageHead("Codes & promos", "Limited-time codes for Borderlands (SHiFT), Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Destiny 2 and Warframe. Each one is listed once, under the right game, with an end date when one is known. Servers can have them posted in a channel. SHiFT codes come from mentalmars.com through a community mirror, the HoYoverse ones from two community code lists."), poll && h("div", { class: "panel" }, poll), head, list, news,
-      h("p", { class: "muted small" }, "Want a message when something new drops? Turn on game code and giveaway alerts in ", h("a", { href: "#/alerts", text: "Alert settings" }), "."));
-    load().catch(fail);
-    promoBlock(news);
-  }
+  async function codesView() { return window.CodesUI.view({ api, app, busy, ext, h, pageHead, promoBlock, state, toast }); }
 
   // ---------- servers ----------
   const guildInvite = g => (state.cfg.inviteUrl ? `${state.cfg.inviteUrl}&guild_id=${encodeURIComponent(g.id)}&disable_guild_select=true` : null);
@@ -3261,274 +3088,15 @@ window.SVC_SITE = envIn => {
     draw();
   }
 
-  async function myPageView() {
-    const grid = h("div", { class: "mp-grid" });
-    const KEY = "svc_mypage";
-    const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
-    const save = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* per-device only */ } };
-    const lay = Object.assign({ order: [], hidden: [], pinned: [] }, load());
-    let me = state.me, profile = null, showHidden = false;
-    try { me = Object.assign({}, state.me, await api("/api/me")); state.me = me; } catch { /* the cached copy is fine */ }
-    try { profile = await api("/api/profile"); } catch { /* optional */ }
-    const flag = id => { const x = (me.setup || []).find(t => t.id === id); return Boolean(x && x.done); };
-    const st = () => me.settings;
-    const CARDS = [
-      { id: "wishlist", icon: "", title: "Wishlist sale alerts", text: "Watch games and hear about sales, lows and bundles.", href: "#/wishlist", status: () => [me.games > 0, me.games + " game" + (me.games === 1 ? "" : "s") + " watched"], toggle: { key: "paused", label: "Alerts on", invert: true } },
-      { id: "free", icon: "", title: "Free game alerts", text: "Told when a game is free on Steam, Epic, GOG and more. The free games page lists them all.", href: "#/free", status: () => [st().free, st().free ? "On" : "Off"], toggle: { key: "free", label: "Turn on" } },
-      { id: "digest", icon: "", title: "Weekly digest", text: "One summary of your wishlist sales each week.", href: "#/alerts", status: () => [st().digest, st().digest ? "On" : "Off"], toggle: { key: "digest", label: "Turn on" } },
-      { id: "bundles", icon: "", title: "Bundle and giveaway alerts", text: "When a wishlist game is in a bundle, given away, or joins or leaves a subscription.", href: "#/alerts", status: () => [st().bundles, st().bundles ? "On" : "Off"], toggle: { key: "bundles", label: "Turn on" } },
-      { id: "share", icon: "", title: "Share with your server", text: "Group alerts, the savings leaderboard and the backlog league.", href: "#/alerts", status: () => [st().share, st().share ? "Opted in" : "Not shared"], toggle: { key: "share", label: "Share" } },
-      { id: "library", icon: "", title: "Library", text: "What you own, what you paid, backlog, spend and trophies.", href: "#/library", status: () => [me.library > 0, me.library + " game" + (me.library === 1 ? "" : "s")] },
-      { id: "steam", icon: "", title: "Steam link", text: "Hours played, hours tracked over time and a taste profile.", href: "#/steam", status: () => [flag("steam"), flag("steam") ? "Linked" : "Not linked"] },
-      { id: "challenge", icon: "", title: "Backlog challenge", text: "A monthly goal of games to finish, with a streak and badges.", href: "#/library", status: () => [flag("challenge"), flag("challenge") ? "Goal set this month" : "No goal this month"] },
-      { id: "friends", icon: "", title: "Friends and gifts", text: "Birthdays, reminders and what is on sale for them.", href: "#/friends", status: () => [flag("friend"), flag("friend") ? "Friends added" : "None yet"] },
-      { id: "redeem", icon: "", title: "Batch redeem", text: "Redeem many Steam keys through the FanaticalGrabber extension.", href: "#/redeem", status: null },
-      { id: "war", icon: "", title: "Sale planner", text: "Plan a sale cart with a budget slider, then see what your alerts caught.", href: "#/warroom", status: null },
-      { id: "foryou", icon: "", title: "For you", text: "Discounts ranked by your taste and wishlist.", href: "#/foryou", status: null },
-      { id: "deals", icon: "", title: "Check a deal", text: "Price by region and bundle checks.", href: "#/deals", status: null },
-      { id: "codes", icon: "", title: "Codes & promos", text: "Working codes for Borderlands, Genshin, Star Rail, Zenless, Destiny 2 and Warframe, plus key giveaway news and DMs for new ones.", href: "#/codes", status: null },
-      { id: "calendar", icon: "", title: "Calendar", text: "Release dates, Steam sales and server events.", href: "#/calendar", status: null },
-      { id: "compare", icon: "", title: "Compare libraries", text: "See what you and a friend both own.", href: "#/compare", status: null },
-      { id: "notifications", icon: "", title: "Notifications", text: "A copy of every alert, and what to mute.", href: "#/notifications", status: () => [me.unread === 0, me.unread ? me.unread + " unread" : "All read"] }
-    ];
-    const ids = CARDS.map(c => c.id);
-    const ordered = () => {
-      const rank = id => { const i = lay.order.indexOf(id); return i < 0 ? 1000 + ids.indexOf(id) : i; };
-      return [...CARDS].sort((a, b) => (lay.pinned.includes(b.id) - lay.pinned.includes(a.id)) || rank(a.id) - rank(b.id));
-    };
-    const persist = () => save(lay);
-    function move(id, d) {
-      const list = ordered().map(c => c.id), i = list.indexOf(id), j = i + d;
-      if (j < 0 || j >= list.length) return;
-      [list[i], list[j]] = [list[j], list[i]]; lay.order = list; persist(); draw();
-    }
-    function card(c) {
-      const hidden = lay.hidden.includes(c.id), pinned = lay.pinned.includes(c.id);
-      const stt = c.status ? c.status() : null;
-      const tools = h("div", { class: "mp-tools" },
-        h("button", { class: "btn gray small", type: "button", title: pinned ? "Unpin" : "Pin to the top", "aria-label": (pinned ? "Unpin " : "Pin ") + c.title, text: pinned ? "★" : "☆", onclick: () => { lay.pinned = pinned ? lay.pinned.filter(x => x !== c.id) : [...lay.pinned, c.id]; persist(); draw(); } }),
-        h("button", { class: "btn gray small", type: "button", "aria-label": "Move " + c.title + " earlier", text: "↑", onclick: () => move(c.id, -1) }),
-        h("button", { class: "btn gray small", type: "button", "aria-label": "Move " + c.title + " later", text: "↓", onclick: () => move(c.id, 1) }),
-        h("button", { class: "btn gray small", type: "button", text: hidden ? "Show" : "Hide", onclick: () => { lay.hidden = hidden ? lay.hidden.filter(x => x !== c.id) : [...lay.hidden, c.id]; persist(); draw(); } }));
-      const actions = h("div", { class: "mp-actions" });
-      if (c.toggle) {
-        const on = c.toggle.invert ? !st()[c.toggle.key] : Boolean(st()[c.toggle.key]);
-        const b = h("button", { class: "btn small " + (on ? "red" : "green"), text: on ? "Turn off" : c.toggle.label, onclick: () => busy(b, async () => {
-          const r = await api("/api/settings", { [c.toggle.key]: c.toggle.invert ? on : !on }); me.settings = r.settings; state.me.settings = r.settings; draw();
-        }) });
-        actions.append(b);
-      }
-      actions.append(h("a", { class: "btn blue small", href: c.href, text: !stt ? "Open" : stt[0] ? "Manage" : "Set up" }));
-      return h("div", { class: "panel mp-card" + (hidden ? " mp-hidden" : "") },
-        h("div", { class: "mp-head" }, h("span", { class: "mp-icon", text: c.icon }), h("strong", { text: c.title }), stt ? h("span", { class: "chip " + (stt[0] ? "ok" : "dim"), text: stt[1] }) : null),
-        h("p", { class: "muted small", text: c.text }), actions, tools);
-    }
-    function draw() {
-      const list = ordered().filter(c => showHidden || !lay.hidden.includes(c.id));
-      const toggleHidden = lay.hidden.length ? h("button", { class: "btn gray small", type: "button", text: showHidden ? "Hide the hidden cards" : "Show " + lay.hidden.length + " hidden card" + (lay.hidden.length === 1 ? "" : "s"), onclick: () => { showHidden = !showHidden; draw(); } }) : null;
-      const reset = h("button", { class: "btn gray small", type: "button", text: "Reset layout", onclick: () => { lay.order = []; lay.hidden = []; lay.pinned = []; persist(); draw(); } });
-      grid.replaceChildren(...list.map(card));
-      bar.replaceChildren(toggleHidden || "", reset);
-    }
-    const bar = h("div", { class: "mp-bar" });
-    const on = CARDS.filter(c => c.status && c.status()[0]).length, tot = CARDS.filter(c => c.status).length;
-    const tourBtn = h("button", { class: "btn gray small", type: "button", text: "Take the tour", onclick: () => startTour({ replay: true }) });
-    app.replaceChildren(pageHead("My page", "Everything you can do here. " + on + " of " + tot + " features are set up. Switch simple ones on right here, pin the ones you use, and hide the rest. The layout is kept on this device."), tourBtn, bar, grid, publicPagePanel());
-    draw();
-  }
+  async function myPageView() { return window.MyPageUI.view({ api, app, busy, h, pageHead, publicPagePanel, startTour, state }); }
 
 
-  async function friendsView() {
-    const list = h("div", { class: "muted", text: "Loading…" });
-    const name = h("input", { type: "text", maxlength: "30", placeholder: "Nickname" });
-    const bday = h("input", { type: "text", maxlength: "5", placeholder: "MM-DD (optional)" });
-    const page = h("input", { type: "text", maxlength: "24", placeholder: "Their public page name (optional)" });
-    const deals = h("div");
-    async function load() {
-      const { friends } = await api("/api/friends");
-      if (!friends.length) return list.replaceChildren(h("div", { class: "empty", text: "No friends yet. Follow someone's page and they show up here on their own, or add a nickname, a birthday and their public page name below. Once a birthday is set you get a reminder a week before, with what is on sale for them." }));
-      list.replaceChildren(...friends.map(f => {
-        const show = h("button", { class: "btn blue small", text: "On sale for them", disabled: !f.slug });
-        show.addEventListener("click", () => busy(show, async () => {
-          const r = await api("/api/friends/deals?name=" + encodeURIComponent(f.name));
-          deals.replaceChildren(h("h3", { text: "On sale for " + r.name }), r.deals.length ? h("div", {}, ...r.deals.map(d => h("div", { class: "row-line" }, h("a", { href: d.url || "#", target: "_blank", rel: "noopener", text: d.title }), h("span", { class: "muted", text: " " + money(d.price, d.currency || "USD") + (d.discount > 0 ? " (-" + d.discount + "%)" : "") + " at " + d.shop })))) : h("div", { class: "muted", text: "Nothing on their wishlist is on sale right now." }));
-        }));
-        const del = h("button", { class: "btn red small", text: "Remove" });
-        del.addEventListener("click", () => busy(del, async () => { await api("/api/friends/remove", { name: f.name }); toast("Removed.", "ok"); load(); }));
-        // A friend that came from a follow has no birthday yet: it can be added right on the row.
-        const bd = h("input", { type: "text", maxlength: "5", placeholder: "MM-DD", "aria-label": "Birthday for " + f.name, class: "fr-bday" });
-        const bdSave = h("button", { class: "btn gray small", type: "button", text: "Set birthday" });
-        bdSave.addEventListener("click", () => busy(bdSave, async () => { await api("/api/friends/birthday", { name: f.name, birthday: bd.value }); toast("Birthday saved. You'll get a reminder a week before.", "ok"); load(); }));
-        return h("div", { class: "panel" }, h("strong", { text: f.name }), f.auto ? h("span", { class: "chip dim", text: " Following" }) : null, h("span", { class: "muted", text: f.birthday ? "  " + f.birthday + (f.daysToBirthday <= 30 ? " (in " + f.daysToBirthday + " days)" : "") + (f.fromPage ? ", shared on their page" : "") : "" }), h("div", { class: "mp-actions fr-actions" }, f.birthday ? null : bd, f.birthday ? null : bdSave, show, del));
-      }));
-    }
-    const add = h("button", { class: "btn blue", text: "Save friend" });
-    add.addEventListener("click", () => busy(add, async () => { await api("/api/friends/add", { name: name.value, birthday: bday.value, page: page.value }); toast("Saved.", "ok"); name.value = bday.value = page.value = ""; load(); }));
-    app.replaceChildren(pageHead("Friends", "Birthdays and gift ideas. People you follow land here automatically, and only a nickname and the month and day are kept."),
-      h("div", { class: "panel" }, h("div", { class: "row" }, field("Nickname", name), field("Birthday", bday), field("Public page", page)), h("div", { class: "mp-actions fr-actions" }, add)), list, deals);
-    load().catch(e => list.replaceChildren(h("div", { class: "empty", text: e.message })));
-  }
+  async function friendsView() { return window.FriendsUI.view({ api, app, busy, field, h, money, pageHead, toast }); }
 
-  async function calendarView() {
-    const KIND = { release: ["", "Releases"], sale: ["", "Steam sales"], event: ["", "Server events"], lfg: ["", "Group games"] };
-    const st = { kinds: new Set(Object.keys(KIND)), guild: "", mode: "list", month: new Date() };
-    st.month.setDate(1); st.month.setHours(0, 0, 0, 0);
-    let data = null;
-    const out = h("div", { class: "muted", text: "Loading…" });
-    const toolbar = h("div", { class: "cal-toolbar" });
-    const sync = h("div");
-    const admin = h("div");
-    const dayKey = ms => { const d = new Date(ms); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-    const timeText = e => e.allDay ? (e.end && dayKey(e.end) !== dayKey(e.start) ? new Date(e.start).toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " to " + new Date(e.end).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "All day") : new Date(e.start).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    const visible = () => data.entries.filter(e => st.kinds.has(e.kind) && (!st.guild || !e.guild_id || e.guild_id === st.guild));
-    // A multi-day entry shows on every day it covers.
-    const spans = e => { const days = []; const last = e.end && e.allDay ? e.end : e.start; for (let t = e.start, n = 0; t <= last && n < 40; t += 86400_000, n++) days.push(dayKey(t)); return days.length ? days : [dayKey(e.start)]; };
-
-    function removeBtn(e) {
-      if (!e.canRemove) return null;
-      const b = h("button", { class: "btn red small", text: "Remove" });
-      b.addEventListener("click", () => busy(b, async () => { await api("/api/calendar/events/delete", { guild_id: e.guild_id, id: e.id }); toast("Removed.", "ok"); load(); }));
-      return b;
-    }
-    function drawList() {
-      const list = visible().filter(e => (e.allDay ? (e.end || e.start) : e.start) >= data.now - 3600_000);
-      if (!list.length) return out.replaceChildren(h("div", { class: "empty", text: "Nothing coming up. Wishlisted games with a release date, Steam sales and server events appear here." }));
-      const groups = new Map();
-      for (const e of list) { const k = dayKey(e.start); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); }
-      out.replaceChildren(...[...groups].map(([k, rows]) => h("div", { class: "panel" },
-        h("h3", { text: new Date(rows[0].start).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) }),
-        ...rows.map(e => h("div", { class: "cal-row" },
-          
-          h("div", {}, h("div", { class: "cal-title" }, e.url ? h("a", { href: e.url, target: "_blank", rel: "noopener noreferrer", text: e.title + " ↗" }) : e.title), h("div", { class: "muted small", text: [timeText(e), e.server, e.notes].filter(Boolean).join(" · ") })),
-          removeBtn(e) || "")))));
-    }
-    function drawMonth() {
-      const first = new Date(st.month), startDow = first.getDay();
-      const gridStart = new Date(first); gridStart.setDate(1 - startDow);
-      const byDay = new Map();
-      for (const e of visible()) for (const k of spans(e)) { if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(e); }
-      const cells = [];
-      for (let i = 0; i < 42; i++) {
-        const d = new Date(gridStart); d.setDate(gridStart.getDate() + i);
-        const items = byDay.get(dayKey(d)) || [];
-        const today = dayKey(d) === dayKey(Date.now());
-        cells.push(h("div", { class: "cal-cell" + (d.getMonth() !== first.getMonth() ? " other" : "") + (today ? " today" : "") },
-          h("div", { class: "cal-day", text: String(d.getDate()) }),
-          ...items.slice(0, 3).map(e => h("div", { class: "cal-chip " + e.kind, title: e.title + " · " + timeText(e), text: e.title })),
-          items.length > 3 ? h("div", { class: "muted small", text: "+" + (items.length - 3) + " more" }) : ""));
-      }
-      const prev = h("button", { class: "btn gray small", text: "‹", "aria-label": "Previous month" }), next = h("button", { class: "btn gray small", text: "›", "aria-label": "Next month" });
-      prev.addEventListener("click", () => { st.month.setMonth(st.month.getMonth() - 1); drawMonth(); });
-      next.addEventListener("click", () => { st.month.setMonth(st.month.getMonth() + 1); drawMonth(); });
-      out.replaceChildren(h("div", { class: "panel" },
-        h("div", { class: "cal-nav" }, prev, h("h3", { text: first.toLocaleDateString(undefined, { month: "long", year: "numeric" }) }), next),
-        h("div", { class: "cal-grid" }, ...["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(n => h("div", { class: "cal-head", text: n })), ...cells)));
-    }
-    const draw = () => (st.mode === "month" ? drawMonth() : drawList());
-
-    function drawToolbar() {
-      const chips = Object.entries(KIND).map(([k, [ico, label]]) => { const b = h("button", { type: "button", class: "tab small" + (st.kinds.has(k) ? " active" : ""), text: label, "aria-pressed": String(st.kinds.has(k)) });
-        b.addEventListener("click", () => { st.kinds.has(k) ? st.kinds.delete(k) : st.kinds.add(k); drawToolbar(); draw(); }); return b; });
-      const mode = h("button", { type: "button", class: "tab small", text: st.mode === "list" ? "Month view" : "List view" });
-      mode.addEventListener("click", () => { st.mode = st.mode === "list" ? "month" : "list"; drawToolbar(); draw(); });
-      const parts = [h("div", { class: "chips" }, ...chips, mode)];
-      if (data.servers.length > 1) { const sel = select([["", "All my servers"], ...data.servers.map(g => [g.id, g.name])], st.guild); sel.addEventListener("change", () => { st.guild = sel.value; draw(); }); parts.push(field("Show", sel)); }
-      toolbar.replaceChildren(...parts);
-    }
-
-    function drawAdmin() {
-      const mgr = data.servers.filter(g => g.manageable);
-      if (!mgr.length) { admin.replaceChildren(); return; }
-      const guild = select(mgr.map(g => [g.id, g.name]), mgr[0].id);
-      const title = h("input", { type: "text", maxlength: "80", placeholder: "e.g. Co-op night: Helldivers 2" });
-      const when = h("input", { type: "datetime-local" });
-      const notes = h("textarea", { maxlength: "400", rows: "2", placeholder: "Details (optional)", class: "short" });
-      const chan = h("select", {}, h("option", { value: "", text: "Do not announce in a channel" }));
-      const remind = select([["60", "Remind 1 hour before"], ["15", "Remind 15 minutes before"], ["1440", "Remind 1 day before"], ["0", "No reminder"]], "60");
-      const loadChans = () => api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).then(c => chan.replaceChildren(h("option", { value: "", text: "Do not announce in a channel" }), ...c.channels.map(x => h("option", { value: x.id, text: "Announce in #" + x.name })))).catch(() => {});
-      guild.addEventListener("change", loadChans); loadChans();
-      const add = h("button", { class: "btn green", text: "Add event" });
-      add.addEventListener("click", () => busy(add, async () => {
-        const at = when.value ? new Date(when.value).getTime() : NaN;
-        const r = await api("/api/calendar/events", { guild_id: guild.value, title: title.value, notes: notes.value, starts_at: at, channel_id: chan.value || undefined, remind_min: Number(remind.value) });
-        toast(r.announced ? "Event added and announced." : "Event added.", "ok"); title.value = ""; notes.value = ""; load();
-      }));
-      admin.replaceChildren(h("h2", { text: "Add a server event" }), h("div", { class: "panel" },
-        h("p", { class: "muted small", text: "Members see it here and with /server calendar view. If you pick a channel it is announced there now and members get a reminder before it starts." }),
-        mgr.length > 1 ? field("Server", guild) : "", h("div", { class: "row" }, field("Title", title), field("Date and time (your browser's time zone)", when)), field("Notes", notes), h("div", { class: "row" }, field("Announce", chan), field("Reminder", remind)), h("p", {}, add)));
-    }
-
-    function drawSync() {
-      const result = h("div");
-      const make = h("button", { class: "btn gray", text: data.feed ? "Make a new link" : "Make a calendar link" });
-      make.addEventListener("click", () => busy(make, async () => {
-        const r = await api("/api/calendar/feed", { action: "new" });
-        const box = h("input", { type: "text", readonly: "readonly", value: r.url, "aria-label": "Calendar link" });
-        box.addEventListener("focus", () => box.select());
-        result.replaceChildren(h("p", { class: "muted small", text: "Copy this now. It is shown once. Anyone with it can read your calendar, so keep it private." }), box);
-        make.textContent = "Make a new link";
-      }));
-      const off = data.feed ? h("button", { class: "btn red", text: "Turn the link off" }) : null;
-      if (off) off.addEventListener("click", () => busy(off, async () => { await api("/api/calendar/feed", { action: "off" }); toast("Link turned off.", "ok"); load(); }));
-      sync.replaceChildren(h("h2", { text: "Use another calendar app (optional)" }), h("div", { class: "panel" },
-        h("p", { class: "muted small", text: "This calendar works on its own. If you also want these dates in Google, Apple or Outlook calendar, make a private link and add it there as a subscription from a URL. It updates by itself." }),
-        data.feed ? h("p", { class: "muted small", text: `A link is active${data.feed.used_at ? ", last used " + new Date(data.feed.used_at).toLocaleDateString() : ", not used yet"}.` }) : "",
-        h("p", {}, make, " ", off || ""), result));
-    }
-
-    async function load() {
-      try {
-        data = await api("/api/calendar?days=365");
-        drawToolbar(); draw(); drawAdmin(); drawSync();
-      } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    app.replaceChildren(pageHead("Calendar", "Game releases from your wishlist, Steam sales, and your servers' events, all in one place."), toolbar, out, admin, sync);
-    load();
-  }
+  async function calendarView() { return window.CalendarUI.view({ api, app, busy, field, h, pageHead, select, toast }); }
 
   // ---------- looking for group ----------
-  async function lfgView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const out = h("div", { class: "muted", text: "Loading…" });
-    const form = h("div");
-    const guild = serverPicker(servers);
-    app.replaceChildren(pageHead("Looking for group", "Find people to play with. Members join with a button, and the group gets a reminder when it starts."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, form, out));
-    async function load() {
-      out.className = "muted"; out.replaceChildren("Loading…");
-      try {
-        const g = servers.find(x => x.id === guild.value);
-        const d = await api("/api/lfg?guild=" + encodeURIComponent(guild.value));
-        if (d.manageable) {
-          const game = h("input", { type: "text", maxlength: "80", placeholder: "Game" });
-          const when = h("input", { type: "datetime-local" });
-          const slots = h("input", { type: "number", min: "2", max: "20", value: "4" });
-          const note = h("input", { type: "text", maxlength: "200", placeholder: "Optional" });
-          const chan = select([["", "Loading channels…"]], "");
-          const evt = h("input", { type: "checkbox" });
-          api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).then(c => { chan.replaceChildren(...c.channels.map(x => h("option", { value: x.id, text: "#" + x.name }))); }).catch(() => {});
-          const post = h("button", { class: "btn blue", text: "Post", onclick: () => busy(post, async () => {
-            if (!when.value) throw new Error("Pick a date and time.");
-            const r = await api("/api/lfg", { guild_id: guild.value, channel_id: chan.value, game: game.value, starts_at: new Date(when.value).getTime(), slots: Number(slots.value), note: note.value, event: evt.checked });
-            toast("Posted." + (r.eventError ? " " + r.eventError : ""), r.eventError ? "warn" : "ok"); load();
-          }) });
-          form.replaceChildren(h("div", { class: "grid two" }, field("Game", game), field("When (your local time)", when), field("Players, counting you", slots), field("Channel", chan)), field("Note", note),
-            h("label", { class: "check" }, evt, " Also create a Discord event (the bot needs Manage Events)"), h("p"), post);
-        } else form.replaceChildren(h("p", { class: "muted small", text: "Server managers can post from here. Everyone can post with /server lfg post in Discord, and join from here or from the post." }));
-        out.className = "";
-        if (!d.posts.length) { out.replaceChildren(h("div", { class: "empty", text: "No open posts. Start one with /server lfg post." + (g ? "" : "") })); return; }
-        out.replaceChildren(...d.posts.map(p => {
-          const act = async (path, msg) => { try { await api(path, { guild_id: guild.value, id: p.id }); toast(msg, "ok"); load(); } catch (e) { toast(e.message, "error"); } };
-          const join = h("button", { class: "btn green small", text: p.joined ? "Leave" : "Join", onclick: () => act(p.joined ? "/api/lfg/leave" : "/api/lfg/join", p.joined ? "You left." : "You are in.") });
-          const close = p.canClose ? h("button", { class: "btn red small", text: "Close", onclick: () => act("/api/lfg/close", "Closed.") }) : null;
-          return h("div", { class: "panel" }, h("h3", { text: p.game }), h("p", { class: "muted", text: new Date(p.starts_at).toLocaleString() + " · hosted by " + p.host + " · " + p.members.length + "/" + p.slots }),
-            p.note ? h("p", { text: p.note }) : null, h("p", { class: "muted small", text: "Players: " + p.members.join(", ") }), h("div", { class: "row" }, join, close, p.url ? ext(p.url, "Open in Discord") : null));
-        }));
-      } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    guild.addEventListener("change", load);
-    load();
-  }
+  async function lfgView() { return window.LfgUI.view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
 
   // ---------- guided server setup (same checklist as /manage setup in Discord) ----------
   /** One row per thing the bot posts, grouped, each with its own channel. Empty rows say what happens instead. */
@@ -3568,64 +3136,7 @@ window.SVC_SITE = envIn => {
       ...body, h("div", { class: "row" }, saveAll, hint));
   }
 
-  async function setupView() {
-    const servers = state.me.servers.filter(g => g.manageable);
-    const holder = h("div");
-    app.replaceChildren(pageHead("Server setup", "A few choices and your server is ready. The same steps are in Discord with /manage setup."), holder);
-    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "You need the Manage Server permission in a server to set it up." })); return; }
-    const wanted = currentParam();
-    const guild = serverPicker(servers, wanted);
-    async function load() {
-      holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
-      try {
-        const st = await api("/api/servers/setup?guild=" + encodeURIComponent(guild.value));
-        const picker = servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null;
-        if (st.bot === false) {
-          holder.replaceChildren(...[picker, h("div", { class: "panel" }, h("h3", { text: "Add the bot first" }), h("p", { class: "muted", text: "The bot is not in this server yet." }),
-            state.cfg && state.cfg.inviteUrl ? ext(state.cfg.inviteUrl, "Add to this server", "btn green") : null)].filter(Boolean));
-          return;
-        }
-        const [ch, ro, fo] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] })), api("/api/servers/forums?guild=" + encodeURIComponent(guild.value)).catch(() => ({ forums: [] }))]);
-        const cmap = await api("/api/servers/channelmap?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] }));
-        const reqSel = select([["", "Not set"], ...fo.forums.map(c => [c.id, "#" + c.name])], st.requestsChannel || "");
-        const chOpts = cur => select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], cur || "");
-        const row = (step, title, help, ...controls) => h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (step.done ? "✅ " : step.optional ? "➖ " : "⬜ ") + title }), h("div", { class: "muted small", text: help })), ...controls.filter(Boolean));
-        const save = (label, fn) => { const b = h("button", { class: "btn blue small", text: label }); b.addEventListener("click", () => busy(b, async () => { await fn(); toast("Saved.", "ok"); load(); })); return b; };
-        const [sAlert, sFeed, sSupport, sVouch] = st.steps; // (the forum row finds its step by id)
-        const alertSel = chOpts(st.alertChannel), supportSel = chOpts(st.supportChannel), vouchSel = chOpts(st.vouchChannel);
-        const staffSel = select([["", "Only people with Manage Server"], ...ro.roles.map(r => [r.id, r.name])], st.staffRole || "");
-        const done = st.steps.filter(x => x.done).length;
-        const auto = st.complete && st.vouchChannel && st.requestsChannel ? null : h("div", { class: "panel" }, h("h3", { text: "Fastest way" }),
-          h("p", { class: "muted", text: "I can create a Steam Value Checker category with #deal-alerts, a private #support-tickets (only you and the bot), #vouches and a #feature-requests forum, and connect them. Needs the Manage Channels permission." }),
-          (() => { const b = h("button", { class: "btn green", text: "Create the channels for me" }); b.addEventListener("click", () => busy(b, async () => { const r = await api("/api/servers/setup/auto", { guild_id: guild.value, staff_role_id: staffSel.value || null }); toast(r.created.length ? "Channels created and connected." : r.note, "ok"); load(); })); return b; })());
-        const feedBtn = h("button", { class: "btn small " + (st.feed ? "red" : "green"), text: st.feed ? "Stop the feed" : "Turn on the feed" });
-        feedBtn.addEventListener("click", () => busy(feedBtn, async () => { await api("/api/servers/feed", { guild_id: guild.value, enabled: !st.feed }); load(); }));
-        holder.replaceChildren(...[picker, auto, h("div", { class: "panel" },
-          h("h3", { text: `Checklist (${done} of ${st.steps.length})` }), progressBar(done / st.steps.length),
-          row(sAlert, "Alert channel", "Where alerts go when a member's DM fails, and where the free-games feed posts. The bot posts a short note there to check it can.",
-            h("div", { class: "row" }, alertSel, save("Save", () => (alertSel.value ? api("/api/servers/channel", { guild_id: guild.value, channel_id: alertSel.value }) : api("/api/servers/channel", { guild_id: guild.value, clear: true }))))),
-          row(sFeed, "Free-games feed", "Posts new free games (not DLC) in the alert channel for everyone.", st.alertChannel ? feedBtn : h("span", { class: "muted small", text: "Choose an alert channel first." })),
-          row(st.steps.find(x => x.id === "digest"), "Friday round-up", "Every Friday the alert channel gets cheap games that opted-in members watch (never who), the free games on now and the week's server events.",
-            st.alertChannel ? (() => { const b = h("button", { class: "btn small " + (st.weeklyDigest ? "red" : "green"), text: st.weeklyDigest ? "Turn off" : "Turn on" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/digest", { guild_id: guild.value, enabled: !st.weeklyDigest }); load(); })); return b; })() : h("span", { class: "muted small", text: "Choose an alert channel first." })),
-          row(st.steps.find(x => x.id === "gamenight"), "Game night nudges", "When 2 or more opted-in members in a voice channel all have the same game hit their alert, the bot posts once in that channel's text chat. Members join with /alerts share.",
-            (() => { const b = h("button", { class: "btn small " + (st.gameNight ? "red" : "green"), text: st.gameNight ? "Turn off" : "Turn on" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/gamenight", { guild_id: guild.value, enabled: !st.gameNight }); load(); })); return b; })()),
-          row(sSupport, "Support tickets", "Members use /bot support open. Tickets appear here with Reply, Assign and Resolve buttons, and in the Support page.",
-            h("div", { class: "row" }, supportSel, staffSel, save("Save", () => api("/api/tickets/setup", { guild_id: guild.value, channel_id: supportSel.value, staff_role_id: staffSel.value })))),
-          state.me.giveaways ? row(sVouch, "Giveaway vouches", "Winners' confirmations are posted here. Without one the bot looks for a channel named #vouches.",
-            h("div", { class: "row" }, vouchSel, save("Save", () => api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouchSel.value })))) : null,
-          row(st.steps.find(x => x.id === "requests"), "Feature requests forum", "Every idea members send in on the dashboard becomes a post here, tagged with its status (planned, in development, shipped…). Needs a forum channel, which Discord only offers on Community servers.",
-            fo.forums.length ? h("div", { class: "row" }, reqSel, save("Save", () => api("/api/community/places", { guild_id: guild.value, requests_channel: reqSel.value }))) : h("span", { class: "muted small", text: "No forum channel yet. \"Create the channels for me\" makes one, or add one in Discord." }))),
-          cmap.channels.length ? channelPanel(cmap.channels, ch.channels, st.alertChannel, guild.value, load) : null,
-          h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
-            h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/me wishlist import" }), ", then star favorites with ", h("code", { text: "/me wishlist priority" })),
-            h("li", {}, "Price a library: ", h("code", { text: "/games value" }), " or link Steam for hours, ", h("code", { text: "/me steam recap" }), " and ", h("code", { text: "/me library challenge" })),
-            h("li", {}, "Share a wishlist for gifts: ", h("code", { text: "/me publicpage" })), h("li", {}, "Keep friends' birthdays and gift deals: ", h("code", { text: "/me friend add" })), h("li", {}, "Earn badges and join the monthly league: ", h("code", { text: "/me library badges" }), " and ", h("code", { text: "/server leaderboard board:finished" })), h("li", {}, "Track bundles and hour goals: ", h("code", { text: "/me library bundle" }), " and ", h("code", { text: "/me steam goal" })), h("li", {}, "See events and release dates: ", h("code", { text: "/server calendar view" })),
-            h("li", {}, "Ask for help: ", h("code", { text: "/bot support open" })), h("li", {}, "Managers can run giveaways: ", h("code", { text: "/server giveaway create" }))))].filter(Boolean));
-      } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    guild.addEventListener("change", load);
-    load();
-  }
+  async function setupView() { return window.SetupUI.view({ api, app, busy, channelPanel, currentParam, ext, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
 
   // ---------- community: welcome, levels, invites, emoji, and the one-click server build ----------
   async function communityView() { return window.CommunityUI.view({ PLAYTEST_SOURCES, api, app, busy, currentParam, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
@@ -3856,73 +3367,7 @@ window.SVC_SITE = envIn => {
     load();
   }
 
-  async function xpView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const holder = h("div");
-    app.replaceChildren(pageHead("Server XP", "Levels, the leaderboard and rewards for your server. In Discord: /server rank and /server levels."), holder);
-    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
-    const guild = serverPicker(servers, currentParam());
-    let page = 1;
-    async function load() {
-      holder.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
-      try {
-        const d = await api("/api/community/xp?guild=" + encodeURIComponent(guild.value) + "&page=" + page);
-        const picker = servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null;
-        const me = d.me, t = d.totals;
-        const off = d.enabled ? null : h("div", { class: "notice warn", text: "XP is turned off in this server." + (d.manager ? " Turn it on below." : "") });
-        const tile = (k, v, s) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), s && h("div", { class: "s", text: s }));
-        const card = h("div", { class: "panel xp-card" }, h("div", { class: "xp-level" }, h("span", { class: "xp-lv-k", text: "LEVEL" }), h("b", { text: String(me.level) })),
-          h("div", { class: "xp-card-main" }, h("h3", { text: me.rank ? `You are #${me.rank} of ${me.members}` : "You have no XP yet" }),
-            h("p", { class: "muted small", text: `${me.into.toLocaleString()} / ${me.need.toLocaleString()} XP to level ${me.level + 1} · ${me.xp.toLocaleString()} XP in total` }), progressBar(me.into / me.need),
-            h("p", { class: "muted small", text: `${me.messages.toLocaleString()} messages · ${me.voiceMinutes.toLocaleString()} minutes in voice` })));
-        const stats = h("div", { class: "grid four" }, tile("Members with XP", t.members.toLocaleString()), tile("Total XP", t.xp.toLocaleString()), tile("Messages counted", t.messages.toLocaleString()), tile("Highest level", t.topLevel));
-        const medal = r => (r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : String(r));
-        const board = h("div", { class: "panel" }, h("h3", { text: "Leaderboard" }),
-          d.board.length ? h("div", { class: "scroll-y tall" }, h("table", { class: "xp-board" }, h("thead", {}, h("tr", {}, ["#", "Member", "Level", "XP", "Messages", "Voice"].map((c, i) => h("th", { class: i > 1 ? "num" : "", text: c })))),
-            h("tbody", {}, d.board.map(r => h("tr", {}, h("td", { text: medal(r.rank) }), h("td", { text: r.name || "Member" }), h("td", { class: "num", text: String(r.level) }), h("td", { class: "num", text: r.xp.toLocaleString() }), h("td", { class: "num", text: r.messages.toLocaleString() }), h("td", { class: "num", text: r.voice_minutes + " min" })))))) : h("p", { class: "muted", text: "Nobody has earned XP yet. Start chatting!" }),
-          d.pages > 1 ? h("div", { class: "row lib-pager" }, h("button", { class: "btn gray small", text: "Previous", disabled: d.page <= 1, onclick: () => { page = d.page - 1; load(); } }), h("span", { class: "muted", text: `Page ${d.page} of ${d.pages}` }), h("button", { class: "btn gray small", text: "Next", disabled: d.page >= d.pages, onclick: () => { page = d.page + 1; load(); } })) : null);
-        const rewards = h("div", { class: "panel" }, h("h3", { text: "Level rewards" }),
-          d.rewards.length ? h("ul", { class: "plain" }, d.rewards.map(r => h("li", {}, h("b", { text: "Level " + r.level }), " → ", r.name, me.level >= r.level ? " ✅" : ""))) : h("p", { class: "muted", text: "No level rewards yet." }),
-          h("p", { class: "muted small", text: "Reach the level and the bot gives you the role." }));
-        const how = h("div", { class: "panel" }, h("h3", { text: "How XP works" }), h("ul", {},
-          h("li", { text: `Chat: ${d.how.message[0]} to ${d.how.message[1]} XP for a message, at most once a minute.` }),
-          h("li", { text: `Voice: ${d.how.voicePerMinute} XP a minute in a voice channel with someone else (not muted or deafened, not in AFK).` }),
-          h("li", { text: d.how.referral ? `Invites: ${d.how.referral} XP each time someone joins through your invite link.` : "Invites: bring friends with your own link (/server invites link)." }),
-          h("li", { text: d.multiplier === 1 ? "XP speed is normal." : `This server runs XP at ×${d.multiplier}.` })));
-        const curve = h("div", { class: "panel" }, h("h3", { text: "XP needed per level" }),
-          h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Level", "XP to reach it", "Total XP"].map((c, i) => h("th", { class: i ? "num" : "", text: c })))), h("tbody", {}, d.curve.map(c => h("tr", {}, h("td", { text: String(c.level) }), h("td", { class: "num", text: c.need.toLocaleString() }), h("td", { class: "num", text: c.total.toLocaleString() })))))));
-        const shop = h("div", { class: "panel shop-soon" }, h("div", { class: "shop-badge", text: "COMING SOON" }), h("h3", { text: "Prize shop" }),
-          h("p", { text: "Spend the XP you earn on rewards from your server's team. Game keys, roles, perks and more." }),
-          h("div", { class: "shop-ghosts", "aria-hidden": "true" }, [["🎮", "Game key"], ["👑", "Special role"], ["✨", "Server perk"]].map(([i, n]) => h("div", { class: "shop-ghost" }, h("span", { text: i }), h("b", { text: n }), h("small", { text: "??? XP" })))),
-          h("p", { class: "muted small", text: "Keep earning XP. Nothing you earn is lost when the shop opens." }));
-        holder.replaceChildren(...[picker, off, card, stats, h("div", { class: "grid two" }, board, h("div", {}, rewards, how)), shop, curve, d.manager ? manage(d) : null].filter(Boolean));
-      } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    function manage(d) {
-      const box = h("div");
-      (async () => {
-        const [ch, ro] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))]);
-        const post = (path, body) => api(path, { guild_id: guild.value, ...body });
-        const save = (label, fn, cls = "btn blue small") => { const b = h("button", { class: cls, text: label }); b.addEventListener("click", () => busy(b, async () => { await fn(); toast("Saved.", "ok"); load(); })); return b; };
-        const st = d.settings;
-        const mult = h("input", { type: "number", min: "0.1", max: "5", step: "0.1", value: String(st.xp_mult) });
-        const ann = select([["same", "In the channel where they chat"], ["channel", "In one channel"], ["off", "Nowhere"]], st.levelup_mode);
-        const annCh = select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], st.levelup_channel || "");
-        const lvlN = h("input", { type: "number", min: "1", max: "200", placeholder: "Level" }), lvlR = select([["", "Choose a role"], ...ro.roles.map(r => [r.id, r.name])], "");
-        const tog = h("button", { class: "btn small " + (st.xp_on ? "red" : "green"), text: st.xp_on ? "Turn XP off" : "Turn XP on" });
-        tog.addEventListener("click", () => busy(tog, async () => { await post("/api/community/xp", { enabled: !st.xp_on }); load(); }));
-        box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Manage XP" }), h("div", { class: "row" }, tog),
-          h("div", { class: "grid two" }, field("XP speed (1 is normal)", mult), field("Announce level-ups", ann)), field("Level-up channel", annCh),
-          h("div", { class: "row" }, save("Save XP settings", () => post("/api/community/xp", { multiplier: mult.value, announce: ann.value, channel_id: annCh.value }))),
-          h("h4", { text: "Level rewards" }),
-          d.rewards.length ? h("ul", { class: "plain" }, d.rewards.map(r => h("li", {}, `Level ${r.level}: `, h("b", { text: r.name }), " ", save("Remove", () => post("/api/community/levelrole", { level: r.level, remove: true }), "btn gray small")))) : h("p", { class: "muted", text: "No level rewards yet." }),
-          h("div", { class: "row" }, lvlN, lvlR, save("Add reward", () => post("/api/community/levelrole", { level: lvlN.value, role_id: lvlR.value })))));
-      })();
-      return box;
-    }
-    guild.addEventListener("change", () => { page = 1; load(); });
-    load();
-  }
+  async function xpView() { return window.XpUI.view({ api, app, busy, currentParam, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
 
   // ---------- moderation: take an action, see the case log, choose the mod log channel ----------
   async function modView() { return window.ModUI.view({ api, app, busy, currentParam, field, h, pageHead, select, serverPicker, state, toast }); }
@@ -4053,85 +3498,7 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "fd-compose" }, box, preview, h("div", { class: "fd-compose-row" }, pick, attach, file, count, send));
   }
 
-  async function feedView() {
-    const signedIn = Boolean(state.me);
-    const st = FEED_STATE;
-    if (!st.scope) st.scope = "following";
-    let following = 0, reactions = [], cursor = null, loading = false;
-    const list = h("div", { class: "fd-list" }), more = h("button", { class: "btn gray small fd-more", type: "button", text: "Show more", hidden: true });
-    const filter = h("div", { class: "fd-filter", hidden: true });
-    const composer = h("div", { class: "fd-composer" });
-    const scopes = h("div", { class: "fd-scopes" }), serverBar = h("div", { class: "fd-serverbar", hidden: true }), serverHead = h("div", { class: "fd-serverhead" });
-    let servers = [];
-    const onServer = id => { st.scope = "servers"; st.server = id; drawChrome(); reload(); (NATIVE ? env.scroller?.scrollTo({ top: 0, behavior: "smooth" }) : window.scrollTo({ top: 0, behavior: "smooth" })); };
-    const onGame = (appid, game) => { st.game = { appid, game }; drawChrome(); reload(); (NATIVE ? env.scroller?.scrollTo({ top: 0, behavior: "smooth" }) : window.scrollTo({ top: 0, behavior: "smooth" })); };
-    function drawChrome() {
-      if (st.scope === "following" && !signedIn) st.scope = "everyone";
-      scopes.replaceChildren(...[["following", "Following"], ["everyone", "Everyone"], ["servers", "Servers"], ["mine", "My posts"]].filter(([k]) => signedIn || k === "everyone" || k === "servers").map(([k, label]) => {
-        const b = h("button", { class: "chip-btn" + (st.scope === k ? " on" : ""), type: "button", text: label, "aria-pressed": String(st.scope === k) });
-        b.addEventListener("click", () => { st.scope = k; drawChrome(); reload(); });
-        return b;
-      }));
-      if (!signedIn && st.scope === "mine") st.scope = "everyone";
-      drawServerBar();
-      filter.hidden = !st.game;
-      if (st.game) { const x = h("button", { class: "fd-link", type: "button", text: "Clear" }); x.addEventListener("click", () => { st.game = null; drawChrome(); reload(); }); filter.replaceChildren(h("span", { text: "Showing posts about " }), h("strong", { text: st.game.game }), x); }
-    }
-    function drawServerBar() {
-      serverBar.hidden = st.scope !== "servers";
-      if (st.scope !== "servers") { serverHead.replaceChildren(); return; }
-      const one = st.server !== "all";
-      const seg = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label, "aria-pressed": String(on) }); b.addEventListener("click", fn); return b; };
-      const sel = h("select", { class: "fd-pick", "aria-label": "Pick a server" }, ...(servers.some(g => g.id === st.server) || !one ? [] : [h("option", { value: st.server, text: "This server" })]), ...servers.map(g => h("option", { value: g.id, text: g.name })));
-      if (one) sel.value = st.server;
-      sel.addEventListener("change", () => { st.server = sel.value; drawServerBar(); reload(); });
-      serverBar.replaceChildren(h("div", { class: "fd-seg" }, seg("All servers", !one, () => { if (!one) return; st.server = "all"; drawServerBar(); reload(); }),
-        seg("One server", one, () => { if (one) return; st.server = servers[0]?.id ?? "all"; if (st.server === "all") return toast("No servers are listed yet.", "warn"); drawServerBar(); reload(); })),
-        one ? sel : null, h("a", { class: "fd-link", href: "/communities", text: "Browse all servers" }));
-      serverHead.replaceChildren();
-      if (one) api("/api/social/server?id=" + encodeURIComponent(st.server)).then(r => serverHead.replaceChildren(serverCard(r.server, r.people))).catch(() => {});
-    }
-    async function load(append) {
-      if (loading) return; loading = true;
-      try {
-        const q = new URLSearchParams({ scope: st.scope }); if (st.scope === "servers") q.set("server", st.server); if (st.game) q.set("game", st.game.appid); if (append && cursor) q.set("before", cursor);
-        const r = await api("/api/social/feed?" + q);
-        following = r.following; reactions = r.reactions;
-        if (JSON.stringify(servers) !== JSON.stringify(r.servers)) { servers = r.servers; if (st.scope === "servers") drawServerBar(); }
-        const ctx = { signedIn, reactions, onGame, onServer };
-        if (!append) list.replaceChildren();
-        if (!r.items.length && !append) {
-          list.replaceChildren(h("div", { class: "empty fd-empty" }, st.scope === "following" && !following
-            ? [h("strong", { text: "Your feed is empty" }), h("p", { text: "Follow a few people and what they finish, unlock and post shows up here." }), h("a", { class: "btn blue small", href: "/discover", text: "Find people to follow" })]
-            : [h("strong", { text: st.game ? "Nobody has posted about that yet" : st.scope === "mine" ? "You haven't posted yet" : st.scope === "servers" ? "Nothing from this server yet" : "Nothing here yet" }), h("p", { text: st.scope === "mine" ? "Say something above, or finish a game and it appears on its own." : "Check back in a bit, or switch to Everyone." })]));
-        } else r.items.forEach(it => list.append(feedCard(it, ctx)));
-        cursor = r.items.length ? r.items[r.items.length - 1].id : cursor; more.hidden = !r.more;
-      } catch (e) { if (!append) list.replaceChildren(h("div", { class: "notice warn", text: e.message })); else toast(e.message, "error"); }
-      loading = false;
-    }
-    const reload = () => { cursor = null; return load(false); };
-    more.addEventListener("click", () => busy(more, () => load(true)));
-    app.replaceChildren(pageHead("Feed", "What people are finishing, unlocking and saying. It follows the pages people have made public."), composer, h("div", { class: "fd-bar" }, scopes), serverBar, serverHead, filter, list, h("div", { class: "fd-foot" }, more));
-    drawChrome();
-    if (signedIn) {
-      let games = []; try { games = (await api("/api/social/mygames")).games; } catch { /* the picker is optional */ }
-      composer.replaceChildren(h("div", { class: "panel fd-panel" }, feedComposer({ games, onPosted: async () => { await reload(); toast("Posted.", "ok"); } })));
-      const prefs = h("details", { class: "fd-prefs panel" }, h("summary", { text: "Feed settings" }));
-      api("/api/social/people").then(r => {
-        const ev = h("input", { type: "checkbox", checked: r.prefs.events }), dg = h("input", { type: "checkbox", checked: r.prefs.digest });
-        ev.addEventListener("change", () => api("/api/social/prefs", { events: ev.checked }).then(() => toast(ev.checked ? "Your finished games and rare unlocks show in the feed." : "Only your posts show in the feed now.", "ok")).catch(e => { ev.checked = !ev.checked; toast(e.message, "error"); }));
-        dg.addEventListener("change", () => api("/api/social/prefs", { digest: dg.checked }).then(() => toast(dg.checked ? "You'll get a weekly rundown on Discord." : "No more weekly digest.", "ok")).catch(e => { dg.checked = !dg.checked; toast(e.message, "error"); }));
-        const flag = (key, text, onMsg, offMsg) => { const c = h("input", { type: "checkbox", checked: r.prefs[key] }); c.addEventListener("change", () => api("/api/social/prefs", { [key]: c.checked }).then(() => toast(c.checked ? onMsg : offMsg, "ok")).catch(e => { c.checked = !c.checked; toast(e.message, "warn"); })); return h("label", { class: "fd-check" }, c, h("span", { text })); };
-        prefs.append(flag("notify", "Tell me in my notifications when someone replies, reacts, follows me or signs my guestbook", "You'll see feed activity in your notifications.", "Feed activity won't show up in your notifications."),
-          flag("dm", "Also send those to me on Discord (at most five an hour)", "You'll get them on Discord too.", "No Discord messages for feed activity."),
-          flag("guestbook", "Let visitors sign the guestbook on my page", "Your guestbook is open.", "Your guestbook is closed."));
-        prefs.append(h("label", { class: "fd-check" }, ev, h("span", { text: "Show my finished games, rare unlocks and trophies in the feed" })), h("label", { class: "fd-check" }, dg, h("span", { text: "Send me a weekly rundown of the people I follow on Discord" })),
-          h("p", { class: "muted small", text: "Your page has to be on for anything to show. Turn it on under My profile." }));
-      }).catch(() => {});
-      app.append(prefs);
-    } else composer.replaceChildren(h("div", { class: "notice", role: "status" }, "You're reading as a guest. ", h("a", { href: "/auth/login", text: "Sign in with Discord" }), " to follow people, post and react."));
-    reload();
-  }
+  async function feedView() { return window.FeedUI.view({ FEED_STATE, NATIVE, api, app, busy, env, feedCard, feedComposer, h, pageHead, serverCard, state, toast }); }
 
 
   /** A server's card: what it is, how active it is, a way in, and the members who have public pages. */
@@ -4144,32 +3511,7 @@ window.SVC_SITE = envIn => {
       people.length ? h("div", { class: "fd-people fd-compact" }, people.slice(0, 8).map(p => personRow(p))) : null);
   }
 
-  async function communitiesView() {
-    const box = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Communities", "Every server the bot is in. Open one to see what its members are up to, or join it."), box);
-    try {
-      const d = await api("/api/social/servers");
-      const q = h("input", { type: "search", class: "fd-search", placeholder: "Find a server", "aria-label": "Find a server" });
-      const grid = h("div", { class: "fd-servers" });
-      const draw = () => {
-        const term = q.value.trim().toLowerCase();
-        const shown = d.servers.filter(g => !term || g.name.toLowerCase().includes(term) || (g.about || "").toLowerCase().includes(term));
-        grid.replaceChildren(...(shown.length ? shown.map(g => {
-          const open = h("button", { class: "btn gray small", type: "button", text: "Open feed" });
-          open.addEventListener("click", () => { FEED_STATE.scope = "servers"; FEED_STATE.server = g.id; FEED_STATE.game = null; navigate("/feed"); });
-          return h("div", { class: "fd-server-card" }, h("div", { class: "fd-server-top" }, h("div", { class: "fd-av init", text: g.name.slice(0, 1).toUpperCase() }), h("div", { class: "fd-who" }, h("strong", { class: "fd-name", text: g.name }),
-            h("span", { class: "muted small", text: [g.members ? `${g.members.toLocaleString()} members` : null, `${g.people} with public pages`, g.active ? `${g.active} active this week` : null].filter(Boolean).join(" · ") }))),
-            g.about ? h("p", { class: "fd-about", text: g.about }) : null, h("div", { class: "fd-actions" }, open, g.invite ? ext(g.invite, "Join", "btn blue small") : null));
-        }) : [h("div", { class: "empty", text: "No servers match that." })]));
-      };
-      q.addEventListener("input", draw);
-      box.className = ""; box.replaceChildren(h("div", { class: "fd-bar" }, q, h("a", { class: "btn gray small", href: "/feed", text: "All servers' feed" })), grid);
-      draw();
-      box.append(leaderboardPanel(d.servers));
-      if (d.manage.length) box.append(h("div", { class: "panel" }, h("h3", { text: "Your servers" }),
-        h("p", { class: "muted small", text: "Servers you manage show up here by default. Add a short description and a Discord invite so people can join, or take the server out of the directory." }), ...d.manage.map(manageRow)));
-    } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-  }
+  async function communitiesView() { return window.CommunitiesUI.view({ FEED_STATE, api, app, ext, h, leaderboardPanel, manageRow, navigate, pageHead }); }
 
   /** Who is posting, finishing and unlocking the most, for every server or one of them. Only members with a public page appear. */
   function leaderboardPanel(servers) {
@@ -4193,32 +3535,7 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "fd-manage" }, h("strong", { text: g.name }), h("label", { class: "fd-check" }, on, h("span", { text: "Show this server in the community directory" })), field("Description", about), field("Invite link", invite), save);
   }
 
-  async function discoverView() {
-    const box = h("div", { class: "muted", text: "Loading…" });
-    const pickWrap = h("div", { class: "fd-bar" });
-    let which = "all-servers";
-    app.replaceChildren(pageHead("Discover", "What people are into this week, the rarest achievements around, and members whose libraries look like yours."), pickWrap, box);
-    const run = async () => {
-    try {
-      const d = await api("/api/social/discover" + (which === "all-servers" ? "" : "?server=" + encodeURIComponent(which)));
-      if (!pickWrap.children.length) {
-        const sel = h("select", { class: "fd-pick", "aria-label": "Where" }, h("option", { value: "all-servers", text: "Everywhere" }), h("option", { value: "all", text: "All connected servers" }), ...d.servers.map(g => h("option", { value: g.id, text: g.name })));
-        sel.addEventListener("change", () => { which = sel.value; run(); });
-        pickWrap.append(sel);
-      }
-      const trend = d.trending.length ? h("div", { class: "fd-trend" }, d.trending.map(g => {
-        const a = h("button", { class: "fd-trend-card", type: "button" }, h("div", { class: "fd-art" }, pfArt(g.art, g.game)), h("strong", { text: g.game }), h("span", { class: "muted small", text: `${g.people} ${g.people === 1 ? "person" : "people"}${g.posts ? ` · ${g.posts} post${g.posts === 1 ? "" : "s"}` : ""}${g.finishes ? ` · ${g.finishes} finished` : ""}` }));
-        a.addEventListener("click", () => { FEED_STATE.game = { appid: g.appid, game: g.game }; FEED_STATE.scope = "everyone"; navigate("/feed"); });
-        return a;
-      })) : h("p", { class: "muted", text: "Nothing is trending yet. Finish a game or post about one and it will show up here." });
-      const rare = d.rare.length ? h("div", { class: "fd-rare" }, d.rare.map(r => h("div", { class: "fd-rare-row" }, httpsOnly(r.icon) ? h("img", { class: "fd-ach", src: r.icon, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : h("div", { class: "fd-ach none", text: "★" }),
-        h("div", {}, h("strong", { text: r.achievement }), h("div", { class: "muted small" }, `${r.game} · ${r.pct}% of players · `, r.slug ? h("a", { href: "#/u/" + r.slug, text: r.name }) : r.name))))) : h("p", { class: "muted", text: "Nobody has shared achievements yet. Turn on the Rarest achievements section on your page." });
-      const people = state.me ? (d.similar.length ? h("div", { class: "fd-people" }, d.similar.map(p => personRow(p, `${p.shared} games in common`))) : h("p", { class: "muted", text: "Sync your Steam library and you'll see members who own a lot of the same games." })) : h("p", { class: "muted", text: "Sign in to see people with libraries like yours." });
-      box.className = ""; box.replaceChildren(h("div", { class: "panel" }, h("h3", { text: "Trending this week" }), trend), h("div", { class: "panel" }, h("h3", { text: "Rarest achievements" }), rare), h("div", { class: "panel" }, h("h3", { text: "People you might like" }), people));
-    } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    };
-    run();
-  }
+  async function discoverView() { return window.DiscoverUI.view({ FEED_STATE, api, app, h, httpsOnly, navigate, pageHead, personRow, pfArt, state }); }
 
   /** A person in a list, with a follow button. */
   function personRow(p, note) {
@@ -4229,21 +3546,7 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "fd-person" }, feedAvatar(p), h("div", { class: "fd-who" }, feedName(p), note ? h("span", { class: "muted small", text: note }) : null), state.me ? btn : null);
   }
 
-  async function peopleView() {
-    const box = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("People", "Who you follow, who follows you, and who you've blocked."), box);
-    const tab = { v: "following" };
-    const draw = r => {
-      const unblock = b => { const x = h("button", { class: "btn gray small", type: "button", text: "Unblock" }); x.addEventListener("click", () => busy(x, async () => { await api("/api/social/block", { slug: b.slug, on: false }); r.blocked = r.blocked.filter(y => y !== b); draw(r); toast("Unblocked.", "ok"); })); return x; };
-      const lists = { following: r.following.map(p => personRow(p)), followers: r.followers.map(p => personRow(p)), blocked: r.blocked.map(b => h("div", { class: "fd-person" }, h("div", { class: "fd-av init", text: "∅" }), h("div", { class: "fd-who" }, h("span", { class: "fd-name", text: b.name })), unblock(b))) };
-      const empty = { following: "You aren't following anyone yet. Try Discover.", followers: "Nobody follows you yet. Share your page link.", blocked: "You haven't blocked anyone." };
-      const tabs = h("div", { class: "fd-scopes" }, [["following", `Following (${r.following.length})`], ["followers", `Followers (${r.followers.length})`], ["blocked", `Blocked (${r.blocked.length})`]].map(([k, label]) => {
-        const b = h("button", { class: "chip-btn" + (tab.v === k ? " on" : ""), type: "button", text: label }); b.addEventListener("click", () => { tab.v = k; draw(r); }); return b;
-      }));
-      box.className = ""; box.replaceChildren(tabs, h("div", { class: "panel" }, lists[tab.v].length ? h("div", { class: "fd-people" }, lists[tab.v]) : h("p", { class: "muted", text: empty[tab.v] })));
-    };
-    try { draw(await api("/api/social/people")); } catch (e) { box.className = ""; box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-  }
+  async function peopleView() { return window.PeopleUI.view({ api, app, busy, h, pageHead, personRow, toast }); }
 
   /** The follow button, counts, library comparison and block on someone's public page. */
   function pfSocial(p, social) {
