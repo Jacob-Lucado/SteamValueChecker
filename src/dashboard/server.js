@@ -46,6 +46,7 @@ import { createModDash, ModDashError } from "./moddash.js";
 import { HttpError } from "./http.js";
 import { createOverlayRoutes } from "./overlayroutes.js";
 import { createAdminRoutes } from "./adminroutes.js";
+import { createTicketRoutes } from "./ticketroutes.js";
 import { createMusicRoutes } from "./musicroutes.js";
 import { createStreamRoutes } from "./streamroutes.js";
 import { createServerRoutes } from "./serverroutes.js";
@@ -950,6 +951,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const serverRoutes = createServerRoutes({ botGuilds, bundleFeed, cd, codes, comm, communityRoutes, config, cooldown, db, drops, guildChoices, guildFor, isManager, itad, managedGuild, managerGuild, names, now, rest, session, userRow });
     const streamRoutes = createStreamRoutes({ cardsFor, clientIp, cooldown, db, guildChoices, gwOverlayPicks, isManager, isOwner, musicCall, musicMember, now, origin, overlayLimit, remember, rest, rolesIn, session, streamAccess, streamGw, streams, twitchReply, userRow });
     const musicRoutes = createMusicRoutes({ botGuilds, chat, cooldown, db, guildChoices, isManager, isOwner, managedGuild, mayStream, music, musicCall, musicGuild, musicMember, musicOrigin, origin, remember, rest, session, stations, streamAccess, streamRoutes });
+    const ticketRoutes = createTicketRoutes({ db, isManager, isOwner, logs, managerGuild, needTickets, session, settingsView, ticketAccess, tickets });
     const routes = {
         // The extension asks this (no sign-in, nothing sent about the person) to remind its users to update.
         "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
@@ -2623,26 +2625,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "GET /api/fortnite/creator": async (req, _b, url) => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return fortniteCall(() => fnSvc.creator(url.searchParams.get("code"))); },
         "GET /api/fortnite/search": async (req, _b, url) => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return { items: await fortniteCall(() => fnSvc.search(url.searchParams.get("q"))) }; },
         "GET /api/fortnite/stats": async (req, _b, url) => { if (!fortniteLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little and try again in a minute."); return fortniteCall(() => fnSvc.stats(url.searchParams.get("name"), url.searchParams.get("platform") || "epic")); },
-        // ----- support tickets (same thread as the Discord side) -----
-        "GET /api/tickets": async (req, _b, url) => {
-            const s = session(req); needTickets();
-            const q = String(url.searchParams.get("q") ?? "").slice(0, 60), status = url.searchParams.get("status") || null;
-            const mine = db.listTickets({ userId: s.userId, limit: 50 });
-            const mgd = s.guilds.filter(isManager);
-            const staff = isOwner(s) || mgd.length > 0;
-            const inbox = staff ? db.listTickets({ all: isOwner(s), guildIds: mgd.map(g => g.id), status, q, limit: 100 }) : [];
-            const cut = t => ({ id: t.id, subject: t.subject, status: t.status, assignee_id: t.assignee_id, tags: t.tags, user_id: t.user_id, user_name: t.user_name, guild_id: t.guild_id, updated_at: t.updated_at, created_at: t.created_at, rating: t.rating });
-            return { mine: mine.map(cut), inbox: inbox.map(cut), staff, owner: isOwner(s),
-                guilds: mgd.map(g => ({ id: g.id, name: g.name, ...settingsView(g.id) })), ownerSettings: isOwner(s) ? settingsView("*") : null };
-        },
-        "GET /api/tickets/one": async (req, _b, url) => {
-            const s = session(req); needTickets();
-            const { t, staff } = ticketAccess(s, url.searchParams.get("id"));
-            const out = { ticket: t, messages: db.listTicketMessages(t.id), staff, canned: staff ? db.listCanned(t.guild_id ?? "*") : [] };
-            // Recent errors help the owner debug a problem report. Staff of other servers never see them.
-            if (isOwner(s) && logs) out.errors = logs.recent({ level: "error", limit: 15 });
-            return out;
-        },
+        ...ticketRoutes,
         // ----- feature requests: members suggest and vote, the owner sets the status -----
         "GET /api/requests": async (req, _b, url) => {
             const s = session(req);
@@ -2694,68 +2677,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             return { removed: db.deleteRequest(id) };
         },
 
-        "POST /api/tickets": async (req, body) => {
-            const s = session(req); needTickets();
-            const gid = body.guild_id && s.guilds.some(g => g.id === body.guild_id) ? body.guild_id : null;
-            return tickets.open({ userId: s.userId, userName: s.username ?? null, guildId: gid, subject: body.subject, body: body.body, kind: body.kind === "bug" ? "bug" : "help" });
-        },
-        "POST /api/tickets/reply": async (req, body) => {
-            const s = session(req); needTickets();
-            const { t, staff } = ticketAccess(s, body.id);
-            const asStaff = staff && t.user_id !== s.userId;
-            await tickets.reply(t.id, { authorId: s.userId, role: asStaff ? "staff" : "user", body: body.body });
-            return { ok: true };
-        },
-        "POST /api/tickets/status": async (req, body) => {
-            const s = session(req); needTickets();
-            const { t, staff } = ticketAccess(s, body.id);
-            if (!staff && body.status !== "closed") throw new HttpError(403, "Only support staff can do that.");
-            if (body.status === "resolved") await tickets.resolve(t.id, { by: s.userId, note: body.note ? String(body.note).slice(0, 500) : null });
-            else if (body.status === "closed") await tickets.close(t.id, { by: s.userId });
-            else throw new HttpError(400, "Unknown status.");
-            return { ok: true };
-        },
-        "POST /api/tickets/assign": async (req, body) => {
-            const s = session(req); needTickets();
-            const { t, staff } = ticketAccess(s, body.id);
-            if (!staff) throw new HttpError(403, "Only support staff can do that.");
-            await tickets.assign(t.id, body.assignee === null ? null : s.userId);
-            return { ok: true };
-        },
-        "POST /api/tickets/tags": async (req, body) => {
-            const s = session(req); needTickets();
-            const { t, staff } = ticketAccess(s, body.id);
-            if (!staff) throw new HttpError(403, "Only support staff can do that.");
-            await tickets.setTags(t.id, body.tags);
-            return { ok: true };
-        },
-        "POST /api/tickets/rate": async (req, body) => { const s = session(req); needTickets(); return { rating: tickets.rate(Number(body.id), s.userId, body.rating) }; },
-        "GET /api/tickets/transcript": async (req, _b, url) => {
-            const s = session(req); needTickets();
-            const { t } = ticketAccess(s, url.searchParams.get("id"));
-            return { name: `ticket-${t.id}.txt`, text: tickets.transcript(t.id) };
-        },
-        "POST /api/tickets/setup": async (req, body) => {
-            const s = session(req); needTickets();
-            const scope = body.guild_id === "*" ? "*" : managerGuild(s, String(body.guild_id)).id;
-            if (scope === "*" && !isOwner(s)) throw new HttpError(403, "Only the bot owner can set this.");
-            const id = v => (/^\d{15,25}$/.test(String(v ?? "").trim()) ? String(v).trim() : null);
-            if (body.channel_id && !id(body.channel_id)) throw new HttpError(400, "That does not look like a channel ID. Enable Developer Mode, right-click the channel, Copy Channel ID.");
-            db.setTicketSettings(scope, { channelId: id(body.channel_id), staffRoleId: id(body.staff_role_id) });
-            return settingsView(scope);
-        },
-        "POST /api/tickets/canned": async (req, body) => {
-            const s = session(req); needTickets();
-            const scope = body.guild_id === "*" ? "*" : managerGuild(s, String(body.guild_id)).id;
-            if (scope === "*" && !isOwner(s)) throw new HttpError(403, "Only the bot owner can edit these.");
-            if (body.remove) db.removeCanned(scope, Number(body.remove));
-            else {
-                const title = String(body.title ?? "").trim().slice(0, 60), text = String(body.body ?? "").trim().slice(0, 1500);
-                if (!title || !text) throw new HttpError(400, "Give the reply a title and some text.");
-                db.addCanned(scope, title, text);
-            }
-            return { canned: db.listCanned(scope) };
-        },
 
         "POST /api/mydata/delete": async (req, body) => {
             const s = session(req);
