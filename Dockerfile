@@ -9,6 +9,6 @@ RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update && apt-get
     && chmod +x /usr/local/bin/yt-dlp \
     && apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 COPY . .
 CMD ["node", "--disable-warning=ExperimentalWarning", "--max-old-space-size=700", "src/index.js"]
