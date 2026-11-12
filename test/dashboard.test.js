@@ -3248,7 +3248,7 @@ test("admin panel: reported profile pages can be hidden, restored and dismissed,
 
 test("every admin route turns a signed-in non-owner away", async () => {
     const { readFileSync } = await import("node:fs");
-    const src = readFileSync(new URL("../src/dashboard/server.js", import.meta.url), "utf8");
+    const src = ["server", "adminroutes", "overlayroutes"].map(f => readFileSync(new URL(`../src/dashboard/${f}.js`, import.meta.url), "utf8")).join("\n"); // the routes live in a few files
     const routes = [...new Set([...src.matchAll(/^\s*"(GET|POST) (\/api\/admin\/[A-Za-z0-9_./-]+)":/gm)].map(m => [m[1], m[2]].join(" ")))];
     assert.ok(routes.length > 40, "found the routes");
     const t = await signedIn();
