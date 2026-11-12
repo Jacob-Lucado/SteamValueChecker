@@ -35,8 +35,6 @@ export function runRefundWarnings({ db, notifier, now = () => Date.now() }) {
             const res = await notifier.deliver(user, { embeds: part.map(r => refundEmbed({ title: r.title, appid: r.appid, hoursLeft: r.hoursLeft, minutes: r.minutes })) }, "refund");
             if (!res.ok) { stats.failed += part.length; continue; }
             stats.delivered += part.length;
-        // Servers that asked for it get the biggest one, so a channel never fills up.
-        try { const top = part[0]; for (const t of db.milestoneTargets?.(id) ?? []) await notifier.postChannel(t.milestone_channel, milestoneShout({ userId: id, title: top.title, appid: top.appid, hours: top.hours })); } catch { /* the DM already went out */ }
             for (const r of part) { db.markSeen(id, `refund:${r.itad_id}`); db.logAlert({ discord_id: id, itad_id: r.itad_id, title: r.title, kind: "refund", via: res.via }); }
         }
         return stats;
@@ -85,6 +83,8 @@ export async function runMilestones({ db, notifier, now = () => Date.now() }) {
         const res = await notifier.deliver(user, { embeds: part.map(r => milestoneEmbed({ title: r.title, appid: r.appid, hours: r.hours, minutes: r.minutes })) }, "milestones");
         if (!res.ok) { stats.failed += part.length; continue; }
         stats.delivered += part.length;
+        // Servers that asked for it get the biggest one, so a channel never fills up.
+        try { const top = part[0]; for (const t of db.milestoneTargets?.(id) ?? []) await notifier.postChannel(t.milestone_channel, milestoneShout({ userId: id, title: top.title, appid: top.appid, hours: top.hours })); } catch { /* the DM already went out */ }
         // Every lower milestone for the same game counts as told as well.
         for (const r of part) { for (const h of MILESTONE_HOURS.filter(h => h <= r.hours)) db.markSeen(id, `mile:${r.itad_id}:${h}`); db.logAlert({ discord_id: id, itad_id: r.itad_id, title: r.title, kind: "milestones", via: res.via }); }
     }

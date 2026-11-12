@@ -207,3 +207,17 @@ test("a milestone shout names the member without pinging and shows no private nu
     assert.deepEqual(m.allowed_mentions, { parse: [] });
     assert.match(m.embeds[0].description, /<@123> just passed \*\*500 hours\*\* in \*\*Hades\*\*/);
 });
+
+test("a milestone is announced in opted-in servers, not on the first run", async () => {
+    const { runMilestones } = await import("../src/playalerts.js");
+    const seen = new Set(), posts = [], dms = []; let minutes = 100;
+    const db = { milestoneUsers: () => [{ discord_id: "7" }], playedGames: () => [{ itad_id: "i", title: "Hades", appid: 1145360, minutes }], hasSeen: (_u, k) => seen.has(k), markSeen: (_u, k) => seen.add(k), logAlert: () => {}, milestoneTargets: () => [{ guild_id: "G", milestone_channel: "C1" }] };
+    const notifier = { deliver: async (_u, p) => { dms.push(p); return { ok: true }; }, postChannel: async (c, p) => { posts.push({ c, p }); } };
+    await runMilestones({ db, notifier });
+    assert.equal(posts.length, 0, "the first run only records what is already passed");
+    minutes = 6100; // just past 100 hours
+    await runMilestones({ db, notifier });
+    assert.equal(posts.length, 1); assert.equal(posts[0].c, "C1"); assert.match(posts[0].p.embeds[0].description, /<@7>/);
+    await runMilestones({ db, notifier });
+    assert.equal(posts.length, 1, "told once");
+});
