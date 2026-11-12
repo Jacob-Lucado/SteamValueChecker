@@ -1,6 +1,6 @@
 // /games bundle and /games saleprep: Discord side. The analysis lives in bundle.js and saleprep.js, the embeds in dealrender.js.
 import { MessageFlags } from "discord.js";
-import { bundleCheck } from "./bundle.js";
+import { bundleLookup } from "./bundle.js";
 import { salePrep, saleRecap } from "./saleprep.js";
 import { bundleEmbeds, salePrepEmbed, recapEmbed } from "./dealrender.js";
 import { regionPrices } from "./regions.js";
@@ -23,13 +23,7 @@ export function createDealHandlers({ db, itad, fx = null }) {
         try {
             await i.deferReply({ flags: MessageFlags.Ephemeral });
             const title = i.options.getString("game");
-            let gameIds;
-            if (title) {
-                const [hit] = await itad.lookupTitles([title]);
-                if (!hit?.id) throw new UserError(`I could not find a game called ${title}.`);
-                gameIds = [hit.id];
-            } else gameIds = db.listItems(i.user.id).map(x => x.itad_id);
-            const res = await bundleCheck({ db, itad, user, gameIds });
+            const res = await bundleLookup({ db, itad, user, query: title });
             if (!res.bundles.length) return void await i.editReply(title ? "That game is not in an active bundle right now." : "None of your wishlist games are in an active bundle right now.");
             return void await i.editReply({ embeds: bundleEmbeds(res) });
         } catch (err) { await failed(i, err); }

@@ -29,6 +29,7 @@ import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
 import { current, dealVerdict } from "./alerts.js";
 import { saveFix, forgetFix, FixError } from "./titlefix.js";
+import { gameFacts } from "./gamefacts.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
 import { compareLibraries, playTogether } from "./compare.js";
 import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
@@ -209,7 +210,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             let subs = [];
             try { subs = (await itad.getSubs?.([found.item.itad_id], user.region))?.get(found.item.itad_id) ?? []; } catch { /* the check works without it */ }
             const reviews = await steamReviews(found.item.appid).catch(() => null);
-            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs, reviews);
+            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs, reviews, await gameFacts(found.item.appid));
             let chart = null;
             try { chart = history ? renderHistoryChart({ title: found.item.title, points: history, currency: now.currency, now: now.price }) : null; } catch { /* the card is fine without the picture */ }
             if (chart) embed.image = { url: "attachment://price-history.png" };

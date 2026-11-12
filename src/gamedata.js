@@ -3,6 +3,7 @@
 import { summarize } from "./report.js";
 import { buyOrWait } from "./advice.js";
 import { upcomingSales, salesBefore } from "./salescal.js";
+import { gameFacts } from "./gamefacts.js";
 
 const MAX_HISTORY_POINTS = 180;
 
@@ -13,11 +14,12 @@ export async function loadGameData(itad, appid, { country = "US", now = Date.now
         if (!id) return null;
         const info = await itad.getTitle(id);
         if (!info?.title) return null;
-        const [prices, history] = await Promise.all([itad.getPrices([id], country).catch(() => new Map()), itad.getHistory(id, country).catch(() => [])]);
+        const [prices, history, facts] = await Promise.all([itad.getPrices([id], country).catch(() => new Map()), itad.getHistory(id, country).catch(() => []), gameFacts(appid)]);
         const sum = summarize(prices.get(id), {});
         const cur = sum.currency || "USD", fmt = n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } };
         const price = sum.best?.price ?? null, step = Math.max(1, Math.ceil(history.length / MAX_HISTORY_POINTS));
         return {
+            facts, // players right now, hours to finish and the critics' score, when known
             title: info.title, appid, itadId: id, currency: cur, price, shop: sum.best?.shop ?? null, shopUrl: /^https:\/\//i.test(sum.best?.url ?? "") ? sum.best.url : null,
             msrp: sum.msrp, low1y: sum.low1y, atl: sum.atl, image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`,
             points: history.filter((_, i) => i % step === 0 || i === history.length - 1).map(p => ({ t: p.t, price: p.price })),

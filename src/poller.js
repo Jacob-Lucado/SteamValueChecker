@@ -7,6 +7,7 @@ import { tasteProfile, matchScore } from "./taste.js";
 import { evaluate, describeTrigger, dealVerdict, meaningfulDrop } from "./alerts.js";
 import { protonTier } from "./proton.js";
 import { steamReviews } from "./reviews.js";
+import { gameFacts } from "./gamefacts.js";
 import { priceInsight } from "./insight.js";
 import { isDlc } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
@@ -92,6 +93,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 try { h.match = h.item.appid ? matchScore(profile, db.getAppTags([h.item.appid]).get(h.item.appid)) : null; } catch { h.match = null; }
                 h.proton = await protonTier(h.item.appid).catch(() => null);
                 h.reviews = await steamReviews(h.item.appid).catch(() => null);
+                h.facts = await gameFacts(h.item.appid);
             }));
             const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict, lang: user.lang, pager: db, color: alertColor(db, userId, now()) });
             const res = await notifier.deliver(user, payload, "alert");

@@ -1,6 +1,7 @@
 // Storage for wishlists and alert settings, using Node's built-in SQLite (no extra dependency).
 // Needs Node 22.13 or newer. Everything stored is listed in PRIVACY.md.
 
+import { priceLogSchema, priceLogStore } from "./pricelog.js";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -227,6 +228,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     // Dashboard sign-ins, so a restart doesn't sign everyone out. The id is a hash of the cookie, never the cookie itself.
     // A member's own corrections for the value checker: "when I type this, I mean that game".
     db.exec("CREATE TABLE IF NOT EXISTS title_fixes (discord_id TEXT NOT NULL, key TEXT NOT NULL, typed TEXT NOT NULL, itad_id TEXT NOT NULL, title TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (discord_id, key))");
+    db.exec(priceLogSchema);
     db.exec("CREATE TABLE IF NOT EXISTS web_sessions (id TEXT PRIMARY KEY, user_id TEXT, data TEXT NOT NULL, expires INTEGER NOT NULL)");
 
     // Columns added after the first release. Safe to run on every start.
@@ -927,6 +929,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const getMeta = key => get("SELECT value FROM status_meta WHERE key = ?", key)?.value ?? null;
     const bumpMeta = key => run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", key);
     const listMetaPrefix = prefix => all("SELECT key, value FROM status_meta WHERE key LIKE ? ESCAPE '\\'", prefix.replace(/[%_\\]/g, c => "\\" + c) + "%");
+    const priceLog = priceLogStore({ db, run, get, all, now });
     const MAX_TITLE_FIXES = 300;
     const setTitleFix = (userId, key, typed, itadId, title) => {
         if (!get("SELECT 1 AS x FROM title_fixes WHERE discord_id = ? AND key = ?", userId, key) && get("SELECT COUNT(*) AS n FROM title_fixes WHERE discord_id = ?", userId).n >= MAX_TITLE_FIXES) return false;
@@ -948,7 +951,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
 
     return {
-        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta, saveSession, dropSession, loadSessions, setTitleFix, removeTitleFix, listTitleFixes,
+        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta, ...priceLog, saveSession, dropSession, loadSessions, setTitleFix, removeTitleFix, listTitleFixes,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, popularApps, funnelMark, funnelStats, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,

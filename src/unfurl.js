@@ -3,6 +3,7 @@
 
 import { EmbedBuilder } from "discord.js";
 import { loadGameData } from "./gamedata.js";
+import { factLines } from "./gamefacts.js";
 import { slugify } from "./gamepage.js";
 import { money } from "./render.js";
 import { reportProblem } from "./guildproblems.js";
@@ -32,6 +33,7 @@ export function unfurlEmbed(d, { origin = null } = {}) {
     if (Number.isFinite(d.low1y)) facts.push(`12-month low ${money(d.low1y, cur)}`);
     if (Number.isFinite(d.atl)) facts.push(`All-time low ${money(d.atl, cur)}`);
     if (facts.length) lines.push(facts.join("  ·  "));
+    lines.push(...factLines(d.facts, { price: d.price, money: n => money(n, cur) }));
     e.setDescription(lines.join("\n"));
     if (d.advice) e.addFields({ name: `${VERDICT[d.advice.verdict] ?? ""} ${d.advice.label}`.trim(), value: String(d.advice.reasons?.[0] ?? "Based on a year of price history.").slice(0, 300) });
     e.setFooter({ text: "Steam Value Checker" });

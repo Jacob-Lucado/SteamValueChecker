@@ -60,6 +60,10 @@ import { createStreams } from "./streamlive.js";
 import { createStreamHandlers } from "./streamhandlers.js";
 import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
 import { openDb } from "./db.js";
+import { withPriceLog } from "./pricelog.js";
+import { configureFacts } from "./gamefacts.js";
+import { createPlayers } from "./players.js";
+import { createIgdb } from "./igdb.js";
 import { createHandlers } from "./handlers.js";
 import { createPanels, PANEL_PREFIX } from "./panel.js";
 import { alertPanel } from "./alertpanel.js";
@@ -200,6 +204,9 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 client.setMaxListeners(30); // each feature adds its own startup listener, and there are now more than the default ten
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
+// Extra facts beside a price: Steam's live player count (no key) and, when the Twitch app keys are set, hours to finish and critics' scores from IGDB.
+configureFacts({ players: createPlayers(), igdb: createIgdb({ clientId: process.env.TWITCH_CLIENT_ID, clientSecret: process.env.TWITCH_CLIENT_SECRET, db, log: m => console.warn(`[igdb] ${m}`) }) });
+withPriceLog(itad, db, { log: m => console.warn(`[prices] ${m}`) }); // every looked-up price is noted once a day, and history falls back to those notes
 const offsite = createOffsite({ ...offsiteConfig(), secret: cfg.keySecret, db, log: t => console.log(`[offsite] ${t}`) });
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
 setInterval(() => moderation.liftDueBans().catch(() => {}), 60_000).unref();
@@ -467,7 +474,7 @@ client.once(Events.ClientReady, c => {
             result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
-            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneStarPosts(); db.prunePolls2(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
+            try { db.prunePricePoints(); db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneStarPosts(); db.prunePolls2(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
             result.watchdog = await ops.job("watchdog", () => runWatchdog({ ops, logs, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }) }));
             result.ownerSummary = await ops.job("owner summary", () => runOwnerSummary({ db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), gather: async () => ({
                 servers: client.guilds.cache.size, errors: logs.recent({ level: "error", limit: 500 }).filter(l => l.at >= Date.now() - 7 * 86_400_000).length,

@@ -122,7 +122,7 @@ const steam = new SlashCommandBuilder()
 const bundle = new SlashCommandBuilder()
     .setName("bundle")
     .setDescription("Is a bundle worth it? Tier prices against what the games cost today, skipping ones you own")
-    .addStringOption(o => o.setName("game").setDescription("A game to look for (default: bundles with anything on your wishlist)").setMaxLength(100));
+    .addStringOption(o => o.setName("game").setDescription("A game, or a link to the bundle's page (default: bundles with anything on your wishlist)").setMaxLength(300));
 
 const saleprep = new SlashCommandBuilder()
     .setName("saleprep")

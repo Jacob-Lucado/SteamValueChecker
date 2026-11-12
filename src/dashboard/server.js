@@ -532,7 +532,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
         if (hit && Date.now() - hit.at < 3 * 3600_000) return hit.page;
         let page = null;
         const [data, proton, deck] = await Promise.all([loadGameData(itad, appid), protonTier(Number(appid)).catch(() => null), deckStatus(Number(appid)).catch(() => null)]);
-        if (data) data.compat = { proton, deck };
+        if (data) data.compat = { proton, deck, critic: data.facts?.critic ?? null, hours: data.facts?.hours ?? null };
         if (data) page = { path: `/game/${appid}-${slugify(data.title)}`, html: renderGamePage(data, { origin }) };
         if (page) { if (gamePages.size >= 400) gamePages.delete(gamePages.keys().next().value); gamePages.set(appid, { at: Date.now(), page }); }
         return page;
