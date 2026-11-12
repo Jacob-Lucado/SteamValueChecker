@@ -81,3 +81,12 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 .ov .card.t-sunset { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 85%, var(--bg)), var(--bg)); border: 1px solid color-mix(in srgb, var(--accent) 70%, #fff); box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent); }
 .ov .card.t-sunset .fill { background: linear-gradient(90deg, #fde68a, #fff); }
 .ov .card.t-sunset .clock, .ov .card.t-sunset .row .rank { color: #fff; }
+
+/* a slow shine across the bar, and the celebration when a goal is reached */
+.ov .fill { position: relative; overflow: hidden; }
+.ov .fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .45) 50%, transparent 70%); transform: translateX(-100%); animation: ovshine 3.2s ease-in-out infinite; }
+@keyframes ovshine { 55%, 100% { transform: translateX(100%); } }
+.ov .card.reached .label { animation: ovpulse 1.6s ease-in-out infinite; }
+@keyframes ovpulse { 50% { transform: scale(1.04); } }
+.confetti { position: fixed; z-index: 9; width: 9px; height: 14px; border-radius: 2px; background: var(--c); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .ov .fill::after, .ov .card.reached .label { animation: none; } }

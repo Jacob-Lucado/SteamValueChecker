@@ -71,3 +71,11 @@ test("overlay themes: only known themes are kept", async () => {
     assert.equal(cleanConfig("goal", { theme: "<script>" }).theme, "classic");
     assert.equal(cleanConfig("goal", {}).theme, "classic");
 });
+
+test("overlay alerts keep a known sound and a sane volume", async () => {
+    const { cleanConfig } = await import("../src/overlays.js");
+    assert.equal(cleanConfig("alerts", {}).sound, "off");
+    assert.equal(cleanConfig("alerts", { sound: "coin", volume: 400 }).volume, 100);
+    assert.equal(cleanConfig("alerts", { sound: "evil.mp3" }).sound, "off");
+    assert.equal(cleanConfig("goal", {}).celebrate, true);
+});

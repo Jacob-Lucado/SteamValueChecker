@@ -26,6 +26,35 @@
     return (d ? d + "d " : "") + two(h) + ":" + two(m) + ":" + two(s % 60);
   }
 
+  // Little synthesized sounds for alerts and celebrations, so there are no audio files to host. OBS plays browser-source audio.
+  let actx = null;
+  const SOUNDS = { chime: [[880, 0, .18], [1318, .14, .35]], pop: [[420, 0, .09], [640, .05, .12]], coin: [[988, 0, .08], [1319, .08, .3]], fanfare: [[523, 0, .14], [659, .14, .14], [784, .28, .14], [1047, .42, .5]] };
+  function blip(name, volume) {
+    const notes = SOUNDS[name]; if (!notes || !(volume > 0)) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume();
+      const t0 = actx.currentTime, gain = Math.min(1, volume / 100) * 0.25;
+      for (const [f, at, len] of notes) {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = name === "coin" ? "square" : "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0 + at); g.gain.exponentialRampToValueAtTime(gain, t0 + at + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + len);
+        o.connect(g).connect(actx.destination); o.start(t0 + at); o.stop(t0 + at + len + 0.05);
+      }
+    } catch { /* no audio in this browser; the visuals still work */ }
+  }
+  let celebrated = false;
+  function confetti(card) {
+    if (celebrated || !card.animate) return; celebrated = true;
+    const r = card.getBoundingClientRect(), colors = ["#f472b6", "#fbbf24", "#34d399", "#60a5fa", "#a78bfa", "#fb7185"];
+    for (let i = 0; i < 46; i++) {
+      const p = el("i", "confetti"); p.style.setProperty("--c", colors[i % colors.length]);
+      p.style.left = r.left + r.width * (0.1 + Math.random() * 0.8) + "px"; p.style.top = r.top + r.height * 0.3 + "px";
+      document.body.append(p);
+      const dx = (Math.random() - 0.5) * 360, up = 80 + Math.random() * 140, fall = 160 + Math.random() * 200, rot = (Math.random() - 0.5) * 900;
+      p.animate([{ transform: "translate(0,0) rotate(0)", opacity: 1 }, { transform: `translate(${dx * 0.6}px,${-up}px) rotate(${rot * 0.5}deg)`, opacity: 1, offset: 0.35 }, { transform: `translate(${dx}px,${fall}px) rotate(${rot}deg)`, opacity: 0 }], { duration: 1700 + Math.random() * 900, easing: "cubic-bezier(.2,.7,.4,1)", delay: Math.random() * 250 }).onfinish = () => p.remove();
+    }
+  }
+
   /** One card for one overlay. Used on its own and, for a scene, once per overlay in the rotation. */
   function build(kind, c, d, timers) {
     const card = el("div", "card" + (c.showBorder ? " bordered" : "") + (c.shadow ? " shadow" : ""));
@@ -39,6 +68,7 @@
       card.append(head, track);
       if (c.showPercent) card.append(el("div", "pct", d.pct + "%"));
       requestAnimationFrame(() => { fill.style.width = d.pct + "%"; });
+      if (d.current >= d.target) { card.classList.add("reached"); if (c.celebrate !== false) setTimeout(() => { if (card.isConnected) { confetti(card); blip("fanfare", Number(c.volume ?? 0)); } }, 900); }
     } else if (kind === "stats") {
       if (c.label) { const head = el("div", "head"); head.append(el("div", "label", c.label)); card.append(head); }
       const tiles = el("div", "tiles");
@@ -173,6 +203,7 @@
     const body = el("div", "abody");
     body.append(el("div", "label", String(tmpl || "").replace(/\{name\}/g, e.name || "").replace(/\{count\}/g, e.count == null ? "" : n(e.count)).replace(/\{n\}/g, String(e.by || 1)).replace(/\s+/g, " ").trim()));
     if (e.by > 1) body.append(el("div", "nums", "+" + e.by + (e.type === "boost" ? " new boosts" : " new members")));
+    blip(c.sound, Number(c.volume ?? 60));
     const icon = el("div", "aicon", ICON[e.type] || "✨");
     if (e.avatar && /^https:\/\/cdn\.discordapp\.com\//.test(e.avatar)) { const im = el("img"); im.alt = ""; im.referrerPolicy = "no-referrer"; im.src = e.avatar; im.onerror = () => im.remove(); icon.textContent = ""; icon.append(im); }
     card.append(icon, body);
