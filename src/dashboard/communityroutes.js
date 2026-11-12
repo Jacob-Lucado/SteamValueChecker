@@ -80,6 +80,7 @@ export function createCommunityRoutes(ctx) {
         },
         "POST /api/community/pings": async (req, body) => comm(() => cd.pings(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/guides": async (req, body) => { const s = session(req); return comm(() => cd.guides(managerGuild(s, String(body.guild_id)).id, body, s.userId ?? s.id ?? null)); },
+        "POST /api/community/problems/clear": async (req, body) => comm(() => cd.dismissProblem(managerGuild(session(req), String(body.guild_id)).id, body.key)),
         "POST /api/community/autorole": async (req, body) => comm(() => cd.autorole(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/xp": async (req, body) => comm(() => cd.xp(managerGuild(session(req), String(body.guild_id)).id, body)),
         "POST /api/community/levelrole": async (req, body) => comm(() => cd.levelrole(managerGuild(session(req), String(body.guild_id)).id, body)),

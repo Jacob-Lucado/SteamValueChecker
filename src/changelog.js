@@ -5,7 +5,8 @@ export const CHANGELOG = [
         "**Escalation:** after a set number of active warnings the bot can time the person out, kick them or ban them on its own.",
         "**Raid guard:** if a pile of accounts join in a few seconds, the bot times out or kicks each newcomer for ten minutes and logs it. You can also act on brand-new accounts.",
         "**More mod tools:** /mod note (a private staff note that never reaches the member), /mod slowmode, /mod lock and /mod unlock. They are in the dashboard's action list too, and every one is logged as a case.",
-        "**Auto memes:** the meme feed now only uses real meme subreddits and skips photos, questions and showcase posts."
+        "**Auto memes:** the meme feed now only uses real meme subreddits and skips photos, questions and showcase posts.",
+        "**Needs your attention:** when the bot can't do something in your server (give a role, post the welcome message, write to the mod log) because of a missing permission or a role set too high, the Community page now says so and why, instead of staying quiet."
     ] },
     { version: "2026.11.57", date: "2026-11-11", title: "A tidier menu", items: [
         "**Fewer sections:** the top menu went from 13 sections to 9. Free games, Bundles, Playtests and Codes & promos now sit under Deals with the rest of the money-saving pages.",

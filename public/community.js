@@ -43,7 +43,12 @@
           h("p", { class: "muted", text: d.verify.steamVerified ? "Your Steam account is verified. Press the button to get the role in this server." : "Prove your Steam account to get the Steam Verified role. You sign in on Steam's own page." }),
           h("div", { class: "row" }, vBtn, h("a", { class: "btn gray", href: "/auth/linked", text: "Connect Linked Roles" }))) : null;
         const boards = h("div", { class: "grid two" }, board("Top inviters", d.inviteTop, r => `${r.active} here · ${r.total} joined`), h("div", { class: "panel" }, h("h3", { text: "Levels and XP" }), h("p", { class: "muted", text: `You are level ${me.level}${me.rank ? `, #${me.rank} in the server` : ""}.` }), h("a", { class: "btn blue", href: "#/xp/" + GID(), text: "Open the Server XP page" })));
-        holder.replaceChildren(...[picker, intent, standing, verifyPanel, boards, rewards, d.manager && d.growth ? growthPanel(d.growth) : null, d.manager ? manager(d) : null].filter(Boolean));
+        const problems = d.manager && d.problems && d.problems.length ? h("div", { class: "notice warn" },
+          h("b", { text: "Needs your attention" }),
+          h("p", { class: "muted small", text: "The bot tried to do these and Discord wouldn't let it. Fix the cause, then dismiss the note." }),
+          h("ul", { class: "plain" }, d.problems.map(p => { const x = h("button", { class: "btn gray small", type: "button", text: "Dismiss" }); x.addEventListener("click", () => busy(x, async () => { await post("/api/community/problems/clear", { key: p.key }); load(); }));
+            return h("li", {}, h("div", {}, h("b", { text: "Couldn't " + p.what }), h("span", { class: "muted small", text: `  ·  ${p.count} time${p.count === 1 ? "" : "s"}, last ${new Date(p.at).toLocaleString()}` })), h("div", { class: "muted small", text: p.why }), x); }))) : null;
+        holder.replaceChildren(...[picker, problems, intent, standing, verifyPanel, boards, rewards, d.manager && d.growth ? growthPanel(d.growth) : null, d.manager ? manager(d) : null].filter(Boolean));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     // Joins and leaves for the last 30 days, people only. Only members the bot saw join are counted, so it fills in from when the bot arrived.

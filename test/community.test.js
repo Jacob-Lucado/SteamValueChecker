@@ -1227,3 +1227,18 @@ test("dashboard: playtest sources can be left out per server and per member", as
     const saved = await t.request("/api/settings", { method: "POST", body: { playtest_skip: ["itch", "nope"] } });
     assert.equal(saved.status, 200, saved.text); assert.deepEqual(saved.data.settings.playtest_skip, ["itch"]);
 });
+
+test("dashboard community page lists what the bot couldn't do, to managers only, and a manager can dismiss it", async () => {
+    const { reportProblem } = await import("../src/guildproblems.js");
+    const t = await dashSetup();
+    reportProblem(t.db, "g1", "autorole", "give new members the auto role", { status: 403 }, 5_000_000);
+    reportProblem(t.db, "g1", "welcome", "post the welcome message", { status: 404 }, 5_000_000);
+    const mine = await t.request("/api/community?guild=g1");
+    assert.deepEqual(mine.data.problems.map(p => p.key).sort(), ["autorole", "welcome"]);
+    assert.match(mine.data.problems[0].why, /permission|exists/);
+    assert.equal((await t.request("/api/community?guild=g2")).data.problems, undefined);
+    assert.equal((await t.request("/api/community/problems/clear", { method: "POST", body: { guild_id: "g2", key: "autorole" } })).status, 403);
+    assert.equal((await t.request("/api/community/problems/clear", { method: "POST", body: { guild_id: "g1", key: "welcome" } })).data.left, 1);
+    assert.deepEqual((await t.request("/api/community?guild=g1")).data.problems.map(p => p.key), ["autorole"]);
+    await t.close();
+});

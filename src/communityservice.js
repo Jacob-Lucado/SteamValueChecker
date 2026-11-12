@@ -3,6 +3,7 @@
 import { welcomeDmPayload, messageXp, XP_COOLDOWN_MS, VOICE_XP, rolesForLevel, welcomePayload, findUsedInvite, levelFromXp, xpForNext, bar } from "./community.js";
 
 import { isHidden } from "./hidden.js";
+import { noteFailure } from "./guildproblems.js";
 import { xpBoost } from "./supporters.js";
 
 const avatarOf = u => (u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null);
@@ -14,7 +15,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
 
     // ---------- XP ----------
     async function syncLevelRoles(guildId, userId, level) {
-        for (const r of rolesForLevel(db.listLevelRoles(guildId), level)) await api.addRole(guildId, userId, r.role_id).catch(() => {});
+        for (const r of rolesForLevel(db.listLevelRoles(guildId), level)) await api.addRole(guildId, userId, r.role_id).catch(noteFailure(db, guildId, "levelrole", "give a level reward role"));
     }
 
     /** XP for one chat message. Returns { leveled, level } or null when it did not count (off, too soon). */
@@ -67,7 +68,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
 
     async function checkRewards(guildId, inviterId) {
         const stats = db.inviteStats(guildId, inviterId);
-        for (const r of db.listRewards(guildId)) if (stats.active >= r.count) await api.addRole(guildId, inviterId, r.role_id).catch(() => {});
+        for (const r of db.listRewards(guildId)) if (stats.active >= r.count) await api.addRole(guildId, inviterId, r.role_id).catch(noteFailure(db, guildId, "invitereward", "give an invite reward role"));
         return stats;
     }
 
@@ -83,8 +84,8 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
         const inviterId = via?.inviterId && via.inviterId !== member.id ? via.inviterId : null;
         db.recordJoin(guildId, member.id, inviterId, via?.code ?? null);
         bump(guildId, "joins_tracked"); if (inviterId && !rejoin) bump(guildId, "referrals");
-        if (c.autorole_id) await api.addRole(guildId, member.id, c.autorole_id).catch(() => {});
-        if (c.verified_role_id && db.getSteamLink(member.id)?.verified) await api.addRole(guildId, member.id, c.verified_role_id).then(() => bump(guildId, "steam_verified_roles")).catch(() => {});
+        if (c.autorole_id) await api.addRole(guildId, member.id, c.autorole_id).catch(noteFailure(db, guildId, "autorole", "give new members the auto role"));
+        if (c.verified_role_id && db.getSteamLink(member.id)?.verified) await api.addRole(guildId, member.id, c.verified_role_id).then(() => bump(guildId, "steam_verified_roles")).catch(noteFailure(db, guildId, "verifiedrole", "give the Steam Verified role"));
         if (inviterId && !rejoin) {
             if (c.referral_xp > 0) { const r = db.addXp(guildId, inviterId, c.referral_xp); if (r.after > r.before) await syncLevelRoles(guildId, inviterId, r.after); }
             await checkRewards(guildId, inviterId);
@@ -95,10 +96,10 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
             if (c.welcome_card !== 0 && renderCard) { try { png = await renderCard({ name: member.username, server: guildName, count, avatarUrl: avatarOf(member) }); } catch { /* the plain welcome still goes out */ } }
             const payload = welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId, card: Boolean(png) });
             if (png) payload.files = [{ name: "welcome.png", data: png, description: `Welcome ${member.username}, member number ${count}` }];
-            await api.sendMessage(c.welcome_channel, payload).catch(() => api.sendMessage(c.welcome_channel, welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId })).catch(() => {}));
+            await api.sendMessage(c.welcome_channel, payload).catch(() => api.sendMessage(c.welcome_channel, welcomePayload({ settings: c, userId: member.id, username: member.username, avatarUrl: avatarOf(member), server: guildName, count, inviterId })).catch(noteFailure(db, guildId, "welcome", "post the welcome message")));
         }
         if (c.welcome_dm && dm && !rejoin) { bump(guildId, "welcome_dms"); await dm(member.id, welcomeDmPayload({ server: guildName, dashboardUrl })).catch(() => bump(guildId, "welcome_dm_failed")); }
-        if (c.log_channel) await api.sendMessage(c.log_channel, { content: `📥 <@${member.id}> joined (member #${count}).${via ? ` Invite \`${via.code}\`${inviterId ? ` from <@${inviterId}>` : ""}.` : " The invite could not be told."}`, allowed_mentions: { parse: [] } }).catch(() => {});
+        if (c.log_channel) await api.sendMessage(c.log_channel, { content: `📥 <@${member.id}> joined (member #${count}).${via ? ` Invite \`${via.code}\`${inviterId ? ` from <@${inviterId}>` : ""}.` : " The invite could not be told."}`, allowed_mentions: { parse: [] } }).catch(noteFailure(db, guildId, "log", "post in the member log channel"));
         return { inviterId, code: via?.code ?? null, rejoin };
     }
 

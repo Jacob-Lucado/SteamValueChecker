@@ -11,6 +11,7 @@ import { refreshLeaderboard, LB_MIN_HOURS, LB_MAX_HOURS } from "../leaderboard.j
 import { communitySetup, rulesPayload, TEMPLATE, isFreshGuild, parseEmojis, importEmojis, EMOJI_MAX_BYTES, WELCOME_FIELDS, DEFAULT_WELCOME } from "../community.js";
 import { createMemes, postMeme, MEME_HOURS } from "../memes.js";
 import { DiscordApiError } from "./discord.js";
+import { listProblems, clearProblems } from "../guildproblems.js";
 import { createEmojiGg, PACK_KEY_RE } from "../emojisource.js";
 
 export class CommunityError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -53,6 +54,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             out.settings = { ...safe, welcome_msg: c.welcome_msg ?? "", defaultWelcome: DEFAULT_WELCOME, fields: WELCOME_FIELDS };
             out.selfRoles = db.listSelfRoles(gid);
             out.built = Boolean(c.setup_at);
+            out.problems = listProblems(db, gid);
             const tk = db.getTicketSettings(gid);
             out.support = { ticket_channel: tk.channel_id, staff_role_id: tk.staff_role_id };
             out.announcements = db.listAnnouncements(gid, 8);
@@ -375,5 +377,6 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
         else db.setCommunity(gid, { [def.column]: value, ...(def.reset ?? {}) });
         return { key, value };
     }
-    return { channelMap, setChannel, overview, setup, welcome, guides, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
+    const dismissProblem = (gid, key) => ({ left: clearProblems(db, gid, key ? String(key).slice(0, 40) : null) });
+    return { dismissProblem, channelMap, setChannel, overview, setup, welcome, guides, autorole, verify, verifyRole, pings, support, places, aiModels, rules, announce, leaderboard, memesSettings, xp, levelrole, referral, emojiList, emojiImport, emojiUpload, emojiPacks, emojiPack, emojiPackImport, inviteLink, xpPage };
 }

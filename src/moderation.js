@@ -3,6 +3,7 @@
 // becomes a numbered case, and every case is posted to the server's mod log.
 
 import { modNoticeEmbed } from "./render.js";
+import { noteFailure } from "./guildproblems.js";
 
 export class ModError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
@@ -98,7 +99,7 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         const c = db.addCase(guildId, { userId, modId, action, reason: reason || null, durationS: durationS || null });
         db.bumpUsage(`mod_${action}`);
         const ch = logChannel(guildId);
-        if (ch) await api.sendMessage(ch, { embeds: [caseEmbed(c, guild)], allowed_mentions: { parse: [] } }).catch(() => {});
+        if (ch) await api.sendMessage(ch, { embeds: [caseEmbed(c, guild)], allowed_mentions: { parse: [] } }).catch(noteFailure(db, guildId, "modlog", "post in the mod log channel"));
         return c;
     }
     const tell = async (userId, guild, verb, reason, extra = "") => {

@@ -2,6 +2,7 @@
 // Memes come from meme-api.com, which serves popular posts from a handful of subreddits. Nothing marked NSFW or spoiler is ever used,
 // pictures must sit on Reddit's or Imgur's own image hosts, and a server never gets the same post twice.
 import { UserError } from "./errors.js";
+import { reportProblem } from "./guildproblems.js";
 
 // Only subreddits that are actually for memes. General ones (r/gaming, r/pcmasterrace, r/Steam) are mostly builds, screenshots and news.
 export const MEME_SUBS = ["memes", "dankmemes", "wholesomememes", "gamingmemes", "ProgrammerHumor", "me_irl"];
@@ -86,6 +87,7 @@ export async function tickMemes({ db, api, memes, now = () => Date.now(), has = 
             // a source hiccup is retried in ten minutes; anything else waits a full interval so a broken channel isn't hit every tick
             db.setCommunity(c.guild_id, { meme_at: /fresh meme/.test(e.message) ? now() - every + 10 * 60_000 : now() });
             log(`memes ${c.guild_id}: ${e.message}`);
+            if (!/fresh meme/.test(e.message)) reportProblem(db, c.guild_id, "memes", "post the auto meme", e);
         }
         await sleep(1500);
     }

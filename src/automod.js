@@ -2,6 +2,8 @@
 // Everything is off until a server turns it on (dashboard Moderation page or /mod automod). Staff, exempt roles and exempt channels are never touched.
 // Settings live in one small JSON value per server, so there is no table to migrate.
 
+import { reportProblem } from "./guildproblems.js";
+
 export const RULES = {
     spam: "Message spam",
     mentions: "Mass mentions",
@@ -117,13 +119,13 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
             if (rule === "spam") recent.set(k, []); // one action per burst, not one per message
             const why = `${RULES[rule]} in <#${channelId}>`;
             let res = null;
-            if (cfg.action.timeoutMinutes) res = await mod.auto({ guildId, userId: authorId, action: "timeout", reason: why, durationS: cfg.action.timeoutMinutes * 60 }).catch(e => { log(`automod timeout: ${e.message}`); return null; });
-            else if (cfg.action.warn) res = await mod.auto({ guildId, userId: authorId, action: "warn", reason: why }).catch(e => { log(`automod warn: ${e.message}`); return null; });
+            if (cfg.action.timeoutMinutes) res = await mod.auto({ guildId, userId: authorId, action: "timeout", reason: why, durationS: cfg.action.timeoutMinutes * 60 }).catch(e => { log(`automod timeout: ${e.message}`); reportProblem(db, guildId, "automod", "time someone out for breaking an auto-mod rule", e); return null; });
+            else if (cfg.action.warn) res = await mod.auto({ guildId, userId: authorId, action: "warn", reason: why }).catch(e => { log(`automod warn: ${e.message}`); reportProblem(db, guildId, "automod", "warn someone for breaking an auto-mod rule", e); return null; });
             else res = await mod.auto({ guildId, userId: authorId, action: "automod", reason: why }).catch(() => null);
             db.bumpUsage(`automod_${rule}`);
             if (res && cfg.escalate.warns && res.warnings >= cfg.escalate.warns && cfg.action.warn) {
                 const e = cfg.escalate;
-                await mod.auto({ guildId, userId: authorId, action: e.action, reason: `${res.warnings} warnings`, durationS: e.action === "timeout" ? e.minutes * 60 : null, dmVerb: true }).catch(err => log(`automod escalate: ${err.message}`));
+                await mod.auto({ guildId, userId: authorId, action: e.action, reason: `${res.warnings} warnings`, durationS: e.action === "timeout" ? e.minutes * 60 : null, dmVerb: true }).catch(err => { log(`automod escalate: ${err.message}`); reportProblem(db, guildId, "automod-escalate", `${cfg.escalate.action} someone after repeated warnings`, err); });
             }
             return rule;
         } catch (e) { log(`automod: ${e.message}`); return null; }
@@ -142,7 +144,7 @@ export function createAutomod({ db, api, mod, botId = () => null, now = () => Da
             if (!raiding && !young) return null;
             const why = raiding ? `Join flood: ${st.times.length} joins in ${R.seconds}s` : `Account younger than ${R.minAccountDays} day${R.minAccountDays === 1 ? "" : "s"}`;
             await mod.auto({ guildId, userId, action: R.action, reason: why, durationS: R.action === "timeout" ? R.minutes * 60 : null, dmVerb: R.action === "kick", caseAs: raiding && !st.alerted ? "raid" : null })
-                .catch(e => log(`raid guard: ${e.message}`));
+                .catch(e => { log(`raid guard: ${e.message}`); reportProblem(db, guildId, "raid", `${R.action} a new member (raid guard)`, e); });
             if (raiding) st.alerted = true;
             db.bumpUsage(raiding ? "automod_raid" : "automod_young");
             return raiding ? "raid" : "young";
