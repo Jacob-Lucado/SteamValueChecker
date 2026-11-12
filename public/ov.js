@@ -78,6 +78,7 @@
     const { kind, config: c, data: d } = state;
     if (kind === "alerts") return;
     stopTimers();
+    root.classList.toggle("scene", kind === "scene");
     if (kind === "scene") return drawScene(c, d.children || []);
     root.replaceChildren(build(kind, c, d, timers));
   }

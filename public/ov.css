@@ -38,3 +38,7 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 .ov .aicon img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .ov .aicon { overflow: hidden; font-size: 34px; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 28%, transparent); }
 .ov .abody .label { font-size: 22px; }
+
+/* in a scene the old and new card sit on top of each other, so nothing shifts while one fades into the next */
+.ov.scene { display: grid; justify-items: start; align-items: start; }
+.ov.scene .card { grid-area: 1 / 1; }
