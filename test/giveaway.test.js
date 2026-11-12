@@ -607,3 +607,40 @@ test("a winner with closed DMs is pinged where they entered, and the host hears 
     await t.svc.tick();
     assert.equal(t.db.listKeys(id)[0].notify_state, "dm");
 });
+
+test("a winner can add one proof screenshot within 30 minutes of confirming", async () => {
+    const t = rig();
+    const id = await won(t);
+    const k = t.db.listKeys(id)[0];
+    await t.svc.delivered(k.id, "dm");
+    assert.equal(t.svc.awaitingProof(k.winner_id), false); // nothing to add before confirming
+    const r = await t.svc.confirm(k.id, k.winner_id);
+    assert.equal(r.proofMinutes, 30);
+    assert.equal(t.svc.awaitingProof(k.winner_id), true);
+    const img = { buffer: Buffer.from("png-bytes"), type: "image/png", name: "x.png" };
+    await assert.rejects(() => t.svc.addProof(k.winner_id, { ...img, type: "application/zip" }), /PNG, JPG/);
+    await assert.rejects(() => t.svc.addProof(k.winner_id, { ...img, buffer: Buffer.alloc(9 * 1024 * 1024) }), /too big/);
+    await assert.rejects(() => t.svc.addProof("stranger", img), /not waiting/);
+    const before = t.posts.length;
+    const p = await t.svc.addProof(k.winner_id, img);
+    assert.match(p.link, /^https:\/\/discord\.com\/channels\/G\/vouch-chan\/\d+$/);
+    const post = t.posts[before];
+    assert.equal(post.channelId, "vouch-chan");
+    assert.equal(post.payload.files[0].name, "proof.png");
+    assert.equal(post.payload.embeds[0].image.url, "attachment://proof.png");
+    assert.deepEqual(post.payload.allowedMentions, { parse: [] });
+    assert.ok(t.dms.some(d => JSON.stringify(d.payload).includes(p.link))); // the host is told
+    assert.equal(t.svc.awaitingProof(k.winner_id), false); // one per prize
+    await assert.rejects(() => t.svc.addProof(k.winner_id, img), /not waiting/);
+});
+
+test("the proof window closes after 30 minutes", async () => {
+    const t = rig();
+    const id = await won(t);
+    const k = t.db.listKeys(id)[0];
+    await t.svc.delivered(k.id, "dm");
+    await t.svc.confirm(k.id, k.winner_id);
+    t.advance(31 * 60_000);
+    assert.equal(t.svc.awaitingProof(k.winner_id), false);
+    await assert.rejects(() => t.svc.addProof(k.winner_id, { buffer: Buffer.from("x"), type: "image/png", name: "a.png" }), /not waiting/);
+});

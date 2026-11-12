@@ -9,7 +9,7 @@ import { noticePreset } from "./noticepresets.js";
 import { asksCreator, creatorEmbed } from "./aicreator.js";
 import { missingAiPerms, permsNotice, shouldTell } from "./aiperms.js";
 import v8 from "node:v8";
-import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, Routes, version as DJS_VERSION } from "discord.js";
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType, Events, GatewayIntentBits, MessageFlags, Partials, PermissionFlagsBits, Routes, version as DJS_VERSION } from "discord.js";
 import { loadConfig } from "./config.js";
 import { chatVoteFor, pollEmbed, pollButtons } from "./gamenight.js";
 import { createItad, ItadError } from "./itad.js";
@@ -202,7 +202,7 @@ const CONTENT_INTENT = Boolean(APP_FLAGS & ((1 << 18) | (1 << 19)));
 console.log(CONTENT_INTENT ? "[ai] Message Content intent is on: \"Hey AI\" and mentions work." : "[ai] Message Content intent is off: only mentions of the bot work. Turn it on in the Developer Portal (Bot > Privileged Gateway Intents) so \"Hey AI\" works too.");
 console.log(cfg.anthropicKey ? "[ai] The bot has its own AI key." : "[ai] No bot AI key: the bot answers common questions itself, and servers can bring their own key.");
 console.log(MEMBERS_INTENT ? "[community] Server Members intent is on: welcome messages and invite tracking are active." : "[community] Server Members intent is off: turn it on in the Developer Portal (Bot > Privileged Gateway Intents) for welcome messages and invite tracking.");
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMessageReactions, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : []), ...(CONTENT_INTENT ? [GatewayIntentBits.MessageContent] : [])] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.DirectMessages, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMessageReactions, ...(MEMBERS_INTENT ? [GatewayIntentBits.GuildMembers] : []), ...(CONTENT_INTENT ? [GatewayIntentBits.MessageContent] : [])], partials: [Partials.Channel] });
 client.setMaxListeners(30); // each feature adds its own startup listener, and there are now more than the default ten
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
@@ -301,6 +301,17 @@ const voiceMap = guildId => {
     }
     return m;
 };
+
+/** Downloads a Discord attachment, but only from Discord's own CDN and only up to the size limit. */
+async function fetchProofImage(a) {
+    const u = new URL(a.url);
+    if (!["cdn.discordapp.com", "media.discordapp.net"].includes(u.hostname)) throw new UserError("Send the screenshot as an image attachment.");
+    const type = String(a.contentType ?? "").split(";")[0];
+    if (a.size > 8 * 1024 * 1024) throw new UserError("That image is too big. Keep it under 8 MB.");
+    const res = await fetch(u, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new UserError("I couldn't download that image. Try sending it again.");
+    return { buffer: Buffer.from(await res.arrayBuffer()), type, name: a.name };
+}
 
 // Giveaways keep prize keys, so they only run when KEY_ENCRYPTION_SECRET is set.
 const gwDiscord = {
@@ -674,6 +685,19 @@ async function chatVote(m) {
 }
 
 // ---- community: XP, welcome, invites ----
+// A winner replies to the bot's DM with a screenshot after confirming a prize.
+client.on(Events.MessageCreate, async m => {
+    try {
+        if (m.guildId || m.author.bot || !giveaways || !giveaways.awaitingProof(m.author.id)) return;
+        const a = m.attachments?.first();
+        if (!a) return void await m.reply({ content: "Send the screenshot as an image attachment and I'll post it. 📸", allowedMentions: { repliedUser: false } }).catch(() => {});
+        let r;
+        try { r = await giveaways.addProof(m.author.id, await fetchProofImage(a)); } catch (e) { r = e; }
+        const text = r instanceof Error ? (r instanceof UserError ? r.message : "I couldn't add that screenshot. Try again in a moment.") : `Posted ✅ ${r.link}`;
+        await m.reply({ content: text, allowedMentions: { repliedUser: false } }).catch(() => {});
+    } catch (e) { console.error(`[proof] ${e?.message}`); }
+});
+
 client.on(Events.MessageCreate, async m => {
     try {
         if (!m.guildId || m.author.bot || m.webhookId || m.system) return;

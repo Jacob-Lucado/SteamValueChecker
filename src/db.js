@@ -293,6 +293,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "share", "INTEGER NOT NULL DEFAULT 0");
     db.exec("CREATE INDEX IF NOT EXISTS users_guild ON users(guild_id, share)");
     addColumn("giveaways", "gallery", "TEXT");
+    addColumn("giveaway_keys", "proof_until", "INTEGER");
+    addColumn("giveaway_keys", "proof_msg", "TEXT");
     addColumn("giveaway_keys", "kind", "TEXT NOT NULL DEFAULT 'key'");
     addColumn("items", "snooze_until", "INTEGER");
     addColumn("users", "muted", "TEXT NOT NULL DEFAULT ''");

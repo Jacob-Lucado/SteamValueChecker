@@ -8,11 +8,11 @@ import { steamArt } from "./art.js";
 import { stepsOf } from "./gwpartner.js";
 import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
-import { reportProblem } from "./guildproblems.js";
+import { reportProblem as reportGuildProblem } from "./guildproblems.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
 import { roleIds, roleList, hasAnyRole, hasAllRoles } from "./gwroles.js";
-import { giveawayPayload, winnersPayload, confirmPayload, vouchPayload, leftoverMessage, hostNote, winnerNudge, leftText } from "./gwrender.js";
+import { giveawayPayload, winnersPayload, confirmPayload, vouchPayload, proofPayload, leftoverMessage, hostNote, winnerNudge, leftText } from "./gwrender.js";
 
 const CONFIRM_FIRST_MS = 10 * 60_000;
 const CONFIRM_REMINDER_MS = 24 * 3600_000;
@@ -83,6 +83,9 @@ function pickOne(pool, rand) {
     return pool.pop();
 }
 
+const PROOF_WINDOW_MS = 30 * 60_000, PROOF_MAX_BYTES = 8 * 1024 * 1024;
+const PROOF_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+
 export function createGiveawayService({ db, tickets = null, vault, discord, itad = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
     const must = id => {
         const g = db.getGiveaway(Number(id));
@@ -97,7 +100,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         if (!g) return;
         const keys = db.listKeys(id);
         if (g.message_id) {
-            try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(id), g.status)); } catch (e) { log(`giveaway edit failed: ${e?.name ?? "error"}`); reportProblem(db, g.guild_id, "giveaway", "update a giveaway post", e); }
+            try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(id), g.status)); } catch (e) { log(`giveaway edit failed: ${e?.name ?? "error"}`); reportGuildProblem(db, g.guild_id, "giveaway", "update a giveaway post", e); }
         }
         // Copies in other servers and DMs show the same live entry count as the home post.
         if (g.status === "active") {
@@ -106,7 +109,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             }
         }
         if (g.announce_id) {
-            try { const wp = winnersPayload(g, keys); await discord.edit(g.channel_id, g.announce_id, { ...wp, content: wp.content ?? "" }); } catch (e) { log(`winners edit failed: ${e?.name ?? "error"}`); reportProblem(db, g.guild_id, "giveaway", "update the winners post", e); }
+            try { const wp = winnersPayload(g, keys); await discord.edit(g.channel_id, g.announce_id, { ...wp, content: wp.content ?? "" }); } catch (e) { log(`winners edit failed: ${e?.name ?? "error"}`); reportGuildProblem(db, g.guild_id, "giveaway", "update the winners post", e); }
         }
     }
 
@@ -364,12 +367,12 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             won.push({ keyId: k.id, label: k.label, userId: winner });
         }
         const keys = db.listKeys(g.id);
-        if (g.message_id) { try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(g.id), "ended")); } catch (e) { reportProblem(db, g.guild_id, "giveaway", "mark a giveaway post as ended", e); } }
+        if (g.message_id) { try { await discord.edit(g.channel_id, g.message_id, giveawayPayload(g, keys, entryCount(g.id), "ended")); } catch (e) { reportGuildProblem(db, g.guild_id, "giveaway", "mark a giveaway post as ended", e); } }
         if (won.length) {
             try {
                 const m = await discord.post(g.channel_id, winnersPayload(g, keys));
                 db.setAnnounceMessage(g.id, m.id);
-            } catch (e) { log(`winners post failed: ${e?.name ?? "error"}`); reportProblem(db, g.guild_id, "giveaway-winners", "announce the giveaway winners", e); }
+            } catch (e) { log(`winners post failed: ${e?.name ?? "error"}`); reportGuildProblem(db, g.guild_id, "giveaway-winners", "announce the giveaway winners", e); }
         } else {
             await announceNew(g, `**${g.title}** ended with no valid entries.`);
         }
@@ -465,11 +468,33 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const g = must(k.giveaway_id);
         db.markConfirmed(k.id);
         await refresh(g.id);
-        const channelId = g.vouch_channel_id || db.getGiveawaySettings(g.guild_id).vouch_channel_id || await discord.findChannelByName(g.guild_id, "vouches");
+        const channelId = await vouchChannel(g);
+        db.openProof(k.id, now() + PROOF_WINDOW_MS);
         let vouched = false;
         if (channelId) { try { await discord.post(channelId, vouchPayload(g, k, userId)); vouched = true; } catch { /* no access to the channel */ } }
         await dmHost(g, hostNote(g, `<@${userId}> confirmed that **${k.label}** redeemed successfully.${vouched ? "" : "\nI could not post it in a vouches channel. Set one with `/server giveaway setup`."}`));
-        return { vouched };
+        return { vouched, proofMinutes: PROOF_WINDOW_MS / 60_000 };
+    }
+
+    const vouchChannel = async g => g.vouch_channel_id || db.getGiveawaySettings(g.guild_id).vouch_channel_id || await discord.findChannelByName(g.guild_id, "vouches");
+
+    /** Does this person have a recent confirmation that is still waiting for an optional screenshot? */
+    const awaitingProof = userId => Boolean(db.keyAwaitingProof(userId, now()));
+
+    /** A winner's screenshot after confirming. One per prize, only inside the short window, only real image files. */
+    async function addProof(userId, { buffer, type, name }) {
+        const k = db.keyAwaitingProof(userId, now());
+        if (!k) throw new UserError("I'm not waiting for a screenshot from you. You can add one for 30 minutes after you confirm a prize.");
+        const ext = PROOF_TYPES[String(type).toLowerCase()];
+        if (!ext) throw new UserError("Send the screenshot as a PNG, JPG, WebP or GIF image.");
+        if (!buffer?.length || buffer.length > PROOF_MAX_BYTES) throw new UserError("That image is too big. Keep it under 8 MB.");
+        const g = must(k.giveaway_id), channelId = await vouchChannel(g);
+        if (!channelId) throw new UserError("This server has no vouches channel to post it in, so I couldn't add it.");
+        const m = await discord.post(channelId, proofPayload(g, k, userId, `proof.${ext}`, buffer)).catch(() => { throw new UserError("I couldn't post in the vouches channel. Ask the host to check my permissions there."); });
+        const link = `https://discord.com/channels/${g.guild_id}/${channelId}/${m.id}`;
+        db.setProof(k.id, link);
+        await dmHost(g, hostNote(g, `<@${userId}> added a screenshot for **${k.label}**: ${link}`));
+        return { link };
     }
 
     /** The winner says the key did not work. The host is told and can send a replacement. */
@@ -596,5 +621,5 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         return done;
     }
 
-    return { spread, spreadStatus, create, launch, updateRules, enter, end, reroll, cancel, prepareClaim, delivered, confirm, reportProblem, replaceKey, remind, tick, refresh };
+    return { spread, spreadStatus, create, launch, updateRules, enter, end, reroll, cancel, prepareClaim, delivered, confirm, awaitingProof, addProof, reportProblem, replaceKey, remind, tick, refresh };
 }

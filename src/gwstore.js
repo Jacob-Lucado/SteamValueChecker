@@ -196,6 +196,10 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     const markDelivered = (keyId, via, confirmAt) => run(
         "UPDATE giveaway_keys SET status = 'delivered', delivered_at = COALESCE(delivered_at, ?), delivered_via = ?, confirm_at = COALESCE(confirm_at, ?) WHERE id = ? AND status IN ('assigned','delivered','problem')",
         now(), via, confirmAt, keyId);
+    /** Gives a winner a short window after confirming to add a screenshot. */
+    const openProof = (keyId, until) => run("UPDATE giveaway_keys SET proof_until = ? WHERE id = ?", until, keyId);
+    const keyAwaitingProof = (userId, t) => clean(get("SELECT * FROM giveaway_keys WHERE winner_id = ? AND status = 'confirmed' AND proof_msg IS NULL AND proof_until > ? ORDER BY proof_until DESC LIMIT 1", userId, t)) ?? null;
+    const setProof = (keyId, link) => run("UPDATE giveaway_keys SET proof_msg = ?, proof_until = NULL WHERE id = ?", link, keyId).changes;
     const markConfirmed = keyId => run("UPDATE giveaway_keys SET status = 'confirmed', confirmed_at = ?, key_enc = NULL, confirm_at = NULL WHERE id = ?", now(), keyId);
     const markProblem = keyId => run("UPDATE giveaway_keys SET status = 'problem', confirm_at = NULL WHERE id = ?", keyId);
     const replaceKeyEnc = (keyId, enc, deadline) => run(
@@ -285,7 +289,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         listTemplates, saveTemplate, removeTemplate, prizesFor,
         setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, entryChannel, setNotifyState, removeEntry, listEntries, countEntries,
-        listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
+        openProof, keyAwaitingProof, setProof, listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,
         giveawayTotals, getGiveawaySettings, setGiveawaySettings, forgetGiveawayUser, hasGiveawayData
     };

@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.62", date: "2026-11-12", title: "Proof screenshots for giveaway winners", items: [
+        "**Add proof:** after a winner confirms their prize they can reply to the bot's DM with a screenshot within 30 minutes. It is posted in the vouches channel and the host is told.",
+        "**Fixed:** giveaway problems (like not being able to post the winners) were not being reported to the server's problem list."
+    ] },
     { version: "2026.11.61", date: "2026-11-12", title: "Sharper prices, Steam Family and server switches", items: [
         "**Exact matches:** paste a Steam store link in /games value instead of a title and it is always the right game. When a typed title is matched wrong, /games fixmatch (or the Fix button on the dashboard) teaches the bot once and it remembers.",
         "**Bigger wishlists:** lists now hold 500 games and a Steam import reads 400.",
