@@ -1527,10 +1527,11 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                     if (options.length < 2) throw new HttpError(400, "Give at least two options.");
                     const channels = await rest.listChannels(mine.guild_id).catch(() => { throw new HttpError(400, "The bot can't see that server right now."); });
                     if (!channels.some(c => String(c.id) === String(body.channel_id))) throw new HttpError(400, "Pick a channel to post the poll in.");
-                    const state = { question, options: options.map(title => ({ title })), votes: {}, until: now() + minutes * 60_000 };
+                    const state = { question, options: options.map(title => ({ title })), votes: {}, chat: true, until: now() + minutes * 60_000 };
                     let sent; try { sent = await rest.sendMessage(String(body.channel_id), { embeds: [pollEmbed(state, now())], components: pollButtons(state.options), allowed_mentions: { parse: [] } }); } catch { throw new HttpError(400, "I couldn't post there. Check that the bot can send messages in that channel."); }
                     if (!sent?.id) throw new HttpError(400, "I couldn't post there.");
                     db.setMeta(`poll:${sent.id}`, JSON.stringify(state));
+                    db.setMeta(`pollch:${String(body.channel_id)}`, String(sent.id));
                     try { db.prunePolls(); } catch { /* old votes can wait */ }
                     db.updateOv(s.userId, mine.token, { config: { ...mine.config, pollId: String(sent.id) } });
                     ovPolls.set(mine.token, { channel: String(body.channel_id), id: String(sent.id) });

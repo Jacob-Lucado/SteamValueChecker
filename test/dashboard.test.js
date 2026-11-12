@@ -3991,6 +3991,15 @@ test("overlay studio: a poll is posted by the bot and its votes show on the over
         o.db.setMeta("poll:998877665544", JSON.stringify({ question: "Next game?", options: [{ title: "Hades" }, { title: "Balatro" }], votes: { a: 0, b: 0, c: 1 }, until: 5_000_000 })); // the test clock is fake, so the real-time prune had cleared the original
         const j = await data(poll);
         assert.equal(j.data.on, true); assert.equal(j.data.total, 3); assert.deepEqual(j.data.options.map(x => x.count), [2, 1]);
+        const { chatVoteFor } = await import("../src/gamenight.js");
+        const id = o.db.getMeta("pollch:c1"); assert.equal(id, "998877665544", "the channel is remembered for chat votes");
+        o.db.setMeta("poll:" + id, JSON.stringify({ question: "Next game?", options: [{ title: "Hades" }, { title: "Balatro" }], votes: {}, chat: true, until: 5_000_000 }));
+        assert.equal(chatVoteFor(o.db, { channelId: "c1", userId: "u9", content: "lol", now: 1000 }), null);
+        assert.ok(chatVoteFor(o.db, { channelId: "c1", userId: "u9", content: "#2", now: 1000 }));
+        assert.ok(chatVoteFor(o.db, { channelId: "c1", userId: "u8", content: "Hades!", now: 1000 }));
+        assert.equal(chatVoteFor(o.db, { channelId: "c1", userId: "u7", content: "3", now: 1000 }), null, "no such option");
+        assert.equal(chatVoteFor(o.db, { channelId: "c1", userId: "u7", content: "1", now: 6_000_000 }), null, "closed polls ignore votes");
+        assert.deepEqual(Object.entries(JSON.parse(o.db.getMeta("poll:" + id)).votes), [["u9", 1], ["u8", 0]]);
         assert.equal((await mk({ action: "endpoll", token: poll })).status, 200);
         assert.equal((await data(poll)).data.open, false);
         const channels = await o.request("/api/overlays/channels?guild=g-admin");

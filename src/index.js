@@ -15,6 +15,7 @@ import {
     version as DJS_VERSION
 } from "discord.js";
 import { loadConfig } from "./config.js";
+import { chatVoteFor, pollEmbed, pollButtons } from "./gamenight.js";
 import { createItad, ItadError } from "./itad.js";
 import { createLuna, withLuna } from "./luna.js";
 import { createGamerPower, withGamerPower } from "./gamerpower.js";
@@ -643,6 +644,16 @@ function queueTrapCount(guildId) {
     }, 4000).unref?.() ?? null);
 }
 
+// A live poll also takes votes typed in its channel: "2", "#2", or the option's name. Needs the Message Content intent to read them.
+async function chatVote(m) {
+    try {
+        const r = chatVoteFor(db, { channelId: m.channelId, userId: m.author.id, content: m.content });
+        if (!r) return;
+        await botRest.editMessage(m.channelId, r.id, { embeds: [pollEmbed(r.state)], components: pollButtons(r.state.options) }).catch(() => {});
+        m.react?.("✅").catch(() => {});
+    } catch { /* a missed chat vote isn't worth an error */ }
+}
+
 // ---- community: XP, welcome, invites ----
 client.on(Events.MessageCreate, async m => {
     try {
@@ -656,6 +667,7 @@ client.on(Events.MessageCreate, async m => {
             if (res === "banned") await m.delete().catch(() => {});
             return;
         }
+        if (m.content) await chatVote(m);
         let guided = false;
         {
             const c = db.getCommunity(m.guildId);

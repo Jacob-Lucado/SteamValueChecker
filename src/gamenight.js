@@ -125,6 +125,19 @@ export function castVote(state, userId, index, now = Date.now()) {
     return true;
 }
 
+/** Records a vote typed in a live poll's channel ("2", "#2" or the option's name). Returns the poll to redraw, or null when the message isn't a vote. */
+export function chatVoteFor(db, { channelId, userId, content, now = Date.now() }) {
+    const id = db.getMeta(`pollch:${channelId}`); if (!id) return null;
+    const raw = db.getMeta(`poll:${id}`); if (!raw) return null;
+    const state = JSON.parse(raw); if (!state.chat) return null;
+    const t = String(content ?? "").trim().toLowerCase().replace(/[.!]+$/, "");
+    const n = /^#?([1-5])$/.exec(t);
+    const idx = n ? Number(n[1]) - 1 : state.options.findIndex(o => o.title.toLowerCase() === t);
+    if (!castVote(state, userId, idx, now)) return null;
+    db.setMeta(`poll:${id}`, JSON.stringify(state));
+    return { id, state };
+}
+
 export function pollTally(state) {
     const counts = state.options.map(() => 0);
     for (const v of Object.values(state.votes)) counts[v]++;
@@ -134,7 +147,7 @@ export function pollTally(state) {
 export function pollEmbed(state, now = Date.now()) {
     const counts = pollTally(state), total = counts.reduce((a, b) => a + b, 0), open = now <= state.until, top = Math.max(...counts);
     const lines = state.options.map((o, i) => `${counts[i] === top && top > 0 ? "🏆" : "▫️"} **${o.title}**: ${counts[i]} vote${counts[i] === 1 ? "" : "s"}`);
-    return { color: 0xff9800, title: state.question || "What should we play?", description: `${lines.join("\n")}\n\n${total} vote${total === 1 ? "" : "s"} so far. ${open ? "Tap a game to vote. You can change your vote." : "Voting is closed."}`, footer: { text: "Games everyone in the voice channel owns  •  Voting stays open for 6 hours" } };
+    return { color: 0xff9800, title: state.question || "What should we play?", description: `${lines.join("\n")}\n\n${total} vote${total === 1 ? "" : "s"} so far. ${open ? (state.chat ? "Tap a button, or just type the number in this channel. You can change your vote." : "Tap a game to vote. You can change your vote.") : "Voting is closed."}`, footer: { text: state.chat ? "Live poll  •  Results show on stream" : "Games everyone in the voice channel owns  •  Voting stays open for 6 hours" } };
 }
 
 export const pollButtons = (options, open = true) => {
