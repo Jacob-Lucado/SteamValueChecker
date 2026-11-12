@@ -80,10 +80,21 @@
       tplSel.addEventListener("change", () => { const t = tpls.find(x => String(x.id) === tplSel.value); if (t) { apply(t.data); toast(`Loaded "${t.name}".`, "ok"); } });
       const saveTpl = h("button", { type: "button", class: "btn gray small", text: "Save as template", onclick: () => busy(saveTpl, async () => { const r = await api("/api/giveaways/templates", { guild_id: guild.value, name: tplName.value, data: grab() }); tpls = r.templates; paintTpls(); toast("Template saved. Prize keys are never saved in it.", "ok"); }) });
       const delTpl = h("button", { type: "button", class: "btn red small", text: "Delete", onclick: () => busy(delTpl, async () => { if (!tplSel.value) return; const r = await api("/api/giveaways/templates", { guild_id: guild.value, remove: Number(tplSel.value) }); tpls = r.templates; paintTpls(); }) });
+      const video = h("input", { type: "file", accept: "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" });
+      const readVideo = () => new Promise((ok, no) => {
+        const f = video.files?.[0];
+        if (!f) return ok({});
+        if (f.size > 10 * 1024 * 1024) return no(new Error("That video is too big. Keep it under 10 MB."));
+        const r = new FileReader();
+        r.onerror = () => no(new Error("I couldn't read that video."));
+        r.onload = () => ok({ video_b64: String(r.result).split(",")[1] ?? "", video_type: f.type || ({ mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime" }[f.name.split(".").pop().toLowerCase()] ?? ""), video_name: f.name });
+        r.readAsDataURL(f);
+      });
       const create = h("button", { class: "btn green", text: "Start giveaway", onclick: () => busy(create, async () => {
         const num = el => (el.value === "" ? undefined : Number(el.value));
+        const vid = await readVideo();
         const r = await api("/api/giveaways/create", {
-          guild_id: guild.value, channel_id: chSel.value, title: title.value, length: length.value, game: game.value, description: desc.value,
+          ...vid, guild_id: guild.value, channel_id: chSel.value, title: title.value, length: length.value, game: game.value, description: desc.value,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
           claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN),
           require_role_ids: reqRole.value, require_all: reqAll.value === "all", override_role_ids: overRole.value, bonus_role_ids: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value,
@@ -105,6 +116,7 @@
         h("div", { class: "grid two" }, h("div", {},
           field("Description", desc),
           h("div", { class: "row" }, field("Big picture, GIF or video link (https)", image), field("Small picture or GIF link (https)", thumb)),
+          field("Or upload a video (MP4, WebM or MOV, up to 10 MB). It is posted with the giveaway.", video),
           h("div", { class: "row" }, field("Game (for automatic artwork)", game), field("Enter button text", label), field("Color (#ff9800)", color)),
           h("label", { class: "check" }, auto, "Find artwork automatically when I don't give an image"),
           h("p", { class: "muted small", text: "Use a direct link to a picture (it ends in .png, .jpg, .gif or .webp). Links copied from a Discord message can expire, so host it somewhere permanent like Imgur." })),

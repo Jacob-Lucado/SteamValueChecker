@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
+import { fetchDiscordFile, VIDEO_TYPES, MEDIA_MAX_BYTES } from "./gwmedia.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl, cleanText } from "./gwparse.js";
 import { ID, keyMessage, infoPayload } from "./gwrender.js";
 
@@ -66,12 +67,16 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             if (c && ![0, 5].includes(c.type)) throw new UserError(`The ${what} must be a text channel.`);
             return c?.id ?? null;
         };
+        const vid = o.getAttachment("video");
+        if (vid && !Object.hasOwn(VIDEO_TYPES, String(vid.contentType ?? "").split(";")[0].toLowerCase())) throw new UserError("The video must be an MP4, WebM or MOV file.");
+        if (vid && vid.size > MEDIA_MAX_BYTES) throw new UserError("That video is too big. Keep it under 10 MB.");
         const game = cleanText(o.getString("game"), 100);
         return {
             guild_id: i.guildId, host_id: i.user.id,
             title: o.getString("title"), duration_ms: parseDuration(o.getString("length") ?? "24h"),
             channel_id: textChannel(o.getChannel("channel"), "giveaway channel") ?? i.channelId,
             game_title: game, description: o.getString("description"),
+            videoFile: vid ? { url: vid.url, contentType: vid.contentType, size: vid.size, name: vid.name } : null,
             image_url: parseImageUrl(o.getString("image"), "image"), thumbnail_url: parseImageUrl(o.getString("thumbnail"), "thumbnail"),
             color: parseColor(o.getString("color")), button_label: o.getString("buttonlabel"),
             require_role_ids: [o.getRole("requirerole")?.id, o.getRole("requirerole2")?.id].filter(Boolean), override_role_ids: [o.getRole("overriderole")?.id].filter(Boolean),
@@ -103,7 +108,9 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             const d = take(i.customId.split(":")[1], i);
             const { keys, duplicates } = parseKeys(i.fields.getTextInputValue("keys"), d.draft.game_title ?? d.draft.title ?? "Prize");
             await i.deferReply({ flags: MessageFlags.Ephemeral });
-            const r = await giveaways.create({ ...d.draft, keys });
+            const { videoFile, ...rest } = d.draft;
+            const video = videoFile ? await fetchDiscordFile(videoFile, { types: VIDEO_TYPES, what: "video" }) : null; // fetched after the reply is deferred, so it can't time out the form
+            const r = await giveaways.create({ ...rest, keys, video });
             const art = { auto: "Artwork was found automatically.", custom: "Using your image.", none: "No artwork (none was found; you can recreate it with an `image:` link)." }[r.imageSource];
             await i.editReply([
                 r.rounds > 1 ? `Series created: **${r.rounds} rounds** scheduled in <#${d.draft.channel_id}>, the first starting <t:${Math.floor(r.starts_at / 1000)}:R> (giveaway #${r.ids.join(", #")}). Cancel any round with \`/server giveaway cancel\`.`

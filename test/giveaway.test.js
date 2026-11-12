@@ -658,3 +658,28 @@ test("proof can be a short video, posted as a file without an embedded picture",
     assert.equal(post.payload.embeds[0].image, undefined);
     assert.match(post.payload.embeds[0].description, /video/);
 });
+
+test("a host can attach a video to a giveaway; it is posted with the giveaway and cleared when it ends", async () => {
+    const t = rig();
+    const video = { buffer: Buffer.from("mp4-bytes"), type: "video/mp4", name: "clip.mp4" };
+    await assert.rejects(() => t.make({ video: { ...video, type: "application/zip" } }), /MP4, WebM or MOV/);
+    await assert.rejects(() => t.make({ video: { ...video, buffer: Buffer.alloc(11 * 1024 * 1024) } }), /under 10 MB/);
+    const { id } = await t.make({ video });
+    const post = t.posts.find(p => p.payload.files?.[0]?.name === "giveaway.mp4");
+    assert.ok(post, "the video rides along with the post");
+    assert.equal(post.payload.files[0].attachment.toString(), "mp4-bytes");
+    assert.equal(t.db.hasVideo(id), true);
+    await t.svc.refresh(id);
+    assert.ok(t.edits.length && t.edits.every(e => !e.payload.files), "edits don't resend the file, so Discord keeps it");
+    await t.svc.cancel(id);
+    assert.equal(t.db.hasVideo(id), false);
+});
+
+test("a scheduled giveaway keeps its video until it launches", async () => {
+    const t = rig();
+    const { id } = await t.make({ start_in_ms: HOUR, video: { buffer: Buffer.from("webm"), type: "video/webm", name: "c.webm" } });
+    assert.equal(t.posts.length, 0);
+    t.advance(2 * HOUR);
+    await t.svc.launch(id);
+    assert.equal(t.posts.at(-1).payload.files[0].name, "giveaway.webm");
+});

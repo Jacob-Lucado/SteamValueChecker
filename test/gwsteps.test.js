@@ -65,3 +65,13 @@ test("giveaway overlay: follows the streamer's latest stream giveaway and lets t
     clock += 11 * 60_000;
     assert.equal(sg.latest("u1"), null, "then it clears");
 });
+
+test("the dashboard form's video is decoded and checked", async () => {
+    const { videoFromBody } = await import("../src/gwmedia.js");
+    assert.equal(videoFromBody({}), null);
+    const v = videoFromBody({ video_b64: Buffer.from("hello").toString("base64"), video_type: "video/mp4", video_name: "a.mp4" });
+    assert.deepEqual([v.buffer.toString(), v.type, v.name], ["hello", "video/mp4", "a.mp4"]);
+    assert.throws(() => videoFromBody({ video_b64: "AAAA", video_type: "image/png" }), /MP4, WebM or MOV/);
+    assert.throws(() => videoFromBody({ video_b64: "A".repeat(15 * 1024 * 1024), video_type: "video/mp4" }), /too big/);
+    assert.ok(giveawayInput({ keys: "A | B", video_b64: "AAAA", video_type: "video/webm" }).input.video);
+});

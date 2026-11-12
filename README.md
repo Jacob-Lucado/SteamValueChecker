@@ -178,7 +178,8 @@ The dashboard's **Admin > Giveaway** tab runs one giveaway across every server: 
 
 Server owners (Manage Server, or a role set with `/server giveaway setup`) can give away game keys.
 
-- `/server giveaway create title length [game] [image] [thumbnail] [color] [requirerole] [bonusrole] [pingrole] ...` opens a private form where you paste the prizes, one per line as `Name | KEY` (up to 50 keys in one giveaway). The post groups them neatly, e.g. `Hades ×2, Celeste`.
+- `/server giveaway create title length [game] [image] [thumbnail] [video] [color] [requirerole] [bonusrole] [pingrole] ...` opens a private form where you paste the prizes, one per line as `Name | KEY` (up to 50 keys in one giveaway). The post groups them neatly, e.g. `Hades ×2, Celeste`.
+- **Your own video:** attach an MP4, WebM or MOV file (up to 10 MB) as `video` on the command, or pick one on the dashboard's giveaway form. The bot keeps the file and posts it with the giveaway (so it never expires), and clears its copy when the giveaway ends or is canceled. Round series reuse the same video.
 - **Artwork:** the bot finds Steam art for `game` automatically, or use your own `image` (a picture, animated GIF, or a video link: .mp4/.webm, YouTube, Vimeo, Twitch clip, Streamable, Tenor/Giphy) and a small `thumbnail` (picture or GIF). Videos play in the message itself, since Discord embeds cannot hold video. The bot never downloads media; it only links to it. `noautoimage` turns auto-art off.
 - **Customize:** description, color, button text, required role, bonus entries for a role, minimum account/server age, a role to ping, and how many hours winners have to claim.
 - When it ends, winners are announced with a **Claim key** button. The bot DMs the key; if DMs are closed it replies only to the winner with "Your DMs are closed, so the prize is posted here:".

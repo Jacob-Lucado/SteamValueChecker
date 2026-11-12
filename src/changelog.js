@@ -1,7 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
-    { version: "2026.11.62", date: "2026-11-12", title: "Proof screenshots and videos for giveaway winners", items: [
+    { version: "2026.11.62", date: "2026-11-12", title: "Videos in giveaways, and proof from winners", items: [
         "**Add proof:** after a winner confirms their prize they can reply to the bot's DM with a screenshot or short video (up to 10 MB) within 30 minutes. It is posted in the vouches channel and the host is told.",
+        "**Giveaway videos:** attach a video file (MP4, WebM or MOV, up to 10 MB) when you create a giveaway, with /server giveaway create or on the dashboard form. It is posted with the giveaway.",
         "**Fixed:** giveaway problems (like not being able to post the winners) were not being reported to the server's problem list."
     ] },
     { version: "2026.11.61", date: "2026-11-12", title: "Sharper prices, Steam Family and server switches", items: [

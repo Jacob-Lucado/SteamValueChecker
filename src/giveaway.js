@@ -8,6 +8,7 @@ import { steamArt } from "./art.js";
 import { stepsOf } from "./gwpartner.js";
 import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
+import { VIDEO_TYPES, MEDIA_MAX_BYTES } from "./gwmedia.js";
 import { reportProblem as reportGuildProblem } from "./guildproblems.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
 import { cleanText, clampInt } from "./gwparse.js";
@@ -87,6 +88,13 @@ const PROOF_WINDOW_MS = 30 * 60_000, PROOF_MAX_BYTES = 10 * 1024 * 1024;
 const PROOF_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
 
 export function createGiveawayService({ db, tickets = null, vault, discord, itad = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
+    /** The giveaway post, with the host's uploaded video attached when there is one. Edits leave the attachment alone. */
+    const postable = (row, keys) => {
+        const payload = giveawayPayload(row, keys, 0, "active");
+        const v = db.getVideo(row.id);
+        if (v) payload.files = [{ attachment: v.buffer, name: `giveaway.${VIDEO_TYPES[v.type] ?? "mp4"}` }];
+        return payload;
+    };
     const must = id => {
         const g = db.getGiveaway(Number(id));
         if (!g) throw new UserError("I can't find that giveaway.");
@@ -131,7 +139,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         spreads.set(g.id, job);
         (async () => {
             const row = db.getGiveaway(g.id);
-            const payload = () => giveawayPayload(row, db.listKeys(g.id), 0, "active");
+            const payload = () => postable(row, db.listKeys(g.id));
             for (const c of channels) {
                 try { const m = await discord.post(c, payload()); db.addMirror(g.id, "channel", c, m.id); job.sent++; } catch (e) { why(e, labels.get(c) || "a server channel"); }
                 await sleep(Math.min(delayMs, 400));
@@ -185,6 +193,8 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const title = cleanText(input.title, 100) ?? titleFromKeys(input.keys);
         if (db.countActiveGiveaways(input.guild_id) >= MAX_ACTIVE_GIVEAWAYS) throw new UserError(`This server already has ${MAX_ACTIVE_GIVEAWAYS} running giveaways. End one first.`);
 
+        const video = input.video ?? null;
+        if (video && (!Object.hasOwn(VIDEO_TYPES, video.type) || !video.buffer?.length || video.buffer.length > MEDIA_MAX_BYTES)) throw new UserError("Use an MP4, WebM or MOV video under 10 MB.");
         let image = input.image_url ?? null, thumbnail = input.thumbnail_url ?? null, imageSource = image ? "custom" : "none";
         let gallery = null;
         if (!image && input.auto_image !== false) {
@@ -208,10 +218,11 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             status: startAt ? "scheduled" : "active", starts_at: startAt, ends_at: (startAt ?? now()) + input.duration_ms
         };
         const id = db.createGiveaway(g, input.keys.map(k => ({ label: k.label, kind: k.kind ?? "key", enc: vault.encrypt(k.key) })));
+        if (video) db.saveVideo(id, video);
         if (startAt) return { id, ends_at: g.ends_at, starts_at: startAt, prizes: input.keys.length, imageSource, scheduled: true };
         try {
             const row = db.getGiveaway(id);
-            const msg = await discord.post(g.channel_id, giveawayPayload(row, db.listKeys(id), 0, "active"));
+            const msg = await discord.post(g.channel_id, postable(row, db.listKeys(id)));
             db.setGiveawayMessage(id, msg.id);
         } catch (e) {
             log(`giveaway post failed in ${g.channel_id}: ${e?.message ?? e}`);
@@ -276,7 +287,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         if (!db.startGiveaway(g.id, now() + (g.duration_ms ?? 24 * 3600_000))) return false;
         try {
             const row = db.getGiveaway(g.id);
-            const msg = await discord.post(row.channel_id, giveawayPayload(row, db.listKeys(g.id), 0, "active"));
+            const msg = await discord.post(row.channel_id, postable(row, db.listKeys(g.id)));
             db.setGiveawayMessage(g.id, msg.id);
             return true;
         } catch (e) {
@@ -355,6 +366,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         let g = must(id);
         if (closed(g)) throw new UserError("That giveaway is already over.");
         db.setGiveawayStatus(g.id, "ended");
+        db.dropVideo(g.id); // the post already carries the file
         g = db.getGiveaway(g.id);
 
         const taken = new Set();
@@ -427,6 +439,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const g = must(id);
         if (!cancellable(g)) throw new UserError("That giveaway is already over.");
         db.setGiveawayStatus(g.id, "cancelled");
+        db.dropVideo(g.id);
         const unused = await returnUnused(g, ["available", "assigned"], "The giveaway was canceled.");
         await refresh(g.id);
         return { unused };

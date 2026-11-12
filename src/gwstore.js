@@ -95,6 +95,12 @@ CREATE TABLE IF NOT EXISTS giveaway_mirrors (
     message_id  TEXT NOT NULL,
     PRIMARY KEY (giveaway_id, channel_id, message_id)
 );
+CREATE TABLE IF NOT EXISTS giveaway_videos (
+    giveaway_id INTEGER PRIMARY KEY REFERENCES giveaways(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    type        TEXT NOT NULL,
+    data        BLOB NOT NULL
+);
 CREATE TABLE IF NOT EXISTS giveaway_settings (
     guild_id        TEXT PRIMARY KEY,
     vouch_channel_id TEXT,
@@ -200,6 +206,11 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
     const openProof = (keyId, until) => run("UPDATE giveaway_keys SET proof_until = ? WHERE id = ?", until, keyId);
     const keyAwaitingProof = (userId, t) => clean(get("SELECT * FROM giveaway_keys WHERE winner_id = ? AND status = 'confirmed' AND proof_msg IS NULL AND proof_until > ? ORDER BY proof_until DESC LIMIT 1", userId, t)) ?? null;
     const setProof = (keyId, link) => run("UPDATE giveaway_keys SET proof_msg = ?, proof_until = NULL WHERE id = ?", link, keyId).changes;
+    /** A host's uploaded video. Kept apart from the giveaway row so the big file is only read when a post is made. */
+    const saveVideo = (id, { buffer, type, name }) => run("INSERT OR REPLACE INTO giveaway_videos (giveaway_id, name, type, data) VALUES (?, ?, ?, ?)", id, name, type, buffer);
+    const getVideo = id => { const r = get("SELECT name, type, data FROM giveaway_videos WHERE giveaway_id = ?", id); return r ? { name: r.name, type: r.type, buffer: Buffer.from(r.data) } : null; };
+    const hasVideo = id => Boolean(get("SELECT 1 AS x FROM giveaway_videos WHERE giveaway_id = ?", id));
+    const dropVideo = id => run("DELETE FROM giveaway_videos WHERE giveaway_id = ?", id);
     const markConfirmed = keyId => run("UPDATE giveaway_keys SET status = 'confirmed', confirmed_at = ?, key_enc = NULL, confirm_at = NULL WHERE id = ?", now(), keyId);
     const markProblem = keyId => run("UPDATE giveaway_keys SET status = 'problem', confirm_at = NULL WHERE id = ?", keyId);
     const replaceKeyEnc = (keyId, enc, deadline) => run(
@@ -289,7 +300,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         listTemplates, saveTemplate, removeTemplate, prizesFor,
         setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, entryChannel, setNotifyState, removeEntry, listEntries, countEntries,
-        openProof, keyAwaitingProof, setProof, listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
+        saveVideo, getVideo, hasVideo, dropVideo, openProof, keyAwaitingProof, setProof, listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,
         wipeKey, setConfirmAt, excludeFor, excludedFor, expiredClaims, duePrompts, purgeKeys, purgeGiveaways,
         giveawayTotals, getGiveawaySettings, setGiveawaySettings, forgetGiveawayUser, hasGiveawayData
     };

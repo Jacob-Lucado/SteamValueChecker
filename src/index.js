@@ -69,6 +69,7 @@ import { createHandlers } from "./handlers.js";
 import { createPanels, PANEL_PREFIX } from "./panel.js";
 import { alertPanel } from "./alertpanel.js";
 import { UserError } from "./errors.js";
+import { fetchDiscordFile, IMAGE_TYPES, VIDEO_TYPES } from "./gwmedia.js";
 import { registerCommands } from "./registercmds.js";
 import { createLogBuffer, ACTIVITY } from "./logbuffer.js";
 import { isHidden } from "./hidden.js";
@@ -302,16 +303,8 @@ const voiceMap = guildId => {
     return m;
 };
 
-/** Downloads a Discord attachment, but only from Discord's own CDN and only up to the size limit. */
-async function fetchProofImage(a) {
-    const u = new URL(a.url);
-    if (!["cdn.discordapp.com", "media.discordapp.net"].includes(u.hostname)) throw new UserError("Send a screenshot or video as an attachment.");
-    const type = String(a.contentType ?? "").split(";")[0];
-    if (a.size > 10 * 1024 * 1024) throw new UserError("That file is too big. Keep it under 10 MB.");
-    const res = await fetch(u, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new UserError("I couldn't download that image. Try sending it again.");
-    return { buffer: Buffer.from(await res.arrayBuffer()), type, name: a.name };
-}
+/** Downloads a winner's proof from Discord's own CDN: an image or a short video. */
+const fetchProofImage = a => fetchDiscordFile(a, { types: { ...IMAGE_TYPES, ...VIDEO_TYPES }, what: "file" });
 
 // Giveaways keep prize keys, so they only run when KEY_ENCRYPTION_SECRET is set.
 const gwDiscord = {
