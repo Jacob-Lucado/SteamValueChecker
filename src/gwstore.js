@@ -111,14 +111,14 @@ CREATE TABLE IF NOT EXISTS giveaway_settings (
 const GIVEAWAY_FIELDS = [
     "guild_id", "channel_id", "host_id", "title", "description", "game_title", "image_url", "thumbnail_url", "color", "button_label",
     "ping_role_id", "require_role_id", "bonus_role_id", "bonus_entries", "min_account_days", "min_member_days", "claim_hours",
-    "vouch_channel_id", "ends_at", "gallery", "require_boost", "require_steam", "override_role_id", "require_all", "starts_at", "duration_ms", "status", "host_name", "host_kind", "host_links", "host_logo", "steps", "is_global"
+    "vouch_channel_id", "ends_at", "gallery", "require_boost", "require_steam", "regions", "override_role_id", "require_all", "starts_at", "duration_ms", "status", "host_name", "host_kind", "host_links", "host_logo", "steps", "is_global"
 ];
 
 export function giveawayStore({ db, run, get, all, clean, now }) {
     // Rows handed out never carry the encrypted key unless asked for.
     const KEY_COLS = "id, giveaway_id, position, label, kind, status, winner_id, assigned_at, deadline, delivered_at, delivered_via, confirm_at, prompts, confirmed_at, redraws, remind_stage, notify_state, (key_enc IS NOT NULL) AS has_key";
 
-    const RULE_COLS = ["require_role_id", "require_all", "override_role_id", "bonus_role_id", "bonus_entries", "require_steam"];
+    const RULE_COLS = ["regions", "require_role_id", "require_all", "override_role_id", "bonus_role_id", "bonus_entries", "require_steam"];
     /** Changes who may enter a giveaway. Only the rule columns can be set here. */
     const setGiveawayRules = (id, patch) => {
         const keys = Object.keys(patch).filter(k => RULE_COLS.includes(k));

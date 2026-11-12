@@ -8,6 +8,7 @@ import { steamArt } from "./art.js";
 import { stepsOf } from "./gwpartner.js";
 import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
+import { regionCheck, parseRegions } from "./gwregion.js";
 import { VIDEO_TYPES, MEDIA_MAX_BYTES } from "./gwmedia.js";
 import { reportProblem as reportGuildProblem } from "./guildproblems.js";
 import { MAX_ACTIVE_GIVEAWAYS } from "./gwstore.js";
@@ -87,7 +88,7 @@ function pickOne(pool, rand) {
 const PROOF_WINDOW_MS = 30 * 60_000, PROOF_MAX_BYTES = 10 * 1024 * 1024;
 const PROOF_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
 
-export function createGiveawayService({ db, tickets = null, vault, discord, itad = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
+export function createGiveawayService({ db, tickets = null, vault, discord, itad = null, countryLookup = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
     /** The giveaway post, with the host's uploaded video attached when there is one. Edits leave the attachment alone. */
     const postable = (row, keys) => {
         const payload = giveawayPayload(row, keys, 0, "active");
@@ -213,7 +214,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             ping_role_id: input.ping_role_id ?? db.getCommunity?.(input.guild_id)?.ping_giveaway ?? null, require_role_id: roleList(input.require_role_ids ?? input.require_role_id), bonus_role_id: roleList(input.bonus_role_ids ?? input.bonus_role_id), override_role_id: roleList(input.override_role_ids ?? input.override_role_id), require_all: input.require_all ? 1 : 0,
             bonus_entries: clampInt(input.bonus_entries, 1, 10, 1), min_account_days: clampInt(input.min_account_days, 0, 3650, 0),
             min_member_days: clampInt(input.min_member_days, 0, 3650, 0), claim_hours: clampInt(input.claim_hours, 1, 168, 48),
-            vouch_channel_id: input.vouch_channel_id ?? null, require_boost: input.require_boost ? 1 : 0, require_steam: input.require_steam ? 1 : 0, duration_ms: input.duration_ms,
+            regions: parseRegions(input.regions), vouch_channel_id: input.vouch_channel_id ?? null, require_boost: input.require_boost ? 1 : 0, require_steam: input.require_steam ? 1 : 0, duration_ms: input.duration_ms,
             is_global: input.is_global ? 1 : 0, host_name: input.host?.host_name ?? null, host_kind: input.host?.host_kind ?? null, host_links: input.host?.host_links ?? null, host_logo: input.host?.host_logo ?? null, steps: input.steps?.length ? JSON.stringify(input.steps) : null,
             status: startAt ? "scheduled" : "active", starts_at: startAt, ends_at: (startAt ?? now()) + input.duration_ms
         };
@@ -239,7 +240,8 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         if (closed(g) || g.ends_at <= now()) throw new UserError("That giveaway has ended.");
         if (g.is_global) throw new UserError("Cross-server giveaways can't be changed once they are out in other servers.");
         const next = {};
-        if (patch.clear) Object.assign(next, { require_role_id: null, require_all: 0, require_steam: 0, override_role_id: null, bonus_role_id: null });
+        if (patch.regions !== undefined) next.regions = parseRegions(patch.regions);
+        if (patch.clear) Object.assign(next, { regions: null, require_role_id: null, require_all: 0, require_steam: 0, override_role_id: null, bonus_role_id: null });
         if (patch.require_role_ids?.length) next.require_role_id = roleList(patch.require_role_ids);
         if (patch.require_all !== undefined) next.require_all = patch.require_all ? 1 : 0;
         if (patch.override_role_ids?.length) next.override_role_id = roleList(patch.override_role_ids);
@@ -262,6 +264,17 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             return { status: "left", total: entryCount(g.id) };
         }
         const have = who.roleIds ?? [];
+        // A region lock is about where the prize can be used, so no role skips it.
+        if (g.regions) {
+            let link = db.getSteamLink(who.userId);
+            // A verified account whose country we haven't read yet: ask Steam once, now, and remember the answer.
+            if (link?.verified && !link.country && countryLookup) {
+                const cc = await countryLookup(link.steamid).catch(() => null);
+                if (cc) { db.setSteamCountry?.(who.userId, cc); link = { ...link, country: cc }; }
+            }
+            const v = regionCheck(g.regions, { steam: link, userRegion: db.getUser?.(who.userId)?.region, strict: Boolean(g.require_steam) });
+            if (!v.ok) throw new UserError(v.reason);
+        }
         // Someone with an override role (usually the booster role) skips every entry rule below.
         if (!hasAnyRole(have, g.override_role_id)) {
             if (g.require_boost && !who.boosting) throw new UserError("This giveaway is for server boosters only.");

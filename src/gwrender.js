@@ -6,6 +6,7 @@ const GREEN = 0x57f287;
 const GREY = 0x8b95a5;
 const RED = 0xed4245;
 import { isVideoLink } from "./gwparse.js";
+import { describeRegions } from "./gwregion.js";
 import { roleIds } from "./gwroles.js";
 import { crossServerParts, stepParts, stepRows } from "./gwpartner.js";
 import { kindInfo, isCode, theme } from "./prizes.js";
@@ -29,6 +30,7 @@ export function prizeSummary(keys) {
 
 function requirements(g) {
     const r = [];
+    if (g.regions) r.push(`🌍 Regions: ${describeRegions(g.regions)}${g.require_steam ? " (checked through Steam)" : " (checked against your Steam country or the region you set)"}`);
     if (g.require_boost) r.push("Server boosters only");
     if (g.require_steam) r.push("Must be Steam Verified");
     const need = roleIds(g.require_role_id);

@@ -85,6 +85,7 @@ export function createGiveawayRoutes(ctx) {
             const patch = { clear: body.clear === true, require_role_ids: roleIds(body.require_role_ids), override_role_ids: roleIds(body.override_role_ids), bonus_role_ids: roleIds(body.bonus_role_ids) };
             if (body.require_all !== undefined) patch.require_all = body.require_all === true || body.require_all === "all";
             if (body.bonus_entries !== undefined) patch.bonus_entries = Number(body.bonus_entries);
+            if (body.regions !== undefined) patch.regions = String(body.regions);
             if (body.steam_verified !== undefined) patch.require_steam = body.steam_verified === true;
             await giveaways.updateRules(x.id, patch);
             return { ok: true };

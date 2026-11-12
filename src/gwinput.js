@@ -1,6 +1,7 @@
 // Turns the fields of a giveaway form into what the giveaway service takes. The server giveaway page and the stream giveaway panel
 // share it, so both accept the same options and check them the same way.
 import { UserError } from "./errors.js";
+import { parseRegions } from "./gwregion.js";
 import { videoFromBody } from "./gwmedia.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl } from "./gwparse.js";
 import { parseSteps, StepError } from "./gwpartner.js";
@@ -27,7 +28,7 @@ export function giveawayInput(body, { channelIds = [], defaults = {} } = {}) {
             bonus_role_ids: roleIds(body.bonus_role_ids ?? body.bonus_role_id), override_role_ids: roleIds(body.override_role_ids ?? body.override_role_id), bonus_entries: int(body.bonus_entries), claim_hours: int(body.claim_hours),
             min_account_days: int(body.min_account_days), min_member_days: int(body.min_member_days),
             vouch_channel_id: channelIds.includes(body.vouch_channel_id) ? body.vouch_channel_id : null,
-            video: videoFromBody(body), auto_image: body.auto_image !== false, keys, require_boost: Boolean(body.boosters), require_steam: Boolean(body.steam_verified), steps,
+            regions: parseRegions(body.regions), video: videoFromBody(body), auto_image: body.auto_image !== false, keys, require_boost: Boolean(body.boosters), require_steam: Boolean(body.steam_verified), steps,
             start_in_ms: text(body.start_in) ? parseDuration(text(body.start_in), { min: 0 }) : 0,
             rounds: int(body.rounds) ?? 1, repeat_ms: text(body.repeat_every) ? parseDuration(text(body.repeat_every)) : null
         }

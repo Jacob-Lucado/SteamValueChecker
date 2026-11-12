@@ -683,3 +683,60 @@ test("a scheduled giveaway keeps its video until it launches", async () => {
     await t.svc.launch(id);
     assert.equal(t.posts.at(-1).payload.files[0].name, "giveaway.webm");
 });
+
+test("region lock: groups expand, bad codes are refused, and worldwide means no lock", async () => {
+    const { parseRegions, allowedCountries } = await import("../src/gwregion.js");
+    assert.equal(parseRegions(""), null);
+    assert.equal(parseRegions("worldwide"), null);
+    assert.equal(parseRegions("us, ca; uk eu"), "US,CA,GB,EU");
+    assert.ok(allowedCountries("EU,US").has("DE") && allowedCountries("EU,US").has("US") && !allowedCountries("EU").has("GB"));
+    assert.throws(() => parseRegions("US, Narnia"), /isn't a region/);
+});
+
+test("region lock: entrants are checked against Steam country, or the region they set when the host doesn't need Steam", async () => {
+    const t = rig();
+    const { id } = await t.make({ regions: "US, CA" });
+    assert.equal(t.db.getGiveaway(id).regions, "US,CA");
+    // Region set for the bot (self-reported): a US member gets in, a German one doesn't.
+    t.db.ensureUser("us"); t.db.updateUser("us", { region: "US" });
+    t.db.ensureUser("de"); t.db.updateUser("de", { region: "DE" });
+    assert.equal((await t.svc.enter(id, { userId: "us", roleIds: [] })).status, "entered");
+    await assert.rejects(() => t.svc.enter(id, { userId: "de", roleIds: [] }), /only for players in \*\*US, CA\*\*.*DE/);
+    // A verified Steam country beats the region they set.
+    t.db.ensureUser("fake"); t.db.updateUser("fake", { region: "US" });
+    t.db.setSteamLink("fake", "76561198000000001", { verified: true }); t.db.setSteamCountry("fake", "BR");
+    await assert.rejects(() => t.svc.enter(id, { userId: "fake", roleIds: [] }), /Your Steam profile says BR/);
+    // Roles that skip other rules don't skip a region lock.
+    const o = await t.make({ regions: "US", override_role_ids: ["boost"] });
+    await assert.rejects(() => t.svc.enter(o.id, { userId: "de", roleIds: ["boost"] }), /only for players in/);
+});
+
+test("region lock with Steam Verified counts only a verified Steam country", async () => {
+    const t = rig();
+    const { id } = await t.make({ regions: "EU", require_steam: true });
+    t.db.ensureUser("a"); t.db.updateUser("a", { region: "DE" });
+    await assert.rejects(() => t.svc.enter(id, { userId: "a", roleIds: [] }), /Sign in through Steam/); // verification is asked for first
+    t.db.setSteamLink("a", "76561198000000002", { verified: true });
+    await assert.rejects(() => t.svc.enter(id, { userId: "a", roleIds: [] }), /doesn't show a country/); // the region they set doesn't count here
+    t.db.setSteamCountry("a", "FR");
+    assert.equal((await t.svc.enter(id, { userId: "a", roleIds: [] })).status, "entered");
+});
+
+test("region lock: a verified account with no stored country is looked up on Steam at entry, and the rules can change the list", async () => {
+    let asked = 0;
+    const clock = 1_800_000_000_000;
+    const db = openDb(":memory:", { now: () => clock });
+    const posts = [];
+    const svc = createGiveawayService({ db, vault: createVault(SECRET), discord: { post: async (c, p) => { posts.push(p); return { id: "1" }; }, edit: async () => {}, dm: async () => ({}), memberOk: async () => true, findChannelByName: async () => null },
+        now: () => clock, rand: () => 0, countryLookup: async () => { asked++; return "GB"; } });
+    const { id } = await svc.create({ guild_id: "G", channel_id: "C", host_id: "h", title: "T", duration_ms: 2 * HOUR, keys: [{ label: "Hades", key: "A-B" }], regions: "UK" });
+    db.ensureUser("u"); db.setSteamLink("u", "76561198000000003", { verified: true });
+    assert.equal((await svc.enter(id, { userId: "u", roleIds: [] })).status, "entered");
+    assert.equal(asked, 1);
+    assert.equal(db.getSteamLink("u").country, "GB");
+    assert.match(JSON.stringify(posts[0].embeds[0].fields), /Regions: GB/);
+    await svc.updateRules(id, { regions: "worldwide" });
+    assert.equal(db.getGiveaway(id).regions, null);
+    await svc.updateRules(id, { regions: "US" });
+    assert.equal(db.getGiveaway(id).regions, "US");
+});

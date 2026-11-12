@@ -304,6 +304,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "tipped", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "free_dlc", "INTEGER NOT NULL DEFAULT 1");
     addColumn("giveaways", "require_boost", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("giveaways", "regions", "TEXT"); // where entrants must be (country codes and groups); null means anywhere
     addColumn("giveaways", "require_steam", "INTEGER NOT NULL DEFAULT 0"); // only members who proved their Steam account may enter
     addColumn("giveaways", "override_role_id", "TEXT"); // members with one of these roles skip every entry rule
     addColumn("giveaways", "require_all", "INTEGER NOT NULL DEFAULT 0"); // 1: they need every required role, 0: any one is enough

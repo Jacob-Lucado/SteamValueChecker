@@ -96,7 +96,7 @@ import { createAbgFeed } from "./abgfeed.js";
 import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
-import { runSteamAutoSync } from "./steamlib.js";
+import { runSteamAutoSync, fetchSteamCountry } from "./steamlib.js";
 import { runFamilySync } from "./family.js";
 import { runWishlistAutoSync } from "./wishlist.js";
 import { importWishlist } from "./steam.js";
@@ -392,7 +392,7 @@ const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id
 const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
 const setupUi = createSetupHandlers({ db, publicUrl: publicBase });
 const giveaways = cfg.keySecret
-    ? createGiveawayService({ db, tickets, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
+    ? createGiveawayService({ db, tickets, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, countryLookup: id => fetchSteamCountry(id, cfg.steamApiKey), multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
     : null;
 const gw = createGiveawayHandlers({ db, giveaways });
 const twitchChat = createTwitchChat({ db, giveaways, streamGw, member: (g, u) => discord.memberInfo(g, u), site: publicBase ?? "", env: process.env, log: m => console.log(`[twitch chat] ${m}`) });

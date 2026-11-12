@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
+import { parseRegions, describeRegions } from "./gwregion.js";
 import { fetchDiscordFile, VIDEO_TYPES, MEDIA_MAX_BYTES } from "./gwmedia.js";
 import { parseKeys, parseDuration, parseColor, parseImageUrl, cleanText } from "./gwparse.js";
 import { ID, keyMessage, infoPayload } from "./gwrender.js";
@@ -76,6 +77,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             title: o.getString("title"), duration_ms: parseDuration(o.getString("length") ?? "24h"),
             channel_id: textChannel(o.getChannel("channel"), "giveaway channel") ?? i.channelId,
             game_title: game, description: o.getString("description"),
+            regions: parseRegions(o.getString("regions")),
             videoFile: vid ? { url: vid.url, contentType: vid.contentType, size: vid.size, name: vid.name } : null,
             image_url: parseImageUrl(o.getString("image"), "image"), thumbnail_url: parseImageUrl(o.getString("thumbnail"), "thumbnail"),
             color: parseColor(o.getString("color")), button_label: o.getString("buttonlabel"),
@@ -128,7 +130,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         const o = i.options, ids = names => names.map(n => o.getRole(n)?.id).filter(Boolean);
         const patch = {
             clear: o.getBoolean("clear") === true, require_role_ids: ids(["requirerole", "requirerole2"]), override_role_ids: ids(["overriderole"]), bonus_role_ids: ids(["bonusrole"]),
-            bonus_entries: o.getInteger("bonusentries") ?? undefined, require_all: o.getBoolean("needall") ?? undefined, require_steam: o.getBoolean("steamverified") ?? undefined
+            bonus_entries: o.getInteger("bonusentries") ?? undefined, require_all: o.getBoolean("needall") ?? undefined, regions: o.getString("regions") ?? undefined, require_steam: o.getBoolean("steamverified") ?? undefined
         };
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         const row = await giveaways.updateRules(g.id, patch);
@@ -137,6 +139,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         lines.push(row.require_role_id ? `Needs ${row.require_all ? "all of" : "one of"}: ${list(row.require_role_id)}` : "No role needed");
         if (row.override_role_id) lines.push(`Skips every requirement: ${list(row.override_role_id)}`);
         if (row.bonus_role_id) lines.push(`${row.bonus_entries} entries for: ${list(row.bonus_role_id)}`);
+        if (row.regions) lines.push(`Regions: ${describeRegions(row.regions)}`);
         if (row.require_steam) lines.push("Steam Verified members only");
         return i.editReply({ content: `Updated the rules for giveaway #${g.id}.\n${lines.join("\n")}`, allowedMentions: { parse: [] } });
     }

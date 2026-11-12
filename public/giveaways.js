@@ -69,7 +69,7 @@
       for (const el of [title, desc, keys, image, thumb, color, label, length]) el.addEventListener("input", gp.paint);
       auto.addEventListener("change", () => { previewKey = ""; refreshPreview(); });
       // Templates keep everything except the prize keys.
-      const FIELDS = { title, length, game, desc, image, thumb, auto, color, label, claim, acct, memb, bonusN, reqRole, reqAll, overRole, bonusRole, pingRole, vouchSel, boosters, startIn, rounds, repeatEvery, chSel };
+      const FIELDS = { title, length, game, desc, image, thumb, auto, color, label, claim, acct, memb, bonusN, reqRole, reqAll, overRole, bonusRole, pingRole, vouchSel, regions, boosters, startIn, rounds, repeatEvery, chSel };
       const grab = () => Object.fromEntries(Object.entries(FIELDS).map(([k, el]) => [k, el.type === "checkbox" ? el.checked : el.value]));
       const apply = data => { for (const [k, el] of Object.entries(FIELDS)) if (data[k] !== undefined) { if (el.type === "checkbox") el.checked = Boolean(data[k]); else el.value = data[k]; } previewKey = ""; refreshPreview(); gp.paint(); };
       let tpls = [];
@@ -80,6 +80,7 @@
       tplSel.addEventListener("change", () => { const t = tpls.find(x => String(x.id) === tplSel.value); if (t) { apply(t.data); toast(`Loaded "${t.name}".`, "ok"); } });
       const saveTpl = h("button", { type: "button", class: "btn gray small", text: "Save as template", onclick: () => busy(saveTpl, async () => { const r = await api("/api/giveaways/templates", { guild_id: guild.value, name: tplName.value, data: grab() }); tpls = r.templates; paintTpls(); toast("Template saved. Prize keys are never saved in it.", "ok"); }) });
       const delTpl = h("button", { type: "button", class: "btn red small", text: "Delete", onclick: () => busy(delTpl, async () => { if (!tplSel.value) return; const r = await api("/api/giveaways/templates", { guild_id: guild.value, remove: Number(tplSel.value) }); tpls = r.templates; paintTpls(); }) });
+      const regions = text("Regions allowed, e.g. US, CA, EU (blank = anywhere)", 200);
       const video = h("input", { type: "file", accept: "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" });
       const readVideo = () => new Promise((ok, no) => {
         const f = video.files?.[0];
@@ -97,7 +98,7 @@
           ...vid, guild_id: guild.value, channel_id: chSel.value, title: title.value, length: length.value, game: game.value, description: desc.value,
           image: image.value, thumbnail: thumb.value, auto_image: auto.checked, color: color.value, button_label: label.value,
           claim_hours: num(claim), min_account_days: num(acct), min_member_days: num(memb), bonus_entries: num(bonusN),
-          require_role_ids: reqRole.value, require_all: reqAll.value === "all", override_role_ids: overRole.value, bonus_role_ids: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, keys: keys.value,
+          require_role_ids: reqRole.value, require_all: reqAll.value === "all", override_role_ids: overRole.value, bonus_role_ids: bonusRole.value, ping_role_id: pingRole.value, vouch_channel_id: vouchSel.value, regions: regions.value, keys: keys.value,
           boosters: boosters.checked, steam_verified: steamV.checked, start_in: startIn.value, rounds: num(rounds), repeat_every: repeatEvery.value, steps: steps.get()
         });
         keys.value = "";
@@ -131,6 +132,8 @@
           h("div", { class: "row" }, field("Ping role", pingRole), field("Hours to claim", claim), field("Vouches channel", vouchSel)),
           h("div", { class: "row" }, field("Min. Discord account age (days)", acct), field("Min. days in this server", memb)),
           h("label", { class: "check" }, boosters, "Only server boosters can enter"),
+          field("Regions allowed (country codes like US, CA, DE or a group: EU, EUROPE, NA, LATAM, OCEANIA, ASIA)", regions),
+          h("p", { class: "muted small", text: "People are checked against the country on their Steam profile, or the region they set for the bot. Tick Steam Verified below to count only Steam-verified countries." }),
           h("label", { class: "check" }, steamV, "Only Steam Verified members can enter"),
           h("h4", { text: "Schedule" }),
           h("div", { class: "row" }, field("Start in", startIn), field("Rounds (prizes are split across them)", rounds), field("Repeat every", repeatEvery))),
