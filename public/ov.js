@@ -66,6 +66,12 @@
       (d.rows || []).forEach((r, i) => { const row = el("div", "row"); row.append(el("span", "rank", String(i + 1)), el("span", "who", r.name), el("span", "val", (c.showLevel ? "Lv " + r.level + " · " : "") + n(r.xp) + " XP")); rows.append(row); });
       if (!(d.rows || []).length) rows.append(el("div", "nums", "No one has earned XP yet"));
       card.append(rows);
+    } else if (kind === "free") {
+      const head = el("div", "head"); head.append(el("div", "label", c.label || "Free right now")); card.append(head);
+      const rows = el("div", "rows");
+      (d.games || []).forEach(g => { const row = el("div", "row"); const left = g.expiry ? Math.max(0, Date.parse(g.expiry) - Date.now()) : 0; const days = Math.floor(left / 86400000), hrs = Math.floor(left % 86400000 / 3600000); row.append(el("span", "who", g.title), el("span", "val", g.shop + (g.expiry && left ? " · " + (days ? days + "d " : "") + hrs + "h left" : ""))); rows.append(row); });
+      if (!(d.games || []).length) rows.append(el("div", "nums", "No free games right now"));
+      card.append(rows);
     } else if (kind === "playing") {
       const head = el("div", "head"); head.append(el("div", "label", c.label || "Playing now")); card.append(head);
       const rows = el("div", "rows");
@@ -177,7 +183,7 @@
   if (demo) {
     // The studio preview: everything comes from the address, nothing is fetched.
     let c = {}, v = {}; try { c = JSON.parse(q.get("c") || "{}"); v = JSON.parse(q.get("v") || "{}"); } catch { /* an empty preview is fine */ }
-    const kind = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll"].includes(q.get("k")) ? q.get("k") : "goal";
+    const kind = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll", "free"].includes(q.get("k")) ? q.get("k") : "goal";
     const target = Math.max(1, Number(c.target) || 100), current = Number(v.current) || 0;
     if (kind === "alerts") {
       look(c); let k = 0;
@@ -186,7 +192,7 @@
     } else {
       const sale = v.sale || { name: "Steam Winter Sale", start: Date.now() + 6 * 86400_000 + 4 * 3600_000, end: Date.now() + 24 * 86400_000, live: false };
       const data = kind === "goal" ? { current, target, pct: Math.max(0, Math.min(100, Math.round(current / target * 100))) }
-        : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : kind === "sale" ? sale : kind === "poll" ? { on: true, question: "What should we play next?", open: true, until: Date.now() + 240000, total: 24, options: [{ title: "Deep Rock Galactic", count: 11 }, { title: "Hades II", count: 8 }, { title: "Balatro", count: 5 }] } : kind === "board" ? { rows: [["Alex", 12, 4210], ["Sam", 9, 2890], ["Riley", 7, 1760], ["Jo", 5, 940], ["Kai", 3, 410]].slice(0, Math.max(3, Number(c.limit) || 5)).map(([name, level, xp]) => ({ name, level, xp })) } : kind === "playing" ? { games: [{ game: "Deep Rock Galactic", count: 4, names: ["Alex", "Sam", "Riley"] }, { game: "Hades II", count: 1, names: ["Jo"] }] } : kind === "scene" ? { children: Array.isArray(v.children) ? v.children : [] } : { at: c.at, mode: c.mode };
+        : kind === "stats" ? { members: v.members ?? null, boosts: v.boosts ?? null } : kind === "sale" ? sale : kind === "poll" ? { on: true, question: "What should we play next?", open: true, until: Date.now() + 240000, total: 24, options: [{ title: "Deep Rock Galactic", count: 11 }, { title: "Hades II", count: 8 }, { title: "Balatro", count: 5 }] } : kind === "board" ? { rows: [["Alex", 12, 4210], ["Sam", 9, 2890], ["Riley", 7, 1760], ["Jo", 5, 940], ["Kai", 3, 410]].slice(0, Math.max(3, Number(c.limit) || 5)).map(([name, level, xp]) => ({ name, level, xp })) } : kind === "free" ? { games: [{ title: "Hades", shop: "Epic", expiry: new Date(Date.now() + 2 * 86400000).toISOString() }, { title: "Balatro", shop: "GOG", expiry: null }, { title: "Dead Cells", shop: "Steam", expiry: new Date(Date.now() + 5 * 3600000).toISOString() }].slice(0, Math.max(2, Number(c.limit) || 4)) } : kind === "playing" ? { games: [{ game: "Deep Rock Galactic", count: 4, names: ["Alex", "Sam", "Riley"] }, { game: "Hades II", count: 1, names: ["Jo"] }] } : kind === "scene" ? { children: Array.isArray(v.children) ? v.children : [] } : { at: c.at, mode: c.mode };
       state = { kind, config: c, data };
       draw();
     }

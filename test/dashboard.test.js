@@ -3997,3 +3997,14 @@ test("overlay studio: a poll is posted by the bot and its votes show on the over
         assert.equal(channels.status, 200); assert.ok(channels.data.channels.length);
     } finally { await o.close(); }
 });
+
+test("overlay studio: the free games overlay lists claimable games without a server", async () => {
+    const soon = new Date(Date.now() + 86400_000).toISOString();
+    const o = await signedIn({ itadExtra: { getGiveawayList: async () => [{ id: "1", title: "Alpha", shop: "Epic", url: "https://e.example/a", expiry: soon }, { id: "2", title: "Old", shop: "Epic", url: "https://e.example/b", expiry: "1970-01-01T00:00:00Z" }, { id: "3", title: "Evil", shop: "Steam", url: "javascript:alert(1)", expiry: null }] } });
+    try {
+        const made = await o.request("/api/overlays", { method: "POST", body: { action: "create", kind: "free" } });
+        assert.equal(made.status, 200);
+        const j = await (await fetch(o.base + "/api/ov/data?token=" + made.data.token)).json();
+        assert.deepEqual(j.data.games.map(g => g.title), ["Alpha"], "no unsafe links, no expired ones");
+    } finally { await o.close(); }
+});

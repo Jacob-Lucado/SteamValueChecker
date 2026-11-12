@@ -424,6 +424,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 let st = null; try { st = o.config.pollId ? JSON.parse(db.getMeta(`poll:${o.config.pollId}`) || "null") : null; } catch { st = null; }
                 if (st) { const counts = st.options.map(() => 0); for (const v of Object.values(st.votes ?? {})) if (counts[v] !== undefined) counts[v]++; data = { on: true, question: st.question || "What should we play?", open: now() <= st.until, until: st.until, total: counts.reduce((a, b) => a + b, 0), options: st.options.map((x, i) => ({ title: x.title, count: counts[i] })) }; }
                 else data = { on: false };
+            } else if (o.kind === "free") {
+                const list = await remember("ovfree", 10 * 60_000, async () => (await itad.getGiveawayList()).filter(g => /^https:\/\//i.test(g.url ?? "")).map(g => ({ title: String(g.title ?? "").slice(0, 80), shop: String(g.shop ?? "").slice(0, 30), expiry: g.expiry ?? null, dlc: isDlc(g) })));
+                data = { games: list.filter(g => o.config.showDlc || !g.dlc).filter(g => !g.expiry || new Date(g.expiry).getTime() > now()).slice(0, o.config.limit).map(({ title, shop, expiry }) => ({ title, shop, expiry })) };
             } else if (o.kind === "playing" && o.guild_id) {
                 const r = nowPlaying?.enabled ? await whoIsPlaying(db, nowPlaying, o.guild_id) : { games: [] };
                 data = { games: await Promise.all(r.games.slice(0, o.config.limit).map(async x => ({ game: x.game, count: x.players.length, names: await Promise.all(x.players.slice(0, 3).map(p => nameOf(p.userId))) }))) };
