@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { ORDER, buildPack } from "../src/dashi18n.js";
 import { LANGS, DISCORD_LOCALE, tr, dictionary, languageDone, localizeCommands } from "../src/i18n.js";
 import { hubCommands } from "../src/commands.js";
 import { prefsPatch } from "../src/prefs.js";
@@ -45,13 +46,20 @@ test("command descriptions are localized for Discord without touching names, opt
     assert.ok(games.options.find(o => o.name === "menu").description_localizations.ko);
 });
 
+// The page's helper with every language's file loaded the way the server serves them.
+function pageHelper({ language = "en", stored = null, added = [] } = {}) {
+    const w = { localStorage: { getItem: () => stored, setItem() {} }, navigator: { language, languages: [language] }, document: { head: { appendChild: el => added.push(el.src) }, createElement: () => ({}), documentElement: {}, addEventListener() {} } };
+    w.window = w;
+    vm.runInNewContext(readFileSync(new URL("../public/i18n.js", import.meta.url), "utf8"), w);
+    return w;
+}
+function withAll(w) { for (const code of ORDER) vm.runInNewContext(buildPack(code), w); return w.SVC_I18N; }
+
 test("dashboard phrases: every language has every phrase, and unknown text stays as it is", () => {
-    const sandbox = { window: {}, navigator: { language: "de-DE", languages: ["de-DE"] }, localStorage: { getItem: () => null, setItem() {} } };
-    vm.runInNewContext(readFileSync(new URL("../public/i18n.js", import.meta.url), "utf8"), sandbox);
-    const I = sandbox.window.SVC_I18N;
+    const I = withAll(pageHelper({ language: "de-DE" }));
     assert.deepEqual(Object.keys(I.LANGS), Object.keys(LANGS));
     const base = Object.keys(I._dict.es);
-    assert.ok(base.length > 150);
+    assert.ok(base.length > 550, `only ${base.length} strings`);
     for (const l of Object.keys(LANGS).filter(l => l !== "en")) {
         assert.deepEqual(Object.keys(I._dict[l]), base, l);
         assert.ok(Object.values(I._dict[l]).every(v => typeof v === "string" && v.trim()), `${l} has a blank phrase`);
@@ -64,41 +72,26 @@ test("dashboard phrases: every language has every phrase, and unknown text stays
     assert.equal(I.tx("constructor", "Wishlist"), "Wishlist");
 });
 
-test("dashboard translations: every row has all eleven languages, patterns work, key pages covered", () => {
-    const w = { localStorage: { getItem: () => "en", setItem() {} }, navigator: { language: "en" } };
-    w.window = w; w.document = { documentElement: {}, addEventListener() {} };
-    vm.runInNewContext(readFileSync(new URL("../public/i18n.js", import.meta.url), "utf8"), w);
-    const I = w.SVC_I18N;
-    const langs = ["es", "fr", "de", "pt", "it", "ru", "pl", "tr", "ja", "ko", "zh"];
-    const en = Object.keys(I._dict.es);
-    assert.ok(en.length > 550, `only ${en.length} strings`);
-    for (const l of langs) {
-        assert.equal(Object.keys(I._dict[l]).length, en.length, l);
-        for (const k of en) assert.ok(I._dict[l][k] && I._dict[l][k].trim(), `${l} missing: ${k}`);
-    }
-    for (const l of langs) for (const t of ["Giveaway overlay", "Nobody is streaming right now.", "Server only", "Move up"]) assert.notEqual(I.tx(l, t), t, `${l}: ${t}`);
-    assert.equal(I.tx("de", 42), 42);
-    assert.equal(I.tx("constructor", "Wishlist"), "Wishlist");
-});
-
-test("dashboard translations: every row has all eleven languages, patterns work, key pages covered", () => {
-    const w = { localStorage: { getItem: () => "en", setItem() {} }, navigator: { language: "en" } };
-    w.window = w; w.document = { documentElement: {}, addEventListener() {} };
-    vm.runInNewContext(readFileSync(new URL("../public/i18n.js", import.meta.url), "utf8"), w);
-    const I = w.SVC_I18N;
-    const langs = ["es", "fr", "de", "pt", "it", "ru", "pl", "tr", "ja", "ko", "zh"];
-    const en = Object.keys(I._dict.es);
-    assert.ok(en.length > 550, `only ${en.length} strings`);
-    for (const l of langs) {
-        assert.equal(Object.keys(I._dict[l]).length, en.length, l);
-        for (const k of en) assert.ok(I._dict[l][k] && I._dict[l][k].trim(), `${l} missing: ${k}`);
-    }
-    for (const l of langs) {
-        for (const s of ["Giveaway overlay", "Nobody is streaming right now.", "Server only", "Move up"]) assert.notEqual(I.tx(l, s), s === "Move up" && l === "x" ? "" : undefined, s);
-        assert.notEqual(I.tx(l, "Server only"), "Server only", l);
+test("dashboard translations: patterns work and key pages are covered in every language", () => {
+    const I = withAll(pageHelper());
+    for (const l of ORDER) {
+        for (const t of ["Giveaway overlay", "Nobody is streaming right now.", "Server only", "Move up"]) assert.notEqual(I.tx(l, t), t, `${l}: ${t}`);
     }
     assert.equal(I.tx("de", "Server only"), "Nur Server");
     assert.equal(I.tx("en", "Server only"), "Server only");
     assert.equal(I.tx("es", "Something never translated"), "Something never translated");
     assert.equal(I.tx("es", "20% off"), "20% de descuento");
+});
+
+test("dashboard translations: a language that has not loaded yet stays in English, and only its own file is fetched", () => {
+    const added = [], w = pageHelper({ language: "ja", added });
+    assert.deepEqual(added, ["/i18n-ja.js"], "a Japanese browser asks for its language file as soon as the page starts");
+    const I = w.SVC_I18N;
+    assert.equal(I.tx("ja", "Wishlist"), "Wishlist", "nothing loaded yet");
+    I.load("ja"); I.load("ja"); I.load("en"); I.load("nope");
+    assert.deepEqual(added, ["/i18n-ja.js"], "one request, for the reader's own language");
+    vm.runInNewContext(buildPack("ja"), w);
+    assert.equal(I.tx("ja", "Wishlist"), "ウィッシュリスト");
+    assert.ok(buildPack("ja").length < 200_000, "a single language file stays small");
+    assert.equal(buildPack("xx"), null);
 });

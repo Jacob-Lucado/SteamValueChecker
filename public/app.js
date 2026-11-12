@@ -344,6 +344,7 @@ window.SVC_SITE = envIn => {
         item.addEventListener("click", async () => {
           closeMenu();
           if (code === LANG) return;
+          await I18N.load(code);
           LANG = code; I18N.remember(code); document.documentElement.lang = code;
           if (state.me) { try { const res = await api("/api/settings", { lang: code }); state.me.settings = res.settings; } catch { /* the page still switches */ } }
           renderChrome(); route();
@@ -1990,6 +1991,7 @@ window.SVC_SITE = envIn => {
 
   let routeSeq = 0;
   async function boot() {
+    await I18N.load(LANG); // the reader's language file was already requested by i18n.js, so this is usually instant
     if (NATIVE) { route(); return; } // the desktop already loaded the settings and the account
     try {
       const shared = EMBED ? (() => { try { return window.parent.__svcState || null; } catch { return null; } })() : null; // a window reuses what the desktop already loaded
@@ -1999,7 +2001,7 @@ window.SVC_SITE = envIn => {
       try { state.me = await api("/api/me?soft=1"); if (state.me?.adminOnly || state.me?.signedOut) state.me = null; } catch { state.me = null; } } // a password sign-in opens the admin panel only
       // No choice made in this browser yet: follow the language already set for the bot on this account.
       const mine = state.me?.settings?.lang;
-      if (!I18N.hasChoice() && mine && mine !== "en" && I18N.valid(mine)) { LANG = mine; I18N.remember(mine); document.documentElement.lang = mine; }
+      if (!I18N.hasChoice() && mine && mine !== "en" && I18N.valid(mine)) { await I18N.load(mine); LANG = mine; I18N.remember(mine); document.documentElement.lang = mine; }
     } catch (e) {
       app.replaceChildren(h("div", { class: "notice warn", text: e.message }));
       return;

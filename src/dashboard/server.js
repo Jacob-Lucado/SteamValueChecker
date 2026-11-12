@@ -106,6 +106,7 @@ import { createMusicChat } from "../musicchat.js";
 import { dmChannel, isDm, dmParts } from "../staffchat.js";
 import { PANEL_AREAS, mayChange } from "../paneluser.js";
 import { checkPassword, burnTime, matchTotp } from "../adminlogin.js";
+import { ORDER as I18N_ORDER, buildPack } from "../dashi18n.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 const SEO_SRC = fileURLToPath(new URL("../seopages.js", import.meta.url));
@@ -114,6 +115,7 @@ const FILES = {
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
     "/theme.js": ["theme.js", "text/javascript; charset=utf-8"],
     "/i18n.js": ["i18n.js", "text/javascript; charset=utf-8"],
+    ...Object.fromEntries(I18N_ORDER.map(code => [`/i18n-${code}.js`, [`i18n-${code}.js`, "text/javascript; charset=utf-8"]])),
     "/style.css": ["style.css", "text/css; charset=utf-8"],
     "/logo.png": ["logo.png", "image/png"],
     "/favicon.ico": ["logo.png", "image/png"], // browsers and link previews ask for this by name
@@ -1570,6 +1572,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         if (body && file.startsWith("seo/") && seoIsLive(file.slice(4, -5)) && Date.now() - (cache.get(file + ":at") ?? 0) > 3600_000) { refreshSeo(file); return body; }
         if (!body) {
             if (file.startsWith("seo/")) return buildSeo(file);
+            if (/^i18n-[a-z]{2}\.js$/.test(file)) { const pack = buildPack(file.slice(5, 7)); if (!pack) return null; body = Buffer.from(pack); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
             if (file === "index.html" || file === "grabber.html" || file === "ai.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));

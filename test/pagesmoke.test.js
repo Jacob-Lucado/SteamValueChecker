@@ -162,6 +162,24 @@ test("the signed-out landing page and the welcome tour open without script error
     } finally { await browser.close(); await o.close(); }
 });
 
+test("the page speaks the browser's language and fetches only that language file", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const o = await setup({ config: { ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        for (const [locale, code] of [["ja-JP", "ja"], ["en-US", null]]) {
+            const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, locale })).newPage();
+            const errors = [], packs = []; page.on("pageerror", e => errors.push(e.message)); page.on("request", r => { const m = /\/i18n-([a-z]{2})\.js/.exec(r.url()); if (m) packs.push(m[1]); });
+            await page.goto(`${o.base}/`, { waitUntil: "load" });
+            await page.waitForFunction(() => (document.getElementById("app")?.innerText ?? "").trim().length > 200, null, { timeout: 15000 });
+            assert.deepEqual(errors, []);
+            assert.deepEqual(packs, code ? [code] : [], `${locale} fetched ${packs.join(",") || "no"} language file`);
+            if (code) assert.equal(await page.evaluate(() => document.documentElement.lang), code);
+            if (code) assert.match(await page.evaluate(() => document.getElementById("app").innerText), /[\u3040-\u30ff\u4e00-\u9fff]/, "the page is drawn in Japanese");
+        }
+    } finally { await browser.close(); await o.close(); }
+});
+
 test("a server's page and the welcome tour open signed in", { timeout: 120_000 }, async t => {
     const browser = await launchBrowser();
     if (!browser) return t.skip("no Chromium here");
