@@ -46,6 +46,11 @@ import { createModDash, ModDashError } from "./moddash.js";
 import { HttpError } from "./http.js";
 import { createOverlayRoutes } from "./overlayroutes.js";
 import { createAdminRoutes } from "./adminroutes.js";
+import { createMiscRoutes } from "./miscroutes.js";
+import { createModRoutes } from "./modroutes.js";
+import { createRedeemRoutes } from "./redeemroutes.js";
+import { createPlayRoutes } from "./playroutes.js";
+import { createProfileRoutes } from "./profileroutes.js";
 import { createAdminExtraRoutes } from "./adminextraroutes.js";
 import { createFortniteRoutes } from "./fortniteroutes.js";
 import { createWishlistRoutes } from "./wishlistroutes.js";
@@ -1023,10 +1028,27 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
     const dayKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date()); // YYYY-MM-DD, Eastern
 
     const adminExtraRoutes = createAdminExtraRoutes({ ai, authorCard, bundleFeed, codes, config, dayKey, db, dm, guildList, health, inviteReport, isOwner, itad, logs, music, musicCall, now, ops, origin, rest, rt, session, square, storage, supporters, topgg, weekly, xposter });
+    const profileRoutes = createProfileRoutes({ authorCard, bgLimit, config, cooldown, db, guildFor, isManager, isOwner, itad, mayPost, notifySocial, now, nowPlaying, profileEditorPayload, rest, session, slugOwner, socialRoutes, socialWrite, steamFetch, userRow });
+    const playRoutes = createPlayRoutes({ botGuilds, calendar, cooldown, db, dm, guildFor, isManager, isOwner, itad, lfg, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow });
+    const redeemRoutes = createRedeemRoutes({ adminExtraRoutes, botGuilds, codes, cooldown, db, dm, fortniteRoutes, indieRoutes, isOwner, itad, musicRoutes, now, overlayRoutes, serverRoutes, session, userRow, wishlistRoutes });
+    const modRoutes = createModRoutes({ MOD_ACTION_PERM, MOD_PERMS, botIn, cooldown, hasGuildPerm, isManager, md, modGuild, modr, session });
+    const miscRoutes = createMiscRoutes({ PAGES, checkoutLimit, config, cooldown, db, isOwner, log, now, origin, publicSettings, referrals, remember, rest, session, square, supporters, topgg, userRow });
     const routes = {
-        // The extension asks this (no sign-in, nothing sent about the person) to remind its users to update.
-        "GET /api/extension/latest": async () => ({ latest: process.env.EXTENSION_LATEST || EXTENSION_LATEST, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL }),
+        ...overlayRoutes,
+        ...adminRoutes,
+        ...giveawayRoutes,
+        ...communityRoutes,
+        ...indieRoutes,
+        ...socialRoutes,
+        ...serverRoutes,
+        ...streamRoutes,
+        ...musicRoutes,
+        ...ticketRoutes,
+        ...libraryRoutes,
         ...wishlistRoutes,
+        ...fortniteRoutes,
+        ...adminExtraRoutes,
+        ...redeemRoutes,
         "GET /api/config": async () => ({
             notice: rt && rt.get("notice_text") ? { text: rt.get("notice_text"), level: rt.get("notice_level") } : null,
             regions: REGIONS, alertTypes: ALERT_TYPES, fanaticalUrl: FANATICAL_GRABBER_URL, tipUrl: SUPPORT_PAGE_URL,
@@ -1043,12 +1065,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             supportUrl: config.mainGuild?.inviteUrl() ?? null
         }),
 
-        "GET /api/topgg": async (req) => {
-            const u = session(req);
-            if (!topgg?.enabled) return { enabled: false };
-            const st = await topgg.status(u.id);
-            return { enabled: true, voted: st.voted, nextAt: st.nextAt, votes: st.votes, xp: VOTE_XP, url: `https://top.gg/bot/${encodeURIComponent(config.clientId ?? "")}/vote` };
-        },
+        ...miscRoutes,
         "GET /api/me": async (req, _b, url) => {
             // The page asks with ?soft=1 on load. Signed out is then an ordinary answer instead of a 401, so visitors' consoles stay clean.
             if (url.searchParams.get("soft") === "1" && !softSession(req) && !sessions.get(cookies(req)[COOKIE])) return { user: null, signedOut: true };
@@ -1081,42 +1098,11 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             };
         },
 
-        "POST /api/tour/done": async (req) => { const s = session(req); userRow(s); db.updateUser(s.userId, { welcomed: 1 }); return { ok: true }; },
-
-        "GET /api/notifications": async (req) => {
-            const s = session(req); userRow(s);
-            return { items: db.listNotifications(s.userId, 80).map(({ extra, ...n }) => {
-                let items = null;
-                try { items = JSON.parse(extra ?? "null")?.items ?? null; } catch { /* old or damaged row */ }
-                return items ? { ...n, items } : n;
-            }), unread: db.unreadNotifications(s.userId) };
-        },
-        "POST /api/notifications/read": async (req) => { const s = session(req); userRow(s); db.readNotifications(s.userId); return { unread: 0 }; },
-
-        "GET /api/commands": async () => remember("commandguide", 3600_000, () => ({ hubs: commandGuide(hubCommands) })),
-
-        "GET /api/changelog": async (req) => {
-            const s = session(req); const u = userRow(s);
-            db.updateUser(s.userId, { seen_version: LATEST });
-            return { entries: CHANGELOG, wasNew: u.seen_version !== LATEST };
-        },
-        "POST /api/changelog/seen": async (req) => { const s = session(req); userRow(s); db.updateUser(s.userId, { seen_version: LATEST }); return { ok: true }; },
 
 
-        // One box that finds your games, library, tickets, pages and (for managers) giveaways.
-        "GET /api/search": async (req, _b, url) => {
-            const s = session(req); userRow(s);
-            const q = String(url.searchParams.get("q") ?? "").trim().toLowerCase().slice(0, 60);
-            if (q.length < 2) return { results: [] };
-            const hit = t => String(t).toLowerCase().includes(q);
-            const out = [];
-            for (const i of db.listItems(s.userId)) if (hit(i.title)) out.push({ kind: "Wishlist", title: i.title, href: "#/wishlist" });
-            for (const l of db.listLibrary(s.userId)) if (hit(l.title)) out.push({ kind: "Library", title: l.title, href: "#/library" });
-            for (const t of db.listTickets({ userId: s.userId, limit: 50 })) if (hit(t.subject) || `#${t.id}` === q) out.push({ kind: "Ticket", title: `#${t.id} ${t.subject}`, href: `#/support/${t.id}` });
-            for (const g of s.guilds) if (hit(g.name)) out.push({ kind: "Server", title: g.name, href: `#/servers/${g.id}` });
-            for (const [id, name] of PAGES) if (hit(name)) out.push({ kind: "Page", title: name, href: "#/" + id });
-            return { results: out.slice(0, 25) };
-        },
+
+
+
 
         "POST /api/value": async (req, body) => {
             const s = session(req);
@@ -1144,212 +1130,26 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
 
 
 
-        "POST /api/settings": async (req, body) => {
-            const s = session(req);
-            const u = userRow(s);
-            const patch = {};
-            if (body.region !== undefined) {
-                if (!REGIONS.some(r => r.value === body.region)) throw new HttpError(400, "Unknown region.");
-                patch.region = body.region;
-            }
-            if (body.stores !== undefined) {
-                if (!["major", "all"].includes(body.stores)) throw new HttpError(400, "Unknown store setting.");
-                patch.stores = body.stores;
-            }
-            if (body.paused !== undefined) patch.paused = body.paused ? 1 : 0;
-            if (body.guild_id !== undefined) {
-                if (body.guild_id !== null && !s.guilds.some(g => g.id === body.guild_id)) throw new HttpError(400, "You are not in that server.");
-                patch.guild_id = body.guild_id;
-            }
-            const nextGuild = patch.guild_id !== undefined ? patch.guild_id : u.guild_id;
-            const nextDelivery = body.delivery ?? u.delivery;
-            if (!["dm", "channel"].includes(nextDelivery)) throw new HttpError(400, "Unknown delivery mode.");
-            if (nextDelivery === "channel" && !db.getGuild(nextGuild)) {
-                throw new HttpError(400, "Pick a server that has an alert channel first. A server admin can set one on the Servers page.");
-            }
-            patch.delivery = nextDelivery;
-            const prefInput = Object.fromEntries(["quiet_start", "quiet_end", "tz", "digest", "digest_day", "bundles", "share", "free", "free_dlc", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "nowplaying", "playtest", "playtest_skip", "news", "min_discount", "max_price", "lows_only", "muted", "lang"].filter(k => body[k] !== undefined).map(k => [k, body[k]]));
-            Object.assign(patch, prefsPatch(prefInput, u));
-            db.updateUser(s.userId, patch);
-            return { settings: publicSettings(db.getUser(s.userId)) };
-        },
 
 
-        // ----- game codes (SHiFT and the like) -----
-        "GET /api/codes": async (req, _b, url) => {
-            session(req);
-            const game = url.searchParams.get("game") || null;
-            const wanted = game ? expandGames([game]) : null; // the Borderlands entry stands for all six
-            if (wanted && !wanted.every(k => codeGames().some(g => g.key === k))) throw new HttpError(400, "Unknown game.");
-            const status = url.searchParams.get("status") === "expired" ? "expired" : "active";
-            const at = now();
-            db.expireDue(at); // anything that ended since the last poll should not show as working
-            return { games: codeGames(), families: codeFamilies(), status, codes: db.listCodes({ status, game: wanted, limit: 100 }).map(c => codeView(c, at)), counts: db.codeCounts() };
-        },
-        "GET /api/bundlefeed": async (req, _b, url) => {
-            session(req);
-            const store = url.searchParams.get("store") || null;
-            if (store && !BUNDLE_STORES[store]) throw new HttpError(400, "Unknown store.");
-            const status = url.searchParams.get("status") === "expired" ? "expired" : "active";
-            db.expireDueBundles(now()); // anything that ended since the last poll should not show as live
-            return { status, stores: Object.entries(BUNDLE_STORES).map(([key, v]) => ({ key, name: v.name })), bundles: db.listFeedBundles({ status, stores: store ? [store] : null, limit: 100 }).map(bundleFeedView), counts: db.bundleFeedCounts() };
-        },
-        ...serverRoutes,
-        ...adminExtraRoutes,
-        ...musicRoutes,
-        ...overlayRoutes,
-        ...indieRoutes,
-        ...fortniteRoutes,
-        "POST /api/codes/retire": async (req, body) => {
-            const s = session(req);
-            if (!isOwner(s)) throw new HttpError(403, "Only the bot owner can do this.");
-            const c = db.getCode(Number(body.id));
-            if (!c) throw new HttpError(404, "No such code.");
-            db.setCodeStatus(c.id, "expired");
-            codes?.poll?.().catch(() => {}); // edits the posts to show it ended
-            return { id: c.id, status: "expired" };
-        },
-        // ----- supporter passes -----
-        "GET /api/supporter": async (req) => {
-            const s = session(req), until = supporterUntil(db, s.userId);
-            return { enabled: Boolean(square?.enabled), plans: PLANS, until: until > now() ? until : null, boost: SUPPORTER_XP_BOOST, founder: isFounder(db, s.userId), wall: wallName(db, s.userId), alert_color: alertColorHex(db, s.userId), founding_left: Math.max(0, FOUNDERS_MAX - foundersTaken(db)) };
-        },
         "GET /api/public/supporters": async () => ({ wall: supporters ? supporters.wall() : [] }),
-        "POST /api/supporter/wall": async (req, body) => {
-            const s = session(req);
-            if (!supporters) throw new HttpError(404, "Not found.");
-            if (!isSupporter(db, s.userId, now()) && !isFounder(db, s.userId)) throw new HttpError(403, "The wall is for supporters.");
-            return { wall: supporters.setWall(s.userId, body.on === false ? "" : body.name) };
-        },
-        "POST /api/supporter/alertcolor": async (req, body) => {
-            const s = session(req);
-            if (!supporters) throw new HttpError(404, "Not found.");
-            if (!isSupporter(db, s.userId, now()) && !isFounder(db, s.userId)) throw new HttpError(403, "Alert colors are a supporter perk.");
-            try { return { alert_color: supporters.setAlertColor(s.userId, body.color) }; } catch (e) { throw new HttpError(400, e.message); }
-        },
-        "POST /api/supporter/checkout": async (req, body) => {
-            const s = session(req);
-            if (!square?.enabled) throw new HttpError(404, "Supporter passes aren't switched on yet.");
-            if (!checkoutLimit.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            let target = s.userId, giftFrom = null;
-            const to = String(body.gift_to ?? "").trim().replace(/^@/, "").toLowerCase();
-            if (to) {
-                const hit = /^\d{5,25}$/.test(to) ? db.getUser(to) : db.getProfileBySlug(to);
-                if (!hit) throw new HttpError(404, "I couldn't find anyone by that page name or ID. They need to have used the bot or turned on their profile page.");
-                if (hit.discord_id === s.userId) throw new HttpError(400, "That's you. Use the normal buttons to buy a pass for yourself.");
-                target = hit.discord_id; giftFrom = s.userId;
-            }
-            try { return { url: await square.checkout({ userId: target, planId: String(body.plan ?? ""), redirectUrl: `${origin}/#/tip?thanks=${giftFrom ? "gift" : "1"}`, giftFrom }) }; }
-            catch (e) { log(`[square] ${e.message}`); throw new HttpError(400, /Pick one|Sign in|switched on/.test(e.message) ? e.message : "Couldn't open the checkout page. Try again in a minute."); }
-        },
-        "GET /api/referral": async (req) => {
-            const s = session(req);
-            if (!s) throw new HttpError(401, "Sign in first.");
-            if (!referrals) throw new HttpError(404, "Not found.");
-            return referrals.stats(s.userId);
-        },
 
 
 
 
 
 
-        // giveaway and code news the bot spotted, plus drops added in the member's own servers
-        "GET /api/promos": async (req) => {
-            const s = session(req);
-            const at = now();
-            db.expireDrops(at);
-            const mine = s.guilds.filter(g => !botGuilds || botGuilds(g.id));
-            const drops = mine.flatMap(g => db.listDrops(g.id, { status: "active", limit: 10 }).map(d => ({ ...dropView(d, at), server: g.name })));
-            return { news: db.listNews(30).map(n => ({ id: n.id, source: n.source, kind: n.kind, title: n.title, url: n.url, summary: n.summary, seenAt: n.seen_at })), drops: drops.filter(d => d.status === "active") };
-        },
 
 
 
 
 
-        "GET /api/redeem": async (req) => {
-            const s = session(req);
-            db.pruneRedeemJobs();
-            return { job: db.pendingRedeemJob(s.userId) };
-        },
 
-        "GET /api/redeem/history": async (req) => {
-            const s = session(req);
-            const entries = db.redeemHistory(s.userId, 100);
-            const count = st => entries.filter(e => e.status === st).length;
-            return { entries, counts: { redeemed: count("redeemed"), owned: count("owned"), used: count("used"), invalid: count("invalid") } };
-        },
 
-        "POST /api/redeem/check": async (req, body) => {
-            // Which pasted keys were already redeemed here, so the page can skip them instead of spending a Steam attempt.
-            const s = session(req);
-            const keys = extractKeys((Array.isArray(body.keys) ? body.keys : []).slice(0, 500).join("\n"));
-            return { known: Object.fromEntries(db.knownRedeems(s.userId, keys)) };
-        },
 
-        "POST /api/redeem/log": async (req, body) => {
-            // A batch run straight from the page: remember how the keys ended up (hashes only).
-            const s = session(req);
-            const results = (Array.isArray(body.results) ? body.results : []).slice(0, 500).map(r => ({ key: String(r?.key ?? ""), status: String(r?.status ?? ""), game: String(r?.game ?? "").slice(0, 100) }));
-            return { logged: db.logRedeem(s.userId, results) };
-        },
 
-        "POST /api/redeem/history/clear": async (req) => {
-            const s = session(req);
-            return { cleared: db.clearRedeemHistory(s.userId) };
-        },
 
-        "POST /api/redeem/finish": async (req, body) => {
-            // The page reports what the extension did with a batch that was queued by /games redeem. Results go back to the member's Discord DMs.
-            const s = session(req);
-            const job = db.pendingRedeemJob(s.userId);
-            if (body.cancel) { db.cancelRedeemJob(s.userId); return { ok: true }; }
-            if (!job || job.id !== Number(body.id)) throw new HttpError(404, "That batch is no longer waiting.");
-            const mine = new Set(job.keys);
-            const results = (Array.isArray(body.results) ? body.results : []).slice(0, 500)
-                .map(r => ({ key: String(r?.key ?? "").toUpperCase(), status: String(r?.status ?? "error").slice(0, 20), game: String(r?.game ?? "").slice(0, 100), message: String(r?.message ?? "").slice(0, 120) }))
-                .filter(r => mine.has(r.key));
-            const count = (...st) => results.filter(r => st.includes(r.status)).length;
-            const failed = results.filter(r => !["redeemed", "owned", "used"].includes(r.status));
-            const left = job.keys.length - results.length;
-            const summary = `${count("redeemed")} redeemed, ${count("owned", "used")} already owned or used, ${failed.length} failed${left > 0 ? `, ${left} not tried` : ""}`;
-            const aborted = String(body.aborted ?? "").slice(0, 160);
-            const lines = [`Your batch redeem finished: **${summary}.**`];
-            if (aborted) lines.push(`⚠️ ${aborted}`);
-            const done = results.filter(r => r.status === "redeemed");
-            if (done.length) lines.push("", "**Redeemed**", ...done.slice(0, 25).map(r => `• ${r.game || "Unnamed product"} (\`${r.key.slice(0, 5)}-•••••-${r.key.slice(-5)}\`)`));
-            if (failed.length) lines.push("", "**Failed** (still yours to retry)", ...failed.slice(0, 25).map(r => `• \`${r.key}\` ${r.message || r.status}`));
-            if (left > 0) lines.push("", `**${left}** key${left === 1 ? "" : "s"} were not tried. Send them again with /games redeem.`);
-            db.logRedeem(s.userId, results);
-            if (!db.finishRedeemJob(s.userId, job.id, summary)) throw new HttpError(404, "That batch is no longer waiting.");
-            const text = lines.join("\n").slice(0, 3900);
-            try { db.addNotification(s.userId, { type: "redeem", title: "Batch redeem finished", body: summary, url: "#/redeem" }); } catch { /* the DM is what counts */ }
-            let sent = false;
-            if (dm) { try { await dm(s.userId, { embeds: [{ color: 0x57f287, title: "Batch redeem", description: text }] }); sent = true; } catch { /* DMs closed: it is in Notifications */ } }
-            return { ok: true, summary, dm: sent };
-        },
 
-        // The key vault shows titles only: what the unredeemed games are worth right now. Keys never come here.
-        "POST /api/vault/value": async (req, body) => {
-            const s = session(req);
-            cooldown(s.userId, "value");
-            const u = userRow(s);
-            const titles = [...new Set((Array.isArray(body.titles) ? body.titles : []).map(t => String(t ?? "").trim().slice(0, 150)).filter(Boolean))].slice(0, 150);
-            if (!titles.length) throw new HttpError(400, "No titles.");
-            const looked = (await itad.lookupTitles(titles)).filter(r => r.id);
-            const prices = looked.length ? await itad.getPrices(looked.map(r => r.id), u.region) : new Map();
-            let total = 0, currency = null;
-            const rows = looked.map(r => {
-                const sum = summarize(prices.get(r.id), { majorOnly: u.stores === "major" });
-                currency ??= sum.currency;
-                const price = sum.best?.price ?? sum.steam ?? null;
-                if (price !== null) total += sum.msrp && sum.msrp > price ? sum.msrp : price;
-                return { title: r.title, msrp: sum.msrp, price };
-            });
-            const nowTotal = rows.reduce((a, r) => a + (r.price ?? 0), 0);
-            return { currency: currency ?? "USD", fullPrice: Math.round(total * 100) / 100, cheapestNow: Math.round(nowTotal * 100) / 100, matched: rows.length, unmatched: titles.length - rows.length };
-        },
 
         // One page per game: prices, a year of history with the buy-now-or-wait verdict, bundles, free offers and server interest.
         "GET /api/game": async (req, _b, url) => {
@@ -1385,37 +1185,11 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             };
         },
 
-        "GET /api/friends": async (req) => { const s = session(req); userRow(s); syncFollowedFriends(db, s.userId, id => authorCard(id).name); return { friends: friendRows(db, s.userId) }; },
-        "POST /api/friends/birthday": async (req, body) => { const s = session(req); userRow(s); if (!db.setFriendBirthday(s.userId, cleanFriendName(body.name), cleanBirthday(body.birthday))) throw new HttpError(404, "I can't find that friend."); return { ok: true }; },
-        "POST /api/friends/add": async (req, body) => { const s = session(req); userRow(s); return saveFriend(db, s.userId, { name: body.name, birthday: body.birthday, page: body.page }); },
-        "POST /api/friends/remove": async (req, body) => { const s = session(req); if (!db.removeFriend(s.userId, String(body.name ?? ""))) throw new HttpError(404, "No friend by that name."); return { removed: true }; },
-        "GET /api/friends/deals": async (req, _b, url) => {
-            const s = session(req);
-            const f = db.getFriend(s.userId, String(url.searchParams.get("name") ?? ""));
-            if (!f) throw new HttpError(404, "No friend by that name.");
-            if (!f.slug) throw new HttpError(400, "Add their public page name first.");
-            cooldown(s.userId, "deals");
-            const deals = await friendDeals(db, itad, f.slug, 10);
-            if (!deals) throw new HttpError(404, "That page is not public, or does not exist.");
-            return { name: f.name, deals };
-        },
+        ...profileRoutes,
 
 
 
-        "GET /api/grabber": async (req) => {
-            const s = session(req);
-            userRow(s);
-            return { link: db.getGrabberLink(s.userId) };
-        },
 
-        // Makes (or replaces) the link code the FanaticalGrabber extension uses. The code is returned once and never stored readable.
-        "POST /api/grabber/token": async (req, body) => {
-            const s = session(req);
-            cooldown(s.userId, "grabbertoken");
-            userRow(s);
-            if (body.action === "off") return { ok: true, removed: db.revokeGrabberToken(s.userId) };
-            return { token: db.createGrabberToken(s.userId) };
-        },
 
 
 
@@ -1446,232 +1220,15 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
 
 
 
-        // Game night on the dashboard: pick opted-in members of a server and see what they can play and buy together.
-        "GET /api/gamenight/members": async (req, _b, url) => {
-            const s = session(req); const g = guildFor(s, url.searchParams.get("guild"));
-            const ids = db.sharingMembers(g.id).slice(0, 60);
-            return { members: await Promise.all(ids.map(async id => ({ id, name: (await rest.memberName(g.id, id)) || "Member " + id.slice(-4) }))) };
-        },
-        // The viewer's Twitch account, as Discord shows it. It is read from their Discord connections (never typed in), so it can't be faked.
-        "GET /api/twitchlink": async (req) => { const s = session(req), l = db.getTwitchLink(s.userId); return { linked: Boolean(l), login: l?.login ?? null }; },
-        "POST /api/twitchlink": async (req, body) => {
-            const s = session(req);
-            if (body.action !== "remove") throw new HttpError(400, "Unknown action.");
-            return { linked: false, removed: db.removeTwitchLink(s.userId) };
-        },
-        // Game club: the server's game of the month. Anyone in the server can look; Manage Server changes it.
-        "GET /api/club": async (req, _b, url) => {
-            const s = session(req), g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
-            const club = db.getClub(g.id), canManage = isManager(g) || isOwner(s);
-            const channels = canManage ? (await rest.listChannels(g.id).catch(() => [])).filter(c => c.type === undefined || c.type === 0 || c.type === 5).map(c => ({ id: c.id, name: c.name })) : [];
-            if (!club?.title) return { club: null, canManage, channels, channel: club?.channel_id ?? null };
-            const prog = clubProgress(db, club);
-            const owners = await Promise.all(prog.owners.map(async r => ({ ...r, name: (await rest.memberName(g.id, r.userId).catch(() => null)) || "Member " + String(r.userId).slice(-4) })));
-            return { club: { title: club.title, appid: club.appid, month: club.month, channel: club.channel_id }, owners, sharing: prog.sharing, canManage, channels, channel: club.channel_id };
-        },
-        "POST /api/club": async (req, body) => {
-            const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));
-            if (!(isManager(g) || isOwner(s))) throw new HttpError(403, "You need the Manage Server permission to change the game club.");
-            if (body.action === "off") { db.removeClub(g.id); return { ok: true }; }
-            if (body.action === "channel") { const id = String(body.channel_id ?? ""); if (id && !(await rest.listChannels(g.id).catch(() => [])).some(c => c.id === id)) throw new HttpError(400, "That channel is not in this server."); db.setClub(g.id, { channel_id: id || null }); return { ok: true }; }
-            if (body.action === "pick") { try { setPick(db, g.id, body.title, s.userId, now()); } catch (e) { throw new HttpError(400, e.message); } return { ok: true }; }
-            throw new HttpError(400, "Unknown action.");
-        },
-        "GET /api/santa": async (req, _b, url) => {
-            const s = session(req), g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
-            const ev = db.getSanta(g.id), canManage = isManager(g) || isOwner(s);
-            const channels = canManage ? (await rest.listChannels(g.id).catch(() => [])).filter(c => c.type === undefined || c.type === 0 || c.type === 5).map(c => ({ id: c.id, name: c.name })) : [];
-            if (!ev) return { event: null, canManage, channels };
-            const entries = db.santaEntries(ev.id);
-            const people = await Promise.all(entries.map(async e => ({ userId: e.user_id, name: (await rest.memberName(g.id, e.user_id).catch(() => null)) || "Member " + String(e.user_id).slice(-4) })));
-            const mine = db.santaEntry(ev.id, s.userId);
-            return { event: { id: ev.id, title: ev.title, budget: ev.budget, currency: ev.currency, status: ev.status, channel: ev.channel_id }, people, joined: Boolean(mine), drawn: Boolean(mine?.giftee_id), canManage, channels };
-        },
-        "POST /api/santa": async (req, body) => {
-            const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));
-            const manager = isManager(g) || isOwner(s);
-            const nameOf = async id => (await rest.memberName(g.id, id).catch(() => null)) || `<@${id}>`;
-            const fail = e => { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; };
-            try {
-                switch (body.action) {
-                    case "join": return { ok: true, joined: joinEvent(db, g.id, s.userId).joined };
-                    case "leave": return { ok: true, left: leaveEvent(db, g.id, s.userId).left };
-                    case "ideas": {
-                        const dm_ = await myAssignment({ db, itad, guildId: g.id, userId: s.userId, nameOf, guildName: g.name });
-                        return { ok: true, text: dm_.embeds[0].description, title: dm_.embeds[0].title };
-                    }
-                }
-                if (!manager) throw new HttpError(403, "You need the Manage Server permission for that.");
-                if (body.action === "create") {
-                    const channelId = String(body.channel_id ?? "");
-                    if (channelId && !(await rest.listChannels(g.id).catch(() => [])).some(c => c.id === channelId)) throw new HttpError(400, "That channel isn't in this server.");
-                    const ev = createEvent(db, { guildId: g.id, channelId: channelId || null, title: body.title, budget: body.budget, region: userRow(s).region || "US", by: s.userId });
-                    if (channelId) await rest.sendMessage(channelId, { embeds: [eventEmbed(ev, [], { guildName: g.name })], allowed_mentions: { parse: [] } }).catch(() => {});
-                    return { ok: true };
-                }
-                if (body.action === "draw") {
-                    if (!dm) throw new HttpError(400, "Sending messages isn't available here.");
-                    const r = await drawEvent({ db, itad, sendDm: (id, p) => dm(id, p), nameOf, guildName: g.name, guildId: g.id });
-                    return { ok: true, count: r.count, failed: r.failed.length };
-                }
-                if (body.action === "reveal") {
-                    const { event, entries } = endEvent(db, g.id);
-                    if (event.channel_id) await rest.sendMessage(event.channel_id, { embeds: [revealEmbed(event, entries)], allowed_mentions: { parse: [] } }).catch(() => {});
-                    return { ok: true };
-                }
-            } catch (e) { fail(e); }
-            throw new HttpError(400, "Unknown action.");
-        },
-        "GET /api/trivia": async (req, _b, url) => {
-            const s = session(req), g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
-            const canManage = isManager(g) || isOwner(s);
-            const channels = canManage ? (await rest.listChannels(g.id).catch(() => [])).filter(c => c.type === undefined || c.type === 0 || c.type === 5).map(c => ({ id: c.id, name: c.name })) : [];
-            if (!trivia) return { enabled: false, canManage, channels, active: null, top: [] };
-            const top = await Promise.all(trivia.top(g.id, 10).map(async r => ({ userId: r.user_id, name: (await rest.memberName(g.id, r.user_id).catch(() => null)) || "Member " + String(r.user_id).slice(-4), points: r.points, correct: r.correct, wins: r.wins })));
-            return { enabled: true, canManage, channels, active: trivia.active(g.id), top, mine: db.triviaRank(g.id, s.userId) };
-        },
-        "POST /api/trivia": async (req, body) => {
-            const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));
-            if (!(isManager(g) || isOwner(s))) throw new HttpError(403, "You need the Manage Server permission to run trivia.");
-            if (!trivia) throw new HttpError(400, "Trivia isn't available right now.");
-            try {
-                if (body.action === "start") {
-                    const channelId = String(body.channel_id ?? "");
-                    if (!(await rest.listChannels(g.id).catch(() => [])).some(c => c.id === channelId)) throw new HttpError(400, "Pick a channel in this server.");
-                    const r = await trivia.start({ guildId: g.id, channelId, rounds: body.rounds, by: s.userId });
-                    return { ok: true, rounds: r.rounds };
-                }
-                if (body.action === "stop") { trivia.stop(g.id); return { ok: true }; }
-            } catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
-            throw new HttpError(400, "Unknown action.");
-        },
-        "GET /api/nowplaying": async (req, _b, url) => {
-            // Same rules as /server nowplaying: members who turned it on (/alerts nowplaying) and share their library.
-            const s = session(req);
-            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
-            if (!nowPlaying?.enabled) return { enabled: false, games: [], watching: 0 };
-            const r = await whoIsPlaying(db, nowPlaying, g.id);
-            const games = await Promise.all(r.games.map(async x => ({ appid: x.appid, game: x.game, players: await Promise.all(x.players.map(async p => ({ userId: p.userId, name: (await rest.memberName(g.id, p.userId).catch(() => null)) || p.name || "Member " + String(p.userId).slice(-4) }))) })));
-            return { enabled: true, games, watching: r.watching };
-        },
-        "GET /api/compare": async (req, _b, url) => {
-            // Same rules as /server compare: a friend in one of your servers who turned on sharing (/alerts share).
-            const s = session(req);
-            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
-            const them = String(url.searchParams.get("user") ?? "");
-            if (them === s.userId) throw new HttpError(400, "Pick someone else.");
-            if (!db.sharingMembers(g.id).includes(them)) throw new HttpError(403, "That member has not opted in with /alerts share.");
-            const r = compareLibraries(db, s.userId, them);
-            const name = (await rest.memberName(g.id, them).catch(() => null)) || "Member " + them.slice(-4);
-            return { name, ...r, shared: r.shared.slice(0, 300), onlyA: r.onlyA.slice(0, 300), onlyB: r.onlyB.slice(0, 300) };
-        },
-        "GET /api/lfg": async (req, _b, url) => {
-            const s = session(req);
-            const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
-            const posts = db.listOpenLfg(g.id);
-            const ids = [...new Set(posts.flatMap(p => [p.creator_id, ...db.lfgMembers(p.id)]))].slice(0, 40);
-            const names = Object.fromEntries(await Promise.all(ids.map(async id => [id, (await rest.memberName(g.id, id).catch(() => null)) || "Member " + id.slice(-4)])));
-            return { me: s.userId, manageable: isManager(g), posts: posts.map(p => {
-                const members = db.lfgMembers(p.id);
-                return { id: p.id, game: p.game, starts_at: p.starts_at, slots: p.slots, note: p.note, host: names[p.creator_id] ?? p.creator_id, members: members.map(m => names[m] ?? "Member " + m.slice(-4)),
-                    joined: members.includes(s.userId), canClose: p.creator_id === s.userId || isManager(g), url: p.message_id ? `https://discord.com/channels/${p.guild_id}/${p.channel_id}/${p.message_id}` : null };
-            }) };
-        },
-
-        "POST /api/lfg": async (req, body) => {
-            const s = session(req);
-            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
-            const g = managerGuild(s, String(body.guild_id));
-            let channels;
-            try { channels = await rest.listChannels(g.id); } catch { throw new HttpError(400, "The bot is not in that server yet. Invite it first."); }
-            const channelId = String(body.channel_id ?? "");
-            if (!channels.some(c => c.id === channelId)) throw new HttpError(400, "Pick one of the server's text channels.");
-            const startsAt = Number(body.starts_at);
-            const { post, eventError } = await lfg.create({ guildId: g.id, channelId, creatorId: s.userId, game: body.game, startsAt, slots: body.slots, note: body.note, event: body.event === true });
-            return { id: post.id, eventError };
-        },
-
-        "POST /api/lfg/join": async (req, body) => {
-            const s = session(req);
-            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
-            const g = guildFor(s, String(body.guild_id));
-            const p = db.getLfg(Number(body.id));
-            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that post.");
-            return { result: (await lfg.join(p.id, s.userId)).result };
-        },
-
-        "POST /api/lfg/leave": async (req, body) => {
-            const s = session(req);
-            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
-            const g = guildFor(s, String(body.guild_id));
-            const p = db.getLfg(Number(body.id));
-            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that post.");
-            await lfg.leave(p.id, s.userId);
-            return { ok: true };
-        },
-
-        "POST /api/lfg/close": async (req, body) => {
-            const s = session(req);
-            if (!lfg) throw new HttpError(503, "Looking for group is not available.");
-            const g = guildFor(s, String(body.guild_id));
-            const p = db.getLfg(Number(body.id));
-            if (!p || p.guild_id !== g.id) throw new HttpError(404, "I can't find that post.");
-            await lfg.close(p.id, s.userId, { canManage: isManager(g) });
-            return { ok: true };
-        },
-
-        "GET /api/coop": async (req, _b, url) => {
-            const s = session(req); const g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
-            const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
-            if (!title) throw new HttpError(400, "Type a game name first.");
-            const [hit] = await itad.lookupTitles([title]);
-            if (!hit?.id) throw new HttpError(404, `I could not find a game called ${title}.`);
-            const owners = await Promise.all(db.ownersOf(g.id, hit.id).map(async o => ({ name: (await rest.memberName(g.id, o.discord_id)) || "Member " + o.discord_id.slice(-4), hours: Math.round((o.minutes ?? 0) / 60) })));
-            return { game: hit.approx ? hit.matched : title, owners };
-        },
-        "POST /api/gamenight": async (req, body) => {
-            const s = session(req); const g = guildFor(s, String(body.guild_id));
-            const allowed = new Set(db.sharingMembers(g.id));
-            const ids = (Array.isArray(body.user_ids) ? body.user_ids : []).map(String).filter(id => allowed.has(id));
-            const r = await gameNight({ db, itad, userIds: ids, region: userRow(s).region }).catch(e => { if (e.constructor?.name === "UserError") throw new HttpError(400, e.message); throw e; });
-            const names = Object.fromEntries(await Promise.all(r.people.map(async id => [id, (await rest.memberName(g.id, id)) || "Member " + id.slice(-4)])));
-            const n = id => names[id] ?? id;
-            return { people: r.people.map(n), hidden: r.hidden, allOwn: r.allOwn.map(x => x.title), almost: r.almost.map(x => ({ title: x.title, missing: x.missing.map(n) })),
-                buy: r.buy.map(b => ({ title: b.title, wanters: b.wanters.map(n), price: b.now?.price ?? null, currency: b.now?.currency ?? "USD", shop: b.now?.shop ?? null, discount: b.now?.discount ?? 0 })) };
-        },
+        ...playRoutes,
 
 
-        "GET /api/mod": async (req, _b, url) => {
-            const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate"); botIn(g);
-            return modr(() => md.overview(g.id, { manager: isManager(g), perms: Object.keys(MOD_PERMS).filter(k => hasGuildPerm(g, k)) }));
-        },
-        "GET /api/mod/cases": async (req, _b, url) => {
-            const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate");
-            return modr(() => md.cases(g.id, url.searchParams.get("user"), url.searchParams.get("page")));
-        },
-        "POST /api/mod/action": async (req, body) => {
-            const s = session(req); const action = String(body.action ?? "");
-            if (!MOD_ACTION_PERM[action]) throw new HttpError(400, "Choose an action.");
-            const g = modGuild(s, String(body.guild_id), MOD_ACTION_PERM[action]); botIn(g);
-            const undo = cooldown(s.userId, "mod");
-            try { return await modr(() => md.act(g.id, s.userId, action, body)); } catch (e) { undo(); throw e; }
-        },
-        "POST /api/mod/clearwarns": async (req, body) => {
-            const s = session(req); const g = modGuild(s, String(body.guild_id), "moderate");
-            return modr(() => md.clearWarns(g.id, body.user));
-        },
-        "GET /api/mod/automod": async (req, _b, url) => {
-            const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate"); botIn(g);
-            return modr(() => md.automodGet(g.id, { canEdit: hasGuildPerm(g, "manageGuild") }));
-        },
-        "POST /api/mod/automod": async (req, body) => {
-            const s = session(req); const g = modGuild(s, String(body.guild_id), "manageGuild"); botIn(g);
-            return modr(() => md.automodSave(g.id, body.settings));
-        },
-        "POST /api/mod/log": async (req, body) => {
-            const s = session(req); const g = modGuild(s, String(body.guild_id), "manageGuild"); botIn(g);
-            return modr(() => md.setLog(g.id, body.channel_id));
-        },
+
+
+
+
+
+        ...modRoutes,
 
 
 
@@ -1697,69 +1254,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             };
         },
 
-        "GET /api/profile": async (req) => { const s = session(req); const u = userRow(s); return { slug: u.profile_slug ?? null, public: Boolean(u.profile_public), claims: db.countGiftClaims(s.userId), giftsPaused: db.giftsPaused(s.userId) }; },
-        "POST /api/profile": async (req, body) => {
-            const s = session(req); userRow(s);
-            const r = setProfile(db, s.userId, { enabled: Boolean(body.enabled), slug: body.slug });
-            const cleared = body.resetClaims ? db.clearGiftClaims(s.userId) : 0;
-            return { ...r, cleared, claims: db.countGiftClaims(s.userId) };
-        },
-        // Public on purpose (anyone with the link), but only for members who switched their page on.
-        // ---------- full profiles ----------
-        // The owner's editor: saved settings, the choices the editor offers, and a preview exactly as visitors would see it.
-        "GET /api/profile/page": async (req) => {
-            const s = session(req); const u = userRow(s);
-            return await profileEditorPayload(u);
-        },
-        // The member's own birthday (month and day). Shared only when they tick the box, and then only as a reminder for people who have their page on their friends list.
-        "POST /api/profile/birthday": async (req, body) => { const s = session(req); userRow(s); return saveOwnBirthday(db, s.userId, { birthday: body.birthday, share: body.share }); },
-        "POST /api/profile/page": async (req, body) => {
-            const s = session(req); const u = userRow(s);
-            const { data } = db.getProfileData(s.userId);
-            const next = cleanProfile(body ?? {}, data);
-            if (next.theme && PROFILE_THEMES[next.theme]?.supporter && next.theme !== data.theme && !isSupporter(db, s.userId, now())) throw new HttpError(403, "That theme is for supporters. You can get a pass on the Chip in page.");
-            if (next.style && PROFILE_STYLES[next.style]?.supporter && next.style !== data.style && !isSupporter(db, s.userId, now())) throw new HttpError(403, "That style is for supporters. You can get a pass on the Chip in page.");
-            db.setProfileData(s.userId, next);
-            return await profileEditorPayload(db.getUser(s.userId));
-        },
-        // The picture behind the page: upload one (a few are kept), copy the Steam background, switch between them, or delete one.
-        "POST /api/profile/background": async (req, body) => {
-            const s = session(req); const u = userRow(s);
-            if (!bgLimit.hit(s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            const { data } = db.getProfileData(s.userId);
-            const setActive = (bg) => db.setProfileData(s.userId, cleanProfile({ pagebg: bg }, data));
-            const action = String(body.action ?? "");
-            if (action === "upload") {
-                let img; try { img = decodeUpload(body.data); } catch (e) { throw new HttpError(400, e.message); }
-                if (db.countProfileBgs(s.userId) >= MAX_BG_STORED) throw new HttpError(400, `You can keep up to ${MAX_BG_STORED} pictures. Delete one first.`);
-                setActive({ kind: "image", image: db.addProfileBg(s.userId, img.mime, img.buf, "upload") });
-            } else if (action === "steam") {
-                const link = db.getSteamLink(s.userId);
-                if (!link) throw new HttpError(400, "Link your Steam account first (Steam page, or /steam link).");
-                let img; try { img = await fetchSteamBackground(link.steamid, steamFetch); } catch (e) { throw new HttpError(502, e.message); }
-                if (!img) throw new HttpError(404, "No background found on your Steam profile. Equip one there first, and make sure the profile is public.");
-                if (img.video) { setActive({ kind: "video", video: img.video }); return await profileEditorPayload(db.getUser(s.userId)); }
-                db.deleteSteamProfileBg(s.userId);
-                if (db.countProfileBgs(s.userId) >= MAX_BG_STORED) throw new HttpError(400, `You can keep up to ${MAX_BG_STORED} pictures. Delete one first.`);
-                setActive({ kind: "image", image: db.addProfileBg(s.userId, img.mime, img.buf, "steam") });
-            } else if (action === "use") {
-                const row = db.getProfileBg(Number(body.id));
-                if (!row || row.discord_id !== s.userId) throw new HttpError(404, "That picture is not yours.");
-                setActive({ kind: "image", image: row.id });
-            } else if (action === "remove") {
-                const row = db.getProfileBg(Number(body.id));
-                if (!row || row.discord_id !== s.userId || !db.deleteProfileBg(s.userId, row.id)) throw new HttpError(404, "That picture is not yours.");
-                if (data.pagebg?.image === row.id) setActive({ kind: "none", image: null });
-            } else throw new HttpError(400, "Unknown action.");
-            return await profileEditorPayload(db.getUser(s.userId));
-        },
-        // Preview unsaved changes. Nothing is stored.
-        "POST /api/profile/preview": async (req, body) => {
-            const s = session(req); const u = userRow(s);
-            if (!u.profile_slug) throw new HttpError(400, "Choose a page name first.");
-            const draft = withDefaults(cleanProfile(body ?? {}, {}));
-            return { profile: await buildProfile({ db, itad, nowPlaying }, u, { owner: true, sameServer: true }, { draft }) };
-        },
         // Public on purpose: anyone with the link sees what the owner chose to show, and only that.
         "GET /api/public/profile": async (req, _b, url) => {
             const owner = db.getProfileBySlug(String(url.searchParams.get("slug") ?? "").toLowerCase());
@@ -1820,19 +1314,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             if (r === "limit") throw new HttpError(429, `You can hold up to ${MAX_CLAIMS_TOTAL} gift marks at a time. Undo one first.`);
             return { claim: "mine", region: compareGiftRegions(db, s.userId, owner.discord_id) };
         },
-        // The list's owner lets go of a mark (and can report it) or pauses marking. They still never learn who made it.
-        "POST /api/profile/gifts": async (req, body) => {
-            const s = session(req);
-            const u = userRow(s);
-            if (body.action === "pause") { db.setGiftsPaused(s.userId, Boolean(body.on)); return { paused: db.giftsPaused(s.userId) }; }
-            if (body.action !== "release") throw new HttpError(400, "Unknown action.");
-            const id = String(body.id ?? "");
-            const game = db.listItems(s.userId).find(g => g.itad_id === id);
-            const r = db.releaseGift(s.userId, id, { report: Boolean(body.report), slug: u.profile_slug ?? "", title: game?.title ?? "" });
-            if (!r.released) throw new HttpError(404, "Nobody has marked that one.");
-            return { released: true, reported: Boolean(body.report) };
-        },
-        ...socialRoutes,
         // ---- guestbook
         "GET /api/public/guestbook": async (req, _b, url) => {
             const sess = softSession(req);
@@ -1844,38 +1325,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             return { open: db.getPrefs(o.discord_id).guestbook, total: g.total, more: g.more, signedIn: Boolean(sess && !sess.steamOnly), owner: mine,
                 items: g.items.map(e => ({ id: e.id, body: e.body, at: e.at, by: authorCard(e.author), mine: Boolean(sess && sess.userId === e.author), canDelete: mine || Boolean(sess && sess.userId === e.author) || Boolean(sess && isOwner(sess)) })) };
         },
-        "POST /api/guestbook/post": async (req, body) => {
-            const s = session(req); userRow(s); mayPost(s);
-            if (!socialWrite.hit("u" + s.userId).ok) throw new HttpError(429, "Slow down a little.");
-            const o = slugOwner(body.slug);
-            const r = db.guestbookPost(o.discord_id, s.userId, body.body, { staff: s.userId === config.ownerId });
-            if (r.error) throw new HttpError(r.status ?? 400, r.error);
-            const me = authorCard(s.userId);
-            notifySocial(o.discord_id, { title: `${me.name} signed your guestbook`, body: String(body.body ?? "").trim().slice(0, 140), url: o.profile_slug ? "/u/" + o.profile_slug : "/feed" });
-            return { id: r.id };
-        },
-        "POST /api/guestbook/delete": async (req, body) => {
-            const s = session(req);
-            const e = db.guestbookEntry(Number(body.id));
-            if (!e) throw new HttpError(404, "That note is gone.");
-            if (e.author !== s.userId && e.owner !== s.userId && !isOwner(s)) throw new HttpError(403, "That one is not yours to remove.");
-            db.guestbookDelete(e.id);
-            return { deleted: true };
-        },
 
-        "GET /api/bundles": async (req, _b, url) => {
-            const s = session(req);
-            cooldown(s.userId, "bundles");
-            const u = userRow(s);
-            const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
-            let gameIds;
-            if (title) {
-                const [hit] = await itad.lookupTitles([title]);
-                if (!hit?.id) throw new HttpError(400, `I could not find a game called ${title}.`);
-                gameIds = [hit.id];
-            } else gameIds = db.listItems(s.userId).map(i => i.itad_id);
-            return await bundleCheck({ db, itad, user: u, gameIds });
-        },
 
         "GET /api/regions": async (req, _b, url) => {
             const s = session(req);
@@ -1889,55 +1339,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             return { game: hit.matched || title, rows };
         },
 
-        "GET /api/calendar": async (req, _b, url) => {
-            // One list for the member: wishlist release dates, Steam sales, events and group games from their servers.
-            const s = session(req);
-            const days = Math.min(365, Math.max(1, Math.round(Number(url.searchParams.get("days"))) || 60));
-            const t = now();
-            const mine = s.guilds.filter(g => !botGuilds || botGuilds(g.id));
-            const wanted = String(url.searchParams.get("guild") ?? "");
-            const guildIds = (wanted ? mine.filter(g => g.id === wanted) : mine).map(g => g.id);
-            const kinds = String(url.searchParams.get("kinds") ?? "").split(",").filter(k => KINDS.includes(k));
-            const entries = calendarEntries(db, s.userId, { from: t - 86400_000, to: t + days * 86400_000, guildIds, kinds: kinds.length ? kinds : KINDS });
-            const names = Object.fromEntries(mine.map(g => [g.id, g.name]));
-            const feed = db.getCalFeed(s.userId);
-            return { now: t, servers: mine.map(g => ({ id: g.id, name: g.name, manageable: isManager(g) })),
-                entries: entries.map(e => ({ ...e, server: e.guild_id ? names[e.guild_id] ?? null : null, canRemove: e.kind === "event" && isManager(mine.find(g => g.id === e.guild_id) ?? {}) })),
-                feed: feed ? { created_at: feed.created_at, used_at: feed.used_at } : null };
-        },
 
-        "POST /api/calendar/events": async (req, body) => {
-            const s = session(req);
-            if (!calendar) throw new HttpError(503, "The calendar is not available.");
-            const g = managerGuild(s, String(body.guild_id));
-            let channelId = null;
-            if (body.channel_id) {
-                let channels;
-                try { channels = await rest.listChannels(g.id); } catch { throw new HttpError(400, "The bot is not in that server yet. Invite it first."); }
-                channelId = String(body.channel_id);
-                if (!channels.some(c => c.id === channelId)) throw new HttpError(400, "Pick one of the server's text channels.");
-            }
-            const r = await calendar.create({ guildId: g.id, creatorId: s.userId, title: body.title, notes: body.notes, startsAt: Number(body.starts_at), channelId, remindMin: body.remind_min === undefined ? 60 : Number(body.remind_min) });
-            return r;
-        },
 
-        "POST /api/calendar/events/delete": async (req, body) => {
-            const s = session(req);
-            if (!calendar) throw new HttpError(503, "The calendar is not available.");
-            const g = managerGuild(s, String(body.guild_id));
-            if (!calendar.remove(Number(body.id), g.id)) throw new HttpError(404, "I can't find that event.");
-            return { ok: true };
-        },
 
-        "POST /api/calendar/feed": async (req, body) => {
-            // An optional private link for Google, Apple or Outlook calendar. The link is shown once; only its hash is kept.
-            const s = session(req);
-            if (body.action === "off") return { off: db.revokeCalFeed(s.userId) };
-            cooldown(s.userId, "grabbertoken");
-            const mine = s.guilds.filter(g => !botGuilds || botGuilds(g.id)).map(g => g.id);
-            const token = db.createCalFeed(s.userId, mine.slice(0, 20));
-            return { url: `${origin}/calendar/feed/${token}.ics` };
-        },
 
 
 
@@ -1976,29 +1380,6 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
 
 
 
-        // ----- feature requests: members suggest and vote, the owner sets the status -----
-        "GET /api/requests": async (req, _b, url) => {
-            const s = session(req);
-            const status = url.searchParams.get("status");
-            return { requests: db.listRequests(s.userId, { status: REQUEST_STATUSES[status] ? status : null, sort: url.searchParams.get("sort") === "new" ? "new" : "votes" }),
-                statuses: REQUEST_STATUSES, counts: db.requestCounts(), max: MAX_OPEN_PER_USER, isOwner: isOwner(s) };
-        },
-        "POST /api/requests": async (req, body) => {
-            const s = session(req);
-            const { title, body: text } = cleanRequest({ title: body.title, body: body.body });
-            if (db.openCountFor(s.userId) >= MAX_OPEN_PER_USER) throw new HttpError(429, limitMessage());
-            const undo = cooldown(s.userId, "request");
-            let id;
-            try { id = db.addRequest({ userId: s.userId, userName: s.username ?? null, title, body: text }); } catch (e) { undo(); throw e; }
-            publishRequest({ db, api: rest, id, base: config.publicUrl }).catch(() => {}); // into each server's feature-requests forum, in the background
-            return { id };
-        },
-        "POST /api/requests/vote": async (req, body) => {
-            const s = session(req); cooldown(s.userId, "requestvote");
-            const r = db.getRequest(Number(body.id));
-            if (!r) throw new HttpError(404, "I can't find that request.");
-            return { voted: db.toggleRequestVote(r.id, s.userId) };
-        },
 
 
         "POST /api/mydata/delete": async (req, body) => {

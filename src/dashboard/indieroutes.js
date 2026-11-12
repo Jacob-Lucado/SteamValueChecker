@@ -10,7 +10,7 @@ import { picksFor } from "../indienews.js";
 import { randomBytes } from "node:crypto";
 
 export function createIndieRoutes(ctx) {
-    const { CRAWLER, adminRoutes, clientIp, config, db, decideKeyRequest, devSession, indieApi, indieHerald, indieKeyLimit, indieLookupLimit, indiePublic, indieReportLimit, indieSyncLimit, indieUpdateLimit, indieVerifyLimit, indieWriteLimit, isOwner, now, origin, session, socialWrite, softSession, syncIndieDev } = ctx;
+    const { CRAWLER, clientIp, config, db, decideKeyRequest, devSession, indieApi, indieHerald, indieKeyLimit, indieLookupLimit, indiePublic, indieReportLimit, indieSyncLimit, indieUpdateLimit, indieVerifyLimit, indieWriteLimit, isOwner, now, origin, session, socialWrite, softSession, syncIndieDev } = ctx;
     return {
         // ---------- indie showcase and developer tools ----------
         "GET /api/indie/tools": async () => ({ cats: INDIE_CATS, tools: INDIE_TOOLS }),
@@ -259,6 +259,5 @@ export function createIndieRoutes(ctx) {
             if (body.all) db.indieKeyClear(g.id); else db.indieKeyRemove(g.id, body.id);
             return { pool: db.indieKeyPool(g.id) };
         },
-        ...adminRoutes,
     };
 }

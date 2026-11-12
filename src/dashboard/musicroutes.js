@@ -6,7 +6,7 @@ import { isHidden } from "../hidden.js";
 import { isSoundcloudUrl } from "../musicsource.js";
 
 export function createMusicRoutes(ctx) {
-    const { botGuilds, chat, cooldown, db, guildChoices, isManager, isOwner, managedGuild, mayStream, music, musicCall, musicGuild, musicMember, musicOrigin, origin, remember, rest, session, stations, streamAccess, streamRoutes } = ctx;
+    const { botGuilds, chat, cooldown, db, guildChoices, isManager, isOwner, managedGuild, mayStream, music, musicCall, musicGuild, musicMember, musicOrigin, origin, remember, rest, session, stations, streamAccess } = ctx;
     return {
         // ----- music (SoundCloud in voice channels) -----
         "GET /api/music": async (req, _b, url) => {
@@ -64,7 +64,6 @@ export function createMusicRoutes(ctx) {
             if (body.action !== "create" && body.action !== "reset") throw new HttpError(400, "Unknown action.");
             return { on: true, token: db.resetOverlay(g.id, s.userId, isOwner(s) ? "owner" : isManager(g) ? "manager" : "role") };
         },
-        ...streamRoutes,
         "GET /api/music/search": async (req, _b, url) => {
             const s = session(req);
             if (!music) throw new HttpError(503, "Music isn't available on this bot right now.");

@@ -11,7 +11,7 @@ import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
 import { autoSetup, setupStatus } from "../setup.js";
 
 export function createServerRoutes(ctx) {
-    const { botGuilds, bundleFeed, cd, codes, comm, communityRoutes, config, cooldown, db, drops, guildChoices, guildFor, isManager, itad, managedGuild, managerGuild, names, now, rest, session, userRow } = ctx;
+    const { botGuilds, bundleFeed, cd, codes, comm, config, cooldown, db, drops, guildChoices, guildFor, isManager, itad, managedGuild, managerGuild, names, now, rest, session, userRow } = ctx;
     return {
         "GET /api/servers/bundles": async (req, _b, url) => {
             const s = session(req);
@@ -329,8 +329,6 @@ export function createServerRoutes(ctx) {
             try { return { ...(await autoSetup({ api: rest, db, guildId: g.id, botId: config.clientId, userId: s.userId, staffRoleId })), status: setupStatus(db, g.id) }; }
             catch (e) { if (e.userFacing) throw new HttpError(400, e.message); if (e instanceof DiscordApiError && e.status === 403) throw new HttpError(400, "I need the Manage Channels permission to create channels."); throw e; }
         },
-
-        ...communityRoutes,
         "GET /api/servers/stats": async (req, _b, url) => {
             const s = session(req);
             const g = guildFor(s, url.searchParams.get("guild"));

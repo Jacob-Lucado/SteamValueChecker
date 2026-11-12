@@ -22,7 +22,7 @@ import { salesBefore, upcomingSales } from "../salescal.js";
 import { summarize } from "../report.js";
 
 export function createWishlistRoutes(ctx) {
-    const { MAX_HISTORY_POINTS, MUTE_DAYS, clientIp, config, cooldown, db, dm, giveawayRoutes, idFinderLimit, isStaff, itad, libraryRoutes, now, num, profileCard, profileOrLinked, session, steamFetch, userRow } = ctx;
+    const { MAX_HISTORY_POINTS, MUTE_DAYS, clientIp, config, cooldown, db, dm, idFinderLimit, isStaff, itad, now, num, profileCard, profileOrLinked, session, steamFetch, userRow } = ctx;
     return {
         // The public Steam ID finder page. No sign-in, so it is rate limited by address; answers are only what the profile already shows.
         "GET /api/steamid": async (req, _b, url) => {
@@ -176,8 +176,6 @@ export function createWishlistRoutes(ctx) {
             const s = session(req);
             return { alerts: db.listAlerts(s.userId, 100).map(a => ({ at: a.at, kind: a.kind, title: a.title, price: a.price, regular: a.regular, shop: a.shop, via: a.via })) };
         },
-
-        ...libraryRoutes,
         "GET /api/steam": async (req) => {
             const s = session(req);
             const u = userRow(s);
@@ -298,7 +296,6 @@ export function createWishlistRoutes(ctx) {
             if (r === "full") throw new HttpError(429, "You can mark up to 50 games as up for giveaway. Remove one first.");
             return { soon: true };
         },
-        ...giveawayRoutes,
         "GET /api/saleprep": async (req, _b, url) => {
             const s = session(req);
             cooldown(s.userId, "saleprep");
