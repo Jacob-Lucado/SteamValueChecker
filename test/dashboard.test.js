@@ -3955,3 +3955,21 @@ test("alerts name the person when the bot reports joins itself, and hide the nam
         assert.ok(h.data.events.length === 2 && h.data.events.every(e => !("name" in e)), "names stay off when switched off");
     } finally { setNamedFeed(false); await o.close(); }
 });
+
+test("overlay studio: a leaderboard ranks server XP with names, and works inside a scene", async () => {
+    const o = await signedIn({ extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members: 10, boosts: 0 }] } });
+    try {
+        const mk = body => o.request("/api/overlays", { method: "POST", body });
+        const data = async token => (await fetch(o.base + "/api/ov/data?token=" + token)).json();
+        assert.equal((await mk({ action: "create", kind: "board" })).status, 400, "a leaderboard needs a server");
+        o.db.setXp("g-admin", "u1", 500); o.db.setXp("g-admin", "u2", 900);
+        const board = (await mk({ action: "create", kind: "board", guild_id: "g-admin", config: { limit: 3 } })).data.token;
+        const j = await data(board);
+        assert.deepEqual(j.data.rows.map(r => r.xp), [900, 500]);
+        assert.equal(j.data.rows[1].name, "Jacob", "names come from the server");
+        const play = (await mk({ action: "create", kind: "playing", guild_id: "g-admin" })).data.token;
+        assert.deepEqual((await data(play)).data.games, []);
+        const scene = (await mk({ action: "create", kind: "scene", config: { items: [board, play] } })).data.token;
+        assert.deepEqual((await data(scene)).data.children.map(c => c.kind), ["board", "playing"]);
+    } finally { await o.close(); }
+});

@@ -411,9 +411,20 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         f.ev = f.ev.filter(e => now() - e.at < 10 * 60_000).slice(-30);
         return { ev: [...f.ev, ...overlayEventsFor(guildId, now())] };
     }
-    function overlayPayload(o) {
+    async function overlayPayload(o) {
         const g = o.guild_id && guildList ? guildList().find(x => x.id === o.guild_id) ?? null : null;
-        return { kind: o.kind, name: o.name, config: o.config, data: overlayData(o, g ? { members: g.members ?? null, boosts: g.boosts ?? null } : null, now()), g };
+        let data = overlayData(o, g ? { members: g.members ?? null, boosts: g.boosts ?? null } : null, now());
+        const nameOf = id => remember("mname:" + o.guild_id + ":" + id, 10 * 60_000, () => rest.memberName(o.guild_id, id)).then(n => n || "a member").catch(() => "a member");
+        try {
+            if (o.kind === "board" && o.guild_id) {
+                const top = db.xpTop(o.guild_id, o.config.limit);
+                data = { rows: await Promise.all(top.map(async r => ({ name: await nameOf(r.user_id), level: r.level, xp: r.xp }))) };
+            } else if (o.kind === "playing" && o.guild_id) {
+                const r = nowPlaying?.enabled ? await whoIsPlaying(db, nowPlaying, o.guild_id) : { games: [] };
+                data = { games: await Promise.all(r.games.slice(0, o.config.limit).map(async x => ({ game: x.game, count: x.players.length, names: await Promise.all(x.players.slice(0, 3).map(p => nameOf(p.userId))) }))) };
+            }
+        } catch { /* leave the numbers empty rather than fail the overlay */ }
+        return { kind: o.kind, name: o.name, config: o.config, data, g };
     }
     const idFinderLimit = createLimiter({ windowMs: 60_000, max: 15, now });
     const indieApi = indieSvc ?? createIndie();
@@ -1477,7 +1488,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "POST /api/overlays": async (req, body) => {
             const s = session(req), action = String(body.action ?? "");
             const guildId = body.guild_id ? String((await streamAccess(s, body.guild_id)).id) : null;
-            const wants = (kind, cfg) => kind === "stats" || kind === "alerts" || (kind === "goal" && ["members", "boosts"].includes(cfg?.source));
+            const wants = (kind, cfg) => kind === "stats" || kind === "alerts" || kind === "board" || kind === "playing" || (kind === "goal" && ["members", "boosts"].includes(cfg?.source));
             try {
                 if (action === "create") {
                     if (!OVERLAY_KINDS.includes(body.kind)) throw new HttpError(400, "Pick an overlay type.");
@@ -1510,7 +1521,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
             const o = db.ovByToken(String(url.searchParams.get("token") ?? ""));
             if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Overlay studio page.");
             ovSeen.set(o.token, now());
-            const p = overlayPayload(o);
+            const p = await overlayPayload(o);
             if (o.kind === "alerts") {
                 const since = url.searchParams.has("since") ? Number(url.searchParams.get("since")) : NaN;
                 const f = feedFor(o.guild_id, p.g), mine = ovTest.get(o.token) ?? [];
@@ -1520,7 +1531,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 return { kind: o.kind, name: o.name, config: o.config, data: { seq: currentSeq(), events }, now: now() };
             }
             if (o.kind === "scene") {
-                const kids = o.config.items.map(t => db.ovByToken(t)).filter(k => k && k.user_id === o.user_id && SCENE_KINDS.includes(k.kind)).map(k => { const q = overlayPayload(k); return { kind: q.kind, name: q.name, config: q.config, data: q.data }; });
+                const kids = await Promise.all(o.config.items.map(t => db.ovByToken(t)).filter(k => k && k.user_id === o.user_id && SCENE_KINDS.includes(k.kind)).map(async k => { const q = await overlayPayload(k); return { kind: q.kind, name: q.name, config: q.config, data: q.data }; }));
                 return { kind: o.kind, name: o.name, config: o.config, data: { children: kids }, now: now() };
             }
             return { kind: o.kind, name: o.name, config: o.config, data: p.data, now: now() };

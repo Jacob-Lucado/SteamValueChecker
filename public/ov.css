@@ -42,3 +42,8 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 /* in a scene the old and new card sit on top of each other, so nothing shifts while one fades into the next */
 .ov.scene { display: grid; justify-items: start; align-items: start; }
 .ov.scene .card { grid-area: 1 / 1; }
+.ov .rows { display: grid; gap: 8px; min-width: 320px; }
+.ov .row { display: flex; align-items: baseline; gap: 12px; font-size: 18px; }
+.ov .row .rank { width: 22px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.ov .row .who { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.ov .row .val { color: var(--muted); font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
