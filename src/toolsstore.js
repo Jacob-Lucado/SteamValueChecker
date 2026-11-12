@@ -174,6 +174,18 @@ export function toolsStore({ run, get, all, clean, now, getMeta, setMeta }) {
         setMeta(`starboard:${guildId}`, "null"); setMeta(`suggest:${guildId}`, "null");
     };
 
+    /** Servers that post playtime milestones, where this person is a member and has a public page. */
+    const milestoneTargets = id => all(`SELECT c.guild_id, c.milestone_channel FROM community c WHERE c.milestone_channel IS NOT NULL
+        AND c.guild_id IN (SELECT guild_id FROM users WHERE discord_id = ? AND guild_id IS NOT NULL UNION SELECT guild_id FROM user_guilds WHERE discord_id = ?)
+        AND (SELECT profile_public FROM users WHERE discord_id = ?) = 1`, id, id, id).map(clean);
+    /** Hours played in the last week per listed server (needs at least 3 players so nobody is singled out). */
+    const weeklyBoard = (sinceDay, guildIds) => {
+        if (!guildIds.length) return [];
+        const q = guildIds.map(() => "?").join(",");
+        return all(`SELECT m.guild_id, SUM(p.minutes) AS minutes, COUNT(DISTINCT p.discord_id) AS players FROM playtime_log p
+            JOIN (SELECT discord_id, guild_id FROM users WHERE guild_id IS NOT NULL UNION SELECT discord_id, guild_id FROM user_guilds) m ON m.discord_id = p.discord_id
+            WHERE p.day >= ? AND m.guild_id IN (${q}) GROUP BY m.guild_id HAVING players >= 3 ORDER BY minutes DESC LIMIT 10`, sinceDay, ...guildIds).map(r => ({ guild_id: r.guild_id, hours: Math.round(Number(r.minutes) / 60), players: Number(r.players) }));
+    };
     // ---- web push
     const addPushSub = (userId, sub) => run("INSERT INTO push_subs (endpoint, user_id, p256dh, auth, created_at) VALUES (?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, fails = 0", sub.endpoint, userId, sub.p256dh, sub.auth, now());
     const pushSubs = userId => all("SELECT endpoint, p256dh, auth FROM push_subs WHERE user_id = ? ORDER BY created_at", userId).map(clean);
@@ -182,7 +194,7 @@ export function toolsStore({ run, get, all, clean, now, getMeta, setMeta }) {
     const countPushSubs = userId => get("SELECT COUNT(*) AS n FROM push_subs WHERE user_id = ?", userId).n;
     const failPushSub = endpoint => { run("UPDATE push_subs SET fails = fails + 1 WHERE endpoint = ?", endpoint); run("DELETE FROM push_subs WHERE endpoint = ? AND fails >= 5", endpoint); };
     return {
-        addPushSub, pushSubs, dropPushSub, dropPushSubsOf, countPushSubs, failPushSub,
+        weeklyBoard, milestoneTargets, addPushSub, pushSubs, dropPushSub, dropPushSubsOf, countPushSubs, failPushSub,
         createRoleMenu, getRoleMenu, listRoleMenus, countRoleMenus, setRoleMenuMessage, deleteRoleMenu, roleMenuItems, addRoleMenuItem, removeRoleMenuItem, forgetRole,
         getStarPost, saveStarPost, deleteStarPost, topStarPosts, starCount, pruneStarPosts,
         createPoll, getPoll, setPollMessage, listPolls, countOpenPolls, closePoll, pollsDue, pollVotes, castVote, prunePolls2,

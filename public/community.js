@@ -261,14 +261,15 @@
           h("h4", { text: "This server's emoji" }), eList);
         loadEmoji();
         // rules, announcements, support: where things are posted and what they say
+        const mileCh = chSel(st.milestone_channel);
         const annCh = chSel(st.announce_channel || (ch.channels.find(c => c.name === "announcements") || {}).id), rulesCh = chSel(st.rules_channel || (ch.channels.find(c => c.name === "rules") || {}).id);
         const reqCh = forumSel(st.requests_channel), trapCh = chSel(st.honeypot_channel);
         const places = h("div", { class: "panel" }, h("h3", { text: "Where things are posted" }),
-          field("Announcements channel (your announcements, and the bot developer's notices to all servers)", annCh), field("Rules channel", rulesCh),
+          field("Announcements channel (your announcements, and the bot developer's notices to all servers)", annCh), field("Rules channel", rulesCh), field("Playtime milestones channel (members with a public page; empty = off)", mileCh),
           field("Feature requests forum (each idea is a post tagged with its status; needs a forum channel)", reqCh),
           field("Trap channel for spam bots: anyone who types there is banned (staff are exempt)", trapCh),
           h("p", { class: "muted small", text: "Pick a channel that members can see and write in, and let me post the warning there. Make sure my role has Ban Members and sits above the members. The warning notice and channel description are added when you save a new channel." }),
-          h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, rules_channel: rulesCh.value, requests_channel: reqCh.value, honeypot_channel: trapCh.value }))));
+          h("div", { class: "row" }, save("Save channels", () => post("/api/community/places", { announce_channel: annCh.value, milestone_channel: mileCh.value, rules_channel: rulesCh.value, requests_channel: reqCh.value, honeypot_channel: trapCh.value }))));
         // AI companion: members write "Hey AI ..." and get a short answer
         const ai = d.ai || {};
         const aiOn = h("input", { type: "checkbox", checked: Boolean(st.ai_on), disabled: !ai.available && !ai.lite });

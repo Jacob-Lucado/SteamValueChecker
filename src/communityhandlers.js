@@ -2,7 +2,7 @@
 // No discord.js import: everything the handlers need comes from the interaction object and the shared REST helper.
 import { renderWelcomeCard } from "./cardimg.js";
 import { humanCount } from "./members.js";
-import { VERIFY_ID, communitySetup, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
+import { VERIFY_ID, communitySetup, setupPlan, isFreshGuild, parseEmojis, importEmojis, isDiscordCdn, WELCOME_FIELDS, welcomePayload } from "./community.js";
 import { UserError } from "./errors.js";
 import { isHidden } from "./hidden.js";
 import { refreshLeaderboard } from "./leaderboard.js";
@@ -47,6 +47,15 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
         if (!i.inGuild()) return eph(i, "Use this in a server.");
         if (!needManager(i)) return;
         const gid = i.guildId;
+        if (sub === "setup" && i.options.getBoolean("preview")) {
+            await i.deferReply({ flags: EPHEMERAL });
+            try {
+                const p = await setupPlan({ api, guildId: gid });
+                const lines = p.missingChannels.map(c => `**${c.category}**: ${c.missing.length === c.of ? "the whole category" : c.missing.join(", ")}`);
+                const body = [`**Roles to add (${p.missingRoles.length} of ${p.total.roles}):** ${p.missingRoles.length ? p.missingRoles.join(", ") : "none, you have them all"}`, "", lines.length ? `**Channels to add:**\n${lines.join("\n")}` : "**Channels:** you already have every channel."].join("\n");
+                return i.editReply({ embeds: [{ color: 0x5865f2, title: "What setup would do here", description: body.slice(0, 3900), footer: { text: "Nothing was changed. Run /manage community setup without preview to build it. Existing channels and roles are never touched." } }] });
+            } catch { return i.editReply({ content: "I could not look at your server just now. Check that I can see its channels and roles." }); }
+        }
         if (sub === "setup") {
             await i.deferReply({ flags: EPHEMERAL });
             try {
@@ -123,6 +132,11 @@ export function createCommunityHandlers({ db, api, service, publicUrl = null, me
             const on = i.options.getBoolean("on") === true;
             db.setCommunity(gid, { unfurl_on: on ? 1 : 0 });
             return eph(i, on ? "I will now answer Steam store links with the price, the lows and a buy-or-wait verdict. I never touch the original message." + (aiPhrase() ? "" : "\n**Heads up:** this bot can't read message text yet (the Message Content intent is off), so replies won't appear until that is turned on.") : "I will leave Steam store links alone.");
+        }
+        if (sub === "milestones") {
+            const ch = i.options.getChannel("channel");
+            db.setCommunity(gid, { milestone_channel: ch?.id ?? null });
+            return eph(i, ch ? `Playtime milestones (100, 250, 500 hours and up) for members who have a public page and the milestone alerts on will be posted in <#${ch.id}>.` : "Milestones are no longer posted here.");
         }
         if (sub === "autorole") {
             const role = i.options.getRole("role");

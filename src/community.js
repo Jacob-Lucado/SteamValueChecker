@@ -140,6 +140,23 @@ export function rulesPayload({ server = "the server", base = null, rules = null,
 }
 
 /** Posts in #get-help and #report-a-bug: one button each that opens the form. */
+/** What setup would build here, without touching anything: what the server already has and what is missing. */
+export async function setupPlan({ api, guildId }) {
+    const [channels, roles] = await Promise.all([api.allChannels(guildId), api.allRoles(guildId)]);
+    const chan = new Set(channels.map(c => String(c.name ?? "").toLowerCase())), role = new Set(roles.map(r => String(r.name ?? "").toLowerCase()));
+    const has = (set, n) => set.has(String(n).toLowerCase());
+    const missingRoles = [...TEMPLATE.roles.map(r => r.name), ...(TEMPLATE.selfRoles ?? []).map(r => r.name)].filter(n => !has(role, n));
+    const total = { roles: TEMPLATE.roles.length + (TEMPLATE.selfRoles ?? []).length, channels: 0 };
+    const missingChannels = [];
+    for (const cat of TEMPLATE.categories) {
+        const items = [...(cat.channels ?? []).map(c => c.name), ...(cat.voice ?? []).map(c => c.name)];
+        total.channels += items.length;
+        const miss = items.filter(n => !has(chan, n));
+        if (miss.length) missingChannels.push({ category: cat.name, missing: miss, of: items.length });
+    }
+    return { missingRoles, missingChannels, total };
+}
+
 export const helpPanel = () => ({
     embeds: [{ color: 0x57f287, title: "Need help?", description: "Press the button to open a **private ticket**. Only you and the mods can see it, and replies land in your DMs.\n\nUse it for giveaway key problems, reporting a member, or any question about the server." }],
     components: [{ type: 1, components: [{ type: 2, style: 3, label: "Open a ticket", emoji: { name: "🎫" }, custom_id: "tk_open:0" }] }]

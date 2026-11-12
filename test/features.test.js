@@ -434,7 +434,7 @@ test("every slash command has a dashboard counterpart", async () => {
     const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
     // command or command/subcommand -> a dashboard route (or page) that does the same job
     const MAP = {
-        "steam/wrapped": "GET /api/steam/wrapped", "community/links": "POST /api/community/places", "mod/stats": "GET /api/mod/stats", "mod/appeals": "POST /api/mod/appeals/decide", "mod/settings": "POST /api/mod/settings",
+        "steam/wrapped": "GET /api/steam/wrapped", "community/links": "POST /api/community/places", "community/milestones": "POST /api/community/places", "mod/stats": "GET /api/mod/stats", "mod/appeals": "POST /api/mod/appeals/decide", "mod/settings": "POST /api/mod/settings",
         "rolemenu/create": "POST /api/tools/rolemenu", "rolemenu/add": "POST /api/tools/rolemenu", "rolemenu/remove": "POST /api/tools/rolemenu", "rolemenu/delete": "POST /api/tools/rolemenu", "rolemenu/list": "GET /api/tools",
         "starboard/setup": "POST /api/tools/starboard", "starboard/off": "POST /api/tools/starboard", "starboard/status": "GET /api/tools",
         "suggestions/setup": "POST /api/tools/suggest", "suggestions/decide": "POST /api/tools/suggest", "suggestions/list": "GET /api/tools",

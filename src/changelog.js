@@ -1,5 +1,11 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.60", date: "2026-11-12", title: "Stats, milestones and setup preview", items: [
+        "**In numbers:** a public stats page at /stats shows the bot's size and which listed servers played the most this week.",
+        "**Milestones in your server:** /manage community milestones posts members' playtime milestones (100, 250, 500 hours and up) in a channel. Only members with a public page are shown.",
+        "**Setup preview:** /manage community setup with preview on lists what would be added and changes nothing.",
+        "**Sale heads-up:** a game page now says when a Steam sale is close and the game has been cheaper before."
+    ] },
     { version: "2026.11.59", date: "2026-11-12", title: "Wrapped, server tools and push", items: [
         "**Steam Wrapped:** /games steam wrapped (or Library > Wrapped) makes five shareable slides from your year: hours, top games, streaks, genres and your gamer type.",
         "**Server tools:** role menus with buttons (/manage rolemenu), a starboard, polls that close themselves (/manage poll), a suggestion box (/server suggest) and custom commands (/server tag). All of it is on the new Servers > Server tools page.",

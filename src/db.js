@@ -330,6 +330,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("library_snapshots", "finished", "INTEGER");
     addColumn("community", "verified_role_id", "TEXT");
     addColumn("community", "mod_log_channel", "TEXT");
+    addColumn("community", "milestone_channel", "TEXT");
     addColumn("community", "warn_days", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "appeals_on", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "last_seen", "INTEGER");

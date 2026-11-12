@@ -35,6 +35,8 @@ export function runRefundWarnings({ db, notifier, now = () => Date.now() }) {
             const res = await notifier.deliver(user, { embeds: part.map(r => refundEmbed({ title: r.title, appid: r.appid, hoursLeft: r.hoursLeft, minutes: r.minutes })) }, "refund");
             if (!res.ok) { stats.failed += part.length; continue; }
             stats.delivered += part.length;
+        // Servers that asked for it get the biggest one, so a channel never fills up.
+        try { const top = part[0]; for (const t of db.milestoneTargets?.(id) ?? []) await notifier.postChannel(t.milestone_channel, milestoneShout({ userId: id, title: top.title, appid: top.appid, hours: top.hours })); } catch { /* the DM already went out */ }
             for (const r of part) { db.markSeen(id, `refund:${r.itad_id}`); db.logAlert({ discord_id: id, itad_id: r.itad_id, title: r.title, kind: "refund", via: res.via }); }
         }
         return stats;
@@ -54,6 +56,11 @@ export function milestoneEmbed({ title, appid, hours, minutes }) {
 export const highestMilestone = minutes => MILESTONE_HOURS.filter(h => minutes >= h * 60).pop() ?? null;
 
 /** The first check only remembers where each game already is; after that a card goes out when a game reaches a higher milestone. */
+/** The version a server sees: no private details, just the number. */
+export function milestoneShout({ userId, title, appid, hours }) {
+    return { embeds: [{ color: 0x5865f2, title: `🏆 ${hours} hours in ${title}`, description: `<@${userId}> just passed **${hours} hours** in **${title}**.`, thumbnail: Number.isInteger(appid) ? { url: steamArt(appid) } : undefined }], allowed_mentions: { parse: [] } };
+}
+
 export async function runMilestones({ db, notifier, now = () => Date.now() }) {
     const stats = { checked: 0, found: 0, delivered: 0, failed: 0, deferred: 0 };
     for (const user of db.milestoneUsers()) {

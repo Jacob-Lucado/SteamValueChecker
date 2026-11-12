@@ -96,6 +96,7 @@ import { summarize } from "../report.js";
 import { buyOrWait } from "../advice.js";
 import { renderGamePage, renderWidget, slugify } from "../gamepage.js";
 import { protonTier, deckStatus } from "../proton.js";
+import { renderStats } from "../statspage.js";
 import { loadGameData } from "../gamedata.js";
 import { grabberRegion } from "../spend.js";
 import { monthKey } from "../challenge.js";
@@ -515,6 +516,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
         if (page) { if (gamePages.size >= 400) gamePages.delete(gamePages.keys().next().value); gamePages.set(appid, { at: Date.now(), page }); }
         return page;
     }
+    let statsCache = null;
     const widgets = new Map(); // appid -> { at, data }
     async function widgetData(appid) {
         const hit = widgets.get(appid);
@@ -1886,6 +1888,15 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
                 return send(res, 200, valueBadgeSvg({ name, ...v }), { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" });
             }
             // Public price page for one game, by Steam app id. Rendered on the server so search engines and link previews can read it.
+            if (req.method === "GET" && url.pathname === "/stats") {
+                if (!shareLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                if (!statsCache || Date.now() - statsCache.at > 5 * 60_000) {
+                    const st = db.stats(), dir = directory(), since = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+                    const names = new Map(dir.map(g => [g.id, g.name]));
+                    statsCache = { at: Date.now(), html: renderStats({ servers: (guildList ? guildList() : []).filter(g => !isHidden(g.id)).length, stats: { users: st.users, uniqueGames: st.uniqueGames, wishlistGames: st.wishlistGames, alertsWeek: Object.values(st.alerts7d ?? {}).reduce((a, b) => a + Number(b), 0) }, board: db.weeklyBoard(since, dir.map(g => g.id)).map(b => ({ ...b, name: names.get(b.guild_id) })), origin: new URL(config.publicUrl).origin }) };
+                }
+                return send(res, 200, statsCache.html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" });
+            }
             if (req.method === "GET" && url.pathname === "/winter-sale") {
                 const ev = SALES.find(x => /winter/i.test(x.name) && x.end > Date.now()) ?? SALES.find(x => x.kind === "sale" && x.end > Date.now());
                 const origin = new URL(config.publicUrl).origin;
@@ -1959,7 +1970,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
             }
             if (req.method === "GET" && url.pathname === "/sitemap.xml") {
                 // Public pages only. The date is when the file behind each page last changed, so crawlers know what to revisit.
-                const PAGES = [["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : k === "fortnite" ? "0.7" : "0.5"]), ["/indie", "page-indie.jpg", "daily", "0.7"], ["/winter-sale", "index.html", "weekly", "0.7"], ["/indie/tools", "page-indie-tools.jpg", "monthly", "0.7"], ...INDIE_TOOLS.map(t => [`/indie/tools/${t.id}`, "page-indie-tools.jpg", "monthly", "0.6"]), ...db.indieList({ limit: 60, sort: "new" }).games.map(g => [`/indie/game/${g.id}`, "page-indie.jpg", "weekly", "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, slug === "steam-deals-this-week" ? "daily" : "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"], ["/licenses.html", "licenses.pdf", "yearly", "0.2"]];
+                const PAGES = [["/stats", null, "daily", "0.5"], ["/", "index.html", "weekly", "1.0"], ["/grabber", "grabber.html", "monthly", "0.8"], ["/ai", "ai.html", "monthly", "0.8"], ...Object.keys(PAGE_SEO).map(k => [`/${k}`, `page-${k}.jpg`, "monthly", k === "support" || k === "help" ? "0.6" : k === "fortnite" ? "0.7" : "0.5"]), ["/indie", "page-indie.jpg", "daily", "0.7"], ["/winter-sale", "index.html", "weekly", "0.7"], ["/indie/tools", "page-indie-tools.jpg", "monthly", "0.7"], ...INDIE_TOOLS.map(t => [`/indie/tools/${t.id}`, "page-indie-tools.jpg", "monthly", "0.6"]), ...db.indieList({ limit: 60, sort: "new" }).games.map(g => [`/indie/game/${g.id}`, "page-indie.jpg", "weekly", "0.5"]), ...seoSlugs().map(slug => [`/${slug}`, `seo/${slug}.html`, slug === "steam-deals-this-week" ? "daily" : "monthly", "0.7"]), ["/terms.html", "terms.pdf", "yearly", "0.3"], ["/privacy.html", "privacy.pdf", "yearly", "0.3"], ["/licenses.html", "licenses.pdf", "yearly", "0.2"]];
                 const day = f => { try { return statSync(f.startsWith("seo/") ? SEO_SRC : join(PUBLIC_DIR, f)).mtime.toISOString().slice(0, 10); } catch { return null; } };
                 const rows = PAGES.map(([p, f, freq, prio]) => `<url><loc>${origin}${p}</loc>${day(f) ? `<lastmod>${day(f)}</lastmod>` : ""}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`).join("\n");
                 let games = ""; try {

@@ -179,6 +179,7 @@ export function createCommunityDash({ db, rest, community, membersIntent = () =>
             patch.ai_on = b.ai_on ? 1 : 0;
         };
         if (b.guides_on !== undefined) patch.guides_on = b.guides_on ? 1 : 0;
+        if (b.milestone_channel !== undefined) patch.milestone_channel = await channelOk(gid, b.milestone_channel || null);
         if (b.unfurl_on !== undefined) patch.unfurl_on = b.unfurl_on ? 1 : 0;
         if (b.ai_channel !== undefined) patch.ai_channel = await channelOk(gid, b.ai_channel || null);
         let trap = null;

@@ -175,3 +175,35 @@ test("custom commands: names are cleaned, limited and replaced", () => {
     assert.equal(db.deleteTag(G, "t5"), true);
     db.forgetToolsGuild(G); assert.equal(db.countTags(G), 0);
 });
+
+import { setupPlan } from "../src/community.js";
+import { renderStats } from "../src/statspage.js";
+import { saleOutlook } from "../src/gamepage.js";
+import { runMilestones } from "../src/playalerts.js";
+
+test("setup preview lists only what is missing", async () => {
+    const api = { allChannels: async () => [{ name: "general" }, { name: "rules" }], allRoles: async () => [{ name: "Member" }, { name: "PC" }] };
+    const p = await setupPlan({ api, guildId: "G" });
+    assert.ok(!p.missingRoles.includes("Member") && !p.missingRoles.includes("PC") && p.missingRoles.includes("Moderator"));
+    const info = p.missingChannels.find(c => /INFORMATION/.test(c.category));
+    assert.ok(info && !info.missing.includes("rules") && info.missing.includes("welcome"));
+    assert.ok(!p.missingChannels.some(c => c.missing.includes("general")));
+});
+test("the stats page escapes names and the weekly board needs three players", () => {
+    const html = renderStats({ servers: 12, stats: { users: 100, uniqueGames: 5, wishlistGames: 9, alertsWeek: 3 }, board: [{ name: "<b>Evil</b>", hours: 40, players: 3 }], origin: "https://x.test" });
+    assert.match(html, /&lt;b&gt;Evil/); assert.ok(!html.includes("<b>Evil"));
+    assert.match(renderStats({ servers: 1, stats: {}, board: [], origin: "https://x.test" }), /Not enough listed servers/);
+});
+test("the sale outlook only speaks when the price is above its low and a sale is near", () => {
+    const now = Date.UTC(2026, 10, 12);
+    assert.equal(saleOutlook({ price: 10, low1y: 9.9, currency: "USD" }, now), null);
+    const o = saleOutlook({ price: 20, low1y: 10, currency: "USD" }, now);
+    assert.ok(o === null || /starts in \d+ day/.test(o));
+    assert.equal(saleOutlook({ price: null, low1y: 5 }, now), null);
+});
+test("a milestone shout names the member without pinging and shows no private numbers", async () => {
+    const { milestoneShout } = await import("../src/playalerts.js");
+    const m = milestoneShout({ userId: "123", title: "Hades", appid: 1145360, hours: 500 });
+    assert.deepEqual(m.allowed_mentions, { parse: [] });
+    assert.match(m.embeds[0].description, /<@123> just passed \*\*500 hours\*\* in \*\*Hades\*\*/);
+});

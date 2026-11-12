@@ -1,6 +1,8 @@
 // Public, server-rendered price page for one game: current best price, a year of history, a buy-or-wait verdict and a way to get alerts.
 // Plain HTML with the facts in the markup (and JSON-LD), so search engines and link previews can read it without running a script.
 
+import { upcomingSales } from "./salescal.js";
+
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (n, cur = "USD") => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return `$${Number(n).toFixed(2)}`; } };
 const dateOf = t => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
@@ -29,6 +31,16 @@ export function chartSvg(points, cur = "USD", { w = 760, h = 260 } = {}) {
  * data: { title, appid, itadId, currency, price, shop, shopUrl, msrp, low1y, atl, points, advice, image }
  * Returns a full HTML document.
  */
+/** A plain heads-up when the price is above its recent low and a Steam sale is close. It says what happened before, not what will happen. */
+export function saleOutlook(data, now = Date.now()) {
+    if (!Number.isFinite(data.price) || !Number.isFinite(data.low1y) || data.price <= data.low1y * 1.08) return null;
+    const next = upcomingSales(now, { limit: 1, salesOnly: true })[0];
+    if (!next) return null;
+    const days = Math.ceil((next.start - now) / 86400_000);
+    if (days < 1 || days > 60) return null;
+    return `Steam's ${next.name} starts in ${days} day${days === 1 ? "" : "s"}. This game has been as low as ${money(data.low1y, data.currency || "USD")} in the past year, so waiting could pay off.`;
+}
+
 const TIER = { platinum: "Platinum", gold: "Gold", silver: "Silver", bronze: "Bronze", borked: "Borked", native: "Native Linux" };
 const DECK_TEXT = { verified: ["#57f287", "Steam Deck Verified"], playable: ["#ffab1f", "Steam Deck Playable"], unsupported: ["#ff7a7a", "Not supported on Steam Deck"] };
 const TIER_COLOR = { platinum: "#9fe8ff", gold: "#ffd24a", silver: "#c9d4e4", bronze: "#d99a6c", borked: "#ff7a7a", native: "#57f287" };
@@ -91,6 +103,7 @@ h1{font-size:clamp(28px,5vw,44px);line-height:1.1;margin:0 0 6px}.sub{color:#a9b
 <div class="hero">${data.image ? `<img class="cap" src="${esc(data.image)}" alt="${esc(data.title)}" loading="eager">` : ""}<div>
 ${price ? `<div class="big">${esc(price)}${cut ? `<span class="badge">-${cut}%</span>` : ""}${cut && Number.isFinite(data.msrp) ? `<s>${esc(money(data.msrp, cur))}</s>` : ""}</div><div style="color:#a9b8d4">${data.shop ? `Best price right now at <b>${esc(data.shop)}</b>` : ""}</div>` : `<div class="big">No price right now</div>`}
 ${data.shopUrl ? `<div class="cta"><a class="btn g" href="${esc(data.shopUrl)}" rel="nofollow noopener" target="_blank">Go to ${esc(data.shop || "store")}</a></div>` : ""}</div></div>
+${(() => { const o = saleOutlook(data); return o ? `<div class="verdict" style="border-left-color:#62b8ff"><b style="color:#62b8ff">Sale coming up</b><ul><li>${esc(o)}</li></ul></div>` : ""; })()}
 ${data.advice ? `<div class="verdict"><b>${esc(data.advice.label)}</b><ul>${data.advice.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul></div>` : ""}
 ${compatBadges(data.compat)}
 <div class="stats">${stat("12-month low", Number.isFinite(data.low1y) ? money(data.low1y, cur) : "")}${stat("All-time low", Number.isFinite(data.atl) ? money(data.atl, cur) : "")}${stat("Usual price", Number.isFinite(data.msrp) ? money(data.msrp, cur) : "")}</div>
