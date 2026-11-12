@@ -1,11 +1,9 @@
 // Discord handlers for the wishlist, alert, channel and data commands.
 // Logic lives in db.js, alerts.js, steam.js and wishlist.js; this file only talks to Discord.
 
-import {
-    ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits
-} from "discord.js";
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
-import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_PRICE, CONTEXT_ADD, CONTEXT_OWNERS } from "./commands.js";
+import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_ADD, CONTEXT_OWNERS } from "./commands.js";
 import { salesEmbed, upcomingSales, salesBefore } from "./salescal.js";
 import { freeMenu, shopSlug } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";

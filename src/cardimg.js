@@ -1,12 +1,12 @@
 // The Steam account value picture, the yearly recap and the welcome card, drawn as SVG and turned into PNG. They match what the website shows.
-import { trophyCase } from "./badges.js";
-import { resolveArt } from "./art.js";
-import { challengeView } from "./challenge.js";
-import { tasteProfile } from "./taste.js";
+
+
+
+
 import { libraryView } from "./library.js";
 import { playStats, fetchProfileCard, fmtHours } from "./steamlib.js";
 import { money } from "./render.js";
-import { THEMES, PLATFORM_LABEL, viewPrefs } from "./cardprefs.js";
+
 import { goalProgress } from "./steamstore.js";
 import { svgToPng, fetchImageDataUri } from "./imgrender.js";
 

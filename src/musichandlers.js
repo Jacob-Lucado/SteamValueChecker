@@ -3,7 +3,7 @@ import { MessageFlags, PermissionFlagsBits, ChannelType } from "discord.js";
 import { UserError } from "./errors.js";
 import { fmtTime } from "./music.js";
 import { CATEGORIES } from "./stations.js";
-import { fancy, nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, playlistLine, playerLink, QUEUE_PAGE } from "./musicrender.js";
+import { fancy, nowPlayingEmbed, queueEmbed, addedEmbed, searchPayload, playlistLine, playerLink } from "./musicrender.js";
 
 const eph = (i, payload, bad = false) => i.reply({ ...fancy(payload, bad), flags: MessageFlags.Ephemeral });
 

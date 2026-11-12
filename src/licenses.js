@@ -1,5 +1,5 @@
 // Builds the third-party notice list from what's actually installed, so it can't drift from the real dependencies.
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const read = p => { try { return readFileSync(p, "utf8"); } catch { return null; } };

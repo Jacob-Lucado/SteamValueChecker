@@ -2,7 +2,7 @@
 // Link buttons open a store page. "Add to wishlist" and "Another pick" belong to the person who asked, so nobody else can press them for them.
 import { randomBytes } from "node:crypto";
 import { steamArt } from "./art.js";
-import { itadArt, artUrl, safeUrl } from "./render.js";
+import { artUrl, safeUrl } from "./render.js";
 import { playNext, libraryView } from "./library.js";
 import { addGameByTitle } from "./wishlist.js";
 

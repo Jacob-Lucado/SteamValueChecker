@@ -13,8 +13,8 @@ import { enrichFree, withOwnership } from "./freeinfo.js";
 import { voiceGroups, voiceBuyEmbed } from "./gamenight.js";
 import { digestIsDue, buildServerDigest } from "./serverdigest.js";
 import { epicSoonPayload, newsPayload } from "./render.js";
-import { isPatchNote } from "./news.js";
-import { releaseEmbed, releaseDateEmbed, alertPayload, bundleEmbed, giveawayEmbed, extrasButtons, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload, saleSoonPayload } from "./render.js";
+
+import { releaseEmbed, releaseDateEmbed, alertPayload, digestEmbed, digestItems, groupEmbed, freeGamesPayload, extrasPayload, lastChancePayload, hotDealsPayload, saleStartPayload, saleSoonPayload } from "./render.js";
 import { upcomingSales } from "./salescal.js";
 import { isQuiet, digestDue } from "./timeutil.js";
 import { viewRows } from "./wishlist.js";

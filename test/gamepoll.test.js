@@ -38,3 +38,11 @@ test("game night vote: pressing a button records the vote and redraws the poll",
     await press("a", 0, "gone");
     assert.match(out.at(-1).reply.content, /no longer available/);
 });
+
+test("clearing old polls also clears the channel pointers that led to them", () => {
+    const db = openDb(":memory:");
+    db.setMeta("poll:old", JSON.stringify({ until: 1 })); db.setMeta("pollch:c1", "old");
+    db.setMeta("poll:new", JSON.stringify({ until: Date.now() + 60_000 })); db.setMeta("pollch:c2", "new");
+    db.prunePolls();
+    assert.equal(db.getMeta("pollch:c1"), null); assert.equal(db.getMeta("pollch:c2"), "new");
+});

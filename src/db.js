@@ -714,7 +714,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const ownersOf = (guildId, itadId) => all("SELECT u.discord_id, l.minutes FROM users u JOIN library l ON l.discord_id = u.discord_id WHERE u.share = 1 AND u.guild_id = ? AND l.itad_id = ? ORDER BY l.minutes DESC, u.discord_id", guildId, itadId).map(clean);
     const sharingMembers = guildId => all("SELECT discord_id FROM users WHERE share = 1 AND guild_id = ?", guildId).map(r => r.discord_id);
     /** Votes on old game night polls are only kept for a day after they close. */
-    const prunePolls = (t = now()) => run("DELETE FROM status_meta WHERE key LIKE 'poll:%' AND json_extract(value, '$.until') < ?", t - 86400_000).changes;
+    const prunePolls = (t = now()) => {
+        const n = run("DELETE FROM status_meta WHERE key LIKE 'poll:%' AND json_extract(value, '$.until') < ?", t - 86400_000).changes;
+        // a channel's pointer to its live poll goes when the poll itself is gone
+        run("DELETE FROM status_meta WHERE key LIKE 'pollch:%' AND NOT EXISTS (SELECT 1 FROM status_meta p WHERE p.key = 'poll:' || status_meta.value)");
+        return n;
+    };
     const setGameNight = (guildId, on) => (on ? run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = '1'", `gamenight:${guildId}`) : run("DELETE FROM status_meta WHERE key = ?", `gamenight:${guildId}`));
     const gameNightOn = guildId => getMeta(`gamenight:${guildId}`) === "1";
     const guildsWithGameNight = () => all("SELECT key FROM status_meta WHERE key LIKE 'gamenight:%'").map(r => ({ guild_id: r.key.slice(10) }));
@@ -925,6 +930,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

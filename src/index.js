@@ -9,11 +9,7 @@ import { noticePreset } from "./noticepresets.js";
 import { asksCreator, creatorEmbed } from "./aicreator.js";
 import { missingAiPerms, permsNotice, shouldTell } from "./aiperms.js";
 import v8 from "node:v8";
-import {
-    ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType,
-    Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, Routes,
-    version as DJS_VERSION
-} from "discord.js";
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, ComponentType, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, Routes, version as DJS_VERSION } from "discord.js";
 import { loadConfig } from "./config.js";
 import { chatVoteFor, pollEmbed, pollButtons } from "./gamenight.js";
 import { createItad, ItadError } from "./itad.js";
@@ -1099,7 +1095,7 @@ const dashboard = createDashboard({ referrals, weekly, indieSvc, fortniteSvc: cr
 // Breadcrumbs for the Admin log, so a restart is never silent: why it stopped, and how much memory it was using.
 const memNote = () => { const m = process.memoryUsage(); return `rss ${Math.round(m.rss / 1048576)} MB, heap ${Math.round(m.heapUsed / 1048576)} MB`; };
 console.log(`${ACTIVITY}[boot] Bot started, ${memNote()}, heap limit ${Math.round(v8.getHeapStatistics().heap_size_limit / 1048576)} MB`);
-for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { music?.shutdown(); } catch { /* */ } console.log(`${ACTIVITY}[restart] Bot stopping: the host sent ${sig} (a deploy or restart). Memory: ${memNote()}`); setTimeout(() => process.exit(0), 300); });
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { try { music?.shutdown(); } catch { /* */ } console.log(`${ACTIVITY}[restart] Bot stopping: the host sent ${sig} (a deploy or restart). Memory: ${memNote()}`); setTimeout(() => { try { db.close?.(); } catch { /* already closed */ } process.exit(0); }, 300); });
 process.on("exit", code => { try { if (code !== 0) console.error(`[exit] bot exited unexpectedly with code ${code}, ${memNote()}`); } catch { /* nothing left to do */ } });
 setInterval(() => { const m = process.memoryUsage(); if (m.rss > 380 * 1048576) console.error(`[memory] high usage: ${memNote()}`); }, 60_000).unref();
 

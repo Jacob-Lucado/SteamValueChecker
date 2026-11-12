@@ -8,7 +8,7 @@ import { trophyCase } from "./badges.js";
 import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
 import { forYou } from "./foryou.js";
 import { calendarEntries } from "./calendar.js";
-import { upcomingSales, saleUrl } from "./salescal.js";
+
 import { salePrep } from "./saleprep.js";
 import { newsForUser } from "./news.js";
 import { bundleCheck } from "./bundle.js";

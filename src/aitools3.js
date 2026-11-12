@@ -17,7 +17,7 @@ import { steamArt } from "./art.js";
 import { dashLink } from "./dashlink.js";
 import { matchServerGuide } from "./guides.js";
 import { MAX_NOTES, NOTE_LEN } from "./aistore.js";
-import { addGameByTitle, findItem } from "./wishlist.js";
+import { addGameByTitle } from "./wishlist.js";
 
 const clip = (s, n = 80) => String(s ?? "").slice(0, n);
 const arr = v => (Array.isArray(v) ? v : []);
