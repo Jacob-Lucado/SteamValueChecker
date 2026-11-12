@@ -305,9 +305,9 @@ const voiceMap = guildId => {
 /** Downloads a Discord attachment, but only from Discord's own CDN and only up to the size limit. */
 async function fetchProofImage(a) {
     const u = new URL(a.url);
-    if (!["cdn.discordapp.com", "media.discordapp.net"].includes(u.hostname)) throw new UserError("Send the screenshot as an image attachment.");
+    if (!["cdn.discordapp.com", "media.discordapp.net"].includes(u.hostname)) throw new UserError("Send a screenshot or video as an attachment.");
     const type = String(a.contentType ?? "").split(";")[0];
-    if (a.size > 8 * 1024 * 1024) throw new UserError("That image is too big. Keep it under 8 MB.");
+    if (a.size > 10 * 1024 * 1024) throw new UserError("That file is too big. Keep it under 10 MB.");
     const res = await fetch(u, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new UserError("I couldn't download that image. Try sending it again.");
     return { buffer: Buffer.from(await res.arrayBuffer()), type, name: a.name };
@@ -690,7 +690,7 @@ client.on(Events.MessageCreate, async m => {
     try {
         if (m.guildId || m.author.bot || !giveaways || !giveaways.awaitingProof(m.author.id)) return;
         const a = m.attachments?.first();
-        if (!a) return void await m.reply({ content: "Send the screenshot as an image attachment and I'll post it. 📸", allowedMentions: { repliedUser: false } }).catch(() => {});
+        if (!a) return void await m.reply({ content: "Send a screenshot or a short video as an attachment and I'll post it. 📸", allowedMentions: { repliedUser: false } }).catch(() => {});
         let r;
         try { r = await giveaways.addProof(m.author.id, await fetchProofImage(a)); } catch (e) { r = e; }
         const text = r instanceof Error ? (r instanceof UserError ? r.message : "I couldn't add that screenshot. Try again in a moment.") : `Posted ✅ ${r.link}`;

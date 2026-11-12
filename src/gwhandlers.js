@@ -264,7 +264,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             if (kind === ID.claim) return await claim(i, Number(rest));
             if (kind === ID.confirm) {
                 const r = await giveaways.confirm(Number(rest), i.user.id);
-                return await i.update({ content: `Confirmed ✅${r.vouched ? " It was posted in the vouches channel." : ""}\n📸 **Want to add proof?** It's optional. Reply here with a screenshot of the redeemed game in the next ${r.proofMinutes} minutes and I'll post it next to your confirmation.`, embeds: [], components: [] });
+                return await i.update({ content: `Confirmed ✅${r.vouched ? " It was posted in the vouches channel." : ""}\n📸 **Want to add proof?** It's optional. Reply here with a screenshot or short video of the redeemed game in the next ${r.proofMinutes} minutes and I'll post it next to your confirmation.`, embeds: [], components: [] });
             }
             if (kind === ID.problem) {
                 const r = await giveaways.reportProblem(Number(rest), i.user.id);

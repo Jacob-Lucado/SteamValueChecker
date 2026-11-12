@@ -83,8 +83,8 @@ function pickOne(pool, rand) {
     return pool.pop();
 }
 
-const PROOF_WINDOW_MS = 30 * 60_000, PROOF_MAX_BYTES = 8 * 1024 * 1024;
-const PROOF_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+const PROOF_WINDOW_MS = 30 * 60_000, PROOF_MAX_BYTES = 10 * 1024 * 1024;
+const PROOF_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
 
 export function createGiveawayService({ db, tickets = null, vault, discord, itad = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
     const must = id => {
@@ -486,14 +486,14 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const k = db.keyAwaitingProof(userId, now());
         if (!k) throw new UserError("I'm not waiting for a screenshot from you. You can add one for 30 minutes after you confirm a prize.");
         const ext = PROOF_TYPES[String(type).toLowerCase()];
-        if (!ext) throw new UserError("Send the screenshot as a PNG, JPG, WebP or GIF image.");
-        if (!buffer?.length || buffer.length > PROOF_MAX_BYTES) throw new UserError("That image is too big. Keep it under 8 MB.");
+        if (!ext) throw new UserError("Send a PNG, JPG, WebP or GIF image, or an MP4, WebM or MOV video.");
+        if (!buffer?.length || buffer.length > PROOF_MAX_BYTES) throw new UserError("That file is too big. Keep it under 10 MB.");
         const g = must(k.giveaway_id), channelId = await vouchChannel(g);
         if (!channelId) throw new UserError("This server has no vouches channel to post it in, so I couldn't add it.");
-        const m = await discord.post(channelId, proofPayload(g, k, userId, `proof.${ext}`, buffer)).catch(() => { throw new UserError("I couldn't post in the vouches channel. Ask the host to check my permissions there."); });
+        const m = await discord.post(channelId, proofPayload(g, k, userId, `proof.${ext}`, buffer, String(type).startsWith("video/"))).catch(() => { throw new UserError("I couldn't post in the vouches channel. Ask the host to check my permissions there."); });
         const link = `https://discord.com/channels/${g.guild_id}/${channelId}/${m.id}`;
         db.setProof(k.id, link);
-        await dmHost(g, hostNote(g, `<@${userId}> added a screenshot for **${k.label}**: ${link}`));
+        await dmHost(g, hostNote(g, `<@${userId}> added proof for **${k.label}**: ${link}`));
         return { link };
     }
 

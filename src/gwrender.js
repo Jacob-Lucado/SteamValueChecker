@@ -196,14 +196,14 @@ export function vouchPayload(g, key, winnerId) {
 }
 
 /** A winner's screenshot, posted in the vouches channel. The picture is attached, not linked, so it does not expire. */
-export function proofPayload(g, key, winnerId, fileName, file) {
+export function proofPayload(g, key, winnerId, fileName, file, video = false) {
     const link = messageLink(g);
     return {
         embeds: [{
             color: GREEN, title: "📸 Proof",
-            description: `<@${winnerId}> added a screenshot of their ${kindInfo(key.kind).icon} **${key.label}**.`,
+            description: `<@${winnerId}> added a ${video ? "video" : "screenshot"} of their ${kindInfo(key.kind).icon} **${key.label}**.`,
             fields: [{ name: "Giveaway", value: link ? `[${g.title}](${link})` : g.title, inline: true }],
-            image: { url: `attachment://${fileName}` },
+            ...(video ? {} : { image: { url: `attachment://${fileName}` } }),
             timestamp: new Date().toISOString()
         }],
         files: [{ attachment: file, name: fileName }],

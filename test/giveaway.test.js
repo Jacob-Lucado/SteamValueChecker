@@ -619,7 +619,7 @@ test("a winner can add one proof screenshot within 30 minutes of confirming", as
     assert.equal(t.svc.awaitingProof(k.winner_id), true);
     const img = { buffer: Buffer.from("png-bytes"), type: "image/png", name: "x.png" };
     await assert.rejects(() => t.svc.addProof(k.winner_id, { ...img, type: "application/zip" }), /PNG, JPG/);
-    await assert.rejects(() => t.svc.addProof(k.winner_id, { ...img, buffer: Buffer.alloc(9 * 1024 * 1024) }), /too big/);
+    await assert.rejects(() => t.svc.addProof(k.winner_id, { ...img, buffer: Buffer.alloc(11 * 1024 * 1024) }), /too big/);
     await assert.rejects(() => t.svc.addProof("stranger", img), /not waiting/);
     const before = t.posts.length;
     const p = await t.svc.addProof(k.winner_id, img);
@@ -643,4 +643,18 @@ test("the proof window closes after 30 minutes", async () => {
     t.advance(31 * 60_000);
     assert.equal(t.svc.awaitingProof(k.winner_id), false);
     await assert.rejects(() => t.svc.addProof(k.winner_id, { buffer: Buffer.from("x"), type: "image/png", name: "a.png" }), /not waiting/);
+});
+
+test("proof can be a short video, posted as a file without an embedded picture", async () => {
+    const t = rig();
+    const id = await won(t);
+    const k = t.db.listKeys(id)[0];
+    await t.svc.delivered(k.id, "dm");
+    await t.svc.confirm(k.id, k.winner_id);
+    const before = t.posts.length;
+    await t.svc.addProof(k.winner_id, { buffer: Buffer.from("mp4-bytes"), type: "video/mp4", name: "clip.mp4" });
+    const post = t.posts[before];
+    assert.equal(post.payload.files[0].name, "proof.mp4");
+    assert.equal(post.payload.embeds[0].image, undefined);
+    assert.match(post.payload.embeds[0].description, /video/);
 });
