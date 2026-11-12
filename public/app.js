@@ -728,7 +728,7 @@ window.SVC_SITE = envIn => {
     return el;
   }
 
-  function renderProfile(p, { canMark = false, preview = false, signedIn = false, region = null, social = null } = {}) { return window.ProfileRenderUI.view({ PF_TITLE, PF_VIS, ext, giftButton, h, httpsOnly, money, pageBgEl, pfArt, pfGuestbook, pfPosts, pfReport, pfSocial, pfSong, pfTile, soonControl, wishSlider }, p, { canMark = false, preview = false, signedIn = false, region = null, social = null } = {}); }
+  function renderProfile(p, { canMark = false, preview = false, signedIn = false, region = null, social = null } = {}) { return window.ProfileRenderUI.view({ PF_TITLE, PF_VIS, ext, giftButton, h, httpsOnly, money, pageBgEl, pfArt, pfGuestbook, pfPosts, pfReport, pfSocial, pfSong, pfTile, soonControl, wishSlider }, p, { canMark, preview, signedIn, region, social }); }
 
   /** A row of cards you slide through instead of one very long list. Swipe on a phone, arrows on a computer. */
   function wishSlider(games, card) {
