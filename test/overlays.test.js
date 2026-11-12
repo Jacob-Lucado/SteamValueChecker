@@ -64,3 +64,10 @@ test("overlay settings for alerts, sale and scene stay inside their limits", asy
     assert.equal(new Set(s.items).size, s.items.length);
     assert.equal(cleanConfig("sale", {}).includeFests, false);
 });
+
+test("overlay themes: only known themes are kept", async () => {
+    const { cleanConfig } = await import("../src/overlays.js");
+    assert.equal(cleanConfig("goal", { theme: "neon" }).theme, "neon");
+    assert.equal(cleanConfig("goal", { theme: "<script>" }).theme, "classic");
+    assert.equal(cleanConfig("goal", {}).theme, "classic");
+});

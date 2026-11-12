@@ -6,6 +6,7 @@ import { upcomingSales } from "./salescal.js";
 export const OVERLAY_KINDS = ["goal", "stats", "timer", "alerts", "sale", "scene", "board", "playing", "poll", "free", "deals", "price"];
 export const SCENE_MAX_ITEMS = 8;
 export const SCENE_KINDS = ["goal", "stats", "timer", "sale", "board", "playing", "free", "deals"]; // what a scene may rotate through (alerts need their own live feed)
+export const OVERLAY_THEMES = ["classic", "glass", "neon", "gradient", "retro", "minimal", "steam", "cyber", "sunset"];
 export const OVERLAY_FONTS = ["Inter", "System", "Georgia", "Mono"];
 export const MAX_OVERLAYS = 12;
 export const MAX_SUPPORTER_OVERLAYS = 24;
@@ -38,7 +39,7 @@ export function cleanConfig(kind, input = {}) {
     const look = {
         accent: hex(c.accent, LOOK_DEFAULTS.accent), text: hex(c.text, LOOK_DEFAULTS.text), muted: hex(c.muted, LOOK_DEFAULTS.muted), bg: hex(c.bg, LOOK_DEFAULTS.bg), border: hex(c.border, LOOK_DEFAULTS.border),
         bgOpacity: num(c.bgOpacity, LOOK_DEFAULTS.bgOpacity, 0, 100), font: pick(c.font, OVERLAY_FONTS, LOOK_DEFAULTS.font), radius: num(c.radius, LOOK_DEFAULTS.radius, 0, 40),
-        padding: num(c.padding, LOOK_DEFAULTS.padding, 4, 48), scale: num(c.scale, LOOK_DEFAULTS.scale, 0.5, 3), showBorder: flag(c.showBorder, true), shadow: flag(c.shadow, true), refresh: num(c.refresh, LOOK_DEFAULTS.refresh, 5, 120)
+        padding: num(c.padding, LOOK_DEFAULTS.padding, 4, 48), scale: num(c.scale, LOOK_DEFAULTS.scale, 0.5, 3), showBorder: flag(c.showBorder, true), shadow: flag(c.shadow, true), refresh: num(c.refresh, LOOK_DEFAULTS.refresh, 5, 120), theme: pick(c.theme, OVERLAY_THEMES, "classic")
     };
     if (kind === "goal") return { ...look, label: text(c.label, "Goal", 40), target: Math.round(num(c.target, 100, 1, 1_000_000_000)), source: pick(c.source, ["manual", "members", "boosts"], "manual"), unit: text(c.unit, "", 12), showPercent: flag(c.showPercent, true), doneText: text(c.doneText, "Goal reached!", 40) };
     if (kind === "stats") return { ...look, label: text(c.label, "", 40), showMembers: flag(c.showMembers, true), showBoosts: flag(c.showBoosts, true), membersLabel: text(c.membersLabel, "Members", 20), boostsLabel: text(c.boostsLabel, "Boosts", 20) };

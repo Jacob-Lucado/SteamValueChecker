@@ -2074,3 +2074,19 @@ a.fd-name:hover { text-decoration: underline; }
 .chmap-group { margin-top: 18px; } .chmap-head { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; border-bottom: 1px solid var(--line); }
 .warn-text { color: #f59e0b; font-weight: 600; }
 
+
+.ovs-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: .6rem; margin-bottom: 1rem; }
+.ovs-theme { display: grid; gap: .35rem; justify-items: center; padding: .5rem; border: 2px solid transparent; border-radius: 12px; background: color-mix(in srgb, currentColor 6%, transparent); color: inherit; font: inherit; font-size: .8rem; cursor: pointer; }
+.ovs-theme:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+.ovs-theme.on { border-color: #5865f2; }
+.ovs-tswatch { display: grid; gap: 4px; align-content: center; width: 86px; height: 52px; padding: 8px; box-sizing: border-box; background: var(--b); border: 1px solid var(--a); border-radius: 8px; }
+.ovs-tswatch i { display: block; height: 7px; border-radius: 4px; background: var(--t); opacity: .85; }
+.ovs-tswatch i + i { width: 60%; background: var(--a); opacity: 1; }
+.ovs-tswatch.t-glass { background: color-mix(in srgb, var(--b) 45%, #8aa); border-color: #fff8; backdrop-filter: blur(2px); }
+.ovs-tswatch.t-neon { box-shadow: 0 0 8px var(--a), inset 0 0 6px var(--a); border-width: 2px; }
+.ovs-tswatch.t-gradient { background: linear-gradient(135deg, var(--b), var(--a)); }
+.ovs-tswatch.t-retro { border-radius: 0; border-width: 3px; box-shadow: 3px 3px 0 var(--a); }
+.ovs-tswatch.t-minimal { background: repeating-conic-gradient(#8884 0% 25%, #0000 0% 50%) 50% / 10px 10px; border-color: transparent; }
+.ovs-tswatch.t-steam { border-radius: 2px; border-top: 3px solid var(--a); }
+.ovs-tswatch.t-cyber { border-radius: 0; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); }
+.ovs-tswatch.t-sunset { background: linear-gradient(160deg, var(--a), var(--b)); }

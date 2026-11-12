@@ -17,6 +17,7 @@
     s.setProperty("--bgop", Math.max(0, Math.min(100, Number(c.bgOpacity ?? 85))) + "%"); s.setProperty("--font", FONTS[c.font] || FONTS.Inter);
     s.setProperty("--radius", Math.max(0, Math.min(40, Number(c.radius ?? 16))) + "px"); s.setProperty("--pad", Math.max(4, Math.min(48, Number(c.padding ?? 20))) + "px");
     s.setProperty("--scale", String(Math.max(0.5, Math.min(3, Number(c.scale ?? 1)))));
+    if (target !== root) { [...target.classList].filter(x => x.startsWith("t-")).forEach(x => target.classList.remove(x)); if (/^[a-z]+$/.test(c.theme || "") && c.theme !== "classic") target.classList.add("t-" + c.theme); }
   }
 
   const two = v => String(v).padStart(2, "0");

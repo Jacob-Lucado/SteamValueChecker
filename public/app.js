@@ -5668,6 +5668,19 @@ window.SVC_SITE = envIn => {
       toast("Downloaded. In OBS: Scene Collection, Import, then pick the file. This file holds your private links, so keep it to yourself.", "ok");
     }
 
+    // One-click looks. Each sets the colors, corners and font that suit it; the card's styling for the name lives in ov.css.
+    const THEMES = [
+      ["classic", "Classic", { accent: "#5865f2", text: "#ffffff", muted: "#94a3b8", bg: "#0b0e14", border: "#1e2638", bgOpacity: 85, radius: 16, font: "Inter", showBorder: true, shadow: true }],
+      ["glass", "Glass", { accent: "#7dd3fc", text: "#ffffff", muted: "#dbeafe", bg: "#1e293b", border: "#ffffff", bgOpacity: 38, radius: 22, font: "Inter", showBorder: true, shadow: true }],
+      ["neon", "Neon", { accent: "#22d3ee", text: "#e0f2fe", muted: "#7dd3fc", bg: "#050816", border: "#22d3ee", bgOpacity: 90, radius: 12, font: "Inter", showBorder: true, shadow: false }],
+      ["gradient", "Gradient", { accent: "#c026d3", text: "#ffffff", muted: "#f5d0fe", bg: "#312e81", border: "#a78bfa", bgOpacity: 95, radius: 20, font: "Inter", showBorder: true, shadow: true }],
+      ["retro", "Retro", { accent: "#facc15", text: "#fefce8", muted: "#d6d3d1", bg: "#111827", border: "#facc15", bgOpacity: 95, radius: 0, font: "Mono", showBorder: true, shadow: false }],
+      ["minimal", "Minimal", { accent: "#ffffff", text: "#ffffff", muted: "#e2e8f0", bg: "#000000", border: "#ffffff", bgOpacity: 0, radius: 0, font: "Inter", showBorder: false, shadow: false }],
+      ["steam", "Steam", { accent: "#66c0f4", text: "#c7d5e0", muted: "#8f98a0", bg: "#1b2838", border: "#2a475e", bgOpacity: 100, radius: 4, font: "System", showBorder: true, shadow: true }],
+      ["cyber", "Cyber", { accent: "#fcee0a", text: "#fcee0a", muted: "#00f0ff", bg: "#0a0a12", border: "#fcee0a", bgOpacity: 95, radius: 0, font: "Mono", showBorder: false, shadow: false }],
+      ["sunset", "Sunset", { accent: "#fb923c", text: "#fff7ed", muted: "#fed7aa", bg: "#7c2d12", border: "#fb923c", bgOpacity: 95, radius: 18, font: "Georgia", showBorder: true, shadow: true }]
+    ];
+
     function paintEditor() {
       const o = find(sel);
       if (!o) { editor.replaceChildren(h("div", { class: "panel" }, h("p", { class: "muted", text: "Pick an overlay on the left, or add a new one." }))); return; }
@@ -5761,6 +5774,7 @@ window.SVC_SITE = envIn => {
       editor.replaceChildren(
         h("div", { class: "panel" }, h("h3", { text: KIND[o.kind][0] }), row("Name", name), needsServer ? row("Server", server) : null, ...specific),
         o.kind === "scene" ? null : h("div", { class: "panel" }, h("h3", { text: "Look" }),
+          h("div", { class: "ovs-themes", role: "group", "aria-label": "Theme" }, ...THEMES.map(([key, label, p]) => { const btn = h("button", { type: "button", class: "ovs-theme" + ((c.theme || "classic") === key ? " on" : ""), title: label, "aria-pressed": String((c.theme || "classic") === key), onclick: () => { Object.assign(o.config, c, p, { theme: key }); o.name = draft.name; paintEditor(); } }, h("span", { class: "ovs-tswatch t-" + key }, h("i", {}), h("i", {})), h("span", { text: label })); btn.style.setProperty("--a", p.accent); btn.style.setProperty("--b", p.bg); btn.style.setProperty("--t", p.text); return btn; })),
           h("div", { class: "ovs-grid" }, row("Accent", color("accent")), row("Text", color("text")), row("Muted text", color("muted")), row("Background", color("bg")), row("Border", color("border")), row("Font", font)),
           row("Background opacity", range("bgOpacity", 0, 100, 1, "%")), row("Corner radius", range("radius", 0, 40, 1, "px")), row("Padding", range("padding", 4, 48, 1, "px")), row("Size", range("scale", 0.5, 3, 0.1, "×")),
           row("Refresh every", range("refresh", 5, 120, 5, "s")), h("div", { class: "row" }, check("showBorder", "Border"), check("shadow", "Drop shadow"))),
