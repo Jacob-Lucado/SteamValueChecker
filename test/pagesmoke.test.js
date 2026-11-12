@@ -144,3 +144,36 @@ test("the moderation page shows the auto-moderator and saves a change", { timeou
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the signed-out landing page and the welcome tour open without script errors", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const o = await setup({ config: { ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/`, { waitUntil: "load" });
+        await page.waitForTimeout(800);
+        const len = await page.evaluate(() => (document.getElementById("app")?.innerText ?? "").trim().length);
+        assert.ok(len > 200, `the landing page drew ${len} characters`);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
+
+test("a server's page and the welcome tour open signed in", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members: 10, boosts: 0 }] } });
+    try {
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/servers`, { waitUntil: "load" }); await page.waitForTimeout(600);
+        await page.goto(`${o.base}/servers/g-admin`, { waitUntil: "load" }); await page.waitForTimeout(800);
+        const len = await page.evaluate(() => (document.getElementById("app")?.innerText ?? "").trim().length);
+        assert.ok(len > 60, `the server page drew ${len} characters`);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
