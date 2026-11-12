@@ -37,9 +37,10 @@ export function summarize(entry, { majorOnly = false } = {}) {
 /** Joins lookup results, price entries and any per-game paid amounts into rows. */
 export function buildRows(resolved, pricesById, paidByTitle = new Map(), opts = {}) {
     return resolved.map(r => ({
-        title: r.title,
+        // A Steam link or a match the member fixed is exact: show the game's name, not what was typed, and no "~".
+        title: r.exact ? (r.matched ?? r.title) : r.title,
         matched: r.matched ?? r.title,
-        approx: Boolean(r.approx),
+        approx: Boolean(r.approx) && !r.exact,
         found: Boolean(r.id),
         id: r.id ?? null,
         paid: paidByTitle.get(r.title) ?? null,

@@ -2108,3 +2108,7 @@ a.fd-name:hover { text-decoration: underline; }
 .wrapped-dots .dot { width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 0; background: var(--line, #27384f); cursor: pointer; }
 .wrapped-dots .dot.on { background: var(--accent, #4da3ff); }
 .wrapped .row.center { justify-content: center; }
+
+/* Value checker: the small "Fix" control beside a guessed or missing match */
+.fix-match { display: inline-flex; gap: 6px; align-items: center; vertical-align: middle; }
+.fix-match input { height: 30px; min-width: 220px; max-width: 100%; }

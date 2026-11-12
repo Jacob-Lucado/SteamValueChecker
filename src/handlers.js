@@ -9,6 +9,7 @@ import { freeMenu, shopSlug } from "./freemenu.js";
 import { enrichFree, withOwnership } from "./freeinfo.js";
 import { ItadError } from "./itad.js";
 import { importWishlist, SteamError, MAX_IMPORT } from "./steam.js";
+import { MAX_ITEMS_PER_USER } from "./db.js";
 import { gameNight, gameNightEmbed, gameNightButtons, pickGame, pollOptions, pollState, castVote, pollEmbed, pollButtons } from "./gamenight.js";
 import { SNOOZE_ID, BELOW_ID, BELOW_MODAL_ID, STORY_ID } from "./render.js";
 import { dealFromEmbed, renderStory } from "./dealstory.js";
@@ -27,6 +28,7 @@ import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serv
 import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
 import { current, dealVerdict } from "./alerts.js";
+import { saveFix, forgetFix, FixError } from "./titlefix.js";
 import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
 import { compareLibraries, playTogether } from "./compare.js";
 import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
@@ -117,7 +119,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             if (r.unmatched) lines.push(`${r.unmatched} could not be matched to price data and were skipped.`);
             if (r.truncated) lines.push(`Only the first ${MAX_IMPORT} of ${r.total} games were imported.`);
             if (r.rateLimited) lines.push("IsThereAnyDeal asked the bot to slow down, so only part of the wishlist was added. Run the import again in a minute to add the rest.");
-            if (res.skippedForLimit) lines.push(`Your list is full (200 games), so ${res.skippedForLimit} were skipped.`);
+            if (res.skippedForLimit) lines.push(`Your list is full (${MAX_ITEMS_PER_USER} games), so ${res.skippedForLimit} were skipped.`);
             lines.push("", `Alerts: **any sale**, delivered by **${deliveryText(db.getUser(i.user.id))}**.`);
             lines.push("Use `/me wishlist alert` to change when you get alerted, and `/me wishlist view` to see prices. Run `/me wishlist import` again any time to sync.");
             if (user.delivery === "dm") lines.push("Make sure your DMs from this server are open, or ask an admin to set `/manage alertchannel`.");
@@ -947,6 +949,24 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         } catch (err) { await failed(i, "watch", err); }
     }
 
+    // ---------- /games fixmatch ----------
+    async function handleFixMatch(i) {
+        cooldown(i, "add");
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+            const typed = i.options.getString("title", true), game = i.options.getString("game");
+            if (!game) {
+                const gone = forgetFix({ db, userId: i.user.id, typed });
+                return void await i.editReply(gone ? `Forgotten. **${typed}** is looked up the normal way again.` : `I had no saved match for **${typed}**.`);
+            }
+            const out = await saveFix({ itad, db, userId: i.user.id, typed, game });
+            await i.editReply(`Got it. From now on, when you type **${out.typed}** I'll price **${out.title}**. This only applies to you.`);
+        } catch (err) {
+            if (err instanceof FixError) return void await i.editReply(err.message);
+            await failed(i, "fixmatch", err);
+        }
+    }
+
     // ---------- /me mydata ----------
     async function handleMyData(i) {
         if (i.options.getSubcommand() === "export") {
@@ -1078,5 +1098,5 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         } catch (err) { await failed(i, "message menu", err); }
     }
 
-    return { handleCoop, handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleSupporter, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
+    return { handleFixMatch, handleCoop, handleNowPlaying, handleGameNightPoll, handlePollVote, handleMessageContext, handleFriend, handleCompare, handleContextMenu, handleWishlist, handleGameNight, handleGameNightButton, handleChangelog, handleSupporter, handleAlertButton, handleAlerts, handleLanguage, handleAlertChannel, handleLibrary, handleServerList, handleLeaderboard, handleFreeGames, handleFreeMenu, handleSales, handleWatch, handlePublicPage, handleServerStats, handleStatus, handleMyData, handleAutocomplete };
 }

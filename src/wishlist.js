@@ -84,9 +84,9 @@ export async function addGameByTitle(db, itad, userId, rawTitle, type, value, { 
 
     const name = hit.approx ? hit.matched : title;
     const res = db.addItems(userId, [{ itad_id: hit.id, title: name }], { trigger: trig.type, value: trig.value, source });
-    if (res.skippedForLimit) throw new WishlistError("Your list is full (200 games). Remove one first.");
+    if (res.skippedForLimit) throw new WishlistError("Your list is full (500 games). Remove one first.");
     if (res.existing) throw new WishlistError(`${name} is already on your list.`);
-    return { name, approx: hit.approx, trigger: describeTrigger({ trigger_type: trig.type, trigger_value: trig.value }) };
+    return { name, approx: Boolean(hit.approx) && !hit.exact, trigger: describeTrigger({ trigger_type: trig.type, trigger_value: trig.value }) };
 }
 
 /** Stores the result of steam.importWishlist(). Shared by the Discord command and the dashboard. */

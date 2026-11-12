@@ -327,6 +327,12 @@ const watch = new SlashCommandBuilder()
     .addStringOption(o => o.setName("title").setDescription("Game title").setRequired(true).setMaxLength(100))
     .addStringOption(alertType).addNumberOption(alertValue);
 
+const fixmatch = new SlashCommandBuilder()
+    .setName("fixmatch")
+    .setDescription("Teach the value checker the right game for a title it got wrong. Leave game empty to forget it")
+    .addStringOption(o => o.setName("title").setDescription("The title the way you typed it").setRequired(true).setMaxLength(120))
+    .addStringOption(o => o.setName("game").setDescription("The right game: its exact name or its Steam store link").setMaxLength(300));
+
 const CODE_GAME_CHOICES = [{ name: "Borderlands (all of them)", value: "borderlands" }, { name: "Genshin Impact", value: "genshin" }, { name: "Honkai: Star Rail", value: "hsr" }, { name: "Zenless Zone Zero", value: "zzz" }, { name: "Destiny 2", value: "destiny2" }, { name: "Warframe", value: "warframe" }];
 const alerts = new SlashCommandBuilder()
     .setName("alerts")
@@ -937,7 +943,7 @@ const playerCmd = new SlashCommandBuilder()
     .setDescription("Open the big music player for this server");
 
 export const commands = [
-    ...[value, wishlist, friendCmd, profileCmd, watch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, supporterCmd, mydata, help, about, vote, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
+    ...[value, wishlist, friendCmd, profileCmd, watch, fixmatch, currency, redeem, regions, sales, publicpage, status, alerts, library, freegames, steam, profilecard, bundle, saleprep, support, bug, codes, feature, grabberAd, changelog, supporterCmd, mydata, help, about, vote, privacy, dashCmd("dashboard"), dashCmd("dash"), languageCmd].map(everywhere),
     ...[alertchannel, giveaway, promos, musicCmd, playCmd, playerCmd, setup, gamenight, coop, lfgCmd, compare, nowplayingCmd, clubCmd, santaCmd, triviaCmd, community, rank, levels, invitesCmd, streamCmd, memesCmd, emojiCmd, modCmd, lbRefresh, rolemenuCmd, starboardCmd, suggestionsCmd, tagsCmd, pollCmd, suggestCmd, tagCmd].map(serverOnly),
     ...[serverlist, leaderboard, serverstats, calendarCmd].map(serverOrDm)
 ].map(c => c.toJSON());
@@ -947,7 +953,7 @@ export const commands = [
 // noisy list that way, so they are folded into a few grouped commands. The handlers still think in the old names:
 // legacyRoute() turns "/me wishlist add" back into ("wishlist", "add") before anything else runs.
 const HUBS = [
-    { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
+    { name: "games", description: "Prices, deals, free games and sales", kind: "everywhere", flat: ["value", "fixmatch", "regions", "bundle", "sales", "freegames", "watch", "redeem"], groups: ["saleprep", "codes"] },
     { name: "me", description: "Your wishlist, library, Steam link, alerts and data", kind: "everywhere", flat: ["currency", "profilecard", "publicpage"], groups: ["wishlist", "library", "steam", "friend", "profile", "mydata"] },
     { name: "server", description: "Your server: giveaways, game nights, levels, boards and events", kind: "serverOrDm", flat: ["gamenight", "coop", "compare", "nowplaying", "rank", "levels", "serverstats", "leaderboard", "suggest", "tag"], groups: ["club", "santa", "trivia", "giveaway", "promos", "serverlist", "lfg", "calendar", "invites", "stream"] },
     { name: "manage", description: "Server managers: setup, community, alert channels and emoji", kind: "serverOnly", perm: PermissionFlagsBits.ManageGuild, flat: ["setup", "leaderboardrefresh"], groups: ["community", "alertchannel", "emoji", "memes", "rolemenu", "starboard", "suggestions", "tags", "poll"] },

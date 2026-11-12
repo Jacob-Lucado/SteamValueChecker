@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, SUPPORT_PAGE_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
+import { saveFix, forgetFix, FixError } from "../titlefix.js";
 import * as xposterText from "../xposter.js";
 import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl, splitGame } from "../bundlelanding.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
@@ -1116,12 +1117,21 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
 
 
 
+        // Corrections for the value checker: "when I type this, I mean that game".
+        "GET /api/value/fixes": async req => ({ fixes: db.listTitleFixes(session(req).userId).map(f => ({ typed: f.typed, title: f.title })) }),
+        "POST /api/value/fix": async (req, body) => {
+            const s = session(req);
+            cooldown(s.userId, "valuefix", 2_000);
+            try { return { ok: true, ...(await saveFix({ itad, db, userId: s.userId, typed: body.typed, game: body.game })) }; }
+            catch (err) { if (err instanceof FixError) throw new HttpError(400, err.message); throw err; }
+        },
+        "POST /api/value/fix/remove": async (req, body) => ({ ok: forgetFix({ db, userId: session(req).userId, typed: body.typed }) }),
         "POST /api/value": async (req, body) => {
             const s = session(req);
             cooldown(s.userId, "value");
             try {
                 return await runValue({
-                    itad,
+                    itad, db, userId: s.userId,
                     typed: String(body.titles ?? "").slice(0, 20_000),
                     upload: body.file && typeof body.file === "object" ? { name: String(body.file.name ?? ""), text: String(body.file.text ?? "") } : null,
                     paid: num(body.paid),
@@ -2189,7 +2199,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
                 const user = db.ensureUser(uid) && db.getUser(uid);
                 if (key === "POST /api/grabber/wishlist") {
                     const r = db.addItems(uid, [{ itad_id: id, title: name }], { source: "extension" });
-                    if (r.skippedForLimit) throw new HttpError(400, "Your list is full (200 games). Remove one first.");
+                    if (r.skippedForLimit) throw new HttpError(400, "Your list is full (500 games). Remove one first.");
                     db.setAppId(uid, id, appid);
                     return json(res, 200, { added: !r.existing, existing: Boolean(r.existing), public: Boolean(user.profile_public && user.profile_slug) });
                 }

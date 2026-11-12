@@ -40,6 +40,7 @@ import { createToolsHandlers } from "./toolshandlers.js";
 import { pushOverlayEvent, setNamedFeed } from "./ovfeed.js";
 import { renderWelcomeCard, renderRecap } from "./cardimg.js";
 import { parseTyped, sanitize } from "./parse.js";
+import { lookupWithFixes } from "./titlefix.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { voteThanksEmbed, pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
@@ -864,7 +865,7 @@ async function handleValue(i) {
         const paidOption = i.options.getNumber("paid");
 
         const titles = clean.entries.map(e => e.title);
-        const resolved = await itad.lookupTitles(titles);
+        const resolved = await lookupWithFixes({ itad, db, userId: i.user.id, titles });
         const ids = [...new Set(resolved.filter(r => r.id).map(r => r.id))];
         const prices = ids.length ? await itad.getPrices(ids, region) : new Map();
 
@@ -880,6 +881,7 @@ async function handleValue(i) {
         if (clean.sawKeys) notes.push("I ignored anything that looked like a key. Please do not post keys in Discord.");
         if (clean.truncated) notes.push(`Only the first ${MAX_TITLES} of ${clean.total} titles were checked.`);
         if (savings && t.found < t.count) notes.push(`The comparison covers the ${t.found} games that were found, but "paid" covers everything you entered.`);
+        if (rows.some(r => r.approx || !r.found)) notes.push("Wrong or missing match? Paste the game's Steam store link instead of its title, or run `/games fixmatch` once and I'll remember it.");
 
         const payload = {
             content: notes.join("\n") || undefined,
@@ -1064,6 +1066,7 @@ async function onInteraction(i, again = false) {
             case "supporter": return await handlers.handleSupporter(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
+            case "fixmatch": return await handlers.handleFixMatch(i);
             case "serverstats": return await handlers.handleServerStats(i);
             case "nowplaying": return await handlers.handleNowPlaying(i);
             case "club": return await clubUi.handle(i);

@@ -2,6 +2,7 @@
 import { parseUpload, parseTyped, sanitize } from "./parse.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { toCsv } from "./render.js";
+import { lookupWithFixes } from "./titlefix.js";
 
 export const MAX_TITLES = 100;
 export const MAX_UPLOAD_CHARS = 200_000;
@@ -10,7 +11,7 @@ export const SORTS = ["input", "name", "msrp", "cheapest"];
 export class ValueError extends Error {}
 
 /** typed: titles text; upload: { name, text } from a FanaticalGrabber export. Returns plain JSON-able data. */
-export async function runValue({ itad, typed = "", upload = null, paid = null, region = "US", stores = "all", sort = "input" }) {
+export async function runValue({ itad, db = null, userId = null, typed = "", upload = null, paid = null, region = "US", stores = "all", sort = "input" }) {
     const entries = [];
     if (upload) {
         if (!/\.(csv|json|txt|md)$/i.test(upload.name ?? "")) throw new ValueError("Unsupported file type. Use a .csv, .json, .txt or .md export.");
@@ -27,7 +28,8 @@ export async function runValue({ itad, typed = "", upload = null, paid = null, r
     if (!SORTS.includes(sort)) sort = "input";
     const majorOnly = stores === "major";
 
-    const resolved = await itad.lookupTitles(clean.entries.map(e => e.title));
+    const titles = clean.entries.map(e => e.title);
+    const resolved = db && userId ? await lookupWithFixes({ itad, db, userId, titles }) : await itad.lookupTitles(titles);
     const ids = [...new Set(resolved.filter(r => r.id).map(r => r.id))];
     const prices = ids.length ? await itad.getPrices(ids, region) : new Map();
     const paidByTitle = new Map(clean.entries.filter(e => e.paid !== null).map(e => [e.title, e.paid]));
@@ -39,6 +41,7 @@ export async function runValue({ itad, typed = "", upload = null, paid = null, r
     if (clean.sawKeys) notes.push("Anything that looked like a key was ignored. Please do not post keys.");
     if (clean.truncated) notes.push(`Only the first ${MAX_TITLES} of ${clean.total} titles were checked.`);
     if (savings && t.found < t.count) notes.push(`The comparison covers the ${t.found} games that were found, but "paid" covers everything you entered.`);
+    if (rows.some(r => r.approx || !r.found)) notes.push("Wrong or missing match? Paste the game's Steam store link instead of its title, or fix it once and it is remembered.");
 
     return { rows, totals: t, savings, notes, region, majorOnly, csv: toCsv(rows, t.currency) };
 }
