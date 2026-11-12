@@ -18,4 +18,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm install --no-audit --no-fund
+      - name: Browser for the page tests
+        if: matrix.node == 22
+        run: npx playwright-core install --with-deps chromium
       - run: npm test

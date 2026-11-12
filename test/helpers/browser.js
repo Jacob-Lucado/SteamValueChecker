@@ -9,6 +9,8 @@ export async function launchBrowser() {
         try { await access(p); } catch { continue; }
         try { return await createRequire(import.meta.url)("playwright-core").chromium.launch({ executablePath: p }); } catch { /* try the next one */ }
     }
+    // the browser that `npx playwright-core install chromium` downloads (what CI does)
+    try { return await createRequire(import.meta.url)("playwright-core").chromium.launch(); } catch { /* none installed */ }
     // a full Playwright install somewhere on the machine brings its own browser
     const roots = ["/usr/lib/node_modules/"];
     try { roots.push(execSync("npm root -g", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() + "/"); } catch { /* no npm on the path */ }

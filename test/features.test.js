@@ -430,7 +430,7 @@ test("the all-time completions board ranks opted-in members by games finished, w
 
 test("every slash command has a dashboard counterpart", async () => {
     const { readFileSync } = await import("node:fs");
-    const server = ["server", "adminroutes", "overlayroutes"].map(f => readFileSync(new URL(`../src/dashboard/${f}.js`, import.meta.url), "utf8")).join("\n");
+    const server = readdirSync(new URL("../src/dashboard/", import.meta.url)).filter(f => f === "server.js" || f.endsWith("routes.js")).map(f => readFileSync(new URL(`../src/dashboard/${f}`, import.meta.url), "utf8")).join("\n");
     const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
     // command or command/subcommand -> a dashboard route (or page) that does the same job
     const MAP = {
