@@ -4896,12 +4896,24 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         }
         return Buffer.from(html.replace(/((?:src|href)=")(\/[A-Za-z0-9_\-\/.]+\.(?:js|css|png|webp|svg))(")/g, (all, a, path, z) => stamp.has(path) ? `${a}${path}?v=${stamp.get(path)}${z}` : all));
     }
+    // The generated landing pages. The deals page takes a while to build (it fetches prices and art), so once it exists a stale copy
+    // is served while a fresh one builds in the background, and it is built once shortly after start so the first visitor never waits.
+    const seoBuilding = new Set();
+    async function buildSeo(file) {
+        let body; cache.set(file + ":at", Date.now()); const slug = file.slice(4, -5); let deals = null; if (slug === "steam-deals-this-week") { try { deals = withPictures(await fillArt(pickDeals(await itad.getDealsPool({ country: "US", pages: 6 }), 45), { max: 45 }), 20); } catch { /* the page says the list is loading */ } } const html = renderSeoPage(slug, { origin, invite: config.clientId ? `${origin}/invite` : null, deals }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body;
+    }
+    function refreshSeo(file) {
+        if (seoBuilding.has(file)) return;
+        seoBuilding.add(file);
+        buildSeo(file).catch(() => {}).finally(() => seoBuilding.delete(file));
+    }
+    setTimeout(() => refreshSeo("seo/steam-deals-this-week.html"), 20_000).unref?.();
     async function loadFile(file) {
         let body = cache.get(file);
         // The sale-dates page counts days, so it is rebuilt every hour instead of once.
-        if (body && file.startsWith("seo/") && seoIsLive(file.slice(4, -5)) && Date.now() - (cache.get(file + ":at") ?? 0) > 3600_000) body = null;
+        if (body && file.startsWith("seo/") && seoIsLive(file.slice(4, -5)) && Date.now() - (cache.get(file + ":at") ?? 0) > 3600_000) { refreshSeo(file); return body; }
         if (!body) {
-            if (file.startsWith("seo/")) { cache.set(file + ":at", Date.now()); const slug = file.slice(4, -5); let deals = null; if (slug === "steam-deals-this-week") { try { deals = withPictures(await fillArt(pickDeals(await itad.getDealsPool({ country: "US", pages: 6 }), 45), { max: 45 }), 20); } catch { /* the page says the list is loading */ } } const html = renderSeoPage(slug, { origin, invite: config.clientId ? `${origin}/invite` : null, deals }); if (!html) return null; body = Buffer.from(html); cache.set(file, body); cache.set(file + ":etag", `W/"${createHash("sha1").update(body).digest("hex").slice(0, 16)}"`); return body; }
+            if (file.startsWith("seo/")) return buildSeo(file);
             try { body = await readFile(join(PUBLIC_DIR, file)); } catch { return null; }
             // The page's share-preview tags need the real public address, so it is filled in once here.
             if (file === "index.html" || file === "grabber.html" || file === "ai.html") body = Buffer.from(body.toString("utf8").replaceAll("__ORIGIN__", origin));
