@@ -49,6 +49,15 @@ export function createIndie({ fetchImpl = globalThis.fetch, now = () => Date.now
                 return remember("r" + appid, total ? { positive: Number(q.total_positive) || 0, negative: Number(q.total_negative) || 0, total, label: q.review_score_desc || null } : null);
             } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 600 * (tries + 1))); }
         }
+        // The review endpoint is sometimes blocked for servers; the store browse service gives the same totals.
+        try {
+            const input = { ids: [{ appid }], context: { language: "english", country_code: "US" }, data_request: { include_reviews: true } };
+            const sum = (await getJson(`https://api.steampowered.com/IStoreBrowseService/GetItems/v1?input_json=${encodeURIComponent(JSON.stringify(input))}`))?.response?.store_items?.[0]?.reviews?.summary_filtered;
+            if (sum) {
+                const total = Number(sum.review_count) || 0, pct = Number(sum.percent_positive) || 0;
+                return remember("r" + appid, total ? { positive: Math.round(total * pct / 100), negative: total - Math.round(total * pct / 100), total, label: sum.review_score_label || null } : null);
+            }
+        } catch (e) { lastErr = e; }
         console.warn(`Steam review count for ${appid} failed: ${lastErr?.message ?? lastErr}`);
         return { failed: true };
     }

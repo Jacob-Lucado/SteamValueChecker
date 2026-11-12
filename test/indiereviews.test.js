@@ -22,3 +22,9 @@ test("a game with no reviews is null", async () => {
     const svc = createIndie({ fetchImpl: async () => json({ query_summary: { total_positive: 0, total_negative: 0, total_reviews: 0 } }) });
     assert.equal(await svc.reviews(5), null);
 });
+
+test("when the review endpoint is blocked, the store browse service supplies the totals", async () => {
+    const svc = createIndie({ fetchImpl: async url => (/appreviews/.test(url) ? { ok: false, status: 403, json: async () => ({}) } : json({ response: { store_items: [{ reviews: { summary_filtered: { review_count: 1457, percent_positive: 93, review_score_label: "Very Positive" } } }] } })) });
+    const r = await svc.reviews(2357000);
+    assert.equal(r.total, 1457); assert.equal(r.positive, 1355); assert.equal(r.negative, 102); assert.equal(r.label, "Very Positive");
+});
