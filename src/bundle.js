@@ -1,7 +1,10 @@
+import { ownedWithFamily } from "./family.js";
 // "Is this bundle worth it?" For each active bundle with a game you want, works out every tier's price against what
 // the games would cost you today, leaving out games you already own. Pure analysis plus the lookups.
 import { summarize } from "./report.js";
 import { UserError } from "./errors.js";
+import { similarity } from "./itad.js";
+import { parseMoney } from "./parse.js";
 
 const MAX_BUNDLES = 3, MAX_GAMES = 60;
 
@@ -47,13 +50,65 @@ export async function bundleCheck({ db, itad, user, gameIds }) {
     if (!ids.length) throw new UserError("Name a game, or add games to your wishlist so I know what to look for.");
     const found = await itad.getBundleDetails(ids, user.region);
     if (!found.length) return { bundles: [], currency: "USD" };
-    const owned = new Set(db.listLibrary(user.discord_id).map(l => l.itad_id));
     const wanted = new Set(db.listItems(user.discord_id).map(i => i.itad_id));
     const ranked = found.sort((a, b) => b.matches.length - a.matches.length || (a.expiry ?? Infinity) - (b.expiry ?? Infinity)).slice(0, MAX_BUNDLES);
     const gameIdsToPrice = [...new Set(ranked.flatMap(b => b.tiers.flatMap(t => t.games.map(g => g.id))))].slice(0, MAX_GAMES * MAX_BUNDLES);
     let prices = new Map();
     try { prices = await itad.getPrices(gameIdsToPrice, user.region); } catch { /* still shows tiers without values */ }
     const priceOf = id => summarize(prices.get(id), { majorOnly: user.stores === "major" }).best?.price ?? null;
+    const owned = await ownedWithFamily({ db, itad, userId: user.discord_id, gameIds: gameIdsToPrice }); // their own games and their Steam Family's
     const bundles = ranked.map(b => analyzeBundle(b, { owned, wanted, price: priceOf }));
     return { bundles, currency: ranked[0].currency ?? "USD" };
+}
+
+/** A bundle page's address without the bits that vary: "www.", a language folder (/en/), the query and a trailing slash. */
+export function bundleLinkKey(link) {
+    try {
+        const u = new URL(String(link).trim());
+        if (!/^https?:$/.test(u.protocol)) return null;
+        return (u.hostname.replace(/^www\./, "") + u.pathname.replace(/^\/[a-z]{2}(-[a-z]{2})?(?=\/)/i, "").replace(/\/+$/, "")).toLowerCase();
+    } catch { return null; }
+}
+
+/**
+ * "Is this bundle worth it?" from the bundle page's link. The bundle is found among the ones the bundle feed already
+ * follows (Humble, Fanatical, IndieGala, Steam), so nothing is fetched from the store here. When the price site knows
+ * the bundle's tiers those are used; otherwise it is judged as one tier at the price the store shows.
+ */
+export async function bundleFromLink({ db, itad, user, link }) {
+    const key = bundleLinkKey(link);
+    if (!key) throw new UserError("That doesn't look like a link to a bundle page.");
+    const row = db.listFeedBundles({ status: "active", limit: 200 }).find(b => bundleLinkKey(b.url) === key);
+    if (!row) throw new UserError("I don't know that bundle. I follow the current bundles on Humble, Fanatical, IndieGala and Steam; for anything else, name a game from it instead.");
+    const names = (row.games ?? []).slice(0, MAX_GAMES);
+    if (!names.length) throw new UserError(`I know **${row.title}**, but the store hasn't listed its games yet. Name a game from it instead.`);
+    const games = (await itad.lookupTitles(names)).filter(r => r.id).map(r => ({ id: r.id, title: r.approx ? r.matched : r.title }));
+    if (!games.length) throw new UserError(`I couldn't match the games in **${row.title}** to prices.`);
+
+    let known = { bundles: [], currency: "USD" };
+    try { known = await bundleCheck({ db, itad, user, gameIds: games.map(g => g.id) }); } catch { /* judged from the store's own listing below */ }
+    const same = known.bundles.find(b => bundleLinkKey(b.url ?? "") === key || similarity(b.title, row.title) >= 0.8);
+    if (same) return { bundles: [same], currency: known.currency };
+
+    const price = parseMoney(row.price);
+    if (price === null) throw new UserError(`I know **${row.title}** but not its price yet.`);
+    const owned = await ownedWithFamily({ db, itad, userId: user.discord_id, gameIds: games.map(g => g.id) });
+    const wanted = new Set(db.listItems(user.discord_id).map(i => i.itad_id));
+    let prices = new Map();
+    try { prices = await itad.getPrices(games.map(g => g.id), user.region); } catch { /* still shows the tier without values */ }
+    const priceOf = id => summarize(prices.get(id), { majorOnly: user.stores === "major" }).best?.price ?? null;
+    const bundle = { id: row.key, title: row.title, shop: row.store, url: row.url, expiry: row.expires_at ?? null, currency: "USD", tiers: [{ price, currency: "USD", games }], matches: [] };
+    return { bundles: [analyzeBundle(bundle, { owned, wanted, price: priceOf })], currency: "USD" };
+}
+
+/** What someone typed into the bundle check: a bundle page link, a game, or nothing (their wishlist). */
+export async function bundleLookup({ db, itad, user, query }) {
+    const q = String(query ?? "").trim();
+    if (/^https?:\/\//i.test(q) && !/store\.steampowered\.com\/app\//i.test(q)) return { ...(await bundleFromLink({ db, itad, user, link: q })), from: "link" };
+    if (q) {
+        const [hit] = await itad.lookupTitles([q.slice(0, 300)]);
+        if (!hit?.id) throw new UserError(`I could not find a game called ${q}.`);
+        return { ...(await bundleCheck({ db, itad, user, gameIds: [hit.id] })), from: "game" };
+    }
+    return { ...(await bundleCheck({ db, itad, user, gameIds: db.listItems(user.discord_id).map(x => x.itad_id) })), from: "wishlist" };
 }

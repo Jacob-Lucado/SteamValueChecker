@@ -1,5 +1,6 @@
 // The My servers page's API: what each managed server has set up, channels and roles, feeds, drops and events.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
+import { featureList, setFeature } from "../features.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { DiscordApiError } from "./discord.js";
 import { EXTRA_BOARDS, extraBoard, finishedLeague, leaderboard, serverStats } from "../library.js";
@@ -308,6 +309,16 @@ export function createServerRoutes(ctx) {
             const s = session(req);
             const g = managerGuild(s, url.searchParams.get("guild"));
             return { ...setupStatus(db, g.id), gameNightOn: db.gameNightOn(g.id), staffRole: db.getTicketSettings(g.id).staff_role_id, bot: botGuilds ? Boolean(botGuilds(g.id)) : null };
+        },
+        // Whole areas of the bot a server can switch off (the same list as /manage features).
+        "GET /api/servers/features": async (req, _b, url) => {
+            const g = managerGuild(session(req), url.searchParams.get("guild"));
+            return { features: featureList(db, g.id) };
+        },
+        "POST /api/servers/features": async (req, body) => {
+            const g = managerGuild(session(req), String(body.guild_id));
+            if (setFeature(db, g.id, String(body.id), Boolean(body.on)) === null) throw new HttpError(400, "Unknown area.");
+            return { features: featureList(db, g.id) };
         },
         "POST /api/servers/gamenight": async (req, body) => {
             const g = managerGuild(session(req), String(body.guild_id));

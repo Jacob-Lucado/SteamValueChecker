@@ -5,6 +5,7 @@ import { saleUrl } from "./salescal.js";
 import { pagedPayload } from "./pager.js";
 import { protonLabel } from "./proton.js";
 import { reviewLine } from "./reviews.js";
+import { factLines } from "./gamefacts.js";
 import { tr } from "./i18n.js";
 import { dealUrl } from "./deallinks.js";
 export const ROWS_PER_PAGE = 15;
@@ -140,7 +141,7 @@ const LEVEL = {
  * One sale alert. `now` comes from alerts.current(). `art` is "image" (large, for a single alert),
  * "thumbnail" (small, when several alerts share a message) or null.
  */
-export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null, insight = null, proton = null, reviews = null, match = null } = {}) {
+export function alertEmbed(item, now, { trigger, lower = false, verdict = null, art = null, insight = null, proton = null, reviews = null, match = null, facts = null } = {}) {
     const c = now.currency ?? "USD";
     const pct = Math.round((now.discount ?? 0) * 100);
     const lvl = LEVEL[verdict?.level] ?? LEVEL.info;
@@ -156,6 +157,7 @@ export function alertEmbed(item, now, { trigger, lower = false, verdict = null, 
     const ends = saleEnds(now.expiry);
     if (ends) lines.push(ends);
     if (reviewLine(reviews)) lines.push(reviewLine(reviews));
+    lines.push(...factLines(facts, { price: now.price, money: n => money(n, c) }));
     if (proton && protonLabel(proton)) lines.push(protonLabel(proton));
     if (insight) fields.push({ name: "Last 12 months", value: `\`${insight.spark}\`\n${insight.text}`.slice(0, 1000), inline: false });
     const art_ = art ? artUrl(item) : undefined;
@@ -193,7 +195,7 @@ export function alertButtons(item, now, { single = true, lang = "en" } = {}) {
 /** A whole alert message for one member: up to 5 games, each with its art and its own buttons. */
 export function alertPayload(hits, { trigger, verdict, lang = "en", pager = null, color = null }) {
     const single = hits.length === 1;
-    const embedFor = (h, one) => ({ ...alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: one ? "image" : "thumbnail", insight: h.insight ?? null, match: h.match ?? null, proton: h.proton ?? null, reviews: h.reviews ?? null }), ...(color != null ? { color } : {}) });
+    const embedFor = (h, one) => ({ ...alertEmbed(h.item, h.now, { trigger: trigger(h.item), lower: h.reason === "lower", verdict: verdict(h.now), art: one ? "image" : "thumbnail", insight: h.insight ?? null, match: h.match ?? null, proton: h.proton ?? null, reviews: h.reviews ?? null, facts: h.facts ?? null }), ...(color != null ? { color } : {}) });
     const rowsFor = (h, one) => [alertButtons(h.item, h.now, { single: one, lang }),
         ...(one && h.item.id != null ? [{ type: 1, components: [
             { type: 2, style: 2, label: tr(lang, "Snooze 7 days"), custom_id: `${SNOOZE_ID}:${h.item.id}` },
@@ -473,7 +475,7 @@ export function groupEmbed(title, count, now) {
 }
 
 /** One game's price and lows, for /me wishlist check. */
-export function checkEmbed(title, now, verdict, advice = null, subs = [], reviews = null) {
+export function checkEmbed(title, now, verdict, advice = null, subs = [], reviews = null, facts = null) {
     const c = now.currency ?? "USD";
     const fields = [
         { name: "Price now", value: money(now.price, c), inline: true },
@@ -486,6 +488,8 @@ export function checkEmbed(title, now, verdict, advice = null, subs = [], review
     const ends = saleEnds(now.expiry);
     if (ends) fields.push({ name: "Sale ends", value: ends.replace(/^\S+ Sale ends /, "") });
     if (reviewLine(reviews)) fields.push({ name: "Steam reviews", value: reviewLine(reviews) });
+    const extra = factLines(facts, { price: now.price, money: n => money(n, c) });
+    if (extra.length) fields.push({ name: "About the game", value: extra.join("\n") });
     if (advice) fields.push({ name: `${{ buy: "🟢", lean_buy: "🟢", lean_wait: "🟡", wait: "🟠" }[advice.verdict]} Buy now or wait? ${advice.label}`, value: advice.reasons.join(" ") });
     if (subs?.length) fields.push({ name: "📦 Included with", value: subs.slice(0, 5).map(s => `**${s.name}**${s.leaving ? ` (leaves ${stamp(s.leaving)})` : ""}`).join("  •  ") + "\nIf you have it, you may not need to buy this." });
     return {

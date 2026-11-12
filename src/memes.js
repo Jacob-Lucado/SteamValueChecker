@@ -1,3 +1,4 @@
+import { featureOn } from "./features.js";
 // Auto memes: every hour (or whatever the server picks) the bot drops one meme in the #memes channel.
 // Memes come from meme-api.com, which serves popular posts from a handful of subreddits. Nothing marked NSFW or spoiler is ever used,
 // pictures must sit on Reddit's or Imgur's own image hosts, and a server never gets the same post twice.
@@ -73,7 +74,7 @@ async function discoverChannel(api, guildId) {
 export async function tickMemes({ db, api, memes, now = () => Date.now(), has = () => true, sleep = ms => new Promise(r => setTimeout(r, ms)), log = () => {} }) {
     let done = 0;
     for (const c of db.allCommunity()) {
-        if (!c.meme_on || !has(c.guild_id)) continue;
+        if (!c.meme_on || !has(c.guild_id) || !featureOn(db, c.guild_id, "fun")) continue; // a server can switch the fun area off
         const every = Math.max(1, c.meme_hours || 1) * 3_600_000;
         if (c.meme_at && now() - c.meme_at < every) continue;
         try {

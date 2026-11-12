@@ -1,6 +1,8 @@
 // Storage for wishlists and alert settings, using Node's built-in SQLite (no extra dependency).
 // Needs Node 22.13 or newer. Everything stored is listed in PRIVACY.md.
 
+import { priceLogSchema, priceLogStore } from "./pricelog.js";
+import { familySchema, familyStore } from "./family.js";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -45,7 +47,7 @@ import { bundleSchema, bundleStore } from "./bundlestore.js";
 import { broadcastSchema, broadcastStore } from "./broadcast.js";
 import { communitySchema, communityStore } from "./communitystore.js";
 
-export const MAX_ITEMS_PER_USER = 200;
+export const MAX_ITEMS_PER_USER = 500;
 export const MAX_LIBRARY_PER_USER = 1500;
 export const MAX_SERVER_LIST = 100;
 export const TRIGGERS = ["any", "percent", "price", "atl"];
@@ -224,6 +226,12 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const db = new DatabaseSync(path);
     db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     db.exec(SCHEMA);
+    // Dashboard sign-ins, so a restart doesn't sign everyone out. The id is a hash of the cookie, never the cookie itself.
+    // A member's own corrections for the value checker: "when I type this, I mean that game".
+    db.exec("CREATE TABLE IF NOT EXISTS title_fixes (discord_id TEXT NOT NULL, key TEXT NOT NULL, typed TEXT NOT NULL, itad_id TEXT NOT NULL, title TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (discord_id, key))");
+    db.exec(priceLogSchema);
+    db.exec(familySchema);
+    db.exec("CREATE TABLE IF NOT EXISTS web_sessions (id TEXT PRIMARY KEY, user_id TEXT, data TEXT NOT NULL, expires INTEGER NOT NULL)");
 
     // Columns added after the first release. Safe to run on every start.
     const cols = t => db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
@@ -557,7 +565,8 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         `SELECT i.*, u.region, u.stores, u.delivery, u.guild_id, u.quiet_start, u.quiet_end, u.tz, u.bundles, u.share, u.min_discount, u.max_price, u.lows_only
            FROM items i JOIN users u ON u.discord_id = i.discord_id
           WHERE u.paused = 0 AND (i.snooze_until IS NULL OR i.snooze_until < ?)
-            AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = i.discord_id AND l.itad_id = i.itad_id)`,
+            AND NOT EXISTS (SELECT 1 FROM library l WHERE l.discord_id = i.discord_id AND l.itad_id = i.itad_id)
+            AND NOT EXISTS (SELECT 1 FROM family_apps f WHERE f.discord_id = i.discord_id AND f.appid = i.appid)`, // a game someone in their Steam Family owns
         now()
     ).map(clean);
     /** Wishlist games that are already in the member's library (owned), so alerts for them are pointless. */
@@ -855,7 +864,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         const u = getUser(discordId);
         if (!u) return null;
         const support = tickets.listTickets({ userId: discordId, limit: 200 }).map(t => ({ id: t.id, subject: t.subject, status: t.status, created_at: t.created_at, messages: tickets.listTicketMessages(t.id).map(m => ({ role: m.role, body: m.body, at: m.at })) }));
-        return { user: u, indie: indie.indieExport(discordId), community: community.communityExport(discordId), friends: friends.listFriends(discordId), birthday: friends.getBirthday(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId), overlays: streamOverlays.listOvs(discordId).map(o => ({ name: o.name, kind: o.kind, created: o.created })), supporter: supporterExport(discordId) };
+        return { user: u, match_fixes: listTitleFixes(discordId), steam_family: family.listFamily(discordId), indie: indie.indieExport(discordId), community: community.communityExport(discordId), friends: friends.listFriends(discordId), birthday: friends.getBirthday(discordId), challenges: challenges.challengeRows(discordId), ai_notes: aiData.getAiNotes(discordId).map(x => x.note), bundles: bundles.listBundles(discordId).map(b => ({ name: b.name, paid: b.paid, bought_at: b.bought_at, games: b.ids.length })), items: listItems(discordId), library: listLibrary(discordId), steam_link: steam.getSteamLink(discordId), playtime_log: steam.playtimeLog(discordId), grabber_link: grabber.getGrabberLink(discordId), calendar_feed: calendar.getCalFeed(discordId), redeem_history: redeem.redeemHistory(discordId, 500), lfg_posts: lfg.lfgForUser(discordId), alerts: listAlerts(discordId, 500), support_tickets: support, profile_card: getCardPrefs(discordId), overlays: streamOverlays.listOvs(discordId).map(o => ({ name: o.name, kind: o.kind, created: o.created })), supporter: supporterExport(discordId) };
     }
 
     /** Pass, founder mark, wall name and what was paid, for the data export. Payment records are kept as accounting entries without a name after deletion. */
@@ -870,6 +879,9 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         try {
             for (const t of ["ai_notes", "items", "library", "library_snapshots", "alert_log", "seen", "steam_links", "ach_rare", "ach_recent", "playtime_log", "grabber_links", "redeem_jobs", "redeem_log", "gift_marks", "gift_owner", "challenges", "bundles_bought", "friends", "user_birthdays"]) run(`DELETE FROM ${t} WHERE discord_id = ?`, discordId);
             run("DELETE FROM push_subs WHERE user_id = ?", discordId);
+            run("DELETE FROM web_sessions WHERE user_id = ?", discordId);
+            run("DELETE FROM title_fixes WHERE discord_id = ?", discordId);
+            family.forgetFamily(discordId);
             run("DELETE FROM gift_marks WHERE claimer_id = ?", discordId);
             run("DELETE FROM server_votes WHERE discord_id = ?", discordId);
             giveaways.forgetGiveawayUser(discordId);
@@ -921,6 +933,19 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const getMeta = key => get("SELECT value FROM status_meta WHERE key = ?", key)?.value ?? null;
     const bumpMeta = key => run("INSERT INTO status_meta (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", key);
     const listMetaPrefix = prefix => all("SELECT key, value FROM status_meta WHERE key LIKE ? ESCAPE '\\'", prefix.replace(/[%_\\]/g, c => "\\" + c) + "%");
+    const priceLog = priceLogStore({ db, run, get, all, now });
+    const family = familyStore({ db, run, get, all, now });
+    const MAX_TITLE_FIXES = 300;
+    const setTitleFix = (userId, key, typed, itadId, title) => {
+        if (!get("SELECT 1 AS x FROM title_fixes WHERE discord_id = ? AND key = ?", userId, key) && get("SELECT COUNT(*) AS n FROM title_fixes WHERE discord_id = ?", userId).n >= MAX_TITLE_FIXES) return false;
+        run("INSERT INTO title_fixes (discord_id, key, typed, itad_id, title, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(discord_id, key) DO UPDATE SET typed = excluded.typed, itad_id = excluded.itad_id, title = excluded.title, at = excluded.at", userId, key, typed, itadId, title, now());
+        return true;
+    };
+    const removeTitleFix = (userId, key) => run("DELETE FROM title_fixes WHERE discord_id = ? AND key = ?", userId, key).changes > 0;
+    const listTitleFixes = userId => all("SELECT key, typed, itad_id, title, at FROM title_fixes WHERE discord_id = ? ORDER BY at DESC", userId);
+    const saveSession = (id, userId, data, expires) => run("INSERT INTO web_sessions (id, user_id, data, expires) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET user_id = excluded.user_id, data = excluded.data, expires = excluded.expires", id, userId ?? null, data, expires);
+    const dropSession = id => run("DELETE FROM web_sessions WHERE id = ?", id);
+    const loadSessions = (at = now()) => { run("DELETE FROM web_sessions WHERE expires < ?", at); return all("SELECT id, data FROM web_sessions ORDER BY expires"); };
     const setMeta = (key, value) => run("INSERT INTO status_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, String(value));
 
     // One time: an earlier version marked every Steam game with an hour or more as "playing". Only games touched in the last
@@ -931,7 +956,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
 
     return {
-        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta,
+        uptimeAdd, uptimeDays, addStatusEvent, statusEvents, getMeta, bumpMeta, listMetaPrefix, setMeta, ...priceLog, ...family, saveSession, dropSession, loadSessions, setTitleFix, removeTitleFix, listTitleFixes,
         siteHit, siteCounts, snoozeItem, addNotification, listNotifications, unreadNotifications, readNotifications, pruneNotifications, ensureUser, getUser, updateUser, wishSyncDue, countItems, listItems, addItems, getItemById, setAppId, removeItem, ownedWishlist, removeOwnedWishlist, setPriority, removeSteamNotIn, setTrigger,
         markAlerted, clearAlerted, popularApps, funnelMark, funnelStats, activeItems, itemsNeedingRelease, upcomingItems, seenWith, setRelease, releasedItems, digestUsers, freeUsers, playtestUsers, nowPlayingMembers, squadGuilds, indieGuilds, indieDevGuilds, guildsWithPlaytest, guildWatchedApps, newsUsers, setGuildChannel, getGuild, clearGuildChannel,
         logAlert, listAlerts, pruneAlertLog, hasSeen, markSeen, pruneSeen, removeWatch, pruneWatches,

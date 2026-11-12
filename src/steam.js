@@ -3,7 +3,7 @@
 // Steam documents only the steamid parameter, and the response shape is read defensively.
 
 export const STEAM_SHOP_ID = 61; // Steam's id in the IsThereAnyDeal API
-export const MAX_IMPORT = 150;
+export const MAX_IMPORT = 400;
 
 export class SteamError extends Error {
     constructor(code, message) {

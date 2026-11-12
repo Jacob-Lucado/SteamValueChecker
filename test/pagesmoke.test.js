@@ -172,6 +172,8 @@ test("the page speaks the browser's language and fetches only that language file
             const errors = [], packs = []; page.on("pageerror", e => errors.push(e.message)); page.on("request", r => { const m = /\/i18n-([a-z]{2})\.js/.exec(r.url()); if (m) packs.push(m[1]); });
             await page.goto(`${o.base}/`, { waitUntil: "load" });
             await page.waitForFunction(() => (document.getElementById("app")?.innerText ?? "").trim().length > 200, null, { timeout: 15000 });
+            // The English placeholder is already longer than that, so also wait for the translated page itself.
+            if (code) await page.waitForFunction(c => document.documentElement.lang === c && /[\u3040-\u30ff\u4e00-\u9fff]/.test(document.getElementById("app")?.innerText ?? ""), code, { timeout: 15000 });
             assert.deepEqual(errors, []);
             assert.deepEqual(packs, code ? [code] : [], `${locale} fetched ${packs.join(",") || "no"} language file`);
             if (code) assert.equal(await page.evaluate(() => document.documentElement.lang), code);
@@ -194,6 +196,44 @@ test("a server's page and the welcome tour open signed in", { timeout: 120_000 }
         await page.goto(`${o.base}/servers/g-admin`, { waitUntil: "load" }); await page.waitForTimeout(800);
         const len = await page.evaluate(() => (document.getElementById("app")?.innerText ?? "").trim().length);
         assert.ok(len > 60, `the server page drew ${len} characters`);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
+
+test("the Setup page's area switches and the Steam page's family list work in a real browser", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const FAM = "76561198000000042";
+    // Steam, as far as the family list needs it: a public games list and a profile name.
+    const steamFetch = async url => ({ ok: true, status: 200, headers: new Map(), json: async () => ({}), text: async () => (/\?xml=1$/.test(String(url)) ? "<profile><steamID><![CDATA[Sis]]></steamID></profile>" : "<gamesList><games><game><appID>620</appID><name><![CDATA[Portal 2]]></name></game></games></gamesList>") });
+    // The page saves things here, so the site's own address has to be the one the browser is on (saves from anywhere else are refused).
+    const PORT = 38517;
+    const o = await signedIn({ port: PORT, config: { ownerId: "u1", publicUrl: `http://127.0.0.1:${PORT}` }, extra: { botGuilds: () => true, steamFetch, guildList: () => [{ id: "g-admin", name: "Mine", members: 10, boosts: 0 }] } });
+    try {
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+
+        await page.goto(`${o.base}/setup`, { waitUntil: "load" });
+        const music = page.locator(".setup-row", { hasText: "Music" });
+        await music.waitFor({ timeout: 15000 });
+        await music.getByRole("button", { name: "Switch off" }).dispatchEvent("click"); // the first-visit tour sits on top of the page, so press the button directly
+        await page.locator(".setup-row", { hasText: "Music" }).getByRole("button", { name: "Switch on" }).waitFor({ timeout: 15000 });
+        assert.equal(o.db.getMeta("featoff:g-admin"), '["music"]');
+
+        o.db.ensureUser("u1", "g-admin"); o.db.setSteamLink("u1", "76561198000000001", { verified: true });
+        await page.goto(`${o.base}/steam`, { waitUntil: "load" });
+        const fam = page.locator(".panel", { hasText: "Steam Family" });
+        await fam.waitFor({ timeout: 15000 });
+        await fam.locator("input[type=text]").fill(FAM);
+        await fam.getByRole("button", { name: "Add" }).dispatchEvent("click");
+        await fam.locator("li", { hasText: "Sis" }).waitFor({ timeout: 15000 });
+        assert.deepEqual([...o.db.familyAppIds("u1")], [620]);
+        await fam.getByRole("button", { name: "Remove" }).dispatchEvent("click");
+        await page.waitForFunction(() => ![...document.querySelectorAll(".panel li")].some(li => li.textContent.includes("Sis")), null, { timeout: 15000 });
+        assert.equal(o.db.listFamily("u1").length, 0);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });

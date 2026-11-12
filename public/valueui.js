@@ -4,7 +4,7 @@
   "use strict";
   function view(ctx) {
     const { api, app, busy, fanaticalCard, field, h, pageHead, renderValue, select, state, voteCard } = ctx;
-    const titles = h("textarea", { placeholder: "Hades; Celeste; Hollow Knight\n(or one per line)", maxlength: "20000" });
+    const titles = h("textarea", { placeholder: "Hades; Celeste; Hollow Knight\n(or one per line; a Steam store link works too)", maxlength: "20000" });
     const file = h("input", { type: "file", accept: ".csv,.json,.txt,.md" });
     const paid = h("input", { type: "number", min: "0", max: "1000000", step: "0.01", placeholder: "Total you paid (optional)" });
     const region = select(state.cfg.regions.map(r => [r.value, r.name]), state.me.settings.region);

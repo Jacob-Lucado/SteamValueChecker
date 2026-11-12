@@ -5,6 +5,14 @@
 const BASE = "https://api.isthereanydeal.com";
 export const TTL_MS = 30 * 60 * 1000;
 const MAX_CACHE = 1000;
+// Prices are asked for by the thousand on every check; titles and Steam ids are small and worth keeping longer.
+const CACHE_CAPS = { "p:": 8000, "id:": 4000, "sapp:": 4000, "shop:": 4000, "title:": 2000 };
+
+/** The Steam app number in a store link ("store.steampowered.com/app/1145360/Hades"), "app/1145360" or "appid:1145360". A bare number is left alone: plenty of games are named one. */
+export function steamAppFrom(text) {
+    const m = /(?:store\.steampowered\.com|steamcommunity\.com|steamdb\.info)\/app\/(\d{1,9})\b|^\s*(?:steam:\/\/\S*?\/|app\/|appid[:\s]\s*)(\d{1,9})\s*$/i.exec(String(text ?? ""));
+    return m ? Number(m[1] ?? m[2]) : null;
+}
 const LOOKUP_CHUNK = 50;
 const PRICE_CHUNK = 50;
 
@@ -72,16 +80,28 @@ export function createItad({
     minGapMs = 250
 } = {}) {
     if (!apiKey) throw new Error("createItad needs an apiKey");
-    const cache = new Map();
+    // One cache per kind of answer (the part of the key before the first colon), each with its own cap. With a single
+    // shared cache, an hourly price check of a few thousand games pushed out every title, history and bundle answer.
+    const caches = new Map();
+    const cacheOf = k => {
+        const kind = k.slice(0, k.indexOf(":") + 1 || k.length);
+        let c = caches.get(kind);
+        if (!c) caches.set(kind, c = new Map());
+        return [c, CACHE_CAPS[kind] ?? MAX_CACHE];
+    };
 
     const getCached = k => {
+        const [cache] = cacheOf(k);
         const hit = cache.get(k);
         if (!hit) return undefined;
         if (now() - hit.t > ttlMs) { cache.delete(k); return undefined; }
+        cache.delete(k); cache.set(k, hit); // used just now, so it is the last to be dropped
         return hit.v;
     };
     const setCached = (k, v) => {
-        if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value);
+        const [cache, cap] = cacheOf(k);
+        cache.delete(k);
+        if (cache.size >= cap) cache.delete(cache.keys().next().value);
         cache.set(k, { t: now(), v });
     };
 
@@ -143,10 +163,24 @@ export function createItad({
     async function lookupTitles(titles) {
         const result = new Map();
         const need = [];
+        const links = new Map(); // what was typed -> Steam app number
         for (const t of titles) {
             const hit = getCached(`id:${t.toLowerCase()}`);
             if (hit !== undefined) result.set(t, hit);
+            else if (steamAppFrom(t)) links.set(t, steamAppFrom(t));
             else need.push(t);
+        }
+
+        // A Steam store link or app number names the game exactly, so there is nothing to guess.
+        if (links.size) {
+            const ids = await lookupShopIds(61, [...new Set(links.values())].map(a => `app/${a}`));
+            await mapLimit([...links], 4, async ([t, app]) => {
+                const id = ids.get(`app/${app}`) ?? null;
+                const info = id ? await getTitle(id).catch(() => null) : null;
+                const v = id ? { id, approx: true, exact: true, matched: info?.title ?? `Steam app ${app}`, appid: app } : { id: null, approx: false, matched: t };
+                setCached(`id:${t.toLowerCase()}`, v);
+                result.set(t, v);
+            });
         }
 
         const unresolved = [];
@@ -457,5 +491,5 @@ export function createItad({
         return points;
     }
 
-    return { steamAppIds, lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getSubs, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getDealsPool, getHistory, health, _cache: cache };
+    return { steamAppIds, lookupTitles, getPrices, lookupShopIds, getTitle, getBundles, getSubs, getBundleDetails, getGiveaways, getGiveawayList, getHotDeals, getDealsPool, getHistory, health, _caches: caches };
 }

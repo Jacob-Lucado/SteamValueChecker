@@ -1,5 +1,16 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.61", date: "2026-11-12", title: "Sharper prices, Steam Family and server switches", items: [
+        "**Exact matches:** paste a Steam store link in /games value instead of a title and it is always the right game. When a typed title is matched wrong, /games fixmatch (or the Fix button on the dashboard) teaches the bot once and it remembers.",
+        "**Bigger wishlists:** lists now hold 500 games and a Steam import reads 400.",
+        "**Bundle links:** /games bundle takes a link to a Humble, Fanatical, IndieGala or Steam bundle page, not just a game name.",
+        "**Steam Family:** add your family with /me steam family (or on the Steam page). Sale alerts for games they already own are held, and bundle checks count those games as owned.",
+        "**More on every game:** players in the game right now, and where the bot has the data, hours to finish and the critics' score, on alerts, the check card and game pages.",
+        "**The bot's own price history:** every price it sees is noted once a day, so charts and buy-or-wait advice keep working when the price site's history is down.",
+        "**Server switches:** /manage features (and the Setup page) turns whole areas off for a server: music, moderation, giveaways, levels, game nights, streams, the fun stuff, and codes and drops.",
+        "**Stay signed in:** updating the bot no longer signs everyone out of the dashboard.",
+        "**Fixed:** the sale calendar had the Autumn Sale in the wrong month, which skewed buy-or-wait advice."
+    ] },
     { version: "2026.11.60", date: "2026-11-12", title: "Stats, milestones and setup preview", items: [
         "**In numbers:** a public stats page at /stats shows the bot's size and which listed servers played the most this week.",
         "**Milestones in your server:** /manage community milestones posts members' playtime milestones (100, 250, 500 hours and up) in a channel. Only members with a public page are shown.",

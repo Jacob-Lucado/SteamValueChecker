@@ -3,7 +3,7 @@
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { HttpError } from "./http.js";
-import { bundleCheck } from "../bundle.js";
+import { bundleLookup } from "../bundle.js";
 import { bundleFeedView } from "../bundlefeed.js";
 import { codeFamilies, codeGames, codeView } from "../codes.js";
 import { dropView } from "../drops.js";
@@ -146,14 +146,7 @@ export function createRedeemRoutes(ctx) {
             const s = session(req);
             cooldown(s.userId, "bundles");
             const u = userRow(s);
-            const title = String(url.searchParams.get("game") ?? "").trim().slice(0, 100);
-            let gameIds;
-            if (title) {
-                const [hit] = await itad.lookupTitles([title]);
-                if (!hit?.id) throw new HttpError(400, `I could not find a game called ${title}.`);
-                gameIds = [hit.id];
-            } else gameIds = db.listItems(s.userId).map(i => i.itad_id);
-            return await bundleCheck({ db, itad, user: u, gameIds });
+            return await bundleLookup({ db, itad, user: u, query: String(url.searchParams.get("game") ?? "").trim().slice(0, 300) });
         },
     };
 }

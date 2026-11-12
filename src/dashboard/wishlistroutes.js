@@ -1,6 +1,7 @@
 // Wishlists, price alerts and Steam linking.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
 import { HttpError } from "./http.js";
+import { addFamily, removeFamily, familyView } from "../family.js";
 import { wrappedData, SLIDES } from "../wrapped.js";
 import { SAMPLE_KINDS, sampleAlert } from "../samples.js";
 import { addGameByTitle, applySteamImport, viewRows } from "../wishlist.js";
@@ -272,6 +273,18 @@ export function createWishlistRoutes(ctx) {
                 const steamid = String(body.profile ?? "").trim() ? await resolveProfile(String(body.profile), steamFetch) : db.getSteamLink(s.userId)?.steamid ?? (() => { throw new HttpError(400, "Sign in through Steam first."); })();
                 return await syncSteamLibrary({ db, itad, userId: s.userId, steamid, apiKey: config.steamApiKey ?? null, fetchImpl: steamFetch });
             } catch (err) { undo(); throw err; }
+        },
+        // Steam Family: the people whose games count as yours for alerts and bundle checks (the same list as /me steam family).
+        "GET /api/steam/family": async (req) => familyView(db, session(req).userId),
+        "POST /api/steam/family": async (req, body) => {
+            const s = session(req);
+            userRow(s);
+            if (body.remove) await removeFamily({ db, userId: s.userId, input: String(body.remove), fetchImpl: steamFetch });
+            if (body.add) {
+                const undo = cooldown(s.userId, "steam");
+                try { await addFamily({ db, userId: s.userId, input: String(body.add).slice(0, 200), apiKey: config.steamApiKey ?? null, fetchImpl: steamFetch }); } catch (err) { undo(); throw err; }
+            }
+            return familyView(db, s.userId);
         },
         "POST /api/steam/sync": async (req) => {
             const s = session(req);

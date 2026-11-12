@@ -5,7 +5,7 @@
   async function view(ctx) {
     const { api, app, busy, ext, field, h, money, pageHead } = ctx;
     const bundlesOut = h("div", { class: "muted", text: "Looking for bundles…" });
-    const game = h("input", { type: "text", placeholder: "A game (leave empty to check your wishlist)", maxlength: "100" });
+    const game = h("input", { type: "text", placeholder: "A game or a bundle page link (leave empty to check your wishlist)", maxlength: "300" });
     const tone = l => (l === "great" || l === "good" ? "ok" : l === "wait" ? "warn" : "");
     async function loadBundles() {
       bundlesOut.className = "muted"; bundlesOut.replaceChildren("Looking for bundles…");

@@ -1,9 +1,10 @@
 // Steam's sale calendar. Valve publishes it ahead of time; update this list when new dates are announced
 // (source: Valve's published sale and festival schedule). Black Friday week has no fixed Valve date.
-export const SALES_UPDATED = "2026-10-26";
+export const SALES_UPDATED = "2026-11-12";
 const d = s => Date.parse(s + "T17:00:00Z"); // Steam events start at 10am Pacific
 export const SALES = [
     { name: "Steam Scream V Fest", kind: "fest", start: d("2026-10-26"), end: d("2026-11-02") },
+    { name: "Auto Battler RPG Fest", kind: "fest", start: d("2026-11-16"), end: d("2026-11-23") },
     { name: "Steam Winter Sale", kind: "sale", start: d("2026-12-17"), end: d("2027-01-04"), note: "Usually the deepest discounts of the year." },
     { name: "Steam Next Fest", kind: "fest", start: d("2027-02-22"), end: d("2027-03-01"), note: "Free demos." },
     { name: "Steam Spring Sale", kind: "sale", start: d("2027-03-18"), end: d("2027-03-25") },
@@ -16,11 +17,16 @@ export const saleUrl = ev => /next fest/i.test(ev?.name ?? "") ? "https://store.
 
 /** Big sales that already happened (kept for the price oracle). Dates are Valve's published ones, to the day. */
 export const PAST_SALES = [
-    { name: "Steam Autumn Sale", kind: "sale", start: d("2025-11-26"), end: d("2025-12-03") },
+    // Since 2025 the Autumn Sale is in early October, not Thanksgiving week.
+    { name: "Steam Autumn Sale", kind: "sale", start: d("2025-09-29"), end: d("2025-10-06") },
     { name: "Steam Winter Sale", kind: "sale", start: d("2025-12-18"), end: d("2026-01-05") },
     { name: "Steam Spring Sale", kind: "sale", start: d("2026-03-19"), end: d("2026-03-26") },
-    { name: "Steam Summer Sale", kind: "sale", start: d("2026-06-25"), end: d("2026-07-09") }
+    { name: "Steam Summer Sale", kind: "sale", start: d("2026-06-25"), end: d("2026-07-09") },
+    { name: "Steam Autumn Sale", kind: "sale", start: d("2026-10-01"), end: d("2026-10-08") }
 ];
+
+/** True when nothing is left on the calendar past the next `days` days: time to add Valve's newest dates. */
+export const calendarRunningOut = (now = Date.now(), days = 60) => !SALES.some(s => s.start > now + days * 86400_000);
 
 /** Big sales that ended in the last `days` days, for checking how a game behaved in them. */
 export const salesBefore = (now = Date.now(), days = 365) => [...PAST_SALES, ...SALES].filter(s => s.kind === "sale" && s.end < now && s.end > now - days * 86400_000);

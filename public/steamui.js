@@ -47,6 +47,24 @@
       }).catch(() => box.replaceChildren());
       return box;
     };
+    // Steam Family: games these people own are skipped in sale alerts and counted as owned in bundle checks.
+    const familyPanel = () => {
+      const box = h("div", { class: "panel" });
+      const draw = v => {
+        const who = h("input", { type: "text", placeholder: "Their Steam profile link, custom name or SteamID64", maxlength: "200" });
+        const add = h("button", { class: "btn blue small", text: "Add" });
+        add.addEventListener("click", () => busy(add, async () => { if (!who.value.trim()) return; draw(await api("/api/steam/family", { add: who.value.trim() })); toast("Added.", "ok"); }));
+        box.replaceChildren(h("h3", { text: "Steam Family" }),
+          h("p", { class: "muted small", text: "Add the people in your Steam Family (their Game details have to be public). Sale alerts for games they own are held, and bundle checks count those games as owned. Most games can be shared in a family, but not all." }),
+          v.members.length ? h("ul", { class: "plain" }, v.members.map(m => { const rm = h("button", { class: "btn gray small", text: "Remove" });
+            rm.addEventListener("click", () => busy(rm, async () => draw(await api("/api/steam/family", { remove: m.steamid }))));
+            return h("li", {}, h("b", { text: m.name }), " ", h("span", { class: "muted", text: m.games + " games" }), " ", rm); })) : null,
+          v.members.length < v.max ? h("div", { class: "row" }, who, add) : h("p", { class: "muted small", text: "That is a full family. Remove someone to add another." }),
+          v.covered.length ? h("p", { class: "muted small", text: `On your wishlist and already in the family (${v.covered.length}): ` + v.covered.slice(0, 12).map(c => c.title).join(", ") + (v.covered.length > 12 ? "…" : "") }) : null);
+      };
+      api("/api/steam/family").then(draw).catch(() => box.remove());
+      return box;
+    };
     const slot = h("div");
     async function load() {
       try {
@@ -109,6 +127,7 @@
             st.unplayedTop.length ? h("div", { class: "panel" }, h("h3", { text: "Biggest unplayed" }), list(st.unplayedTop, r => h("span", { class: "muted", text: r.msrp ? money(r.msrp, cur) : "no price" }))) : null),
           h("p", { class: "muted small", text: "Last synced " + (d.link.synced_at ? new Date(d.link.synced_at).toLocaleString() : "never") + ". Steam does not share what you paid. The FanaticalGrabber extension can fill it in from your Steam purchase history (open store.steampowered.com/account/history and press Send what I paid), or add it on the Library page." }),
           linkedRolesPanel(),
+          familyPanel(),
           h("div", { class: "panel" }, h("h3", { text: "Manage" }), h("div", { class: "row" }, sync), h("p"), h("label", { class: "check" }, unlinkGames, " Also remove the games that came from Steam"), h("p"), unlink));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }

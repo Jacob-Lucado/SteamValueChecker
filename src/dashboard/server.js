@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, SUPPORT_PAGE_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
+import { saveFix, forgetFix, FixError } from "../titlefix.js";
 import * as xposterText from "../xposter.js";
 import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl, splitGame } from "../bundlelanding.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
@@ -433,7 +434,27 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
     const onAdminHost = req => Boolean(adminHost) && String(req?.headers?.host ?? "").toLowerCase() === adminHost;
     const adminHome = adminOrigin ? adminOrigin + "/" : "/admin";
     const secure = origin.startsWith("https://");
-    const sessions = new Map();
+    // Sign-ins live in memory and in the database, so a deploy or restart doesn't sign everyone out.
+    // The database only ever sees a hash of the cookie, so a copy of it (a backup, say) can't be used to sign in as someone.
+    const sidKey = id => (typeof id === "string" && id.startsWith("h:") ? id : "h:" + createHash("sha256").update(String(id ?? "")).digest("hex"));
+    class SessionStore extends Map {
+        get(id) { return super.get(sidKey(id)); }
+        has(id) { return super.has(sidKey(id)); }
+        set(id, s) {
+            const k = sidKey(id);
+            try { db.saveSession?.(k, s?.userId, JSON.stringify(s), s?.expires ?? 0); } catch { /* still signed in until the next restart */ }
+            return super.set(k, s);
+        }
+        delete(id) {
+            const k = sidKey(id);
+            try { db.dropSession?.(k); } catch { /* it expires by itself */ }
+            return super.delete(k);
+        }
+    }
+    const sessions = new SessionStore();
+    try {
+        for (const row of db.loadSessions?.(now()) ?? []) { try { Map.prototype.set.call(sessions, row.id, JSON.parse(row.data)); } catch { /* a row that can't be read is just a sign-in lost */ } }
+    } catch { /* an older database without the table: everyone signs in once more */ }
     const states = new Map();
     const steamKnown = new Map();   // one-time token -> { user, exp }: a Steam sign-in of a known member, waiting for the Discord half
     const steamPending = new Map(); // one-time token -> { steamid, exp }: a Steam sign-in that still needs a Discord account to attach to
@@ -511,7 +532,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
         if (hit && Date.now() - hit.at < 3 * 3600_000) return hit.page;
         let page = null;
         const [data, proton, deck] = await Promise.all([loadGameData(itad, appid), protonTier(Number(appid)).catch(() => null), deckStatus(Number(appid)).catch(() => null)]);
-        if (data) data.compat = { proton, deck };
+        if (data) data.compat = { proton, deck, critic: data.facts?.critic ?? null, hours: data.facts?.hours ?? null };
         if (data) page = { path: `/game/${appid}-${slugify(data.title)}`, html: renderGamePage(data, { origin }) };
         if (page) { if (gamePages.size >= 400) gamePages.delete(gamePages.keys().next().value); gamePages.set(appid, { at: Date.now(), page }); }
         return page;
@@ -1096,12 +1117,21 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
 
 
 
+        // Corrections for the value checker: "when I type this, I mean that game".
+        "GET /api/value/fixes": async req => ({ fixes: db.listTitleFixes(session(req).userId).map(f => ({ typed: f.typed, title: f.title })) }),
+        "POST /api/value/fix": async (req, body) => {
+            const s = session(req);
+            cooldown(s.userId, "valuefix", 2_000);
+            try { return { ok: true, ...(await saveFix({ itad, db, userId: s.userId, typed: body.typed, game: body.game })) }; }
+            catch (err) { if (err instanceof FixError) throw new HttpError(400, err.message); throw err; }
+        },
+        "POST /api/value/fix/remove": async (req, body) => ({ ok: forgetFix({ db, userId: session(req).userId, typed: body.typed }) }),
         "POST /api/value": async (req, body) => {
             const s = session(req);
             cooldown(s.userId, "value");
             try {
                 return await runValue({
-                    itad,
+                    itad, db, userId: s.userId,
                     typed: String(body.titles ?? "").slice(0, 20_000),
                     upload: body.file && typeof body.file === "object" ? { name: String(body.file.name ?? ""), text: String(body.file.text ?? "") } : null,
                     paid: num(body.paid),
@@ -2169,7 +2199,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
                 const user = db.ensureUser(uid) && db.getUser(uid);
                 if (key === "POST /api/grabber/wishlist") {
                     const r = db.addItems(uid, [{ itad_id: id, title: name }], { source: "extension" });
-                    if (r.skippedForLimit) throw new HttpError(400, "Your list is full (200 games). Remove one first.");
+                    if (r.skippedForLimit) throw new HttpError(400, "Your list is full (500 games). Remove one first.");
                     db.setAppId(uid, id, appid);
                     return json(res, 200, { added: !r.existing, existing: Boolean(r.existing), public: Boolean(user.profile_public && user.profile_slug) });
                 }

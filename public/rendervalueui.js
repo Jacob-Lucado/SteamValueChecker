@@ -29,10 +29,29 @@
 
     const showPaid = d.rows.some(r => r.paid !== null);
     const head = ["Game", "MSRP", "Steam", "Cheapest", "Store", "All-time low", showPaid && "Paid"].filter(Boolean);
+    // "Fix" on a row that was guessed or not found: say which game it is once (a name or its Steam store link) and it is remembered.
+    const fixer = r => {
+      const box = h("span", { class: "fix-match" });
+      const open = h("button", { class: "btn gray small", type: "button", text: "Fix", title: "Tell me which game this is" });
+      open.addEventListener("click", () => {
+        const input = h("input", { type: "text", placeholder: "Right name or Steam store link", maxlength: "300", "aria-label": "The right game for " + r.title });
+        const save = h("button", { class: "btn blue small", type: "button", text: "Save" });
+        const go = () => busy(save, async () => {
+          const out = await api("/api/value/fix", { typed: r.title, game: input.value });
+          box.replaceChildren(h("span", { class: "muted small", text: "Saved as " + out.title + ". Check again to see it." }));
+          toast("I'll remember that.", "ok");
+        });
+        save.addEventListener("click", go);
+        input.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+        box.replaceChildren(input, save); input.focus();
+      });
+      box.append(open);
+      return box;
+    };
     const body = d.rows.map(r => {
-      if (!r.found) return h("tr", { class: "missing" }, h("td", { text: r.title }), h("td", { colspan: head.length - 1, text: "not found" }));
+      if (!r.found) return h("tr", { class: "missing" }, h("td", { text: r.title }), h("td", { colspan: head.length - 1 }, "not found ", fixer(r)));
       return h("tr", {},
-        h("td", { class: "title-cell", title: r.approx ? "Closest match: " + r.matched : "" }, (r.approx ? "~ " : "") + r.title),
+        h("td", { class: "title-cell", title: r.approx ? "Closest match: " + r.matched : "" }, (r.approx ? "~ " : "") + r.title, r.approx && " ", r.approx && fixer(r)),
         h("td", { class: "num", text: money(r.msrp, cur) }),
         h("td", { class: "num" }, r.cut > 0 && h("span", { class: "badge", text: "-" + r.cut + "%" }), " ", money(r.steam, cur)),
         h("td", { class: "num now", text: money(r.best && r.best.price, cur) }),
@@ -54,7 +73,7 @@
     blocks.push(h("div", { class: "panel" },
       h("div", { class: "page-head" }, h("h3", { text: `Results (${d.region})` }), h("div", { class: "actions" }, toLib, csv)),
       h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, head.map((c, i) => h("th", { class: i > 0 && c !== "Store" ? "num" : "", text: c })))), h("tbody", {}, body))),
-      h("p", { class: "muted small", text: "~ = approximate title match. Prices by IsThereAnyDeal." })));
+      h("p", { class: "muted small", text: "~ = approximate title match. A Steam store link in place of a title is always exact. Prices by IsThereAnyDeal." })));
     into.replaceChildren(...blocks);
   }
   root.RenderValueUI = { view };

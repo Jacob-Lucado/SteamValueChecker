@@ -40,6 +40,7 @@ import { createToolsHandlers } from "./toolshandlers.js";
 import { pushOverlayEvent, setNamedFeed } from "./ovfeed.js";
 import { renderWelcomeCard, renderRecap } from "./cardimg.js";
 import { parseTyped, sanitize } from "./parse.js";
+import { lookupWithFixes } from "./titlefix.js";
 import { readUpload } from "./upload.js";
 import { buildRows, sortRows, totals, resolvePaid, savingsReport } from "./report.js";
 import { voteThanksEmbed, pageCount, tableEmbed, summaryEmbed, toCsv, FREE_CLAIM_ALL_ID, STOP_ID, aboutPayload } from "./render.js";
@@ -59,6 +60,11 @@ import { createStreams } from "./streamlive.js";
 import { createStreamHandlers } from "./streamhandlers.js";
 import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
 import { openDb } from "./db.js";
+import { withPriceLog } from "./pricelog.js";
+import { blockedArea, handleFeaturesCommand, handleFeaturesPick, FEATURE_PICK } from "./features.js";
+import { configureFacts } from "./gamefacts.js";
+import { createPlayers } from "./players.js";
+import { createIgdb } from "./igdb.js";
 import { createHandlers } from "./handlers.js";
 import { createPanels, PANEL_PREFIX } from "./panel.js";
 import { alertPanel } from "./alertpanel.js";
@@ -90,6 +96,7 @@ import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
+import { runFamilySync } from "./family.js";
 import { runWishlistAutoSync } from "./wishlist.js";
 import { importWishlist } from "./steam.js";
 import { runFriendReminders } from "./friends.js";
@@ -199,6 +206,9 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 client.setMaxListeners(30); // each feature adds its own startup listener, and there are now more than the default ten
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
+// Extra facts beside a price: Steam's live player count (no key) and, when the Twitch app keys are set, hours to finish and critics' scores from IGDB.
+configureFacts({ players: createPlayers(), igdb: createIgdb({ clientId: process.env.TWITCH_CLIENT_ID, clientSecret: process.env.TWITCH_CLIENT_SECRET, db, log: m => console.warn(`[igdb] ${m}`) }) });
+withPriceLog(itad, db, { log: m => console.warn(`[prices] ${m}`) }); // every looked-up price is noted once a day, and history falls back to those notes
 const offsite = createOffsite({ ...offsiteConfig(), secret: cfg.keySecret, db, log: t => console.log(`[offsite] ${t}`) });
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)
 setInterval(() => moderation.liftDueBans().catch(() => {}), 60_000).unref();
@@ -465,8 +475,9 @@ client.once(Events.ClientReady, c => {
             result.digests = await ops.job("digests", () => runDigests({ db, itad, notifier, log }));
             result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
+            result.familySync = await ops.job("steam family refresh", () => runFamilySync({ db, apiKey: cfg.steamApiKey, log }));
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
-            try { db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneStarPosts(); db.prunePolls2(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
+            try { db.prunePricePoints(); db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneStarPosts(); db.prunePolls2(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
             result.watchdog = await ops.job("watchdog", () => runWatchdog({ ops, logs, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }) }));
             result.ownerSummary = await ops.job("owner summary", () => runOwnerSummary({ db, ownerId: cfg.ownerId, sendDm: (id, p) => discord.sendDm(id, p), gather: async () => ({
                 servers: client.guilds.cache.size, errors: logs.recent({ level: "error", limit: 500 }).filter(l => l.at >= Date.now() - 7 * 86_400_000).length,
@@ -864,7 +875,7 @@ async function handleValue(i) {
         const paidOption = i.options.getNumber("paid");
 
         const titles = clean.entries.map(e => e.title);
-        const resolved = await itad.lookupTitles(titles);
+        const resolved = await lookupWithFixes({ itad, db, userId: i.user.id, titles });
         const ids = [...new Set(resolved.filter(r => r.id).map(r => r.id))];
         const prices = ids.length ? await itad.getPrices(ids, region) : new Map();
 
@@ -880,6 +891,7 @@ async function handleValue(i) {
         if (clean.sawKeys) notes.push("I ignored anything that looked like a key. Please do not post keys in Discord.");
         if (clean.truncated) notes.push(`Only the first ${MAX_TITLES} of ${clean.total} titles were checked.`);
         if (savings && t.found < t.count) notes.push(`The comparison covers the ${t.found} games that were found, but "paid" covers everything you entered.`);
+        if (rows.some(r => r.approx || !r.found)) notes.push("Wrong or missing match? Paste the game's Steam store link instead of its title, or run `/games fixmatch` once and I'll remember it.");
 
         const payload = {
             content: notes.join("\n") || undefined,
@@ -931,7 +943,11 @@ async function onInteraction(i, again = false) {
             i.options.getSubcommandGroup = () => null;
             if (i.isChatInputCommand() && SERVER_ONLY_LEGACY.has(route.command) && !i.inGuild()) return void i.reply({ content: "That one works inside a server. Try it there.", flags: MessageFlags.Ephemeral }).catch(() => {});
         }
+        // A server can switch whole areas off (/manage features). Their commands say so instead of running.
+        const off = i.isChatInputCommand() && i.inGuild() ? blockedArea(db, i.guildId, i.commandName) : null;
+        if (off) return void i.reply({ content: `${off.emoji} **${off.name}** is switched off in this server. A manager can turn it back on with \`/manage features\`.`, flags: MessageFlags.Ephemeral }).catch(() => {});
     }
+    if (i.isStringSelectMenu?.() && i.customId === FEATURE_PICK) return handleFeaturesPick(i, db);
     if (i.isAutocomplete()) {
         try { await (i.commandName === "tag" ? toolsUi.tagAutocomplete(i) : i.commandName === "giveaway" ? gw.handleAutocomplete(i) : i.commandName === "music" ? (musicUi?.handleAutocomplete(i) ?? i.respond([])) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
@@ -1064,6 +1080,8 @@ async function onInteraction(i, again = false) {
             case "supporter": return await handlers.handleSupporter(i);
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
+            case "fixmatch": return await handlers.handleFixMatch(i);
+            case "features": return await handleFeaturesCommand(i, db);
             case "serverstats": return await handlers.handleServerStats(i);
             case "nowplaying": return await handlers.handleNowPlaying(i);
             case "club": return await clubUi.handle(i);

@@ -139,9 +139,19 @@ Import your Steam wishlist (or add games by hand) and the bot tells you when som
 
 **How alerts avoid spam:** you are alerted once per sale. You are alerted again only if the price drops further, or after the sale ends and a new one starts. Several alerts for one person are grouped into one message.
 
-The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, minimum 30, because prices are cached for 30 minutes). Each game is looked up once per region however many people watch it. Lists hold up to 200 games, and an import reads up to 150.
+The bot checks prices every 60 minutes by default (`CHECK_INTERVAL_MINUTES`, minimum 30, because prices are cached for 30 minutes). Each game is looked up once per region however many people watch it. Lists hold up to 500 games, and an import reads up to 400.
 
 > Steam only shares wishlists that are **public**. Set *Game details* to Public under Profile > Edit Profile > Privacy Settings, then import.
+
+### Steam Family, exact matches and server switches
+
+- **Steam Family** (`/me steam family`, dashboard Steam page, `src/family.js`): a member adds up to five public Steam profiles. Each profile's app ids are kept (`family_members`, `family_apps`) and refreshed once a day by the "steam family refresh" job. `activeItems` leaves out wishlist games a family member owns, and `ownedWithFamily` counts them as owned in bundle checks. Steam has no public family API, so the profiles are added by hand; not every game can be shared, and the card says so.
+- **Exact matches** (`src/titlefix.js`): a Steam store link or `app/<id>` in `/games value` is looked up by app id. `/games fixmatch title: game:` saves a member's own correction (`title_fixes`, 300 at most), applied to their later lookups; the dashboard has the same under the Value Checker (`GET /api/value/fixes`, `POST /api/value/fix`).
+- **Server switches** (`/manage features`, dashboard Setup page, `src/features.js`): one meta value per server (`featoff:<guildId>`) lists the areas switched off. Their commands answer with a short note, XP stops for Levels, and automatic memes stop for the fun area. To put a new command behind a switch, add it to `AREAS`.
+- **The bot's own price history** (`src/pricelog.js`): the day's lowest price per game and region, kept two years, used when the price site's history is missing.
+- **Players, hours to finish, critics' score** (`src/players.js`, `src/igdb.js`, `src/gamefacts.js`): the player count is Steam's public counter. Hours and scores come from IGDB and use the same Twitch app keys as go-live detection; without them those two lines are simply left off.
+- **Sign-ins** are kept in the `web_sessions` table (the cookie is stored hashed), so a restart or deploy no longer signs people out.
+- **Nightly live check** (`.github/workflows/live-check.yml`, `scripts/live-check.mjs`): asks the real price site and Steam for one well-known game and fails if the answers changed shape. Add the `ITAD_API_KEY` secret to the repo for it to run.
 
 ### `/games freegames`
 
@@ -232,7 +242,7 @@ It is off unless you turn it on. To enable it:
 2. Set `DISCORD_CLIENT_SECRET` and `DASHBOARD_URL` in `.env` (and optionally `DASHBOARD_PORT`, default 3000, and `DASHBOARD_HOST`, default `127.0.0.1`).
 3. Run `npm start` and open the address.
 
-For a public site, put a reverse proxy with HTTPS (Caddy, nginx, a Cloudflare tunnel) in front and use that `https://` address as `DASHBOARD_URL`. Cookies are marked `Secure` when the address is HTTPS. Sign-in uses the `identify` and `guilds` scopes only, and sessions are kept in memory, so a restart signs everyone out.
+For a public site, put a reverse proxy with HTTPS (Caddy, nginx, a Cloudflare tunnel) in front and use that `https://` address as `DASHBOARD_URL`. Cookies are marked `Secure` when the address is HTTPS. Sign-in uses the `identify` and `guilds` scopes only, and sessions are kept in the database, so a restart does not sign anyone out.
 
 The dashboard runs inside the bot process and shares its database and price cache. Setting an alert channel there posts a short confirmation message, which also confirms the bot can post in that channel.
 

@@ -1,0 +1,28 @@
+# Every night: ask the real price site and Steam for one well-known game and check the answers still look the way the bot
+# expects. The normal tests only use fakes, so this is what catches a changed response. A failed run emails the repo owner.
+# Needs one secret, ITAD_API_KEY (the same key the bot uses). Optional: LIVE_STEAM_PROFILE (a public Steam profile with a wishlist),
+# and TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET to check IGDB as well.
+name: Live API check
+on:
+  schedule:
+    - cron: "17 9 * * *"   # 4:17am Eastern, a quiet hour
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm ci --omit=optional --ignore-scripts --no-audit --no-fund
+      - name: Ask the live services
+        env:
+          ITAD_API_KEY: ${{ secrets.ITAD_API_KEY }}
+          LIVE_STEAM_PROFILE: ${{ secrets.LIVE_STEAM_PROFILE }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+        run: node scripts/live-check.mjs
