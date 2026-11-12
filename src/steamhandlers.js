@@ -1,3 +1,4 @@
+import { addFamily, removeFamily, familyView, familyEmbed } from "./family.js";
 // /me steam: link a public Steam profile so the library and hours played fill in by themselves, and get a pick for what to play next.
 import { MessageFlags } from "discord.js";
 import { steamArt } from "./art.js";
@@ -127,6 +128,18 @@ export function createSteamHandlers({ db, itad, apiKey = null, publicUrl = null,
         const sub = i.options.getSubcommand();
         db.ensureUser(i.user.id, i.guildId);
         try {
+            if (sub === "family") {
+                const add = (i.options.getString("add") ?? "").trim(), remove = (i.options.getString("remove") ?? "").trim();
+                await i.deferReply({ flags: MessageFlags.Ephemeral });
+                let note = null;
+                if (remove) { await removeFamily({ db, userId: i.user.id, input: remove, fetchImpl }); note = "Removed."; }
+                if (add) {
+                    wait(i.user.id);
+                    const r = await addFamily({ db, userId: i.user.id, input: add, apiKey, fetchImpl });
+                    note = `Added **${r.name ?? r.steamid}** with ${r.games} games.`;
+                }
+                return void await i.editReply({ content: note ?? undefined, embeds: [familyEmbed(familyView(db, i.user.id))] });
+            }
             if (sub === "unlink") {
                 const had = db.removeSteamLink(i.user.id);
                 if (!had) return eph(i, "No Steam profile is linked.");

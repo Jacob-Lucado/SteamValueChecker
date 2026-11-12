@@ -1,3 +1,4 @@
+import { ownedWithFamily } from "./family.js";
 // "Is this bundle worth it?" For each active bundle with a game you want, works out every tier's price against what
 // the games would cost you today, leaving out games you already own. Pure analysis plus the lookups.
 import { summarize } from "./report.js";
@@ -49,13 +50,13 @@ export async function bundleCheck({ db, itad, user, gameIds }) {
     if (!ids.length) throw new UserError("Name a game, or add games to your wishlist so I know what to look for.");
     const found = await itad.getBundleDetails(ids, user.region);
     if (!found.length) return { bundles: [], currency: "USD" };
-    const owned = new Set(db.listLibrary(user.discord_id).map(l => l.itad_id));
     const wanted = new Set(db.listItems(user.discord_id).map(i => i.itad_id));
     const ranked = found.sort((a, b) => b.matches.length - a.matches.length || (a.expiry ?? Infinity) - (b.expiry ?? Infinity)).slice(0, MAX_BUNDLES);
     const gameIdsToPrice = [...new Set(ranked.flatMap(b => b.tiers.flatMap(t => t.games.map(g => g.id))))].slice(0, MAX_GAMES * MAX_BUNDLES);
     let prices = new Map();
     try { prices = await itad.getPrices(gameIdsToPrice, user.region); } catch { /* still shows tiers without values */ }
     const priceOf = id => summarize(prices.get(id), { majorOnly: user.stores === "major" }).best?.price ?? null;
+    const owned = await ownedWithFamily({ db, itad, userId: user.discord_id, gameIds: gameIdsToPrice }); // their own games and their Steam Family's
     const bundles = ranked.map(b => analyzeBundle(b, { owned, wanted, price: priceOf }));
     return { bundles, currency: ranked[0].currency ?? "USD" };
 }
@@ -91,7 +92,7 @@ export async function bundleFromLink({ db, itad, user, link }) {
 
     const price = parseMoney(row.price);
     if (price === null) throw new UserError(`I know **${row.title}** but not its price yet.`);
-    const owned = new Set(db.listLibrary(user.discord_id).map(l => l.itad_id));
+    const owned = await ownedWithFamily({ db, itad, userId: user.discord_id, gameIds: games.map(g => g.id) });
     const wanted = new Set(db.listItems(user.discord_id).map(i => i.itad_id));
     let prices = new Map();
     try { prices = await itad.getPrices(games.map(g => g.id), user.region); } catch { /* still shows the tier without values */ }

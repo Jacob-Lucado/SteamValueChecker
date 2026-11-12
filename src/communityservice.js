@@ -1,5 +1,6 @@
 // The community actions behind both the Discord commands and the dashboard. Everything talks to Discord through `api`
 // (dashboard/discord.js), so it runs the same from a command, an event or a web request, and the tests use a fake.
+import { featureOn } from "./features.js";
 import { welcomeDmPayload, messageXp, XP_COOLDOWN_MS, VOICE_XP, rolesForLevel, welcomePayload, findUsedInvite, levelFromXp, xpForNext, bar } from "./community.js";
 
 import { isHidden } from "./hidden.js";
@@ -21,7 +22,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
     /** XP for one chat message. Returns { leveled, level } or null when it did not count (off, too soon). */
     async function onMessage({ guildId, userId }) {
         const c = db.getCommunity(guildId);
-        if (!c.xp_on) return null;
+        if (!c.xp_on || !featureOn(db, guildId, "levels")) return null;
         const key = `${guildId}:${userId}`;
         if (now() - (last.get(key) ?? 0) < XP_COOLDOWN_MS) return null;
         last.set(key, now());
@@ -34,7 +35,7 @@ export function createCommunity({ db, api, dm = null, dashboardUrl = null, owner
     /** One minute of voice for these people (the caller picks who counts). */
     async function onVoiceMinute(guildId, userIds) {
         const c = db.getCommunity(guildId);
-        if (!c.xp_on) return;
+        if (!c.xp_on || !featureOn(db, guildId, "levels")) return;
         for (const id of userIds) {
             const r = db.addXp(guildId, id, Math.round(VOICE_XP * c.xp_mult * xpBoost(db, id, now())), { voiceMinutes: 1 });
             if (r.after > r.before) await syncLevelRoles(guildId, id, r.after);

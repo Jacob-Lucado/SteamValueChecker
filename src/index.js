@@ -61,6 +61,7 @@ import { createStreamHandlers } from "./streamhandlers.js";
 import { createStreamWatch, watchable, CHECK_EVERY_MS } from "./streamwatch.js";
 import { openDb } from "./db.js";
 import { withPriceLog } from "./pricelog.js";
+import { blockedArea, handleFeaturesCommand, handleFeaturesPick, FEATURE_PICK } from "./features.js";
 import { configureFacts } from "./gamefacts.js";
 import { createPlayers } from "./players.js";
 import { createIgdb } from "./igdb.js";
@@ -95,6 +96,7 @@ import { createPlaytestSources } from "./playsources.js";
 import { runRefundWarnings, runRefundDrops, runMilestones } from "./playalerts.js";
 import { refreshTags } from "./taste.js";
 import { runSteamAutoSync } from "./steamlib.js";
+import { runFamilySync } from "./family.js";
 import { runWishlistAutoSync } from "./wishlist.js";
 import { importWishlist } from "./steam.js";
 import { runFriendReminders } from "./friends.js";
@@ -473,6 +475,7 @@ client.once(Events.ClientReady, c => {
             result.digests = await ops.job("digests", () => runDigests({ db, itad, notifier, log }));
             result.snapshots = await ops.job("snapshots", () => runSnapshots({ db, itad, log }));
             result.steamSync = await ops.job("steam auto-sync", () => runSteamAutoSync({ db, itad, apiKey: cfg.steamApiKey, log }));
+            result.familySync = await ops.job("steam family refresh", () => runFamilySync({ db, apiKey: cfg.steamApiKey, log }));
             result.wishSync = await ops.job("wishlist auto-sync", () => runWishlistAutoSync({ db, itad, importWishlist, log }));
             try { db.prunePricePoints(); db.pruneAlertLog(); db.pruneSeen(); db.pruneWatches(); db.pruneGuildSeen(); db.prunePlaytime(); db.pruneGiftClaims(); db.pruneStarPosts(); db.prunePolls2(); db.pruneInactiveProfileBgs(BG_INACTIVE_MS); dailySocial(db); } catch (err) { ops.error("cleanup", err); }
             result.watchdog = await ops.job("watchdog", () => runWatchdog({ ops, logs, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }) }));
@@ -940,7 +943,11 @@ async function onInteraction(i, again = false) {
             i.options.getSubcommandGroup = () => null;
             if (i.isChatInputCommand() && SERVER_ONLY_LEGACY.has(route.command) && !i.inGuild()) return void i.reply({ content: "That one works inside a server. Try it there.", flags: MessageFlags.Ephemeral }).catch(() => {});
         }
+        // A server can switch whole areas off (/manage features). Their commands say so instead of running.
+        const off = i.isChatInputCommand() && i.inGuild() ? blockedArea(db, i.guildId, i.commandName) : null;
+        if (off) return void i.reply({ content: `${off.emoji} **${off.name}** is switched off in this server. A manager can turn it back on with \`/manage features\`.`, flags: MessageFlags.Ephemeral }).catch(() => {});
     }
+    if (i.isStringSelectMenu?.() && i.customId === FEATURE_PICK) return handleFeaturesPick(i, db);
     if (i.isAutocomplete()) {
         try { await (i.commandName === "tag" ? toolsUi.tagAutocomplete(i) : i.commandName === "giveaway" ? gw.handleAutocomplete(i) : i.commandName === "music" ? (musicUi?.handleAutocomplete(i) ?? i.respond([])) : handlers.handleAutocomplete(i)); } catch (err) { console.error(`[autocomplete] ${err.name}: ${err.message}`); }
         return;
@@ -1074,6 +1081,7 @@ async function onInteraction(i, again = false) {
             case "sales": return await handlers.handleSales(i);
             case "watch": return await handlers.handleWatch(i);
             case "fixmatch": return await handlers.handleFixMatch(i);
+            case "features": return await handleFeaturesCommand(i, db);
             case "serverstats": return await handlers.handleServerStats(i);
             case "nowplaying": return await handlers.handleNowPlaying(i);
             case "club": return await clubUi.handle(i);

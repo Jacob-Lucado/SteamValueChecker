@@ -22,6 +22,13 @@
         }
         const [ch, ro, fo] = await Promise.all([api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })), api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] })), api("/api/servers/forums?guild=" + encodeURIComponent(guild.value)).catch(() => ({ forums: [] }))]);
         const cmap = await api("/api/servers/channelmap?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] }));
+        const feat = await api("/api/servers/features?guild=" + encodeURIComponent(guild.value)).catch(() => ({ features: [] }));
+        // Whole areas of the bot this server can switch off (the same switches as /manage features).
+        const featuresPanel = list => list.length ? h("div", { class: "panel" }, h("h3", { text: "What this server uses" }),
+          h("p", { class: "muted", text: "Switch off the areas you don't want. Their commands then answer with a short note instead of running. Prices, wishlists and alerts are always on." }),
+          ...list.map(a => { const b = h("button", { class: "btn small " + (a.on ? "red" : "green"), text: a.on ? "Switch off" : "Switch on" });
+            b.addEventListener("click", () => busy(b, async () => { await api("/api/servers/features", { guild_id: guild.value, id: a.id, on: !a.on }); load(); }));
+            return h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (a.on ? "🟢 " : "⚪ ") + a.emoji + " " + a.name }), h("div", { class: "muted small", text: a.about })), b); })) : null;
         const reqSel = select([["", "Not set"], ...fo.forums.map(c => [c.id, "#" + c.name])], st.requestsChannel || "");
         const chOpts = cur => select([["", "Not set"], ...ch.channels.map(c => [c.id, "#" + c.name])], cur || "");
         const row = (step, title, help, ...controls) => h("div", { class: "setup-row" }, h("div", {}, h("b", { text: (step.done ? "✅ " : step.optional ? "➖ " : "⬜ ") + title }), h("div", { class: "muted small", text: help })), ...controls.filter(Boolean));
@@ -51,6 +58,7 @@
           row(st.steps.find(x => x.id === "requests"), "Feature requests forum", "Every idea members send in on the dashboard becomes a post here, tagged with its status (planned, in development, shipped…). Needs a forum channel, which Discord only offers on Community servers.",
             fo.forums.length ? h("div", { class: "row" }, reqSel, save("Save", () => api("/api/community/places", { guild_id: guild.value, requests_channel: reqSel.value }))) : h("span", { class: "muted small", text: "No forum channel yet. \"Create the channels for me\" makes one, or add one in Discord." }))),
           cmap.channels.length ? channelPanel(cmap.channels, ch.channels, st.alertChannel, guild.value, load) : null,
+          featuresPanel(feat.features),
           h("div", { class: "panel" }, h("h3", { text: "What members can do now" }), h("ul", {},
             h("li", {}, "Import a wishlist for sale alerts: ", h("code", { text: "/me wishlist import" }), ", then star favorites with ", h("code", { text: "/me wishlist priority" })),
             h("li", {}, "Price a library: ", h("code", { text: "/games value" }), " or link Steam for hours, ", h("code", { text: "/me steam recap" }), " and ", h("code", { text: "/me library challenge" })),

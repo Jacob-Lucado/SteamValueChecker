@@ -1,6 +1,6 @@
 # Privacy Policy: Steam Value Checker
 
-Last updated: November 9, 2026 (supporter passes, overlays and server rivalries added)
+Last updated: November 12, 2026 (Steam Family and saved match corrections added)
 
 Steam Value Checker is a Discord bot that prices a list of games and, if you choose, watches your wishlist and tells you when a game goes on sale. This page explains what it does with your data.
 
@@ -43,6 +43,8 @@ Steam Value Checker is a Discord bot that prices a list of games and, if you cho
 - If you use the library: the games you add, what you paid for each (only if you enter it), and one daily snapshot of the totals (number of games, total paid, total MSRP, cheapest price, and how many games are in your backlog, being played or finished) used for the value and backlog charts, `/me library trend` and the leaderboard.
 - If you link Steam with `/me steam link`: your public SteamID64 and, for each game you own, its Steam app ID, minutes played, when it was last played and, if the bot has a Steam API key, how many achievements you have unlocked of the total (used to mark a game Finished at 100%). The bot reads only what your public profile shows and never asks for a login. `/me steam unlink` removes the link (and, if you choose, the games it added).
 - If you use the FanaticalGrabber extension's send button: a SHA-256 hash of your link code, when it was made and last used, and how many sends. The code itself is never stored. `/me library grabber action:off` deletes it. The extension sends game titles only, never keys.
+- If you add people to **Steam Family** (`/me steam family`): each person's public SteamID64, their Steam name and the Steam app IDs of the games their public profile lists, so sale alerts and bundle checks can skip games your family already owns. Removing a person, or deleting your data, erases their list.
+- If you save a correction with `/games fixmatch`: the title you typed and the game you picked.
 - If you use batch redeem: keys you queue with `/games redeem` are kept only until the batch finishes, you cancel it, or 24 hours pass, then erased. Keys you paste on the dashboard page go from your browser to the extension to Steam and never reach this server. For each settled key the bot keeps a SHA-256 hash and a masked hint (first and last five characters), the result and the game name, so repeats are skipped and `/games redeem history:true` can list them. Clear it from the Batch redeem page.
 - If you use `/me steam recap`: the hours added at each Steam sync (the day, the game and the minutes gained), kept for three years so the hours-tracked recap works.
 - If you set a backlog challenge: your goal for each month. Progress is worked out from your library and the date you marked a game finished.

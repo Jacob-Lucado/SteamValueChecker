@@ -59,7 +59,17 @@
       if (!fromExt(e)) return;
       const m = e.data;
       if (!m || m.svc !== "ext") return;
-      if (m.type === "vault") { showVault(m.items || []); return; }
+      if (m.type === "vault") {
+        // Newer versions of the extension only hand keys over right after a click, so offer a button instead of asking by itself.
+        if (m.locked) {
+          const show = h("button", { class: "btn gray small", text: "Show my saved keys" });
+          show.addEventListener("click", () => extSend({ svc: "page", type: "vault" }));
+          vaultBox.hidden = false;
+          vaultBox.replaceChildren(h("h3", { text: "Key vault" }), h("p", { class: "muted small", text: "Keys you revealed with FanaticalGrabber and haven't redeemed yet. They stay in your browser." }), show);
+          return;
+        }
+        showVault(m.items || []); return;
+      }
       if (m.type === "pong") {
         if (versionLess(m.version, MIN_EXT)) {
           ext = null; extFound = true;
