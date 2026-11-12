@@ -2090,3 +2090,12 @@ a.fd-name:hover { text-decoration: underline; }
 .ovs-tswatch.t-steam { border-radius: 2px; border-top: 3px solid var(--a); }
 .ovs-tswatch.t-cyber { border-radius: 0; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); }
 .ovs-tswatch.t-sunset { background: linear-gradient(160deg, var(--a), var(--b)); }
+
+/* moderation: auto-mod rule blocks and pick-many chips */
+.rule { border-top: 1px solid var(--line, rgba(255,255,255,.08)); padding: 6px 0; }
+.rule-body { margin: 0 0 8px 26px; }
+.rule-body textarea { width: 100%; }
+.picks { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
+.pick { font: inherit; font-size: 12.5px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line, rgba(255,255,255,.14)); background: var(--soft, transparent); color: var(--muted); cursor: pointer; }
+.pick.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--text); }
+.pick:disabled { cursor: default; opacity: .7; }

@@ -13,8 +13,17 @@ export const ACTIONS = {
     kick: { label: "Kick", color: 0xe67e22, icon: "👢" },
     ban: { label: "Ban", color: 0xed4245, icon: "🔨" },
     unban: { label: "Unban", color: 0x57f287, icon: "🕊️" },
-    purge: { label: "Messages cleared", color: 0x95a5a6, icon: "🧹" }
+    purge: { label: "Messages cleared", color: 0x95a5a6, icon: "🧹" },
+    note: { label: "Staff note", color: 0x3498db, icon: "📝" },
+    slowmode: { label: "Slowmode", color: 0x3498db, icon: "🐌" },
+    lock: { label: "Channel locked", color: 0xe67e22, icon: "🔒" },
+    unlock: { label: "Channel unlocked", color: 0x57f287, icon: "🔓" },
+    automod: { label: "Auto-mod", color: 0xe67e22, icon: "🤖" },
+    raid: { label: "Raid guard", color: 0xed4245, icon: "🚨" }
 };
+export const MAX_SLOWMODE_S = 21600;
+// Discord permission bits a locked channel takes away from @everyone.
+const LOCK_BITS = (1n << 11n) | (1n << 38n) | (1n << 35n) | (1n << 36n); // send messages, send in threads, create public / private threads
 export const MAX_REASON = 400;
 export const MAX_TIMEOUT_S = 28 * 86400;
 export const MIN_TIMEOUT_S = 60;
@@ -166,6 +175,48 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         return { case: c, deleted: ids.length };
     }
 
+    /** A private staff note on a person. It is a case, so it shows in their history, but they are never told. */
+    async function note({ guildId, actorId, userId, text }) {
+        const why = clean(text);
+        if (!why) fail(400, "Write the note.");
+        if (!idOk(userId)) fail(400, "That does not look like a Discord user ID. Paste the person's ID or mention.");
+        const guild = await api.getGuild(guildId).catch(() => fail(400, "The bot is not in that server yet. Invite it first."));
+        return { case: await record({ guildId, guild, userId, modId: actorId, action: "note", reason: why }) };
+    }
+    /** Slowmode for a channel: seconds between messages per person, 0 turns it off (max 6 hours). */
+    async function slowmode({ guildId, actorId, channelId, seconds, reason }) {
+        const s = typeof seconds === "number" ? seconds : (parseDuration(seconds) ?? (String(seconds).trim() === "0" || /^off$/i.test(String(seconds).trim()) ? 0 : null));
+        if (s === null || s < 0 || s > MAX_SLOWMODE_S) fail(400, "Give a length from 0 (off) to 6 hours, like 5s, 30s, 2m or 1h.");
+        if (!idOk(channelId)) fail(400, "Choose a channel.");
+        const guild = await api.getGuild(guildId).catch(() => fail(400, "The bot is not in that server yet. Invite it first."));
+        try { await api.editChannel(channelId, { rate_limit_per_user: s }); } catch (e) { discordFail(e, "change that channel"); }
+        return { case: await record({ guildId, guild, userId: null, modId: actorId, action: "slowmode", reason: `${s ? `${fmtDuration(s)} between messages` : "Slowmode off"} in <#${channelId}>${clean(reason) ? `: ${clean(reason)}` : ""}`, durationS: s || null }), seconds: s };
+    }
+    /** Stops @everyone from sending in a channel, or lets them again. Other overwrites on the channel are left alone. */
+    async function lock({ guildId, actorId, channelId, reason, unlock = false }) {
+        if (!idOk(channelId)) fail(400, "Choose a channel.");
+        const guild = await api.getGuild(guildId).catch(() => fail(400, "The bot is not in that server yet. Invite it first."));
+        let ch;
+        try { ch = await api.getChannel(channelId); } catch (e) { discordFail(e, "read that channel"); }
+        const ov = (ch?.permission_overwrites ?? []).find(o => o.id === guildId && Number(o.type) === 0);
+        let allow = BigInt(ov?.allow ?? 0), deny = BigInt(ov?.deny ?? 0);
+        if (unlock) deny &= ~LOCK_BITS; else { deny |= LOCK_BITS; allow &= ~LOCK_BITS; }
+        try { await api.setOverwrite(channelId, guildId, { type: 0, allow: allow.toString(), deny: deny.toString() }); } catch (e) { discordFail(e, `${unlock ? "unlock" : "lock"} that channel`); }
+        return { case: await record({ guildId, guild, userId: null, modId: actorId, action: unlock ? "unlock" : "lock", reason: `<#${channelId}>${clean(reason) ? `: ${clean(reason)}` : ""}` }) };
+    }
+    /** What the auto-moderator and raid guard do: the bot acts on its own, so there is no moderator to gate and no DM unless asked. */
+    async function auto({ guildId, userId, action, reason, durationS = null, dmVerb = null, caseAs = null }) {
+        const guild = await api.getGuild(guildId).catch(() => null);
+        const why = clean(reason);
+        if (action === "timeout" && durationS) await api.timeoutMember(guildId, userId, new Date(now() + Math.min(MAX_TIMEOUT_S, durationS) * 1000).toISOString(), why);
+        else if (action === "kick") { if (dmVerb) await tell(userId, guild, "kicked", why); await api.kickMember(guildId, userId, why); }
+        else if (action === "ban") { if (dmVerb) await tell(userId, guild, "banned", why); await api.banMember(guildId, userId, { reason: why }); }
+        else if (action === "warn") { await tell(userId, guild, "warned", why); }
+        const label = caseAs ?? (action === "warn" || action === "timeout" || action === "kick" || action === "ban" ? action : "automod");
+        const c = await record({ guildId, guild, userId, modId: botId(), action: label, reason: `[auto] ${why}`, durationS });
+        return { case: c, warnings: db.warnCount(guildId, userId) };
+    }
+
     function history(guildId, { userId = null, page = 1, perPage = 10 } = {}) {
         const total = db.countCases(guildId, userId), pages = Math.max(1, Math.ceil(total / perPage));
         const p = Math.min(pages, Math.max(1, Math.trunc(Number(page)) || 1));
@@ -178,5 +229,5 @@ export function createModeration({ db, api, dm = null, botId = () => null, now =
         return { cleared: n };
     }
 
-    return { warn, timeout, untimeout, kick, ban, unban, purge, history, clearWarnings, caseEmbed, logChannel, parseDuration };
+    return { warn, timeout, untimeout, kick, ban, unban, purge, note, slowmode, lock, auto, history, clearWarnings, caseEmbed, logChannel, parseDuration };
 }

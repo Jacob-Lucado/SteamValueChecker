@@ -299,8 +299,8 @@ const ADMINISTRATOR = 0x8n;
 
 export const RESTRICTED_TEXT = "Your access to Steam Value Checker has been restricted by the bot owner. You can no longer use the bot or this dashboard, and you won't get alerts. If you think this is a mistake, contact the bot owner.";
 
-const MOD_PERMS = { moderate: { bit: 1n << 40n, text: "Moderate Members" }, kick: { bit: 1n << 1n, text: "Kick Members" }, ban: { bit: 1n << 2n, text: "Ban Members" }, manageMessages: { bit: 1n << 13n, text: "Manage Messages" }, manageGuild: { bit: MANAGE_GUILD, text: "Manage Server" } };
-const MOD_ACTION_PERM = { warn: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", purge: "manageMessages" };
+const MOD_PERMS = { moderate: { bit: 1n << 40n, text: "Moderate Members" }, kick: { bit: 1n << 1n, text: "Kick Members" }, ban: { bit: 1n << 2n, text: "Ban Members" }, manageMessages: { bit: 1n << 13n, text: "Manage Messages" }, manageChannels: { bit: 1n << 4n, text: "Manage Channels" }, manageGuild: { bit: MANAGE_GUILD, text: "Manage Server" } };
+const MOD_ACTION_PERM = { warn: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", purge: "manageMessages", note: "moderate", slowmode: "manageChannels", lock: "manageChannels", unlock: "manageChannels" };
 /** Does this person have the permission in that server (owner and Administrator have all of them)? */
 const hasGuildPerm = (g, need) => {
     if (g.owner) return true;
@@ -314,7 +314,7 @@ const isManager = g => {
     } catch { return false; }
 };
 
-export function createDashboard({ referrals = null, weekly = null, indieSvc = null, fortniteSvc = null, indieNews = null, spotlight = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
+export function createDashboard({ referrals = null, weekly = null, indieSvc = null, fortniteSvc = null, indieNews = null, spotlight = null, storage = null, topgg = null, twitchReply = false, trivia = null, emojigg = null, news = null, abg = null, nowPlaying = null, playtests = null, db, itad, rest, music = null, musicGuild = null, stations = null, codes = null, bundleFeed = null, xposter = null, imageFetch = globalThis.fetch, drops = null, ops = null, giveaways = null, tickets = null, logs = null, botInfo = null, status = null, djsVersion = null, botGuilds = null, guildList = null, guildInvite = null, leaveGuild = null, commandWatch = null, offsite = null, health = null, square = null, supporters = null, lfg = null, calendar = null, community = null, moderation = null, automod = null, membersIntent = () => true, rt = null, ai = null, broadcaster: sharedBroadcaster = null, dm = null, fx = null, steamFetch = globalThis.fetch, config, now = () => Date.now(), log = () => {} }) {
     const origin = new URL(config.publicUrl).origin;
     // The admin panel can live on its own subdomain. It shares the sign-in with the main site through a cookie for the whole domain.
     const adminOrigin = config.adminUrl ? new URL(config.adminUrl).origin : null;
@@ -916,7 +916,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         if (!cd) throw new HttpError(503, "Community features are not available on this bot.");
         try { return await fn(); } catch (e) { if (e instanceof CommunityError) throw new HttpError(e.status, e.message); throw e; }
     };
-    const md = moderation ? createModDash({ db, rest, mod: moderation }) : null;
+    const md = moderation ? createModDash({ db, rest, mod: moderation, automod }) : null;
     /** Moderation from the dashboard needs the same Discord permission the command does, on top of seeing the server. */
     const modGuild = (s, id, need) => {
         const g = guildFor(s, id);
@@ -1639,6 +1639,14 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         "POST /api/mod/clearwarns": async (req, body) => {
             const s = session(req); const g = modGuild(s, String(body.guild_id), "moderate");
             return modr(() => md.clearWarns(g.id, body.user));
+        },
+        "GET /api/mod/automod": async (req, _b, url) => {
+            const s = session(req); const g = modGuild(s, url.searchParams.get("guild"), "moderate"); botIn(g);
+            return modr(() => md.automodGet(g.id, { canEdit: hasGuildPerm(g, "manageGuild") }));
+        },
+        "POST /api/mod/automod": async (req, body) => {
+            const s = session(req); const g = modGuild(s, String(body.guild_id), "manageGuild"); botIn(g);
+            return modr(() => md.automodSave(g.id, body.settings));
         },
         "POST /api/mod/log": async (req, body) => {
             const s = session(req); const g = modGuild(s, String(body.guild_id), "manageGuild"); botIn(g);

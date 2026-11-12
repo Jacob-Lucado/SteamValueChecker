@@ -137,6 +137,7 @@ import { dashPayload } from "./dashlink.js";
 import { startPresence } from "./presence.js";
 import { createModeration } from "./moderation.js";
 import { createModHandlers } from "./modhandlers.js";
+import { createAutomod } from "./automod.js";
 import { tickLeaderboards } from "./leaderboard.js";
 import { createMemes, createMemeHandlers, tickMemes } from "./memes.js";
 import { createBroadcaster } from "./broadcast.js";
@@ -255,7 +256,8 @@ const topgg = createTopgg({
     }
 });
 const moderation = createModeration({ db, api: botRest, dm: (id, p) => discord.sendDm(id, p), botId: () => client.user?.id ?? cfg.clientId });
-const modUi = createModHandlers({ db, mod: moderation });
+const automod = createAutomod({ db, api: botRest, mod: moderation, botId: () => client.user?.id ?? cfg.clientId, log: t => console.warn(`[automod] ${t}`) });
+const modUi = createModHandlers({ db, mod: moderation, automod, publicUrl: cfg.dashboard?.publicUrl ?? null });
 const streamGw = createStreamGiveaways({ db, giveaways: () => giveaways });
 const streams = createStreams({ db, api: botRest, onEnd: (g, u) => streamGw.onEnd(g, u) });
 const memes = createMemes();
@@ -663,6 +665,14 @@ client.on(Events.MessageCreate, async m => {
             if (res === "banned") await m.delete().catch(() => {});
             return;
         }
+        {
+            // Auto-moderation runs first: a message it removes never earns XP or gets a reply.
+            const p = m.member?.permissions;
+            const staff = m.guild?.ownerId === m.author.id || Boolean(p?.has?.(["Administrator"]) || p?.has?.(["ManageMessages"]) || p?.has?.(["ModerateMembers"]));
+            const hit = await automod.onMessage({ guildId: m.guildId, channelId: m.channelId, messageId: m.id, authorId: m.author.id, content: m.content ?? "", roles: [...(m.member?.roles?.cache?.keys?.() ?? [])], staff,
+                mentionCount: (m.mentions?.users?.size ?? 0) + (m.mentions?.roles?.size ?? 0) + (m.mentions?.everyone ? 1 : 0), deleteMessage: () => m.delete() });
+            if (hit) return;
+        }
         if (m.content) await chatVote(m);
         let guided = false;
         {
@@ -688,6 +698,7 @@ client.on(Events.GuildMemberUpdate, (before, after) => {
 client.on(Events.GuildMemberAdd, async member => {
     if (!member.user?.bot) pushOverlayEvent(member.guild.id, { type: "join", name: member.displayName ?? member.user?.username, avatar: member.displayAvatarURL?.({ size: 128, extension: "png" }), count: member.guild.memberCount ?? null });
     if (member.id === cfg.ownerId) ensureCreatorRole(member.guild, cfg.ownerId, console.warn);
+    if (!member.user?.bot && await automod.onJoin({ guildId: member.guild.id, userId: member.id, createdAtMs: member.user?.createdTimestamp ?? null })) return; // the raid guard handled them: no welcome message
     if (member.guild.id === mainGuild.detect?.()) supporters.onJoin(member.id);
     try { await community.onJoin({ guildId: member.guild.id, guildName: member.guild.name, count: humanCount(member.guild), member: { id: member.id, username: member.user.username, avatar: member.user.avatar, bot: member.user.bot } }); }
     catch (err) { console.error(`[welcome] ${err.name}: ${err.message}`); }
@@ -1085,7 +1096,7 @@ const dashboard = createDashboard({ referrals, weekly, indieSvc, fortniteSvc: cr
         const inv = await ch.createInvite({ maxAge: 3600, maxUses: 1, unique: true, reason: "Bot owner asked for an invite from the dashboard" });
         return inv.url;
     },
-    guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g), boosts: g.premiumSubscriptionCount ?? 0 })), lfg, calendar, community, moderation, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKey: cfg.anthropicKey, aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: (k, o) => ai.checkKey(k, o), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
+    guildList: () => client.guilds.cache.map(g => ({ id: g.id, name: g.name, members: humanCount(g), boosts: g.premiumSubscriptionCount ?? 0 })), lfg, calendar, community, moderation, automod, membersIntent: () => MEMBERS_INTENT, rt, ai, config: { ...d, steamApiKey: cfg.steamApiKey, backupDir: cfg.backupDir, creator: cfg.creator, clientId: cfg.clientId, ownerId: cfg.ownerId, trustProxy: cfg.trustProxy, aiAvailable: Boolean(cfg.anthropicKey), aiKey: cfg.anthropicKey, aiLite: true, aiKeyVault: keyVault, mainGuild, aiCheckKey: (k, o) => ai.checkKey(k, o), aiPhrase: CONTENT_INTENT, aiDailyCap: cfg.aiDailyCap }, log: (m, level = "activity") => (level === "error" ? console.error(`[dashboard] ${m}`) : level === "warn" ? console.warn(`[dashboard] ${m}`) : console.log(`${ACTIVITY}[dashboard] ${m}`)) });
     dashboard.listen().then(a => { console.log(`Dashboard listening on ${a.address}:${a.port} (public address ${d.publicUrl})`); setTimeout(() => pingIndexNow({ origin: new URL(d.publicUrl).origin, db }), 30_000).unref(); })
         .catch(err => console.error(`[dashboard] could not start: ${err.message}`));
 } else {

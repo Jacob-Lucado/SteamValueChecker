@@ -1,5 +1,12 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.58", date: "2026-11-12", title: "More moderation", items: [
+        "**Auto-moderator:** the bot can now watch for message spam, mass mentions, Discord invite links, links outside your allow-list, blocked words and SHOUTING. A message that breaks a rule is deleted, and the person can also be warned or timed out. Staff, chosen roles and chosen channels are never touched. Turn it on in the dashboard's Moderation page or with /mod automod.",
+        "**Escalation:** after a set number of active warnings the bot can time the person out, kick them or ban them on its own.",
+        "**Raid guard:** if a pile of accounts join in a few seconds, the bot times out or kicks each newcomer for ten minutes and logs it. You can also act on brand-new accounts.",
+        "**More mod tools:** /mod note (a private staff note that never reaches the member), /mod slowmode, /mod lock and /mod unlock. They are in the dashboard's action list too, and every one is logged as a case.",
+        "**Auto memes:** the meme feed now only uses real meme subreddits and skips photos, questions and showcase posts."
+    ] },
     { version: "2026.11.57", date: "2026-11-11", title: "A tidier menu", items: [
         "**Fewer sections:** the top menu went from 13 sections to 9. Free games, Bundles, Playtests and Codes & promos now sit under Deals with the rest of the money-saving pages.",
         "**Creators:** the indie showcase and dev panel share a section with the streamer pages (Streamer hub, Overlay studio, Go live, Who is live).",

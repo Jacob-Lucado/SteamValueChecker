@@ -2,17 +2,17 @@
 import { ModError, ACTIONS, fmtDuration } from "./moderation.js";
 
 const EPHEMERAL = 64;
-const BIT = { kick: 1n << 1n, ban: 1n << 2n, manageGuild: 1n << 5n, manageMessages: 1n << 13n, moderate: 1n << 40n };
+const BIT = { kick: 1n << 1n, ban: 1n << 2n, manageGuild: 1n << 5n, manageMessages: 1n << 13n, manageChannels: 1n << 4n, moderate: 1n << 40n };
 /** What each /mod command needs, the same permissions Discord's own moderation uses. */
-export const NEEDS = { warn: "moderate", warnings: "moderate", clearwarns: "moderate", cases: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", purge: "manageMessages", log: "manageGuild" };
-export const PERMISSION_TEXT = { moderate: "Moderate Members", kick: "Kick Members", ban: "Ban Members", manageMessages: "Manage Messages", manageGuild: "Manage Server" };
+export const NEEDS = { warn: "moderate", warnings: "moderate", clearwarns: "moderate", cases: "moderate", timeout: "moderate", untimeout: "moderate", kick: "kick", ban: "ban", unban: "ban", purge: "manageMessages", log: "manageGuild" , note: "moderate", slowmode: "manageChannels", lock: "manageChannels", unlock: "manageChannels", automod: "manageGuild" };
+export const PERMISSION_TEXT = { moderate: "Moderate Members", kick: "Kick Members", ban: "Ban Members", manageMessages: "Manage Messages", manageChannels: "Manage Channels", manageGuild: "Manage Server" };
 
 export const caseLine = c => {
     const a = ACTIONS[c.action] ?? { label: c.action, icon: "•" };
     return `**#${c.case_no}** ${a.icon} ${a.label}${c.cleared ? " (cleared)" : ""} · <t:${Math.floor(c.created_at / 1000)}:R>${c.mod_id ? ` · by <@${c.mod_id}>` : ""}${c.duration_s ? ` · ${fmtDuration(c.duration_s)}` : ""}${c.reason ? `\n> ${String(c.reason).slice(0, 150)}` : ""}`;
 };
 
-export function createModHandlers({ db, mod, publicUrl = null }) {
+export function createModHandlers({ db, mod, automod = null, publicUrl = null }) {
     const eph = (i, content) => i.reply({ content, flags: EPHEMERAL, allowedMentions: { parse: [] } });
     const historyEmbed = (title, h, who) => ({
         color: 0x5865f2, title,
@@ -34,6 +34,32 @@ export function createModHandlers({ db, mod, publicUrl = null }) {
                 if (ch) { db.setCommunity(gid, { mod_log_channel: ch.id }); return eph(i, `Moderation actions will be logged in <#${ch.id}>.`); }
                 const cur = mod.logChannel(gid);
                 return eph(i, cur ? `Moderation actions are logged in <#${cur}>. Pick another with the channel option.` : "No mod log yet. Pick a channel with the channel option, or run `/manage community setup`.");
+            }
+            if (sub === "automod") {
+                if (!automod) return eph(i, "The auto-moderator is not available right now.");
+                const rule = o.getString("rule"), on = o.getBoolean("enabled");
+                if (rule && on !== null && on !== undefined) {
+                    const cur = automod.get(gid);
+                    automod.save(gid, rule === "on" ? { on } : rule === "raid" ? { raid: { on } } : { rules: { [rule]: { on } } });
+                    if (on && rule !== "on" && !cur.on) automod.save(gid, { on: true });
+                }
+                const c = automod.get(gid), flag = v => (v ? "🟢 on" : "⚫ off");
+                const lines = [`**Auto-moderator:** ${flag(c.on)}`, ...Object.entries(automod.rules).map(([k, label]) => `• ${label}: ${flag(c.rules[k].on)}`), `• Raid guard: ${flag(c.raid.on)}`,
+                    `**When a rule is broken:** the message is deleted${c.action.timeoutMinutes ? `, and they are timed out for ${c.action.timeoutMinutes} minute${c.action.timeoutMinutes === 1 ? "" : "s"}` : c.action.warn ? " and they get a warning" : ""}.`,
+                    c.escalate.warns ? `**After ${c.escalate.warns} warnings:** ${c.escalate.action}${c.escalate.action === "timeout" ? ` for ${c.escalate.minutes} minutes` : ""}.` : null].filter(Boolean);
+                return i.reply({ embeds: [{ color: 0xed4245, title: "🤖 Auto-moderator", description: lines.join("\n"), footer: { text: `Blocked words, link allow-list, exemptions and the rest are on the dashboard${publicUrl ? ` at ${publicUrl}` : ""}.` } }], flags: EPHEMERAL });
+            }
+            if (sub === "note") { const r = await mod.note({ guildId: gid, actorId, userId: user(), text: o.getString("text", true) }); return eph(i, `Noted on <@${r.case.user_id}> (case #${r.case.case_no}). They are not told.`); }
+            if (sub === "slowmode") {
+                await i.deferReply({ flags: EPHEMERAL });
+                const r = await mod.slowmode({ guildId: gid, actorId, channelId: o.getChannel("channel")?.id ?? i.channelId, seconds: o.getString("length", true), reason: o.getString("reason") });
+                return i.editReply({ content: r.seconds ? `Slowmode set to ${fmtDuration(r.seconds)} (case #${r.case.case_no}).` : `Slowmode is off (case #${r.case.case_no}).` });
+            }
+            if (sub === "lock" || sub === "unlock") {
+                await i.deferReply({ flags: EPHEMERAL });
+                const ch = o.getChannel("channel")?.id ?? i.channelId;
+                const r = await mod.lock({ guildId: gid, actorId, channelId: ch, reason: o.getString("reason"), unlock: sub === "unlock" });
+                return i.editReply({ content: `${sub === "lock" ? "Locked" : "Unlocked"} <#${ch}> (case #${r.case.case_no}).` });
             }
             if (sub === "cases" || sub === "warnings") {
                 const u = sub === "warnings" ? o.getUser("user", true) : o.getUser("user");

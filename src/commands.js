@@ -653,6 +653,25 @@ const modCmd = new SlashCommandBuilder()
     .addSubcommand(s => s.setName("cases").setDescription("Recent moderation actions in this server")
         .addUserOption(o => o.setName("user").setDescription("Only this person"))
         .addIntegerOption(o => o.setName("page").setDescription("Page number").setMinValue(1)))
+    .addSubcommand(s => s.setName("note").setDescription("Add a private staff note to a member's history (they are never told)")
+        .addUserOption(o => o.setName("user").setDescription("Who the note is about").setRequired(true))
+        .addStringOption(o => o.setName("text").setDescription("The note").setRequired(true).setMaxLength(400)))
+    .addSubcommand(s => s.setName("slowmode").setDescription("Set slowmode on a channel (Manage Channels)")
+        .addStringOption(o => o.setName("length").setDescription("Time between messages: 5s, 30s, 2m, 1h, or off").setRequired(true).setMaxLength(10))
+        .addChannelOption(o => o.setName("channel").setDescription("Which channel (default: this one)").addChannelTypes(...textChan))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(300)))
+    .addSubcommand(s => s.setName("lock").setDescription("Stop everyone from sending messages in a channel (Manage Channels)")
+        .addChannelOption(o => o.setName("channel").setDescription("Which channel (default: this one)").addChannelTypes(...textChan))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(300)))
+    .addSubcommand(s => s.setName("unlock").setDescription("Let everyone send messages in a channel again (Manage Channels)")
+        .addChannelOption(o => o.setName("channel").setDescription("Which channel (default: this one)").addChannelTypes(...textChan))
+        .addStringOption(o => o.setName("reason").setDescription("Why").setMaxLength(300)))
+    .addSubcommand(s => s.setName("automod").setDescription("See or switch the auto-moderator and raid guard (Manage Server). Full settings are on the dashboard")
+        .addStringOption(o => o.setName("rule").setDescription("What to switch").addChoices(
+            { name: "Everything (master switch)", value: "on" }, { name: "Message spam", value: "spam" }, { name: "Mass mentions", value: "mentions" },
+            { name: "Discord invite links", value: "invites" }, { name: "Links", value: "links" }, { name: "Blocked words", value: "words" },
+            { name: "SHOUTING", value: "caps" }, { name: "Raid guard", value: "raid" }))
+        .addBooleanOption(o => o.setName("enabled").setDescription("Turn it on or off")))
     .addSubcommand(s => s.setName("log").setDescription("Choose where moderation actions are logged (Manage Server)")
         .addChannelOption(o => o.setName("channel").setDescription("The mod log channel").addChannelTypes(...textChan)));
 

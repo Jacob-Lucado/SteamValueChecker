@@ -3,7 +3,7 @@ import { ModError, parseUserId } from "../moderation.js";
 
 export class ModDashError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
-export function createModDash({ db, rest, mod }) {
+export function createModDash({ db, rest, mod, automod = null }) {
     const fail = (status, m) => { throw new ModDashError(status, m); };
     const wrap = async fn => { try { return await fn(); } catch (e) { if (e instanceof ModError) throw new ModDashError(e.status, e.message); throw e; } };
     const nameOf = async (gid, id) => (id ? (await rest.memberName(gid, id).catch(() => null)) : null);
@@ -29,10 +29,13 @@ export function createModDash({ db, rest, mod }) {
             const userId = parseUserId(body.user);
             const reason = String(body.reason ?? "");
             const common = { guildId: gid, actorId, userId, reason };
+            if (action === "slowmode") return mod.slowmode({ guildId: gid, actorId, channelId: String(body.channel_id ?? ""), seconds: body.duration ?? body.seconds, reason });
+            if (action === "lock" || action === "unlock") return mod.lock({ guildId: gid, actorId, channelId: String(body.channel_id ?? ""), reason, unlock: action === "unlock" });
             if (action === "purge") return mod.purge({ guildId: gid, actorId, channelId: String(body.channel_id ?? ""), amount: body.amount, userId: body.user ? userId ?? fail(400, "Paste the person's user ID or mention, or leave it empty.") : null }).then(r => ({ ...r, summary: `Deleted ${r.deleted} message${r.deleted === 1 ? "" : "s"}.` }));
             if (!userId) fail(400, "Paste the person's user ID or mention. In Discord, turn on Developer Mode, then right-click them and choose Copy User ID.");
             db.bumpUsage("dash_mod");
             if (action === "warn") return mod.warn(common);
+            if (action === "note") return mod.note({ guildId: gid, actorId, userId, text: reason });
             if (action === "timeout") return mod.timeout({ ...common, duration: body.duration });
             if (action === "untimeout") return mod.untimeout(common);
             if (action === "kick") return mod.kick(common);
@@ -47,5 +50,16 @@ export function createModDash({ db, rest, mod }) {
         db.setCommunity(gid, { mod_log_channel: channelId || null });
         return { logChannel: mod.logChannel(gid) };
     }
-    return { overview, cases, act, clearWarns, setLog };
+    async function automodGet(gid, { canEdit }) {
+        if (!automod) fail(503, "The auto-moderator is not available right now.");
+        const [channels, roles] = await Promise.all([rest.listChannels(gid).catch(() => []), Promise.resolve(rest.allRoles?.(gid)).catch(() => [])]);
+        return { settings: automod.get(gid), canEdit, rules: automod.rules, channels, roles: (roles ?? []).filter(r => r.id !== gid && !r.managed).map(r => ({ id: r.id, name: r.name })) };
+    }
+    function automodSave(gid, settings) {
+        if (!automod) fail(503, "The auto-moderator is not available right now.");
+        if (!settings || typeof settings !== "object") fail(400, "Nothing to save.");
+        db.bumpUsage("dash_automod");
+        return { settings: automod.save(gid, settings) };
+    }
+    return { overview, cases, act, clearWarns, setLog, automodGet, automodSave };
 }

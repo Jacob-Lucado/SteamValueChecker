@@ -5,6 +5,7 @@ import { createXPoster, oauthHeader, freeGameText, bundleText, DEFAULT_DAILY } f
 
 const ENV = { X_API_KEY: "k", X_API_SECRET: "s", X_ACCESS_TOKEN: "t", X_ACCESS_SECRET: "ts" };
 const game = (id, extra = {}) => ({ id, title: "Cool Game", shop: "Epic Games", url: "https://store.epicgames.com/x", type: "game", expiry: Date.UTC(2026, 10, 12, 15), ...extra });
+const FUTURE = Date.now() + 3 * 86400_000; // for tests that run on the real clock
 
 test("the OAuth header is signed, repeatable and carries no secrets", () => {
     const keys = { apiKey: "k", apiSecret: "s", accessToken: "t", accessSecret: "ts" };
@@ -49,9 +50,9 @@ test("a failed post is remembered, explained and not retried at a cost", async (
     const db = openDb(":memory:"); let calls = 0;
     const x = createXPoster({ env: ENV, db, fetchImpl: async () => { calls++; return { ok: false, status: 402, json: async () => ({ title: "CreditsDepleted" }) }; } });
     x.setSettings({ enabled: true });
-    const r = await x.tick([game("a")]);
+    const r = await x.tick([game("a", { expiry: FUTURE })]);
     assert.match(r.error, /out of credits/); assert.match(x.status().error.message, /credits/);
-    assert.equal(calls, 2, "the picture, then the post"); await x.tick([game("a")]); assert.equal(calls, 2, "the same game isn't tried again");
+    assert.equal(calls, 2, "the picture, then the post"); await x.tick([game("a", { expiry: FUTURE })]); assert.equal(calls, 2, "the same game isn't tried again");
     assert.throws(() => x.setSettings({ daily: 99 }), /between 1 and/);
     assert.equal(x.status().monthlyCost, 12, "2 a day with a link each");
 });
@@ -231,13 +232,13 @@ test("peek shows the next automatic post without sending or marking anything, an
     const { readEvents } = await import("../src/adminlog.js");
     const db = openDb(":memory:"), sent = [];
     const x = createXPoster({ env: ENV, db, fetchImpl: async (u, o) => { sent.push(o); return { ok: false, status: 500, text: async () => "boom", json: async () => ({}) }; } });
-    assert.deepEqual(x.peek([game("a")]), { off: true }, "off until it's switched on");
+    assert.deepEqual(x.peek([game("a", { expiry: FUTURE })]), { off: true }, "off until it's switched on");
     x.setSettings({ enabled: true });
     assert.deepEqual(x.peek([]), { nothing: true });
-    const p = x.peek([game("a", { title: "Peeked" })]);
+    const p = x.peek([game("a", { title: "Peeked", expiry: FUTURE })]);
     assert.equal(p.title, "Peeked"); assert.match(p.text, /Free right now: Peeked/); assert.equal(p.chars, p.text.length); assert.ok(p.cost > 0);
     assert.equal(sent.length, 0, "peeking sends nothing"); assert.equal(x.freePosted("a"), false, "and marks nothing");
-    const r = await x.tick([game("a")]);
+    const r = await x.tick([game("a", { expiry: FUTURE })]);
     assert.ok(r.error);
     assert.equal(readEvents(db, "adminlog:problems")[0].where, "X post");
 });
