@@ -4017,3 +4017,26 @@ test("overlay studio: the free games overlay lists claimable games without a ser
         assert.deepEqual(j.data.games.map(g => g.title), ["Alpha"], "no unsafe links, no expired ones");
     } finally { await o.close(); }
 });
+
+test("overlay studio: level-ups only show on the alerts overlay when switched on", async () => {
+    const { pushOverlayEvent } = await import("../src/ovfeed.js");
+    const o = await signedIn({ extra: { botGuilds: () => true, guildList: () => [{ id: "g-admin", name: "Mine", members: 10, boosts: 0 }] } });
+    try {
+        const tok = (await o.request("/api/overlays", { method: "POST", body: { action: "create", kind: "alerts", guild_id: "g-admin" } })).data.token;
+        const get = async () => (await (await fetch(o.base + "/api/ov/data?token=" + tok + "&since=0")).json()).data.events;
+        pushOverlayEvent("g-admin", { type: "level", name: "Sam", count: 7 });
+        assert.deepEqual((await get()).filter(e => e.type === "level"), [], "off by default");
+        await o.request("/api/overlays", { method: "POST", body: { action: "save", token: tok, config: { showLevels: true } } });
+        const ev = (await get()).filter(e => e.type === "level");
+        assert.equal(ev.length, 1); assert.equal(ev[0].count, 7); assert.equal(ev[0].name, "Sam");
+    } finally { await o.close(); }
+});
+
+test("overlay studio: the best deals overlay lists the top discounts", async () => {
+    const o = await signedIn({ itadExtra: { getDealsPool: async () => [{ title: "Big Game", cut: 60, regular: 60, price: 24, currency: "USD", url: "https://deal.example/a" }, { title: "Tiny", cut: 5, regular: 5, price: 4.75, currency: "USD", url: "https://deal.example/b" }] } });
+    try {
+        const tok = (await o.request("/api/overlays", { method: "POST", body: { action: "create", kind: "deals" } })).data.token;
+        const j = await (await fetch(o.base + "/api/ov/data?token=" + tok)).json();
+        assert.deepEqual(j.data.deals.map(d => d.title), ["Big Game"]);
+    } finally { await o.close(); }
+});

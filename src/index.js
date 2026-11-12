@@ -679,6 +679,7 @@ client.on(Events.MessageCreate, async m => {
         }
         const r = await community.onMessage({ guildId: m.guildId, userId: m.author.id });
         if (!r?.leveled) return;
+        if (!m.author.bot) pushOverlayEvent(m.guildId, { type: "level", name: m.member?.displayName ?? m.author.username, avatar: m.member?.displayAvatarURL?.({ size: 128, extension: "png" }) ?? m.author.displayAvatarURL?.({ size: 128, extension: "png" }), count: r.level });
         const c = db.getCommunity(m.guildId);
         if (c.levelup_mode === "off") return;
         const target = c.levelup_mode === "channel" && c.levelup_channel ? await client.channels.fetch(c.levelup_channel).catch(() => null) : m.channel;

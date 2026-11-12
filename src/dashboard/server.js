@@ -424,6 +424,9 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 let st = null; try { st = o.config.pollId ? JSON.parse(db.getMeta(`poll:${o.config.pollId}`) || "null") : null; } catch { st = null; }
                 if (st) { const counts = st.options.map(() => 0); for (const v of Object.values(st.votes ?? {})) if (counts[v] !== undefined) counts[v]++; data = { on: true, question: st.question || "What should we play?", open: now() <= st.until, until: st.until, total: counts.reduce((a, b) => a + b, 0), options: st.options.map((x, i) => ({ title: x.title, count: counts[i] })) }; }
                 else data = { on: false };
+            } else if (o.kind === "deals") {
+                const list = await remember("ovdeals", 30 * 60_000, async () => pickDeals(await itad.getDealsPool({ country: "US", pages: 3 }), 8).map(d => ({ title: String(d.title).slice(0, 80), cut: Math.round(d.cut), price: d.price, currency: String(d.currency || "USD").slice(0, 3) })));
+                data = { deals: list.slice(0, o.config.limit) };
             } else if (o.kind === "free") {
                 const list = await remember("ovfree", 10 * 60_000, async () => (await itad.getGiveawayList()).filter(g => /^https:\/\//i.test(g.url ?? "")).map(g => ({ title: String(g.title ?? "").slice(0, 80), shop: String(g.shop ?? "").slice(0, 30), expiry: g.expiry ?? null, dlc: isDlc(g) })));
                 data = { games: list.filter(g => o.config.showDlc || !g.dlc).filter(g => !g.expiry || new Date(g.expiry).getTime() > now()).slice(0, o.config.limit).map(({ title, shop, expiry }) => ({ title, shop, expiry })) };
@@ -1514,7 +1517,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 if (action === "bump") { db.updateOv(s.userId, mine.token, { value: Math.max(0, Number(mine.value) + Math.max(-1_000_000, Math.min(1_000_000, Number(body.by) || 0))) }); return { value: db.ovById(s.userId, mine.token).value }; }
                 if (action === "test") {
                     if (mine.kind !== "alerts") throw new HttpError(400, "Only an alerts overlay has test alerts.");
-                    const list = ovTest.get(mine.token) ?? []; list.push({ seq: nextSeq(), type: ["join", "boost"][list.length % 2], count: 1281 + list.length, by: 1, name: "Test Member", avatar: null, at: now(), test: true });
+                    const list = ovTest.get(mine.token) ?? []; list.push({ seq: nextSeq(), type: ["join", "boost", "level"][list.length % 3], count: 1281 + list.length, by: 1, name: "Test Member", avatar: null, at: now(), test: true });
                     ovTest.set(mine.token, list.slice(-5));
                     return { ok: true, seen: ovSeen.has(mine.token) ? now() - ovSeen.get(mine.token) : null };
                 }
@@ -1563,7 +1566,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
                 const since = url.searchParams.has("since") ? Number(url.searchParams.get("since")) : NaN;
                 const f = feedFor(o.guild_id, p.g), mine = ovTest.get(o.token) ?? [];
                 const all = [...f.ev, ...mine].sort((a, b) => a.seq - b.seq);
-                const events = Number.isFinite(since) && since >= 0 ? all.filter(e => e.seq > since && (e.type !== "join" || o.config.showJoins) && (e.type !== "boost" || o.config.showBoosts)).slice(-8).map(({ seq, type, count, by, name, avatar }) => ({ seq, type, count: count ?? (type === "join" ? p.g?.members : p.g?.boosts) ?? null, by, ...(o.config.showNames && name ? { name, avatar } : {}) })) : [];
+                const events = Number.isFinite(since) && since >= 0 ? all.filter(e => e.seq > since && (e.type !== "join" || o.config.showJoins) && (e.type !== "boost" || o.config.showBoosts) && (e.type !== "level" || o.config.showLevels)).slice(-8).map(({ seq, type, count, by, name, avatar }) => ({ seq, type, count: count ?? (type === "level" ? null : type === "join" ? p.g?.members : p.g?.boosts) ?? null, by, ...(o.config.showNames && name ? { name, avatar } : {}) })) : [];
                 ovTest.set(o.token, mine.filter(e => now() - e.at < 60_000));
                 return { kind: o.kind, name: o.name, config: o.config, data: { seq: currentSeq(), events }, now: now() };
             }

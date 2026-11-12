@@ -11,9 +11,9 @@ export const hasNamedFeed = () => named;
 
 const clean = v => String(v ?? "").replace(/[\u0000-\u001f​-‏‪-‮]/g, " ").replace(/\s+/g, " ").trim().slice(0, 32);
 
-/** type: "join" or "boost". `count` is the new total when known. */
+/** type: "join", "boost" or "level" (count is then the new level). `count` is the new total when known. */
 export function pushOverlayEvent(guildId, { type, name = "", avatar = null, count = null }, now = Date.now()) {
-    if (!guildId || !["join", "boost"].includes(type)) return;
+    if (!guildId || !["join", "boost", "level"].includes(type)) return;
     const list = (rings.get(String(guildId)) ?? []).filter(e => now - e.at < 10 * 60_000);
     list.push({ seq: nextSeq(), type, name: clean(name), avatar: /^https:\/\/cdn\.discordapp\.com\//.test(String(avatar ?? "")) ? String(avatar) : null, count, by: 1, at: now });
     rings.set(String(guildId), list.slice(-30));
