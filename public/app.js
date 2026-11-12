@@ -652,94 +652,10 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- for you: discounts ranked by your taste and wishlist ----------
-  async function forYouView() {
-    const host = h("div", { class: "muted", text: "Finding deals for you…" });
-    const st = { sort: "best", atl: false, great: false, wish: false, cut: 0, max: "any", shop: "all", page: 0 };
-    let data = null, tries = 0;
-    const PER = 24;
-    const sorters = { best: null, cut: (a, b) => b.cut - a.cut, price: (a, b) => a.price - b.price };
-    const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label }); b.addEventListener("click", fn); return b; };
-    function draw() {
-      const cur = data.currency;
-      const shops = [...new Set(data.deals.map(d => d.shop))].sort();
-      const maxN = st.max === "any" ? Infinity : Number(st.max);
-      let list = data.deals.filter(d => d.cut >= st.cut && d.price <= maxN && (!st.atl || d.atl) && (!st.great || (d.match || 0) >= 80) && (!st.wish || d.wishlist) && (st.shop === "all" || d.shop === st.shop));
-      if (sorters[st.sort]) list = [...list].sort(sorters[st.sort]);
-      const pages = Math.max(1, Math.ceil(list.length / PER));
-      st.page = Math.min(st.page, pages - 1);
-      const sort = select([["best", "Best for you"], ["cut", "Biggest discount"], ["price", "Lowest price"]], st.sort);
-      sort.addEventListener("change", () => { st.sort = sort.value; st.page = 0; draw(); });
-      const maxSel = select([["any", "Any"], ["5", "Under 5"], ["10", "Under 10"], ["20", "Under 20"], ["40", "Under 40"]], st.max);
-      maxSel.addEventListener("change", () => { st.max = maxSel.value; st.page = 0; draw(); });
-      const set = (k, v) => () => { st[k] = v; st.page = 0; draw(); };
-      const card = d => h("a", { class: "fy-card", href: d.url && /^https:\/\//.test(d.url) ? d.url : "#/foryou", target: "_blank", rel: "noopener noreferrer" },
-        h("div", { class: "fy-match" + (d.match === null ? " none" : ""), "aria-label": d.match === null ? "No match score yet" : d.match + " percent match" }, h("b", { text: d.match === null ? "–" : String(d.match) }), h("small", { text: "MATCH" })),
-        steamArt(d.appid, "fy-art", 460, 215, d.id),
-        h("div", { class: "fy-info" },
-          h("strong", { class: "fy-title", text: d.title }),
-          h("span", { class: "muted small", text: d.shop + (d.atl ? " · all-time low" : "") + (d.wishlist ? " · on your wishlist" : "") }),
-          d.genres.length ? h("span", { class: "fy-genres", text: d.genres.join(" · ") }) : null),
-        h("div", { class: "fy-price" }, h("span", { class: "fy-cut", text: "-" + d.cut + "%" }), h("b", { text: money(d.price, cur) }), h("s", { text: money(d.regular, cur) })));
-      const prev = h("button", { class: "pg-btn wide", text: "‹ Prev", onclick: () => { st.page--; draw(); host.scrollIntoView({ block: "start" }); } }); prev.disabled = st.page === 0;
-      const next = h("button", { class: "pg-btn wide", text: "Next ›", onclick: () => { st.page++; draw(); host.scrollIntoView({ block: "start" }); } }); next.disabled = st.page >= pages - 1;
-      host.className = "";
-      host.replaceChildren(
-        !data.personalized ? h("div", { class: "notice" }, "These are the best current discounts. ", h("a", { href: "#/steam", text: "Sign in through Steam" }), " (or add wishlist games) and they will be ranked for you.") : null,
-        h("div", { class: "panel fy-filters" },
-          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Sort" }), sort,
-            chip("All-time low", st.atl, set("atl", !st.atl)), chip("Strong match 80+", st.great, set("great", !st.great)), chip("On wishlist", st.wish, set("wish", !st.wish))),
-          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Discount" }), ...[[0, "Any discount"], [25, "25%+"], [50, "50%+"], [75, "75%+"]].map(([n, t]) => chip(t, st.cut === n, set("cut", n))),
-            h("span", { class: "fy-lab", text: "Max price" }), maxSel),
-          shops.length > 1 ? h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Store" }), chip("All", st.shop === "all", set("shop", "all")), ...shops.slice(0, 12).map(x => chip(x, st.shop === x, set("shop", x)))) : null),
-        h("p", { class: "muted small", text: `${list.length} deals matched · ranked for you` + (data.pending ? ` · still reading genres for ${data.pending} games` : "") }),
-        list.length ? h("div", { class: "fy-grid" }, list.slice(st.page * PER, (st.page + 1) * PER).map(card)) : h("div", { class: "empty", text: "No deals match those filters." }),
-        h("div", { class: "lib-pager" }, h("div", { class: "pg-nav" }, prev, h("span", { class: "muted small", text: `Page ${st.page + 1} of ${pages}` }), next)));
-    }
-    async function load() {
-      try {
-        data = await api("/api/foryou");
-        draw();
-        if (data.pending && tries++ < 40) setTimeout(() => { if (host.isConnected) load(); }, 3500);
-      } catch (e) { host.className = ""; host.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    app.replaceChildren(pageHead("For you", "Live discounts ranked by how well each game fits your taste and wishlist. Games you already own are left out."), host);
-    load();
-  }
+  async function forYouView() { return window.ForYouUI.view({ api, app, h, money, pageHead, select, steamArt }); }
 
   // ---------- value checker ----------
-  function valueView() {
-    const titles = h("textarea", { placeholder: "Hades; Celeste; Hollow Knight\n(or one per line)", maxlength: "20000" });
-    const file = h("input", { type: "file", accept: ".csv,.json,.txt,.md" });
-    const paid = h("input", { type: "number", min: "0", max: "1000000", step: "0.01", placeholder: "Total you paid (optional)" });
-    const region = select(state.cfg.regions.map(r => [r.value, r.name]), state.me.settings.region);
-    const stores = select([["all", "All tracked stores, including key sites"], ["major", "Major stores only"]], state.me.settings.stores);
-    const sort = select([["input", "As entered"], ["name", "Name (A-Z)"], ["msrp", "MSRP (high to low)"], ["cheapest", "Cheapest price (high to low)"]], "input");
-    const results = h("div");
-
-    const run = h("button", { class: "btn green", text: "Check value", onclick: () => busy(run, async () => {
-      let upload = null;
-      const f = file.files[0];
-      if (f) {
-        if (f.size > state.cfg.maxUploadChars) throw new Error("That file is too large (200 KB max).");
-        upload = { name: f.name, text: await f.text() };
-      }
-      const data = await api("/api/value", {
-        titles: titles.value, file: upload, paid: paid.value, region: region.value, stores: stores.value, sort: sort.value
-      });
-      renderValue(results, data);
-    }) });
-
-    app.replaceChildren(
-      pageHead("Value Checker", "Price a game library: MSRP, Steam, cheapest right now, and what you saved."),
-      h("div", { class: "panel" },
-        field("Game titles", titles),
-        h("div", { class: "row" }, field("Or upload a FanaticalGrabber export (.csv .json .txt .md)", file), field("Total paid", paid)),
-        h("div", { class: "row" }, field("Region", region), field("Stores for “cheapest”", stores), field("Sort", sort)),
-        h("p", { class: "muted small", text: "Never paste game keys. Anything that looks like a key is ignored." }),
-        run),
-      fanaticalCard(), voteCard(),
-      results);
-  }
+  function valueView() { return window.ValueUI.view({ api, app, busy, fanaticalCard, field, h, pageHead, renderValue, select, state, voteCard }); }
 
   function renderValue(into, d) {
     const t = d.totals, cur = t.currency;
@@ -1304,15 +1220,7 @@ window.SVC_SITE = envIn => {
     return h("div", { class: "pf-slider" }, count, h("div", { class: "pf-slide-wrap" }, prev, track, next));
   }
 
-  async function publicProfileView(slug) {
-    const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(holder);
-    try {
-      const d = await api("/api/public/profile?slug=" + encodeURIComponent(slug));
-      document.title = d.profile.name + " on Steam Value Checker";
-      app.replaceChildren(renderProfile(d.profile, { canMark: d.canMark, signedIn: d.signedIn, region: d.region, social: d.social }));
-    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-  }
+  async function publicProfileView(slug) { return window.PublicProfileUI.view({ api, app, h, renderProfile }, slug); }
 
   /** The editor: every choice on the left, the real page on the right, updated as you go. */
   async function profileEditorView() { return window.ProfileEditorUI.view({ PAGE_PRESET_CSS, PF_TITLE, PF_VIS, api, app, busy, field, h, pageHead, publicPagePanel, renderProfile, route, select, toast }); }
@@ -1394,51 +1302,9 @@ window.SVC_SITE = envIn => {
   }
 
   // One page per game: price, history and verdict, bundles, free offers and who in the server is watching it.
-  async function gameView(id) {
-    const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(holder);
-    try {
-      const g = await api("/api/game?id=" + encodeURIComponent(id));
-      const cur = g.currency;
-      const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : "");
-      const good = g.advice && (g.advice.verdict === "buy" || g.advice.verdict === "lean_buy");
-      const add = h("button", { class: "btn green", text: "Add to my wishlist" });
-      add.addEventListener("click", () => busy(add, async () => { await api("/api/wishlist/add", { title: g.title }); toast("Added.", "ok"); add.hidden = true; }));
-      holder.className = "";
-      holder.replaceChildren(
-        pageHead(g.title, g.release ? "Released " + new Date(g.release).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""),
-        g.appid ? steamArt(g.appid, "next-art") : "",
-        h("div", { class: "game-actions" }, g.url ? ext(g.url, "View the best deal", "btn green") : "", g.onWishlist || g.inLibrary ? h("span", { class: "chip ok", text: g.inLibrary ? "In your library" : "On your wishlist" }) : add),
-        h("div", { class: "grid four" },
-          tile("Best price now", g.price != null ? money(g.price, cur) : "–", g.shop || ""),
-          tile("Steam", g.steam != null ? money(g.steam, cur) : "–", g.msrp ? "Regular " + money(g.msrp, cur) : ""),
-          tile("All-time low", g.atl != null ? money(g.atl, cur) : "–"),
-          tile("1-year low", g.low1y != null ? money(g.low1y, cur) : "–", g.low3m != null ? "3-month " + money(g.low3m, cur) : "")),
-        g.advice ? h("div", { class: "notice " + (good ? "ok" : "warn") }, h("b", { text: (good ? "" : "") + "Buy now or wait? " + g.advice.label + ". " }), g.advice.reasons.join(" ")) : "",
-        g.points.length ? h("div", { class: "panel" }, h("h3", { text: "Price over the last year" }), lineChart([{ name: "Price", cls: "s0", points: g.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + g.title })) : "",
-        g.free.length ? h("div", { class: "panel" }, h("h3", { text: "Free right now" }), g.free.map(f => h("div", { class: "game-line" }, h("span", {}, h("b", { text: f.title }), " on " + f.shop), f.url ? ext(f.url, "Claim", "btn green small") : ""))) : "",
-        g.bundles.length ? h("div", { class: "panel" }, h("h3", { text: "In a bundle" }), g.bundles.map(b => h("div", { class: "game-line" }, h("span", {}, h("b", { text: b.title }), ` (${b.shop || "bundle"}) from ${money(b.price, b.currency || cur)}`), b.url ? ext(b.url, "Open", "btn gray small") : ""))) : "",
-        g.watchers ? h("p", { class: "muted", text: `${g.watchers} member${g.watchers === 1 ? "" : "s"} of your server ${g.watchers === 1 ? "is" : "are"} watching this (only people who opted in with /alerts share).` }) : "");
-    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-  }
+  async function gameView(id) { return window.GameUI.view({ api, app, busy, ext, h, lineChart, money, pageHead, steamArt, toast }, id); }
 
-  async function publicWishlistView(slug) {
-    const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(holder);
-    try {
-      const d = await api("/api/public/wishlist?slug=" + encodeURIComponent(slug));
-      const money2 = (n, c) => (n === null || n === undefined ? "-" : new Intl.NumberFormat(undefined, { style: "currency", currency: c || "USD" }).format(n));
-      holder.className = "";
-      if (/^#[0-9a-f]{6}$/i.test(d.accent || "")) { holder.style.setProperty("--accent", d.accent); holder.style.setProperty("--accent-2", d.accent); }
-      holder.replaceChildren(pageHead(d.slug + "'s wishlist", `${d.games.length} game${d.games.length === 1 ? "" : "s"} with today's best prices. Thinking of a gift?`),
-        d.games.length ? h("div", { class: "free-grid" }, d.games.map(g => h("div", { class: "free-card" },
-          g.art ? h("img", { src: g.art, alt: "", loading: "lazy" }) : h("div", { class: "free-noart", text: "" }),
-          h("div", { class: "free-info" }, h("strong", { text: g.title }),
-            h("span", { class: "muted small", text: (g.discount > 0 ? `${g.discount}% off • ` : "") + (g.shop || "") }),
-            h("b", { text: money2(g.price, g.currency) }),
-            g.url && ext(g.url, "View deal", "btn green small"), soonControl(g, d.slug, d.canMark), giftButton(g, d.slug, { signedIn: d.signedIn, owner: d.owner, open: d.giftsOpen !== false, region: d.region }))))) : h("div", { class: "empty", text: "Nothing on this list yet." }));
-    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-  }
+  async function publicWishlistView(slug) { return window.PublicWishlistUI.view({ api, app, ext, giftButton, h, pageHead, soonControl }, slug); }
 
   async function loadFree(panel) {
     try {
@@ -1472,17 +1338,7 @@ window.SVC_SITE = envIn => {
   }
 
   // Free games: everything free to claim right now, with the store filter and sort, and the two settings that matter here.
-  async function freeView() {
-    const panel = h("div", { class: "panel" }, h("h3", { text: "Free right now" }), h("p", { class: "muted", text: "Loading…" }));
-    const set = state.me.settings;
-    const sw = (key, label, hint) => { const c = h("input", { type: "checkbox", checked: key === "free_dlc" ? set.free_dlc !== false : Boolean(set[key]) });
-      c.addEventListener("change", async () => { try { const r = await api("/api/settings", { [key]: c.checked }); state.me.settings = r.settings; toast("Saved.", "ok"); if (key === "free_dlc") loadFree(panel); } catch (e) { toast(e.message, "error"); c.checked = !c.checked; } });
-      return h("label", { class: "check" }, c, " ", h("b", { text: label }), " ", h("span", { class: "muted small", text: hint })); };
-    app.replaceChildren(pageHead("Free games", "Everything that is free to claim right now on Steam, Epic, GOG and more. Claiming happens on the store's site."),
-      h("div", { class: "panel" }, sw("free", "Tell me when a game goes free", "(sent by DM or to your alert channel)"), h("p"), sw("free_dlc", "Show free DLC", "(also hides it from /games freegames)")),
-      soonPanel(), panel);
-    loadFree(panel);
-  }
+  async function freeView() { return window.FreeUI.view({ api, app, h, loadFree, pageHead, soonPanel, state, toast }); }
 
 
   // ---------- playtests ----------
@@ -1493,128 +1349,16 @@ window.SVC_SITE = envIn => {
   async function playtestsView() { return window.PlaytestsUI.view({ PLAYTEST_POLL_MS, api, app, currentView, ext, h, pageHead, state, toast }); }
 
   /** The server's game of the month: the pick, who is playing or finished, and (for managers) the controls. */
-  async function clubView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const guild = serverPicker(servers), out = h("div");
-    app.replaceChildren(pageHead("Game club", "One game a month for the whole server. Members who share their library (/alerts share) show up with their hours and achievements. In Discord: /server club."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null), out);
-    async function load() {
-      if (!servers.length) { out.replaceChildren(h("p", { class: "muted", text: "Invite the bot to a server first." })); return; }
-      let d;
-      try { d = await api("/api/club?guild=" + encodeURIComponent(guild.value)); } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
-      const post = body => api("/api/club", { guild_id: guild.value, ...body });
-      const parts = [];
-      if (d.club) {
-        const row = r => h("li", {}, h("b", { text: r.name }), ` ${r.hours}h`, r.ach_total ? `, ${r.ach_done}/${r.ach_total} achievements` : "", r.finished ? " ✅" : r.started ? " ▶️" : " ⏳ not started");
-        parts.push(h("div", { class: "panel" }, h("h3", { text: d.club.title }), h("p", { class: "muted", text: d.club.month + " pick. " + d.owners.length + " of " + d.sharing + " sharing members own it." }),
-          d.club.appid ? ext("https://store.steampowered.com/app/" + d.club.appid + "/", "Steam page", "btn gray small") : null,
-          d.owners.length ? h("ul", { class: "plain" }, d.owners.map(row)) : h("p", { class: "muted", text: "Nobody who shares their library owns it yet." })));
-      } else parts.push(h("div", { class: "empty", text: "No pick yet." + (d.canManage ? " Set one below." : " A server manager can set one.") }));
-      if (d.canManage) {
-        const title = h("input", { type: "text", maxlength: "100", placeholder: "Game title", value: d.club ? d.club.title : "" });
-        const chSel = select([["", "Not set"], ...d.channels.map(c => [c.id, "#" + c.name])], d.channel || "");
-        const run = (btn, fn, msg) => busy(btn, async () => { await fn(); toast(msg, "ok"); load(); });
-        const pick = h("button", { class: "btn blue", type: "button", text: "Set this month's pick" }), sv = h("button", { class: "btn gray small", type: "button", text: "Save channel" }), off = h("button", { class: "btn red small", type: "button", text: "Turn the club off" });
-        pick.addEventListener("click", () => run(pick, () => post({ action: "pick", title: title.value }), "Pick saved."));
-        sv.addEventListener("click", () => run(sv, () => post({ action: "channel", channel_id: chSel.value }), "Saved."));
-        off.addEventListener("click", () => run(off, () => post({ action: "off" }), "Game club is off."));
-        parts.push(h("div", { class: "panel" }, h("h3", { text: "Manage (Manage Server)" }), field("Game of the month", title), h("div", { class: "row" }, pick),
-          field("Weekly card channel (posted once a week, and when the month ends)", chSel), h("div", { class: "row" }, sv, off)));
-      }
-      out.replaceChildren(...parts);
-    }
-    guild.addEventListener("change", load); await load();
-  }
+  async function clubView() { return window.ClubUI.view({ api, app, busy, ext, field, h, pageHead, select, serverPicker, state, toast }); }
 
   // Secret Santa for a server: sign up, draw, and see who you're buying for.
-  async function santaView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const guild = serverPicker(servers), out = h("div");
-    app.replaceChildren(pageHead("Secret Santa", "Draw names in your server and get a private message with who you're buying for and what's on their wishlist inside the budget. Joining shares your wishlist with only whoever draws you. In Discord: /server santa."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null), out);
-    async function load() {
-      if (!servers.length) { out.replaceChildren(h("p", { class: "muted", text: "Invite the bot to a server first." })); return; }
-      let d;
-      try { d = await api("/api/santa?guild=" + encodeURIComponent(guild.value)); } catch (e) { out.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
-      const post = body => api("/api/santa", { guild_id: guild.value, ...body });
-      const run = (btn, fn, msg) => busy(btn, async () => { const r = await fn(); toast(typeof msg === "function" ? msg(r) : msg, "ok"); load(); });
-      const parts = [];
-      const ev = d.event;
-      if (ev && ev.status !== "ended") {
-        const money = n => { try { return new Intl.NumberFormat(undefined, { style: "currency", currency: ev.currency }).format(n); } catch { return n + " " + ev.currency; } };
-        const mine = h("div");
-        const actions = [];
-        if (ev.status === "open") {
-          const b = h("button", { class: d.joined ? "btn gray" : "btn green", type: "button", text: d.joined ? "Leave" : "Join" });
-          b.addEventListener("click", () => run(b, () => post({ action: d.joined ? "leave" : "join" }), d.joined ? "You left." : "You're in."));
-          actions.push(b);
-        } else if (d.drawn) {
-          const b = h("button", { class: "btn blue", type: "button", text: "Who do I have?" });
-          b.addEventListener("click", () => busy(b, async () => { const r = await post({ action: "ideas" }); mine.replaceChildren(h("div", { class: "panel" }, h("h3", { text: r.title }), h("p", { text: r.text, class: "pre" }))); }));
-          actions.push(b);
-        }
-        parts.push(h("div", { class: "panel" }, h("h3", { text: "🎅 " + ev.title }), h("p", { class: "muted", text: `Budget ${money(ev.budget)} · ${ev.status === "open" ? "open for sign-ups" : "names drawn"} · ${d.people.length} in` }),
-          d.people.length ? h("ul", { class: "plain" }, d.people.map(p => h("li", { text: p.name }))) : h("p", { class: "muted", text: "Nobody yet." }),
-          h("div", { class: "row" }, ...actions), mine));
-        if (d.canManage) {
-          const draw = h("button", { class: "btn blue", type: "button", text: "Draw names", disabled: ev.status !== "open" }), reveal = h("button", { class: "btn red small", type: "button", text: "Reveal and finish" });
-          draw.addEventListener("click", () => run(draw, () => post({ action: "draw" }), r => `Drawn. ${r.count} people messaged${r.failed ? `, ${r.failed} with closed DMs (they can use /server santa ideas)` : ""}.`));
-          reveal.addEventListener("click", () => { if (confirm("Show who had who and finish this Secret Santa?")) run(reveal, () => post({ action: "reveal" }), "Finished."); });
-          parts.push(h("div", { class: "panel" }, h("h3", { text: "Manage (Manage Server)" }), h("p", { class: "muted small", text: "Drawing needs at least three people. Everyone gets a private message with their giftee and ideas." }), h("div", { class: "row" }, draw, reveal)));
-        }
-      } else if (d.canManage) {
-        const title = h("input", { type: "text", maxlength: "80", placeholder: "Secret Santa" });
-        const budget = h("input", { type: "number", min: "1", max: "1000", step: "1", value: "20", class: "short-num", "aria-label": "Budget" });
-        const chSel = select([["", "Don't post an announcement"], ...d.channels.map(c => [c.id, "#" + c.name])], "");
-        const go = h("button", { class: "btn green", type: "button", text: "Start it" });
-        go.addEventListener("click", () => run(go, () => post({ action: "create", title: title.value, budget: Number(budget.value), channel_id: chSel.value }), "Secret Santa started."));
-        parts.push(h("div", { class: "panel" }, h("h3", { text: "Start a Secret Santa" }), field("Name", title), field("Budget per gift, in your store's currency", budget), field("Announce in", chSel), h("div", { class: "row" }, go)));
-      } else parts.push(h("div", { class: "empty", text: "No Secret Santa here yet. A server manager can start one." }));
-      out.replaceChildren(...parts);
-    }
-    guild.addEventListener("change", load); await load();
-  }
+  async function santaView() { return window.SantaUI.view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
 
   async function triviaView() { return window.TriviaUI.view({ api, app, busy, field, h, pageHead, select, serverPicker, state, toast }); }
 
   const NOWPLAYING_POLL_MS = 60_000;
   /** Who in a server is in a game right now. Reads Steam through the bot, so it stays current without a refresh. */
-  async function nowPlayingView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const guild = serverPicker(servers), out = h("div"), stamp = h("span", { class: "muted small" });
-    let timer = null, loadedAt = 0;
-    const alive = () => document.body.contains(out) && currentView() === "nowplaying";
-    const on = Boolean(state.me.settings && state.me.settings.nowplaying);
-    async function load() {
-      if (!servers.length) { out.replaceChildren(h("p", { class: "muted", text: "Invite the bot to a server first." })); return; }
-      try {
-        const d = await api("/api/nowplaying?guild=" + encodeURIComponent(guild.value));
-        if (!alive()) return;
-        loadedAt = Date.now();
-        if (!d.enabled) { out.replaceChildren(h("div", { class: "notice warn", text: "This bot has no Steam API key set, so it cannot see what people are playing." })); return; }
-        out.replaceChildren(d.games.length
-          ? h("div", { class: "grid three" }, d.games.map(g => h("div", { class: "panel np-card" },
-              h("img", { src: "/art/header/" + g.appid + ".jpg", alt: "", loading: "lazy" }),
-              h("h3", { text: g.game }), h("p", { class: "muted", text: g.players.map(p => p.name).join(", ") }),
-              g.players.length >= 2 ? h("span", { class: "chip ok", text: g.players.length + " playing together" }) : null,
-              ext("https://store.steampowered.com/app/" + g.appid + "/", "Steam page", "btn gray small"))))
-          : h("div", { class: "empty", text: d.watching ? "Nobody who shares their activity is in a game right now." : "Nobody in this server has turned this on yet." }),
-          h("p", { class: "muted small", text: d.watching + (d.watching === 1 ? " member shares" : " members share") + " what they play." }));
-      } catch (e) { if (!loadedAt) out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    const toggle = h("button", { class: "btn " + (on ? "gray" : "green"), type: "button", text: on ? "Leave the board" : "Show me on the board" });
-    toggle.addEventListener("click", () => busy(toggle, async () => {
-      const r = await api("/api/settings", { nowplaying: !state.me.settings.nowplaying });
-      state.me.settings = r.settings; toast(r.settings.nowplaying ? "You are on the board. Link Steam, turn on sharing and make Game details public so it can see you." : "You are off the board.", "ok"); nowPlayingView();
-    }));
-    guild.addEventListener("change", load);
-    app.replaceChildren(pageHead("Now playing", "Who in your server is in a game right now. Members choose to show up here, and two or more in the same game can trigger a squad-up post."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, h("div", { class: "row" }, toggle, stamp)), out);
-    out.replaceChildren(h("p", { class: "muted", text: "Loading…" }));
-    await load();
-    clearInterval(timer);
-    timer = setInterval(() => { if (!alive()) return clearInterval(timer); stamp.textContent = loadedAt ? "Refreshes by itself every minute." : ""; if (!document.hidden) load(); }, NOWPLAYING_POLL_MS);
-  }
+  async function nowPlayingView() { return window.NowPlayingUI.view({ NOWPLAYING_POLL_MS, api, app, busy, currentView, ext, field, h, pageHead, serverPicker, state, toast }); }
 
   // ---------- game codes ----------
   /** Giveaway and code news the bot spotted, plus drops added in the member's own servers. Fills `into`. */
@@ -2162,58 +1906,7 @@ window.SVC_SITE = envIn => {
   }
 
   // The page the extension's "Link now" button opens. One job: get the extension linked, with nothing else on the page.
-  function connectView() {
-    const box = h("div", { class: "panel" });
-    app.replaceChildren(pageHead("Link FanaticalGrabber", "Connect the extension to your account so prices, playtests and your library show up while you browse."), box);
-    const flag = on => { try { on ? localStorage.setItem("svc_connect", "1") : localStorage.removeItem("svc_connect"); } catch { /* storage blocked */ } };
-    if (!state.me) {
-      flag(true);
-      box.replaceChildren(h("p", {}, "Sign in first, then this page links the extension for you automatically."),
-        h("p", {}, steamLoginBtn("Sign in through Steam", "btn steam big"), " ", h("a", { class: "btn blue big", href: "/auth/login", text: "Sign in with Discord" })));
-      return;
-    }
-    flag(false);
-    const status = h("p", { class: "muted", text: "Looking for the extension…" });
-    const code = h("div"), retry = h("button", { class: "btn gray", text: "Try again" });
-    box.replaceChildren(status, h("p", {}, retry), code);
-    const ask = (type, extra = {}) => new Promise(res => {
-      const on = e => { if (fromExt(e) && e.data && e.data.svc === "ext" && (e.data.type === (type === "ping" ? "pong" : "connected"))) { window.removeEventListener("message", on); res(e.data); } };
-      window.addEventListener("message", on); extSend({ svc: "page", type, ...extra });
-      setTimeout(() => { window.removeEventListener("message", on); res(null); }, 1500);
-    });
-    async function manual() {
-      try {
-        const { token } = await api("/api/grabber/token", { action: "new" });
-        const input = h("input", { type: "text", readonly: "", value: token, style: "width:100%;font-family:monospace" });
-        input.addEventListener("focus", () => input.select());
-        const copy = h("button", { class: "btn blue small", text: "Copy code" });
-        copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(token); copy.textContent = "Copied"; } catch { input.select(); } });
-        code.replaceChildren(h("h4", { text: "Or paste a code" }), h("p", { class: "muted small", text: "Click the FanaticalGrabber icon in your toolbar (the puzzle piece menu if it is hidden), open \"Have a code? Paste it\", and paste this. It is shown once, and anyone with it can add games to your library." }), input, h("p", {}, copy));
-      } catch (e) { code.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    const success = (ver, again) => {
-      const feats = ["Prices, all-time lows and your library status on Steam pages", "Playtest and demo badges", "How many people in your server own a game", "One-click wishlist and stream spotlight", "Free games to keep, with optional auto-claim", "Price and region checks on Fanatical"];
-      status.className = "";
-      status.replaceChildren(h("div", { class: "notice" }, h("b", { text: again ? "FanaticalGrabber is already connected. " : "Connected successfully. " }), `FanaticalGrabber${ver ? " " + String(ver).slice(0, 12) : ""} is linked to your account${state.me && state.me.name ? ", " + state.me.name : ""}. Only game names are ever sent, never your keys.`),
-        h("h4", { text: "Now switched on" }), h("ul", {}, feats.map(f => h("li", { text: f }))),
-        h("p", {}, h("a", { class: "btn steam", href: "https://store.steampowered.com", target: "_blank", rel: "noopener noreferrer", text: "Open the Steam store" }), " ", h("a", { class: "btn blue", href: "#/home", text: "Go to my dashboard" })),
-        again ? h("p", { class: "muted small", text: "Having trouble? Press Try again to make a fresh link." }) : h("p", { class: "muted small", text: "You can close this tab. The extension's toolbar icon now shows your free game and alert counts." }));
-    };
-    async function go(force) {
-      status.className = "muted"; status.textContent = "Looking for the extension…"; code.replaceChildren();
-      const here = await ask("ping");
-      if (!here) { status.className = ""; status.replaceChildren(h("div", { class: "notice warn", text: "I can't see the extension on this page. Make sure FanaticalGrabber is installed and up to date, then reload. If it keeps happening, paste a code instead." })); manual(); return; }
-      if (here.linked && force !== true) { try { const { link } = await api("/api/grabber"); if (link) { success(here.version, true); return; } } catch { /* fall through and link again */ } }
-      try {
-        const { token } = await api("/api/grabber/token", { action: "new" });
-        const done = await ask("connect", { token });
-        if (done && done.ok) { success(here.version, false); return; }
-      } catch (e) { status.replaceChildren(h("div", { class: "notice warn", text: e.message })); return; }
-      status.replaceChildren(h("div", { class: "notice warn", text: "The extension did not accept the link. Update it, then try again, or paste a code instead." })); manual();
-    }
-    retry.addEventListener("click", () => go(true));
-    go();
-  }
+  function connectView() { return window.ConnectUI.view({ api, app, extSend, fromExt, h, pageHead, state, steamLoginBtn }); }
 
   async function libraryView() { return window.LibraryUI.view({ api, app, badgesPanel, bundlesPanel, busy, challengePanel, extSend, field, fromExt, h, hoursText, lineChart, money, pageHead, select, spendPanel, state, steamArt, toast }); }
 
@@ -2337,108 +2030,13 @@ window.SVC_SITE = envIn => {
   async function giveawaysView() { return window.GiveawaysUI.view({ api, app, busy, field, giveawayPreview, h, pageHead, pendingPanel, prizeButtons, roleMulti, select, serverPicker, state, stepsEditor, toast }); }
 
   // ---------- my data ----------
-  function myDataView() {
-    const confirm = h("input", { type: "text", placeholder: "Type DELETE", autocomplete: "off" });
-    const del = h("button", { class: "btn red", text: "Delete everything", onclick: () => busy(del, async () => {
-      await api("/api/mydata/delete", { confirm: confirm.value });
-      toast("Deleted. The bot no longer stores anything about you.", "ok");
-      state.me.games = 0;
-      boot();
-    }) });
-    app.replaceChildren(
-      pageHead("My Data", "Everything the bot stores about you, and control over it."),
-      h("div", { class: "panel" }, h("h3", { text: "Stored" }),
-        h("p", { text: "Your Discord ID, your wishlist and alert rules, giveaway entries, your library and what you paid, your settings (including quiet hours and time zone), your last 90 days of alert history, the server you last used, and your public Steam ID if you imported a wishlist. Games you suggest or vote for on a server list are stored with that server. The Value Checker stores nothing." }),
-        h("a", { class: "btn blue", href: "/api/mydata/download", text: "Download my data (JSON)" })),
-      h("div", { class: "panel" }, h("h3", { text: "Delete" }),
-        h("p", { text: "This deletes your wishlist, library, alert history and settings, your Steam profile ID, your votes and the games you added to server lists. It cannot be undone. Backups made before you delete are removed as they rotate out (7 days)." }),
-        field("Confirm", confirm), h("p"), del));
-  }
+  function myDataView() { return window.MyDataUI.view({ api, app, boot, busy, field, h, pageHead, state, toast }); }
 
   // ---------- help ----------
   // The About page: the same numbers as the /bot about command in Discord.
-  let statusTimer = 0;
-  async function statusView() {
-    clearInterval(statusTimer);
-    const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(holder);
-    const LABEL = { operational: "Operational", degraded: "Degraded", down: "Down", unknown: "Checking" };
-    const HEAD = { operational: "All systems operational", degraded: "Some systems are degraded", down: "Major outage" };
-    const n = v => (v === null || v === undefined ? "-" : Number(v).toLocaleString());
-    const ago = ms => { const s = Math.max(0, Math.round((Date.now() - ms) / 1000)); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
-    async function load(manual) {
-      try {
-        const d = await api("/api/status");
-        const tm = d.telemetry, st = d.stats;
-        const refresh = h("button", { class: "btn gray small", text: "Refresh now", onclick: () => busy(refresh, () => load(true)) });
-        const tile = (icon, k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
-        const row = (k, v) => h("div", { class: "kv" }, h("span", { class: "muted", text: k }), h("b", { text: v === null || v === undefined ? "-" : String(v) }));
-        const up = d.uptime;
-        holder.className = "status-page";
-        holder.replaceChildren(...[
-          h("div", { class: "st-banner " + d.overall },
-            h("div", {}, h("span", { class: "st-dot " + d.overall }), h("h1", { class: "st-head", text: HEAD[d.overall] || "Checking…" })),
-            h("div", { class: "st-meta" }, h("span", { class: "muted small", text: d.checkedAt ? "Last checked " + ago(d.checkedAt) : "Starting up…" }), refresh)),
-          st && h("div", { class: "grid four" },
-            tile("", "Servers", n(st.servers)), tile("", "Members served", n(st.members)), tile("", "Games watched", n(st.gamesWatched)),
-            tile("", "Uptime, 90 days", up.pct90 === null ? "-" : up.pct90 + "%", up.pct30 === null ? null : `${up.pct30}% over the last 30 days`)),
-          h("div", { class: "panel" }, h("h3", { text: "Services" }),
-            h("div", { class: "st-list" }, d.components.map(c => h("div", { class: "st-row" },
-              h("div", {}, h("b", { text: c.name }), h("div", { class: "muted small", text: c.detail ? `${c.desc} • ${c.detail}` : c.desc })),
-              h("span", { class: "chip " + (c.state === "operational" ? "ok" : c.state === "unknown" ? "dim" : "warn"), text: LABEL[c.state] || c.state }))))),
-          h("div", { class: "panel" }, h("h3", { text: "Bot details" }),
-            h("div", { class: "grid three" },
-              h("div", {}, row("Version", tm.version), row("Node.js", tm.node), row("discord.js", tm.discordjs)),
-              h("div", {}, row("Gateway latency", tm.pingMs === null ? null : tm.pingMs + " ms"), row("Memory (heap)", tm.heapMb + " MB"), row("Memory (total)", tm.rssMb + " MB")),
-              h("div", {}, row("Process uptime", tm.uptime), row("Shards", "1 (standalone)"), row("Region", tm.region || "-")))),
-          h("div", { class: "panel" }, h("h3", { text: "Uptime, past 90 days" }),
-            h("div", { class: "st-bars" }, up.days.map(x => h("span", { class: "st-bar " + (x.pct === null ? "none" : x.pct >= 99.9 ? "good" : x.pct >= 95 ? "warn" : "bad"), title: `${x.day}: ${x.pct === null ? "no data" : x.pct + "%"}` }))),
-            h("div", { class: "st-axis muted small" }, h("span", { text: "90 days ago" }), h("span", { text: "Today" }))),
-          h("div", { class: "panel" }, h("h3", { text: "Recent incidents" }),
-            d.incidents.length ? h("div", { class: "st-list" }, d.incidents.map(e => h("div", { class: "st-row" },
-              h("div", {}, h("b", { text: (d.components.find(c => c.id === e.component) || { name: e.component === "bot" ? "Bot" : e.component }).name }), h("div", { class: "muted small", text: e.note || "" })),
-              h("div", { class: "st-when" }, h("span", { class: "chip " + (e.state === "operational" ? "ok" : "warn"), text: LABEL[e.state] || e.state }), h("span", { class: "muted small", text: new Date(e.at).toLocaleString() })))))
-              : h("div", { class: "empty", text: "No incidents recorded." })),
-          h("p", { class: "muted small", text: "Checked every minute. Time the bot was offline counts against uptime. History starts when status tracking was first turned on." })].filter(Boolean));
-      } catch (e) { if (manual || !holder.firstChild || holder.className !== "status-page") holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    await load();
-    statusTimer = setInterval(() => { if (currentView() !== "status") clearInterval(statusTimer); else load(); }, 30_000);
-  }
+  async function statusView() { return window.StatusUI.view({ api, app, busy, currentView, h }); }
 
-  async function aboutView() {
-    const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(holder);
-    try {
-      const x = await api("/api/about");
-      state.about = x.about; state.creator = x.creator; state.freeNow = x.freeNow ?? null;
-      const ab = x.about, c = x.creator;
-      const n = v => (v === null || v === undefined ? "-" : Number(v).toLocaleString());
-      const tile = (icon, k, v) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }));
-      holder.className = "about-page";
-      holder.replaceChildren(
-        // Drawn in the page rather than shown as a picture, so it stays sharp on any screen.
-        h("div", { class: "about-banner-live", role: "img", "aria-label": "Steam Value Checker: MSRP, sale price and cheapest price now" },
-          h("i", { class: "ab-ring r1", "aria-hidden": "true" }), h("i", { class: "ab-ring r2", "aria-hidden": "true" }),
-          h("img", { class: "ab-tag", src: "/tag.svg", alt: "", width: "108", height: "120" }),
-          h("div", { class: "ab-text" }, h("h1", { class: "ab-title", text: "Steam Value Checker" }), h("div", { class: "ab-sub", text: "MSRP, sale price and cheapest price now" }), h("div", { class: "ab-note", text: "Works with FanaticalGrabber exports" }))),
-        h("div", { class: "panel about" },
-          h("div", { class: "about-head" },
-            h("img", { class: "about-logo", src: "/logo.png", alt: "", width: "84", height: "84" }),
-            h("div", {}, h("h3", { text: "Steam Value Checker" }),
-              c && h("div", { class: "creator" }, h("img", { class: "creator-logo", src: "/creator.png", alt: "", width: "32", height: "32" }), "Created by ", ext(c.url, c.name)))),
-          md(state.cfg.about),
-          ab && h("p", { class: "muted small", text: "Online since " + new Date(ab.startedAt).toLocaleString() + " · v" + ab.version + " · Node " + String(ab.node).replace(/^v/, "") }),
-          ab ? h("div", { class: "grid four about-stats" },
-            tile("", "Uptime", ab.uptime), tile("", "Servers", n(ab.servers)), tile("", "Members reached", n(ab.members)), tile("", "Latency", ab.pingMs === null ? "-" : ab.pingMs + " ms"),
-            tile("", "Games watched", n(ab.gamesWatched)), tile("", "Alerts, last 24h", n(ab.alerts24h)), tile("", "Giveaways run", n(ab.giveaways)), tile("", "Keys redeemed", n(ab.redeemed)))
-            : h("p", { class: "muted", text: "Live numbers are not available right now." }),
-          h("div", { class: "rule inline" },
-            c && h("a", { class: "btn blue", href: safeHref(c.url), target: "_blank", rel: "noopener noreferrer", text: "Created by " + c.name }),
-            h("a", { class: "btn gray", href: safeHref(state.cfg.fanaticalUrl), target: "_blank", rel: "noopener noreferrer", text: "FanaticalGrabber" }),
-            h("a", { class: "btn gray", href: "/licenses.html", text: "Licenses" }))));
-    } catch (e) { holder.className = ""; holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-  }
+  async function aboutView() { return window.AboutUI.view({ api, app, ext, h, md, safeHref, state }); }
 
   /** Every command menu, as the bot shows it: hub, area, and how to type each command. Loaded from the bot's real command list. */
   function commandGuidePanel() {
@@ -2458,17 +2056,7 @@ window.SVC_SITE = envIn => {
     return panel;
   }
 
-  function helpView() {
-    app.replaceChildren(
-      pageHead("Help", "The dashboard does everything the Discord commands do."),
-      ...(state.cfg.supportUrl ? [h("div", { class: "panel support-panel" }, h("h3", { text: "Need a hand?" }),
-        h("p", { class: "muted", text: "Join the support server to ask questions, share ideas, report bugs and see new features as they land." }),
-        h("div", { class: "row" }, ext(state.cfg.supportUrl, "Join the support server", "btn blue big")))] : []),
-      h("div", { class: "panel" }, h("h3", { text: "Using the bot" }), md(state.cfg.help)),
-      commandGuidePanel(),
-      h("div", { class: "panel" }, h("h3", { text: "Privacy" }), md(state.cfg.privacy)),
-      fanaticalCard());
-  }
+  function helpView() { return window.HelpUI.view({ app, commandGuidePanel, ext, fanaticalCard, h, md, pageHead, state }); }
 
   // ---------- routing ----------
   // ---------- support tickets ----------
@@ -2523,12 +2111,7 @@ window.SVC_SITE = envIn => {
     try { await load(); } catch (e) { box.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
   }
 
-  async function requestsView() {
-    const box = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Feature requests", "Suggest something for the bot, vote on ideas, and see what's planned or being built."), box);
-    await requestList(box);
-    box.className = "";
-  }
+  async function requestsView() { return window.RequestsUI.view({ app, h, pageHead, requestList }); }
 
   // The same words as the Support page on the shop site.
   async function tipView() { return window.TipUI.view({ api, app, busy, ext, h, pageHead, routeText, select, state, toast }); }
@@ -2642,40 +2225,7 @@ window.SVC_SITE = envIn => {
       h("span", {}, h("strong", { text: n.title }), h("span", { class: "muted", text: `${when}${n.body ? " · " + plainDiscord(n.body).slice(0, 160) : ""}` })));
   }
 
-  async function notificationsView() {
-    const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Notifications", "A copy of every alert the bot sends you, so a missed DM is never lost. Muted kinds are kept here but not sent to Discord (change that in Alert settings)."), holder);
-    try {
-      const d = await api("/api/notifications");
-      const prizes = (await api("/api/claims").catch(() => ({ prizes: [] }))).prizes;
-      holder.className = "";
-      holder.replaceChildren(...[
-        prizes.length ? h("div", { class: "panel" }, h("h3", { text: "Your prizes" }),
-          h("p", { class: "muted small", text: "Press Claim prize on the winners message in Discord. Keys are never shown here." }),
-          ...prizes.map(p => h("div", { class: "kv" }, h("span", {}, h("b", { text: p.label + " " }), h("span", { class: "muted", text: `${p.title} · ${PRIZE_STATUS[p.status] || p.status}${p.status === "assigned" && p.deadline ? " · claim by " + new Date(p.deadline).toLocaleString() : ""}` })),
-            p.link ? ext(p.link, "Open in Discord") : null))) : null,
-        h("p", { class: "muted small" }, "Choose what is sent to Discord in ", h("a", { href: "#/alerts", text: "Alert settings" }), "."),
-        (() => {
-          // Filter what is kept here by kind of alert and by words in the title.
-          const KIND = { alert: "Sales", sale: "Sales", bundle: "Bundles", free: "Free games", news: "News", digest: "Digest", release: "Releases", codes: "Codes", promo: "Promos", friend: "Friends" };
-          const kinds = [...new Set(d.items.map(n => n.type).filter(Boolean))];
-          let kind = "", q = "";
-          const list = h("div", { class: "cards" });
-          const paint = () => {
-            const rows = d.items.filter(n => (!kind || n.type === kind) && (!q || (String(n.title) + " " + String(n.body || "")).toLowerCase().includes(q)));
-            list.replaceChildren(...(rows.length ? rows.map(noteCard) : [h("p", { class: "muted", text: d.items.length ? "Nothing matches." : "Nothing yet. Alerts will show up here." })]));
-            chips.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.kind || "") === kind)));
-          };
-          const chip = (k, text) => { const b = h("button", { type: "button", class: "chip", "data-kind": k, text }); b.addEventListener("click", () => { kind = k; paint(); }); return b; };
-          const chips = h("div", { class: "row chips" }, chip("", "All"), ...kinds.map(k => chip(k, KIND[k] || k[0].toUpperCase() + k.slice(1))));
-          const search = h("input", { type: "search", placeholder: "Search your alerts", "aria-label": "Search your alerts" });
-          search.addEventListener("input", () => { q = search.value.trim().toLowerCase(); paint(); });
-          paint();
-          return h("div", { class: "panel" }, h("h3", { text: "Recent" }), d.items.length > 3 ? h("div", { class: "lookup-row" }, search) : null, d.items.length > 3 && kinds.length > 1 ? chips : null, list);
-        })()].filter(Boolean));
-      if (d.unread) { await api("/api/notifications/read", {}); state.me.unread = 0; renderChrome(); }
-    } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-  }
+  async function notificationsView() { return window.NotificationsUI.view({ PRIZE_STATUS, api, app, ext, h, noteCard, pageHead, renderChrome, state }); }
 
   // ---------- music ----------
   async function musicView() { return window.MusicUI.view({ api, app, busy, currentView, field, h, pageHead, select, state, toast }); }
@@ -2796,82 +2346,10 @@ window.SVC_SITE = envIn => {
   }
 
   // ---------- game night ----------
-  async function gameNightView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const out = h("div");
-    const guild = serverPicker(servers);
-    const people = h("div", { class: "chips" });
-    app.replaceChildren(pageHead("Game night", "Pick who is playing. See what everyone owns, who is missing a game, and what is worth buying together. Only members who opted in with /alerts share are listed."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, people, out));
-    // One game: who in the server owns it, to get a co-op group going.
-    const coopIn = h("input", { type: "text", maxlength: "100", placeholder: "A game's name", "aria-label": "Game name" }), coopOut = h("div");
-    const coopGo = h("button", { class: "btn blue small", type: "button", text: "Find owners" });
-    const coopRun = () => busy(coopGo, async () => {
-      coopOut.replaceChildren();
-      const d = await api(`/api/coop?guild=${encodeURIComponent(guild.value)}&game=${encodeURIComponent(coopIn.value)}`);
-      coopOut.replaceChildren(d.owners.length ? h("div", {}, h("p", { text: `${d.owners.length} ${d.owners.length === 1 ? "member owns" : "members own"} ${d.game}:` }), h("ul", {}, d.owners.map(o => h("li", { text: `${o.name} · ${o.hours ? o.hours + "h played" : "hasn't started"}` }))))
-        : h("p", { class: "muted", text: "Nobody here who shares their library owns it yet." }));
-    }).catch(e => toast(e.message, "error"));
-    coopGo.addEventListener("click", coopRun);
-    coopIn.addEventListener("keydown", e => { if (e.key === "Enter") coopRun(); });
-    app.append(h("div", { class: "panel" }, h("h3", { text: "Who owns a game?" }), h("div", { class: "row" }, coopIn, coopGo), coopOut));
-    const picked = new Set();
-    async function loadMembers() {
-      picked.clear(); out.replaceChildren(); people.replaceChildren(h("span", { class: "muted", text: "Loading…" }));
-      try {
-        const d = await api("/api/gamenight/members?guild=" + encodeURIComponent(guild.value));
-        if (!d.members.length) { people.replaceChildren(h("p", { class: "muted", text: "Nobody here has opted in yet. Members turn it on with /alerts share (or on the Alerts page)." })); return; }
-        people.replaceChildren(...d.members.map(m => { const b = h("button", { type: "button", class: "tab small", text: m.name }); b.addEventListener("click", () => { picked.has(m.id) ? picked.delete(m.id) : picked.add(m.id); b.classList.toggle("active", picked.has(m.id)); }); return b; }),
-          (() => { const go = h("button", { class: "btn green small", text: "Work it out" }); go.addEventListener("click", () => busy(go, async () => show(await api("/api/gamenight", { guild_id: guild.value, user_ids: [...picked] })))); return go; })());
-      } catch (e) { people.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    function show(r) {
-      const list = (title, rows) => h("div", { class: "subpanel" }, h("h4", { text: title }), rows.length ? h("ul", {}, ...rows.map(x => h("li", { text: x }))) : h("p", { class: "muted", text: "None." }));
-      out.replaceChildren(
-        list(`Everyone owns (${r.allOwn.length})`, r.allOwn),
-        list("Almost everyone owns", r.almost.map(a => `${a.title} (missing: ${a.missing.join(", ")})`)),
-        list("Worth buying together", r.buy.map(b => `${b.title}, wanted by ${b.wanters.join(", ")}${b.price !== null ? ` at ${b.price.toFixed(2)} ${b.currency}${b.shop ? " at " + b.shop : ""}` : ""}`)),
-        r.allOwn.length ? (() => { const b = h("button", { class: "btn gray small", text: "Pick a game for us" }); b.addEventListener("click", () => toast("Tonight: " + r.allOwn[Math.floor(Math.random() * r.allOwn.length)], "ok")); return b; })() : null);
-    }
-    guild.addEventListener("change", loadMembers);
-    loadMembers();
-  }
+  async function gameNightView() { return window.GameNightUI.view({ api, app, busy, field, h, pageHead, serverPicker, state, toast }); }
 
   // ---------- compare with a friend ----------
-  async function compareView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const out = h("div");
-    const guild = serverPicker(servers);
-    const people = h("div", { class: "chips" });
-    app.replaceChildren(pageHead("Compare", "Pick a friend to see what you both own and what only one of you has. Only members who opted in with /alerts share can be compared."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null, people), out);
-    async function loadMembers() {
-      out.replaceChildren(); people.replaceChildren(h("span", { class: "muted", text: "Loading…" }));
-      if (!servers.length) { people.replaceChildren(h("p", { class: "muted", text: "Invite the bot to a server first. Comparing works between members of the same server." })); return; }
-      try {
-        const d = await api("/api/gamenight/members?guild=" + encodeURIComponent(guild.value));
-        const others = d.members.filter(m => !state.me.user || m.id !== state.me.user.id);
-        if (!others.length) { people.replaceChildren(h("p", { class: "muted", text: "Nobody else here has opted in yet. Members turn it on with /alerts share (or on the Alerts page)." })); return; }
-        people.replaceChildren(...others.map(m => { const b = h("button", { type: "button", class: "tab small", text: m.name }); b.addEventListener("click", () => busy(b, async () => show(await api("/api/compare?guild=" + encodeURIComponent(guild.value) + "&user=" + encodeURIComponent(m.id))))); return b; }));
-      } catch (e) { people.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
-    }
-    const hrs = m => (m >= 60 ? Math.round(m / 60).toLocaleString() + "h" : "");
-    function show(r) {
-      const list = (title, rows, f) => h("div", { class: "subpanel" }, h("h4", { text: title }), rows.length ? h("ul", {}, ...rows.map(x => h("li", { text: f(x) }))) : h("p", { class: "muted", text: "Nothing." }));
-      out.replaceChildren(
-        h("div", { class: "panel" }, h("h3", { text: "You and " + r.name }),
-          h("div", { class: "grid four" },
-            h("div", { class: "tile" }, h("div", { class: "k", text: "In common" }), h("div", { class: "v", text: String(r.shared.length) }), h("div", { class: "s", text: r.overlapPct + "% overlap" })),
-            h("div", { class: "tile" }, h("div", { class: "k", text: "Your games" }), h("div", { class: "v", text: String(r.a.games) }), h("div", { class: "s", text: hrs(r.a.minutes) ? hrs(r.a.minutes) + " on record" : "" })),
-            h("div", { class: "tile" }, h("div", { class: "k", text: r.name + "'s games" }), h("div", { class: "v", text: String(r.b.games) }), h("div", { class: "s", text: hrs(r.b.minutes) ? hrs(r.b.minutes) + " on record" : "" })),
-            h("div", { class: "tile" }, h("div", { class: "k", text: "You have, they don't" }), h("div", { class: "v", text: String(r.onlyA.length) }))),
-          list(`You both own (${r.shared.length})`, r.shared, x => x.title + (x.aMinutes || x.bMinutes ? `  (you ${hrs(x.aMinutes) || "0h"}, them ${hrs(x.bMinutes) || "0h"})` : "")),
-          list(`Only you (${r.onlyA.length})`, r.onlyA, x => x.title),
-          list(`Only ${r.name} (${r.onlyB.length})`, r.onlyB, x => x.title)));
-    }
-    guild.addEventListener("change", loadMembers);
-    loadMembers();
-  }
+  async function compareView() { return window.CompareUI.view({ api, app, busy, field, h, pageHead, serverPicker, state }); }
 
   // ---------- calendar ----------
   // Built in: wishlist release dates, Steam sales, server events and group games. Managers add server events here.
@@ -3298,74 +2776,10 @@ window.SVC_SITE = envIn => {
     return panel;
   }
 
-  async function streamerHubView() {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const guild = servers.length ? serverPicker(servers, currentParam()) : null;
-    const goBox = h("div", { id: "sh-live" }), rosterBox = h("div", { id: "sh-roster" });
-    const jump = (id, label) => h("a", { class: "chip-btn", href: "#/streamer", text: label, onclick: e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); } });
-    app.replaceChildren(pageHead("Streamer hub", "Everything for streamers in one place: announce when you go live, the overlays for OBS, your gift-me wishlist, and who else is streaming. In Discord: /server stream."),
-      h("div", { class: "panel" }, servers.length > 1 ? field("Server", guild) : null,
-        h("div", { class: "chips" }, jump("sh-live", "Go live and pings"), jump("sh-gift", "Gift me page"), jump("sh-roster", "Who is live"))),
-      h("div", { class: "notice" }, h("b", { text: "What these need: " }), "your Discord sign-in with the bot in your server. The Playing now card, !game and Now playing also need Steam linked (Steam page) and Game details set to Public. The browser extension features (spotlight, wishlist from a store page) need the extension linked with the bot: ", h("a", { href: "#/library", text: "Library, Connect the extension" }), "."),
-      goBox, h("div", { class: "panel" }, h("h3", { text: "Overlays for OBS" }), h("p", { class: "muted", text: "Now playing, giveaway, deals and cards, goal bars, server stats and timers are all in one place now." }), h("a", { class: "btn blue", href: "#/overlays", text: "Open the Overlay studio" })), h("div", { id: "sh-gift" }, publicPagePanel()),
-      h("div", { class: "panel" }, h("h3", { text: "Discord commands" }), h("p", { class: "muted small", text: "/server stream link links your Twitch, Kick or YouTube channel. /server stream live, title and game post or update a go-live message. /server stream end closes it. /server stream ping turns the go-live pings on or off for you. /alerts share and /server nowplaying let friends see you in a game." })),
-      rosterBox);
-    if (!servers.length) { goBox.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet, so go-live posts are off. The overlay and gift page below still work. Add the bot from the Servers page." })); rosterBox.remove(); return; }
-    await Promise.all([streamsView({ into: goBox, guild }), streamersView({ into: rosterBox, guild })]);
-  }
+  async function streamerHubView() { return window.StreamerHubUI.view({ app, currentParam, field, h, pageHead, publicPagePanel, serverPicker, state, streamersView, streamsView }); }
 
   // ---------- streamers: everyone who linked a channel in a server, and who is live ----------
-  async function streamersView(opts = {}) {
-    const servers = state.me.servers.filter(g => g.bot !== false);
-    const holder = opts.into ?? h("div");
-    if (!opts.into) app.replaceChildren(pageHead("Streamers", "Everyone in your server who linked a Twitch, Kick or YouTube channel, and who is live right now."), holder);
-    if (!servers.length) { holder.replaceChildren(h("div", { class: "notice warn", text: "The bot is not in any of your servers yet. Add it from the Servers page." })); return; }
-    const guild = opts.guild ?? serverPicker(servers, currentParam());
-    const st = { show: "all", site: "all" }, SITE = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
-    let data = null, timer = 0;
-    const alive = () => currentView() === (opts.into ? "streamer" : "streamers") && holder.isConnected;
-    const ago = ms => { const m = Math.max(1, Math.round(ms / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
-    const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label, "aria-pressed": String(on) }); b.addEventListener("click", fn); return b; };
-    guild.addEventListener("change", () => { data = null; load(); });
-    function draw() {
-      const all = data.people, liveN = all.filter(p => p.live).length;
-      const chans = p => (p.channels && p.channels.length ? p.channels : [{ platform: p.platform, handle: p.handle, url: p.url, checked: p.checked }]);
-      const list = all.filter(p => (st.show === "all" || (st.show === "live") === Boolean(p.live)) && (st.site === "all" || chans(p).some(c => c.platform === st.site)));
-      const sites = [...new Set(all.flatMap(p => chans(p).map(c => c.platform)))];
-      const siteOf = u => /twitch/.test(u) ? "Twitch" : /kick/.test(u) ? "Kick" : /youtu/.test(u) ? "YouTube" : "stream";
-      const card = p => {
-        const live = p.live;
-        const av = h("div", { class: "sr-av" + (live ? " live" : "") }, p.avatar ? h("img", { src: p.avatar, alt: "", width: "56", height: "56", referrerpolicy: "no-referrer", loading: "lazy" }) : h("span", { text: p.name.slice(0, 1).toUpperCase() }));
-        return h("div", { class: "sr-card " + p.platform + (live ? " live" : "") },
-          live ? h("div", { class: "sr-banner" }, h("span", { class: "sr-dot" }), "LIVE NOW", h("span", { class: "sr-since", text: " · " + ago(data.now - live.since) })) : null,
-          h("div", { class: "sr-top" }, av,
-            h("div", { class: "sr-id" }, h("strong", { text: p.name + (p.mine ? " (you)" : "") }),
-              ...chans(p).map(c => h("a", { class: "sr-chan", href: c.url, target: "_blank", rel: "noopener noreferrer", text: SITE[c.platform] + " · " + c.handle + " ↗" }))),
-            h("span", { class: "sr-pills" }, ...chans(p).map(c => h("span", { class: "sr-pill " + c.platform, text: SITE[c.platform] })))),
-          live ? h("div", { class: "sr-live" }, h("div", { class: "sr-title", text: live.title }), live.game ? h("div", { class: "sr-game", text: "🎮 " + live.game }) : null)
-            : h("div", { class: "sr-off" }, h("span", { class: "sr-dot off" }), chans(p).some(c => c.checked) ? "Offline" : "Not checked automatically"),
-          live ? h("div", { class: "sr-watchrow" }, h("a", { class: "btn green small sr-watch", href: live.url, target: "_blank", rel: "noopener noreferrer", text: (live.also || []).length ? "Watch on " + siteOf(live.url) : "Watch the stream" }), ...(live.also || []).map(u => h("a", { class: "btn gray small sr-watch", href: u, target: "_blank", rel: "noopener noreferrer", text: "Watch on " + siteOf(u) }))) : null);
-      };
-      holder.replaceChildren(
-        servers.length > 1 && !opts.guild ? h("div", { class: "panel" }, field("Server", guild)) : null,
-        h("div", { class: "sr-stats" },
-          h("div", { class: "sr-stat" }, h("b", { text: String(all.length) }), h("span", { text: "linked" })),
-          h("div", { class: "sr-stat" + (liveN ? " hot" : "") }, h("b", { text: String(liveN) }), h("span", { text: "live now" })),
-          h("div", { class: "sr-stat" }, h("b", { text: String(all.length - liveN) }), h("span", { text: "offline" })),
-          h("a", { class: "btn blue sr-link", href: "#/" + (opts.into ? "streamer" : "streams") + "?guild=" + encodeURIComponent(guild.value), text: "Link your channel" })),
-        all.length ? h("div", { class: "panel fy-filters" },
-          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Show" }), chip("Everyone", st.show === "all", () => { st.show = "all"; draw(); }), chip("Live now", st.show === "live", () => { st.show = "live"; draw(); }), chip("Offline", st.show === "off", () => { st.show = "off"; draw(); })),
-          sites.length > 1 ? h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Site" }), chip("All", st.site === "all", () => { st.site = "all"; draw(); }), ...sites.map(x => chip(SITE[x], st.site === x, () => { st.site = x; draw(); }))) : null) : null,
-        list.length ? h("div", { class: "sr-grid" }, ...list.map(card)) : h("div", { class: "empty", text: all.length ? "Nobody matches that filter." : "Nobody has linked a channel in this server yet. Streamers (and moderators and managers) can link theirs on the Streams page or with /server stream link." }));
-    }
-    async function load() {
-      clearTimeout(timer);
-      try { data = await api("/api/streams/roster?guild=" + encodeURIComponent(guild.value)); draw(); }
-      catch (e) { holder.replaceChildren(servers.length > 1 ? h("div", { class: "panel" }, field("Server", guild)) : null, h("div", { class: "notice warn", text: e.message })); }
-      timer = setTimeout(() => { if (alive()) load(); }, 30_000);
-    }
-    load();
-  }
+  async function streamersView(opts = {}) { return window.StreamersUI.view({ api, app, currentParam, currentView, field, h, pageHead, serverPicker, state }, opts = {}); }
 
   async function xpView() { return window.XpUI.view({ api, app, busy, currentParam, field, h, pageHead, progressBar, select, serverPicker, state, toast }); }
 

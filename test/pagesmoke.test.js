@@ -129,8 +129,8 @@ test("the moderation page shows the auto-moderator and saves a change", { timeou
         const errors = []; page.on("pageerror", e => errors.push(e.message));
         await page.goto(`${o.base}/mod`, { waitUntil: "load" });
         await page.locator("label.check", { hasText: "Message spam" }).waitFor({ timeout: 10_000 }).catch(async e => { throw new Error(`${e.message}\n${(await page.evaluate(() => document.getElementById("app")?.innerText ?? "")).slice(0, 600)}\n${errors.join("\n")}`); });
-                await page.locator("label.check", { hasText: "Auto-moderator on" }).locator("input").check({ force: true });
-        await page.locator("label.check", { hasText: "Message spam" }).locator("input").check({ force: true });
+                await page.waitForLoadState("networkidle"); await page.waitForTimeout(600); // the page may redraw once while its lists arrive
+        for (const name of ["Auto-moderator on", "Message spam"]) await page.locator("label.check", { hasText: name }).locator("input").evaluate(el => { if (!el.checked) { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); } });
         await page.getByRole("button", { name: "Save auto-moderator" }).evaluate(el => el.click());
         await page.waitForTimeout(1500);
         const toastText = await page.evaluate(() => [...document.querySelectorAll("[class*=toast],[role=status],[role=alert]")].map(e => e.innerText).join("|"));
