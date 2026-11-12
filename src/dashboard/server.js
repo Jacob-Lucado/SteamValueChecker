@@ -2,15 +2,10 @@
 // Login is Discord OAuth2 (identify + guilds). Sessions live in memory, so a restart logs everyone out.
 
 import { roleIds } from "../gwroles.js";
-import { VOTE_XP } from "../topgg.js";
-import { pushEvent, readEvents, groupErrors } from "../adminlog.js";
-import { aiStats, aiUsedToday } from "../aichat.js";
-import { sampleAlert, SAMPLE_KINDS } from "../samples.js";
+import { pushEvent } from "../adminlog.js";
 import http from "node:http";
-import { gameNight } from "../gamenight.js";
-import { setupStatus, autoSetup } from "../setup.js";
 import { CHANGELOG, LATEST } from "../changelog.js";
-import { randomBytes, createHash, randomUUID } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { indexNowKey } from "../indexnow.js";
 import { PAGE_SEO } from "../pageseo.js";
 import { SEO_PAGES, seoSlugs, seoIsLive, renderSeoPage } from "../seopages.js";
@@ -26,20 +21,14 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { REGIONS, ALERT_TYPES, FANATICAL_GRABBER_URL, SUPPORT_PAGE_URL, EXTENSION_LATEST, EXTENSION_STORE_URL } from "../constants.js";
 import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
-import { applyCodeSettings, codeFamilies, codeGames, codeView } from "../codes.js";
-import { applyBundleFeedSettings, bundleFeedView } from "../bundlefeed.js";
 import * as xposterText from "../xposter.js";
 import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl, splitGame } from "../bundlelanding.js";
-import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
 import { compareGiftRegions } from "../giftregion.js";
-import { PAGE_PRESETS, MAX_BG_STORED, decodeUpload, fetchSteamBackground } from "../profilebg.js";
-import { expandGames } from "../codesource.js";
-import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
-import { viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "../wishlist.js";
-import { importWishlist, SteamError, STEAM_SHOP_ID } from "../steam.js";
+import { PAGE_PRESETS, MAX_BG_STORED } from "../profilebg.js";
+import { viewRows, exportJson, WishlistError } from "../wishlist.js";
+import { SteamError, STEAM_SHOP_ID } from "../steam.js";
 import { ItadError } from "../itad.js";
-import { parseTrigger, describeTrigger } from "../alerts.js";
 import { DiscordApiError } from "./discord.js";
 import { createCommunityDash, CommunityError } from "./communitydash.js";
 import { createModDash, ModDashError } from "./moddash.js";
@@ -66,88 +55,57 @@ import { createGiveawayRoutes } from "./giveawayroutes.js";
 import { botInviteUrl } from "../community.js";
 import { listModels } from "../aiproviders.js";
 import { connectionPayload } from "../linkedroles.js";
-import { parseHost, stepsOf, parseSteps, StepError, STEP_KINDS } from "../gwpartner.js";
 import { HELP, ABOUT, PRIVACY } from "../text.js";
-import { hubCommands } from "../commands.js";
 import { valueBadgeSvg } from "../valuebadge.js";
 
 
 
-import { PLANS, SUPPORTER_XP_BOOST } from "../square.js";
-import { supporterUntil, isSupporter, isFounder, wallName, alertColorHex, foundersTaken, FOUNDERS_MAX, endOfDayEastern } from "../supporters.js";
-import { buildProfile, cleanProfile, withDefaults, PROFILE_THEMES, PROFILE_STYLES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
-import { commandGuide } from "../hubpanel.js";
+import { isSupporter } from "../supporters.js";
+import { buildProfile, withDefaults, PROFILE_THEMES, PROFILE_STYLES, BG_STYLES, LAYOUTS, SECTIONS, LINK_KIND_NAMES } from "../profilepage.js";
 import { enrichFree, withOwnership } from "../freeinfo.js";
 import { forYou } from "../foryou.js";
-import { libraryAnalytics } from "../analytics.js";
 import { steamLoginUrl, verifySteamLogin } from "../steamopenid.js";
 import { UserError } from "../errors.js";
-import { createIndie, parseApp, cleanLinks } from "../indie.js";
+import { createIndie } from "../indie.js";
 import { createFortnite } from "../fortnite.js";
-import { INDIE_CATS, INDIE_TOOLS, indieSeo, indieSpotlightText } from "../indiemeta.js";
-import { MAX_PENDING_PER_USER, MAX_GAMES_PER_USER } from "../indiestore.js";
-import { createIndieNews, picksFor } from "../indienews.js";
+import { INDIE_TOOLS, indieSeo } from "../indiemeta.js";
+import { createIndieNews } from "../indienews.js";
 import { indieBadgeSvg } from "../indiebadge.js";
 import { createStreams, canStreamIn } from "../streamlive.js";
-import { parseUpload, sanitize } from "../parse.js";
-import { prefsPatch, prefsView } from "../prefs.js";
-import { trophyCase } from "../badges.js";
-import { renderSteamValue, renderRecap, renderWelcomeCard, renderProfileShare } from "../cardimg.js";
-import { createBroadcaster, MAX_BODY } from "../broadcast.js";
+import { sanitize } from "../parse.js";
+import { prefsView } from "../prefs.js";
+import { renderSteamValue, renderRecap, renderProfileShare } from "../cardimg.js";
+import { createBroadcaster } from "../broadcast.js";
 import { grabberPromo } from "../promo.js";
-import { createEvent, joinEvent, leaveEvent, drawEvent, endEvent, myAssignment, eventEmbed, revealEmbed } from "../santa.js";
 import { noticePreset } from "../noticepresets.js";
-import { addBundle, bundleView } from "../bundles.js";
-import { createNews, newsForUser } from "../news.js";
+import { createNews } from "../news.js";
 import { playtestBoard } from "../playboard.js";
-import { whoIsPlaying } from "../nowplaying.js";
-import { streamCardData, streamCardLine, chatCommandSets, STREAMCARD_KINDS } from "../streamcard.js";
-import { clubProgress, setPick } from "../gameclub.js";
+import { streamCardData, streamCardLine, STREAMCARD_KINDS } from "../streamcard.js";
 import { createStreamGiveaways } from "../streamgiveaway.js";
 import { playtestFor, socialFor, setSpotlight, getSpotlight, badgeFor, syncFromApps, listGifts, offerGift, claimGift, withdrawGift } from "../extapi.js";
 import { createPlaytestSources } from "../playsources.js";
-import { goalProgress } from "../steamstore.js";
-import { fillGifted, fillPrices, fillRetail, importLibrary, libraryView, leaderboard, finishedLeague, extraBoard, EXTRA_BOARDS, serverStats } from "../library.js";
-import { extractKeys } from "../redeemstore.js";
-import { compareLibraries } from "../compare.js";
+import { fillGifted, fillPrices, fillRetail, importLibrary } from "../library.js";
 import { regionPrices } from "../regions.js";
-import { calendarEntries, toIcs, KINDS } from "../calendar.js";
-import { addToServerList, serverListView, vote, removeFromServerList } from "../serverlist.js";
+import { calendarEntries, toIcs } from "../calendar.js";
 import { createLimiter } from "../ratelimit.js";
-import { setProfile, publicWishlist } from "../profile.js";
-import { artUrl, steamArt, ideaStatusEmbed } from "../render.js";
-import { REACTIONS } from "../socialstore.js";
-import { isSoundcloudUrl } from "../musicsource.js";
-import { CATEGORIES } from "../stations.js";
-import { parseChannel, channelUrl, watchable } from "../streamwatch.js";
-import { publishRequest, refreshRequest, removeRequestPosts } from "../requestsync.js";
-import { cleanRequest, limitMessage } from "../requests.js";
-import { REQUEST_STATUSES, MAX_OPEN_PER_USER, MAX_NOTE as REQ_NOTE } from "../requeststore.js";
+import { publicWishlist } from "../profile.js";
+import { steamArt } from "../render.js";
 import { summarize } from "../report.js";
-import { refreshTags, tasteProfile, recommend, tasteWhy } from "../taste.js";
 import { buyOrWait } from "../advice.js";
 import { renderGamePage, slugify } from "../gamepage.js";
-import { saveOwnBirthday, friendDeals, friendRows, saveFriend, friendFromFollow, syncFollowedFriends, cleanFriendName, cleanBirthday } from "../friends.js";
-import { spendSummary, regionCurrency, grabberRegion } from "../spend.js";
-import { challengeView, monthKey, MAX_GOAL } from "../challenge.js";
+import { grabberRegion } from "../spend.js";
+import { monthKey } from "../challenge.js";
 import { MAX_CLAIMS_PER_LIST, MAX_CLAIMS_TOTAL, accountOldEnough } from "../giftstore.js";
 import { upcomingSales, salesBefore, SALES_UPDATED, SALES } from "../salescal.js";
-import { playNext } from "../library.js";
-import { resolveProfile, syncSteamLibrary, playStats, steamNext, fetchProfileCard, fetchOwnedGames } from "../steamlib.js";
-import { bundleCheck } from "../bundle.js";
-import { salePrep, saleRecap } from "../saleprep.js";
+import { fetchProfileCard } from "../steamlib.js";
 import { isDlc } from "../freemenu.js";
 import { freeArt } from "../render.js";
-import { autoImage } from "../giveaway.js";
 import { isHidden } from "../hidden.js";
 import { legalPage, legalFramePage } from "../legal.js";
-import { parseKeys, parseDuration, parseColor, parseImageUrl } from "../gwparse.js";
-import { giveawayInput } from "../gwinput.js";
-import { MAX_KEYS } from "../gwstore.js";
 import { createMusicChat } from "../musicchat.js";
 import { dmChannel, isDm, dmParts } from "../staffchat.js";
-import { PANEL_AREAS, mayChange, cleanEdit } from "../paneluser.js";
-import { checkPassword, burnTime, passwordProblem, USERNAME_RE, newTotpSecret, matchTotp, totpUri } from "../adminlogin.js";
+import { PANEL_AREAS, mayChange } from "../paneluser.js";
+import { checkPassword, burnTime, matchTotp } from "../adminlogin.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 const SEO_SRC = fileURLToPath(new URL("../seopages.js", import.meta.url));
@@ -203,7 +161,6 @@ const FILES = {
     "/streamersui.js": ["streamersui.js", "text/javascript; charset=utf-8"],
     "/connectui.js": ["connectui.js", "text/javascript; charset=utf-8"],
     "/freeui.js": ["freeui.js", "text/javascript; charset=utf-8"],
-    "/publicwishlistui.js": ["publicwishlistui.js", "text/javascript; charset=utf-8"],
     "/gameui.js": ["gameui.js", "text/javascript; charset=utf-8"],
     "/publicprofileui.js": ["publicprofileui.js", "text/javascript; charset=utf-8"],
     "/requestsui.js": ["requestsui.js", "text/javascript; charset=utf-8"],

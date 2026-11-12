@@ -789,7 +789,6 @@ window.SVC_SITE = envIn => {
   // One page per game: price, history and verdict, bundles, free offers and who in the server is watching it.
   async function gameView(id) { return (await lazy("GameUI")).view({ api, app, busy, ext, h, lineChart, money, pageHead, steamArt, toast }, id); }
 
-  async function publicWishlistView(slug) { return (await lazy("PublicWishlistUI")).view({ api, app, ext, giftButton, h, pageHead, soonControl }, slug); }
 
   async function loadFree(panel) {
     try {
@@ -965,7 +964,6 @@ window.SVC_SITE = envIn => {
   const hoursText = m => (m < 60 ? m + " min" : (m / 60).toFixed(m < 600 ? 1 : 0) + " h");
   // Hours tracked: this year per month and top games, plus the total since linking, and a card drawn on a canvas that can be saved as an image.
   function recapPanel() {
-    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const out = h("div", { class: "muted", text: "Loading…" });
     const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: v }), sub ? h("div", { class: "s", text: sub }) : null);
     // A yearly hours goal: a bar, where this pace ends up, and a box to change it.
@@ -1328,7 +1326,6 @@ window.SVC_SITE = envIn => {
   // ---------- routing ----------
   // ---------- support tickets ----------
   const STATUS_ICON = { open: "🟢", waiting: "🟡", resolved: "✅", closed: "⚫" };
-  const STATUS_CHIP = { open: "ok", waiting: "warn", resolved: "", closed: "dim" };
 
   // ---------- feature requests ----------
   const REQ_CHIP = { open: "dim", planned: "ok", in_development: "ok", shipped: "ok", rejected: "warn", duplicate: "dim", on_hold: "warn" };
@@ -1544,11 +1541,6 @@ window.SVC_SITE = envIn => {
     return wrap;
   }
 
-  function contrastButton() {
-    const b = h("button", { class: "theme-btn", type: "button", text: "◐", title: "High contrast", "aria-label": "Toggle high contrast" });
-    b.addEventListener("click", () => applyContrast(!contrastOn()));
-    return b;
-  }
 
   // Search overlay: press / anywhere. Keyboard: g then w/l/a/s/n/h jumps to a page, ? lists the keys.
   let searchEl = null;
