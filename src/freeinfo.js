@@ -17,9 +17,10 @@ async function steamKind(appid, fetchImpl) {
         const data = (await res.json())?.[String(appid)];
         const d = data?.success ? data.data : null;
         const out = d ? { dlc: d.type === "dlc", demo: d.type === "demo", isFree: d.is_free === true, released: d.release_date?.coming_soon ? null : (Date.parse(d.release_date?.date) || null), base: d.fullgame?.appid ? { appid: Number(d.fullgame.appid), name: String(d.fullgame.name ?? "").slice(0, 100) } : null } : null;
+        if (cache.size > 5000) cache.clear();
         cache.set(appid, out);
         return out;
-    } catch { negative.set(appid, Date.now()); return null; }
+    } catch { if (negative.size > 2000) negative.clear(); negative.set(appid, Date.now()); return null; }
 }
 
 /** Copies of the offers with `type: "dlc"` and `base: { appid, name }` filled in for Steam DLC. Never throws. */

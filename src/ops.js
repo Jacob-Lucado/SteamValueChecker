@@ -10,6 +10,7 @@ export function createOps({ now = () => Date.now(), sendOwner = async () => {}, 
 
     async function incident(key, message) {
         if (now() - (lastSent.get(key) ?? -Infinity) < throttleMs) return false;
+        if (lastSent.size > 200) lastSent.clear();
         lastSent.set(key, now());
         try { await sendOwner(message); } catch { /* the owner may have DMs closed; the admin page still shows it */ }
         return true;

@@ -328,7 +328,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         res.write("retry: 3000\n\n");
         const born = now();
         let quiet = 0, timer = 0, over = false;
-        const end = () => { if (over) return; over = true; clearInterval(timer); vizTotal--; vizOpen.set(s.userId, Math.max(0, (vizOpen.get(s.userId) ?? 1) - 1)); try { res.end(); } catch { /* gone */ } };
+        const end = () => { if (over) return; over = true; clearInterval(timer); vizTotal--; { const left = (vizOpen.get(s.userId) ?? 1) - 1; if (left > 0) vizOpen.set(s.userId, left); else vizOpen.delete(s.userId); } try { res.end(); } catch { /* gone */ } };
         const tick = () => {
             const live = sessions.get(cookies(req)[COOKIE]);
             if (!live || live.expires < now() || now() - born > 4 * 3600_000) return end();
@@ -391,7 +391,7 @@ export function createDashboard({ referrals = null, weekly = null, indieSvc = nu
         res.write("retry: 2000\n\n");
         const born = now();
         let n = 0, timer = 0, over = false, lastNp = "";
-        const end = () => { if (over) return; over = true; clearInterval(timer); clearInterval(recheck); overlayTotal--; overlayOpen.set(token, Math.max(0, (overlayOpen.get(token) ?? 1) - 1)); try { res.end(); } catch { /* gone */ } };
+        const end = () => { if (over) return; over = true; clearInterval(timer); clearInterval(recheck); overlayTotal--; { const left = (overlayOpen.get(token) ?? 1) - 1; if (left > 0) overlayOpen.set(token, left); else overlayOpen.delete(token); } try { res.end(); } catch { /* gone */ } };
         const np = () => {
             let st = null;
             try { st = music.status(gid); } catch { /* busy */ }

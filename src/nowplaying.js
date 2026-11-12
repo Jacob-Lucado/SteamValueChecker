@@ -28,6 +28,7 @@ export function createNowPlaying({ apiKey = null, fetchImpl = globalThis.fetch, 
     async function lookup(steamids) {
         const want = [...new Set(steamids.map(String))], fresh = new Map(), need = [];
         for (const id of want) { const c = cache.get(id); if (c && now() - c.at < ttlMs) fresh.set(id, c.v); else need.push(id); }
+        if (cache.size > 5000) for (const [k, c] of cache) if (now() - c.at >= ttlMs) cache.delete(k);
         if (need.length) {
             const got = await fetchPlayers(need, { apiKey, fetchImpl });
             for (const id of need) { const v = got.get(id) ?? { name: "", appid: null, game: null }; cache.set(id, { at: now(), v }); fresh.set(id, v); }

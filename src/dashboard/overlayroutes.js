@@ -145,6 +145,7 @@ export function createOverlayRoutes({ db, rest, itad, now, remember, session, st
             if (!overlayLimit.hit(clientIp(req)).ok) throw new HttpError(429, "Slow down a little.");
             const o = db.ovByToken(String(url.searchParams.get("token") ?? ""));
             if (!o) throw new HttpError(404, "This overlay link isn't valid. Make a new one on the Overlay studio page.");
+            if (ovSeen.size > 2000) for (const [k, at] of ovSeen) if (now() - at > 3600_000) ovSeen.delete(k);
             ovSeen.set(o.token, now());
             const p = await overlayPayload(o);
             if (o.kind === "alerts") {
