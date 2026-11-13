@@ -42,7 +42,13 @@ jobs:
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --remote-only --app "$APP" --config fly.toml --wait-timeout 15m
+        run: |
+          # Build from the newest CMS and game server commits. A cached build is only reused when neither changed.
+          cms_sha=$(git ls-remote https://github.com/Jacob-Lucado/CMS.git refs/heads/main | cut -f1)
+          emu_sha=$(git ls-remote https://github.com/Jacob-Lucado/EMU.git refs/heads/main | cut -f1)
+          echo "CMS $cms_sha, game server $emu_sha"
+          flyctl deploy --remote-only --app "$APP" --config fly.toml --wait-timeout 15m \
+            --build-arg CMS_SHA="$cms_sha" --build-arg EMU_SHA="$emu_sha"
       - name: Point the domain at the hotel
         if: ${{ inputs.move_domain }}
         env:
