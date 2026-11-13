@@ -79,10 +79,8 @@ RUN mkdir -p furni-sql hotel-files/c_images/hof_furni/icons \
 
 # ---------------------------------------------------------------- runtime
 FROM ubuntu:24.04
-ARG CMS_REPO
-ARG CMS_REF
-ARG CMS_SHA
-ARG EMU_SHA
+# The commit ids are declared only where they are used: every RUN after an ARG sees it, so a new commit
+# would otherwise rebuild the system packages and Chromium on every deploy.
 ENV DEBIAN_FRONTEND=noninteractive \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_NO_INTERACTION=1 \
@@ -112,6 +110,9 @@ COPY --from=downloads /dl/furni-sql /etc/hotel/furni/
 COPY --from=downloads /dl/adminer.php "$HOTEL/adminer/adminer.php"
 
 # The website, built once here. Its database setup runs on first boot, when the volume is there.
+ARG CMS_REPO
+ARG CMS_REF
+ARG CMS_SHA
 RUN echo "CMS $CMS_SHA" && git clone --depth 1 --branch "$CMS_REF" "$CMS_REPO" "$HOTEL/cms" \
     && cd "$HOTEL/cms" \
     && composer install --no-dev --optimize-autoloader --no-progress \
@@ -135,6 +136,7 @@ RUN useradd --system --home-dir "$HOTEL/emulator" --shell /usr/sbin/nologin plus
     && chmod +x /usr/local/bin/hotel-start /usr/local/bin/hotel-client-config
 
 # Lets hotel-start skip the slow setup steps when the code is the same as on the last boot.
+ARG EMU_SHA
 ENV CMS_SHA=$CMS_SHA EMU_SHA=$EMU_SHA
 
 EXPOSE 8000

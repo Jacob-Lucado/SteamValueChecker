@@ -39,15 +39,19 @@ jobs:
               exit 1
             }
           fi
-      # The image is built here with GitHub's build cache, so a deploy only rebuilds and uploads the part that
+      # The image is built here with a build cache, so a deploy only rebuilds and uploads the part that
       # changed: usually just the website or the game server, never the hotel files or the system packages.
       - name: Find the newest website and game server commits
         id: commits
         run: |
           echo "cms=$(git ls-remote https://github.com/Jacob-Lucado/CMS.git refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
           echo "emu=$(git ls-remote https://github.com/Jacob-Lucado/EMU.git refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
+      # Deleting these takes over a minute, so it runs alongside the build instead of before it. The first
+      # build steps need little disk.
       - name: Make room for the build
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+        run: |
+          sudo nohup rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL > /dev/null 2>&1 &
+          df -h /
       - name: Sign in to Fly's image registry
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -62,8 +66,12 @@ jobs:
           build-args: |
             CMS_SHA=${{ steps.commits.outputs.cms }}
             EMU_SHA=${{ steps.commits.outputs.emu }}
-          cache-from: type=gha,scope=hotel
-          cache-to: type=gha,mode=max,scope=hotel
+          # The build cache lives next to the image in Fly's registry. GitHub's cache tops out at 10 GB, which
+          # the hotel files and build tools fill, so older layers kept getting thrown out and rebuilt.
+          cache-from: |
+            type=registry,ref=registry.fly.io/${{ env.APP }}:buildcache
+            type=gha,scope=hotel
+          cache-to: type=registry,ref=registry.fly.io/${{ env.APP }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
