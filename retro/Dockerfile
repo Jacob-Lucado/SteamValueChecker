@@ -56,6 +56,7 @@ FROM ubuntu:24.04
 ARG CMS_REPO
 ARG CMS_REF
 ARG CMS_SHA
+ARG EMU_SHA
 ENV DEBIAN_FRONTEND=noninteractive \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_NO_INTERACTION=1 \
@@ -105,6 +106,9 @@ RUN useradd --system --home-dir "$HOTEL/emulator" --shell /usr/sbin/nologin plus
     && sed -i 's/minlevel="Trace"/minlevel="Info"/' "$HOTEL/emulator/Config/nlog.config" \
     && cp "$HOTEL/emulator/Config/config.json" /etc/hotel/emulator-config.json \
     && chmod +x /usr/local/bin/hotel-start /usr/local/bin/hotel-client-config
+
+# Lets hotel-start skip the slow setup steps when the code is the same as on the last boot.
+ENV CMS_SHA=$CMS_SHA EMU_SHA=$EMU_SHA
 
 EXPOSE 8000
 CMD ["/usr/local/bin/hotel-start"]

@@ -157,15 +157,19 @@ if [ "$(sql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_sc
 fi
 
 # The game server brings its own tables up to date when it starts, before the website looks at them.
-log "Letting the game server update its tables."
-su -s /bin/sh plusemu -c "cd '$EMU' && exec './Plus Emulator'" > /tmp/emulator-first-run.log 2>&1 &
-emu_pid=$!
-if ! wait_for "The game server" emulator_up; then
-    tail -n 60 /tmp/emulator-first-run.log
-    exit 1
+# Only needed when this build has a game server the volume has not seen yet.
+if [ "${EMU_SHA:-unknown}" = unknown ] || [ "$(cat "$DATA/.emu-build" 2> /dev/null)" != "$EMU_SHA" ]; then
+    log "Letting the game server update its tables."
+    su -s /bin/sh plusemu -c "cd '$EMU' && exec './Plus Emulator'" > /tmp/emulator-first-run.log 2>&1 &
+    emu_pid=$!
+    if ! wait_for "The game server" emulator_up; then
+        tail -n 60 /tmp/emulator-first-run.log
+        exit 1
+    fi
+    kill "$emu_pid" 2> /dev/null || true
+    wait "$emu_pid" 2> /dev/null || true
+    printf '%s\n' "${EMU_SHA:-unknown}" > "$DATA/.emu-build"
 fi
-kill "$emu_pid" 2> /dev/null || true
-wait "$emu_pid" 2> /dev/null || true
 
 # ---------------------------------------------------------------- website
 cd "$CMS"
@@ -201,7 +205,11 @@ set_env DISCORD_CLIENT_SECRET "${DISCORD_CLIENT_SECRET:-}"
 chgrp www-data "$DATA/cms.env" && chmod 640 "$DATA/cms.env"
 
 php artisan optimize:clear > /dev/null
-php artisan atom:install --emulator=plus --skip-build --no-interaction
+# Migrations and seeders only change with the website's code.
+if [ "${CMS_SHA:-unknown}" = unknown ] || [ "$(cat "$DATA/.cms-build" 2> /dev/null)" != "$CMS_SHA" ]; then
+    php artisan atom:install --emulator=plus --skip-build --no-interaction
+    printf '%s\n' "${CMS_SHA:-unknown}" > "$DATA/.cms-build"
+fi
 
 if [ "$(sql -N plus -e 'SELECT COUNT(*) FROM website_installation WHERE completed = 1' 2> /dev/null || echo 0)" = 0 ]; then
     ADMIN_USER=${ADMIN_USER:-admin}
