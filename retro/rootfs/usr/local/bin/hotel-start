@@ -54,7 +54,21 @@ mkdir -p "$DATA/mysql" "$DATA/backups" "$DATA/camera" "$DATA/storage"
 for dir in app/public framework/cache/data framework/sessions framework/testing framework/views logs; do
     mkdir -p "$DATA/storage/$dir"
 done
-mkdir -p "$DATA/storage/app/public/website_news_images" "$DATA/camera/thumbnail"
+mkdir -p "$DATA/storage/app/public/website_news_images" "$DATA/camera/thumbnail" "$DATA/ads"
+
+# Badges and the client's texts live on the volume, so badges and names added in Housekeeping survive
+# a redeploy. Badges from a newer hotel files pack are copied in; ones already there are kept.
+mkdir -p "$DATA/badges"
+if [ ! -L "$HOTEL/hotel-files/c_images/album1584" ]; then
+    cp -rn "$HOTEL/hotel-files/c_images/album1584/." "$DATA/badges/"
+    rm -rf "$HOTEL/hotel-files/c_images/album1584"
+    ln -s "$DATA/badges" "$HOTEL/hotel-files/c_images/album1584"
+fi
+if [ ! -f "$DATA/ExternalTexts.json" ]; then
+    cp "$HOTEL/hotel-files/gamedata/ExternalTexts.json" "$DATA/ExternalTexts.json"
+fi
+ln -sf "$DATA/ExternalTexts.json" "$HOTEL/hotel-files/gamedata/ExternalTexts.json"
+chown -R www-data:www-data "$DATA/badges" "$DATA/ads" "$DATA/ExternalTexts.json"
 if [ ! -f "$DATA/storage/app/public/website_news_images/default.png" ]; then
     cp "$CMS/public/assets/images/hotel.png" "$DATA/storage/app/public/website_news_images/default.png"
 fi
@@ -245,6 +259,13 @@ UPDATE website_settings SET value = CASE \`key\`
     WHEN 'furniture_icons_path' THEN '$SITE_URL/hotel-files/c_images/hof_furni/icons'
     ELSE value END
 WHERE \`key\` IN ('nitro_path', 'rcon_ip', 'rcon_port', 'badges_path', 'furniture_icons_path');
+INSERT INTO website_settings (\`key\`, value, comment) VALUES
+    ('badge_path_filesystem', '$HOTEL/hotel-files/c_images/album1584', 'Folder Housekeeping saves badges to'),
+    ('ads_path_filesystem', '$DATA/ads', 'Folder Housekeeping saves ads to'),
+    ('ads_picture_path', '$SITE_URL/ads/', 'Where ad pictures are served'),
+    ('nitro_external_texts_file', '$HOTEL/hotel-files/gamedata/ExternalTexts.json', 'Badge names and descriptions for the client'),
+    ('flash_external_texts_file', '', 'Not used by this client')
+ON DUPLICATE KEY UPDATE value = VALUES(value);
 EOF
 
 # Catalog art the hotel files have under another name: the English shop header instead of the Portuguese

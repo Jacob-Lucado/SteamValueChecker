@@ -86,6 +86,14 @@ server {
     }
     location /camera/ { return 404; }
 
+    # Ad pictures uploaded in Housekeeping.
+    location /ads/ {
+        alias /data/ads/;
+        limit_except GET HEAD { deny all; }
+        add_header X-Content-Type-Options nosniff always;
+        location ~* \.(php|phtml|html?|svg)$ { return 404; }
+    }
+
     # Answered by the game server: furniture data built from the furniture table, and badge rarity.
     location = /api/gamedata/furnidata { proxy_pass http://127.0.0.1:8080; }
     location = /api/badges/leaderboard { proxy_pass http://127.0.0.1:8080; }
