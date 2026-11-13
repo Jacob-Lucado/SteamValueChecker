@@ -39,16 +39,37 @@ jobs:
               exit 1
             }
           fi
+      # The image is built here with GitHub's build cache, so a deploy only rebuilds and uploads the part that
+      # changed: usually just the website or the game server, never the hotel files or the system packages.
+      - name: Find the newest website and game server commits
+        id: commits
+        run: |
+          echo "cms=$(git ls-remote https://github.com/Jacob-Lucado/CMS.git refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "emu=$(git ls-remote https://github.com/Jacob-Lucado/EMU.git refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
+      - name: Make room for the build
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+      - name: Sign in to Fly's image registry
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl auth docker
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the hotel image
+        uses: docker/build-push-action@v6
+        with:
+          context: retro
+          push: true
+          tags: registry.fly.io/${{ env.APP }}:deploy-${{ github.run_number }}
+          build-args: |
+            CMS_SHA=${{ steps.commits.outputs.cms }}
+            EMU_SHA=${{ steps.commits.outputs.emu }}
+          cache-from: type=gha,scope=hotel
+          cache-to: type=gha,mode=max,scope=hotel
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          # Build from the newest CMS and game server commits. A cached build is only reused when neither changed.
-          cms_sha=$(git ls-remote https://github.com/Jacob-Lucado/CMS.git refs/heads/main | cut -f1)
-          emu_sha=$(git ls-remote https://github.com/Jacob-Lucado/EMU.git refs/heads/main | cut -f1)
-          echo "CMS $cms_sha, game server $emu_sha"
-          flyctl deploy --remote-only --app "$APP" --config fly.toml --wait-timeout 15m \
-            --build-arg CMS_SHA="$cms_sha" --build-arg EMU_SHA="$emu_sha"
+          flyctl deploy --app "$APP" --config fly.toml --wait-timeout 15m \
+            --image "registry.fly.io/$APP:deploy-${{ github.run_number }}"
       - name: Point the domain at the hotel
         if: ${{ inputs.move_domain }}
         env:
