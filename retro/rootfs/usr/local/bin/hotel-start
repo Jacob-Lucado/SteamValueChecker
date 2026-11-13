@@ -216,9 +216,12 @@ set_env TRUSTED_PROXIES '*'
 # Discord sign-in. Set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET as Fly secrets; PHP never sees the machine's own env.
 set_env DISCORD_CLIENT_ID "${DISCORD_CLIENT_ID:-}"
 set_env DISCORD_CLIENT_SECRET "${DISCORD_CLIENT_SECRET:-}"
-# Shop top-ups. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET as Fly secrets.
-set_env STRIPE_SECRET_KEY "${STRIPE_SECRET_KEY:-}"
-set_env STRIPE_WEBHOOK_SECRET "${STRIPE_WEBHOOK_SECRET:-}"
+# Shop top-ups through Square. Set these as Fly secrets; SQUARE_ENVIRONMENT is sandbox or production.
+set_env SQUARE_ENVIRONMENT "${SQUARE_ENVIRONMENT:-sandbox}"
+set_env SQUARE_ACCESS_TOKEN "${SQUARE_ACCESS_TOKEN:-}"
+set_env SQUARE_LOCATION_ID "${SQUARE_LOCATION_ID:-}"
+set_env SQUARE_WEBHOOK_SIGNATURE_KEY "${SQUARE_WEBHOOK_SIGNATURE_KEY:-}"
+set_env SQUARE_WEBHOOK_URL "$SITE_URL/api/square/webhook"
 chgrp www-data "$DATA/cms.env" && chmod 640 "$DATA/cms.env"
 
 php artisan optimize:clear > /dev/null
