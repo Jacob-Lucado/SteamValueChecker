@@ -158,6 +158,9 @@ set_env FORCE_HTTPS "$([ "$HTTPS_FLAG" = on ] && echo true || echo false)"
 set_env SESSION_SECURE_COOKIE "$([ "$HTTPS_FLAG" = on ] && echo true || echo false)"
 # Every request comes through Fly's proxy and then nginx.
 set_env TRUSTED_PROXIES '*'
+# Discord sign-in. Set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET as Fly secrets; PHP never sees the machine's own env.
+set_env DISCORD_CLIENT_ID "${DISCORD_CLIENT_ID:-}"
+set_env DISCORD_CLIENT_SECRET "${DISCORD_CLIENT_SECRET:-}"
 chgrp www-data "$DATA/cms.env" && chmod 640 "$DATA/cms.env"
 
 php artisan optimize:clear > /dev/null
