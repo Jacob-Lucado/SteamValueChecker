@@ -10,6 +10,8 @@ ARG CMS_SHA=unknown
 ARG CMS_REPO=https://github.com/Jacob-Lucado/CMS.git
 ARG CMS_REF=main
 ARG VOLT_VERSION=v1.0.4
+# The renderer commit that matches this Volt release.
+ARG VOLT_RENDERER_REF=c8f74ffd
 ARG ADMINER_VERSION=6.3.0
 ARG HOTEL_FILES_URL=https://github.com/plus-emulator/plusemu-installer/releases/download/hotel-files
 
@@ -29,21 +31,33 @@ RUN echo "EMU $EMU_SHA" && git clone --depth 1 --branch "$EMU_REF" "$EMU_REPO" .
     && cp CameraRenderer/package.json CameraRenderer/package-lock.json CameraRenderer/*.mjs /out/CameraRenderer/ \
     && rm -f /out/CameraRenderer/*.test.mjs
 
-# ---------------------------------------------------------------- client and hotel files
+# ---------------------------------------------------------------- game client, built from source
+FROM node:22 AS client
+ARG VOLT_VERSION
+ARG VOLT_RENDERER_REF
+WORKDIR /w
+RUN git clone -q --depth 1 --branch "$VOLT_VERSION" https://github.com/plus-emulator/Volt.git Volt \
+    && git clone -q https://github.com/plus-emulator/Volt-Renderer.git Volt-Renderer \
+    && git -C Volt-Renderer checkout -q "$VOLT_RENDERER_REF"
+# Pixel-font labels draw on a transparent canvas, so the redesigned dark windows show through behind them.
+RUN sed -i 's/^    transparent = false,$/    transparent = true,/' Volt/src/common/native-text/NativeText.tsx \
+    && grep -q '^    transparent = true,$' Volt/src/common/native-text/NativeText.tsx
+RUN corepack enable \
+    && (cd Volt-Renderer && yarn install --immutable) \
+    && (cd Volt && yarn install --immutable && yarn vite build) \
+    && test -f Volt/dist/index.html
+COPY client/lucadoos-skin.css Volt/dist/lucadoos/skin.css
+RUN v=$(sha1sum Volt/dist/lucadoos/skin.css | cut -c1-10) \
+    && sed -i "0,/<\/style>/s##</style>\n    <link rel=\"stylesheet\" href=\"./lucadoos/skin.css?v=$v\" />#" Volt/dist/index.html \
+    && grep -q 'lucadoos/skin.css' Volt/dist/index.html
+
+# ---------------------------------------------------------------- hotel files
 FROM ubuntu:24.04 AS downloads
 ARG ADMINER_VERSION
 ARG VOLT_VERSION
 ARG HOTEL_FILES_URL
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*
 WORKDIR /dl
-RUN curl -fsSL --retry 3 "https://github.com/plus-emulator/Volt/releases/download/$VOLT_VERSION/volt-client.zip" -o volt.zip \
-    && mkdir client && unzip -q volt.zip -d client && rm volt.zip \
-    && test -f client/index.html
-# The LucadoOS look, loaded after the client's own styles.
-COPY client/lucadoos-skin.css client/lucadoos/skin.css
-RUN v=$(sha1sum client/lucadoos/skin.css | cut -c1-10) \
-    && sed -i "0,/<\/style>/s##</style>\n    <link rel=\"stylesheet\" href=\"./lucadoos/skin.css?v=$v\" />#" client/index.html \
-    && grep -q 'lucadoos/skin.css' client/index.html
 RUN curl -fsSL --retry 3 "https://github.com/vrana/adminer/releases/download/v$ADMINER_VERSION/adminer-$ADMINER_VERSION-mysql-en.php" -o adminer.php \
     && grep -q 'adminer_object' adminer.php
 RUN curl -fsSL --retry 3 "$HOTEL_FILES_URL/hotel-files.tar.gz" -o files.tar.gz \
@@ -80,7 +94,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN npx -y playwright@1.63.0 install --with-deps --only-shell chromium && rm -rf /root/.npm /var/lib/apt/lists/*
 
 # The big files that rarely change come first, so a website or game server change never re-uploads them.
-COPY --from=downloads /dl/client "$HOTEL/client"
+COPY --from=client /w/Volt/dist "$HOTEL/client"
 COPY --from=downloads /dl/hotel-files "$HOTEL/hotel-files"
 COPY --from=downloads /dl/adminer.php "$HOTEL/adminer/adminer.php"
 
