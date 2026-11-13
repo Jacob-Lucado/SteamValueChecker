@@ -103,6 +103,17 @@ server {
         alias /var/www/hotel/hotel-files/;
         expires 7d;
     }
+    # Furni and catalog icons the hotel files lack show as blank instead of filling the console with 404s.
+    location ~ ^/hotel-files/c_images/(hof_furni/icons|catalogue)/[^/]+\.png$ {
+        root /var/www/hotel;
+        expires 7d;
+        try_files $uri /hotel-static/missing-icon.png;
+    }
+    location = /hotel-static/missing-icon.png {
+        root /var/www/hotel/static;
+        rewrite ^ /missing-icon.png break;
+        expires 7d;
+    }
 
     location ~ ^/(login|register|forgot-password|reset-password/[^/]+|two-factor-challenge)$ {
         limit_req zone=hotel_login burst=5 nodelay;

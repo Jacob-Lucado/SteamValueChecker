@@ -274,6 +274,8 @@ sql plus <<'EOF'
 UPDATE catalog_page_images SET image = 'catalog_frontpage_headline_shop_EN' WHERE image = 'catalog_frontpage_headline_shop_GENERAL';
 UPDATE catalog_page_images SET image = 'catalog_pet_headline1_en' WHERE image = 'catalog_pet_headline3_en';
 UPDATE furniture SET item_name = 'horse_hairdye_04_horseshoe' WHERE item_name = 'horse_hairdye_04_horsesho';
+-- The Video Screen plays YouTube like the TVs (the client is patched to match).
+UPDATE furniture SET interaction_type = 'television' WHERE item_name = 'ads_videoplayer';
 
 -- Offers the client can't draw are switched off: furni with no art in the hotel files, and furni the
 -- furnidata doesn't list. Switching one back on in the database shows it again.

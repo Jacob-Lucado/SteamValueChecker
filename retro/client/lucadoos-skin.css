@@ -88,18 +88,15 @@ body,
 .volt-catalog-search-input { color: var(--los-text) !important; background: transparent !important; }
 .volt-catalog-search-input::placeholder { color: var(--los-muted) !important; }
 .volt-catalog-navigation-shell, .volt-catalog-grid-shell {
-  background: var(--los-panel) !important; border: 1px solid var(--los-line) !important; border-image: none !important; border-radius: 10px !important; overflow: hidden;
+  background: var(--los-panel) !important; border-image: none !important; border-radius: 10px !important; box-shadow: inset 0 0 0 1px var(--los-line) !important;
 }
 .volt-catalog-navigation-shell::before, .volt-catalog-navigation-shell::after, .volt-catalog-grid-shell::before, .volt-catalog-grid-shell::after { display: none !important; }
 .volt-catalog-navigation-item { border-radius: 6px; margin: 1px 4px; }
 .volt-catalog-navigation-item:hover { background: rgba(77, 163, 255, .12) !important; }
-.volt-catalog-grid > * { background: var(--los-panel-2) !important; border: 1px solid transparent !important; border-image: none !important; border-radius: 8px !important; }
-.volt-catalog-grid > *:hover { border-color: var(--los-line) !important; }
-.volt-catalog-grid > [class*="selected"], .volt-catalog-grid > [class*="active"] { border-color: var(--los-accent) !important; box-shadow: 0 0 0 1px var(--los-accent) inset; }
-.volt-catalog-window .volt-classic-scrollbar { background: transparent !important; border-image: none !important; width: 10px !important; }
-.volt-catalog-window .volt-classic-scrollbar-button { display: none !important; }
-.volt-catalog-window .volt-classic-scrollbar-track { background: rgba(255, 255, 255, .04) !important; border-image: none !important; border-radius: 6px !important; }
-.volt-catalog-window .volt-classic-scrollbar-thumb { background: #3a5a86 !important; border-image: none !important; border-radius: 6px !important; }
+/* Tiles keep the client's own size: their edge is a shadow, which takes no room in the grid. */
+.volt-catalog-grid > * { background-color: var(--los-panel-2) !important; border-radius: 8px !important; }
+.volt-catalog-grid > *:hover { box-shadow: inset 0 0 0 1px var(--los-line) !important; }
+.volt-catalog-grid > [class*="selected"], .volt-catalog-grid > [class*="active"] { box-shadow: inset 0 0 0 2px var(--los-accent) !important; }
 .volt-catalog-purchase-row { background: transparent !important; gap: 6px; }
 .volt-catalog-purchase-row button, .volt-catalog-purchase-selection-prompt {
   background: var(--los-panel-2) !important; border: 1px solid var(--los-line) !important; border-image: none !important; border-radius: 8px !important;

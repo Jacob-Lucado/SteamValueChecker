@@ -1133,5 +1133,30 @@
             "display": "BUBBLE",
             "image": "${image.library.url}/album1584/X1517.gif"
         }
-    }
+    },
+    "toolbar.stories.enabled": false,
+    "camera.launch.ui.position": "bottom-icons",
+    "games_icon_enabled": false,
+    "builders.club.enabled": true,
+    "badge_rarity.uncommon": false,
+    "habbo_club_buy_disabled": false,
+    "catalog.gift_wrapping_new.gift_card": "",
+    "currency.seasonal.color": "",
+    "eventinfo.enabled": true,
+    "wired.game_earnings": false,
+    "external.plugins": [],
+    "wired.ui_picker_enabled": false,
+    "friendship.category.management.enabled": false,
+    "user.custom.filter.enabled": false,
+    "badge.display.excluded.badgeCodes": "",
+    "groupforum.poll.period": 300,
+    "avatareditor.support.sellablefurni": true,
+    "catalog.multiple.purchase.enabled": true,
+    "catalog.vip.buy.promo": "",
+    "disabled.custom.chat.styles": "",
+    "disclaimer.credit_spending.enabled": false,
+    "effects.in.avatar.editor": true,
+    "roomenterad.habblet.enabled": false,
+    "wired.coins_chest.initial_capacity": 5000,
+    "wired.coins_chest.upgrade_capacity": 5000
 }

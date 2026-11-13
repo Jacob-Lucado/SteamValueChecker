@@ -1,0 +1,13 @@
+diff --git a/packages/room/src/RoomObjectLogicFactory.ts b/packages/room/src/RoomObjectLogicFactory.ts
+index dac3fb2b..b55455ad 100644
+--- a/packages/room/src/RoomObjectLogicFactory.ts
++++ b/packages/room/src/RoomObjectLogicFactory.ts
+@@ -243,6 +243,8 @@ export class RoomObjectLogicFactory implements IRoomObjectLogicFactory
+             case RoomObjectLogicType.FURNITURE_WILDWEST_WANTED:
+                 logic = FurnitureWildWestWantedLogic;
+                 break;
++            // Habbo's Video Screen (ads_videoplayer) plays YouTube like the TVs do.
++            case 'furniture_video_player':
+             case RoomObjectLogicType.FURNITURE_YOUTUBE:
+                 logic = FurnitureYoutubeLogic;
+                 break;
