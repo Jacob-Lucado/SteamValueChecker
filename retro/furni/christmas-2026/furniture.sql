@@ -1,7 +1,7 @@
 -- Christmas 2026: made by tools/import-nitro-furni.py. Safe to run again.
 
 INSERT IGNORE INTO catalog_pages (id, parent_id, caption, icon, required_permission, position, link, layout, catalog_mode, visible, enabled, required_club_level)
-VALUES (1837401519, 2123951, 'Christmas 2026', 176, NULL, -1, '', 'default_3x3', 'normal', 1, 1, 0);
+VALUES (1837401519, 2123951, 'Christmas 2026', 176, NULL, -1, NULL, 'default_3x3', 'normal', 1, 1, 0);
 INSERT IGNORE INTO catalog_page_images (page_id, slot, image) VALUES (1837401519, 0, 'catalog_xmas_headline1');
 
 INSERT IGNORE INTO furniture (id, item_name, public_name, type, width, length, stack_height, can_stack, can_sit, is_walkable, sprite_id, allow_recycle, allow_trade, allow_marketplace_sell, allow_gift, allow_inventory_stack, interaction_type, interaction_modes_count, vending_ids, height_adjustable, effect_id, has_furnidata, revision, category, default_dir, xdim, ydim, part_colors, name, description, ad_url, excluded_dynamic, custom_params, special_type, can_stand_on, can_sit_on, can_lay_on, furni_line, environment, rare) VALUES (37401519, 'xmas_c26_bluewhitecandle', 'Blue and White Candle', 's', 1, 1, 1.0, 1, 0, 0, 37401519, 0, 1, 0, 1, 1, 'default', 6, '0', '0', 0, 1, 59005, 'unknown', 0, 1, 1, NULL, 'Blue and White Candle', '', '', 0, '', 1, 0, 0, 0, '', '', 0);

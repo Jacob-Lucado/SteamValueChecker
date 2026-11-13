@@ -19,3 +19,7 @@ python3 tools/import-nitro-furni.py "<unzipped pack folder>" <slug> "<catalog pa
 It writes `furni/<slug>/`. Commit that folder and deploy: the furni go next to the hotel's own, and the page
 shows up at the top of the Furni tab. The client reads each furni file by its own header, so Nitro and
 Habbo furni work side by side.
+
+`furni/bobba` holds 429 furni from the [BoBBa Catalog v2.5.0](https://github.com/Puff-in/BoBBa-Catalog-v2.5.0)
+(GPL-3.0): its own furni lines, Exchange and Dolls that this hotel's files did not have. Their names are made
+from the classnames, because the catalog ships only text keys for them.
