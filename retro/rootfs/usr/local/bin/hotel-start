@@ -287,6 +287,11 @@ WHERE offer.enabled = 1 AND (
         SELECT 1 FROM furniture AS listed WHERE listed.has_furnidata = 1 AND listed.type = furni.type AND listed.sprite_id = furni.sprite_id)));
 EOF
 
+# Extra furni packs: the furni, their catalog page and offers. Rows that already exist are left alone.
+for pack in /etc/hotel/furni/*.sql; do
+    if [ -f "$pack" ]; then sql plus < "$pack"; fi
+done
+
 php artisan storage:link --force > /dev/null 2>&1 || true
 # The website caches its settings, so clear that after changing them above.
 php artisan optimize:clear > /dev/null

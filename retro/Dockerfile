@@ -39,6 +39,8 @@ WORKDIR /w
 RUN git clone -q --depth 1 --branch "$VOLT_VERSION" https://github.com/plus-emulator/Volt.git Volt \
     && git clone -q https://github.com/plus-emulator/Volt-Renderer.git Volt-Renderer \
     && git -C Volt-Renderer checkout -q "$VOLT_RENDERER_REF"
+COPY client/patches/ patches/
+RUN for patch in patches/renderer-*.patch; do git -C Volt-Renderer apply "/w/$patch"; done
 # Pixel-font labels draw on a transparent canvas, so the redesigned dark windows show through behind them.
 RUN sed -i 's/^    transparent = false,$/    transparent = true,/' Volt/src/common/native-text/NativeText.tsx \
     && grep -q '^    transparent = true,$' Volt/src/common/native-text/NativeText.tsx
@@ -64,6 +66,16 @@ RUN curl -fsSL --retry 3 "$HOTEL_FILES_URL/hotel-files.tar.gz" -o files.tar.gz \
     && curl -fsSL --retry 3 "$HOTEL_FILES_URL/SHA256SUMS" -o SHA256SUMS \
     && echo "$(awk '$2 == "hotel-files.tar.gz" || $2 == "*hotel-files.tar.gz" {print $1}' SHA256SUMS)  files.tar.gz" | sha256sum -c - \
     && mkdir hotel-files && tar xzf files.tar.gz --no-same-owner -C hotel-files && rm files.tar.gz SHA256SUMS
+# Extra furni packs (tools/import-nitro-furni.py): their bundles sit beside the official ones under the
+# .hab name the client asks for, and the client reads each file by its own header.
+COPY furni/ furni/
+RUN mkdir -p furni-sql hotel-files/c_images/hof_furni/icons \
+    && for pack in furni/*/; do \
+         slug=$(basename "$pack"); \
+         for bundle in "$pack"bundles/*.nitro; do cp "$bundle" "hotel-files/assets/furniture/$(basename "$bundle" .nitro).hab"; done; \
+         cp "$pack"icons/*.png hotel-files/c_images/hof_furni/icons/ 2> /dev/null || true; \
+         cp "$pack"furniture.sql "furni-sql/$slug.sql"; \
+       done
 
 # ---------------------------------------------------------------- runtime
 FROM ubuntu:24.04
@@ -96,6 +108,7 @@ RUN npx -y playwright@1.63.0 install --with-deps --only-shell chromium && rm -rf
 # The big files that rarely change come first, so a website or game server change never re-uploads them.
 COPY --from=client /w/Volt/dist "$HOTEL/client"
 COPY --from=downloads /dl/hotel-files "$HOTEL/hotel-files"
+COPY --from=downloads /dl/furni-sql /etc/hotel/furni/
 COPY --from=downloads /dl/adminer.php "$HOTEL/adminer/adminer.php"
 
 # The website, built once here. Its database setup runs on first boot, when the volume is there.

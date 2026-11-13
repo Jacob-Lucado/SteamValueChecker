@@ -1,0 +1,24 @@
+diff --git a/packages/assets/src/AssetManager.ts b/packages/assets/src/AssetManager.ts
+index f198e72c..efd3ba97 100644
+--- a/packages/assets/src/AssetManager.ts
++++ b/packages/assets/src/AssetManager.ts
+@@ -149,13 +149,17 @@ export class AssetManager implements IAssetManager
+                 // Only the configured format is fetched and read; the texture stays keyed by the requested URL.
+                 const format = this._dependencies.bundleFormat();
+                 const response = await this.fetchAsset(GetAssetBundleUrl(url, format));
+-                const loadBundle = (format === 'hab') ? this._dependencies.loadHabBundle : this._dependencies.loadVoltBundle;
++                const buffer = await response.arrayBuffer();
++                // The file's own header decides how it is read, so Nitro furni can sit beside Habbo ones.
++                const head = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
++                const isHab = (head.length === 4) && (head[0] === 0x48) && (head[1] === 0x41) && (head[2] === 0x42) && (head[3] === 0);
++                const loadBundle = isHab ? this._dependencies.loadHabBundle : this._dependencies.loadVoltBundle;
+                 const decodedResources: LoadedImageResource[] = [];
+ 
+                 try
+                 {
+                     const bundle = await loadBundle(
+-                        await response.arrayBuffer(),
++                        buffer,
+                         async (bytes, entryName) =>
+                         {
+                             const detected = detectImageFormat(new Uint8Array(bytes), undefined, entryName);
