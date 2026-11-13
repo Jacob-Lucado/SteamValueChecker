@@ -190,6 +190,7 @@ set_env CLIENT_NITRO_ENABLED true
 set_env NITRO_CLIENT_PATH "$SITE_URL/client"
 set_env RCON_HOST 127.0.0.1
 set_env RCON_PORT 30001
+set_env RCON_CONNECT_TIMEOUT 3
 set_env FORCE_HTTPS "$([ "$HTTPS_FLAG" = on ] && echo true || echo false)"
 set_env SESSION_SECURE_COOKIE "$([ "$HTTPS_FLAG" = on ] && echo true || echo false)"
 # Every request comes through Fly's proxy and then nginx.
@@ -232,7 +233,7 @@ UPDATE website_settings SET value = CASE \`key\`
     WHEN 'nitro_path' THEN '$SITE_URL/client'
     WHEN 'rcon_ip' THEN '127.0.0.1'
     WHEN 'rcon_port' THEN '30001'
-    WHEN 'badges_path' THEN '$SITE_URL/hotel-files/c_images/album1584'
+    WHEN 'badges_path' THEN '$SITE_URL/hotel-files/c_images/album1584/'
     WHEN 'furniture_icons_path' THEN '$SITE_URL/hotel-files/c_images/hof_furni/icons'
     ELSE value END
 WHERE \`key\` IN ('nitro_path', 'rcon_ip', 'rcon_port', 'badges_path', 'furniture_icons_path');
