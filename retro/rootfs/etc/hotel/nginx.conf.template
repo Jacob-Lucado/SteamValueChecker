@@ -1,0 +1,103 @@
+# Written by hotel-start from /etc/hotel/nginx.conf.template on every boot.
+# Fly's proxy handles HTTPS and hands every request to this server on port 8000.
+
+limit_req_zone $hotel_client_ip zone=hotel_login:10m rate=10r/m;
+limit_req_zone $hotel_client_ip zone=hotel_housekeeping:10m rate=60r/m;
+limit_conn_zone $hotel_client_ip zone=hotel_conn:10m;
+limit_conn_zone $hotel_client_ip zone=hotel_ws:10m;
+
+# Fly puts the visitor's real address in Fly-Client-IP.
+map $http_fly_client_ip $hotel_client_ip {
+    "" $remote_addr;
+    default $http_fly_client_ip;
+}
+
+types { application/json jsonc; }
+
+server {
+    listen 8000 default_server;
+    server_name _;
+
+    root /var/www/hotel/cms/public;
+    index index.php;
+    charset utf-8;
+    client_max_body_size 20m;
+    server_tokens off;
+    client_header_timeout 10s;
+    client_body_timeout 10s;
+    keepalive_timeout 20s;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), usb=()" always;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml application/wasm;
+
+    # Fly's health check
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # The game connection. Only the hotel's own pages may open it.
+    location = /ws {
+        if ($http_origin != "${SITE_URL}") { return 403; }
+        limit_conn hotel_ws 20;
+        proxy_pass http://127.0.0.1:2096;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $hotel_client_ip;
+        proxy_set_header X-Forwarded-For $hotel_client_ip;
+        proxy_read_timeout 1d;
+        proxy_send_timeout 1d;
+    }
+
+    # The game client (Volt). Hashed bundles never change; its settings are read fresh every load.
+    location /client/ {
+        alias /var/www/hotel/client/;
+        index index.html;
+        location ~ ^/client/(src/)?assets/ { expires max; }
+        location ~ ^/client/(index\.html|configuration/) { expires -1; }
+    }
+    location = /client { return 301 /client/; }
+
+    # Answered by the game server: furniture data built from the furniture table, and badge rarity.
+    location = /api/gamedata/furnidata { proxy_pass http://127.0.0.1:8080; }
+    location = /api/badges/leaderboard { proxy_pass http://127.0.0.1:8080; }
+
+    # Furniture, clothes, badges and texts.
+    location /hotel-files/ {
+        alias /var/www/hotel/hotel-files/;
+        expires 7d;
+    }
+
+    location ~ ^/(login|register|forgot-password|reset-password/[^/]+|two-factor-challenge)$ {
+        limit_req zone=hotel_login burst=5 nodelay;
+        try_files $uri /index.php?$query_string;
+    }
+
+    location /housekeeping {
+        limit_req zone=hotel_housekeeping burst=20 nodelay;
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location / {
+        limit_conn hotel_conn 50;
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php8.5-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param HTTPS ${HTTPS_FLAG};
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    location ~ /\.(?!well-known) { deny all; }
+}

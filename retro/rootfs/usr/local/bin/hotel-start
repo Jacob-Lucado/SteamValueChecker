@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# Starts the hotel. The first boot sets up the database and the website on the /data volume,
+# the same way the PlusEMU installer does on a server. Later boots only refresh the settings.
+set -Eeuo pipefail
+
+HOTEL=/var/www/hotel
+CMS=$HOTEL/cms
+EMU=$HOTEL/emulator
+DATA=/data
+SECRETS=$DATA/secrets.env
+SITE_URL=${SITE_URL:?Set SITE_URL, for example https://retro.steamvaluechecker.com}
+SITE_URL=${SITE_URL%/}
+HOTEL_NAME=${HOTEL_NAME:-Lucado Hotel}
+
+log() { printf '[hotel] %s\n' "$*"; }
+random_secret() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "${1:-32}" || true; }
+sql() { mariadb --protocol=socket -uroot "$@"; }
+
+set_env() { # set_env <KEY> <value>: replace or add KEY=value in the website's .env
+    local file=$DATA/cms.env value=$2
+    if [[ $value =~ [[:space:]#\"] ]]; then value="\"${value//\"/\\\"}\""; fi
+    if grep -q "^$1=" "$file"; then
+        KEY=$1 VALUE=$value awk 'BEGIN { FS = OFS = "=" } $1 == ENVIRON["KEY"] { print ENVIRON["KEY"] "=" ENVIRON["VALUE"]; next } { print }' "$file" > "$file.new"
+        cat "$file.new" > "$file" && rm -f "$file.new"
+    else
+        printf '%s=%s\n' "$1" "$value" >> "$file"
+    fi
+}
+
+render() { # render <template> <output>: fill in {{SITE_URL}}, {{SOCKET_URL}} and {{FURNIDATA_URL}}
+    local text
+    text=$(< "$1")
+    text=${text//\{\{SITE_URL\}\}/$SITE_URL}
+    text=${text//\{\{SOCKET_URL\}\}/$SOCKET_URL}
+    text=${text//\{\{FURNIDATA_URL\}\}/$SITE_URL/api/gamedata/furnidata}
+    printf '%s\n' "$text" > "$2"
+}
+
+wait_for() { # wait_for <what> <command...>
+    local what=$1
+    shift
+    for _ in $(seq 1 90); do
+        if "$@" > /dev/null 2>&1; then return 0; fi
+        sleep 2
+    done
+    log "$what did not start in time."
+    return 1
+}
+
+emulator_up() { [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/gamedata/furnidata/version)" != 000 ]; }
+
+# ---------------------------------------------------------------- folders on the volume
+mkdir -p "$DATA/mysql" "$DATA/backups" "$DATA/camera" "$DATA/storage"
+for dir in app/public framework/cache/data framework/sessions framework/testing framework/views logs; do
+    mkdir -p "$DATA/storage/$dir"
+done
+chown -R mysql:mysql "$DATA/mysql"
+chown -R www-data:www-data "$DATA/storage"
+chown plusemu:plusemu "$DATA/camera" "$DATA/backups"
+mkdir -p /run/mysqld /run/php && chown mysql:mysql /run/mysqld
+
+if [ ! -f "$SECRETS" ]; then
+    printf 'DB_PASSWORD=%s\n' "$(random_secret 32)" > "$SECRETS"
+    chmod 600 "$SECRETS"
+fi
+# shellcheck disable=SC1090
+. "$SECRETS"
+
+case $SITE_URL in
+    https://*) HTTPS_FLAG=on ;;
+    *) HTTPS_FLAG=off ;;
+esac
+SOCKET_URL=$(printf '%s' "$SITE_URL" | sed 's#^http#ws#')/ws
+
+# ---------------------------------------------------------------- game server and client settings
+jq --arg pass "$DB_PASSWORD" --arg backups "$DATA/backups" --arg photos "$DATA/camera" --arg bearer "$(random_secret 48)" '
+    .Database.Hostname = "127.0.0.1" | .Database.Port = 3306 | .Database.Username = "hotel"
+    | .Database.Password = $pass | .Database.Name = "plus"
+    | .Database.Migrations.BackupDirectory = $backups
+    | .Flash.Hostname = "127.0.0.1"
+    | .Nitro.Hostname = "127.0.0.1" | .Nitro.Port = 2096 | .Nitro.Name = "Volt"
+    | .Rcon.Hostname = "127.0.0.1" | .Rcon.Port = 30001 | .Rcon.AllowedAddresses = ["127.0.0.1", "localhost"]
+    | .Camera.Bearer = $bearer | .Camera.OutputDirectory = $photos' /etc/hotel/emulator-config.json > "$EMU/Config/config.json"
+chown -R plusemu:plusemu "$EMU"
+chmod 600 "$EMU/Config/config.json"
+
+for file in renderer-config.json ui-config.json client-mode.json; do
+    render "/etc/hotel/$file" "$HOTEL/client/configuration/$file"
+done
+
+SITE_URL=$SITE_URL HTTPS_FLAG=$HTTPS_FLAG envsubst '${SITE_URL} ${HTTPS_FLAG}' < /etc/hotel/nginx.conf.template > /etc/nginx/sites-available/hotel.conf
+ln -sf /etc/nginx/sites-available/hotel.conf /etc/nginx/sites-enabled/hotel.conf
+nginx -t -q
+
+# ---------------------------------------------------------------- database
+if [ ! -d "$DATA/mysql/mysql" ]; then
+    log "First boot: creating the database."
+    mariadb-install-db --user=mysql --datadir="$DATA/mysql" --skip-test-db > /dev/null
+fi
+
+/usr/sbin/mariadbd --user=mysql --datadir="$DATA/mysql" --bind-address=127.0.0.1 --skip-networking=0 &
+db_pid=$!
+wait_for "MariaDB" sql -e 'SELECT 1'
+
+sql <<EOF
+CREATE DATABASE IF NOT EXISTS plus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'hotel'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+CREATE USER IF NOT EXISTS 'hotel'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
+GRANT ALL PRIVILEGES ON plus.* TO 'hotel'@'localhost';
+GRANT ALL PRIVILEGES ON plus.* TO 'hotel'@'127.0.0.1';
+FLUSH PRIVILEGES;
+EOF
+
+# A database with players in it is a hotel and is never replaced.
+if [ "$(sql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'plus' AND table_name = 'users'")" = 0 ]; then
+    log "Importing the PlusEMU database."
+    sql plus < "$EMU/Database/FreshInstall.sql"
+fi
+
+# The game server brings its own tables up to date when it starts, before the website looks at them.
+log "Letting the game server update its tables."
+su -s /bin/sh plusemu -c "cd '$EMU' && exec './Plus Emulator'" > /tmp/emulator-first-run.log 2>&1 &
+emu_pid=$!
+if ! wait_for "The game server" emulator_up; then
+    tail -n 60 /tmp/emulator-first-run.log
+    exit 1
+fi
+kill "$emu_pid" 2> /dev/null || true
+wait "$emu_pid" 2> /dev/null || true
+
+# ---------------------------------------------------------------- website
+cd "$CMS"
+if [ ! -f "$DATA/cms.env" ]; then
+    cp .env.example "$DATA/cms.env"
+fi
+set_env APP_NAME "$HOTEL_NAME"
+set_env APP_ENV production
+set_env APP_DEBUG false
+set_env APP_URL "$SITE_URL"
+set_env LOG_CHANNEL stderr
+set_env LOG_LEVEL warning
+set_env DB_CONNECTION mariadb
+set_env DB_HOST 127.0.0.1
+set_env DB_PORT 3306
+set_env DB_DATABASE plus
+set_env DB_USERNAME hotel
+set_env DB_PASSWORD "$DB_PASSWORD"
+set_env EMULATOR_DRIVER plus
+set_env CMS_THEME lucadoos
+set_env CLIENT_NITRO_ENABLED true
+set_env NITRO_CLIENT_PATH "$SITE_URL/client"
+set_env RCON_HOST 127.0.0.1
+set_env RCON_PORT 30001
+set_env FORCE_HTTPS "$([ "$HTTPS_FLAG" = on ] && echo true || echo false)"
+set_env SESSION_SECURE_COOKIE "$([ "$HTTPS_FLAG" = on ] && echo true || echo false)"
+# Every request comes through Fly's proxy and then nginx.
+set_env TRUSTED_PROXIES '*'
+chgrp www-data "$DATA/cms.env" && chmod 640 "$DATA/cms.env"
+
+php artisan optimize:clear > /dev/null
+php artisan atom:install --emulator=plus --skip-build --no-interaction
+
+if [ "$(sql -N plus -e 'SELECT COUNT(*) FROM website_installation WHERE completed = 1' 2> /dev/null || echo 0)" = 0 ]; then
+    ADMIN_USER=${ADMIN_USER:-admin}
+    ADMIN_EMAIL=${ADMIN_EMAIL:-admin@retro.local}
+    if [ -z "${ADMIN_PASSWORD:-}" ]; then
+        ADMIN_PASSWORD=$(random_secret 20)
+        printf '%s\n' "$ADMIN_PASSWORD" > "$DATA/admin-password.txt"
+        chmod 600 "$DATA/admin-password.txt"
+        log "Admin account: $ADMIN_USER / $ADMIN_PASSWORD  (change it after you sign in)"
+    fi
+    settings=$(mktemp)
+    jq -n --arg name "$HOTEL_NAME" '{hotel_name: $name}' > "$settings"
+    ATOM_ADMIN_EMAIL=$ADMIN_EMAIL ATOM_ADMIN_PASSWORD=$ADMIN_PASSWORD \
+        php artisan atom:setup --complete --settings="$settings" --admin="$ADMIN_USER" --no-interaction
+    rm -f "$settings"
+    # atom:setup only promotes the placeholder admin, so give it the real name, email and password.
+    ADMIN_USER=$ADMIN_USER ADMIN_EMAIL=$ADMIN_EMAIL ADMIN_PASSWORD=$ADMIN_PASSWORD php <<'PHP'
+<?php
+require 'vendor/autoload.php';
+$app = require 'bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$user = App\Models\User::where('username', getenv('ADMIN_USER'))->firstOrFail();
+$user->forceFill(['username' => getenv('ADMIN_USER'), 'mail' => getenv('ADMIN_EMAIL'), 'password' => getenv('ADMIN_PASSWORD')])->save();
+PHP
+fi
+
+sql plus <<EOF
+UPDATE website_settings SET value = CASE \`key\`
+    WHEN 'nitro_path' THEN '$SITE_URL/client'
+    WHEN 'rcon_ip' THEN '127.0.0.1'
+    WHEN 'rcon_port' THEN '30001'
+    WHEN 'badges_path' THEN '$SITE_URL/hotel-files/c_images/album1584'
+    WHEN 'furniture_icons_path' THEN '$SITE_URL/hotel-files/c_images/hof_furni/icons'
+    ELSE value END
+WHERE \`key\` IN ('nitro_path', 'rcon_ip', 'rcon_port', 'badges_path', 'furniture_icons_path');
+EOF
+
+php artisan storage:link --force > /dev/null 2>&1 || true
+# The website caches its settings, so clear that after changing them above.
+php artisan optimize:clear > /dev/null
+php artisan optimize > /dev/null
+chown -R www-data:www-data "$DATA/storage" bootstrap/cache
+
+# ---------------------------------------------------------------- hand over to supervisor
+mariadb-admin --protocol=socket -uroot shutdown
+wait "$db_pid" 2> /dev/null || true
+log "Starting the hotel at $SITE_URL"
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/hotel.conf
