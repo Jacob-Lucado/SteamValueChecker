@@ -92,6 +92,9 @@ SITE_URL=$SITE_URL HTTPS_FLAG=$HTTPS_FLAG envsubst '${SITE_URL} ${HTTPS_FLAG}' <
 ln -sf /etc/nginx/sites-available/hotel.conf /etc/nginx/sites-enabled/hotel.conf
 nginx -t -q
 
+printf '<?php return [%s => %s];\n' "'password'" "'$DB_PASSWORD'" > "$HOTEL/adminer/credentials.php"
+chown root:www-data "$HOTEL/adminer/credentials.php" && chmod 640 "$HOTEL/adminer/credentials.php"
+
 # ---------------------------------------------------------------- database
 if [ ! -d "$DATA/mysql/mysql" ]; then
     log "First boot: creating the database."

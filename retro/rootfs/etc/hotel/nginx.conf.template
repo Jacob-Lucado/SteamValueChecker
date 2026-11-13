@@ -81,6 +81,30 @@ server {
         try_files $uri /index.php?$query_string;
     }
 
+    # The database page. Only staff who can open Housekeeping get past check.php.
+    location = /_hotel_db_check {
+        internal;
+        fastcgi_pass unix:/run/php/php8.5-fpm.sock;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /var/www/hotel/adminer/check.php;
+        fastcgi_param HTTPS ${HTTPS_FLAG};
+        fastcgi_pass_request_body off;
+        fastcgi_param CONTENT_LENGTH "";
+    }
+    location @hotel_db_denied { return 302 /housekeeping; }
+    location ^~ /housekeeping/database {
+        auth_request /_hotel_db_check;
+        error_page 401 403 = @hotel_db_denied;
+        limit_req zone=hotel_housekeeping burst=40 nodelay;
+        client_max_body_size 64m;
+        fastcgi_pass unix:/run/php/php8.5-fpm.sock;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /var/www/hotel/adminer/index.php;
+        fastcgi_param HTTPS ${HTTPS_FLAG};
+        fastcgi_read_timeout 300s;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+    }
+
     location /housekeeping {
         limit_req zone=hotel_housekeeping burst=20 nodelay;
         try_files $uri $uri/ /index.php?$query_string;

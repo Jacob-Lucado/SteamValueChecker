@@ -7,6 +7,7 @@ ARG EMU_REF=main
 ARG CMS_REPO=https://github.com/Jacob-Lucado/CMS.git
 ARG CMS_REF=main
 ARG VOLT_VERSION=v1.0.4
+ARG ADMINER_VERSION=6.3.0
 ARG HOTEL_FILES_URL=https://github.com/plus-emulator/plusemu-installer/releases/download/hotel-files
 
 # ---------------------------------------------------------------- game server
@@ -23,6 +24,7 @@ RUN git clone --depth 1 --branch "$EMU_REF" "$EMU_REPO" . \
 
 # ---------------------------------------------------------------- client and hotel files
 FROM ubuntu:24.04 AS downloads
+ARG ADMINER_VERSION
 ARG VOLT_VERSION
 ARG HOTEL_FILES_URL
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*
@@ -30,6 +32,8 @@ WORKDIR /dl
 RUN curl -fsSL --retry 3 "https://github.com/plus-emulator/Volt/releases/download/$VOLT_VERSION/volt-client.zip" -o volt.zip \
     && mkdir client && unzip -q volt.zip -d client && rm volt.zip \
     && test -f client/index.html
+RUN curl -fsSL --retry 3 "https://github.com/vrana/adminer/releases/download/v$ADMINER_VERSION/adminer-$ADMINER_VERSION-mysql-en.php" -o adminer.php \
+    && grep -q 'adminer_object' adminer.php
 RUN curl -fsSL --retry 3 "$HOTEL_FILES_URL/hotel-files.tar.gz" -o files.tar.gz \
     && curl -fsSL --retry 3 "$HOTEL_FILES_URL/SHA256SUMS" -o SHA256SUMS \
     && echo "$(awk '$2 == "hotel-files.tar.gz" || $2 == "*hotel-files.tar.gz" {print $1}' SHA256SUMS)  files.tar.gz" | sha256sum -c - \
@@ -70,6 +74,7 @@ RUN git clone --depth 1 --branch "$CMS_REF" "$CMS_REPO" "$HOTEL/cms" \
 COPY --from=emulator /out "$HOTEL/emulator"
 COPY --from=downloads /dl/client "$HOTEL/client"
 COPY --from=downloads /dl/hotel-files "$HOTEL/hotel-files"
+COPY --from=downloads /dl/adminer.php "$HOTEL/adminer/adminer.php"
 COPY rootfs/ /
 
 RUN useradd --system --home-dir "$HOTEL/emulator" --shell /usr/sbin/nologin plusemu \
