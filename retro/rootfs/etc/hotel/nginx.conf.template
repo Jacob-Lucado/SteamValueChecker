@@ -62,9 +62,29 @@ server {
         alias /var/www/hotel/client/;
         index index.html;
         location ~ ^/client/(src/)?assets/ { expires max; }
-        location ~ ^/client/(index\.html|configuration/) { expires -1; }
+        location ~ ^/client/configuration/ { expires -1; }
+        # The entry page carries the client's settings inline, which saves several round trips on load.
+        location ~ ^/client/(index\.html)?$ {
+            expires -1;
+            ssi on;
+            ssi_silent_errors on;
+            ssi_types text/html;
+        }
+    }
+    location = /client/configuration/furnidata-version.json {
+        proxy_pass http://127.0.0.1:8080/api/gamedata/furnidata/version;
     }
     location = /client { return 301 /client/; }
+
+    # Camera photos and room thumbnails, written by the game server.
+    location ~ "^/camera/(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:_small)?|thumbnail/[0-9]+)\.png$" {
+        root /data;
+        limit_except GET HEAD { deny all; }
+        add_header X-Content-Type-Options nosniff always;
+        add_header Cache-Control no-cache;
+        try_files $uri =404;
+    }
+    location /camera/ { return 404; }
 
     # Answered by the game server: furniture data built from the furniture table, and badge rarity.
     location = /api/gamedata/furnidata { proxy_pass http://127.0.0.1:8080; }

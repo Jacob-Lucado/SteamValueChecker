@@ -57,9 +57,6 @@
 	"habbicons.asset.hash": "default",
 	"timezone.settings": "America/New_York",
 	"user.badges.group.slot.enabled": true,
-	"loading.logo.url": "",
-	"loading.background": "",
-	"loading.progress.color": "linear-gradient(90deg,#4f8cff,#2563eb)",
 	"badges.leaderboard.endpoint": "${api.url}/api/badges/leaderboard",
 	"avatar.mandatory.libraries": [
         "bd:1",

@@ -24,7 +24,10 @@ RUN echo "EMU $EMU_SHA" && git clone --depth 1 --branch "$EMU_REF" "$EMU_REPO" .
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o /out \
     && mkdir -p /out/Database \
     && cp Database/FreshInstall.sql /out/Database/ \
-    && cp -r Database/Migrations /out/Database/
+    && cp -r Database/Migrations /out/Database/ \
+    && mkdir -p /out/CameraRenderer \
+    && cp CameraRenderer/package.json CameraRenderer/package-lock.json CameraRenderer/*.mjs /out/CameraRenderer/ \
+    && rm -f /out/CameraRenderer/*.test.mjs
 
 # ---------------------------------------------------------------- client and hotel files
 FROM ubuntu:24.04 AS downloads
@@ -36,6 +39,11 @@ WORKDIR /dl
 RUN curl -fsSL --retry 3 "https://github.com/plus-emulator/Volt/releases/download/$VOLT_VERSION/volt-client.zip" -o volt.zip \
     && mkdir client && unzip -q volt.zip -d client && rm volt.zip \
     && test -f client/index.html
+# The LucadoOS look, loaded after the client's own styles.
+COPY client/lucadoos-skin.css client/lucadoos/skin.css
+RUN v=$(sha1sum client/lucadoos/skin.css | cut -c1-10) \
+    && sed -i "0,/<\/style>/s##</style>\n    <link rel=\"stylesheet\" href=\"./lucadoos/skin.css?v=$v\" />#" client/index.html \
+    && grep -q 'lucadoos/skin.css' client/index.html
 RUN curl -fsSL --retry 3 "https://github.com/vrana/adminer/releases/download/v$ADMINER_VERSION/adminer-$ADMINER_VERSION-mysql-en.php" -o adminer.php \
     && grep -q 'adminer_object' adminer.php
 RUN curl -fsSL --retry 3 "$HOTEL_FILES_URL/hotel-files.tar.gz" -o files.tar.gz \
@@ -66,6 +74,10 @@ RUN apt-get update \
     && curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
 
+# The camera service draws photos in a headless Chromium. Installed early so it is rarely downloaded again.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN npx -y playwright@1.63.0 install --with-deps --only-shell chromium && rm -rf /root/.npm /var/lib/apt/lists/*
+
 # The big files that rarely change come first, so a website or game server change never re-uploads them.
 COPY --from=downloads /dl/client "$HOTEL/client"
 COPY --from=downloads /dl/hotel-files "$HOTEL/hotel-files"
@@ -82,13 +94,17 @@ RUN echo "CMS $CMS_SHA" && git clone --depth 1 --branch "$CMS_REF" "$CMS_REPO" "
     && ln -s /data/cms.env .env
 
 COPY --from=emulator /out "$HOTEL/emulator"
+RUN cd "$HOTEL/emulator/CameraRenderer" \
+    && npm ci --omit=dev --no-audit --no-fund \
+    && npx playwright install --only-shell chromium \
+    && rm -rf /root/.npm
 COPY rootfs/ /
 
 RUN useradd --system --home-dir "$HOTEL/emulator" --shell /usr/sbin/nologin plusemu \
     && sed -i '1s/^\xEF\xBB\xBF//' "$HOTEL/emulator/Config/config.json" \
     && sed -i 's/minlevel="Trace"/minlevel="Info"/' "$HOTEL/emulator/Config/nlog.config" \
     && cp "$HOTEL/emulator/Config/config.json" /etc/hotel/emulator-config.json \
-    && chmod +x /usr/local/bin/hotel-start
+    && chmod +x /usr/local/bin/hotel-start /usr/local/bin/hotel-client-config
 
 EXPOSE 8000
 CMD ["/usr/local/bin/hotel-start"]

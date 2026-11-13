@@ -1,0 +1,59 @@
+#!/usr/bin/env php
+<?php
+// hotel-client-config <client example> <our settings> <output>
+// Starts from the example settings that ship with this client release, so a newer client gets its new
+// settings with their defaults, then applies ours on top. Writes {{SITE_URL}}-style placeholders through.
+
+[, $examplePath, $oursPath, $outputPath] = $argv + [null, null, null, null];
+
+if ($oursPath === null || $outputPath === null) {
+    fwrite(STDERR, "usage: hotel-client-config <example> <ours> <output>\n");
+    exit(2);
+}
+
+/** JSON with comments and trailing commas, as the client's example files are written. */
+function readLoose(string $path): array
+{
+    $text = file_get_contents($path);
+    $out = '';
+    $length = strlen($text);
+    for ($i = 0; $i < $length; $i++) {
+        $char = $text[$i];
+        if ($char === '"') {
+            $end = $i + 1;
+            while ($end < $length && $text[$end] !== '"') {
+                $end += $text[$end] === '\\' ? 2 : 1;
+            }
+            $out .= substr($text, $i, $end - $i + 1);
+            $i = $end;
+        } elseif ($char === '/' && ($text[$i + 1] ?? '') === '/') {
+            while ($i < $length && $text[$i] !== "\n") {
+                $i++;
+            }
+        } elseif ($char === '/' && ($text[$i + 1] ?? '') === '*') {
+            $i = strpos($text, '*/', $i + 2) ?: $length;
+            $i++;
+        } else {
+            $out .= $char;
+        }
+    }
+    $out = preg_replace('/,(\s*[}\]])/', '$1', $out);
+    $data = json_decode($out, true);
+    if (! is_array($data)) {
+        throw new RuntimeException("$path is not valid JSON: " . json_last_error_msg());
+    }
+
+    return $data;
+}
+
+$ours = readLoose($oursPath);
+$base = [];
+if ($examplePath !== null && is_file($examplePath)) {
+    try {
+        $base = readLoose($examplePath);
+    } catch (RuntimeException $e) {
+        fwrite(STDERR, $e->getMessage() . "; using our settings only.\n");
+    }
+}
+
+file_put_contents($outputPath, json_encode(array_replace($base, $ours), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");

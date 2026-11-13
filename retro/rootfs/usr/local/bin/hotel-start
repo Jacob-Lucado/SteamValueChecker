@@ -54,9 +54,14 @@ mkdir -p "$DATA/mysql" "$DATA/backups" "$DATA/camera" "$DATA/storage"
 for dir in app/public framework/cache/data framework/sessions framework/testing framework/views logs; do
     mkdir -p "$DATA/storage/$dir"
 done
+mkdir -p "$DATA/storage/app/public/website_news_images" "$DATA/camera/thumbnail"
+if [ ! -f "$DATA/storage/app/public/website_news_images/default.png" ]; then
+    cp "$CMS/public/assets/images/hotel.png" "$DATA/storage/app/public/website_news_images/default.png"
+fi
 chown -R mysql:mysql "$DATA/mysql"
 chown -R www-data:www-data "$DATA/storage"
-chown plusemu:plusemu "$DATA/camera" "$DATA/backups"
+chown -R plusemu:plusemu "$DATA/camera"
+chown plusemu:plusemu "$DATA/backups"
 mkdir -p /run/mysqld /run/php && chown mysql:mysql /run/mysqld
 
 if [ ! -f "$SECRETS" ]; then
@@ -73,7 +78,9 @@ esac
 SOCKET_URL=$(printf '%s' "$SITE_URL" | sed 's#^http#ws#')/ws
 
 # ---------------------------------------------------------------- game server and client settings
-jq --arg pass "$DB_PASSWORD" --arg backups "$DATA/backups" --arg photos "$DATA/camera" --arg bearer "$(random_secret 48)" '
+# The game server and the camera service share this secret; a new one each boot is fine.
+CAMERA_SECRET=$(random_secret 48)
+jq --arg pass "$DB_PASSWORD" --arg backups "$DATA/backups" --arg photos "$DATA/camera" --arg bearer "$CAMERA_SECRET" '
     .Database.Hostname = "127.0.0.1" | .Database.Port = 3306 | .Database.Username = "hotel"
     | .Database.Password = $pass | .Database.Name = "plus"
     | .Database.Migrations.BackupDirectory = $backups
@@ -84,9 +91,38 @@ jq --arg pass "$DB_PASSWORD" --arg backups "$DATA/backups" --arg photos "$DATA/c
 chown -R plusemu:plusemu "$EMU"
 chmod 600 "$EMU/Config/config.json"
 
-for file in renderer-config.json ui-config.json client-mode.json; do
-    render "/etc/hotel/$file" "$HOTEL/client/configuration/$file"
+# Each setting file starts from the example that ships with this client release, with ours on top,
+# so a client update brings its new settings along.
+for pair in renderer-config.json:renderer-config.json.example.json ui-config.json:ui-config.example client-mode.json:client-mode.example; do
+    file=${pair%%:*}
+    merged=$(mktemp)
+    hotel-client-config "$HOTEL/client/configuration/${pair#*:}" "/etc/hotel/$file" "$merged"
+    render "$merged" "$HOTEL/client/configuration/$file"
+    rm -f "$merged"
 done
+
+# The browser tab shows the hotel's name.
+HOTEL_NAME=$HOTEL_NAME php -r '$f = $argv[1]; $t = htmlspecialchars(getenv("HOTEL_NAME") ?: "Hotel", ENT_QUOTES); file_put_contents($f, preg_replace("#<title>[^<]*</title>#", "<title>$t</title>", file_get_contents($f), 1));' "$HOTEL/client/index.html"
+
+# Gamedata versions for the client's entry page: it then asks for each file by version and can cache it.
+php -r '$files = []; foreach (glob($argv[1] . "/*") as $f) { if (is_file($f)) { $files[basename($f)] = substr(sha1_file($f), 0, 16); } } echo json_encode(["files" => $files], JSON_UNESCAPED_SLASHES), "\n";' \
+    "$HOTEL/hotel-files/gamedata" > "$HOTEL/client/configuration/gamedata-versions.json"
+
+# The camera service draws photos with the client's own renderer.
+install -m 600 -o plusemu -g plusemu /dev/null /run/hotel-camera.env
+cat > /run/hotel-camera.env <<EOF
+CAMERA_RENDERER_SECRET=$CAMERA_SECRET
+CAMERA_ASSET_LAYOUT=hotel-files
+CAMERA_ASSET_ROOT=$HOTEL/hotel-files
+CAMERA_IMAGES_ROOT=$HOTEL/hotel-files/c_images
+CAMERA_MEDIA_ROOT=$DATA/camera
+CAMERA_PAGE_ROOT=$HOTEL/client
+CAMERA_RENDERER_CONFIG=$HOTEL/client/configuration/renderer-config.json
+CAMERA_UI_CONFIG=$HOTEL/client/configuration/ui-config.json
+CAMERA_FURNIDATA_URL=http://127.0.0.1:8080/api/gamedata/furnidata
+CAMERA_CHROMIUM_SANDBOX=0
+PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+EOF
 
 SITE_URL=$SITE_URL HTTPS_FLAG=$HTTPS_FLAG envsubst '${SITE_URL} ${HTTPS_FLAG}' < /etc/hotel/nginx.conf.template > /etc/nginx/sites-available/hotel.conf
 ln -sf /etc/nginx/sites-available/hotel.conf /etc/nginx/sites-enabled/hotel.conf
@@ -200,6 +236,14 @@ UPDATE website_settings SET value = CASE \`key\`
     WHEN 'furniture_icons_path' THEN '$SITE_URL/hotel-files/c_images/hof_furni/icons'
     ELSE value END
 WHERE \`key\` IN ('nitro_path', 'rcon_ip', 'rcon_port', 'badges_path', 'furniture_icons_path');
+EOF
+
+# Catalog art the hotel files have under another name: the English shop header instead of the Portuguese
+# one, a pet header that exists, and a furniture name that was cut short.
+sql plus <<'EOF'
+UPDATE catalog_page_images SET image = 'catalog_frontpage_headline_shop_EN' WHERE image = 'catalog_frontpage_headline_shop_GENERAL';
+UPDATE catalog_page_images SET image = 'catalog_pet_headline1_en' WHERE image = 'catalog_pet_headline3_en';
+UPDATE furniture SET item_name = 'horse_hairdye_04_horseshoe' WHERE item_name = 'horse_hairdye_04_horsesho';
 EOF
 
 php artisan storage:link --force > /dev/null 2>&1 || true
