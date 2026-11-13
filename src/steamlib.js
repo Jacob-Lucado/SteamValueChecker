@@ -1,5 +1,6 @@
 // Steam library linking: read the owned games and playtime of a PUBLIC profile, store them in the member's library,
 // and work out what the playtime says about value. Pure logic plus two fetches; Discord and the dashboard call this.
+import { achDirect } from "./art.js";
 import { refreshTrophies } from "./socialevents.js";
 import { STEAM_SHOP_ID, SteamError, parseProfileInput, resolveVanity, get } from "./steam.js";
 import { MAX_LIBRARY_PER_USER } from "./db.js";
@@ -122,7 +123,7 @@ export async function fetchAchievementArt(appid, unlocked, { apiKey, fetchImpl =
         const info = new Map();
         try {
             const sr = await get(fetchImpl, `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=${encodeURIComponent(apiKey)}&appid=${Number(appid)}&l=english`);
-            if (sr.ok) for (const a of (await sr.json())?.game?.availableGameStats?.achievements ?? []) info.set(String(a.name), { icon: steamImage(a.icon), name: a.displayName });
+            if (sr.ok) for (const a of (await sr.json())?.game?.availableGameStats?.achievements ?? []) info.set(String(a.name), { icon: achDirect(a.icon, appid) ?? steamImage(a.icon), name: a.displayName });
         } catch { /* the pictures are a bonus */ }
         const dress = a => ({ apiname: a.apiname, name: info.get(a.apiname)?.name || a.name || a.apiname, icon: info.get(a.apiname)?.icon ?? null });
         return { rare: rare.map(a => ({ ...dress(a), pct: Math.round(a.pct * 10) / 10, at: a.at })), recent: recent.map(a => ({ ...dress(a), at: a.at })) };

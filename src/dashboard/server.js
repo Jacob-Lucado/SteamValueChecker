@@ -24,7 +24,7 @@ import { runValue, ValueError, MAX_UPLOAD_CHARS } from "../value.js";
 import { saveFix, forgetFix, FixError } from "../titlefix.js";
 import * as xposterText from "../xposter.js";
 import { renderBundleLanding, renderDealLanding, renderBundleGone, bundleDestination, dealDestination, safePictureUrl, splitGame } from "../bundlelanding.js";
-import { resolveArt, resolveUrlArt, ART_KINDS } from "../art.js";
+import { resolveArt, resolveUrlArt, resolveAchIcon, ART_KINDS } from "../art.js";
 import { compareGiftRegions } from "../giftregion.js";
 import { PAGE_PRESETS, MAX_BG_STORED } from "../profilebg.js";
 import { viewRows, exportJson, WishlistError } from "../wishlist.js";
@@ -1884,6 +1884,13 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
                 if (!artLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
                 const [, kind, id] = artMatch;
                 const got = kind === "bundle" ? await resolveUrlArt(`bundle-${id}`, db.getFeedBundle?.(Number(id))?.image, { fetchImpl: artFetch }) : ART_KINDS.includes(kind) ? await resolveArt(id, kind, { fetchImpl: artFetch }) : null;
+                if (!got) return send(res, 404, "No picture.", { "Content-Type": "text/plain", "Cache-Control": "public, max-age=600" });
+                return send(res, 200, got.buf, { "Content-Type": got.type, "Cache-Control": "public, max-age=604800" });
+            }
+            const achMatch = req.method === "GET" ? /^\/art\/ach\/(\d{1,10})\/([0-9a-f]{40})\.jpg$/.exec(url.pathname) : null;
+            if (achMatch) {
+                if (!artLimit.hit(clientIp(req)).ok) return send(res, 429, "Slow down a little.", { "Content-Type": "text/plain" });
+                const got = await resolveAchIcon(achMatch[1], achMatch[2], { fetchImpl: artFetch });
                 if (!got) return send(res, 404, "No picture.", { "Content-Type": "text/plain", "Cache-Control": "public, max-age=600" });
                 return send(res, 200, got.buf, { "Content-Type": got.type, "Cache-Control": "public, max-age=604800" });
             }

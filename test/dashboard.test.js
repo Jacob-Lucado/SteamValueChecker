@@ -4107,3 +4107,18 @@ test("a restart keeps people signed in: the sign-in is read back from the databa
         assert.equal(t.db.loadSessions(0).length, 0, "signing out removes it from the database too");
     } finally { await again.close(); }
 });
+
+test("achievement pictures are served from our own address and kept", async () => {
+    const hash = "b".repeat(40);
+    const png = Buffer.concat([Buffer.from([0x89, 0x50]), Buffer.alloc(400, 2)]);
+    const seen = [];
+    const t = await setup({ config: { artFetch: async u => { seen.push(u); return u.includes("shared.fastly") && u.includes(hash) ? { ok: true, headers: new Headers({ "content-type": "image/png" }), arrayBuffer: async () => png } : { ok: false }; } } });
+    const res = await fetch(`${t.base}/art/ach/2054970/${hash}.jpg`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "image/png");
+    assert.match(res.headers.get("cache-control"), /max-age=604800/);
+    assert.equal((await res.arrayBuffer()).byteLength, png.length);
+    assert.equal((await fetch(`${t.base}/art/ach/2054970/${"c".repeat(40)}.jpg`)).status, 404); // nothing on any server
+    assert.equal((await fetch(`${t.base}/art/ach/2054970/short.jpg`)).status === 404, true);
+    await t.close();
+});

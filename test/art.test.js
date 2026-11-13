@@ -53,3 +53,24 @@ test("store pictures are only taken from known store hosts, over https", async (
     assert.equal(await resolveUrlArt("bundle-3", "http://hb.imgix.net/c.jpg", { fetchImpl }), null);
     assert.equal(await resolveUrlArt("../x", "https://hb.imgix.net/c.jpg", { fetchImpl }), null);
 });
+
+test("achievement icons: the hash is found in any address shape and the picture is fetched from the current servers", async () => {
+    const { parseAchIcon, achDirect, achIcon, resolveAchIcon, configureArt } = await import("../src/art.js");
+    const hash = "a".repeat(40);
+    assert.deepEqual(parseAchIcon(`https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/2054970/${hash}.jpg`), { appid: "2054970", hash });
+    assert.deepEqual(parseAchIcon(hash, 730), { appid: "730", hash });
+    assert.equal(parseAchIcon("https://evil.example/x.jpg"), null);
+    assert.equal(achDirect(`https://media.steampowered.com/steamcommunity/public/images/apps/730/${hash}.jpg`), `https://cdn.fastly.steamstatic.com/steamcommunity/public/images/apps/730/${hash}.jpg`);
+    configureArt({ base: "https://site.test" });
+    assert.equal(achIcon(hash, 730), `https://site.test/art/ach/730/${hash}.jpg`);
+    configureArt({ base: null });
+    const tried = [];
+    const png = Buffer.concat([Buffer.from([0x89, 0x50]), Buffer.alloc(400, 1)]);
+    const fetchImpl = async u => { tried.push(u); return u.includes("shared.fastly") ? { ok: true, headers: { get: () => "image/jpeg" }, arrayBuffer: async () => png } : { ok: false }; };
+    const got = await resolveAchIcon("730", hash, { fetchImpl });
+    assert.equal(got.type, "image/png");
+    assert.equal(tried.length, 2, "the first server missed, the next one had it");
+    assert.equal(await resolveAchIcon("730", hash, { fetchImpl }) === got, true); // kept, not fetched again
+    assert.equal(tried.length, 2);
+    assert.equal(await resolveAchIcon("730", "nope", { fetchImpl }), null);
+});

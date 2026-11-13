@@ -1,3 +1,4 @@
+import { achDirect } from "./art.js";
 // A member's linked Steam profile, and the owned games (with playtime) synced from it into their library.
 // Only the public SteamID64 and per-game minutes are stored. Nothing here can read a private profile.
 
@@ -167,13 +168,13 @@ export function steamStore({ db, run, get, all, clean, now, maxLibrary, onFinish
         const since = now() - 14 * 86400_000;
         const games = all("SELECT appid, title, minutes, min_2w, last_played, ach_done, ach_total FROM library WHERE discord_id = ? AND appid IS NOT NULL AND last_played > ? ORDER BY last_played DESC LIMIT ?", discordId, since, limit).map(clean);
         const total2w = get("SELECT COALESCE(SUM(min_2w),0) AS m FROM library WHERE discord_id = ?", discordId)?.m ?? 0;
-        return { minutes2w: total2w, games: games.map(g => ({ ...g, unlocks: all("SELECT name, icon FROM ach_recent WHERE discord_id = ? AND appid = ? ORDER BY at DESC", discordId, g.appid).map(clean) })) };
+        return { minutes2w: total2w, games: games.map(g => ({ ...g, unlocks: all("SELECT name, icon FROM ach_recent WHERE discord_id = ? AND appid = ? ORDER BY at DESC", discordId, g.appid).map(clean).map(u => ({ ...u, icon: achDirect(u.icon, g.appid) ?? u.icon })) })) };
     }
     /** What the profile shows: every unlock counted, how many are rare, and the rarest few. */
     function achievementShowcase(discordId, limit = 14) {
         const t = get("SELECT COALESCE(SUM(ach_done),0) AS done, COUNT(CASE WHEN ach_total > 0 THEN 1 END) AS games FROM library WHERE discord_id = ?", discordId);
         const rare = get("SELECT COUNT(*) AS n FROM ach_rare WHERE discord_id = ?", discordId)?.n ?? 0;
-        const top = all("SELECT appid, game, name, icon, pct FROM ach_rare WHERE discord_id = ? ORDER BY pct ASC, game ASC, name ASC LIMIT ?", discordId, limit).map(clean);
+        const top = all("SELECT appid, game, name, icon, pct FROM ach_rare WHERE discord_id = ? ORDER BY pct ASC, game ASC, name ASC LIMIT ?", discordId, limit).map(clean).map(a => ({ ...a, icon: achDirect(a.icon, a.appid) ?? a.icon }));
         return { done: t?.done ?? 0, games: t?.games ?? 0, rare, top };
     }
 

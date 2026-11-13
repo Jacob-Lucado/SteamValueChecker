@@ -1,3 +1,4 @@
+import { achIcon } from "./art.js";
 // Full public profiles. Each member can turn sections on or off, set who sees each one, pick a look, write a short bio,
 // add links, choose favorite games and a profile song. Nothing shows unless they chose it: the wishlist page that already
 // existed is now just one section. Validation lives here so the Discord commands and the dashboard follow the same rules.
@@ -243,10 +244,10 @@ export async function buildProfile({ db, itad, nowPlaying = null }, owner, viewe
                 if (mine.length || viewer.owner) sections.push({ key: "posts", vis: s.vis, items: mine.map(x => ({ id: x.id, body: x.body, game: x.game, at: x.at, reactions: x.reactions, replies: x.replies })) });
             } else if (s.key === "achievements") {
                 const a = steam ? db.achievementShowcase(owner.discord_id) : null;
-                if (a && (a.done || a.top.length)) sections.push({ key: "achievements", vis: s.vis, done: a.done, rare: a.rare, games: a.games, top: a.top.map(x => ({ game: x.game, name: x.name, icon: x.icon, pct: x.pct })) });
+                if (a && (a.done || a.top.length)) sections.push({ key: "achievements", vis: s.vis, done: a.done, rare: a.rare, games: a.games, top: a.top.map(x => ({ game: x.game, name: x.name, icon: achIcon(x.icon, x.appid) ?? x.icon, pct: x.pct })) });
             } else if (s.key === "activity") {
                 const r = steam ? db.recentActivity(owner.discord_id) : null;
-                if (r?.games.length) sections.push({ key: "activity", vis: s.vis, hours2w: Math.round(r.minutes2w / 6) / 10, games: r.games.map(g => ({ title: g.title, art: steamArt(g.appid), hours: Math.round((g.minutes ?? 0) / 6) / 10, hours2w: Math.round((g.min_2w ?? 0) / 6) / 10, last: g.last_played, done: g.ach_done ?? 0, total: g.ach_total ?? 0, unlocks: g.unlocks })) });
+                if (r?.games.length) sections.push({ key: "activity", vis: s.vis, hours2w: Math.round(r.minutes2w / 6) / 10, games: r.games.map(g => ({ title: g.title, art: steamArt(g.appid), hours: Math.round((g.minutes ?? 0) / 6) / 10, hours2w: Math.round((g.min_2w ?? 0) / 6) / 10, last: g.last_played, done: g.ach_done ?? 0, total: g.ach_total ?? 0, unlocks: (g.unlocks ?? []).map(u => ({ ...u, icon: achIcon(u.icon, g.appid) ?? u.icon })) })) });
             } else if (s.key === "steam") {
                 if (steam) sections.push({ key: "steam", vis: s.vis, games: steam.games ?? lib.length, hours: Math.round((steam.minutes ?? 0) / 60), library: lib.length, finished: lib.filter(x => x.status === "finished").length });
             } else if (s.key === "value") {

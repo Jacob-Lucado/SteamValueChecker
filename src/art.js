@@ -24,6 +24,39 @@ export const directArt = (appid, kind = "header") => `https://cdn.akamai.steamst
 export const steamArt = (appid, kind = "header") => (state.base && /^\d{1,10}$/.test(String(appid)) && KINDS[kind] ? `${state.base}/art/${kind}/${appid}.jpg` : directArt(appid, kind));
 
 const typeOf = buf => (buf[0] === 0x89 && buf[1] === 0x50 ? "image/png" : buf[0] === 0x47 ? "image/gif" : buf[0] === 0x52 ? "image/webp" : "image/jpeg");
+
+// Achievement pictures. Steam's schema hands back addresses on retired image servers (or only the file's hash), so the hash
+// is pulled out and the picture is looked up on the current servers, kept, and served from our own address like game art.
+const ACH_RE = /\/apps\/(\d{1,10})\/([0-9a-f]{40})\.(?:jpg|png)/i;
+const ACH_HOSTS = (id, hash) => [`https://cdn.fastly.steamstatic.com/steamcommunity/public/images/apps/${id}/${hash}.jpg`, `https://shared.fastly.steamstatic.com/community_assets/images/apps/${id}/${hash}.jpg`, `https://cdn.akamai.steamstatic.com/steamcommunity/public/images/apps/${id}/${hash}.jpg`, `https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/${id}/${hash}.jpg`];
+/** { appid, hash } from whatever Steam gave us (a full address on any of its servers, or just the hash). */
+export function parseAchIcon(icon, appid = null) {
+    const s = String(icon ?? "").trim();
+    const m = ACH_RE.exec(s);
+    if (m) return { appid: m[1], hash: m[2].toLowerCase() };
+    if (/^[0-9a-f]{40}(\.(jpg|png))?$/i.test(s) && /^\d{1,10}$/.test(String(appid))) return { appid: String(appid), hash: s.slice(0, 40).toLowerCase() };
+    return null;
+}
+/** Steam's current address for an achievement picture, or null when we can't tell which file it is. */
+export function achDirect(icon, appid = null) { const p = parseAchIcon(icon, appid); return p ? ACH_HOSTS(p.appid, p.hash)[0] : null; }
+/** The address to put in an <img>: ours when the site address is known, Steam's current one otherwise. */
+export function achIcon(icon, appid = null) { const p = parseAchIcon(icon, appid); return p ? (state.base ? `${state.base}/art/ach/${p.appid}/${p.hash}.jpg` : ACH_HOSTS(p.appid, p.hash)[0]) : null; }
+export async function resolveAchIcon(appid, hash, { fetchImpl = globalThis.fetch } = {}) {
+    if (!/^\d{1,10}$/.test(String(appid)) || !/^[0-9a-f]{40}$/.test(String(hash))) return null;
+    const key = `ach:${appid}-${hash}`;
+    if (mem.has(key)) return mem.get(key);
+    const file = state.dir ? join(state.dir, `ach-${appid}-${hash}.img`) : null;
+    if (file && existsSync(file)) { try { const buf = readFileSync(file); return remember(key, { buf, type: typeOf(buf) }); } catch { /* refetch */ } }
+    if (Date.now() - (misses.get(key) ?? 0) < MISS_MS) return null;
+    if (!inflight.has(key)) inflight.set(key, (async () => {
+        let buf = null;
+        for (const u of ACH_HOSTS(appid, hash)) { buf = await grab(fetchImpl, u); if (buf) break; }
+        if (!buf) { noteMiss(key); return null; }
+        if (file) { try { writeFileSync(file, buf); } catch { /* memory only */ } }
+        return remember(key, { buf, type: typeOf(buf) });
+    })().finally(() => inflight.delete(key)));
+    return inflight.get(key);
+}
 const remember = (key, val) => { mem.set(key, val); if (mem.size > MEM_MAX) mem.delete(mem.keys().next().value); return val; };
 
 async function grab(fetchImpl, url) {
