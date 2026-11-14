@@ -751,3 +751,17 @@ test("a failed first post names the channel and the reason, and keeps nothing", 
     await assert.rejects(() => svc.create({ guild_id: "G", channel_id: "C9", host_id: "h", title: "T", duration_ms: 3600000, keys: [{ label: "A", key: "K-1" }] }), e => /<#C9> \(the bot is missing a permission there\)/.test(e.message) && e.postFailed === "C9");
     assert.equal(db.listGiveaways("G").length, 0);
 });
+
+test("when Discord refuses the video file, the giveaway still posts without it", async () => {
+    const { createGiveawayService } = await import("../src/giveaway.js");
+    const { createVault } = await import("../src/vault.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:"), sent = [];
+    const svc = createGiveawayService({ db, vault: createVault("test-secret-at-least-16-chars"), discord: { post: async (c, p) => { if (p.files) { const e = new Error("Missing Permissions"); e.code = 50013; throw e; } sent.push(p); return { id: "9" }; }, edit: async () => {}, dm: async () => ({}), memberOk: async () => true, findChannelByName: async () => null } });
+    const r = await svc.create({ guild_id: "G", channel_id: "C", host_id: "h", title: "T", duration_ms: 3600000, keys: [{ label: "A", key: "K-1" }], video: { buffer: Buffer.from("mp4"), type: "video/mp4", name: "a.mp4" } });
+    assert.equal(r.videoDropped, true);
+    assert.equal(sent.length, 1);
+    assert.equal(db.getGiveaway(r.id).message_id, "9");
+    const plain = await svc.create({ guild_id: "G", channel_id: "C", host_id: "h", title: "T2", duration_ms: 3600000, keys: [{ label: "B", key: "K-2" }] });
+    assert.equal(plain.videoDropped, false);
+});

@@ -687,7 +687,7 @@ export function createAdminRoutes(ctx) {
                     dmUsers: audience === "channels" ? [] : targets.users, delayMs: config.broadcastDelayMs ?? 1100
                 });
                 log(`Bot owner started global giveaway #${r.id}`);
-                return { id: r.id, prizes: r.prizes, ends_at: r.ends_at, total: sent.total, duplicates, skipped: skipped.map(id => (guildList?.() ?? []).find(g => g.id === id)?.name ?? id) };
+                return { id: r.id, prizes: r.prizes, ends_at: r.ends_at, total: sent.total, duplicates, videoDropped: Boolean(r.videoDropped), skipped: skipped.map(id => (guildList?.() ?? []).find(g => g.id === id)?.name ?? id) };
             } catch (err) { undo(); throw err; }
         },
         "POST /api/admin/giveaways/end": async (req, body) => {

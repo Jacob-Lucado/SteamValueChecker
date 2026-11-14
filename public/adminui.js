@@ -376,6 +376,7 @@
             host: hostKind.value === "partner" ? { kind: "partner", name: pName.value, logo: pLogo.value, links: [["Website", pWeb.value], ["Discord", pDiscord.value], ["X", pX.value], ["", pOther.value]].filter(l => l[1].trim()).map(l => ({ label: l[0], url: l[1] })) } : { kind: "network" },
             steps: stepList.map(e => ({ kind: e.sel.value, url: e.url.value, label: e.label.value })) });
           toast(`Your giveaway is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. Sending it out to ${r.total} more place${r.total === 1 ? "" : "s"}.`, "ok");
+          if (r.videoDropped) toast("The giveaway went out without your video. Give the bot Attach Files in that channel, and keep the video under the server's upload limit.", "warn");
           if (r.skipped && r.skipped.length) toast(`I couldn't post in ${r.skipped.join(", ")}, so I started it from another server. Check the bot's permissions in that channel.`, "warn");
           confirm.value = ""; keys.value = "";
           await refresh();

@@ -89,6 +89,19 @@ const PROOF_WINDOW_MS = 30 * 60_000, PROOF_MAX_BYTES = 10 * 1024 * 1024;
 const PROOF_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
 
 export function createGiveawayService({ db, tickets = null, vault, discord, itad = null, countryLookup = null, multiBannerUrl = null, now = () => Date.now(), rand = max => randomInt(max), log = () => {} }) {
+    /**
+     * Posts to a channel. The host's video goes along as a file, which needs the Attach Files permission and a file under that
+     * server's upload limit; when Discord refuses because of the file, the giveaway still goes out without it.
+     */
+    async function sendPost(channelId, payload, how = discord.post) {
+        try { return { ...(await how(channelId, payload)), videoDropped: false }; }
+        catch (e) {
+            if (!payload.files?.length) throw e;
+            const { files, ...bare } = payload;
+            log(`giveaway video not attached in ${channelId}: ${e?.message ?? e}`);
+            return { ...(await how(channelId, bare)), videoDropped: true };
+        }
+    }
     /** The giveaway post, with the host's uploaded video attached when there is one. Edits leave the attachment alone. */
     const postable = (row, keys) => {
         const payload = giveawayPayload(row, keys, 0, "active");
@@ -142,11 +155,11 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             const row = db.getGiveaway(g.id);
             const payload = () => postable(row, db.listKeys(g.id));
             for (const c of channels) {
-                try { const m = await discord.post(c, payload()); db.addMirror(g.id, "channel", c, m.id); job.sent++; } catch (e) { why(e, labels.get(c) || "a server channel"); }
+                try { const m = await sendPost(c, payload()); db.addMirror(g.id, "channel", c, m.id); job.sent++; } catch (e) { why(e, labels.get(c) || "a server channel"); }
                 await sleep(Math.min(delayMs, 400));
             }
             for (const u of users) {
-                try { const m = await discord.dm(u, payload()); if (m?.id && m?.channelId) db.addMirror(g.id, "dm", m.channelId, m.id); job.sent++; } catch (e) { why(e, "a member DM"); }
+                try { const m = await sendPost(u, payload(), discord.dm); if (m?.id && m?.channelId) db.addMirror(g.id, "dm", m.channelId, m.id); job.sent++; } catch (e) { why(e, "a member DM"); }
                 await sleep(delayMs);
             }
         })().catch(() => {}).finally(() => { job.done = true; });
@@ -221,19 +234,22 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const id = db.createGiveaway(g, input.keys.map(k => ({ label: k.label, kind: k.kind ?? "key", enc: vault.encrypt(k.key) })));
         if (video) db.saveVideo(id, video);
         if (startAt) return { id, ends_at: g.ends_at, starts_at: startAt, prizes: input.keys.length, imageSource, scheduled: true };
+        let videoDropped = false;
         try {
             const row = db.getGiveaway(id);
-            const msg = await discord.post(g.channel_id, postable(row, db.listKeys(id)));
+            const msg = await sendPost(g.channel_id, postable(row, db.listKeys(id)));
             db.setGiveawayMessage(id, msg.id);
+            videoDropped = msg.videoDropped;
         } catch (e) {
             log(`giveaway post failed in ${g.channel_id}: ${e?.message ?? e}`);
             db.deleteGiveaway(id); // nothing was announced, so no keys are kept
             const why = ({ 10003: "that channel no longer exists", 50001: "the bot can't see that channel", 50013: "the bot is missing a permission there", 50035: "Discord refused the post" })[e?.code] ?? null;
-            const err = new UserError(`I could not post in <#${g.channel_id}>${why ? ` (${why})` : ""}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`);
+            const said = String(e?.message ?? e ?? "").replace(/\s+/g, " ").slice(0, 160);
+            const err = new UserError(`I could not post in <#${g.channel_id}>${why ? ` (${why})` : ""}${said ? `. Discord said: ${said}` : ""}. Give the bot View Channel, Send Messages, Embed Links and Attach Files there, then try again.`);
             err.postFailed = g.channel_id;
             throw err;
         }
-        return { id, ends_at: g.ends_at, prizes: input.keys.length, imageSource };
+        return { id, ends_at: g.ends_at, prizes: input.keys.length, imageSource, videoDropped };
     }
 
     // ---------- change the entry rules of a running giveaway ----------
@@ -303,7 +319,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         if (!db.startGiveaway(g.id, now() + (g.duration_ms ?? 24 * 3600_000))) return false;
         try {
             const row = db.getGiveaway(g.id);
-            const msg = await discord.post(row.channel_id, postable(row, db.listKeys(g.id)));
+            const msg = await sendPost(row.channel_id, postable(row, db.listKeys(g.id)));
             db.setGiveawayMessage(g.id, msg.id);
             return true;
         } catch (e) {

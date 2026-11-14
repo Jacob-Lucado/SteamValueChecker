@@ -94,6 +94,7 @@
         });
         keys.value = "";
         toast(r.rounds > 1 ? `Series created: ${r.rounds} rounds scheduled.` : r.scheduled ? `Giveaway #${r.id} is scheduled.` : `Giveaway #${r.id} is live with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}.`, "ok");
+        if (r.videoDropped) toast("It went out without your video. Give the bot Attach Files in that channel and keep the video under the server's upload limit.", "warn");
         load();
       }) });
       return h("div", { class: "panel" }, h("h3", { text: "Start a giveaway" }),

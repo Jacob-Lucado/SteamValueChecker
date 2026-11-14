@@ -117,7 +117,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             await i.editReply([
                 r.rounds > 1 ? `Series created: **${r.rounds} rounds** scheduled in <#${d.draft.channel_id}>, the first starting <t:${Math.floor(r.starts_at / 1000)}:R> (giveaway #${r.ids.join(", #")}). Cancel any round with \`/server giveaway cancel\`.`
                   : r.scheduled ? `Giveaway **#${r.id}** is scheduled in <#${d.draft.channel_id}>. It starts <t:${Math.floor(r.starts_at / 1000)}:R> and runs until <t:${Math.floor(r.ends_at / 1000)}:R>.`
-                  : `Giveaway **#${r.id}** is live in <#${d.draft.channel_id}> with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. It ends <t:${Math.floor(r.ends_at / 1000)}:R>.`,
+                  : `Giveaway **#${r.id}** is live in <#${d.draft.channel_id}> with ${r.prizes} prize${r.prizes === 1 ? "" : "s"}. It ends <t:${Math.floor(r.ends_at / 1000)}:R>.${r.videoDropped ? "\n⚠️ It went out without your video. Give the bot **Attach Files** in that channel and keep the video under the server's upload limit." : ""}`,
                 art, duplicates ? `${duplicates} duplicate key${duplicates === 1 ? " was" : "s were"} skipped.` : null,
                 "Your keys are encrypted. The bot deletes each one once the winner confirms, and sends back any that go unused."
             ].filter(Boolean).join("\n"));
