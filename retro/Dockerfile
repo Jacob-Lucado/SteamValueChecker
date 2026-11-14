@@ -42,8 +42,6 @@ RUN git clone -q --depth 1 --branch "$VOLT_VERSION" https://github.com/plus-emul
 COPY client/patches/ patches/
 RUN for patch in patches/renderer-*.patch; do git -C Volt-Renderer apply "/w/$patch"; done
 # Pixel-font labels draw on a transparent canvas, so the redesigned dark windows show through behind them.
-RUN sed -i 's/^    transparent = false,$/    transparent = true,/' Volt/src/common/native-text/NativeText.tsx \
-    && grep -q '^    transparent = true,$' Volt/src/common/native-text/NativeText.tsx
 RUN corepack enable \
     && (cd Volt-Renderer && yarn install --immutable) \
     && (cd Volt && yarn install --immutable && yarn vite build) \
