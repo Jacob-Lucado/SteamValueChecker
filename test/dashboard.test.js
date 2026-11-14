@@ -4122,3 +4122,21 @@ test("achievement pictures are served from our own address and kept", async () =
     assert.equal((await fetch(`${t.base}/art/ach/2054970/short.jpg`)).status === 404, true);
     await t.close();
 });
+
+test("admin network-wide giveaway: a home channel that can't be posted in is skipped, and the giveaway starts from the next server", async () => {
+    const { createGiveawayService } = await import("../src/giveaway.js");
+    const { createVault } = await import("../src/vault.js");
+    const posts = [];
+    const o = await signedIn({
+        config: { ownerId: "u1", broadcastDelayMs: 0 },
+        giveawayService: db => createGiveawayService({ db, vault: createVault("test-secret-at-least-16-chars"),
+            discord: { post: async (c, p) => { if (c === "BAD") { const e = new Error("Missing Access"); e.code = 50001; throw e; } posts.push(c); return { id: String(posts.length) }; }, edit: async () => {}, dm: async () => ({}), memberOk: async () => true, findChannelByName: async () => null } })
+    });
+    o.db.setGiveawaySettings("G1", { giveaway_channel_id: "BAD" });
+    o.db.setGiveawaySettings("G2", { giveaway_channel_id: "GOOD" });
+    const r = await o.request("/api/admin/giveaways/create", { method: "POST", body: { keys: "Hades | AAAAA-BBBBB-CCCCC", title: "Free game", confirm: "SEND", audience: "channels", home: "G1" } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.skipped.length, 1);
+    assert.ok(posts.includes("GOOD"), "it went out through the working channel");
+    await o.close();
+});

@@ -662,19 +662,32 @@ export function createAdminRoutes(ctx) {
                 let host, steps;
                 try { host = parseHost(body.host, config.creator?.name ?? "the bot owner"); steps = parseSteps(body.steps); }
                 catch (e) { if (e instanceof StepError) throw new HttpError(400, e.message); throw e; }
-                const r = await giveaways.create({
-                    guild_id: home.guild_id, channel_id: home.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
+                // The first server's channel may have gone stale (bot removed, permission lost). That must not stop the whole
+                // giveaway, so the next server's channel becomes the home post and the owner is told which ones were skipped.
+                const homes = [home, ...dest.filter(d => d !== home)], skipped = [];
+                let r;
+                for (const h of homes) {
+                    try {
+                        r = await giveaways.create({
+                    guild_id: h.guild_id, channel_id: h.channel_id, host_id: s.userId, title: body.title, duration_ms: parseDuration(text(body.length) ?? "24h"),
                     game_title: text(body.game), description: text(body.description), image_url: parseImageUrl(body.image, "image"), thumbnail_url: parseImageUrl(body.thumbnail, "thumbnail"),
                     color: parseColor(body.color), button_label: text(body.button_label), regions: parseRegions(body.regions), video: videoFromBody(body),
                     claim_hours: Number(body.claim_hours) || undefined, keys, auto_image: true, is_global: true, host, steps, require_steam: Boolean(body.steam_verified)
-                });
+                        });
+                        break;
+                    } catch (e) {
+                        if (!e?.postFailed) throw e;
+                        skipped.push(h.guild_id);
+                        if (h === homes[homes.length - 1]) throw e;
+                    }
+                }
                 const targets = db.broadcastTargets();
                 const sent = await giveaways.spread(r.id, {
                     channelIds: audience === "dm" ? [] : dest.map(d => d.channel_id), labels: new Map(dest.map(d => [d.channel_id, (guildList?.() ?? []).find(g => g.id === d.guild_id)?.name ?? d.guild_id])),
                     dmUsers: audience === "channels" ? [] : targets.users, delayMs: config.broadcastDelayMs ?? 1100
                 });
                 log(`Bot owner started global giveaway #${r.id}`);
-                return { id: r.id, prizes: r.prizes, ends_at: r.ends_at, total: sent.total, duplicates };
+                return { id: r.id, prizes: r.prizes, ends_at: r.ends_at, total: sent.total, duplicates, skipped: skipped.map(id => (guildList?.() ?? []).find(g => g.id === id)?.name ?? id) };
             } catch (err) { undo(); throw err; }
         },
         "POST /api/admin/giveaways/end": async (req, body) => {

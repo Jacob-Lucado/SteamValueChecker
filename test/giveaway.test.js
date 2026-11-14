@@ -740,3 +740,14 @@ test("region lock: a verified account with no stored country is looked up on Ste
     await svc.updateRules(id, { regions: "US" });
     assert.equal(db.getGiveaway(id).regions, "US");
 });
+
+test("a failed first post names the channel and the reason, and keeps nothing", async () => {
+    const t = rig(); t.failPost?.("C");
+    const { createGiveawayService } = await import("../src/giveaway.js");
+    const { createVault } = await import("../src/vault.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:");
+    const svc = createGiveawayService({ db, vault: createVault("test-secret-at-least-16-chars"), discord: { post: async () => { const e = new Error("x"); e.code = 50013; throw e; }, edit: async () => {}, dm: async () => ({}), memberOk: async () => true, findChannelByName: async () => null } });
+    await assert.rejects(() => svc.create({ guild_id: "G", channel_id: "C9", host_id: "h", title: "T", duration_ms: 3600000, keys: [{ label: "A", key: "K-1" }] }), e => /<#C9> \(the bot is missing a permission there\)/.test(e.message) && e.postFailed === "C9");
+    assert.equal(db.listGiveaways("G").length, 0);
+});

@@ -228,7 +228,10 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         } catch (e) {
             log(`giveaway post failed in ${g.channel_id}: ${e?.message ?? e}`);
             db.deleteGiveaway(id); // nothing was announced, so no keys are kept
-            throw new UserError("I could not post in that channel. Give the bot View Channel, Send Messages and Embed Links there, then try again.");
+            const why = ({ 10003: "that channel no longer exists", 50001: "the bot can't see that channel", 50013: "the bot is missing a permission there", 50035: "Discord refused the post" })[e?.code] ?? null;
+            const err = new UserError(`I could not post in <#${g.channel_id}>${why ? ` (${why})` : ""}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`);
+            err.postFailed = g.channel_id;
+            throw err;
         }
         return { id, ends_at: g.ends_at, prizes: input.keys.length, imageSource };
     }
