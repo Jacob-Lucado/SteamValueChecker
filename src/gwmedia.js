@@ -34,3 +34,15 @@ export function videoFromBody(body) {
     if (!buffer.length || buffer.length > MEDIA_MAX_BYTES) throw new UserError("That video is too big. Keep it under 10 MB.");
     return { buffer, type, name: String(body.video_name ?? "video").slice(0, 100) };
 }
+
+/**
+ * Picks a channel for a name like "vouches" from a list of { id, name }. Exact match first, then names that only contain it,
+ * since servers often decorate channel names ("✅│vouches", "vouches-and-proof").
+ */
+export function matchChannelByName(channels, name) {
+    const want = String(name).toLowerCase();
+    const list = channels.filter(c => c?.id && typeof c.name === "string");
+    const bare = n => n.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const hit = list.find(c => c.name.toLowerCase() === want) ?? list.find(c => bare(c.name).split(" ").some(w => w === want || w === want.replace(/es$/, ""))) ?? list.find(c => c.name.toLowerCase().includes(want.replace(/es$/, "")));
+    return hit?.id ?? null;
+}

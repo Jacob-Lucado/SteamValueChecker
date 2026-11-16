@@ -2,6 +2,8 @@
 export const CHANGELOG = [
     { version: "2026.11.62", date: "2026-11-12", title: "Region locks, videos in giveaways, and proof from winners", items: [
         "**Add proof:** after a winner confirms their prize they can reply to the bot's DM with a screenshot or short video (up to 10 MB) within 30 minutes. It is posted in the vouches channel and the host is told.",
+        "**Quieter alerts:** the owner is only warned about slow or rate-limited price data after 20 minutes in a row, and the same service isn't announced again for six hours. Real outages still alert after three minutes.",
+        "**Fixed:** the bot now finds vouches channels with decorated names like ✅│vouches, and winner proof goes under the giveaway itself when a server has no vouches channel.",
         "**Fixed:** a network-wide giveaway no longer fails when the first server's channel can't be posted in. It starts from the next server and tells you which one was skipped, and the error now names the exact channel and why.",
         "**Fixed:** achievement pictures on profile pages (rarest achievements and recent activity) now load. They come from the bot's own picture cache instead of Steam's old image address.",
         "**Region locks:** hosts can limit a giveaway to certain countries or groups like EU and NA, on /server giveaway create, /server giveaway rules, and every giveaway form on the dashboard (servers, streams and network-wide). The post lists the regions, and people are checked against their Steam profile country (or the region they set). Add Steam Verified to count only verified countries.",

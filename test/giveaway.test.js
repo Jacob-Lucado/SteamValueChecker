@@ -765,3 +765,24 @@ test("when Discord refuses the video file, the giveaway still posts without it",
     const plain = await svc.create({ guild_id: "G", channel_id: "C", host_id: "h", title: "T2", duration_ms: 3600000, keys: [{ label: "B", key: "K-2" }] });
     assert.equal(plain.videoDropped, false);
 });
+
+test("channel names like ✅│vouches are found, and proof falls back to the giveaway's own channel without one", async () => {
+    const { matchChannelByName } = await import("../src/gwmedia.js");
+    const ch = [{ id: "1", name: "general" }, { id: "2", name: "✅│vouches" }, { id: "3", name: "vouch-chat" }];
+    assert.equal(matchChannelByName(ch, "vouches"), "2");
+    assert.equal(matchChannelByName([{ id: "1", name: "vouches" }, { id: "2", name: "✅-vouches" }], "vouches"), "1");
+    assert.equal(matchChannelByName([{ id: "9", name: "proof-of-vouches" }], "vouches"), "9");
+    assert.equal(matchChannelByName([{ id: "1", name: "general" }], "vouches"), null);
+    const t = rig();
+    const id = await won(t);
+    const k = t.db.listKeys(id)[0];
+    await t.svc.delivered(k.id, "dm");
+    await t.svc.confirm(k.id, k.winner_id);
+    const before = t.posts.length;
+    const old = t.db.getGiveawaySettings("G");
+    t.db.setGiveawaySettings("G", { vouch_channel_id: null });
+    t.db.setGiveawayVouch?.(id, null);
+    const p = await t.svc.addProof(k.winner_id, { buffer: Buffer.from("x"), type: "image/png", name: "a.png" });
+    assert.ok(p.link);
+    assert.ok(t.posts.length > before);
+});

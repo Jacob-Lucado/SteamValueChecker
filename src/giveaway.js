@@ -533,8 +533,8 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const ext = PROOF_TYPES[String(type).toLowerCase()];
         if (!ext) throw new UserError("Send a PNG, JPG, WebP or GIF image, or an MP4, WebM or MOV video.");
         if (!buffer?.length || buffer.length > PROOF_MAX_BYTES) throw new UserError("That file is too big. Keep it under 10 MB.");
-        const g = must(k.giveaway_id), channelId = await vouchChannel(g);
-        if (!channelId) throw new UserError("This server has no vouches channel to post it in, so I couldn't add it.");
+        const g = must(k.giveaway_id), channelId = (await vouchChannel(g)) || g.channel_id; // no vouches channel: it goes under the giveaway itself
+        if (!channelId) throw new UserError("I couldn't find a channel to post it in.");
         const m = await discord.post(channelId, proofPayload(g, k, userId, `proof.${ext}`, buffer, String(type).startsWith("video/"))).catch(() => { throw new UserError("I couldn't post in the vouches channel. Ask the host to check my permissions there."); });
         const link = `https://discord.com/channels/${g.guild_id}/${channelId}/${m.id}`;
         db.setProof(k.id, link);

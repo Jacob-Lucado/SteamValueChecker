@@ -7,7 +7,8 @@ const dayKey = ms => new Date(ms).toISOString().slice(0, 10);
 const RANK = { operational: 0, degraded: 1, down: 2 };
 
 /** probes: { id: { name, desc, critical, check: () => { state, detail } | Promise } } */
-export function createStatusMonitor({ db, probes, now = () => Date.now(), intervalMs = 60_000, log = () => {}, notify = null, alertAfterTicks = 3 }) {
+export function createStatusMonitor({ db, probes, now = () => Date.now(), intervalMs = 60_000, log = () => {}, notify = null, alertAfterTicks = 3, degradedAfterTicks = 20, cooldownMs = 6 * 3600_000 }) {
+    const toldAt = new Map(); // id -> when the owner was last told, so one flaky service can't ping every few minutes
     let current = new Map(); // id -> { state, detail }
     const trouble = new Map(); // id -> { since, ticks, told } while a component is not operational
     let checkedAt = null;
@@ -50,7 +51,10 @@ export function createStatusMonitor({ db, probes, now = () => Date.now(), interv
             } else {
                 const cur = tr ?? { since: t, ticks: 0, told: false };
                 cur.ticks++;
-                if (!cur.told && cur.ticks >= alertAfterTicks) { cur.told = true; tell(`⚠️ ${probes[id].name} ${probes[id].plural ? "have" : "has"} been ${r.state === "down" ? "down" : "degraded"} for ${cur.ticks} minutes${r.detail ? `: ${r.detail}` : ""}.`); }
+                // A service that is down is worth a message quickly. One that is only slow or rate limited has to stay that way for a while,
+                // and the same service is not announced again for hours (a recovery notice only follows a warning that was sent).
+                const needed = r.state === "down" ? alertAfterTicks : Math.max(alertAfterTicks, degradedAfterTicks);
+                if (!cur.told && cur.ticks >= needed && t - (toldAt.get(id) ?? -Infinity) >= cooldownMs) { cur.told = true; toldAt.set(id, t); tell(`⚠️ ${probes[id].name} ${probes[id].plural ? "have" : "has"} been ${r.state === "down" ? "down" : "degraded"} for ${cur.ticks} minutes${r.detail ? `: ${r.detail}` : ""}.`); }
                 trouble.set(id, cur);
             }
         }

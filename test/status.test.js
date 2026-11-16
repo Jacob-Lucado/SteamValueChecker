@@ -36,15 +36,41 @@ test("owner is told once when something stays broken, and once when it recovers"
     let t = Date.parse("2026-10-26T12:00:00Z"), state = "operational";
     const told = [];
     const m = createStatusMonitor({ db, now: () => t, notify: x => told.push(x), alertAfterTicks: 3,
-        probes: { prices: { name: "Price data", desc: "d", critical: false, check: () => ({ state, detail: state === "degraded" ? "rate_limited" : null }) } } });
+        probes: { prices: { name: "Price data", desc: "d", critical: false, check: () => ({ state, detail: state === "down" ? "rate_limited" : null }) } } });
     await m.tick();
-    state = "degraded";
+    state = "down";
     for (let n = 0; n < 5; n++) { t += MIN; await m.tick(); }
     assert.equal(told.length, 1);
-    assert.match(told[0], /Price data has been degraded for 3 minutes: rate_limited/);
+    assert.match(told[0], /Price data has been down for 3 minutes: rate_limited/);
     state = "operational"; t += MIN; await m.tick();
     assert.equal(told.length, 2);
     assert.match(told[1], /back to normal/);
     t += 20 * MIN; await m.tick(); // the process was off
     assert.match(told[2], /offline for about/);
+});
+
+test("a service that is only degraded doesn't ping the owner for short blips, and isn't repeated for hours", async () => {
+    const db = openDb(":memory:");
+    let t = Date.parse("2026-10-26T12:00:00Z"), state = "operational";
+    const told = [];
+    const m = createStatusMonitor({ db, now: () => t, notify: x => told.push(x),
+        probes: { prices: { name: "Price data", desc: "d", critical: false, check: () => ({ state, detail: state === "degraded" ? "rate_limited" : null }) } } });
+    await m.tick();
+    state = "degraded";
+    for (let n = 0; n < 10; n++) { t += MIN; await m.tick(); }       // a ten minute blip: nothing
+    state = "operational"; t += MIN; await m.tick();
+    assert.deepEqual(told, []);
+    state = "degraded";
+    for (let n = 0; n < 20; n++) { t += MIN; await m.tick(); }       // twenty minutes in a row: one warning
+    assert.equal(told.length, 1);
+    state = "operational"; t += MIN; await m.tick();
+    assert.equal(told.length, 2);                                      // and the recovery
+    state = "degraded";
+    for (let n = 0; n < 30; n++) { t += MIN; await m.tick(); }       // again within hours: quiet
+    state = "operational"; t += MIN; await m.tick();
+    assert.equal(told.length, 2);
+    for (let n = 0; n < 7 * 60; n++) { t += MIN; await m.tick(); }       // hours of quiet
+    state = "degraded";                                                  // much later it can speak up again
+    for (let n = 0; n < 20; n++) { t += MIN; await m.tick(); }
+    assert.equal(told.length, 3);
 });

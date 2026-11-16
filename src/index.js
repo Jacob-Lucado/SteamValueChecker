@@ -69,7 +69,7 @@ import { createHandlers } from "./handlers.js";
 import { createPanels, PANEL_PREFIX } from "./panel.js";
 import { alertPanel } from "./alertpanel.js";
 import { UserError } from "./errors.js";
-import { fetchDiscordFile, IMAGE_TYPES, VIDEO_TYPES } from "./gwmedia.js";
+import { fetchDiscordFile, matchChannelByName, IMAGE_TYPES, VIDEO_TYPES } from "./gwmedia.js";
 import { registerCommands } from "./registercmds.js";
 import { createLogBuffer, ACTIVITY } from "./logbuffer.js";
 import { isHidden } from "./hidden.js";
@@ -343,7 +343,7 @@ const gwDiscord = {
         try {
             const g = await client.guilds.fetch(guildId);
             const channels = await g.channels.fetch();
-            return channels.find(c => c?.isTextBased() && c.name.toLowerCase() === name)?.id ?? null;
+            return matchChannelByName([...channels.values()].filter(c => c?.isTextBased() && !c.isThread?.()), name);
         } catch { return null; }
     }
 };
