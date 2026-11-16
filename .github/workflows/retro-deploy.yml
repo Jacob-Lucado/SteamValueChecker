@@ -46,6 +46,7 @@ jobs:
         run: |
           echo "cms=$(git ls-remote https://github.com/Jacob-Lucado/CMS.git refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
           echo "emu=$(git ls-remote https://github.com/Jacob-Lucado/EMU.git refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "volt=$(git ls-remote https://github.com/Jacob-Lucado/Volt.git refs/heads/lucadoos | cut -f1)" >> "$GITHUB_OUTPUT"
       # Deleting these takes over a minute, so it runs alongside the build instead of before it. The first
       # build steps need little disk.
       - name: Make room for the build
@@ -66,6 +67,7 @@ jobs:
           build-args: |
             CMS_SHA=${{ steps.commits.outputs.cms }}
             EMU_SHA=${{ steps.commits.outputs.emu }}
+            VOLT_SHA=${{ steps.commits.outputs.volt }}
           # The build cache lives next to the image in Fly's registry. GitHub's cache tops out at 10 GB, which
           # the hotel files and build tools fill, so older layers kept getting thrown out and rebuilt.
           cache-from: |

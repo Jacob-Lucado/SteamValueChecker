@@ -9,8 +9,11 @@ ARG EMU_SHA=unknown
 ARG CMS_SHA=unknown
 ARG CMS_REPO=https://github.com/Jacob-Lucado/CMS.git
 ARG CMS_REF=main
-ARG VOLT_VERSION=v1.0.4
-# The renderer commit that matches this Volt release.
+# The game client is Jacob's own Volt, on its lucadoos branch. VOLT_SHA is the commit to build.
+ARG VOLT_REPO=https://github.com/Jacob-Lucado/Volt.git
+ARG VOLT_REF=lucadoos
+ARG VOLT_SHA=unknown
+# The renderer commit that matches this client.
 ARG VOLT_RENDERER_REF=c8f74ffd
 ARG ADMINER_VERSION=6.3.0
 ARG HOTEL_FILES_URL=https://github.com/plus-emulator/plusemu-installer/releases/download/hotel-files
@@ -33,23 +36,21 @@ RUN echo "EMU $EMU_SHA" && git clone --depth 1 --branch "$EMU_REF" "$EMU_REPO" .
 
 # ---------------------------------------------------------------- game client, built from source
 FROM node:22 AS client
-ARG VOLT_VERSION
+ARG VOLT_REPO
+ARG VOLT_REF
+ARG VOLT_SHA
 ARG VOLT_RENDERER_REF
 WORKDIR /w
-RUN git clone -q --depth 1 --branch "$VOLT_VERSION" https://github.com/plus-emulator/Volt.git Volt \
-    && git clone -q https://github.com/plus-emulator/Volt-Renderer.git Volt-Renderer \
+RUN git clone -q https://github.com/plus-emulator/Volt-Renderer.git Volt-Renderer \
     && git -C Volt-Renderer checkout -q "$VOLT_RENDERER_REF"
 COPY client/patches/ patches/
 RUN for patch in patches/renderer-*.patch; do git -C Volt-Renderer apply "/w/$patch"; done
-# Pixel-font labels draw on a transparent canvas, so the redesigned dark windows show through behind them.
-RUN corepack enable \
-    && (cd Volt-Renderer && yarn install --immutable) \
+RUN corepack enable && (cd Volt-Renderer && yarn install --immutable)
+# Everything above stays cached. Only a new client commit rebuilds from here.
+RUN echo "Volt $VOLT_SHA" \
+    && git clone -q --depth 1 --branch "$VOLT_REF" "$VOLT_REPO" Volt \
     && (cd Volt && yarn install --immutable && yarn vite build) \
     && test -f Volt/dist/index.html
-COPY client/lucadoos-skin.css Volt/dist/lucadoos/skin.css
-RUN v=$(sha1sum Volt/dist/lucadoos/skin.css | cut -c1-10) \
-    && sed -i "0,/<\/style>/s##</style>\n    <link rel=\"stylesheet\" href=\"./lucadoos/skin.css?v=$v\" />#" Volt/dist/index.html \
-    && grep -q 'lucadoos/skin.css' Volt/dist/index.html
 
 # ---------------------------------------------------------------- hotel files
 FROM ubuntu:24.04 AS downloads
