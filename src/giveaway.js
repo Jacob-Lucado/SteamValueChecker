@@ -516,12 +516,21 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const channelId = await vouchChannel(g);
         db.openProof(k.id, now() + PROOF_WINDOW_MS);
         let vouched = false;
-        if (channelId) { try { await discord.post(channelId, vouchPayload(g, k, userId)); vouched = true; } catch { /* no access to the channel */ } }
+        if (channelId) { try { await discord.post(channelId, vouchPayload(g, k, userId)); vouched = true; } catch (e) { log(`vouch post failed in ${channelId}: ${e?.message ?? e}`); } }
         await dmHost(g, hostNote(g, `<@${userId}> confirmed that **${k.label}** redeemed successfully.${vouched ? "" : "\nI could not post it in a vouches channel. Set one with `/server giveaway setup`."}`));
         return { vouched, proofMinutes: PROOF_WINDOW_MS / 60_000 };
     }
 
-    const vouchChannel = async g => g.vouch_channel_id || db.getGiveawaySettings(g.guild_id).vouch_channel_id || await discord.findChannelByName(g.guild_id, "vouches");
+    // Looked up by name only when nothing was chosen, and then remembered for the server so later confirmations don't depend on
+    // another round trip to Discord that might hiccup.
+    const vouchChannel = async g => {
+        const chosen = g.vouch_channel_id || db.getGiveawaySettings(g.guild_id).vouch_channel_id;
+        if (chosen) return chosen;
+        const found = await discord.findChannelByName(g.guild_id, "vouches");
+        if (found) { try { db.setGiveawaySettings(g.guild_id, { vouch_channel_id: found }); } catch { /* still usable this time */ } }
+        else log(`no vouches channel found for server ${g.guild_id}`);
+        return found;
+    };
 
     /** Does this person have a recent confirmation that is still waiting for an optional screenshot? */
     const awaitingProof = userId => Boolean(db.keyAwaitingProof(userId, now()));

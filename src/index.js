@@ -344,7 +344,7 @@ const gwDiscord = {
             const g = await client.guilds.fetch(guildId);
             const channels = await g.channels.fetch();
             return matchChannelByName([...channels.values()].filter(c => c?.isTextBased() && !c.isThread?.()), name);
-        } catch { return null; }
+        } catch (e) { console.error(`[giveaway] could not look up channels in ${guildId}: ${e?.message}`); return null; }
     }
 };
 const publicBase = cfg.dashboard?.publicUrl ? cfg.dashboard.publicUrl.replace(/\/$/, "") : null;
