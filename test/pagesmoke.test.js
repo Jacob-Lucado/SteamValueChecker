@@ -276,6 +276,13 @@ test("the giveaway form takes a region list and a video file, and saves both", {
         assert.equal(g.regions, "US,EU");
         assert.equal(o.db.hasVideo(g.id), true);
         assert.equal(posts[0].files[0].name, "giveaway.mp4");
+        // the host stats strip shows up once something has run, and the block list works from the page
+        await page.getByText("Your giveaways so far").waitFor({ timeout: 20_000 });
+        await page.locator("input[aria-label='Discord ID to block']").fill("123456789012345678");
+        await page.getByRole("button", { name: "Block", exact: true }).evaluate(el => el.click());
+        for (let n = 0; n < 40 && !o.db.isBlocked("g-admin", "123456789012345678"); n++) await page.waitForTimeout(250);
+        assert.equal(o.db.isBlocked("g-admin", "123456789012345678"), true);
+        await page.getByText("123456789012345678").first().waitFor({ timeout: 10_000 });
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
