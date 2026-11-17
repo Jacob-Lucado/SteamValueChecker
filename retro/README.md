@@ -23,3 +23,15 @@ Habbo furni work side by side.
 `furni/bobba` holds 429 furni from the [BoBBa Catalog v2.5.0](https://github.com/Puff-in/BoBBa-Catalog-v2.5.0)
 (GPL-3.0): its own furni lines, Exchange and Dolls that this hotel's files did not have. Their names are made
 from the classnames, because the catalog ships only text keys for them.
+
+## Adding loose Nitro bundles
+
+A folder of `.nitro` files with no SQL or furnidata can be added with:
+
+```
+python3 tools/import-nitro-bundles.py "<folder>" <slug> "<catalog page name>" --have have.txt --db-names db.txt
+```
+
+`have.txt` lists the classnames the hotel already has art for and `db.txt` the ones that already have a furni
+row. Each new bundle supplies its own size and states, names come from the classnames, and the page is split by
+name prefix. `furni/pack-2026` holds 2,898 furni added this way.
