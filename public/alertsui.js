@@ -58,11 +58,11 @@
       return { box, save: () => collect() };
     }
     const codeRows = codeAlertRows();
-    const FACTS = [["reviews", "Steam review score, and a warning when recent reviews have dropped"], ["critic", "Critic score"], ["time", "Time to finish and what it costs per hour"], ["players", "Players on Steam right now"], ["early", "Early Access warning"], ["controller", "Controller support"], ["vr", "VR support"]];
+    const FACTS = [["reviews", "Steam review score, and a warning when recent reviews have dropped"], ["critic", "Critic score"], ["time", "Time to finish and what it costs per hour"], ["players", "Players on Steam right now"], ["early", "Early Access warning"], ["controller", "Controller support"], ["vr", "VR support"], ["alertvr", "Send me sale alerts for VR-only games"], ["alertearly", "Send me sale alerts for Early Access games"]];
     const hiddenNow = new Set(state.me.settings.hide_facts || []);
     const factBoxes = FACTS.map(([key]) => { const cb = h("input", { type: "checkbox", checked: !hiddenNow.has(key) }); cb.dataset.key = key; return cb; });
     const factsPanel = () => h("div", { class: "panel" }, h("h3", { text: "Extra lines on price cards" }),
-      h("p", { class: "muted small", text: "Untick anything you don't want on your sale alerts and check cards." }),
+      h("p", { class: "muted small", text: "Untick anything you don't want on your sale alerts and check cards. The last two decide whether those games get a sale alert at all." }),
       ...FACTS.map(([, label], n) => h("label", { class: "check" }, factBoxes[n], label)));
     const save = h("button", { class: "btn green", text: "Save settings", onclick: () => busy(save, async () => {
       const r = await api("/api/settings", {

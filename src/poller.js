@@ -83,6 +83,20 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
         const sendable = quiet ? list.filter(h => h.item.priority) : list;
         stats.deferred += list.length - sendable.length;
         if (!sendable.length) continue;
+        // Some people don't want sale alerts for VR-only or Early Access games (no headset, or they wait for 1.0). Those are skipped quietly.
+        const skip = hiddenFacts(user).filter(k => k === "alertvr" || k === "alertearly");
+        if (skip.length) {
+            for (const h of [...sendable]) {
+                if (!h.item.appid) continue;
+                const store = (await gameFacts(h.item.appid).catch(() => null))?.store;
+                if ((skip.includes("alertvr") && store?.vr === "only") || (skip.includes("alertearly") && store?.earlyAccess)) {
+                    db.markAlerted(h.item.id, h.now.price);
+                    sendable.splice(sendable.indexOf(h), 1);
+                    stats.skipped = (stats.skipped ?? 0) + 1;
+                }
+            }
+            if (!sendable.length) continue;
+        }
         // Someone whose DMs keep failing and who has no alert channel gets one try a day instead of an hourly one that only burns price lookups.
         if (user.delivery !== "channel" && (user.dm_failures ?? 0) >= 5 && !db.getGuild(user.guild_id) && Math.floor(now() / 3600_000) % 24 !== 0) { stats.unreachable += sendable.length; stats.failed += sendable.length; continue; }
         for (const part of chunked(sendable, MAX_CARDS)) {

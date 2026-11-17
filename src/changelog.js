@@ -2,6 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.63", date: "2026-11-17", title: "Wishlist export and a security pass", items: [
         "**Export CSV:** the Wishlist page has a new button that downloads your list with best prices, stores and discounts, ready for a spreadsheet.",
+        "**Skip alerts you can't use:** `/me wishlist cards` (and the Alerts page) can now turn off sale alerts for VR-only games and for Early Access games, for people without a headset or who wait for 1.0.",
         "**Game pages show it too:** the public game pages now carry Early Access, controller, VR and review-dip badges alongside Steam Deck and ProtonDB.",
         "**Pick your extras:** new `/me wishlist cards` (and an *Extra lines on price cards* box on the Alerts page) lets you hide the review score, critic score, time to finish, player count, Early Access, controller or VR lines on your alerts and check cards. VR support is shown too.",
         "**Early Access and controller notes:** alerts, check cards and game pages now flag games that are still in Early Access and say when a game has full or partial controller support.",

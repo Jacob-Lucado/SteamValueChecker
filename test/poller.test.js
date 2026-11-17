@@ -210,3 +210,22 @@ test("schedule can hold back its first run so a restart doesn't fire everything 
     assert.equal(runs, 1);
     stop();
 });
+
+test("someone who skips VR-only or Early Access sale alerts doesn't get them, and others still do", async () => {
+    const { configureFacts } = await import("../src/gamefacts.js");
+    const stores = { 1: { vr: "only", earlyAccess: false }, 2: { vr: null, earlyAccess: true }, 3: { vr: "supported", earlyAccess: false } };
+    configureFacts({ store: { meta: async appid => stores[appid] } });
+    try {
+        const t = setup({ prices: { a: { deals: [deal(10, 20)] }, b: { deals: [deal(10, 20)] }, c: { deals: [deal(10, 20)] } } });
+        for (const u of ["skipper", "keen"]) { t.db.ensureUser(u, "g1"); t.db.addItems(u, [{ itad_id: "a", title: "VR only", appid: 1 }, { itad_id: "b", title: "Early one", appid: 2 }, { itad_id: "c", title: "VR ready", appid: 3 }]); }
+        t.db.updateUser("skipper", { hide_facts: "alertvr,alertearly" });
+        const s = await runCycle(t);
+        const titles = id => t.sent.filter(x => x.id === id).map(x => JSON.stringify(x.p)).join("|"); // several games share one card, so look at the whole message
+        assert.doesNotMatch(titles("skipper"), /VR only|Early one/);
+        assert.match(titles("skipper"), /VR ready/);
+        assert.match(titles("keen"), /VR only/); assert.match(titles("keen"), /Early one/);
+        assert.equal(s.skipped, 2);
+        const again = await runCycle(t);
+        assert.equal(again.alerts, 0, "the skipped ones are remembered, not retried every hour");
+    } finally { configureFacts(null); }
+});

@@ -377,7 +377,8 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                     db.updateUser(user.discord_id, { hide_facts: [...list].join(",") });
                     const label = FACT_OPTIONS.find(([k]) => k === key)?.[1] ?? key;
                     const off = FACT_OPTIONS.filter(([k]) => list.has(k)).map(([, l]) => l);
-                    return eph(i, `${show ? "Showing" : "Hiding"} **${label}** on your price alerts and check cards.\n${off.length ? `Hidden now: ${off.join(", ")}.` : "Nothing is hidden."}`);
+                    const what = key.startsWith("alert") ? `${show ? "You'll get" : "You won't get"} **${label.replace(/^Sale alerts for /, "sale alerts for ")}**.` : `${show ? "Showing" : "Hiding"} **${label}** on your price alerts and check cards.`;
+                    return eph(i, `${what}\n${off.length ? `Switched off now: ${off.join(", ")}.` : "Everything is on."}`);
                 }
             }
         } catch (err) {
