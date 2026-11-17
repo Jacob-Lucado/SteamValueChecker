@@ -61,7 +61,7 @@ export function openRadio(address, { allowPrivate = false, maxRedirects = 3, tim
         const go = (target, left) => {
             const u = allowPrivate ? (() => { try { return new URL(target); } catch { return null; } })() : parseRadioUrl(target);
             if (!u || !(u.protocol === "http:" || u.protocol === "https:")) return fail("That doesn't look like a stream address I can open.");
-            const req = mods[u.protocol].get(u, { headers: { "User-Agent": "Mozilla/5.0 (music bot)", Accept: "*/*", Connection: "close" }, lookup: safeLookup(allowPrivate, lookupImpl), timeout: timeoutMs }, res => {
+            const req = mods[u.protocol].get(u, { headers: { "User-Agent": "Mozilla/5.0 (compatible; SteamValueChecker Discord bot)", Accept: "*/*", Connection: "close" }, lookup: safeLookup(allowPrivate, lookupImpl), timeout: timeoutMs }, res => {
                 const code = res.statusCode ?? 0;
                 if (code >= 300 && code < 400 && res.headers.location) {
                     res.resume(); req.destroy();

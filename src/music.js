@@ -4,6 +4,7 @@ import { UserError } from "./errors.js";
 import { createQueue, LOOP_MODES } from "./musicqueue.js";
 import { isSoundcloudUrl, cleanQuery } from "./musicsource.js";
 import { parseRadioUrl } from "./musicradio.js";
+import { findStation } from "./stations.js";
 import { MAX_PENDING_PER_USER } from "./musicstore.js";
 import { createAnalyser } from "./musicviz.js";
 import { pipeline } from "node:stream";
@@ -320,6 +321,13 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
             try { const t = await source.radioProbe(q); return { kind: "radio", title: t.title, tracks: [t] }; }
             catch (err) { throw err instanceof UserError ? err : new UserError("I couldn't open that stream."); }
         }
+        // With SoundCloud off, words mean a station: "lofi", "groove salad", "jazz".
+        if (source.soundcloud === false && !isSoundcloudUrl(q)) {
+            const st = allowRadio ? findStation(q) : null;
+            if (!st) throw new UserError(`I don't have a station for "${cleanQuery(q).slice(0, 40)}". Try \`/music live\` to browse them, a word like lofi, jazz or synthwave, or paste a stream link.`);
+            try { const t = await source.radioProbe(st.url); return { kind: "radio", title: st.name, tracks: [{ ...t, title: st.name, artist: `Live radio · ${st.genre}`, genre: st.genre }] }; }
+            catch (err) { throw err instanceof UserError ? new UserError(`${st.name} isn't answering right now. ${err.message}`) : new UserError(`${st.name} isn't answering right now.`); }
+        }
         try {
             if (isSoundcloudUrl(q)) {
                 const r = await source.resolve(q);
@@ -336,7 +344,7 @@ export function createMusic({ db, source, voice, getGuild, api = null, panel = n
     async function enqueue({ guildId, userId, textChannelId, query = null, tracks = null, playNext = false, shuffleAdded = false }) {
         const w = who(guildId, userId);
         const g = state(guildId);
-        if (!tracks && /^https?:\/\//i.test(String(query ?? "").trim()) && !isSoundcloudUrl(String(query).trim()) && !w.settings.radio) throw new UserError("Live stream links are turned off in this server. A manager can allow them on the dashboard.");
+        if (!tracks && !w.settings.radio && (source.soundcloud === false || (/^https?:\/\//i.test(String(query ?? "").trim()) && !isSoundcloudUrl(String(query).trim())))) throw new UserError("Live stream links are turned off in this server. A manager can allow them on the dashboard.");
         let found = tracks ? { kind: tracks.length > 1 ? "playlist" : "track", title: tracks[0]?.title ?? "", tracks } : await lookup(query);
         let list = found.tracks.map(t => ({ ...t, requestedBy: String(userId) }));
         const limit = w.settings.max_minutes * 60;

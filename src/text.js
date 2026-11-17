@@ -21,7 +21,7 @@ export const HELP_PAGES = [
             { name: "🎮 /games", value: "Price games, check bundles, free games, sales, codes, sale prep." },
             { name: "👤 /me  ·  🔔 /alerts", value: "Your wishlist, library, Steam link, friends and data; how you get sale alerts." },
             { name: "🏠 /server", value: "Giveaways, game nights, levels, boards, events, invites, streams." },
-            { name: "🎵 /music  ·  /play  ·  /player", value: "SoundCloud and live radio in voice, with an Auto DJ. `/player` opens the big player, and its All commands button opens a menu for every music command." },
+            { name: "🎵 /music  ·  /play  ·  /player", value: "Live radio in voice, with an Auto DJ. `/player` opens the big player, and its All commands button opens a menu for every music command." },
             { name: "🛠 /manage  ·  🛡 /mod", value: "Setup and community tools for managers; moderation for mods." },
             { name: "🤖 /bot  ·  /dashboard", value: "Status, changelog, support and ideas. `/dashboard` opens the website." },
             { name: "🧭 Not sure what to type?", value: "Every hub has a menu: `/games menu`, `/me menu`, `/server menu`, `/manage menu`, `/bot menu`, `/mod menu`. Pick an area, pick a command, see how it works, and run the simple ones with a button. `/alerts status` opens your alert settings with dropdowns." }
@@ -41,7 +41,7 @@ export const HELP_PAGES = [
             { name: "Library", value: "`/me library` `add`, `import`, `remove`, `view`, `status`, `backlog`, `spend`, `trend`, `challenge`, `badges`, `bundles`, `grabber`." },
             { name: "Steam", value: "`/me steam` `link`, `sync`, `view`, `next`, `foryou`, `verify`, `value`, `taste`, `recap`, `wrapped` (five shareable slides of your year), `goal`, `unlink`.\n`/me steam family` lists the people in your Steam Family: games they own are skipped in sale alerts and counted as owned in bundle checks." },
             { name: "Sharing", value: "`/me profilecard` draws your profile page as a picture. `/me publicpage` makes a shareable wishlist page (`share:true` posts the link in the channel). `/me currency` picks your currency.\n`/me friend` `add` / `list` / `deals` / `remove`: friends' birthdays and wishlist sales." },
-            { name: "Profile page", value: "`/me profile` builds your public page: `view`, `bio`, `name`, `look` (theme, background, layout, banner), `song` (YouTube, SoundCloud, Spotify or a live radio stream), `link`, `unlink`, `favorite`, `unfavorite`, `show` (who sees each section). The dashboard has a live editor." },
+            { name: "Profile page", value: "`/me profile` builds your public page: `view`, `bio`, `name`, `look` (theme, background, layout, banner), `song` (YouTube, Spotify or a live radio stream), `link`, `unlink`, `favorite`, `unfavorite`, `show` (who sees each section). The dashboard has a live editor." },
             { name: "Data", value: "`/me mydata` `export` / `delete` your data." }
         ] },
     { key: "alerts", label: "Sale alerts", emoji: "🔔", title: "/alerts",
@@ -64,7 +64,7 @@ export const HELP_PAGES = [
             { name: "Events and giveaways", value: "`/server calendar` shows releases, sales and server events.\n`/server giveaway` `create` / `list` / `info` / `end` / `cancel` / `reroll` / `replace` / `setup` runs key giveaways. `create` takes `regions:` (like US, EU) to lock it to places and a `video` file to post with it.\n`/server promos` `list` shows drops like SteelSeries or NVIDIA (managers: `add` / `end` / `channel` / `ping` / `news`)." }
         ] },
     { key: "music", label: "Music", emoji: "🎵", title: "/music, /play and /player",
-        description: "SoundCloud songs, playlists and live radio in your voice channel. Join one first. `/player` opens the big player on the web: queue, search, radio, a live visualizer, a session chat and a Stream tab for OBS.",
+        description: "Live radio in your voice channel (SoundCloud is paused for now). Join one first. `/player` opens the big player on the web: queue, search, radio, a live visualizer, a session chat and a Stream tab for OBS.",
         fields: [
             { name: "Start something", value: "`/play` (or `/music play`) a link or words. `/music search` picks from results. `/music live` lists stations on the air right now." },
             { name: "Controls", value: "`nowplaying`, `queue`, `pause`, `resume`, `skip`, `skipto`, `previous`, `seek`, `stop`, `leave`, `volume`, `loop`, `shuffle`, `remove`, `move`, `clear`." },

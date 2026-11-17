@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.64", date: "2026-11-17", title: "More live radio, SoundCloud paused", items: [
+        "SoundCloud is paused for now because its rules don't allow Discord bots. Live radio is unaffected.",
+        "About 70 new live stations: lofi, synthwave, game and anime, jazz and classical, pop, reggae and world, and more.",
+        "Type a station name or genre in /play or the player (lofi, jazz, groove salad) and it finds the station for you.",
+    ] },
     { version: "2026.11.63", date: "2026-11-17", title: "Wishlist export and a security pass", items: [
         "**Export CSV:** the Wishlist page has a new button that downloads your list with best prices, stores and discounts, ready for a spreadsheet.",
         "**Skip alerts you can't use:** `/me wishlist cards` (and the Alerts page) can now turn off sale alerts for VR-only games and for Early Access games, for people without a headset or who wait for 1.0.",

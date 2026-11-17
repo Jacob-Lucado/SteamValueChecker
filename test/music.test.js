@@ -67,7 +67,7 @@ test("source asks yt-dlp the right things and never lets a link argument look li
     };
     const spawned = [];
     const spawnImpl = (cmd, args) => { spawned.push([cmd, args]); const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.kill = () => {}; return p; };
-    const src = createSource({ exec, spawnImpl });
+    const src = createSource({ exec, spawnImpl, soundcloud: true });
     const found = await src.search("--exec evil", 3);
     assert.equal(found.length, 1);
     assert.ok(calls[0].some(a => a === "scsearch3:--exec evil"), "the query is one argument with a prefix, so it can't be a flag");
@@ -477,7 +477,7 @@ test("a bare SoundCloud profile link asks for their own uploads, not reposts", a
     assert.equal(profileTracksUrl("https://soundcloud.com/a/sets/x"), "https://soundcloud.com/a/sets/x");
     assert.equal(profileTracksUrl("https://soundcloud.com/discover"), "https://soundcloud.com/discover");
     const seen = [];
-    const src = createSource({ exec: async (_c, args) => { seen.push(args.at(-1)); return JSON.stringify({ _type: "playlist", title: "strange language (Tracks)", entries: [{ url: "https://soundcloud.com/strangelanguagee/rolling", title: "Rolling" }] }); } });
+    const src = createSource({ soundcloud: true, exec: async (_c, args) => { seen.push(args.at(-1)); return JSON.stringify({ _type: "playlist", title: "strange language (Tracks)", entries: [{ url: "https://soundcloud.com/strangelanguagee/rolling", title: "Rolling" }] }); } });
     const r = await src.resolve("https://soundcloud.com/strangelanguagee");
     assert.equal(seen[0], "https://soundcloud.com/strangelanguagee/tracks");
     assert.equal(r.kind, "playlist"); assert.equal(r.title, "strange language's tracks"); assert.equal(r.tracks.length, 1);
@@ -498,11 +498,11 @@ test("a slow SoundCloud lookup is retried once before the track fails", async ()
     let calls = 0;
     const exec = async () => { calls++; if (calls === 1) throw new Error("SoundCloud took too long to answer."); return "https://cdn.example/a.mp3\n"; };
     const fake = () => ({ stdout: {}, stderr: { on() {} }, on() {}, kill() {} });
-    const src = createSource({ exec, spawnImpl: fake });
+    const src = createSource({ exec, spawnImpl: fake, soundcloud: true });
     const s = await src.stream({ url: "https://soundcloud.com/a/b", title: "x" });
     assert.equal(calls, 2); assert.ok(s.stream);
     calls = -5; // keeps timing out: the second failure goes up
-    await assert.rejects(createSource({ exec: async () => { throw new Error("SoundCloud took too long to answer."); }, spawnImpl: fake }).stream({ url: "https://soundcloud.com/a/b", title: "x" }), /too long/);
+    await assert.rejects(createSource({ soundcloud: true, exec: async () => { throw new Error("SoundCloud took too long to answer."); }, spawnImpl: fake }).stream({ url: "https://soundcloud.com/a/b", title: "x" }), /too long/);
 });
 
 test("the station list has hip hop and R&B, and an unfiltered pick mixes every kind", async () => {
@@ -514,4 +514,14 @@ test("the station list has hip hop and R&B, and an unfiltered pick mixes every k
     const mix = await st.pick(); assert.equal(mix.length, 25);
     assert.ok(new Set(mix.map(t => t.cat)).size >= 6, "every kind represented");
     assert.ok((await st.pick("hiphop")).every(t => t.cat === "hiphop"));
+});
+
+test("SoundCloud is paused by default, live radio and station names still work", async () => {
+    const src = createSource({ exec: async () => { throw new Error("should not run"); } });
+    assert.equal(src.soundcloud, false);
+    await assert.rejects(src.search("anything"), /paused/);
+    await assert.rejects(src.resolve("https://soundcloud.com/a/b"), /paused/);
+    const { findStation } = await import("../src/stations.js");
+    assert.match(findStation("lofi").name, /lofi/i);
+    assert.equal(findStation("zzzqqq"), null);
 });

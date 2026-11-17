@@ -5,7 +5,7 @@
   async function view(ctx) {
     const { api, app, busy, currentView, field, h, pageHead, select, state, toast } = ctx;
     const holder = h("div", { class: "muted", text: "Loading…" });
-    app.replaceChildren(pageHead("Music", "Play SoundCloud songs, playlists and live radio in a voice channel. Join one in your server, then add music here or with /play."), holder);
+    app.replaceChildren(pageHead("Music", "Play live radio in a voice channel (SoundCloud is paused for now). Join one in your server, then add music here or with /play."), holder);
     const big = h("a", { class: "btn blue", href: "#", target: "_blank", rel: "noopener", text: "View the big music player ↗", title: "Opens the full-screen player with session chat" });
     app.insertBefore(h("div", { class: "row" }, big), holder);
     const fmt = sec => { sec = Math.max(0, Math.floor(sec || 0)); const hh = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60; return (hh ? hh + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
@@ -99,7 +99,7 @@
       reqBox.style.display = s.autodj ? "" : "none";
       if (!s.autodj) return;
       if (typing(reqBox)) return;
-      const q = h("input", { type: "text", placeholder: "SoundCloud song or playlist link, or words to search", maxlength: "300", "aria-label": "Request a song" });
+      const q = h("input", { type: "text", placeholder: "Station name (lofi, jazz) or a live stream link", maxlength: "300", "aria-label": "Request a song" });
       const go = h("button", { class: "btn green", type: "button", text: "Request" }), find = h("button", { class: "btn blue", type: "button", text: "Search" });
       const results = h("div");
       go.disabled = find.disabled = !(a.enabled && s.autodj_submit);
@@ -123,7 +123,7 @@
 
     // ----- parts that stay put while you type -----
     function addPanel(d) {
-      const q = h("input", { type: "text", placeholder: "SoundCloud link (song or playlist), a live radio stream link, or words to search for", maxlength: "300", "aria-label": "Song, playlist, stream link or search" });
+      const q = h("input", { type: "text", placeholder: "Station name (lofi, jazz), or a live radio stream link", maxlength: "300", "aria-label": "Song, playlist, stream link or search" });
       const next = h("input", { type: "checkbox" }), shuf = h("input", { type: "checkbox" });
       const results = h("div");
       const play = h("button", { class: "btn green", type: "button", text: "Play" }), find = h("button", { class: "btn blue", type: "button", text: "Search" });

@@ -66,12 +66,18 @@ export function run(cmd, args, { timeoutMs = 30_000, spawnImpl = spawn } = {}) {
     });
 }
 
-export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: probeRadio, open: openRadio } } = {}) {
+// SoundCloud's rules don't allow Discord bots, so playing from it is switched off. Set SOUNDCLOUD_ENABLED=1 to bring it back.
+export const SOUNDCLOUD_PAUSED = "SoundCloud is paused for now because its rules don't allow Discord bots. Live radio still works: try `/music live`, type a station name like lofi or jazz, or paste a stream link.";
+const paused = () => Object.assign(new Error(SOUNDCLOUD_PAUSED), { missing: true });
+
+export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: probeRadio, open: openRadio }, soundcloud = process.env.SOUNDCLOUD_ENABLED === "1" } = {}) {
     const json = async args => JSON.parse(await exec(YTDLP, ["--no-warnings", "--no-call-home", "--ignore-config", ...args]));
 
     return {
+        soundcloud,
         /** Search SoundCloud. Returns up to `limit` tracks. */
         async search(query, limit = 5) {
+            if (!soundcloud) throw paused();
             const q = cleanQuery(query);
             if (!q) return [];
             const data = await json(["--flat-playlist", "-J", `scsearch${Math.min(10, Math.max(1, limit))}:${q}`]);
@@ -80,6 +86,7 @@ export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: p
 
         /** A SoundCloud link: one track, or a set/profile with many. */
         async resolve(url) {
+            if (!soundcloud) throw paused();
             if (!isSoundcloudUrl(url)) throw new Error("That isn't a SoundCloud link.");
             const data = await json(["--flat-playlist", "-J", "--playlist-end", "100", "--", profileTracksUrl(url)]);
             const owner = /^(.*) \((?:All|Tracks)\)$/.exec(String(data.title ?? ""))?.[1];
@@ -94,7 +101,7 @@ export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: p
 
         /** Fills in the length and picture when a track came from a flat list without them. */
         async details(track) {
-            if (track.duration && track.thumb) return track;
+            if (!soundcloud || track.radio || (track.duration && track.thumb)) return track;
             try { const t = parseEntry(await json(["--no-playlist", "-J", "--", track.url])); return t ? { ...track, ...Object.fromEntries(Object.entries(t).filter(([, v]) => v)) } : track; }
             catch { return track; }
         },
@@ -104,6 +111,7 @@ export function createSource({ exec = run, spawnImpl = spawn, radio = { probe: p
         radioProbe: url => radio.probe(url),
 
         async stream(track, { seek = 0 } = {}) {
+            if (!track.radio && !soundcloud) throw paused();
             if (track.radio) {
                 // A live station: fetch it here (so the address checks stay in force) and hand the audio to ffmpeg to decode.
                 const r = await radio.open(track.url);
