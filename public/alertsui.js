@@ -58,10 +58,16 @@
       return { box, save: () => collect() };
     }
     const codeRows = codeAlertRows();
+    const FACTS = [["reviews", "Steam review score, and a warning when recent reviews have dropped"], ["critic", "Critic score"], ["time", "Time to finish and what it costs per hour"], ["players", "Players on Steam right now"], ["early", "Early Access warning"], ["controller", "Controller support"], ["vr", "VR support"]];
+    const hiddenNow = new Set(state.me.settings.hide_facts || []);
+    const factBoxes = FACTS.map(([key]) => { const cb = h("input", { type: "checkbox", checked: !hiddenNow.has(key) }); cb.dataset.key = key; return cb; });
+    const factsPanel = () => h("div", { class: "panel" }, h("h3", { text: "Extra lines on price cards" }),
+      h("p", { class: "muted small", text: "Untick anything you don't want on your sale alerts and check cards." }),
+      ...FACTS.map(([, label], n) => h("label", { class: "check" }, factBoxes[n], label)));
     const save = h("button", { class: "btn green", text: "Save settings", onclick: () => busy(save, async () => {
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
-        quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
+        hide_facts: factBoxes.filter(b => !b.checked).map(b => b.dataset.key), quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
         max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), playtest_skip: skipList(), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
@@ -103,6 +109,7 @@
         h("div", { class: "row" }, field("Quiet from", qs), field("Until", qe), field("Your time zone", tz)),
         h("label", { class: "check" }, digest, "Weekly digest of your wishlist sales, sent from 9:00 in your time zone on"), field("Day", digestDay)),
       muteToggles(),
+      factsPanel(),
       samplePanel(),
       h("div", { class: "panel" },
         h("h3", { text: "Share with your server" }),

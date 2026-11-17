@@ -74,12 +74,25 @@ export function prefsPatch(input, user) {
         if (list.some(x => !MUTABLE.includes(x))) throw new UserError(`You can mute: ${MUTABLE.join(", ")}.`);
         patch.muted = [...new Set(list)].join(",");
     }
+    if (has("hide_facts")) {
+        const list = (Array.isArray(input.hide_facts) ? input.hide_facts : String(input.hide_facts ?? "").split(",")).map(x => String(x).trim()).filter(Boolean);
+        if (list.some(x => !FACT_KEYS.includes(x))) throw new UserError(`You can hide: ${FACT_KEYS.join(", ")}.`);
+        patch.hide_facts = [...new Set(list)].join(",");
+    }
     if (has("lang")) {
         if (!LANGS[input.lang]) throw new UserError("Pick one of the languages in the list.");
         patch.lang = input.lang;
     }
     return patch;
 }
+
+/** The extra lines on price alerts and check cards, so each person can pick which ones they want. */
+export const FACT_OPTIONS = [
+    ["reviews", "Steam review score and review dips"], ["critic", "Critic score"], ["time", "Time to finish and cost per hour"],
+    ["players", "Players right now"], ["early", "Early Access warning"], ["controller", "Controller support"], ["vr", "VR support"]
+];
+export const FACT_KEYS = FACT_OPTIONS.map(([k]) => k);
+export const hiddenFacts = u => String(u?.hide_facts ?? "").split(",").filter(k => FACT_KEYS.includes(k));
 
 export const MUTABLE = ["alert", "bundle", "free", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "digest", "release", "friend", "codes", "promo"];
 
@@ -88,7 +101,7 @@ export function prefsView(u) {
     return {
         quiet_start: formatClock(u.quiet_start), quiet_end: formatClock(u.quiet_end), tz: u.tz ?? DEFAULT_TZ,
         digest: Boolean(u.digest), digest_day: u.digest_day ?? 1, bundles: u.bundles !== 0, share: Boolean(u.share), free: Boolean(u.free), free_dlc: u.free_dlc !== 0, news: u.news ?? 0, playtest: u.playtest ?? 0, playtest_skip: String(u.playtest_skip ?? "").split(",").filter(Boolean), achv: Boolean(u.achv), nowplaying: Boolean(u.nowplaying), nudge: Boolean(u.nudge), yearly: Boolean(u.yearly), refund: Boolean(u.refund), milestones: Boolean(u.milestones), dlc: Boolean(u.dlc),
-        min_discount: u.min_discount ?? 0, max_price: u.max_price ?? 0, lows_only: Boolean(u.lows_only), muted: String(u.muted ?? "").split(",").filter(Boolean), lang: u.lang ?? "en"
+        min_discount: u.min_discount ?? 0, max_price: u.max_price ?? 0, lows_only: Boolean(u.lows_only), muted: String(u.muted ?? "").split(",").filter(Boolean), hide_facts: hiddenFacts(u), lang: u.lang ?? "en"
     };
 }
 

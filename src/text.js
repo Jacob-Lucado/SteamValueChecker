@@ -37,7 +37,7 @@ export const HELP_PAGES = [
     { key: "me", label: "Wishlist and library", emoji: "👤", title: "/me",
         description: "Your own things. Only you see the replies.",
         fields: [
-            { name: "Wishlist", value: "`/me wishlist` `import` (your public Steam wishlist), `add`, `remove`, `view`, `check`, `alert` (sale, % off or low), `priority`, `cleanup`." },
+            { name: "Wishlist", value: "`/me wishlist` `import` (your public Steam wishlist), `add`, `remove`, `view`, `check`, `alert` (sale, % off or low), `priority`, `cleanup`, `cards` (choose which extra lines show: reviews, critic score, time to finish, players, Early Access, controller, VR)." },
             { name: "Library", value: "`/me library` `add`, `import`, `remove`, `view`, `status`, `backlog`, `spend`, `trend`, `challenge`, `badges`, `bundles`, `grabber`." },
             { name: "Steam", value: "`/me steam` `link`, `sync`, `view`, `next`, `foryou`, `verify`, `value`, `taste`, `recap`, `wrapped` (five shareable slides of your year), `goal`, `unlink`.\n`/me steam family` lists the people in your Steam Family: games they own are skipped in sale alerts and counted as owned in bundle checks." },
             { name: "Sharing", value: "`/me profilecard` draws your profile page as a picture. `/me publicpage` makes a shareable wishlist page (`share:true` posts the link in the channel). `/me currency` picks your currency.\n`/me friend` `add` / `list` / `deals` / `remove`: friends' birthdays and wishlist sales." },

@@ -4,6 +4,7 @@ import { REGIONS, ALERT_TYPES } from "./constants.js";
 import { CATEGORIES } from "./stations.js";
 import { MENU } from "./hubpanel.js";
 import { LANGS } from "./i18n.js";
+import { FACT_OPTIONS } from "./prefs.js";
 const LANG_CHOICES = Object.entries(LANGS).map(([value, name]) => ({ name, value }));
 export { REGIONS };
 
@@ -258,19 +259,22 @@ const privacy = new SlashCommandBuilder().setName("privacy").setDescription("Wha
 const wishlist = new SlashCommandBuilder()
     .setName("wishlist")
     .setDescription("Your wishlist and sale alerts")
+    .addSubcommand(s => s.setName("cards").setDescription("Choose the extra lines on your alerts and cards")
+        .addStringOption(o => o.setName("info").setDescription("Which line").setRequired(true).addChoices(...FACT_OPTIONS.map(([value, name]) => ({ name, value }))))
+        .addBooleanOption(o => o.setName("show").setDescription("True to show it, false to hide it").setRequired(true)))
     .addSubcommand(s => s.setName("import").setDescription("Import your public Steam wishlist")
-        .addStringOption(o => o.setName("profile").setDescription("Optional: a Steam profile link or ID. Leave empty to use the Steam account you signed in with")))
+        .addStringOption(o => o.setName("profile").setDescription("Steam profile link or ID (default: your linked account)")))
     .addSubcommand(s => s.setName("add").setDescription("Add one game by title")
         .addStringOption(o => o.setName("title").setDescription("Game title").setRequired(true).setMaxLength(100))
         .addStringOption(alertType).addNumberOption(alertValue))
     .addSubcommand(s => s.setName("remove").setDescription("Remove a game")
         .addStringOption(o => gameOption(o, true)))
-    .addSubcommand(s => s.setName("cleanup").setDescription("Remove wishlist games you already own (they are in your library)"))
-    .addSubcommand(s => s.setName("priority").setDescription("Star a game: listed first, and its alerts come through quiet hours")
+    .addSubcommand(s => s.setName("cleanup").setDescription("Drop wishlist games you already own"))
+    .addSubcommand(s => s.setName("priority").setDescription("Star a game: listed first, alerts skip quiet hours")
         .addStringOption(o => gameOption(o, true))
         .addBooleanOption(o => o.setName("starred").setDescription("Star it (default) or false to remove the star")))
     .addSubcommand(s => s.setName("view").setDescription("See your wishlist with current prices"))
-    .addSubcommand(s => s.setName("check").setDescription("Is a wishlist game a good deal right now? Shows its lows")
+    .addSubcommand(s => s.setName("check").setDescription("Is it a good deal right now? Shows its lows")
         .addStringOption(o => gameOption(o, true)))
     .addSubcommand(s => s.setName("alert").setDescription("Change when a game (or all games) alerts you")
         .addStringOption(o => alertType(o).setRequired(true))

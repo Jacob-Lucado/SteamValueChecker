@@ -2,6 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.63", date: "2026-11-17", title: "Wishlist export and a security pass", items: [
         "**Export CSV:** the Wishlist page has a new button that downloads your list with best prices, stores and discounts, ready for a spreadsheet.",
+        "**Pick your extras:** new `/me wishlist cards` (and an *Extra lines on price cards* box on the Alerts page) lets you hide the review score, critic score, time to finish, player count, Early Access, controller or VR lines on your alerts and check cards. VR support is shown too.",
         "**Early Access and controller notes:** alerts, check cards and game pages now flag games that are still in Early Access and say when a game has full or partial controller support.",
         "**Review dip warnings:** when a game you watch goes on sale and its last month of Steam reviews is much worse than its overall score, the alert and the check card now say so, so a bad patch or a review bomb does not catch you out.",
         "**Giveaway stats:** the Giveaways page and `/server giveaway list` now show how many giveaways you have run, entries, people, prizes won and how many were claimed.",

@@ -1,14 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readTags, createStoreMeta, earlyAccessLine, controllerLine } from "../src/storemeta.js";
-import { configureFacts, gameFacts, factLines } from "../src/gamefacts.js";
+import { configureFacts, gameFacts, factLines, withoutHidden } from "../src/gamefacts.js";
+import { vrLine } from "../src/storemeta.js";
+import { prefsPatch, hiddenFacts } from "../src/prefs.js";
 
 const steam = (genres, cats) => ({ ok: true, status: 200, json: async () => ({ 620: { success: true, data: { genres: genres.map(description => ({ description })), categories: cats.map(description => ({ description })) } } }) });
 
 test("store meta: Early Access and controller support are read from Steam's tags", () => {
-    assert.deepEqual(readTags({ genres: ["Action", "Early Access"], cats: ["Single-player", "Full controller support"] }), { earlyAccess: true, controller: "full" });
-    assert.deepEqual(readTags({ genres: ["RPG"], cats: ["Partial Controller Support"] }), { earlyAccess: false, controller: "partial" });
-    assert.deepEqual(readTags({ genres: [], cats: [] }), { earlyAccess: false, controller: null });
+    assert.deepEqual(readTags({ genres: ["Action", "Early Access"], cats: ["Single-player", "Full controller support"] }), { earlyAccess: true, controller: "full", vr: null });
+    assert.deepEqual(readTags({ genres: ["RPG"], cats: ["Partial Controller Support"] }), { earlyAccess: false, controller: "partial", vr: null });
+    assert.deepEqual(readTags({ genres: [], cats: [] }), { earlyAccess: false, controller: null, vr: null });
     assert.equal(readTags(null), null);
 });
 
@@ -32,4 +34,23 @@ test("store meta: shows up in the card facts and stays out when there is nothing
     configureFacts({ store: createStoreMeta({ fetchImpl: async () => steam(["Action"], ["Single-player"]) }) });
     assert.equal(await gameFacts(620), null);
     configureFacts(null);
+});
+
+test("VR support is read from the store tags", () => {
+    assert.equal(readTags({ genres: [], cats: ["VR Supported"] }).vr, "supported");
+    assert.equal(readTags({ genres: [], cats: ["VR Only"] }).vr, "only");
+    assert.equal(readTags({ genres: [], cats: ["Single-player"] }).vr, null);
+    assert.match(vrLine({ vr: "only" }), /needs a VR headset/); assert.equal(vrLine({ vr: "supported" }), "🥽 VR supported"); assert.equal(vrLine(null), null);
+});
+
+test("each person can switch the extra lines off", () => {
+    const facts = { players: 5000, hours: { main: 10 }, critic: { score: 80, count: 9 }, store: { earlyAccess: true, controller: "full", vr: "supported" } };
+    assert.equal(factLines(facts).length, 6);
+    assert.equal(withoutHidden(facts, []), facts);
+    assert.equal(factLines(withoutHidden(facts, ["vr", "early", "controller"])).length, 3);
+    assert.equal(factLines(withoutHidden(facts, ["players", "critic", "time", "early", "controller", "vr"])).length, 0);
+    assert.equal(facts.store.vr, "supported", "the shared facts are left alone");
+    assert.deepEqual(hiddenFacts({ hide_facts: "vr,bogus,early" }), ["vr", "early"]);
+    assert.deepEqual(prefsPatch({ hide_facts: ["vr", "vr", "players"] }, {}), { hide_facts: "vr,players" });
+    assert.throws(() => prefsPatch({ hide_facts: ["nope"] }, {}), /You can hide/);
 });

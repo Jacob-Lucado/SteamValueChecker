@@ -29,8 +29,8 @@ import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
 import { current, dealVerdict } from "./alerts.js";
 import { saveFix, forgetFix, FixError } from "./titlefix.js";
-import { gameFacts } from "./gamefacts.js";
-import { prefsPatch, describeQuiet, describeDigest } from "./prefs.js";
+import { gameFacts, withoutHidden } from "./gamefacts.js";
+import { prefsPatch, describeQuiet, describeDigest, hiddenFacts, FACT_OPTIONS } from "./prefs.js";
 import { compareLibraries, playTogether } from "./compare.js";
 import { challengeView, monthKey, MAX_GOAL } from "./challenge.js";
 import { buyOrWait } from "./advice.js";
@@ -209,8 +209,9 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             try { history = await itad.getHistory(found.item.itad_id, user.region); advice = buyOrWait(history, now.price, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => money(n, now.currency) }); } catch { /* the check works without it */ }
             let subs = [];
             try { subs = (await itad.getSubs?.([found.item.itad_id], user.region))?.get(found.item.itad_id) ?? []; } catch { /* the check works without it */ }
-            const reviews = await steamReviews(found.item.appid).catch(() => null);
-            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs, reviews, await gameFacts(found.item.appid));
+            const hide = hiddenFacts(user);
+            const reviews = hide.includes("reviews") ? null : await steamReviews(found.item.appid).catch(() => null);
+            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs, reviews, withoutHidden(await gameFacts(found.item.appid), hide));
             let chart = null;
             try { chart = history ? renderHistoryChart({ title: found.item.title, points: history, currency: now.currency, now: now.price }) : null; } catch { /* the card is fine without the picture */ }
             if (chart) embed.image = { url: "attachment://price-history.png" };
@@ -369,6 +370,15 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                 case "view": return await wishlistView(i, user);
                 case "alert": return await wishlistAlert(i);
                 case "check": return await wishlistCheck(i, user);
+                case "cards": {
+                    const key = i.options.getString("info", true), show = i.options.getBoolean("show", true);
+                    const list = new Set(hiddenFacts(user));
+                    show ? list.delete(key) : list.add(key);
+                    db.updateUser(user.discord_id, { hide_facts: [...list].join(",") });
+                    const label = FACT_OPTIONS.find(([k]) => k === key)?.[1] ?? key;
+                    const off = FACT_OPTIONS.filter(([k]) => list.has(k)).map(([, l]) => l);
+                    return eph(i, `${show ? "Showing" : "Hiding"} **${label}** on your price alerts and check cards.\n${off.length ? `Hidden now: ${off.join(", ")}.` : "Nothing is hidden."}`);
+                }
             }
         } catch (err) {
             await failed(i, "wishlist", err);

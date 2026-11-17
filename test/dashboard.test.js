@@ -342,6 +342,10 @@ test("settings: validated, and channel delivery needs a server with an alert cha
     assert.equal(bad.status, 400);
     assert.match(bad.data.error, /alert channel/);
     assert.equal((await t.request("/api/settings", { method: "POST", body: { region: "XX" } })).status, 400);
+    const hid = await t.request("/api/settings", { method: "POST", body: { hide_facts: ["vr", "players", "vr"] } });
+    assert.deepEqual(hid.data.settings.hide_facts, ["vr", "players"]);
+    assert.equal((await t.request("/api/settings", { method: "POST", body: { hide_facts: ["nonsense"] } })).status, 400);
+    assert.deepEqual((await t.request("/api/settings", { method: "POST", body: { hide_facts: [] } })).data.settings.hide_facts, []);
     assert.equal((await t.request("/api/settings", { method: "POST", body: { guild_id: "not-mine" } })).status, 400);
 
     t.db.setGuildChannel("g-admin", "c1", "someone");

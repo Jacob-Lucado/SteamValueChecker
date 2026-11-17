@@ -254,6 +254,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "quiet_start", "INTEGER");
     addColumn("users", "quiet_end", "INTEGER");
     addColumn("users", "tz", "TEXT NOT NULL DEFAULT 'UTC'");
+    addColumn("users", "hide_facts", "TEXT NOT NULL DEFAULT ''");
     // Everyone still on the old UTC default moves to the new default once. Anyone who picks UTC afterwards keeps it.
     if (!db.prepare("SELECT 1 FROM status_meta WHERE key = 'tz:default:v1'").get()) {
         db.prepare("UPDATE users SET tz = ? WHERE tz = 'UTC'").run(DEFAULT_TZ);
@@ -445,7 +446,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     }
     const getUser = id => clean(get("SELECT * FROM users WHERE discord_id = ?", id));
 
-    const SETTABLE = new Set(["wish_sync", "wish_synced_at", "muted", "seen_version", "lang", "welcomed", "tipped",
+    const SETTABLE = new Set(["hide_facts", "wish_sync", "wish_synced_at", "muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
         "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "playtest_skip", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
     ]);

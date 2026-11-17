@@ -11,7 +11,8 @@ export function readTags(tags) {
     const cats = (tags.cats ?? []).map(c => c.toLowerCase());
     const earlyAccess = (tags.genres ?? []).some(g => /^early access$/i.test(g));
     const controller = cats.some(c => /full controller support/.test(c)) ? "full" : cats.some(c => /partial controller support/.test(c)) ? "partial" : null;
-    return { earlyAccess, controller };
+    const vr = cats.some(c => /^vr only$/.test(c)) ? "only" : cats.some(c => /^vr (supported|support)$/.test(c)) ? "supported" : null;
+    return { earlyAccess, controller, vr };
 }
 
 export function createStoreMeta({ fetchImpl = globalThis.fetch, now = () => Date.now() } = {}) {
@@ -31,4 +32,5 @@ export function createStoreMeta({ fetchImpl = globalThis.fetch, now = () => Date
 }
 
 export const earlyAccessLine = m => (m?.earlyAccess ? "🚧 **Early Access:** still in development, so it can change a lot, and the price may too." : null);
+export const vrLine = m => (m?.vr === "only" ? "🥽 VR only: needs a VR headset" : m?.vr === "supported" ? "🥽 VR supported" : null);
 export const controllerLine = m => (m?.controller === "full" ? "🎮 Full controller support" : m?.controller === "partial" ? "🎮 Partial controller support" : null);
