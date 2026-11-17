@@ -9,7 +9,7 @@ export async function fetchAppTags(appid, fetchImpl = globalThis.fetch) {
     if (!res.ok) throw new Error(`Steam answered ${res.status}`);
     const data = (await res.json())?.[String(appid)];
     if (!data?.success) return null;
-    const names = list => (Array.isArray(list) ? list : []).map(x => String(x?.description ?? "").trim()).filter(Boolean).slice(0, 12);
+    const names = list => (Array.isArray(list) ? list : []).map(x => String(x?.description ?? "").trim()).filter(Boolean).slice(0, 24);
     return { genres: names(data.data?.genres), cats: names(data.data?.categories) };
 }
 

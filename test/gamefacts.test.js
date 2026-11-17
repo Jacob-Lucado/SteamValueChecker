@@ -82,3 +82,10 @@ test("game facts: nothing until configured, then shown on the alert and check ca
     assert.ok(check.fields.some(f => f.name === "About the game" && /playing on Steam/.test(f.value)));
     assert.ok(!alertEmbed({ title: "Portal 2", itad_id: "x" }, now, { trigger: "any sale" }).description.includes("Critics"), "no facts, no lines");
 });
+
+test("the co-op line shows on cards and goes away when someone hides it", async () => {
+    const { factLines, withoutHidden } = await import("../src/gamefacts.js");
+    const facts = { players: null, hours: null, critic: null, store: { earlyAccess: false, controller: null, vr: null, modes: { coop: true, online: true, local: false, pvp: false, multi: true, remote: false } } };
+    assert.ok(factLines(facts).some(l => l.includes("Co-op (online)")));
+    assert.ok(!factLines(withoutHidden(facts, ["modes"])).some(l => l.includes("Co-op")));
+});

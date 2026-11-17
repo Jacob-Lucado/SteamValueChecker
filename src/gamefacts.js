@@ -3,7 +3,7 @@
 // until the bot starts and calls configureFacts() it answers null, and a failed lookup just leaves a line off.
 import { playersLine } from "./players.js";
 import { timeLine, criticLine, perHour } from "./igdb.js";
-import { earlyAccessLine, controllerLine, vrLine } from "./storemeta.js";
+import { earlyAccessLine, controllerLine, vrLine, modesLine } from "./storemeta.js";
 
 let sources = null;
 export const configureFacts = s => { sources = s; };
@@ -16,7 +16,7 @@ export async function gameFacts(appid) {
         sources.igdb?.facts(appid).catch(() => null) ?? null,
         sources.store?.meta(appid).catch(() => null) ?? null
     ]);
-    if (players == null && !igdb && !store?.earlyAccess && !store?.controller && !store?.vr) return null;
+    if (players == null && !igdb && !store?.earlyAccess && !store?.controller && !store?.vr && !modesLine(store)) return null;
     return { players: players ?? null, hours: igdb?.hours ?? null, critic: igdb?.critic ?? null, store: store ?? null };
 }
 
@@ -30,6 +30,7 @@ export function factLines(facts, { price = null, money = null } = {}) {
         time ? time + (cost !== null && money ? `, about ${money(cost)} an hour at this price` : "") : null,
         playersLine(facts.players),
         earlyAccessLine(facts.store),
+        modesLine(facts.store),
         controllerLine(facts.store),
         vrLine(facts.store)
     ].filter(Boolean);
@@ -47,6 +48,7 @@ export function withoutHidden(facts, hide = []) {
         if (h.has("early")) f.store.earlyAccess = false;
         if (h.has("controller")) f.store.controller = null;
         if (h.has("vr")) f.store.vr = null;
+        if (h.has("modes")) f.store.modes = null;
     }
     return f;
 }

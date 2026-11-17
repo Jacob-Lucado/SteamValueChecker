@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.65", date: "2026-11-17", title: "Who can you play it with?", items: [
+        "**Co-op and multiplayer line:** price alerts, check cards and game pages now say if a game has online or local co-op, PvP, or Remote Play Together, so you know before you buy whether it works for your group.",
+        "It has its own switch: untick *Co-op and multiplayer* on the Alerts page, or use `/me wishlist cards`.",
+    ] },
     { version: "2026.11.64", date: "2026-11-17", title: "More live radio, SoundCloud paused", items: [
         "SoundCloud is paused for now because its rules don't allow Discord bots. Live radio is unaffected.",
         "About 70 new live stations: lofi, synthwave, game and anime, jazz and classical, pop, reggae and world, and more.",

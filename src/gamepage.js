@@ -54,6 +54,11 @@ const compatBadges = c => {
     if (c?.earlyAccess) out.push(`<span class="cb" style="border-color:#ffab1f">🚧 Early Access</span>`);
     if (c?.controller === "full" || c?.controller === "partial") out.push(`<span class="cb" style="border-color:#c9d4e4">🎮 ${c.controller === "full" ? "Full" : "Partial"} controller support</span>`);
     if (c?.vr === "only" || c?.vr === "supported") out.push(`<span class="cb" style="border-color:#c9d4e4">🥽 VR ${c.vr === "only" ? "only" : "supported"}</span>`);
+    const mo = c?.modes;
+    if (mo) {
+        const bits = [mo.coop && "Co-op", mo.pvp && "PvP", !mo.coop && !mo.pvp && mo.multi && "Multiplayer", mo.remote && "Remote Play Together"].filter(Boolean);
+        if (bits.length) out.push(`<span class="cb" style="border-color:#c9d4e4">👥 ${bits.join(" · ")}</span>`);
+    }
     // A bad month: recent reviews well below the overall score.
     if (c?.dip && Number.isFinite(Number(c.dip.pct))) out.push(`<span class="cb" style="border-color:#ff7a7a">⚠️ Lately worse: ${Number(c.dip.pct)}% of this month's reviews are positive</span>`);
     const hrs = c?.hours?.main ?? c?.hours?.rushed;

@@ -54,3 +54,12 @@ test("each person can switch the extra lines off", () => {
     assert.deepEqual(prefsPatch({ hide_facts: ["vr", "vr", "players"] }, {}), { hide_facts: "vr,players" });
     assert.throws(() => prefsPatch({ hide_facts: ["nope"] }, {}), /You can hide/);
 });
+
+test("co-op and multiplayer modes read from the store categories", async () => {
+    const { readTags, modesLine } = await import("../src/storemeta.js");
+    const m = readTags({ genres: [], cats: ["Single-player", "Multi-player", "Online Co-op", "Shared/Split Screen Co-op", "Online PvP", "Remote Play Together"] });
+    assert.equal(modesLine(m), "👥 Co-op (online, local), PvP, Remote Play Together");
+    assert.equal(modesLine(readTags({ genres: [], cats: ["Single-player"] })), null);
+    assert.equal(modesLine(readTags({ genres: [], cats: ["Multi-player"] })), "👥 Multiplayer");
+    assert.equal(modesLine(readTags({ genres: [], cats: [] })), null);
+});
