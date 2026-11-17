@@ -26,7 +26,7 @@ export function createGiveawayRoutes(ctx) {
                 const keys = db.listKeys(x.id);
                 return { id: x.id, title: x.title, regions: x.regions ?? null, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length, outcome: outcomeOf(x, keys) };
             });
-            return { giveaways: rows, pending: await pendingClaimsFor(g.id), settings: db.getGiveawaySettings(g.id), max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
+            return { giveaways: rows, pending: await pendingClaimsFor(g.id), settings: db.getGiveawaySettings(g.id), blocked: giveaways ? giveaways.blockedList(g.id) : [], max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
         "GET /api/giveaways/templates": async (req, _b, url) => {
             const s = session(req); needGiveaways();
@@ -101,6 +101,17 @@ export function createGiveawayRoutes(ctx) {
             const g = managerGuild(session(req), body.guild_id); needGiveaways();
             const x = giveawayOf(g, body.id);
             return await giveaways.replaceKey(x.id, String(body.user_id ?? ""), body.key);
+        },
+        // Bar a member from this server's giveaways, or let them back in.
+        "POST /api/giveaways/block": async (req, body) => {
+            const s = session(req);
+            const g = managerGuild(s, body.guild_id); needGiveaways();
+            const id = String(body.user_id ?? "").trim().replace(/^<@!?(\d+)>$/, "$1");
+            if (!/^\d{15,25}$/.test(id)) throw new HttpError(400, "Paste the member's Discord ID (right-click them with Developer Mode on).");
+            if (id === s.userId) throw new HttpError(400, "You can't block yourself.");
+            const result = giveaways.setBlocked(g.id, id, body.on !== false, s.userId);
+            if (result === "full") throw new HttpError(400, "The block list is full (200). Unblock someone first.");
+            return { result, blocked: giveaways.blockedList(g.id) };
         },
         "POST /api/giveaways/setup": async (req, body) => {
             const g = managerGuild(session(req), body.guild_id);

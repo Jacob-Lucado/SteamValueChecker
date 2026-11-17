@@ -26,7 +26,7 @@
           api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })),
           api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))
         ]);
-        holder.replaceChildren(pendingPanel(list.pending, id => api("/api/giveaways/remind", { guild_id: guild.value, key_id: id }), load), giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways, ro.roles), setupPanel(ch.channels, ro.roles, list.settings));
+        holder.replaceChildren(pendingPanel(list.pending, id => api("/api/giveaways/remind", { guild_id: guild.value, key_id: id }), load), giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways, ro.roles), setupPanel(ch.channels, ro.roles, list.settings, list.blocked));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
 
@@ -190,14 +190,23 @@
         h("p", { class: "muted small", text: "Prize keys are never shown here." })));
     }
 
-    function setupPanel(channels, roles, settings) {
+    function setupPanel(channels, roles, settings, blocked = []) {
       const vouch = select([["", "A channel named #vouches"], ...channels.map(c => [c.id, "#" + c.name])], settings.vouch_channel_id || "");
       const mgr = select([["", "Only people with Manage Server"], ...roles.map(r => [r.id, r.name])], settings.manager_role_id || "");
       const gwCh = select([["", "The alert channel"], ...channels.map(c => [c.id, "#" + c.name])], settings.giveaway_channel_id || "");
       const save = h("button", { class: "btn gray", text: "Save", onclick: () => busy(save, async () => { await api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouch.value, giveaway_channel_id: gwCh.value, manager_role_id: mgr.value }); toast("Saved.", "ok"); }) });
+      const blockBox = h("div", { class: "muted small" });
+      const idIn = h("input", { type: "text", placeholder: "Member's Discord ID", maxlength: "40", "aria-label": "Discord ID to block" });
+      const drawBlocked = list => {
+        blockBox.replaceChildren(...(list.length ? list.map(b => h("div", { class: "row" }, h("code", { text: b.discord_id }), h("button", { class: "chip-btn", type: "button", text: "Let back in", onclick: async () => { try { const r = await api("/api/giveaways/block", { guild_id: guild.value, user_id: b.discord_id, on: false }); drawBlocked(r.blocked); toast("They can enter again.", "ok"); } catch (e) { toast(e.message, "err"); } } }))) : [h("span", { text: "Nobody is blocked." })]));
+      };
+      drawBlocked(blocked);
+      const blockBtn = h("button", { class: "btn gray", text: "Block", onclick: () => busy(blockBtn, async () => { const r = await api("/api/giveaways/block", { guild_id: guild.value, user_id: idIn.value, on: true }); drawBlocked(r.blocked); idIn.value = ""; toast(r.result === "already" ? "Already blocked." : "Blocked. Their open entries were removed.", "ok"); }) });
       return h("div", { class: "panel" }, h("h3", { text: "Server settings" }),
         h("div", { class: "row" }, field("Vouches channel (winners' confirmations are posted here)", vouch), field("Role that can run giveaways in Discord", mgr)),
-        h("div", { class: "row" }, field("Giveaway channel (network-wide giveaways from the bot owner appear here)", gwCh)), h("p"), save);
+        h("div", { class: "row" }, field("Giveaway channel (network-wide giveaways from the bot owner appear here)", gwCh)), h("p"), save,
+        h("h4", { text: "Blocked members" }), h("p", { class: "muted small", text: "They can't enter any giveaway in this server, even with a bypass role." }),
+        h("div", { class: "row" }, field("Add by Discord ID", idIn), blockBtn), blockBox);
     }
 
     guild.addEventListener("change", load);

@@ -786,3 +786,18 @@ test("channel names like ✅│vouches are found, and proof falls back to the gi
     assert.ok(p.link);
     assert.ok(t.posts.length > before);
 });
+
+test("blocked members can't enter, lose open entries, and can be let back in", async () => {
+    const t = rig();
+    const { id } = await t.make({ override_role_ids: ["boost"] });
+    const gid = t.db.getGiveaway(id).guild_id;
+    await t.svc.enter(id, { userId: "bad", roleIds: [] });
+    assert.equal(t.svc.setBlocked(gid, "bad", true, "host"), "added");
+    assert.ok(!t.db.getEntry(id, "bad"), "the open entry is gone");
+    await assert.rejects(() => t.svc.enter(id, { userId: "bad", roleIds: ["boost"] }), /can't enter giveaways in this server/); // an override role doesn't skip it
+    assert.equal(t.svc.setBlocked(gid, "bad", true), "already");
+    assert.deepEqual(t.svc.blockedList(gid).map(b => b.discord_id), ["bad"]);
+    assert.equal(t.svc.setBlocked(gid, "bad", false), "removed");
+    assert.equal(t.svc.setBlocked(gid, "bad", false), "none");
+    assert.equal((await t.svc.enter(id, { userId: "bad", roleIds: [] })).status, "entered");
+});

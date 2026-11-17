@@ -282,6 +282,8 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             db.removeEntry(g.id, who.userId);
             return { status: "left", total: entryCount(g.id) };
         }
+        // A host can bar someone from every giveaway in their server. Nothing, not even an override role, skips it.
+        if (g.guild_id && db.isBlocked?.(g.guild_id, who.userId)) throw new UserError("You can't enter giveaways in this server.");
         const have = who.roleIds ?? [];
         // A region lock is about where the prize can be used, so no role skips it.
         if (g.regions) {
@@ -533,6 +535,14 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
     };
 
     /** Does this person have a recent confirmation that is still waiting for an optional screenshot? */
+    /** Bars a member from a server's giveaways (or lets them back in). Returns "added", "already", "full" or, when unblocking, "removed" / "none". */
+    function setBlocked(guildId, userId, on, by = null) {
+        if (!userId) throw new UserError("Pick a member.");
+        if (on) { const r = db.blockUser(guildId, userId, by, now()); if (r === "added") { for (const g of db.listGiveaways?.(guildId) ?? []) if (!closed(g) && db.getEntry(g.id, userId)) { db.removeEntry(g.id, userId); refresh?.(g.id).catch?.(() => {}); } } return r; }
+        return db.unblockUser(guildId, userId) ? "removed" : "none";
+    }
+    const blockedList = guildId => db.listBlocked(guildId);
+
     const awaitingProof = userId => Boolean(db.keyAwaitingProof(userId, now()));
 
     /** A winner's screenshot after confirming. One per prize, only inside the short window, only real image files. */
@@ -675,5 +685,5 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         return done;
     }
 
-    return { spread, spreadStatus, create, launch, updateRules, enter, end, reroll, cancel, prepareClaim, delivered, confirm, awaitingProof, addProof, reportProblem, replaceKey, remind, tick, refresh };
+    return { spread, spreadStatus, create, launch, updateRules, enter, end, reroll, cancel, prepareClaim, delivered, confirm, awaitingProof, addProof, setBlocked, blockedList, reportProblem, replaceKey, remind, tick, refresh };
 }

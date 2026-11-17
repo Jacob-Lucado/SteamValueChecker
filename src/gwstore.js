@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS giveaway_templates (
     UNIQUE (guild_id, name)
 );
 CREATE INDEX IF NOT EXISTS giveaway_keys_g ON giveaway_keys(giveaway_id);
+CREATE TABLE IF NOT EXISTS giveaway_blocked (
+    guild_id   TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    by_id      TEXT,
+    at         INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, discord_id)
+);
 CREATE TABLE IF NOT EXISTS giveaway_excluded (
     key_id     INTEGER NOT NULL REFERENCES giveaway_keys(id) ON DELETE CASCADE,
     discord_id TEXT NOT NULL,
@@ -247,10 +254,23 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         return getGiveawaySettings(guildId);
     }
 
+    /** People a server has barred from its giveaways. */
+    const BLOCK_MAX = 200;
+    const blockUser = (guildId, userId, by, at = Date.now()) => {
+        if (get("SELECT 1 AS x FROM giveaway_blocked WHERE guild_id = ? AND discord_id = ?", guildId, userId)) return "already";
+        if (get("SELECT COUNT(*) AS n FROM giveaway_blocked WHERE guild_id = ?", guildId).n >= BLOCK_MAX) return "full";
+        run("INSERT INTO giveaway_blocked (guild_id, discord_id, by_id, at) VALUES (?,?,?,?)", guildId, userId, by ?? null, at);
+        return "added";
+    };
+    const unblockUser = (guildId, userId) => run("DELETE FROM giveaway_blocked WHERE guild_id = ? AND discord_id = ?", guildId, userId).changes > 0;
+    const isBlocked = (guildId, userId) => Boolean(get("SELECT 1 AS x FROM giveaway_blocked WHERE guild_id = ? AND discord_id = ?", guildId, userId));
+    const listBlocked = guildId => all("SELECT discord_id, by_id, at FROM giveaway_blocked WHERE guild_id = ? ORDER BY at DESC", guildId);
+
     /** A member's own giveaway data: used by /me mydata delete. Wipes what they entered and anything waiting for them. */
     function forgetGiveawayUser(userId) {
         run("DELETE FROM giveaway_entries WHERE discord_id = ?", userId);
         run("DELETE FROM giveaway_excluded WHERE discord_id = ?", userId);
+        run("DELETE FROM giveaway_blocked WHERE discord_id = ?", userId);
         // A prize that was waiting for them goes back to the host; a delivered key is wiped.
         run("UPDATE giveaway_keys SET status = 'available', winner_id = NULL, deadline = NULL WHERE winner_id = ? AND status = 'assigned'", userId);
         run("UPDATE giveaway_keys SET key_enc = NULL, status = 'expired', winner_id = NULL WHERE winner_id = ? AND status IN ('delivered','problem')", userId);
@@ -297,7 +317,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
 
     return {
         markSoon, unmarkSoon, soonIds, listSoon,
-        listTemplates, saveTemplate, removeTemplate, prizesFor,
+        listTemplates, saveTemplate, removeTemplate, prizesFor, blockUser, unblockUser, isBlocked, listBlocked,
         setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, entryChannel, setNotifyState, removeEntry, listEntries, countEntries,
         saveVideo, getVideo, hasVideo, dropVideo, openProof, keyAwaitingProof, setProof, listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,

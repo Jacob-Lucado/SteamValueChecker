@@ -694,6 +694,15 @@ test("giveaways page: managers only, validated, and keys never come back", async
     assert.ok(!made.text.includes("AAAAA"));
     assert.ok(!JSON.stringify(posts).includes("AAAAA")); // the public post carries no keys
 
+    // blocking a member from the server's giveaways
+    const blk = b => t.request("/api/giveaways/block", { method: "POST", body: { guild_id: "g-admin", ...b } });
+    assert.equal((await blk({ user_id: "abc" })).status, 400);
+    const okb = await blk({ user_id: "<@123456789012345678>" });
+    assert.equal(okb.status, 200); assert.equal(okb.data.result, "added"); assert.equal(okb.data.blocked[0].discord_id, "123456789012345678");
+    assert.equal((await t.request("/api/giveaways?guild=g-admin")).data.blocked.length, 1);
+    assert.equal((await blk({ user_id: "123456789012345678", on: false })).data.blocked.length, 0);
+    assert.equal((await t.request("/api/giveaways/block", { method: "POST", body: { guild_id: "g-member", user_id: "123456789012345678" } })).status, 403);
+
     // the streamer's overlay can show several of the running giveaways at once
     const card = (await t.request("/api/streamcard", { method: "POST", body: { action: "create" } })).data;
     const shown = async () => (await (await fetch(t.base + "/api/giveawayoverlay/data?token=" + card.token)).json()).giveaways;
