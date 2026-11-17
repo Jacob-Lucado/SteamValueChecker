@@ -53,3 +53,12 @@ test("Deck status reads Valve's answer and stays quiet on failure", async () => 
     assert.equal(await deckStatus(114, { fetchFn: async () => { throw new Error("down"); } }), null);
     assert.equal(await deckStatus("x"), null);
 });
+
+test("game pages show Early Access, controller, VR and a review dip when they apply", () => {
+    const html = renderGamePage({ ...base, compat: { earlyAccess: true, controller: "full", vr: "supported", dip: { pct: 55, total: 400 } } }, { origin: "https://svc.test" });
+    assert.match(html, /Early Access/); assert.match(html, /Full controller support/); assert.match(html, /VR supported/); assert.match(html, /Lately worse: 55%/);
+    assert.match(renderGamePage({ ...base, compat: { vr: "only", controller: "partial" } }, { origin: "https://svc.test" }), /VR only[\s\S]*|Partial controller/);
+    const none = renderGamePage({ ...base, compat: { earlyAccess: false, controller: null, vr: null, dip: null } }, { origin: "https://svc.test" });
+    assert.ok(!none.includes("class=\"compat\""));
+    assert.ok(!renderGamePage({ ...base, compat: { dip: { pct: "<b>" } } }, { origin: "https://svc.test" }).includes("Lately worse"));
+});

@@ -97,6 +97,7 @@ import { summarize } from "../report.js";
 import { buyOrWait } from "../advice.js";
 import { renderGamePage, renderWidget, slugify } from "../gamepage.js";
 import { protonTier, deckStatus } from "../proton.js";
+import { steamReviews } from "../reviews.js";
 import { renderStats } from "../statspage.js";
 import { loadGameData } from "../gamedata.js";
 import { grabberRegion } from "../spend.js";
@@ -534,8 +535,8 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
         const hit = gamePages.get(appid);
         if (hit && Date.now() - hit.at < 3 * 3600_000) return hit.page;
         let page = null;
-        const [data, proton, deck] = await Promise.all([loadGameData(itad, appid), protonTier(Number(appid)).catch(() => null), deckStatus(Number(appid)).catch(() => null)]);
-        if (data) data.compat = { proton, deck, critic: data.facts?.critic ?? null, hours: data.facts?.hours ?? null };
+        const [data, proton, deck, reviews] = await Promise.all([loadGameData(itad, appid), protonTier(Number(appid)).catch(() => null), deckStatus(Number(appid)).catch(() => null), steamReviews(Number(appid)).catch(() => null)]);
+        if (data) data.compat = { proton, deck, critic: data.facts?.critic ?? null, hours: data.facts?.hours ?? null, earlyAccess: Boolean(data.facts?.store?.earlyAccess), controller: data.facts?.store?.controller ?? null, vr: data.facts?.store?.vr ?? null, dip: reviews?.dip ?? null };
         if (data) page = { path: `/game/${appid}-${slugify(data.title)}`, html: renderGamePage(data, { origin }) };
         if (page) { if (gamePages.size >= 400) gamePages.delete(gamePages.keys().next().value); gamePages.set(appid, { at: Date.now(), page }); }
         return page;

@@ -50,6 +50,12 @@ const compatBadges = c => {
     if (c?.proton && TIER[c.proton]) out.push(`<span class="cb" style="border-color:${TIER_COLOR[c.proton]}">🐧 ProtonDB: ${TIER[c.proton]}</span>`);
     // Critics' score and hours to finish (from IGDB), when known. The page is kept for a few hours, so the live player count is left to the bot's cards.
     if (c?.critic?.score) out.push(`<span class="cb" style="border-color:#8fb8ff">📰 Critics: ${Number(c.critic.score)}/100</span>`);
+    // From Steam's own store tags: still in Early Access, controller and VR support.
+    if (c?.earlyAccess) out.push(`<span class="cb" style="border-color:#ffab1f">🚧 Early Access</span>`);
+    if (c?.controller === "full" || c?.controller === "partial") out.push(`<span class="cb" style="border-color:#c9d4e4">🎮 ${c.controller === "full" ? "Full" : "Partial"} controller support</span>`);
+    if (c?.vr === "only" || c?.vr === "supported") out.push(`<span class="cb" style="border-color:#c9d4e4">🥽 VR ${c.vr === "only" ? "only" : "supported"}</span>`);
+    // A bad month: recent reviews well below the overall score.
+    if (c?.dip && Number.isFinite(Number(c.dip.pct))) out.push(`<span class="cb" style="border-color:#ff7a7a">⚠️ Lately worse: ${Number(c.dip.pct)}% of this month's reviews are positive</span>`);
     const hrs = c?.hours?.main ?? c?.hours?.rushed;
     if (hrs) out.push(`<span class="cb" style="border-color:#c9d4e4">⏱️ About ${Number(hrs)} hour${Number(hrs) === 1 ? "" : "s"} to finish</span>`);
     return out.length ? `<div class="compat">${out.join("")}</div>` : "";
