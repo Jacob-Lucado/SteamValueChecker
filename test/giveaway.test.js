@@ -801,3 +801,23 @@ test("blocked members can't enter, lose open entries, and can be let back in", a
     assert.equal(t.svc.setBlocked(gid, "bad", false), "none");
     assert.equal((await t.svc.enter(id, { userId: "bad", roleIds: [] })).status, "entered");
 });
+
+test("winner pause: a recent winner sits out for the days the server set, then can enter again", async () => {
+    const t = rig();
+    const first = await t.make({});
+    await t.svc.enter(first.id, { userId: "a", roleIds: [] });
+    t.advance(3 * HOUR);
+    await t.svc.end(first.id);
+    const winner = t.db.listKeys(first.id)[0].winner_id;
+    assert.equal(winner, "a");
+    t.db.setGiveawaySettings("G", { win_cooldown_days: 7 });
+    t.advance(24 * HOUR);
+    const next = await t.make({});
+    await assert.rejects(() => t.svc.enter(next.id, { userId: "a", roleIds: [] }), /sit out for 7 days.*<t:\d+:R>/);
+    assert.equal((await t.svc.enter(next.id, { userId: "b", roleIds: [] })).status, "entered"); // others are unaffected
+    t.advance(7 * 24 * HOUR);
+    const later = await t.make({});
+    assert.equal((await t.svc.enter(later.id, { userId: "a", roleIds: [] })).status, "entered");
+    t.db.setGiveawaySettings("G", { win_cooldown_days: 0 });
+    assert.equal(t.db.getGiveawaySettings("G").win_cooldown_days, 0);
+});

@@ -207,7 +207,9 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         if (vouch) patch.vouch_channel_id = vouch.id;
         if (role) patch.manager_role_id = role.id;
         if (gwChannel) patch.giveaway_channel_id = gwChannel.id;
-        if (clear) { patch.vouch_channel_id = null; patch.manager_role_id = null; patch.giveaway_channel_id = null; }
+        const pause = i.options.getInteger("winnerpause");
+        if (pause !== null && pause !== undefined) patch.win_cooldown_days = pause;
+        if (clear) { patch.vouch_channel_id = null; patch.manager_role_id = null; patch.giveaway_channel_id = null; patch.win_cooldown_days = 0; }
         const s = Object.keys(patch).length ? db.setGiveawaySettings(i.guildId, patch) : db.getGiveawaySettings(i.guildId);
         const note = [];
         const bu = i.options.getUser("block"), uu = i.options.getUser("unblock");
@@ -224,6 +226,7 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
             `Vouches channel: ${s.vouch_channel_id ? `<#${s.vouch_channel_id}>` : "a channel named #vouches, if there is one"}`,
             `Giveaway manager role: ${s.manager_role_id ? `<@&${s.manager_role_id}>` : "none (only people with Manage Server)"}`,
             `Giveaway channel (network-wide giveaways from the bot owner): ${s.giveaway_channel_id ? `<#${s.giveaway_channel_id}>` : "the alert channel, if one is set"}`,
+            `Winners sit out: ${s.win_cooldown_days ? `${s.win_cooldown_days} day${s.win_cooldown_days === 1 ? "" : "s"} after a prize` : "off"}`,
             `Blocked from your giveaways: ${blocked.length ? blocked.slice(0, 15).map(b => `<@${b.discord_id}>`).join(", ") + (blocked.length > 15 ? ` and ${blocked.length - 15} more` : "") : "nobody"}`
         ].join("\n"));
     }

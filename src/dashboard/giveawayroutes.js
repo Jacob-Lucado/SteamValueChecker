@@ -130,6 +130,7 @@ export function createGiveawayRoutes(ctx) {
                 if (body.giveaway_channel_id && !ids.has(body.giveaway_channel_id)) throw new HttpError(400, "Pick a text channel from the list.");
                 patch.giveaway_channel_id = body.giveaway_channel_id || null;
             }
+            if (body.win_cooldown_days !== undefined) patch.win_cooldown_days = Math.max(0, Math.min(365, Math.trunc(Number(body.win_cooldown_days)) || 0));
             return { settings: db.setGiveawaySettings(g.id, patch) };
         },
     };

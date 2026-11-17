@@ -284,6 +284,15 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         }
         // A host can bar someone from every giveaway in their server. Nothing, not even an override role, skips it.
         if (g.guild_id && db.isBlocked?.(g.guild_id, who.userId)) throw new UserError("You can't enter giveaways in this server.");
+        // Some servers keep recent winners out so the prizes get spread around.
+        const cool = g.guild_id ? Number(db.getGiveawaySettings?.(g.guild_id)?.win_cooldown_days) || 0 : 0;
+        if (cool) {
+            const won = db.lastWinAt?.(g.guild_id, who.userId);
+            if (won && now() - won < cool * 86400_000) {
+                const back = Math.floor((won + cool * 86400_000) / 1000);
+                throw new UserError(`This server asks winners to sit out for ${cool} day${cool === 1 ? "" : "s"} after a prize. You can enter again <t:${back}:R>.`);
+            }
+        }
         const have = who.roleIds ?? [];
         // A region lock is about where the prize can be used, so no role skips it.
         if (g.regions) {

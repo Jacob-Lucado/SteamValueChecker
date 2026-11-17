@@ -244,15 +244,19 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         run("DELETE FROM giveaways WHERE status IN ('ended','cancelled') AND ended_at < ?", now() - olderThanMs).changes;
 
     // server settings
-    const getGiveawaySettings = guildId => clean(get("SELECT * FROM giveaway_settings WHERE guild_id = ?", guildId)) ?? { guild_id: guildId, vouch_channel_id: null, manager_role_id: null, giveaway_channel_id: null };
+    const getGiveawaySettings = guildId => clean(get("SELECT * FROM giveaway_settings WHERE guild_id = ?", guildId)) ?? { guild_id: guildId, vouch_channel_id: null, manager_role_id: null, giveaway_channel_id: null, win_cooldown_days: 0 };
     function setGiveawaySettings(guildId, patch) {
         const cur = getGiveawaySettings(guildId);
-        const next = { vouch_channel_id: cur.vouch_channel_id, manager_role_id: cur.manager_role_id, giveaway_channel_id: cur.giveaway_channel_id ?? null, ...patch };
-        run(`INSERT INTO giveaway_settings (guild_id, vouch_channel_id, manager_role_id, giveaway_channel_id) VALUES (?,?,?,?)
-             ON CONFLICT(guild_id) DO UPDATE SET vouch_channel_id = excluded.vouch_channel_id, manager_role_id = excluded.manager_role_id, giveaway_channel_id = excluded.giveaway_channel_id`,
-            guildId, next.vouch_channel_id ?? null, next.manager_role_id ?? null, next.giveaway_channel_id ?? null);
+        const next = { vouch_channel_id: cur.vouch_channel_id, manager_role_id: cur.manager_role_id, giveaway_channel_id: cur.giveaway_channel_id ?? null, win_cooldown_days: cur.win_cooldown_days ?? 0, ...patch };
+        run(`INSERT INTO giveaway_settings (guild_id, vouch_channel_id, manager_role_id, giveaway_channel_id, win_cooldown_days) VALUES (?,?,?,?,?)
+             ON CONFLICT(guild_id) DO UPDATE SET vouch_channel_id = excluded.vouch_channel_id, manager_role_id = excluded.manager_role_id, giveaway_channel_id = excluded.giveaway_channel_id, win_cooldown_days = excluded.win_cooldown_days`,
+            guildId, next.vouch_channel_id ?? null, next.manager_role_id ?? null, next.giveaway_channel_id ?? null, Math.max(0, Math.min(365, Math.trunc(Number(next.win_cooldown_days)) || 0)));
         return getGiveawaySettings(guildId);
     }
+
+    /** When someone last won a prize in this server (a prize they let expire doesn't count). */
+    const lastWinAt = (guildId, userId) => get(`SELECT MAX(k.assigned_at) AS t FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id
+        WHERE g.guild_id = ? AND k.winner_id = ? AND k.status IN ('assigned','delivered','confirmed','problem')`, guildId, userId)?.t ?? null;
 
     /** People a server has barred from its giveaways. */
     const BLOCK_MAX = 200;
@@ -317,7 +321,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
 
     return {
         markSoon, unmarkSoon, soonIds, listSoon,
-        listTemplates, saveTemplate, removeTemplate, prizesFor, blockUser, unblockUser, isBlocked, listBlocked,
+        listTemplates, saveTemplate, removeTemplate, prizesFor, lastWinAt, blockUser, unblockUser, isBlocked, listBlocked,
         setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, entryChannel, setNotifyState, removeEntry, listEntries, countEntries,
         saveVideo, getVideo, hasVideo, dropVideo, openProof, keyAwaitingProof, setProof, listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,

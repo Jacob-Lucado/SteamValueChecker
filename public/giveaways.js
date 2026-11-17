@@ -194,7 +194,8 @@
       const vouch = select([["", "A channel named #vouches"], ...channels.map(c => [c.id, "#" + c.name])], settings.vouch_channel_id || "");
       const mgr = select([["", "Only people with Manage Server"], ...roles.map(r => [r.id, r.name])], settings.manager_role_id || "");
       const gwCh = select([["", "The alert channel"], ...channels.map(c => [c.id, "#" + c.name])], settings.giveaway_channel_id || "");
-      const save = h("button", { class: "btn gray", text: "Save", onclick: () => busy(save, async () => { await api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouch.value, giveaway_channel_id: gwCh.value, manager_role_id: mgr.value }); toast("Saved.", "ok"); }) });
+      const save = h("button", { class: "btn gray", text: "Save", onclick: () => busy(save, async () => { await api("/api/giveaways/setup", { guild_id: guild.value, vouch_channel_id: vouch.value, giveaway_channel_id: gwCh.value, manager_role_id: mgr.value, win_cooldown_days: pauseIn.value }); toast("Saved.", "ok"); }) });
+      const pauseIn = h("input", { type: "number", min: "0", max: "365", value: String(settings.win_cooldown_days || 0), "aria-label": "Days a winner sits out" });
       const blockBox = h("div", { class: "muted small" });
       const idIn = h("input", { type: "text", placeholder: "Member's Discord ID", maxlength: "40", "aria-label": "Discord ID to block" });
       const drawBlocked = list => {
@@ -204,7 +205,7 @@
       const blockBtn = h("button", { class: "btn gray", text: "Block", onclick: () => busy(blockBtn, async () => { const r = await api("/api/giveaways/block", { guild_id: guild.value, user_id: idIn.value, on: true }); drawBlocked(r.blocked); idIn.value = ""; toast(r.result === "already" ? "Already blocked." : "Blocked. Their open entries were removed.", "ok"); }) });
       return h("div", { class: "panel" }, h("h3", { text: "Server settings" }),
         h("div", { class: "row" }, field("Vouches channel (winners' confirmations are posted here)", vouch), field("Role that can run giveaways in Discord", mgr)),
-        h("div", { class: "row" }, field("Giveaway channel (network-wide giveaways from the bot owner appear here)", gwCh)), h("p"), save,
+        h("div", { class: "row" }, field("Giveaway channel (network-wide giveaways from the bot owner appear here)", gwCh), field("Days a winner sits out before entering again (0 = off)", pauseIn)), h("p"), save,
         h("h4", { text: "Blocked members" }), h("p", { class: "muted small", text: "They can't enter any giveaway in this server, even with a bypass role." }),
         h("div", { class: "row" }, field("Add by Discord ID", idIn), blockBtn), blockBox);
     }
