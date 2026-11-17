@@ -71,7 +71,7 @@ test("game facts: nothing until configured, then shown on the alert and check ca
     configureFacts({ players: { current: async () => 5000 }, igdb: { facts: async () => ({ hours: { main: 20, rushed: null, complete: null }, critic: { score: 88, count: 40 } }) } });
     const facts = await gameFacts(620);
     configureFacts(null);
-    assert.deepEqual(facts, { players: 5000, hours: { main: 20, rushed: null, complete: null }, critic: { score: 88, count: 40 } });
+    assert.deepEqual(facts, { players: 5000, hours: { main: 20, rushed: null, complete: null }, critic: { score: 88, count: 40 }, store: null });
     const lines = factLines(facts, { price: 10, money: n => "$" + n.toFixed(2) });
     assert.deepEqual(lines, ["📰 Critics: **88/100** from 40 reviews", "⏱️ About **20 hours** to finish, about $0.50 an hour at this price", "👥 **5,000** playing on Steam right now"]);
     const now = { price: 10, regular: 20, discount: 0.5, currency: "USD", shop: "Steam", atl: 5, low1y: 8, low3m: 9, expiry: null };

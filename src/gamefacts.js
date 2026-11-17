@@ -3,6 +3,7 @@
 // until the bot starts and calls configureFacts() it answers null, and a failed lookup just leaves a line off.
 import { playersLine } from "./players.js";
 import { timeLine, criticLine, perHour } from "./igdb.js";
+import { earlyAccessLine, controllerLine } from "./storemeta.js";
 
 let sources = null;
 export const configureFacts = s => { sources = s; };
@@ -10,12 +11,13 @@ export const configureFacts = s => { sources = s; };
 /** { players, hours, critic } for a Steam app, or null. Never throws. */
 export async function gameFacts(appid) {
     if (!sources || !Number.isInteger(appid) || appid <= 0) return null;
-    const [players, igdb] = await Promise.all([
+    const [players, igdb, store] = await Promise.all([
         sources.players?.current(appid).catch(() => null) ?? null,
-        sources.igdb?.facts(appid).catch(() => null) ?? null
+        sources.igdb?.facts(appid).catch(() => null) ?? null,
+        sources.store?.meta(appid).catch(() => null) ?? null
     ]);
-    if (players == null && !igdb) return null;
-    return { players: players ?? null, hours: igdb?.hours ?? null, critic: igdb?.critic ?? null };
+    if (players == null && !igdb && !store?.earlyAccess && !store?.controller) return null;
+    return { players: players ?? null, hours: igdb?.hours ?? null, critic: igdb?.critic ?? null, store: store ?? null };
 }
 
 /** Ready-made lines for a card, in a steady order. `money` formats the per-hour cost. */
@@ -26,6 +28,8 @@ export function factLines(facts, { price = null, money = null } = {}) {
     return [
         criticLine(facts),
         time ? time + (cost !== null && money ? `, about ${money(cost)} an hour at this price` : "") : null,
-        playersLine(facts.players)
+        playersLine(facts.players),
+        earlyAccessLine(facts.store),
+        controllerLine(facts.store)
     ].filter(Boolean);
 }

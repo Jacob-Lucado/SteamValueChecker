@@ -65,6 +65,7 @@ import { blockedArea, handleFeaturesCommand, handleFeaturesPick, FEATURE_PICK } 
 import { configureFacts } from "./gamefacts.js";
 import { createPlayers } from "./players.js";
 import { createIgdb } from "./igdb.js";
+import { createStoreMeta } from "./storemeta.js";
 import { createHandlers } from "./handlers.js";
 import { createPanels, PANEL_PREFIX } from "./panel.js";
 import { alertPanel } from "./alertpanel.js";
@@ -208,7 +209,7 @@ client.setMaxListeners(30); // each feature adds its own startup listener, and t
 const lastRun = new Map();
 const db = openDb(cfg.dbPath);
 // Extra facts beside a price: Steam's live player count (no key) and, when the Twitch app keys are set, hours to finish and critics' scores from IGDB.
-configureFacts({ players: createPlayers(), igdb: createIgdb({ clientId: process.env.TWITCH_CLIENT_ID, clientSecret: process.env.TWITCH_CLIENT_SECRET, db, log: m => console.warn(`[igdb] ${m}`) }) });
+configureFacts({ players: createPlayers(), store: createStoreMeta(), igdb: createIgdb({ clientId: process.env.TWITCH_CLIENT_ID, clientSecret: process.env.TWITCH_CLIENT_SECRET, db, log: m => console.warn(`[igdb] ${m}`) }) });
 withPriceLog(itad, db, { log: m => console.warn(`[prices] ${m}`) }); // every looked-up price is noted once a day, and history falls back to those notes
 const offsite = createOffsite({ ...offsiteConfig(), secret: cfg.keySecret, db, log: t => console.log(`[offsite] ${t}`) });
 try { db.purgeHiddenGuilds(); } catch { /* nothing to purge yet */ } // test servers keep no history (hidden.js)

@@ -2,6 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.63", date: "2026-11-17", title: "Wishlist export and a security pass", items: [
         "**Export CSV:** the Wishlist page has a new button that downloads your list with best prices, stores and discounts, ready for a spreadsheet.",
+        "**Early Access and controller notes:** alerts, check cards and game pages now flag games that are still in Early Access and say when a game has full or partial controller support.",
         "**Review dip warnings:** when a game you watch goes on sale and its last month of Steam reviews is much worse than its overall score, the alert and the check card now say so, so a bad patch or a review bomb does not catch you out.",
         "**Giveaway stats:** the Giveaways page and `/server giveaway list` now show how many giveaways you have run, entries, people, prizes won and how many were claimed.",
         "**Winner pause:** servers can keep recent winners out of new giveaways for a set number of days (`/server giveaway setup winnerpause` or the Giveaways page).",
