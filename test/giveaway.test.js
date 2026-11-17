@@ -821,3 +821,14 @@ test("winner pause: a recent winner sits out for the days the server set, then c
     t.db.setGiveawaySettings("G", { win_cooldown_days: 0 });
     assert.equal(t.db.getGiveawaySettings("G").win_cooldown_days, 0);
 });
+
+test("server giveaway stats count entries, people, prizes and how many got claimed", async () => {
+    const t = rig();
+    const a = await t.make({});
+    await t.enterAll(a.id, ["a", "b"]);
+    t.advance(3 * HOUR);
+    await t.svc.end(a.id);
+    const st = t.db.giveawayStats(t.db.getGiveaway(a.id).guild_id);
+    assert.deepEqual([st.giveaways, st.entries, st.people, st.won], [1, 2, 2, 2], JSON.stringify(st));
+    assert.equal(st.claimRate, 0); assert.equal(t.db.giveawayStats("nobody").claimRate, null);
+});

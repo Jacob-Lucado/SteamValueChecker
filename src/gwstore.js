@@ -254,6 +254,19 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
         return getGiveawaySettings(guildId);
     }
 
+    /** Numbers for a server's host: how much has run, and how well prizes get claimed. */
+    const giveawayStats = guildId => {
+        const n = (sql, ...a) => get(sql, ...a)?.n ?? 0;
+        const ended = n("SELECT COUNT(*) AS n FROM giveaways WHERE guild_id = ? AND status = 'ended'", guildId);
+        const won = n("SELECT COUNT(*) AS n FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id WHERE g.guild_id = ? AND k.winner_id IS NOT NULL", guildId);
+        const confirmed = n("SELECT COUNT(*) AS n FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id WHERE g.guild_id = ? AND k.status = 'confirmed'", guildId);
+        const claimed = n("SELECT COUNT(*) AS n FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id WHERE g.guild_id = ? AND k.status IN ('delivered','confirmed','problem')", guildId);
+        const entries = n("SELECT COUNT(*) AS n FROM giveaway_entries e JOIN giveaways g ON g.id = e.giveaway_id WHERE g.guild_id = ?", guildId);
+        const people = n("SELECT COUNT(DISTINCT e.discord_id) AS n FROM giveaway_entries e JOIN giveaways g ON g.id = e.giveaway_id WHERE g.guild_id = ?", guildId);
+        return { giveaways: n("SELECT COUNT(*) AS n FROM giveaways WHERE guild_id = ?", guildId), ended, entries, people, won, claimed, confirmed,
+            claimRate: won ? Math.round(claimed / won * 100) : null };
+    };
+
     /** When someone last won a prize in this server (a prize they let expire doesn't count). */
     const lastWinAt = (guildId, userId) => get(`SELECT MAX(k.assigned_at) AS t FROM giveaway_keys k JOIN giveaways g ON g.id = k.giveaway_id
         WHERE g.guild_id = ? AND k.winner_id = ? AND k.status IN ('assigned','delivered','confirmed','problem')`, guildId, userId)?.t ?? null;
@@ -321,7 +334,7 @@ export function giveawayStore({ db, run, get, all, clean, now }) {
 
     return {
         markSoon, unmarkSoon, soonIds, listSoon,
-        listTemplates, saveTemplate, removeTemplate, prizesFor, lastWinAt, blockUser, unblockUser, isBlocked, listBlocked,
+        listTemplates, saveTemplate, removeTemplate, prizesFor, giveawayStats, lastWinAt, blockUser, unblockUser, isBlocked, listBlocked,
         setGiveawayRules, getGiveaway, listGiveaways, markGlobal, addMirror, listMirrors, listGlobalGiveaways, giveawayDestinations, countActiveGiveaways, dueScheduled, startGiveaway, dueGiveaways, giveawayByMessage, createGiveaway, setGiveawayMessage, setAnnounceMessage,
         setGiveawayStatus, markLeftoverNotified, deleteGiveaway, getEntry, addEntry, entryChannel, setNotifyState, removeEntry, listEntries, countEntries,
         saveVideo, getVideo, hasVideo, dropVideo, openProof, keyAwaitingProof, setProof, listKeys, getKey, getKeyEnc, setRemindStage, pendingClaims, keyForWinner, assignKey, releaseKey, bumpRedraw, markDelivered, markConfirmed, markProblem, replaceKeyEnc,

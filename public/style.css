@@ -2112,3 +2112,7 @@ a.fd-name:hover { text-decoration: underline; }
 /* Value checker: the small "Fix" control beside a guessed or missing match */
 .fix-match { display: inline-flex; gap: 6px; align-items: center; vertical-align: middle; }
 .fix-match input { height: 30px; min-width: 220px; max-width: 100%; }
+
+/* Host stats strip on the Giveaways page */
+.stat { flex: 1 1 110px; min-width: 96px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); text-align: center; }
+.stat-n { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }

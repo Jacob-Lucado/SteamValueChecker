@@ -2,6 +2,7 @@
 export const CHANGELOG = [
     { version: "2026.11.63", date: "2026-11-17", title: "Wishlist export and a security pass", items: [
         "**Export CSV:** the Wishlist page has a new button that downloads your list with best prices, stores and discounts, ready for a spreadsheet.",
+        "**Giveaway stats:** the Giveaways page and `/server giveaway list` now show how many giveaways you have run, entries, people, prizes won and how many were claimed.",
         "**Winner pause:** servers can keep recent winners out of new giveaways for a set number of days (`/server giveaway setup winnerpause` or the Giveaways page).",
         "**Block list for giveaways:** hosts can bar a member from every giveaway in their server with `/server giveaway setup` (`block` and `unblock`) or from the Giveaways page. Their open entries are removed and no bypass role skips the block.",
         "**Safer uploads:** giveaway creation with a video now has its own tighter limit, slow or oversized uploads are cut off early, and the server drops stalled connections."

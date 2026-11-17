@@ -698,6 +698,7 @@ test("giveaways page: managers only, validated, and keys never come back", async
     assert.equal(pause.status, 200); assert.equal(pause.data.settings.win_cooldown_days, 9);
     assert.equal((await t.request("/api/giveaways/setup", { method: "POST", body: { guild_id: "g-admin", win_cooldown_days: 9999 } })).data.settings.win_cooldown_days, 365);
     await t.request("/api/giveaways/setup", { method: "POST", body: { guild_id: "g-admin", win_cooldown_days: 0 } });
+    assert.equal(typeof (await t.request("/api/giveaways?guild=g-admin")).data.stats.giveaways, "number");
     // blocking a member from the server's giveaways
     const blk = b => t.request("/api/giveaways/block", { method: "POST", body: { guild_id: "g-admin", ...b } });
     assert.equal((await blk({ user_id: "abc" })).status, 400);

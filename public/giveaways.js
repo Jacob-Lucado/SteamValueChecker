@@ -26,8 +26,16 @@
           api("/api/servers/channels?guild=" + encodeURIComponent(guild.value)).catch(() => ({ channels: [] })),
           api("/api/servers/roles?guild=" + encodeURIComponent(guild.value)).catch(() => ({ roles: [] }))
         ]);
-        holder.replaceChildren(pendingPanel(list.pending, id => api("/api/giveaways/remind", { guild_id: guild.value, key_id: id }), load), giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways, ro.roles), setupPanel(ch.channels, ro.roles, list.settings, list.blocked));
+        holder.replaceChildren(statsStrip(list.stats), pendingPanel(list.pending, id => api("/api/giveaways/remind", { guild_id: guild.value, key_id: id }), load), giveawayForm(ch.channels, ro.roles, list.settings, list.stepKinds || []), giveawayTable(list.giveaways, ro.roles), setupPanel(ch.channels, ro.roles, list.settings, list.blocked));
       } catch (e) { holder.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
+    }
+
+    function statsStrip(s) {
+      if (!s || !s.giveaways) return h("div");
+      const cell = (v, label) => h("div", { class: "stat" }, h("div", { class: "stat-n", text: String(v) }), h("div", { class: "muted small", text: label }));
+      return h("div", { class: "panel" }, h("h3", { text: "Your giveaways so far" }), h("div", { class: "row" },
+        cell(s.giveaways, "giveaways"), cell(s.entries, "entries"), cell(s.people, "different people"), cell(s.won, "prizes won"),
+        cell(s.claimRate === null ? "n/a" : s.claimRate + "%", "claimed"), cell(s.confirmed, "confirmed")));
     }
 
     function giveawayForm(channels, roles, settings, stepKinds) {

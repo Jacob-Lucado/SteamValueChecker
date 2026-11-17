@@ -26,7 +26,7 @@ export function createGiveawayRoutes(ctx) {
                 const keys = db.listKeys(x.id);
                 return { id: x.id, title: x.title, regions: x.regions ?? null, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, channel_id: x.channel_id, entries: db.countEntries(x.id), prizes: keys.length, redeemed: keys.filter(k => k.status === "confirmed").length, outcome: outcomeOf(x, keys) };
             });
-            return { giveaways: rows, pending: await pendingClaimsFor(g.id), settings: db.getGiveawaySettings(g.id), blocked: giveaways ? giveaways.blockedList(g.id) : [], max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
+            return { stats: db.giveawayStats(g.id), giveaways: rows, pending: await pendingClaimsFor(g.id), settings: db.getGiveawaySettings(g.id), blocked: giveaways ? giveaways.blockedList(g.id) : [], max: MAX_KEYS, stepKinds: Object.entries(STEP_KINDS).map(([id, k]) => ({ id, label: k.label, hint: k.hint })) };
         },
         "GET /api/giveaways/templates": async (req, _b, url) => {
             const s = session(req); needGiveaways();

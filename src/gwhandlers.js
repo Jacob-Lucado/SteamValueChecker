@@ -191,7 +191,9 @@ export function createGiveawayHandlers({ db, giveaways, now = () => Date.now() }
         needManager(i);
         const rows = db.listGiveaways(i.guildId, { limit: 15 });
         const lines = rows.map(g => `**#${g.id}** ${g.title}: ${g.status}${g.status === "active" ? `, ends <t:${Math.floor(g.ends_at / 1000)}:R>` : ""}, ${db.countEntries(g.id)} entries${g.regions ? `, 🌍 ${describeRegions(g.regions)}` : ""}`);
-        return i.reply({ embeds: [{ color: 0xff9800, title: "Giveaways", description: lines.join("\n") || "None yet. Start one with `/server giveaway create`." }], flags: MessageFlags.Ephemeral });
+        const st = db.giveawayStats(i.guildId);
+        const footer = st.giveaways ? { text: `${st.giveaways} run · ${st.entries} entries from ${st.people} people · ${st.won} prizes won${st.claimRate === null ? "" : `, ${st.claimRate}% claimed`}` } : undefined;
+        return i.reply({ embeds: [{ color: 0xff9800, title: "Giveaways", description: lines.join("\n") || "None yet. Start one with `/server giveaway create`.", footer }], flags: MessageFlags.Ephemeral });
     }
 
     async function setup(i) {
