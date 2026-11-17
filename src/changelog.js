@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.63", date: "2026-11-17", title: "Wishlist export and a security pass", items: [
+        "**Export CSV:** the Wishlist page has a new button that downloads your list with best prices, stores and discounts, ready for a spreadsheet.",
+        "**Safer uploads:** giveaway creation with a video now has its own tighter limit, slow or oversized uploads are cut off early, and the server drops stalled connections."
+    ] },
     { version: "2026.11.62", date: "2026-11-12", title: "Region locks, videos in giveaways, and proof from winners", items: [
         "**Add proof:** after a winner confirms their prize they can reply to the bot's DM with a screenshot or short video (up to 10 MB) within 30 minutes. It is posted in the vouches channel and the host is told.",
         "**Quieter alerts:** the owner is only warned about slow or rate-limited price data after 20 minutes in a row, and the same service isn't announced again for six hours. Real outages still alert after three minutes.",

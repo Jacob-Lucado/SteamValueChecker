@@ -123,6 +123,16 @@
           h("div", { class: "wl-drawer-body" }, h("h4", { text: "One rule for every game" }), allRule,
             h("h4", { text: "Several games at once" }), h("div", { class: "rule inline" }, h("label", { class: "check" }, selectAll, "Select all shown"), count, bulkRule, removeSel))));
     }
+    // Downloads the list as it stands right now, so it opens straight in a spreadsheet.
+    function exportCsv() {
+      const rows = data?.rows ?? [];
+      if (!rows.length) return toast("Nothing to export yet.");
+      const q = v => { v = String(v ?? ""); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      const lines = [["Game", "Best price", "Store", "Regular price", "Discount %", "Currency", "Owned"].join(",")];
+      for (const r of rows) lines.push([r.title, r.best?.price ?? "", r.best?.shop ?? "", r.regular ?? "", r.discount ?? 0, r.currency ?? "", r.owned ? "yes" : "no"].map(q).join(","));
+      const a = h("a", { href: URL.createObjectURL(new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" })), download: "wishlist.csv" });
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
     async function loadList() {
       try {
         data = await api("/api/wishlist");
@@ -134,7 +144,7 @@
 
     app.replaceChildren(
       pageHead("Wishlist", "Sales first. You are alerted according to each game's rule."),
-      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; } })),
+      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "⇩ Export CSV", onclick: exportCsv }), h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; } })),
       importDrawer, addDrawer,
       listBox);
     listBox.className = "muted"; listBox.textContent = "Loading prices…";
