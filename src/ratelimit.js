@@ -5,7 +5,11 @@ export function createLimiter({ windowMs, max, now = () => Date.now() }) {
         /** Returns { ok, retryAfterS }. */
         hit(key) {
             const t = now();
-            if (hits.size > 5000) for (const [k, v] of hits) if (v.reset <= t) hits.delete(k);
+            if (hits.size > 5000) {
+                for (const [k, v] of hits) if (v.reset <= t) hits.delete(k);
+                // A flood of one-off keys must not grow the map without limit. Dropping the oldest keeps memory flat.
+                while (hits.size > 20000) hits.delete(hits.keys().next().value);
+            }
             let h = hits.get(key);
             if (!h || h.reset <= t) { h = { count: 0, reset: t + windowMs }; hits.set(key, h); }
             h.count++;

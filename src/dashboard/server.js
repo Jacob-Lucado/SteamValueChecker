@@ -481,6 +481,9 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
     const giftLimit = createLimiter({ windowMs: 3600_000, max: 60, now });
     const shareLimit = createLimiter({ windowMs: 60_000, max: 120, now });
     const artLimit = createLimiter({ windowMs: 60_000, max: 900, now });
+    // Giveaway creates can carry a 10 MB video, so they get a much tighter budget than ordinary writes, and only a few may be in flight at once.
+    const uploadLimit = createLimiter({ windowMs: 60_000, max: 6, now });
+    let uploadsOpen = 0;
     const artFetch = config.artFetch ?? globalThis.fetch;
     const loginLimit = createLimiter({ windowMs: 60_000, max: 8, now });
     const authLimit = createLimiter({ windowMs: 60_000, max: config.authPerMinute ?? 20, now });
@@ -577,11 +580,15 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
         send(res, status, JSON.stringify(data), { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...headers });
 
     async function readJson(req, limit) {
+        // Say no up front when the sender already admits the body is too big, and cut off bodies that crawl in.
+        if (Number(req.headers["content-length"]) > limit) throw new HttpError(413, "That request is too large.");
         const chunks = [];
         let size = 0;
+        const deadline = Date.now() + Math.max(15_000, Math.ceil(limit / 50_000) * 1000); // a slow link still gets about 50 KB/s
         for await (const c of req) {
             size += c.length;
             if (size > limit) throw new HttpError(413, "That request is too large.");
+            if (Date.now() > deadline) throw new HttpError(408, "That upload took too long. Try again.");
             chunks.push(c);
         }
         if (!size) return {};
@@ -1854,7 +1861,7 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
         return json(res, 200, { ...db.siteHit(site, fresh), online: online(site) }, cors);
     }
 
-    const server = http.createServer(async (req, res) => {
+    const server = http.createServer({ requestTimeout: 120_000, headersTimeout: 20_000 }, async (req, res) => {
         try {
             // Link checkers (Discord's developer portal among them) ask with HEAD first. Answer it like a GET; Node drops the body.
             if (req.method === "HEAD") req.method = "GET";
@@ -2312,7 +2319,16 @@ export function createDashboard({ push = null, referrals = null, weekly = null, 
             let body = {};
             if (req.method === "POST") {
                 checkWrite(req);
-                body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" || key === "POST /api/streams/giveaway" || key === "POST /api/admin/giveaways/create" ? 14_500_000 : key === "POST /api/admin/xposter/post" ? 7_200_000 : key === "POST /api/profile/background" || key === "POST /api/social/post" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000);
+                const big = key === "POST /api/giveaways/create" || key === "POST /api/streams/giveaway" || key === "POST /api/admin/giveaways/create";
+                if (big) {
+                    const sid = cookies(req)[COOKIE];
+                    const r = uploadLimit.hit(sessions.has(sid) ? `s:${sid}` : `ip:${clientIp(req)}`);
+                    if (!r.ok) throw new HttpError(429, `Slow down. Try again in ${r.retryAfterS}s.`);
+                    if (uploadsOpen >= 8) throw new HttpError(503, "Busy right now. Try again in a moment.");
+                }
+                if (big) uploadsOpen++;
+                try { body = await readJson(req, key === "POST /api/value" ? MAX_UPLOAD_CHARS * 2 + 50_000 : key === "POST /api/giveaways/create" || key === "POST /api/streams/giveaway" || key === "POST /api/admin/giveaways/create" ? 14_500_000 : key === "POST /api/admin/xposter/post" ? 7_200_000 : key === "POST /api/profile/background" || key === "POST /api/social/post" ? 1_700_000 : key === "POST /api/community/emoji" ? 400_000 : 20_000); }
+                finally { if (big) uploadsOpen--; }
             }
             const out = await handler(req, body, url);
             if (req.method === "POST" && url.pathname.startsWith("/api/admin/")) auditAdmin(req, url.pathname, body);

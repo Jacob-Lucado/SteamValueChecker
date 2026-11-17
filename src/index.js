@@ -679,9 +679,14 @@ async function chatVote(m) {
 
 // ---- community: XP, welcome, invites ----
 // A winner replies to the bot's DM with a screenshot after confirming a prize.
+const proofSeen = new Map(); // userId -> last time we handled a DM, so a spammer can't make us download file after file
 client.on(Events.MessageCreate, async m => {
     try {
         if (m.guildId || m.author.bot || !giveaways || !giveaways.awaitingProof(m.author.id)) return;
+        const last = proofSeen.get(m.author.id) ?? 0;
+        if (Date.now() - last < 3000) return;
+        if (proofSeen.size > 500) proofSeen.clear();
+        proofSeen.set(m.author.id, Date.now());
         const a = m.attachments?.first();
         if (!a) return void await m.reply({ content: "Send a screenshot or a short video as an attachment and I'll post it. 📸", allowedMentions: { repliedUser: false } }).catch(() => {});
         let r;

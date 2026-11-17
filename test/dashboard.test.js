@@ -4140,3 +4140,18 @@ test("admin network-wide giveaway: a home channel that can't be posted in is ski
     assert.ok(posts.includes("GOOD"), "it went out through the working channel");
     await o.close();
 });
+
+test("giveaway creates have their own tight limit and the limiter map stays bounded", async () => {
+    const t = await setup();
+    await t.signIn();
+    const codes = [];
+    for (let i = 0; i < 8; i++) codes.push((await t.request("/api/giveaways/create", { method: "POST", body: { guild_id: "g-admin", channel_id: "c1", title: "x", length: "1h", keys: "k" } })).status);
+    assert.equal(codes.filter(c => c === 429).length, 2, codes.join());
+    const big = await t.request("/api/giveaways/create", { method: "POST", body: {} });
+    assert.equal(big.status, 429);
+    const { createLimiter } = await import("../src/ratelimit.js");
+    const l = createLimiter({ windowMs: 60_000, max: 1 });
+    for (let i = 0; i < 30000; i++) l.hit(`k${i}`);
+    assert.equal(l.hit("k29999").ok, false); // the newest keys survive the cap
+    await t.close();
+});
