@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseReviews, steamReviews, reviewLine } from "../src/reviews.js";
+import { parseReviews, steamReviews, reviewLine, reviewDip } from "../src/reviews.js";
 import { alertEmbed, checkEmbed } from "../src/render.js";
 
 const body = (pos, neg, desc) => ({ success: 1, query_summary: { review_score_desc: desc, total_positive: pos, total_negative: neg, total_reviews: pos + neg } });
@@ -15,8 +15,8 @@ test("reviews: fetched once per game for a while, and every failure is silent", 
     let calls = 0, t = 0;
     const ok = async url => { calls++; assert.match(url, /appreviews\/4242\?json=1/); return { ok: true, json: async () => body(80, 20, "Very Positive") }; };
     const a = await steamReviews(4242, { fetchFn: ok, now: () => t }); const b = await steamReviews(4242, { fetchFn: ok, now: () => t + 1000 });
-    assert.equal(a.pct, 80); assert.deepEqual(a, b); assert.equal(calls, 1);
-    await steamReviews(4242, { fetchFn: ok, now: () => t + 7 * 3600_000 }); assert.equal(calls, 2, "refreshed after the cache expires");
+    assert.equal(a.pct, 80); assert.deepEqual(a, b); assert.equal(calls, 2, "one all-time and one last-30-days request");
+    await steamReviews(4242, { fetchFn: ok, now: () => t + 7 * 3600_000 }); assert.equal(calls, 4, "refreshed after the cache expires");
     assert.equal(await steamReviews(9001, { fetchFn: async () => { throw new Error("down"); } }), null);
     assert.equal(await steamReviews(9002, { fetchFn: async () => ({ ok: false }) }), null);
     assert.equal(await steamReviews(null, { fetchFn: ok }), null); assert.equal(await steamReviews(-5, { fetchFn: ok }), null);
@@ -30,4 +30,17 @@ test("reviews: shown on the alert and on the check card, and left out when unkno
     assert.doesNotMatch(alertEmbed({ title: "G" }, now, { trigger: "any" }).description, /Steam: /);
     assert.ok(checkEmbed("G", { ...now, low3m: 6, low1y: 5 }, null, null, [], r).fields.some(f => f.name === "Steam reviews"));
     assert.ok(!checkEmbed("G", { ...now, low3m: 6, low1y: 5 }, null, null, []).fields.some(f => f.name === "Steam reviews"));
+});
+
+test("reviews: a game whose last month is far worse than its overall score gets a warning", async () => {
+    const all = { desc: "Very Positive", pct: 90, total: 40000 };
+    assert.deepEqual(reviewDip(all, { pct: 55, total: 400 }), { pct: 55, total: 400, drop: 35 });
+    assert.equal(reviewDip(all, { pct: 80, total: 400 }), null, "an ordinary wobble");
+    assert.equal(reviewDip(all, { pct: 40, total: 12 }), null, "too few recent reviews to mean anything");
+    assert.equal(reviewDip({ desc: "Mixed", pct: 60, total: 900 }, { pct: 52, total: 300 }), null, "recent is bad but not a big drop from a game that was only so-so");
+    const fetchFn = async url => ({ ok: true, json: async () => (/filter=recent/.test(url) ? body(220, 180, "Mixed") : body(9000, 1000, "Very Positive")) });
+    const v = await steamReviews(777, { fetchFn });
+    assert.equal(v.dip.pct, 55);
+    assert.match(reviewLine(v), /Lately worse: only \*\*55%\*\* of the last 400/);
+    assert.doesNotMatch(reviewLine({ desc: "Very Positive", pct: 90, total: 5000 }), /Lately/);
 });
