@@ -1,0 +1,65 @@
+diff --git a/packages/room/src/object/logic/furniture/FurnitureRoomBackgroundLogic.ts b/packages/room/src/object/logic/furniture/FurnitureRoomBackgroundLogic.ts
+index 2db97241..951f7803 100644
+--- a/packages/room/src/object/logic/furniture/FurnitureRoomBackgroundLogic.ts
++++ b/packages/room/src/object/logic/furniture/FurnitureRoomBackgroundLogic.ts
+@@ -1,10 +1,36 @@
+-import { IRoomObjectModel } from '@volt/api';
++import { IRoomObjectModel, RoomObjectVariable } from '@volt/api';
++import { CreateLinkEvent } from '@volt/utils';
+ import { FurnitureRoomBrandingLogic } from './FurnitureRoomBrandingLogic';
+ 
+ export class FurnitureRoomBackgroundLogic extends FurnitureRoomBrandingLogic
+ {
++    private static readonly ROOM_LINK: RegExp = /^room:(\d{1,9})$/;
++
++    constructor()
++    {
++        super();
++
++        this._hasClickUrl = true;
++    }
++
+     protected getAdClickUrl(model: IRoomObjectModel): string
+     {
+-        return null;
++        return model.getValue<string>(RoomObjectVariable.FURNITURE_BRANDING_URL);
++    }
++
++    /** A background opens a web address in a new tab, or enters a room when the address reads `room:<id>`. */
++    protected handleAdClick(objectId: number, objectType: string, clickUrl: string): void
++    {
++        const link = (clickUrl ?? '').trim();
++        const room = FurnitureRoomBackgroundLogic.ROOM_LINK.exec(link);
++
++        if(room)
++        {
++            CreateLinkEvent(`navigator/goto/${ room[1] }`);
++
++            return;
++        }
++
++        if(/^https?:\/\//i.test(link)) window.open(link, '_blank', 'noopener,noreferrer');
+     }
+ }
+diff --git a/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts b/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts
+index 34ab3e52..9ee156f3 100644
+--- a/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts
++++ b/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts
+@@ -1,3 +1,4 @@
++import { RoomObjectVariable } from '@volt/api';
+ import { Texture } from 'pixi.js';
+ import { DirectionalOffsetData } from '../data';
+ import { CreateHalfSizeTexture } from '../HalfSizeTexture';
+@@ -159,8 +160,11 @@ export class FurnitureRoomBackgroundVisualization extends FurnitureBrandedImageV
+         return (this.getLayerBlendMode(scale, direction, layerId) !== 'normal');
+     }
+ 
++    // A background lets clicks fall through to the room, unless its picture carries a link.
+     protected getLayerIgnoreMouse(scale: number, direction: number, layerId: number): boolean
+     {
+-        return true;
++        if(this.getLayerTag(scale, direction, layerId) !== FurnitureBrandedImageVisualization.BRANDED_IMAGE) return true;
++
++        return !this.object?.model?.getValue<string>(RoomObjectVariable.FURNITURE_BRANDING_URL);
+     }
+ }
