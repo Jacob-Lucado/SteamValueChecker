@@ -1,0 +1,143 @@
+diff --git a/packages/api/src/room/object/visualization/IRoomObjectSprite.ts b/packages/api/src/room/object/visualization/IRoomObjectSprite.ts
+index dade059f..75c9794f 100644
+--- a/packages/api/src/room/object/visualization/IRoomObjectSprite.ts
++++ b/packages/api/src/room/object/visualization/IRoomObjectSprite.ts
+@@ -22,6 +22,8 @@ export interface IRoomObjectSprite
+     blendMode: BLEND_MODES;
+     color: number;
+     relativeDepth: number;
++    /** When set, the sprite sorts at this depth whatever the tile of its object (null = sort by the tile). */
++    fixedDepth: number | null;
+     varyingDepth: boolean;
+     libraryAssetName: string;
+     clickHandling: boolean;
+diff --git a/packages/room/src/object/visualization/RoomObjectSprite.ts b/packages/room/src/object/visualization/RoomObjectSprite.ts
+index d2376478..020537a0 100644
+--- a/packages/room/src/object/visualization/RoomObjectSprite.ts
++++ b/packages/room/src/object/visualization/RoomObjectSprite.ts
+@@ -24,6 +24,7 @@ export class RoomObjectSprite implements IRoomObjectSprite
+     private _blendMode: BLEND_MODES = 'normal';
+     private _color: number = 0xFFFFFF;
+     private _relativeDepth: number = 0;
++    private _fixedDepth: number | null = null;
+     private _varyingDepth: boolean = false;
+     private _libraryAssetName: string = '';
+     private _clickHandling: boolean = false;
+@@ -295,6 +296,20 @@ export class RoomObjectSprite implements IRoomObjectSprite
+         this._updateCounter++;
+     }
+ 
++    public get fixedDepth(): number | null
++    {
++        return this._fixedDepth;
++    }
++
++    public set fixedDepth(depth: number | null)
++    {
++        if(this._fixedDepth === depth) return;
++
++        this._fixedDepth = depth;
++
++        this._updateCounter++;
++    }
++
+     public get varyingDepth(): boolean
+     {
+         return this._varyingDepth;
+diff --git a/packages/room/src/object/visualization/furniture/FurnitureBBVisualization.ts b/packages/room/src/object/visualization/furniture/FurnitureBBVisualization.ts
+index e2ebc631..b5345657 100644
+--- a/packages/room/src/object/visualization/furniture/FurnitureBBVisualization.ts
++++ b/packages/room/src/object/visualization/furniture/FurnitureBBVisualization.ts
+@@ -14,8 +14,6 @@ export class FurnitureBBVisualization extends FurnitureBrandedImageVisualization
+ 
+     protected getLayerZOffset(scale: number, direction: number, layerId: number): number
+     {
+-        const offset = super.getLayerZOffset(scale, direction, layerId) + this._offsetZ;
+-
+-        return this.isBrandedImageLayer(scale, layerId) ? offset + this._offsetZ : offset;
++        return super.getLayerZOffset(scale, direction, layerId) + this._offsetZ;
+     }
+ }
+diff --git a/packages/room/src/object/visualization/furniture/FurnitureBrandedImageVisualization.ts b/packages/room/src/object/visualization/furniture/FurnitureBrandedImageVisualization.ts
+index 5ff47a30..86d5136d 100644
+--- a/packages/room/src/object/visualization/furniture/FurnitureBrandedImageVisualization.ts
++++ b/packages/room/src/object/visualization/furniture/FurnitureBrandedImageVisualization.ts
+@@ -216,7 +216,7 @@ export class FurnitureBrandedImageVisualization extends FurnitureVisualization
+         return super.getSpriteAssetName(scale, layerId);
+     }
+ 
+-    protected isBrandedImageLayer(scale: number, layerId: number): boolean
++    private isBrandedImageLayer(scale: number, layerId: number): boolean
+     {
+         return this.getLayerTag(scale, this._direction, layerId) === FurnitureBrandedImageVisualization.BRANDED_IMAGE;
+     }
+@@ -237,6 +237,14 @@ export class FurnitureBrandedImageVisualization extends FurnitureVisualization
+         return this.isBrandedImageLayer(scale, layerId) ? offset + ((this._offsetY || 0) * (scale / 64)) : offset;
+     }
+ 
++    // offsetZ is the z-index / depth (overlap order, like CSS z-index).
++    protected getLayerZOffset(scale: number, direction: number, layerId: number): number
++    {
++        const offset = super.getLayerZOffset(scale, direction, layerId);
++
++        return this.isBrandedImageLayer(scale, layerId) ? offset + (this._offsetZ || 0) : offset;
++    }
++
+     // `scale` zooms the branded image (percent, 100 = 1x). Applied via the
+     // sprite's scale (a real Pixi sprite scale) — NOT by writing width/height,
+     // which are read-only on RoomObjectSprite and would throw every frame.
+diff --git a/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts b/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts
+index 25a93ae9..ffbf4393 100644
+--- a/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts
++++ b/packages/room/src/object/visualization/furniture/FurnitureRoomBackgroundVisualization.ts
+@@ -5,6 +5,12 @@ import { FurnitureBrandedImageVisualization } from './FurnitureBrandedImageVisua
+ 
+ export class FurnitureRoomBackgroundVisualization extends FurnitureBrandedImageVisualization
+ {
++    // Sort depth of the image: larger is further back. Room planes sit near 2000 (RoomVisualization
++    // ROOM_DEPTH_OFFSET) and furniture, pets and avatars sort below ~150 even in big rooms, so this
++    // band lies between them whatever the tile of the furni. offsetZ moves the image inside the band.
++    private static readonly BACKGROUND_LAYER_DEPTH: number = 1000;
++    private static readonly BACKGROUND_LAYER_DEPTH_RANGE: number = 500;
++
+     private _imageOffsets: Map<number, DirectionalOffsetData> = null;
+     private _halfSizeImage: Texture = null;
+     private _halfSizeImageUrl: string = null;
+@@ -73,6 +79,8 @@ export class FurnitureRoomBackgroundVisualization extends FurnitureBrandedImageV
+ 
+         const sprite = this.getSprite(layerId);
+ 
++        if(sprite) sprite.fixedDepth = this.getBackgroundDepth();
++
+         if(!sprite || !sprite.texture || (this.getImageFactor(scale) === 1)) return;
+ 
+         const halfSizeImage = this.getHalfSizeImage(sprite.texture, layerId);
+@@ -82,10 +90,12 @@ export class FurnitureRoomBackgroundVisualization extends FurnitureBrandedImageV
+         else sprite.scale = (sprite.scale * 0.5);
+     }
+ 
+-    /** AIR: offsetZ moves every layer toward the viewer, sorted with all other room sprites. */
+-    protected getLayerZOffset(scale: number, direction: number, layerId: number): number
++    private getBackgroundDepth(): number
+     {
+-        return (super.getLayerZOffset(scale, direction, layerId) - this._offsetZ);
++        const range = FurnitureRoomBackgroundVisualization.BACKGROUND_LAYER_DEPTH_RANGE;
++        const offsetZ = Math.max(-range, Math.min(range, (this._offsetZ || 0)));
++
++        return (FurnitureRoomBackgroundVisualization.BACKGROUND_LAYER_DEPTH - offsetZ);
+     }
+ 
+     /** AIR draws the image into a half-size bitmap once; built from the loaded image outside the render path. */
+diff --git a/packages/room/src/renderer/RoomSpriteCanvas.ts b/packages/room/src/renderer/RoomSpriteCanvas.ts
+index 0c8c84ab..c78208f8 100644
+--- a/packages/room/src/renderer/RoomSpriteCanvas.ts
++++ b/packages/room/src/renderer/RoomSpriteCanvas.ts
+@@ -651,7 +651,7 @@ export class RoomSpriteCanvas implements IRoomRenderingCanvas
+             sortableSprite.x = (spriteX - this._screenOffsetX);
+             sortableSprite.y = (spriteY - this._screenOffsetY);
+ 
+-            sortableSprite.z = ((z + sprite.relativeDepth) + (3.7E-11 * count));
++            sortableSprite.z = ((sprite.fixedDepth ?? (z + sprite.relativeDepth)) + (3.7E-11 * count));
+ 
+             spriteCount++;
+             count++;
