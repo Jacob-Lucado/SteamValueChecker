@@ -13,7 +13,16 @@ INSERT INTO room_models (id,door_x,door_y,door_z,door_dir,heightmap,public_items
 INSERT INTO rooms (roomtype,caption,owner,description,category,state,users_max,model_name,tags,wallpaper,floor,landscape) VALUES ('private','Welcome to Lucado Hotel',@owner,'New here? Start at the front desk, then explore the hotel. Have fun!',29,'open',50,'lucado_welcome','welcome|newcomers|lobby|start','202','401','0.0');
 SET @room = LAST_INSERT_ID();
 INSERT INTO items (user_id,room_id,base_item,extra_data,x,y,z,rot,wall_pos,limited_number,limited_stack) VALUES
-(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='ads_background' AND type='s'),CONCAT('state',CHAR(9),'0',CHAR(10),'imageUrl',CHAR(9),@site,'/images/welcome/welcome-lounge.png',CHAR(10),'offsetX',CHAR(9),'-108',CHAR(10),'offsetY',CHAR(9),'-144',CHAR(10),'offsetZ',CHAR(9),'0',CHAR(10),'scale',CHAR(9),'100'),24,8,0.5,4,'',0,0);
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='ads_background' AND type='s'),CONCAT('state',CHAR(9),'0',CHAR(10),'imageUrl',CHAR(9),@site,'/images/welcome/welcome-lounge.png',CHAR(10),'offsetX',CHAR(9),'-108',CHAR(10),'offsetY',CHAR(9),'-144',CHAR(10),'offsetZ',CHAR(9),'0',CHAR(10),'scale',CHAR(9),'100'),24,8,0.5,4,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_sofa' AND type='s'),'0',24,9,0,2,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_lowtable' AND type='s'),'0',26,9,0,0,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_sofa' AND type='s'),'0',28,9,0,6,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_chair' AND type='s'),'0',26,8,0,4,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_chair' AND type='s'),'0',26,12,0,0,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_plant' AND type='s'),'0',24,12,0,0,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_plant' AND type='s'),'0',28,12,0,0,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_floorlight' AND type='s'),'0',24,8,0,0,'',0,0),
+(@owner,@room,(SELECT MIN(id) FROM furniture WHERE item_name='darkmodern_c20_floorlight' AND type='s'),'0',28,8,0,0,'',0,0);
 
 -- Lucado Plaza
 INSERT INTO room_models (id,door_x,door_y,door_z,door_dir,heightmap,public_items,required_club_level,custom,wall_height,half_scale,camera_x,camera_y,camera_z) VALUES ('lucado_plaza',10,15,0,0,'xxxxxxxxxxxxxxxxxxxxxx\r\nx00011111111111111000x\r\nx00011111111111111000x\r\nx00011111111111111000x\r\nx00011111111111111000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nx00000000000000000000x\r\nxxxxxxxxxx0xxxxxxxxxxx','',0,1,-1,1,0,0,0);
