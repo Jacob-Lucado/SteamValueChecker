@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.72", date: "2026-11-19", title: "Co-op filter on your library", items: [
+        "**Library page:** games with online, local or LAN co-op get a 🤝 Co-op tag, and the filter drawer has a *Co-op games only* switch, so it's easy to see what you already own that you can play with friends.",
+    ] },
     { version: "2026.11.71", date: "2026-11-19", title: "Price cap and unreleased in Discord", items: [
         "**`/me wishlist view`** now also has a *Not out yet* choice for *show* and a *max* price cap, matching the Wishlist page.",
     ] },

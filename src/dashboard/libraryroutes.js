@@ -20,7 +20,11 @@ export function createLibraryRoutes(ctx) {
             const u = userRow(s);
             const v = await libraryView(db, itad, u);
             const tags = db.getAppTags(v.rows.map(r => r.appid).filter(Boolean)); // Steam's public genres, for the card view's tags and filter
-            for (const r of v.rows) r.genres = (tags.get(r.appid)?.genres ?? []).slice(0, 4);
+            for (const r of v.rows) {
+                const t = tags.get(r.appid);
+                r.genres = (t?.genres ?? []).slice(0, 4);
+                r.coop = (t?.cats ?? []).some(c => /co-op/i.test(c)); // from Steam's own categories, for the co-op filter
+            }
             return v;
         },
         "POST /api/library/add": async (req, body) => {

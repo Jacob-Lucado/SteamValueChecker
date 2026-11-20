@@ -86,7 +86,7 @@
         n.others.length ? h("p", { class: "muted small", text: "Also in the running: " + n.others.map(o => o.title).join(", ") }) : null,
         h("p", { class: "muted small", text: n.remaining ? `${n.remaining} more to choose from.` : "That is everything left in your backlog." })));
     }) });
-    const view = { q: "", status: "all", sort: "name", page: 0, mode: (() => { try { return localStorage.getItem("svc_libmode") === "list" ? "list" : "grid"; } catch { return "grid"; } })(), play: "all", genres: new Set(), filters: false };
+    const view = { q: "", status: "all", sort: "name", page: 0, mode: (() => { try { return localStorage.getItem("svc_libmode") === "list" ? "list" : "grid"; } catch { return "grid"; } })(), play: "all", genres: new Set(), coop: false, filters: false };
     const picked = new Set(); // itad ids ticked for a bulk status change
     const STATUS_OPTIONS = [["backlog", "Backlog"], ["playing", "Playing"], ["played", "Played"], ["finished", "Finished"], ["dropped", "Dropped"]];
     async function load() {
@@ -207,7 +207,7 @@
               r.ach_total ? h("span", { text: `${r.ach_done}/${r.ach_total}` }) : null,
               r.saved != null && r.saved > 0 ? h("span", { class: "lib-save", text: "Saved " + money(r.saved, cur) }) : null),
             prices.length ? h("div", { class: "lib-prices" }, prices.map(([k, v]) => h("span", {}, h("small", { text: k }), " " + v))) : null,
-            (r.genres || []).length ? h("div", { class: "lib-tags" }, r.genres.map(g => h("span", { class: "lib-tag", text: g }))) : null,
+            (r.genres || []).length || r.coop ? h("div", { class: "lib-tags" }, ...(r.coop ? [h("span", { class: "lib-tag", text: "🤝 Co-op" })] : []), ...(r.genres || []).map(g => h("span", { class: "lib-tag", text: g }))) : null,
             h("div", { class: "lib-actions" }, stat, hist, rm),
             holder);
         }
@@ -221,7 +221,7 @@
 
         function drawTable() {
           const q = view.q.trim().toLowerCase();
-          const list = d.rows.filter(r => (view.status === "all" || (r.status || "backlog") === view.status) && (!q || r.title.toLowerCase().includes(q)) && playOk(r, view.play) && (!view.genres.size || [...view.genres].every(g => (r.genres || []).includes(g)))).sort(sorters[view.sort] || sorters.name);
+          const list = d.rows.filter(r => (view.status === "all" || (r.status || "backlog") === view.status) && (!q || r.title.toLowerCase().includes(q)) && playOk(r, view.play) && (!view.coop || r.coop) && (!view.genres.size || [...view.genres].every(g => (r.genres || []).includes(g)))).sort(sorters[view.sort] || sorters.name);
           if (view.mode === "grid") {
             matching = list;
             const pages = Math.max(1, Math.ceil(list.length / GRID_PAGE));
@@ -270,8 +270,9 @@
         const chip = (label, on, fn) => { const b = h("button", { class: "chip-btn" + (on ? " on" : ""), type: "button", text: label }); b.addEventListener("click", fn); return b; };
         const drawFilters = () => filterPanel.replaceChildren(
           h("div", { class: "row" }, field("Playtime", playSel)),
+          h("div", { class: "chips" }, chip("Co-op games only", view.coop, () => { view.coop = !view.coop; view.page = 0; drawFilters(); drawTable(); })),
           allGenres.length ? h("div", {}, h("div", { class: "muted small", text: "Genres (a game must match all you pick)" }), h("div", { class: "chips" }, allGenres.map(g => chip(g, view.genres.has(g), () => { view.genres.has(g) ? view.genres.delete(g) : view.genres.add(g); view.page = 0; drawFilters(); drawTable(); })))) : h("p", { class: "muted small", text: "Genres appear after your Steam library has been read once." }),
-          view.genres.size || view.play !== "all" ? h("button", { class: "btn gray small", type: "button", text: "Clear filters", onclick: () => { view.genres.clear(); view.play = "all"; playSel.value = "all"; view.page = 0; drawFilters(); drawTable(); } }) : null);
+          view.genres.size || view.play !== "all" || view.coop ? h("button", { class: "btn gray small", type: "button", text: "Clear filters", onclick: () => { view.genres.clear(); view.coop = false; view.play = "all"; playSel.value = "all"; view.page = 0; drawFilters(); drawTable(); } }) : null);
         drawFilters(); syncHead();
         drawTable();
 

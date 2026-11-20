@@ -480,6 +480,15 @@ test("settings: quiet hours, digest and sharing are validated and saved", async 
     await t.close();
 });
 
+test("library: games with Steam co-op tags are flagged for the page's co-op filter", async () => {
+    const t = await signedIn();
+    t.db.syncSteamGames("u1", [{ itad_id: "duo", title: "Duo", appid: 91, minutes: 60, lastPlayed: null }, { itad_id: "solo", title: "Solo", appid: 92, minutes: 60, lastPlayed: null }]);
+    t.db.saveAppTags(91, ["Action"], ["Online Co-op"]); t.db.saveAppTags(92, ["RPG"], ["Single-player"]);
+    const rows = (await t.request("/api/library")).data.rows;
+    assert.deepEqual(rows.map(r => [r.title, r.coop]).sort(), [["Duo", true], ["Solo", false]]);
+    await t.close();
+});
+
 test("library: add, import entries, view totals, remove", async () => {
     const t = await signedIn();
     assert.equal((await t.request("/api/library/add", { method: "POST", body: { title: "Hades", paid: 5 } })).status, 200);
