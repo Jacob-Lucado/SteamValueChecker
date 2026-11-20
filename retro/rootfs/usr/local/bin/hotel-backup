@@ -1,0 +1,20 @@
+#!/bin/sh
+# Saves a compressed copy of the hotel database to the data volume every 6 hours and keeps the newest 28.
+DATA=/data
+OUT="$DATA/backups/database"
+mkdir -p "$OUT"
+
+# Give the database time to start and the first setup time to finish.
+sleep 600
+
+while true; do
+    stamp=$(date -u +%Y%m%d-%H%M)
+    if mariadb-dump --protocol=socket -uroot --single-transaction --quick --routines plus | gzip -c > "$OUT/plus-$stamp.sql.gz.part"; then
+        mv "$OUT/plus-$stamp.sql.gz.part" "$OUT/plus-$stamp.sql.gz"
+    else
+        rm -f "$OUT/plus-$stamp.sql.gz.part"
+        echo "database backup failed"
+    fi
+    ls -1t "$OUT"/plus-*.sql.gz 2>/dev/null | tail -n +29 | xargs -r rm -f
+    sleep 21600
+done

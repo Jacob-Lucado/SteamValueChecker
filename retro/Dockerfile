@@ -133,7 +133,7 @@ RUN useradd --system --home-dir "$HOTEL/emulator" --shell /usr/sbin/nologin plus
     && sed -i '1s/^\xEF\xBB\xBF//' "$HOTEL/emulator/Config/config.json" \
     && sed -i 's/minlevel="Trace"/minlevel="Info"/' "$HOTEL/emulator/Config/nlog.config" \
     && cp "$HOTEL/emulator/Config/config.json" /etc/hotel/emulator-config.json \
-    && chmod +x /usr/local/bin/hotel-start /usr/local/bin/hotel-client-config
+    && chmod +x /usr/local/bin/hotel-start /usr/local/bin/hotel-client-config /usr/local/bin/hotel-backup
 
 # Lets hotel-start skip the slow setup steps when the code is the same as on the last boot.
 ARG EMU_SHA
