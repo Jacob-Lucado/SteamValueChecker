@@ -52,7 +52,7 @@
 	"room.zoom.enabled": true,
 	"room.camera.follow_user": true,
 	"room.camera.move.speed": 12,
-	"discord.url": "",
+	"discord.url": "https://discord.gg/uCqSXgwSCQ",
 	"habbicons.enabled": true,
 	"habbicons.asset.root": "/client/habbicons",
 	"habbicons.asset.hash": "habbo-225e1f8a",
