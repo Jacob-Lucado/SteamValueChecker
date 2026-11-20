@@ -1,7 +1,7 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
     { version: "2026.11.75", date: "2026-11-20", title: "No more false outage alerts", items: [
-        "A deleted alert channel or a lost permission is now treated as that member's setup problem, not a bot outage, so it no longer triggers the \"alerts could not be delivered\" notice to the owner. Those members are retried once a day instead of every hour.",
+        "Members who chose server-channel alerts now get them by DM when that server's alert channel is missing, deleted or the bot lost access, instead of the alert failing every hour. If both are closed, it counts as that member's setup problem, not a bot outage, so it no longer triggers the \"alerts could not be delivered\" notice, and they are retried once a day.",
     ] },
     { version: "2026.11.74", date: "2026-11-20", title: "Delivery problems now say why", items: [
         "When alerts can't be delivered, the outage notice to the owner now includes what Discord actually answered (for example a missing-permission or invalid-message code), and the same detail goes into the log.",

@@ -237,16 +237,27 @@ test("a failed delivery carries what Discord said, so an outage alert can name t
     assert.equal(describeError(null), "unknown");
 });
 
-test("a channel that is gone counts as the member's setup, not an outage, and is retried only daily", async () => {
+test("channel delivery falls back to DMs when the channel is gone, and only counts as unreachable when both fail", async () => {
     const { isPermanent } = await import("../src/notify.js");
     assert.equal(isPermanent({ code: 10003 }), true);
     assert.equal(isPermanent({ code: 50013 }), true);
     assert.equal(isPermanent({ code: 500 }), false);
-    const db = openDb(":memory:");
-    db.ensureUser("c1", "g1"); db.updateUser("c1", { delivery: "channel" });
-    db.setGuildChannel("g1", "gone", "owner");
-    const n = createNotifier({ db, discord: { sendDm: async () => {}, sendChannel: async () => { throw Object.assign(new Error("Unknown Channel"), { code: 10003 }); } } });
-    const r = await n.deliver(db.getUser("c1"), { embeds: [embed] }, "alert");
-    assert.deepEqual([r.ok, r.reason, r.permanent], [false, "channel_failed", true]);
-    assert.equal(db.getUser("c1").dm_failures, 1);
+    const gone = () => { throw Object.assign(new Error("Unknown Channel"), { code: 10003 }); };
+    // channel gone, DMs open: the alert still arrives, by DM
+    let db = openDb(":memory:");
+    db.ensureUser("c1", "g1"); db.updateUser("c1", { delivery: "channel" }); db.setGuildChannel("g1", "gone", "owner");
+    const dms = [];
+    let n = createNotifier({ db, discord: { sendDm: async (id, p) => { dms.push(id); }, sendChannel: async () => gone() } });
+    let r = await n.deliver(db.getUser("c1"), { embeds: [embed] }, "alert");
+    assert.deepEqual([r.ok, r.via, dms], [true, "dm", ["c1"]]);
+    // no alert channel was ever set up, DMs open: DM
+    db = openDb(":memory:");
+    db.ensureUser("c2", "g2"); db.updateUser("c2", { delivery: "channel" });
+    n = createNotifier({ db, discord: { sendDm: async () => {}, sendChannel: async () => gone() } });
+    assert.equal((await n.deliver(db.getUser("c2"), { embeds: [embed] }, "alert")).via, "dm");
+    // both dead: a setup problem on their side, not an outage
+    n = createNotifier({ db, discord: { sendDm: async () => { throw new Error("closed"); }, sendChannel: async () => gone() } });
+    r = await n.deliver(db.getUser("c2"), { embeds: [embed] }, "alert");
+    assert.deepEqual([r.ok, r.permanent], [false, true]);
+    assert.equal(db.getUser("c2").dm_failures, 1);
 });

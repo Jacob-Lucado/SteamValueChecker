@@ -29,8 +29,6 @@ export function createNotifier({ db, discord, push = null }) {
             if (user.delivery === "channel" && user.dm_failures) db.updateUser(user.discord_id, { dm_failures: 0 });
             return { ok: true, via: "channel" };
         } catch (e) {
-            // Someone who picked channel delivery has no DM to fall back on, so the same counter that backs off dead DMs backs off a dead channel.
-            if (user.delivery === "channel") db.updateUser(user.discord_id, { dm_failures: (user.dm_failures ?? 0) + 1 });
             return { ok: false, via: null, reason: "channel_failed", detail: describeError(e), permanent: isPermanent(e) };
         }
     }
@@ -64,7 +62,19 @@ export function createNotifier({ db, discord, push = null }) {
     }
 
     async function send(user, payload) {
-        if (user.delivery === "channel") return viaChannel(user, payload);
+        if (user.delivery === "channel") {
+            // The server's alert channel is gone, was never set, or the bot lost access: the member still wants the alert, so it goes to their DMs instead of failing every hour.
+            const r = await viaChannel(user, payload);
+            if (r.ok) return r;
+            try {
+                await discord.sendDm(user.discord_id, payload);
+                if (user.dm_failures) db.updateUser(user.discord_id, { dm_failures: 0 });
+                return { ok: true, via: "dm" };
+            } catch (e) {
+                db.updateUser(user.discord_id, { dm_failures: (user.dm_failures ?? 0) + 1 });
+                return { ok: false, via: null, reason: r.reason === "no_channel" ? "dm_failed_no_channel" : r.reason, detail: r.detail ?? `DM: ${describeError(e)}`, permanent: r.reason === "no_channel" || Boolean(r.permanent) };
+            }
+        }
 
         try {
             await discord.sendDm(user.discord_id, payload);
