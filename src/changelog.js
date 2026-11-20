@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.68", date: "2026-11-19", title: "Game night knows what's co-op", items: [
+        "**Co-op first:** in `/server gamenight` and on the Game night page, games your group can play together get a 🤝, sit at the top of each list, and *Pick a game for us* chooses a co-op or multiplayer game when you have one.",
+    ] },
     { version: "2026.11.67", date: "2026-11-19", title: "Filter your wishlist by co-op and genre", items: [
         "**Wishlist filters:** new *Co-op* and *Multiplayer* chips and a genre picker on the Wishlist page, so you can find something to play with friends or in the mood you're in. Your saved views remember them too.",
     ] },

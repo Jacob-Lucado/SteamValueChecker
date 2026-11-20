@@ -190,3 +190,17 @@ test("the admin address defaults to admin. in front of a real domain, never on f
     assert.equal(adminUrlOf("http://localhost:3000"), null);
     assert.equal(adminUrlOf("https://steamvaluechecker.com", "panel.example.org"), "https://panel.example.org");
 });
+
+test("game night: co-op games are marked, listed first and preferred for the pick", async () => {
+    const { gameNight, gameNightEmbed, pickGame } = await import("../src/gamenight.js");
+    const db = openDb(":memory:");
+    for (const id of ["a", "b"]) { db.ensureUser(id, "g1"); db.updateUser(id, { share: 1 }); }
+    for (const id of ["a", "b"]) db.syncSteamGames(id, [{ itad_id: "solo", title: "AAA Solo", appid: 1, minutes: 0, lastPlayed: null }, { itad_id: "duo", title: "ZZZ Duo", appid: 2, minutes: 0, lastPlayed: null }]);
+    db.saveAppTags(1, ["RPG"], ["Single-player"]); db.saveAppTags(2, ["Action"], ["Online Co-op"]);
+    const r = await gameNight({ db, itad: { getPrices: async () => new Map() }, userIds: ["a", "b"] });
+    assert.deepEqual(r.allOwn.map(g => [g.title, g.coop]), [["ZZZ Duo", true], ["AAA Solo", false]]);
+    assert.equal(pickGame(r, () => 0.99).title, "ZZZ Duo", "a co-op game wins over a solo one");
+    const embed = gameNightEmbed(r);
+    assert.match(embed.fields[0].value, /ZZZ Duo 🤝/);
+    assert.match(embed.footer.text, /🤝 = co-op/);
+});

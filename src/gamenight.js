@@ -13,10 +13,10 @@ export async function gameNight({ db, itad, userIds, region = "US" }) {
     const hidden = unique.length - users.length;
     if (users.length < 2) throw new UserError(`I need at least 2 people who opted in with /alerts share${hidden ? ` (${hidden} in this group have not)` : ""}.`);
 
-    const owned = new Map(), wants = new Map(), title = new Map();
+    const owned = new Map(), wants = new Map(), title = new Map(), appOf = new Map();
     for (const u of users) {
-        owned.set(u.discord_id, new Set(db.listLibrary(u.discord_id).map(l => (title.set(l.itad_id, l.title), l.itad_id))));
-        wants.set(u.discord_id, new Set(db.listItems(u.discord_id).map(i => (title.set(i.itad_id, i.title), i.itad_id))));
+        owned.set(u.discord_id, new Set(db.listLibrary(u.discord_id).map(l => (title.set(l.itad_id, l.title), l.appid && appOf.set(l.itad_id, l.appid), l.itad_id))));
+        wants.set(u.discord_id, new Set(db.listItems(u.discord_id).map(i => (title.set(i.itad_id, i.title), i.appid && appOf.set(i.itad_id, i.appid), i.itad_id))));
     }
     const ids = users.map(u => u.discord_id);
     const empty = ids.filter(id => owned.get(id).size === 0);
@@ -39,8 +39,14 @@ export async function gameNight({ db, itad, userIds, region = "US" }) {
     if (wanted.length) { try { prices = await itad.getPrices(wanted.map(([g]) => g), region); } catch { /* the list still helps without prices */ } }
     const buy = wanted.map(([g, w]) => ({ id: g, title: title.get(g), wanters: w, now: prices.get(g) ? current(summarize(prices.get(g))) : null }));
 
+    // Steam's co-op / multiplayer tag (shared, already stored): a game everyone owns is only a night out if you can play it together.
+    let tags = new Map();
+    try { tags = db.getAppTags?.([...new Set([...appOf.values()])]) ?? new Map(); } catch { /* no tags, no marks */ }
+    const coop = id => (tags.get(appOf.get(id))?.cats ?? []).some(c => /co-op|multi-player|pvp|mmo/i.test(c));
+    const mark = g => ({ ...g, coop: coop(g.id) });
     const byTitle = (a, b) => a.title.localeCompare(b.title);
-    return { people: ids, hidden, empty, allOwn: allOwn.sort(byTitle), almost: almost.sort((a, b) => a.missing.length - b.missing.length || byTitle(a, b)), buy };
+    const byCoop = (a, b) => Number(b.coop) - Number(a.coop);
+    return { people: ids, hidden, empty, allOwn: allOwn.map(mark).sort((a, b) => byCoop(a, b) || byTitle(a, b)), almost: almost.map(mark).sort((a, b) => byCoop(a, b) || a.missing.length - b.missing.length || byTitle(a, b)), buy: buy.map(mark).sort(byCoop) };
 }
 
 const list = (rows, f) => (rows.length ? rows.slice(0, MAX_LIST).map(f).join("\n") + (rows.length > MAX_LIST ? `\n…and ${rows.length - MAX_LIST} more` : "") : null);
@@ -48,15 +54,15 @@ export const GN_PICK = "gn_pick";
 
 export function gameNightEmbed(r) {
     const fields = [];
-    const own = list(r.allOwn, g => `• ${g.title}`);
+    const own = list(r.allOwn, g => `• ${g.title}${g.coop ? " 🤝" : ""}`);
     fields.push({ name: `Everyone owns (${r.allOwn.length})`, value: own ?? "Nothing in common yet. Check the buy list below." });
-    const near = list(r.almost, g => `• ${g.title} (missing: ${g.missing.map(m => `<@${m}>`).join(", ")})`);
+    const near = list(r.almost, g => `• ${g.title}${g.coop ? " 🤝" : ""} (missing: ${g.missing.map(m => `<@${m}>`).join(", ")})`);
     if (near) fields.push({ name: "Almost everyone owns", value: near });
-    const buy = list(r.buy, b => `• **${b.title}** wanted by ${b.wanters.map(w => `<@${w}>`).join(", ")}${b.now?.price != null ? ` at **${money(b.now.price, b.now.currency ?? "USD")}**${b.now.discount > 0 ? ` (-${Math.round(b.now.discount * 100)}%)` : ""}${b.now.shop ? ` at ${b.now.shop}` : ""}` : ""}`);
+    const buy = list(r.buy, b => `• **${b.title}**${b.coop ? " 🤝" : ""} wanted by ${b.wanters.map(w => `<@${w}>`).join(", ")}${b.now?.price != null ? ` at **${money(b.now.price, b.now.currency ?? "USD")}**${b.now.discount > 0 ? ` (-${Math.round(b.now.discount * 100)}%)` : ""}${b.now.shop ? ` at ${b.now.shop}` : ""}` : ""}`);
     if (buy) fields.push({ name: "Worth buying together", value: buy });
     if (r.empty?.length) fields.push({ name: "No games on record", value: `${r.empty.map(m => `<@${m}>`).join(", ")} ${r.empty.length === 1 ? "has" : "have"} no games in the bot yet, so ${r.empty.length === 1 ? "they are" : "they are all"} left out of "Everyone owns". Link Steam with \`/me steam link\` or add games with \`/me library import\`.` });
     return { color: 0xff9800, title: `Game night for ${r.people.length}`, description: r.people.map(p => `<@${p}>`).join(" "), fields,
-        footer: { text: `${r.hidden ? `${r.hidden} not counted (not opted in)  •  ` : ""}Only members who opted in with /alerts share are included` } };
+        footer: { text: `${[...r.allOwn, ...r.almost, ...r.buy].some(g => g.coop) ? "🤝 = co-op or multiplayer  •  " : ""}${r.hidden ? `${r.hidden} not counted (not opted in)  •  ` : ""}Only members who opted in with /alerts share are included` } };
 }
 
 export const gameNightButtons = (channelId = "0") => [{ type: 1, components: [{ type: 2, style: 1, label: "Pick a game for us", custom_id: `${GN_PICK}:${channelId}` }, { type: 2, style: 2, label: "Start a vote", custom_id: `gn_poll:${channelId}` }] }];
@@ -64,6 +70,8 @@ export const gameNightButtons = (channelId = "0") => [{ type: 1, components: [{ 
 /** One game chosen at random from what everyone owns, else from what almost everyone owns. */
 export function pickGame(r, rand = Math.random) {
     const pool = r.allOwn.length ? r.allOwn : r.almost;
+    const together = pool.filter(g => g.coop); // co-op or multiplayer games first, when there are any
+    if (together.length) return together[Math.floor(rand() * together.length)];
     return pool.length ? pool[Math.floor(rand() * pool.length)] : null;
 }
 

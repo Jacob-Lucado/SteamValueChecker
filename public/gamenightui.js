@@ -33,12 +33,13 @@
       } catch (e) { people.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     }
     function show(r) {
+      const co = new Set(r.coop || []), mk = t => (co.has(t) ? " 🤝" : "");
       const list = (title, rows) => h("div", { class: "subpanel" }, h("h4", { text: title }), rows.length ? h("ul", {}, ...rows.map(x => h("li", { text: x }))) : h("p", { class: "muted", text: "None." }));
       out.replaceChildren(
-        list(`Everyone owns (${r.allOwn.length})`, r.allOwn),
-        list("Almost everyone owns", r.almost.map(a => `${a.title} (missing: ${a.missing.join(", ")})`)),
-        list("Worth buying together", r.buy.map(b => `${b.title}, wanted by ${b.wanters.join(", ")}${b.price !== null ? ` at ${b.price.toFixed(2)} ${b.currency}${b.shop ? " at " + b.shop : ""}` : ""}`)),
-        r.allOwn.length ? (() => { const b = h("button", { class: "btn gray small", text: "Pick a game for us" }); b.addEventListener("click", () => toast("Tonight: " + r.allOwn[Math.floor(Math.random() * r.allOwn.length)], "ok")); return b; })() : null);
+        list(`Everyone owns (${r.allOwn.length})`, r.allOwn.map(t => t + mk(t))),
+        list("Almost everyone owns", r.almost.map(a => `${a.title}${mk(a.title)} (missing: ${a.missing.join(", ")})`)),
+        list("Worth buying together", r.buy.map(b => `${b.title}${mk(b.title)}, wanted by ${b.wanters.join(", ")}${b.price !== null ? ` at ${b.price.toFixed(2)} ${b.currency}${b.shop ? " at " + b.shop : ""}` : ""}`)),
+        r.allOwn.length ? (() => { const b = h("button", { class: "btn gray small", text: "Pick a game for us" }); b.addEventListener("click", () => { const pool = r.allOwn.filter(t => co.has(t)); const from = pool.length ? pool : r.allOwn; toast("Tonight: " + from[Math.floor(Math.random() * from.length)], "ok"); }); return b; })() : null);
     }
     guild.addEventListener("change", loadMembers);
     loadMembers();

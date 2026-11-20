@@ -171,7 +171,7 @@ export function createPlayRoutes(ctx) {
             const r = await gameNight({ db, itad, userIds: ids, region: userRow(s).region }).catch(e => { if (e.constructor?.name === "UserError") throw new HttpError(400, e.message); throw e; });
             const names = Object.fromEntries(await Promise.all(r.people.map(async id => [id, (await rest.memberName(g.id, id)) || "Member " + id.slice(-4)])));
             const n = id => names[id] ?? id;
-            return { people: r.people.map(n), hidden: r.hidden, allOwn: r.allOwn.map(x => x.title), almost: r.almost.map(x => ({ title: x.title, missing: x.missing.map(n) })),
+            return { people: r.people.map(n), hidden: r.hidden, allOwn: r.allOwn.map(x => x.title), coop: [...r.allOwn, ...r.almost, ...r.buy].filter(x => x.coop).map(x => x.title), almost: r.almost.map(x => ({ title: x.title, missing: x.missing.map(n) })),
                 buy: r.buy.map(b => ({ title: b.title, wanters: b.wanters.map(n), price: b.now?.price ?? null, currency: b.now?.currency ?? "USD", shop: b.now?.shop ?? null, discount: b.now?.discount ?? 0 })) };
         },
         "GET /api/calendar": async (req, _b, url) => {
