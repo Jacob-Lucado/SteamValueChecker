@@ -283,6 +283,8 @@ UPDATE catalog_page_images SET image = 'catalog_pet_headline1_en' WHERE image = 
 UPDATE furniture SET item_name = 'horse_hairdye_04_horseshoe' WHERE item_name = 'horse_hairdye_04_horsesho';
 -- The Video Screen plays YouTube like the TVs (the client is patched to match).
 UPDATE furniture SET interaction_type = 'television' WHERE item_name = 'ads_videoplayer';
+-- A furni whose description is only its own id and the word desc has no description. It shows empty.
+UPDATE furniture SET description = '' WHERE description REGEXP '^[a-z0-9_*]+ desc$';
 
 -- Offers the client can't draw are switched off: furni with no art in the hotel files, and furni the
 -- furnidata doesn't list. Switching one back on in the database shows it again.
