@@ -10,6 +10,9 @@ const safeUrl = u => { try { const x = new URL(u); return /(^|\.)steamvaluecheck
  * `discord` needs: sendDm(userId, payload) and sendChannel(channelId, payload), both throwing on failure.
  * Returns { ok, via: "dm" | "channel" | null, reason? }.
  */
+/** What Discord actually said, short enough for a log line or an owner DM: "50035 Invalid Form Body". */
+export const describeError = e => [e?.code ?? e?.status ?? null, String(e?.rawError?.message ?? e?.message ?? e ?? "unknown").replace(/\s+/g, " ").slice(0, 100)].filter(x => x !== null).join(" ");
+
 export function createNotifier({ db, discord, push = null }) {
     async function viaChannel(user, payload) {
         const guild = db.getGuild(user.guild_id);
@@ -21,8 +24,8 @@ export function createNotifier({ db, discord, push = null }) {
                 allowedMentions: { users: [user.discord_id], parse: [] }
             });
             return { ok: true, via: "channel" };
-        } catch {
-            return { ok: false, via: null, reason: "channel_failed" };
+        } catch (e) {
+            return { ok: false, via: null, reason: "channel_failed", detail: describeError(e) };
         }
     }
 
@@ -61,10 +64,10 @@ export function createNotifier({ db, discord, push = null }) {
             await discord.sendDm(user.discord_id, payload);
             if (user.dm_failures) db.updateUser(user.discord_id, { dm_failures: 0 });
             return { ok: true, via: "dm" };
-        } catch {
+        } catch (e) {
             db.updateUser(user.discord_id, { dm_failures: (user.dm_failures ?? 0) + 1 });
             const r = await viaChannel(user, payload);
-            return r.ok ? r : { ok: false, via: null, reason: r.reason === "no_channel" ? "dm_failed_no_channel" : r.reason };
+            return r.ok ? r : { ok: false, via: null, reason: r.reason === "no_channel" ? "dm_failed_no_channel" : r.reason, detail: r.detail ?? `DM: ${describeError(e)}` };
         }
     }
 

@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.74", date: "2026-11-20", title: "Delivery problems now say why", items: [
+        "When alerts can't be delivered, the outage notice to the owner now includes what Discord actually answered (for example a missing-permission or invalid-message code), and the same detail goes into the log.",
+    ] },
     { version: "2026.11.73", date: "2026-11-19", title: "Steam Deck rating on price cards", items: [
         "**Steam Deck line:** sale alerts and check cards now show Valve's own Steam Deck rating (Verified, Playable or Not supported). Turn it off with *Steam Deck rating* on the Alerts page or in `/me wishlist cards`.",
     ] },

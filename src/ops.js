@@ -68,7 +68,7 @@ export function createOps({ now = () => Date.now(), sendOwner = async () => {}, 
             } else state.priceFailStreak = 0;
             if (stats.delivered === 0 && stats.failed - (stats.unreachable ?? 0) >= 5) {
                 error("delivery", `${stats.failed - (stats.unreachable ?? 0)} alerts not delivered`);
-                await incident("delivery", `Steam Value Checker: ${stats.failed - (stats.unreachable ?? 0)} alerts could not be delivered in the last check and none got through. The bot may have lost permission to post, or Discord may be having trouble.`);
+                await incident("delivery", `Steam Value Checker: ${stats.failed - (stats.unreachable ?? 0)} alerts could not be delivered in the last check and none got through. The bot may have lost permission to post, or Discord may be having trouble.${stats.lastFailure ? ` Discord's last answer: ${stats.lastFailure}.` : ""}`);
             }
         },
 

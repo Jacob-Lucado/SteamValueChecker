@@ -124,7 +124,8 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 stats.failed += part.length;
                 // A member with DMs closed and no alert channel is on them, not a bot fault, so it isn't counted toward an outage alert.
                 if (res.reason === "dm_failed_no_channel" || res.reason === "restricted") stats.unreachable += part.length;
-                log(`delivery failed (${res.reason})`);
+                if (res.detail && !(res.reason === "dm_failed_no_channel" || res.reason === "restricted")) stats.lastFailure = `${res.reason}, ${res.detail}`;
+                log(`delivery failed (${res.reason}${res.detail ? `: ${res.detail}` : ""})`);
             }
         }
     }

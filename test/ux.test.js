@@ -220,3 +220,19 @@ test("wishlist view filters and sorts like the Wishlist page", async () => {
     assert.deepEqual(filterRows(rows, { max: 10, sort: "name" }).map(r => r.title), ["Alpha", "Gamma"]);
     assert.deepEqual(filterRows([{ ...rows[0], release_at: 5 }, rows[1]], { show: "soon" }).map(r => r.title), ["Beta"]);
 });
+
+test("a failed delivery carries what Discord said, so an outage alert can name the cause", async () => {
+    const { describeError } = await import("../src/notify.js");
+    const db = openDb(":memory:");
+    db.ensureUser("u9", "g9");
+    db.setGuildChannel("g9", "c9", "owner");
+    const bad = Object.assign(new Error("Invalid Form Body"), { code: 50035 });
+    const gone = Object.assign(new Error("Missing Access"), { code: 50001 });
+    const n = createNotifier({ db, discord: { sendDm: async () => { throw bad; }, sendChannel: async () => { throw gone; } } });
+    const r = await n.deliver(db.getUser("u9"), { embeds: [embed] }, "alert");
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, "channel_failed");
+    assert.equal(r.detail, "50001 Missing Access");
+    assert.equal(describeError(bad), "50035 Invalid Form Body");
+    assert.equal(describeError(null), "unknown");
+});
