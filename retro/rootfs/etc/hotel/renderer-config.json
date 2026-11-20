@@ -17,7 +17,8 @@
         "${gamedata.url}/UITexts.jsonc?t=%timestamp%",
         "${gamedata.url}/hotel-texts.json?t=%timestamp%",
         "${gamedata.url}/wired-texts.json?t=%timestamp%",
-        "${gamedata.url}/introduction-task-texts.json?t=%timestamp%"
+        "${gamedata.url}/introduction-task-texts.json?t=%timestamp%",
+        "${gamedata.url}/habboween-texts.json?t=%timestamp%"
     ],
 	  "base.locale": "en",
     "external.samples.url": "${hof.furni.url}/mp3/sound_machine_sample_%sample%.mp3",
