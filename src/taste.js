@@ -12,7 +12,7 @@ export async function fetchAppTags(appid, fetchImpl = globalThis.fetch) {
     const names = list => (Array.isArray(list) ? list : []).map(x => String(x?.description ?? "").trim()).filter(Boolean).slice(0, 24);
     // "English<strong>*</strong>, French, Spanish - Spain" -> ["english", "french", "spanish"]
     const langs = [...new Set(String(data.data?.supported_languages ?? "").replace(/<br>.*$/is, "").replace(/<[^>]*>/g, "").replace(/\*/g, "").split(",").map(x => x.split(" - ")[0].trim().toLowerCase()).filter(Boolean))].slice(0, 40);
-    return { genres: names(data.data?.genres), cats: names(data.data?.categories), langs };
+    return { genres: names(data.data?.genres), cats: names(data.data?.categories), ...(langs.length ? { langs } : {}) };
 }
 
 /** Fetches tags for apps not yet known, a few at a time and politely. Stops at the first error (rate limits). Returns how many were stored. */
