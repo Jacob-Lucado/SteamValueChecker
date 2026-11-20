@@ -40,3 +40,7 @@ export const EXTENSION_LATEST = "2.7.0";
 export const EXTENSION_STORE_URL = "https://chromewebstore.google.com/detail/fanaticalgrabber/kmbpdeglijkfbkifilcckkeljagcdbnb";
 export const SUPPORT_PAGE_URL = "https://jacob-lucado.github.io/LucadoServices/support.html";
 export const FANATICAL_GRABBER_URL = "https://steamvaluechecker.com/grabber";
+
+// /me wishlist view: what to show and how to order it.
+export const VIEW_SHOW = [["sale", "On sale now"], ["coop", "Co-op"], ["multi", "Multiplayer"], ["priority", "Starred"], ["unowned", "Not owned yet"]];
+export const VIEW_SORT = [["cut", "Biggest discount"], ["price", "Lowest price"], ["name", "Name"]];

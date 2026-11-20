@@ -52,6 +52,15 @@ export async function viewRows(db, itad, user) {
     return { rows, currency: rows.find(r => r.currency)?.currency ?? "USD" };
 }
 
+/** The same filters and sorts as the Wishlist page, for /me wishlist view. Rows keep the usual order (sales first) when no sort is picked. */
+export function filterRows(rows, { show = null, sort = null } = {}) {
+    const keep = { sale: r => r.discount > 0, coop: r => r.coop, multi: r => r.multi, priority: r => r.priority, unowned: r => !r.owned }[show];
+    let out = keep ? rows.filter(keep) : [...rows];
+    const by = { cut: (a, b) => b.discount - a.discount, price: (a, b) => (a.best?.price ?? Infinity) - (b.best?.price ?? Infinity), name: (a, b) => a.title.localeCompare(b.title) }[sort];
+    if (by) out = out.sort(by);
+    return out;
+}
+
 /** Plain-JSON copy of everything stored about a user, for /me mydata export. */
 export function exportJson(db, userId) {
     const data = db.exportUser(userId);

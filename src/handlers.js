@@ -1,6 +1,7 @@
 // Discord handlers for the wishlist, alert, channel and data commands.
 // Logic lives in db.js, alerts.js, steam.js and wishlist.js; this file only talks to Discord.
 
+import { VIEW_SHOW } from "./constants.js";
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
 import { CONTEXT_COMPARE, CONTEXT_WISHLIST, CONTEXT_GIFTS, CONTEXT_TOGETHER, CONTEXT_ADD, CONTEXT_OWNERS } from "./commands.js";
@@ -19,7 +20,7 @@ import { supporterUntil, isFounder, wallName } from "./supporters.js";
 import { SUPPORTER_XP_BOOST } from "./square.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { pushEvent } from "./adminlog.js";
-import { findItem, suggest, viewRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
+import { findItem, suggest, viewRows, filterRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
 import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed, ownersEmbed, coopEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
@@ -172,8 +173,12 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         cooldown(i, "view");
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         try {
-            const { rows, currency } = await viewRows(db, itad, user);
+            let { rows, currency } = await viewRows(db, itad, user);
             if (!rows.length) throw new UserError("Your wishlist is empty. Use `/me wishlist import` or `/me wishlist add`.");
+            const show = i.options.getString("show"), sort = i.options.getString("sort");
+            const all = rows;
+            rows = filterRows(all, { show, sort });
+            if (!rows.length) throw new UserError(`Nothing on your wishlist matches **${VIEW_SHOW.find(([k]) => k === show)?.[1] ?? "that"}**.${show === "coop" || show === "multi" ? " Steam's tags fill in over time for new games, so try again later." : ""}`);
             const pages = Math.max(1, Math.ceil(rows.length / WISHLIST_PER_PAGE));
             const view = page => [wishlistEmbed(rows, page, currency)];
             const message = await i.editReply({ embeds: view(0), components: pages > 1 ? [pageButtons(0, pages)] : [] });

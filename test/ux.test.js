@@ -204,3 +204,17 @@ test("game night: co-op games are marked, listed first and preferred for the pic
     assert.match(embed.fields[0].value, /ZZZ Duo 🤝/);
     assert.match(embed.footer.text, /🤝 = co-op/);
 });
+
+test("wishlist view filters and sorts like the Wishlist page", async () => {
+    const { filterRows } = await import("../src/wishlist.js");
+    const rows = [
+        { title: "Beta", discount: 0, best: { price: 30 }, coop: true, multi: true, priority: false, owned: false },
+        { title: "Alpha", discount: 0.5, best: { price: 10 }, coop: false, multi: false, priority: true, owned: false },
+        { title: "Gamma", discount: 0.2, best: { price: 5 }, coop: true, multi: true, priority: false, owned: true }
+    ];
+    assert.deepEqual(filterRows(rows, { show: "sale" }).map(r => r.title), ["Alpha", "Gamma"]);
+    assert.deepEqual(filterRows(rows, { show: "coop", sort: "name" }).map(r => r.title), ["Beta", "Gamma"]);
+    assert.deepEqual(filterRows(rows, { show: "unowned", sort: "price" }).map(r => r.title), ["Alpha", "Beta"]);
+    assert.deepEqual(filterRows(rows, { sort: "cut" }).map(r => r.title), ["Alpha", "Gamma", "Beta"]);
+    assert.deepEqual(filterRows(rows).map(r => r.title), ["Beta", "Alpha", "Gamma"]);
+});
