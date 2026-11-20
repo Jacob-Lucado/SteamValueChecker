@@ -7,13 +7,13 @@ const META_MODE = "logfeed_mode", META_CHANNEL = "logfeed_channel";
 const PROBLEM = /\b(failed|failure|could not|couldn't|can't|cannot|degraded|timed out|timeout|crash|unhandled|refused)\b/i;
 const ICON = { error: "🔴", warn: "🟠", info: "⚪", activity: "🔵" };
 
-export function createLogFeed({ db, send, now = () => Date.now(), windowMs = 20_000, perMinute = 5, timer = setTimeout }) {
+export function createLogFeed({ db, send, guildName = () => null, now = () => Date.now(), windowMs = 20_000, perMinute = 5, timer = setTimeout }) {
     const queue = new Map();
     let pending = null, dropped = 0, sentAt = [], lastSent = null, lastError = null, sent = 0;
 
     const mode = () => (MODES[db.getMeta(META_MODE)] ? db.getMeta(META_MODE) : "problems");
     const channel = () => db.getMeta(META_CHANNEL) || null;
-    const norm = t => t.replace(/\d{5,}/g, "#").replace(/\d+/g, "N").slice(0, 160);
+    const norm = t => t.replace(/\(\d{17,20}\)/g, "(#)").replace(/\d{5,}/g, "#").replace(/\d+/g, "N").slice(0, 160);
 
     /** True when this line is worth sending in the current mode. */
     function wanted(entry) {
@@ -24,9 +24,13 @@ export function createLogFeed({ db, send, now = () => Date.now(), windowMs = 20_
         return entry.level === "info" && PROBLEM.test(entry.text);
     }
 
+    /** A server ID in a line becomes "Server name (id)", so the log says which server it means. */
+    const named = text => text.replace(/\b\d{17,20}\b/g, id => { try { const n = guildName(id); return n ? `${n} (${id})` : id; } catch { return id; } });
+
     function accept(entry) {
         try {
             if (!entry || !wanted(entry)) return;
+            entry = { ...entry, text: named(entry.text) };
             const key = entry.level + norm(entry.text);
             const hit = queue.get(key);
             if (hit) hit.count++;

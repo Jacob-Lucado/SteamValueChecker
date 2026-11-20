@@ -260,7 +260,7 @@ const discord = {
         await channel.send(payload);
     }
 };
-const logFeed = createLogFeed({ db, send: async ({ channelId, content }) => {
+const logFeed = createLogFeed({ db, guildName: id => client.guilds.cache.get(id)?.name ?? null, send: async ({ channelId, content }) => {
     if (channelId) await discord.sendChannel(channelId, { content, allowedMentions: { parse: [] } });
     else if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { content });
     else throw new Error("No owner to send logs to");

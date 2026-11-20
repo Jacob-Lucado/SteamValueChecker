@@ -71,3 +71,16 @@ test("the log buffer hands each masked line to subscribers, and a failing subscr
     buf.add("error", ["again"]);
     assert.equal(got.length, 1);
 });
+
+test("server IDs in a line become server names, and lines from different servers stay separate", async () => {
+    const names = { "111111111111111111": "Geometry Dash And Minecraft", "222222222222222222": "Game Junkies" };
+    const { feed, sent } = make({ guildName: id => names[id] ?? null });
+    for (let i = 0; i < 3; i++) feed.accept(E("info", "[alerts] delivery failed (no_channel) in server 111111111111111111"));
+    feed.accept(E("info", "[alerts] delivery failed (no_channel) in server 222222222222222222"));
+    feed.accept(E("info", "[alerts] delivery failed (no_channel) in server 333333333333333333"));
+    await feed.flush();
+    const c = sent[0].content;
+    assert.match(c, /Geometry Dash And Minecraft \(111111111111111111\) ×3/);
+    assert.match(c, /Game Junkies \(222222222222222222\)/);
+    assert.match(c, /in server 333333333333333333/);
+});

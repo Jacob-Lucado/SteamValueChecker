@@ -125,7 +125,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 // A member with DMs closed and no alert channel is on them, not a bot fault, so it isn't counted toward an outage alert.
                 if (res.reason === "dm_failed_no_channel" || res.reason === "restricted" || res.permanent) stats.unreachable += part.length;
                 if (res.detail && !(res.reason === "dm_failed_no_channel" || res.reason === "restricted" || res.permanent)) stats.lastFailure = `${res.reason}, ${res.detail}`;
-                log(`delivery failed (${res.reason}${res.detail ? `: ${res.detail}` : ""})`);
+                log(`delivery failed (${res.reason}${res.detail ? `: ${res.detail}` : ""}) in server ${user.guild_id ?? "none"}`);
             }
         }
     }
