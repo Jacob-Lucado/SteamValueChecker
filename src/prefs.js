@@ -89,7 +89,7 @@ export function prefsPatch(input, user) {
 /** The extra lines on price alerts and check cards, so each person can pick which ones they want. */
 export const FACT_OPTIONS = [
     ["reviews", "Steam review score and review dips"], ["critic", "Critic score"], ["time", "Time to finish and cost per hour"],
-    ["players", "Players right now"], ["early", "Early Access note"], ["modes", "Co-op and multiplayer"], ["lang", "Missing-language warning"], ["controller", "Controller support"], ["vr", "VR support"],
+    ["players", "Players right now"], ["early", "Early Access note"], ["modes", "Co-op and multiplayer"], ["lang", "Missing-language warning"], ["deck", "Steam Deck rating"], ["controller", "Controller support"], ["vr", "VR support"],
     ["alertvr", "Sale alerts for VR-only games"], ["alertearly", "Sale alerts for Early Access games"]
 ];
 export const FACT_KEYS = FACT_OPTIONS.map(([k]) => k);

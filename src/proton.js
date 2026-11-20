@@ -34,4 +34,6 @@ export async function deckStatus(appid, { fetchFn = globalThis.fetch, now = Date
     deckCache.set(appid, { at: now(), status });
     return status;
 }
+/** Valve's own Steam Deck rating as a card line. */
+export const deckLine = status => ({ verified: "🎮 Steam Deck: Verified", playable: "🎮 Steam Deck: Playable, needs some tweaks", unsupported: "🎮 Steam Deck: Not supported" })[status] ?? null;
 export const DECK_LABEL = { verified: "Steam Deck Verified", playable: "Steam Deck Playable", unsupported: "Not supported on Steam Deck" };

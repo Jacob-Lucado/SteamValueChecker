@@ -89,3 +89,14 @@ test("the co-op line shows on cards and goes away when someone hides it", async 
     assert.ok(factLines(facts).some(l => l.includes("Co-op (online)")));
     assert.ok(!factLines(withoutHidden(facts, ["modes"])).some(l => l.includes("Co-op")));
 });
+
+test("the Steam Deck rating shows as a card line and can be switched off", async () => {
+    const { configureFacts, gameFacts, factLines, withoutHidden } = await import("../src/gamefacts.js");
+    configureFacts({ deck: { status: async () => "playable" } });
+    const f = await gameFacts(620);
+    assert.ok(factLines(f).some(l => /Steam Deck: Playable/.test(l)));
+    assert.ok(!factLines(withoutHidden(f, ["deck"])).some(l => /Deck/.test(l)));
+    configureFacts({ deck: { status: async () => null } });
+    assert.equal(await gameFacts(620), null);
+    configureFacts(null);
+});

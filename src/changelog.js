@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.73", date: "2026-11-19", title: "Steam Deck rating on price cards", items: [
+        "**Steam Deck line:** sale alerts and check cards now show Valve's own Steam Deck rating (Verified, Playable or Not supported). Turn it off with *Steam Deck rating* on the Alerts page or in `/me wishlist cards`.",
+    ] },
     { version: "2026.11.72", date: "2026-11-19", title: "Co-op filter on your library", items: [
         "**Library page:** games with online, local or LAN co-op get a 🤝 Co-op tag, and the filter drawer has a *Co-op games only* switch, so it's easy to see what you already own that you can play with friends.",
     ] },

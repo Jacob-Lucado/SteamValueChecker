@@ -3,6 +3,7 @@
 // until the bot starts and calls configureFacts() it answers null, and a failed lookup just leaves a line off.
 import { playersLine } from "./players.js";
 import { timeLine, criticLine, perHour } from "./igdb.js";
+import { deckLine } from "./proton.js";
 import { earlyAccessLine, controllerLine, vrLine, modesLine, languageNote } from "./storemeta.js";
 
 let sources = null;
@@ -11,13 +12,14 @@ export const configureFacts = s => { sources = s; };
 /** { players, hours, critic } for a Steam app, or null. Never throws. */
 export async function gameFacts(appid) {
     if (!sources || !Number.isInteger(appid) || appid <= 0) return null;
-    const [players, igdb, store] = await Promise.all([
+    const [players, igdb, store, deck] = await Promise.all([
         sources.players?.current(appid).catch(() => null) ?? null,
         sources.igdb?.facts(appid).catch(() => null) ?? null,
-        sources.store?.meta(appid).catch(() => null) ?? null
+        sources.store?.meta(appid).catch(() => null) ?? null,
+        sources.deck?.status(appid).catch(() => null) ?? null
     ]);
-    if (players == null && !igdb && !store?.earlyAccess && !store?.controller && !store?.vr && !modesLine(store) && !store?.langs?.length) return null;
-    return { players: players ?? null, hours: igdb?.hours ?? null, critic: igdb?.critic ?? null, store: store ?? null };
+    if (players == null && !igdb && !store?.earlyAccess && !store?.controller && !store?.vr && !modesLine(store) && !store?.langs?.length && !deck) return null;
+    return { players: players ?? null, hours: igdb?.hours ?? null, critic: igdb?.critic ?? null, store: store ?? null, ...(deck ? { deck } : {}) };
 }
 
 /** Ready-made lines for a card, in a steady order. `money` formats the per-hour cost. */
@@ -31,6 +33,7 @@ export function factLines(facts, { price = null, money = null } = {}) {
         playersLine(facts.players),
         earlyAccessLine(facts.store),
         modesLine(facts.store),
+        deckLine(facts.deck),
         facts.store?.langNote ?? null,
         controllerLine(facts.store),
         vrLine(facts.store)
@@ -45,6 +48,7 @@ export function withoutHidden(facts, hide = [], lang = "en") {
     const h = new Set(hide), f = { ...facts };
     if (h.has("players")) f.players = null;
     if (h.has("critic")) f.critic = null;
+    if (h.has("deck")) f.deck = null;
     if (h.has("time")) f.hours = null;
     if (f.store) {
         f.store = { ...f.store };
