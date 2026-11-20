@@ -487,3 +487,5 @@ UPDATE items i JOIN rooms r ON r.id = i.room_id SET i.extra_data = REPLACE(i.ext
 UPDATE items i JOIN rooms r ON r.id = i.room_id SET i.extra_data = REPLACE(i.extra_data, '@@roof@@', (SELECT id FROM (SELECT id FROM rooms WHERE owner = @owner AND model_name = 'lucado_roof' LIMIT 1) t)) WHERE r.owner = @owner AND i.extra_data LIKE '%@@roof@@%';
 UPDATE items i JOIN rooms r ON r.id = i.room_id SET i.extra_data = REPLACE(i.extra_data, '@@help@@', (SELECT id FROM (SELECT id FROM rooms WHERE owner = @owner AND model_name = 'lucado_help' LIMIT 1) t)) WHERE r.owner = @owner AND i.extra_data LIKE '%@@help@@%';
 UPDATE items i JOIN rooms r ON r.id = i.room_id SET i.extra_data = REPLACE(i.extra_data, '@@plaza@@', (SELECT id FROM (SELECT id FROM rooms WHERE owner = @owner AND model_name = 'lucado_plaza' LIMIT 1) t)) WHERE r.owner = @owner AND i.extra_data LIKE '%@@plaza@@%';
+-- New players, and anyone without a home room, start in the welcome lobby.
+UPDATE server_settings SET value = (SELECT id FROM rooms WHERE owner = @owner AND model_name = 'lucado_welcome' LIMIT 1) WHERE `key` = 'global_home_room';
