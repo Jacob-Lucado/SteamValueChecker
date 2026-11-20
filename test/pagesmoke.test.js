@@ -340,6 +340,12 @@ test("the Wishlist page filters by co-op and genre", { timeout: 120_000 }, async
         await page.waitForTimeout(300);
         assert.equal(await page.getByText("Alpha Duo").count(), 0);
         assert.equal(await page.getByText("Beta Solo").count() > 0, true);
+        await page.getByLabel("Filter by genre").selectOption("");
+        await page.getByLabel("Show only games at or under this price").fill("5");
+        await page.getByLabel("Show only games at or under this price").dispatchEvent("change");
+        await page.waitForTimeout(300);
+        assert.equal(await page.getByText("Alpha Duo").count(), 0, "everything in the test costs 10, so a 5 cap hides it");
+        assert.equal(await page.getByText("No games match those filters.").count() > 0, true);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });

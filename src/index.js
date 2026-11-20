@@ -792,7 +792,7 @@ const status = createStatusMonitor({
             staleAfter(beat.giveaways, 60_000) ? { state: "degraded", detail: "The last run is overdue" } : { state: "operational" } } } : {}),
         freesources: { name: "Free game sources", desc: "Amazon Luna claims, GamerPower giveaways, Epic's upcoming free games, Steam news and Top.gg votes", critical: false, plural: true, check: () => {
             const bad = [["Amazon Luna", luna.health()], ["GamerPower", gamerPower.health()], ["Epic Games Store", epicSoon.health()], ["Steam news", news.health()], ["Top.gg votes", topgg.health()]].filter(([, h]) => h.enabled !== false && h.lastErrorAt && (!h.lastOkAt || h.lastErrorAt > h.lastOkAt));
-            return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${h.lastError})`).join(" or ")}` } : { state: "operational" };
+            return bad.length ? { state: "degraded", detail: `Can't read ${bad.map(([n, h]) => `${n} (${/http5\d\d/i.test(String(h.lastError)) ? `${h.lastError}, a problem on their end, nothing to fix here` : h.lastError})`).join(" or ")}` } : { state: "operational" };
         } },
         bundlefeed: { name: "Bundle feed", desc: "Humble, Fanatical, IndieGala and Steam bundles posted to servers", critical: false, check: () => {
             if (staleAfter(beat.bundles, 30 * 60_000)) return { state: "degraded", detail: "The last check is overdue" };

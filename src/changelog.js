@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.70", date: "2026-11-19", title: "More wishlist filters, clearer status alerts", items: [
+        "**Wishlist page:** a *Not out yet* chip and a *Max price* box, saved with your views.",
+        "**Status alerts:** when a source like Steam news fails with a 5xx error, the warning now says it's a problem on their end and there's nothing to fix.",
+    ] },
     { version: "2026.11.69", date: "2026-11-19", title: "Filter your wishlist in Discord", items: [
         "**`/me wishlist view` has filters:** *show* only games on sale, co-op, multiplayer, starred or not owned yet, and *sort* by biggest discount, lowest price or name. Same filters as the Wishlist page.",
     ] },
