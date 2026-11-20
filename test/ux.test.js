@@ -217,4 +217,6 @@ test("wishlist view filters and sorts like the Wishlist page", async () => {
     assert.deepEqual(filterRows(rows, { show: "unowned", sort: "price" }).map(r => r.title), ["Alpha", "Beta"]);
     assert.deepEqual(filterRows(rows, { sort: "cut" }).map(r => r.title), ["Alpha", "Gamma", "Beta"]);
     assert.deepEqual(filterRows(rows).map(r => r.title), ["Beta", "Alpha", "Gamma"]);
+    assert.deepEqual(filterRows(rows, { max: 10, sort: "name" }).map(r => r.title), ["Alpha", "Gamma"]);
+    assert.deepEqual(filterRows([{ ...rows[0], release_at: 5 }, rows[1]], { show: "soon" }).map(r => r.title), ["Beta"]);
 });

@@ -175,10 +175,10 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         try {
             let { rows, currency } = await viewRows(db, itad, user);
             if (!rows.length) throw new UserError("Your wishlist is empty. Use `/me wishlist import` or `/me wishlist add`.");
-            const show = i.options.getString("show"), sort = i.options.getString("sort");
+            const show = i.options.getString("show"), sort = i.options.getString("sort"), max = i.options.getNumber("max");
             const all = rows;
-            rows = filterRows(all, { show, sort });
-            if (!rows.length) throw new UserError(`Nothing on your wishlist matches **${VIEW_SHOW.find(([k]) => k === show)?.[1] ?? "that"}**.${show === "coop" || show === "multi" ? " Steam's tags fill in over time for new games, so try again later." : ""}`);
+            rows = filterRows(all, { show, sort, max });
+            if (!rows.length) throw new UserError(`Nothing on your wishlist matches ${[VIEW_SHOW.find(([k]) => k === show)?.[1], max > 0 ? `under ${max}` : null].filter(Boolean).map(x => `**${x}**`).join(" ") || "that"}.${show === "coop" || show === "multi" ? " Steam's tags fill in over time for new games, so try again later." : ""}`);
             const pages = Math.max(1, Math.ceil(rows.length / WISHLIST_PER_PAGE));
             const view = page => [wishlistEmbed(rows, page, currency)];
             const message = await i.editReply({ embeds: view(0), components: pages > 1 ? [pageButtons(0, pages)] : [] });

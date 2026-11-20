@@ -42,5 +42,5 @@ export const SUPPORT_PAGE_URL = "https://jacob-lucado.github.io/LucadoServices/s
 export const FANATICAL_GRABBER_URL = "https://steamvaluechecker.com/grabber";
 
 // /me wishlist view: what to show and how to order it.
-export const VIEW_SHOW = [["sale", "On sale now"], ["coop", "Co-op"], ["multi", "Multiplayer"], ["priority", "Starred"], ["unowned", "Not owned yet"]];
+export const VIEW_SHOW = [["sale", "On sale now"], ["coop", "Co-op"], ["multi", "Multiplayer"], ["priority", "Starred"], ["unowned", "Not owned yet"], ["soon", "Not out yet"]];
 export const VIEW_SORT = [["cut", "Biggest discount"], ["price", "Lowest price"], ["name", "Name"]];
