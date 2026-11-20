@@ -68,7 +68,7 @@ if [ ! -f "$DATA/ExternalTexts.json" ]; then
     cp "$HOTEL/hotel-files/gamedata/ExternalTexts.json" "$DATA/ExternalTexts.json"
 fi
 ln -sf "$DATA/ExternalTexts.json" "$HOTEL/hotel-files/gamedata/ExternalTexts.json"
-cp /etc/hotel/habboween-texts.json "$HOTEL/hotel-files/gamedata/habboween-texts.json"
+cp /etc/hotel/seasonal-texts.json "$HOTEL/hotel-files/gamedata/seasonal-texts.json"
 chown -R www-data:www-data "$DATA/badges" "$DATA/ads" "$DATA/ExternalTexts.json"
 if [ ! -f "$DATA/storage/app/public/website_news_images/default.png" ]; then
     cp "$CMS/public/assets/images/hotel.png" "$DATA/storage/app/public/website_news_images/default.png"
