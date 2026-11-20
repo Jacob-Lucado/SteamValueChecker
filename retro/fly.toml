@@ -3,6 +3,9 @@
 app = 'steamvaluechecker-retro'
 primary_region = 'iad'
 
+# The camera starts a headless Chromium, and with the game server and database the 2 GB machine runs close to full.
+swap_size_mb = 1024
+
 [build]
   dockerfile = 'Dockerfile'
 
