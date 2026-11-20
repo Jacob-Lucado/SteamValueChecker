@@ -38,7 +38,7 @@
     }) });
 
     // ----- the list: filter toolbar and cards, laid out like the For you page -----
-    const W = { sort: "sale", sale: false, prio: false, hideOwned: false, q: "", page: 0 };
+    const W = { sort: "sale", sale: false, prio: false, hideOwned: false, coop: false, multi: false, genre: "", q: "", page: 0 };
     const PER = 24; let data = null; const picked = new Set();
     // Saved views live in this browser only: a name and the sort and filter chips. Storage can be blocked, so every read and write is guarded.
     const VIEWS_KEY = "svc.wishviews";
@@ -60,7 +60,7 @@
     function draw() {
       const cur = data.currency, rows = data.rows;
       const q = W.q.trim().toLowerCase();
-      let list = rows.filter(r => (!W.sale || r.discount > 0) && (!W.prio || r.priority) && (!W.hideOwned || !r.owned) && (!q || r.title.toLowerCase().includes(q)));
+      let list = rows.filter(r => (!W.sale || r.discount > 0) && (!W.prio || r.priority) && (!W.hideOwned || !r.owned) && (!W.coop || r.coop) && (!W.multi || r.multi) && (!W.genre || (r.genres || []).includes(W.genre)) && (!q || r.title.toLowerCase().includes(q)));
       if (sorters[W.sort]) list = [...list].sort(sorters[W.sort]);
       const pages = Math.max(1, Math.ceil(list.length / PER));
       W.page = Math.min(W.page, pages - 1);
@@ -72,18 +72,23 @@
       const views = readViews();
       const viewSel = select([["", views.length ? "Saved views" : "No saved views"], ...views.map((v, i) => [String(i), v.name])], "");
       viewSel.setAttribute("aria-label", "Saved views");
-      viewSel.addEventListener("change", () => { const v = views[Number(viewSel.value)]; if (!v) return; Object.assign(W, { sort: sorters[v.sort] !== undefined ? v.sort : "sale", sale: Boolean(v.sale), prio: Boolean(v.prio), hideOwned: Boolean(v.hideOwned), q: String(v.q ?? ""), page: 0 }); draw(); });
+      viewSel.addEventListener("change", () => { const v = views[Number(viewSel.value)]; if (!v) return; Object.assign(W, { sort: sorters[v.sort] !== undefined ? v.sort : "sale", sale: Boolean(v.sale), prio: Boolean(v.prio), hideOwned: Boolean(v.hideOwned), coop: Boolean(v.coop), multi: Boolean(v.multi), genre: String(v.genre ?? ""), q: String(v.q ?? ""), page: 0 }); draw(); });
       const viewName = h("input", { type: "text", placeholder: "Name this view", maxlength: "24", "aria-label": "Name for this view" });
       const saveView = h("button", { class: "btn gray small", type: "button", text: "Save view" });
       saveView.addEventListener("click", () => {
         const name = viewName.value.trim().slice(0, 24);
         if (!name) return toast("Give the view a name first.", "error");
-        const next = [...views.filter(v => v.name.toLowerCase() !== name.toLowerCase()), { name, sort: W.sort, sale: W.sale, prio: W.prio, hideOwned: W.hideOwned, q: W.q }];
+        const next = [...views.filter(v => v.name.toLowerCase() !== name.toLowerCase()), { name, sort: W.sort, sale: W.sale, prio: W.prio, hideOwned: W.hideOwned, coop: W.coop, multi: W.multi, genre: W.genre, q: W.q }];
         if (!writeViews(next)) return toast("This browser wouldn't keep it. Saved views need site storage to be allowed.", "error");
         toast(`Saved "${name}".`, "ok"); draw();
       });
       const delView = h("button", { class: "btn gray small", type: "button", text: "Delete view" });
       delView.addEventListener("click", () => { const v = views[Number(viewSel.value)]; if (!v) return toast("Pick a saved view to delete.", "error"); writeViews(views.filter(x => x !== v)); draw(); });
+      const genreCount = new Map();
+      for (const r of rows) for (const g of r.genres || []) genreCount.set(g, (genreCount.get(g) || 0) + 1);
+      const genreSel = select([["", "Any genre"], ...[...genreCount].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 30).map(([g, n]) => [g, `${g} (${n})`])], W.genre);
+      genreSel.setAttribute("aria-label", "Filter by genre");
+      genreSel.addEventListener("change", () => { W.genre = genreSel.value; W.page = 0; draw(); });
       const onSale = rows.filter(r => r.discount > 0 && !r.owned).length, ownedN = rows.filter(r => r.owned).length;
 
       const allRule = h("div", { class: "rule inline" }, ...ruleControl({ type: "any" }, async (type, value) => {
@@ -114,7 +119,7 @@
         ownedN ? h("div", { class: "notice" }, `${ownedN} game${ownedN === 1 ? " is" : "s are"} already in your library. `, cleanBtn) : null,
         h("div", { class: "panel fy-filters" },
           h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Sort" }), sort, search),
-          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Show" }), chip("On sale now", W.sale, set("sale", !W.sale)), chip("Priority", W.prio, set("prio", !W.prio)), chip("Hide owned", W.hideOwned, set("hideOwned", !W.hideOwned))),
+          h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Show" }), chip("On sale now", W.sale, set("sale", !W.sale)), chip("Priority", W.prio, set("prio", !W.prio)), chip("Hide owned", W.hideOwned, set("hideOwned", !W.hideOwned)), chip("Co-op", W.coop, set("coop", !W.coop)), chip("Multiplayer", W.multi, set("multi", !W.multi)), genreSel),
           h("div", { class: "fy-row" }, h("span", { class: "fy-lab", text: "Views" }), viewSel, viewName, saveView, views.length ? delView : null)),
         h("p", { class: "muted small", text: `${list.length} of ${rows.length} game${rows.length === 1 ? "" : "s"} · ${onSale} on sale right now` }),
         list.length ? h("div", { class: "fy-grid wl-grid" }, ...list.slice(W.page * PER, (W.page + 1) * PER).map(r => wishCard(r, cur, loadList, (id, on) => { if (on) picked.add(id); else picked.delete(id); count.textContent = picked.size + " selected"; }, picked.has(r.itad_id)))) : h("div", { class: "empty", text: "No games match those filters." }),

@@ -312,3 +312,34 @@ test("the Alerts page lets you switch off extra lines on price cards, and it sti
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Wishlist page filters by co-op and genre", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        o.db.addItems("u1", [{ itad_id: "a", title: "Alpha Duo" }, { itad_id: "b", title: "Beta Solo" }]);
+        o.db.setAppId("u1", "a", 111); o.db.setAppId("u1", "b", 222);
+        o.db.saveAppTags(111, ["Action"], ["Online Co-op"]); o.db.saveAppTags(222, ["RPG"], ["Single-player"]);
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/wishlist`, { waitUntil: "load" });
+        await page.getByText("Alpha Duo").first().waitFor({ timeout: 20_000 });
+        assert.equal(await page.getByText("Beta Solo").count() > 0, true);
+        await page.getByRole("button", { name: "Co-op" }).evaluate(el => el.click());
+        await page.waitForTimeout(300);
+        assert.equal(await page.getByText("Beta Solo").count(), 0, "the solo game drops out of the co-op filter");
+        assert.equal(await page.getByText("Alpha Duo").count() > 0, true);
+        await page.getByRole("button", { name: "Co-op" }).evaluate(el => el.click());
+        await page.getByLabel("Filter by genre").selectOption("RPG");
+        await page.waitForTimeout(300);
+        assert.equal(await page.getByText("Alpha Duo").count(), 0);
+        assert.equal(await page.getByText("Beta Solo").count() > 0, true);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});

@@ -30,11 +30,16 @@ export async function viewRows(db, itad, user) {
     if (!items.length) return { rows: [], currency: "USD" };
     const prices = await itad.getPrices(items.map(i => i.itad_id), user.region);
     const owned = new Set(db.listLibrary(user.discord_id).map(x => x.itad_id));
+    // Steam's own genres and categories (shared, already stored for the wishlist) so the page can filter by co-op and genre.
+    let tags = new Map();
+    try { tags = db.getAppTags?.(items.map(i => i.appid).filter(Number.isInteger)) ?? new Map(); } catch { /* the filters just stay empty */ }
     const rows = items.map(it => {
         const s = summarize(prices.get(it.itad_id), { majorOnly: user.stores === "major" });
+        const tg = it.appid ? tags.get(it.appid) : null, cats = (tg?.cats ?? []).map(c => c.toLowerCase());
         const now = current(s);
         return {
             owned: owned.has(it.itad_id), priority: Boolean(it.priority),
+            coop: cats.some(c => /co-op/.test(c)), multi: cats.some(c => /multi-player|pvp|co-op|mmo/.test(c)), genres: (tg?.genres ?? []).filter(g => !/^early access$/i.test(g)).slice(0, 6),
             itad_id: it.itad_id, appid: it.appid ?? null, title: it.title, source: it.source,
             best: s.best, regular: now.regular, atl: now.atl, discount: now.discount, currency: s.currency,
             alert: describeTrigger(it), trigger_type: it.trigger_type, trigger_value: it.trigger_value,

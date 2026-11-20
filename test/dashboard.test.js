@@ -270,6 +270,14 @@ test("wishlist: add, view with sale info, change rules, remove", async () => {
     assert.equal(row.discount, 0.5);
     assert.equal(row.best.price, 10);
     assert.equal(row.trigger_type, "percent");
+    // Steam tags saved for the game show up as co-op / genre filters on the wishlist page.
+    assert.deepEqual([row.coop, row.multi, row.genres], [false, false, []]);
+    {
+        t.db.setAppId("u1", row.itad_id, 4242);
+        t.db.saveAppTags(4242, ["Action", "Early Access"], ["Single-player", "Online Co-op"]);
+        const tagged = (await t.request("/api/wishlist")).data.rows[0];
+        assert.deepEqual([tagged.coop, tagged.multi, tagged.genres], [true, true, ["Action"]]);
+    }
 
     const one = await t.request("/api/wishlist/alert", { method: "POST", body: { itad_id: row.itad_id, type: "price", value: 12 } });
     assert.equal(one.data.label, "at or under 12");
