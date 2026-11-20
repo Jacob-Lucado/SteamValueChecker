@@ -58,7 +58,7 @@
       return { box, save: () => collect() };
     }
     const codeRows = codeAlertRows();
-    const FACTS = [["reviews", "Steam review score, and a warning when recent reviews have dropped"], ["critic", "Critic score"], ["time", "Time to finish and what it costs per hour"], ["players", "Players on Steam right now"], ["early", "Early Access warning"], ["modes", "Co-op and multiplayer (who you can play it with)"], ["controller", "Controller support"], ["vr", "VR support"], ["alertvr", "Send me sale alerts for VR-only games"], ["alertearly", "Send me sale alerts for Early Access games"]];
+    const FACTS = [["reviews", "Steam review score, and a warning when recent reviews have dropped"], ["critic", "Critic score"], ["time", "Time to finish and what it costs per hour"], ["players", "Players on Steam right now"], ["early", "Early Access warning"], ["modes", "Co-op and multiplayer (who you can play it with)"], ["lang", "Warn me when a game has no text in my language (set with /language)"], ["controller", "Controller support"], ["vr", "VR support"], ["alertvr", "Send me sale alerts for VR-only games"], ["alertearly", "Send me sale alerts for Early Access games"]];
     const hiddenNow = new Set(state.me.settings.hide_facts || []);
     const factBoxes = FACTS.map(([key]) => { const cb = h("input", { type: "checkbox", checked: !hiddenNow.has(key) }); cb.dataset.key = key; return cb; });
     const factsPanel = () => h("div", { class: "panel" }, h("h3", { text: "Extra lines on price cards" }),

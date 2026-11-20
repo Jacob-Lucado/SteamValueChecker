@@ -3,7 +3,7 @@
 // until the bot starts and calls configureFacts() it answers null, and a failed lookup just leaves a line off.
 import { playersLine } from "./players.js";
 import { timeLine, criticLine, perHour } from "./igdb.js";
-import { earlyAccessLine, controllerLine, vrLine, modesLine } from "./storemeta.js";
+import { earlyAccessLine, controllerLine, vrLine, modesLine, languageNote } from "./storemeta.js";
 
 let sources = null;
 export const configureFacts = s => { sources = s; };
@@ -16,7 +16,7 @@ export async function gameFacts(appid) {
         sources.igdb?.facts(appid).catch(() => null) ?? null,
         sources.store?.meta(appid).catch(() => null) ?? null
     ]);
-    if (players == null && !igdb && !store?.earlyAccess && !store?.controller && !store?.vr && !modesLine(store)) return null;
+    if (players == null && !igdb && !store?.earlyAccess && !store?.controller && !store?.vr && !modesLine(store) && !store?.langs?.length) return null;
     return { players: players ?? null, hours: igdb?.hours ?? null, critic: igdb?.critic ?? null, store: store ?? null };
 }
 
@@ -31,14 +31,17 @@ export function factLines(facts, { price = null, money = null } = {}) {
         playersLine(facts.players),
         earlyAccessLine(facts.store),
         modesLine(facts.store),
+        facts.store?.langNote ?? null,
         controllerLine(facts.store),
         vrLine(facts.store)
     ].filter(Boolean);
 }
 
 /** The same facts with the lines a person switched off taken out. `hide` is a list of keys from FACT_OPTIONS. */
-export function withoutHidden(facts, hide = []) {
-    if (!facts || !hide.length) return facts;
+export function withoutHidden(facts, hide = [], lang = "en") {
+    if (!facts) return facts;
+    if (!hide.includes("lang") && facts.store?.langs) facts = { ...facts, store: { ...facts.store, langNote: languageNote(facts.store, lang) } };
+    if (!hide.length) return facts;
     const h = new Set(hide), f = { ...facts };
     if (h.has("players")) f.players = null;
     if (h.has("critic")) f.critic = null;

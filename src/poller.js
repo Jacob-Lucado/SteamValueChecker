@@ -109,7 +109,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 h.proton = await protonTier(h.item.appid).catch(() => null);
                 const hide = hiddenFacts(user);
                 h.reviews = hide.includes("reviews") ? null : await steamReviews(h.item.appid).catch(() => null);
-                h.facts = withoutHidden(await gameFacts(h.item.appid), hide);
+                h.facts = withoutHidden(await gameFacts(h.item.appid), hide, user.lang);
             }));
             const payload = alertPayload(part, { trigger: describeTrigger, verdict: dealVerdict, lang: user.lang, pager: db, color: alertColor(db, userId, now()) });
             const res = await notifier.deliver(user, payload, "alert");

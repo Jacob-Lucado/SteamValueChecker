@@ -1,5 +1,9 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.66", date: "2026-11-19", title: "Language check on price cards", items: [
+        "**Missing-language warning:** if a game has no text in the language you picked with `/language`, its sale alerts and check cards now say so and list what it does have. Nothing shows when it's covered.",
+        "Turn it off with *Missing-language warning* on the Alerts page or in `/me wishlist cards`.",
+    ] },
     { version: "2026.11.65", date: "2026-11-17", title: "Who can you play it with?", items: [
         "**Co-op and multiplayer line:** price alerts, check cards and game pages now say if a game has online or local co-op, PvP, or Remote Play Together, so you know before you buy whether it works for your group.",
         "It has its own switch: untick *Co-op and multiplayer* on the Alerts page, or use `/me wishlist cards`.",

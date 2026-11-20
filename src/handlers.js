@@ -211,7 +211,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             try { subs = (await itad.getSubs?.([found.item.itad_id], user.region))?.get(found.item.itad_id) ?? []; } catch { /* the check works without it */ }
             const hide = hiddenFacts(user);
             const reviews = hide.includes("reviews") ? null : await steamReviews(found.item.appid).catch(() => null);
-            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs, reviews, withoutHidden(await gameFacts(found.item.appid), hide));
+            const embed = checkEmbed(found.item.title, now, dealVerdict(now), advice, subs, reviews, withoutHidden(await gameFacts(found.item.appid), hide, user.lang));
             let chart = null;
             try { chart = history ? renderHistoryChart({ title: found.item.title, points: history, currency: now.currency, now: now.price }) : null; } catch { /* the card is fine without the picture */ }
             if (chart) embed.image = { url: "attachment://price-history.png" };

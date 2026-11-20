@@ -63,3 +63,18 @@ test("co-op and multiplayer modes read from the store categories", async () => {
     assert.equal(modesLine(readTags({ genres: [], cats: ["Multi-player"] })), "👥 Multiplayer");
     assert.equal(modesLine(readTags({ genres: [], cats: [] })), null);
 });
+
+test("language warning only shows when the game has no text in the person's language", async () => {
+    const { languageNote } = await import("../src/storemeta.js");
+    const { withoutHidden, factLines } = await import("../src/gamefacts.js");
+    const m = readTags({ genres: [], cats: [], langs: ["english", "french", "german"] });
+    assert.deepEqual(m.langs, ["english", "french", "german"]);
+    assert.equal(languageNote(m, "fr"), null);
+    assert.equal(languageNote(m, "en"), null);
+    assert.match(languageNote(m, "es"), /No Spanish text.*English, French, German/);
+    assert.equal(languageNote({ langs: [] }, "es"), null);
+    assert.equal(languageNote({ langs: ["simplified chinese"] }, "zh"), null);
+    const facts = { players: null, hours: null, critic: null, store: m };
+    assert.ok(factLines(withoutHidden(facts, [], "es")).some(l => l.includes("No Spanish")));
+    assert.ok(!factLines(withoutHidden(facts, ["lang"], "es")).some(l => l.includes("No Spanish")));
+});

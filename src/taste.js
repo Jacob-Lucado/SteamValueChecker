@@ -5,12 +5,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** Genres and categories for one app, or null when Steam has nothing (removed or region-locked pages). */
 export async function fetchAppTags(appid, fetchImpl = globalThis.fetch) {
-    const res = await fetchImpl(`https://store.steampowered.com/api/appdetails?appids=${encodeURIComponent(appid)}&filters=genres,categories&l=english`, { headers: { "Accept-Language": "en" } });
+    const res = await fetchImpl(`https://store.steampowered.com/api/appdetails?appids=${encodeURIComponent(appid)}&filters=genres,categories,supported_languages&l=english`, { headers: { "Accept-Language": "en" } });
     if (!res.ok) throw new Error(`Steam answered ${res.status}`);
     const data = (await res.json())?.[String(appid)];
     if (!data?.success) return null;
     const names = list => (Array.isArray(list) ? list : []).map(x => String(x?.description ?? "").trim()).filter(Boolean).slice(0, 24);
-    return { genres: names(data.data?.genres), cats: names(data.data?.categories) };
+    // "English<strong>*</strong>, French, Spanish - Spain" -> ["english", "french", "spanish"]
+    const langs = [...new Set(String(data.data?.supported_languages ?? "").replace(/<br>.*$/is, "").replace(/<[^>]*>/g, "").replace(/\*/g, "").split(",").map(x => x.split(" - ")[0].trim().toLowerCase()).filter(Boolean))].slice(0, 40);
+    return { genres: names(data.data?.genres), cats: names(data.data?.categories), langs };
 }
 
 /** Fetches tags for apps not yet known, a few at a time and politely. Stops at the first error (rate limits). Returns how many were stored. */
