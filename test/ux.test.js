@@ -236,3 +236,17 @@ test("a failed delivery carries what Discord said, so an outage alert can name t
     assert.equal(describeError(bad), "50035 Invalid Form Body");
     assert.equal(describeError(null), "unknown");
 });
+
+test("a channel that is gone counts as the member's setup, not an outage, and is retried only daily", async () => {
+    const { isPermanent } = await import("../src/notify.js");
+    assert.equal(isPermanent({ code: 10003 }), true);
+    assert.equal(isPermanent({ code: 50013 }), true);
+    assert.equal(isPermanent({ code: 500 }), false);
+    const db = openDb(":memory:");
+    db.ensureUser("c1", "g1"); db.updateUser("c1", { delivery: "channel" });
+    db.setGuildChannel("g1", "gone", "owner");
+    const n = createNotifier({ db, discord: { sendDm: async () => {}, sendChannel: async () => { throw Object.assign(new Error("Unknown Channel"), { code: 10003 }); } } });
+    const r = await n.deliver(db.getUser("c1"), { embeds: [embed] }, "alert");
+    assert.deepEqual([r.ok, r.reason, r.permanent], [false, "channel_failed", true]);
+    assert.equal(db.getUser("c1").dm_failures, 1);
+});

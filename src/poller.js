@@ -98,7 +98,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
             if (!sendable.length) continue;
         }
         // Someone whose DMs keep failing and who has no alert channel gets one try a day instead of an hourly one that only burns price lookups.
-        if (user.delivery !== "channel" && (user.dm_failures ?? 0) >= 5 && !db.getGuild(user.guild_id) && Math.floor(now() / 3600_000) % 24 !== 0) { stats.unreachable += sendable.length; stats.failed += sendable.length; continue; }
+        if ((user.dm_failures ?? 0) >= 5 && (user.delivery === "channel" || !db.getGuild(user.guild_id)) && Math.floor(now() / 3600_000) % 24 !== 0) { stats.unreachable += sendable.length; stats.failed += sendable.length; continue; }
         for (const part of chunked(sendable, MAX_CARDS)) {
             const profile = part.some(h => h.item.appid) ? (() => { try { return tasteProfile(db, userId); } catch { return null; } })() : null;
             // History is fetched only for alerts that are really being sent, and a failure just leaves the note off.
@@ -123,8 +123,8 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
             } else {
                 stats.failed += part.length;
                 // A member with DMs closed and no alert channel is on them, not a bot fault, so it isn't counted toward an outage alert.
-                if (res.reason === "dm_failed_no_channel" || res.reason === "restricted") stats.unreachable += part.length;
-                if (res.detail && !(res.reason === "dm_failed_no_channel" || res.reason === "restricted")) stats.lastFailure = `${res.reason}, ${res.detail}`;
+                if (res.reason === "dm_failed_no_channel" || res.reason === "restricted" || res.permanent) stats.unreachable += part.length;
+                if (res.detail && !(res.reason === "dm_failed_no_channel" || res.reason === "restricted" || res.permanent)) stats.lastFailure = `${res.reason}, ${res.detail}`;
                 log(`delivery failed (${res.reason}${res.detail ? `: ${res.detail}` : ""})`);
             }
         }

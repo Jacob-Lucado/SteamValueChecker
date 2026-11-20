@@ -13,6 +13,9 @@ const safeUrl = u => { try { const x = new URL(u); return /(^|\.)steamvaluecheck
 /** What Discord actually said, short enough for a log line or an owner DM: "50035 Invalid Form Body". */
 export const describeError = e => [e?.code ?? e?.status ?? null, String(e?.rawError?.message ?? e?.message ?? e ?? "unknown").replace(/\s+/g, " ").slice(0, 100)].filter(x => x !== null).join(" ");
 
+/** Answers that won't change by retrying: the channel is gone, the bot lost access, or the person can't be messaged. These are a setup problem on their side, not an outage. */
+export const isPermanent = e => [10003, 10004, 10013, 50001, 50007, 50013, 50278].includes(Number(e?.code));
+
 export function createNotifier({ db, discord, push = null }) {
     async function viaChannel(user, payload) {
         const guild = db.getGuild(user.guild_id);
@@ -23,9 +26,12 @@ export function createNotifier({ db, discord, push = null }) {
                 content: `<@${user.discord_id}> ${payload.content ?? ""}`.trim(),
                 allowedMentions: { users: [user.discord_id], parse: [] }
             });
+            if (user.delivery === "channel" && user.dm_failures) db.updateUser(user.discord_id, { dm_failures: 0 });
             return { ok: true, via: "channel" };
         } catch (e) {
-            return { ok: false, via: null, reason: "channel_failed", detail: describeError(e) };
+            // Someone who picked channel delivery has no DM to fall back on, so the same counter that backs off dead DMs backs off a dead channel.
+            if (user.delivery === "channel") db.updateUser(user.discord_id, { dm_failures: (user.dm_failures ?? 0) + 1 });
+            return { ok: false, via: null, reason: "channel_failed", detail: describeError(e), permanent: isPermanent(e) };
         }
     }
 
@@ -67,7 +73,7 @@ export function createNotifier({ db, discord, push = null }) {
         } catch (e) {
             db.updateUser(user.discord_id, { dm_failures: (user.dm_failures ?? 0) + 1 });
             const r = await viaChannel(user, payload);
-            return r.ok ? r : { ok: false, via: null, reason: r.reason === "no_channel" ? "dm_failed_no_channel" : r.reason, detail: r.detail ?? `DM: ${describeError(e)}` };
+            return r.ok ? r : { ok: false, via: null, reason: r.reason === "no_channel" ? "dm_failed_no_channel" : r.reason, detail: r.detail ?? `DM: ${describeError(e)}`, permanent: Boolean(r.permanent) };
         }
     }
 
