@@ -16,7 +16,7 @@ import { refreshRequest, removeRequestPosts } from "../requestsync.js";
 import * as xposterText from "../xposter.js";
 
 export function createAdminExtraRoutes(ctx) {
-    const { ai, authorCard, bundleFeed, codes, config, dayKey, db, dm, guildList, health, inviteReport, isOwner, itad, logs, music, musicCall, now, ops, origin, rest, rt, session, square, storage, supporters, topgg, weekly, xposter } = ctx;
+    const { logFeed, ai, authorCard, bundleFeed, codes, config, dayKey, db, dm, guildList, health, inviteReport, isOwner, itad, logs, music, musicCall, now, ops, origin, rest, rt, session, square, storage, supporters, topgg, weekly, xposter } = ctx;
     return {
         "POST /api/admin/bundles/poll": async (req) => {
             const s = session(req);
@@ -122,6 +122,20 @@ export function createAdminExtraRoutes(ctx) {
                 return { ...p, title: row?.title ?? "(removed)", store: p.path === "b" ? row?.store ?? "" : row?.shop ?? "", kind: p.path === "b" ? "Bundle" : row?.kind === "free" ? "Free game" : "Deal", url: `${origin}/${p.path}/${p.id}` };
             });
             return { invites, today: days.find(d => d.day === today) ?? { day: today, visits: 0, clicks: 0, previews: 0 }, week: { visits: sum(week, "visits"), clicks: sum(week, "clicks"), previews: sum(week, "previews") }, total: { visits: sum(pages, "visits"), clicks: sum(pages, "clicks") }, days: last, top };
+        },
+        "GET /api/admin/logfeed": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!logFeed) throw new HttpError(503, "The log feed isn't available on this bot.");
+            return logFeed.status();
+        },
+        "POST /api/admin/logfeed": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!logFeed) throw new HttpError(503, "The log feed isn't available on this bot.");
+            try {
+                const out = logFeed.setSettings({ mode: body.mode, channel: body.channel });
+                if (body.test) await logFeed.test();
+                return out;
+            } catch (e) { throw new HttpError(e.user ? 400 : 502, e.user ? e.message : "Discord wouldn't take the test message. Check the channel ID and that the bot can post there."); }
         },
         "GET /api/admin/xposter": async (req) => {
             const s = session(req);

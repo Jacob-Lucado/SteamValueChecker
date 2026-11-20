@@ -127,6 +127,7 @@ import { createCodeHandlers } from "./codeshandlers.js";
 import { runCodes } from "./codes.js";
 import { runBundleFeed } from "./bundlefeed.js";
 import { createXPoster } from "./xposter.js";
+import { createLogFeed } from "./logfeed.js";
 import { createIndie } from "./indie.js";
 import { configureDeals } from "./deallinks.js";
 import { createWeekly } from "./weeklydeals.js";
@@ -259,6 +260,12 @@ const discord = {
         await channel.send(payload);
     }
 };
+const logFeed = createLogFeed({ db, send: async ({ channelId, content }) => {
+    if (channelId) await discord.sendChannel(channelId, { content, allowedMentions: { parse: [] } });
+    else if (cfg.ownerId) await discord.sendDm(cfg.ownerId, { content });
+    else throw new Error("No owner to send logs to");
+} });
+logs.subscribe(logFeed.accept);
 const push = createPush({ db, contact: cfg.dashboard?.publicUrl ? `mailto:admin@${new URL(cfg.dashboard.publicUrl).hostname}` : undefined });
 push.publicKey(); // makes the keys once, before anything shares them
 const notifier = createNotifier({ db, discord, push });
@@ -1154,7 +1161,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ push, referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ logFeed, push, referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

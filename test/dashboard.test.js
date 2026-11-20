@@ -4190,3 +4190,23 @@ test("giveaway creates have their own tight limit and the limiter map stays boun
     assert.equal(l.hit("k29999").ok, false); // the newest keys survive the cap
     await t.close();
 });
+
+test("admin log feed: owner only, settings are checked, and the test message is sent", async () => {
+    const { createLogFeed } = await import("../src/logfeed.js");
+    const sent = [];
+    const holder = {};
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ logFeed: holder.feed ??= createLogFeed({ db: { getMeta: k => holder.db.getMeta(k), setMeta: (k, v) => holder.db.setMeta(k, v) }, send: async m => { sent.push(m); } }) }) });
+    holder.db = o.db;
+    try {
+        const g = await o.request("/api/admin/logfeed");
+        assert.equal(g.status, 200);
+        assert.equal(g.data.mode, "problems");
+        const bad = await o.request("/api/admin/logfeed", { method: "POST", body: { channel: "nope" } });
+        assert.equal(bad.status, 400);
+        const ok = await o.request("/api/admin/logfeed", { method: "POST", body: { mode: "all", channel: "123456789012345678", test: true } });
+        assert.equal(ok.status, 200);
+        assert.deepEqual([ok.data.mode, ok.data.channel], ["all", "123456789012345678"]);
+        assert.equal(sent.length, 1);
+        assert.match(sent[0].content, /Log feed is working/);
+    } finally { await o.close(); }
+});

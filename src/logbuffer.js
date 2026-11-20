@@ -29,6 +29,7 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
         } catch { /* no file yet */ }
     }
     let fileCount = lines.length;
+    const listeners = new Set();
 
     function add(level, args) {
         let text = mask(args.map(a => (typeof a === "string" ? a : a instanceof Error ? (a.stack ?? a.message) : safeJson(a))).join(" ")).slice(0, 4000);
@@ -40,6 +41,7 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
         lines.push(entry);
         if (lines.length > max + maxFile) lines = lines.slice(-max - maxFile);
         if (file && level !== "info") persist(entry);
+        for (const fn of listeners) { try { fn(entry); } catch { /* a listener must never break logging */ } }
         return entry;
     }
 
@@ -83,7 +85,10 @@ export function createLogBuffer({ file = null, secrets = [], max = 400, maxFile 
         return n;
     }
 
-    return { add, capture, recent, clear };
+    /** Calls `fn` with every new line (already masked). Returns a function that stops it. */
+    function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+
+    return { add, capture, recent, clear, subscribe };
 }
 
 function safeJson(v) { try { return typeof v === "object" ? JSON.stringify(v) : String(v); } catch { return String(v); } }

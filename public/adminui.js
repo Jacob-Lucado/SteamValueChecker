@@ -1318,6 +1318,18 @@
         const st = await api("/api/admin/storage").catch(() => null);
         const [eg, se, cw, pb] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null)]);
         const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
+        const lf = await api("/api/admin/logfeed").catch(() => null);
+        const lfPanel = lf && (() => {
+          const modeSel = h("select", { "aria-label": "What to send" }, Object.entries(lf.modes).map(([k, v]) => h("option", { value: k, text: v, selected: k === lf.mode })));
+          const chan = h("input", { type: "text", inputmode: "numeric", placeholder: "Channel ID (blank = DM me)", value: lf.channel || "", "aria-label": "Log channel ID", style: "min-width:16rem" });
+          const save = (test) => async () => { try { await api("/api/admin/logfeed", { mode: modeSel.value, channel: chan.value.trim(), test }); toast(test ? "Saved. Check Discord for the test message." : "Saved.", "ok"); adminRoute(); } catch (e) { toast(e.message); } };
+          const b1 = h("button", { class: "btn small", type: "button", text: "Save" }), b2 = h("button", { class: "btn gray small", type: "button", text: "Save and send a test" });
+          b1.addEventListener("click", () => busy(b1, save(false))); b2.addEventListener("click", () => busy(b2, save(true)));
+          return h("div", { class: "panel" }, h("h3", { text: "Logs in Discord" }),
+            h("p", { class: "muted", text: "Sends the bot's problems to a Discord channel, or to your DMs if you leave the channel blank. Repeats are folded into one line with a count, and at most five messages go out a minute. \"Problems only\" is errors, warnings and anything that failed; \"Everything\" is the whole log." }),
+            h("div", { class: "row" }, modeSel, chan, b1, b2),
+            h("p", { class: "muted small", text: lf.lastError ? `Last send failed: ${lf.lastError}` : lf.sent ? `${lf.sent} messages sent so far.` : "Nothing sent yet." }));
+        })();
         const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
           eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
             h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
@@ -1349,6 +1361,7 @@
           h("div", { class: "grid four" }, tile("Started", new Date(sys.deploy.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), sys.deploy.release ? `Release ${sys.deploy.release}${sys.deploy.machine ? " · machine " + sys.deploy.machine : ""}${sys.deploy.region ? " · " + sys.deploy.region : ""}` : "Not running on Fly"), tile("Signed in now", sys.sessions.signedIn, `${sys.sessions.steamOnly} Steam-only`), tile("Node", p.node, p.platform), tile("Admin address", sys.admin.host || "path /admin", sys.admin.sharedCookie ? "Shared sign-in on" : "Sign-in on this address only")),
           storagePanel,
           pbPanel,
+          lfPanel,
           errPanel,
           cwPanel,
           srvPanel,
