@@ -116,6 +116,7 @@ RUN echo "CMS $CMS_SHA" && git clone --depth 1 --branch "$CMS_REF" "$CMS_REPO" "
     && cd "$HOTEL/cms" \
     && composer install --no-dev --optimize-autoloader --no-progress \
     && npm ci --no-audit --no-fund \
+    && npx vite build --config resources/themes/atom/vite.config.js \
     && npm run build:lucadoos \
     && rm -rf node_modules \
     && rm -rf storage && ln -s /data/storage storage \
