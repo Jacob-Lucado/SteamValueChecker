@@ -148,7 +148,7 @@ export function createMoreTools({ db, itad, news = null, fx = null, nameOf = () 
             const u = userOf(userId), p = prefsView(u);
             await dashCard(dashUrl, ctx, "alerts", { title: "Your alert settings", description: "Change any of them in your dashboard.", fields: [{ name: "Alerts", value: u.paused ? "Paused" : "On" }, { name: "Region", value: u.region }, { name: "Watching", value: `${db.countItems(userId)} games` }] });
             return { alerts: u.paused ? "paused" : "on", delivery: u.delivery, region: u.region, stores: u.stores, gamesWatched: db.countItems(userId), quietHours: describeQuiet(u), weeklyDigest: describeDigest(u),
-                minDiscountPct: p.min_discount, newsAlerts: ["off", "patch notes only", "every announcement"][p.news] ?? "off", freeGameAlerts: p.free, bundleAlerts: p.bundles, achievementAlerts: p.achv, language: p.lang };
+                minDiscountPct: p.min_discount, newsAlerts: ["off", "patch notes only", "every announcement"][p.news] ?? "off", freeGameAlerts: p.free, bundleAlerts: p.bundles, achievementAlerts: p.achv, smartAlerts: p.smart, language: p.lang };
         },
 
         async update_settings(input, { userId }) {

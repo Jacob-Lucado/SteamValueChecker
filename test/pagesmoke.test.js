@@ -287,6 +287,36 @@ test("the giveaway form takes a region list and a video file, and saves both", {
     } finally { await browser.close(); await o.close(); }
 });
 
+test("the Alerts page's Smart alerts switch saves, survives a reload and sits beside the other switches", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/alerts`, { waitUntil: "load" });
+        const smart = page.getByRole("checkbox", { name: /^Smart alerts: a wishlist game/ });
+        await smart.waitFor({ timeout: 20_000 });
+        const nudge = page.locator("label.check", { hasText: "monthly pick from my backlog" }).locator("input");
+        assert.equal(await smart.isChecked(), false, "off by default");
+        await smart.evaluate(el => el.click());
+        await page.getByRole("button", { name: "Save settings" }).evaluate(el => el.click());
+        for (let n = 0; n < 40 && !o.db.getUser("u1")?.smart; n++) await page.waitForTimeout(250);
+        assert.equal(o.db.getUser("u1").smart, 1);
+        assert.equal(o.db.getUser("u1").nudge, 0, "the other switches are untouched");
+        await page.reload({ waitUntil: "load" });
+        await page.getByRole("checkbox", { name: /^Smart alerts: a wishlist game/ }).waitFor({ timeout: 20_000 });
+        assert.equal(await page.getByRole("checkbox", { name: /^Smart alerts: a wishlist game/ }).isChecked(), true, "still on after a reload");
+        assert.equal(await nudge.count() > 0, true);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
+
 test("the Alerts page lets you switch off extra lines on price cards, and it sticks", { timeout: 120_000 }, async t => {
     const browser = await launchBrowser();
     if (!browser) return t.skip("no Chromium here");
