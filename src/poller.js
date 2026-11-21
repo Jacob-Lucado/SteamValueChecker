@@ -405,7 +405,7 @@ export async function runGuildFeeds({ db, itad, notifier, now = () => Date.now()
             for (const part of chunked(games, 4)) {
                 const payload = freeGamesPayload(shop, part, { pager: db });
                 const ok = payload ? await notifier.postGuild(guild.guild_id, payload, "free") : true;
-                if (!ok) { await failedGuildPost({ db, notifier, log, health, now }, guild.guild_id, "free game", "feed"); continue; }
+                if (!ok) { await failedGuildPost({ db, notifier, log, health, now }, guild.guild_id, "feed", "feed"); continue; }
                 guildPostOk(health, "feed", guild.guild_id);
                 for (const g of part) db.guildMarkSeen(guild.guild_id, `free:${g.id}`);
                 stats.posted += part.length;
