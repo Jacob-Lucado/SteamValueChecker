@@ -1092,3 +1092,21 @@ test("alert price-history button points at the public game page when one is conf
         assert.equal(row.components.find(c => c.label === "Price history").url, "https://example.com/game/620");
     } finally { setGamePageOrigin(null); }
 });
+
+test("a free feed post that fails names the server and reason, and a blocked channel is skipped for a day", async () => {
+    const { runGuildFeeds } = await import("../src/poller.js");
+    const t = rig({});
+    t.db.setGuildChannel("g1", "c1", "u1");
+    t.db.setFreeFeed("g1", true);
+    let tries = 0, clock = 5_000_000;
+    const notifier = { postGuild: async () => { tries++; return false; }, lastPostFailure: () => ({ detail: "50013 Missing Permissions", permanent: true }) };
+    const itad = { getGiveawayList: async () => [free("1", "Alpha", "Steam")] };
+    const logs = [];
+    const args = { db: t.db, itad, notifier, now: () => clock, log: m => logs.push(m) };
+    await runGuildFeeds(args);
+    assert.match(logs[0], /feed post failed in server g1: 50013 Missing Permissions \(will retry tomorrow\)/);
+    clock += 3_600_000; await runGuildFeeds(args);
+    assert.equal(tries, 1, "not retried an hour later");
+    clock += 24 * 3_600_000; await runGuildFeeds(args);
+    assert.equal(tries, 2, "retried the next day");
+});

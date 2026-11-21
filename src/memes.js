@@ -6,7 +6,7 @@ import { UserError } from "./errors.js";
 import { reportProblem } from "./guildproblems.js";
 
 // Only subreddits that are actually for memes. General ones (r/gaming, r/pcmasterrace, r/Steam) are mostly builds, screenshots and news.
-export const MEME_SUBS = ["memes", "dankmemes", "wholesomememes", "gamingmemes", "ProgrammerHumor", "me_irl"];
+export const MEME_SUBS = ["memes", "dankmemes", "wholesomememes", "gamememes", "ProgrammerHumor", "me_irl"];
 export const MEME_HOURS = [1, 2, 3, 6, 12, 24];
 const IMAGE_URL = /^https:\/\/(?:i\.redd\.it|i\.imgur\.com|preview\.redd\.it)\/[\w./-]+\.(?:png|jpe?g|gif|webp)$/i;
 const BLOCKED_WORDS = /\b(nsfw|porn|nude|sex|rape|gore|suicide|nazi|hitler|slur)\b/i;
@@ -17,9 +17,9 @@ const NOT_A_MEME = /\b(?:my (?:first|new|latest|setup|build|collection|dog|cat|a
 const sourceFetch = (fetchImpl, url) => fetchImpl(url, { signal: AbortSignal.timeout(10_000), headers: { "user-agent": "SteamValueChecker/1.0 (discord bot)" } });
 
 /** Picks a usable meme out of whatever the API returned, or null. `seen` is a Set of post links this server already got. */
-export function chooseMeme(list, seen = new Set(), rnd = Math.random) {
+export function chooseMeme(list, seen = new Set(), rnd = Math.random, minUps = MIN_UPS) {
     const ok = (Array.isArray(list) ? list : []).filter(m => m && !m.nsfw && !m.spoiler && IMAGE_URL.test(String(m.url ?? "")) && typeof m.postLink === "string"
-        && /^https:\/\/(?:redd\.it|www\.reddit\.com)\//.test(m.postLink) && !seen.has(m.postLink) && Number(m.ups) >= MIN_UPS && !BLOCKED_WORDS.test(String(m.title ?? "")) && !NOT_A_MEME.test(String(m.title ?? "").trim()) && String(m.title ?? "").length <= 140
+        && /^https:\/\/(?:redd\.it|www\.reddit\.com)\//.test(m.postLink) && !seen.has(m.postLink) && Number(m.ups) >= minUps && !BLOCKED_WORDS.test(String(m.title ?? "")) && !NOT_A_MEME.test(String(m.title ?? "").trim()) && String(m.title ?? "").length <= 140
         && (!m.subreddit || MEME_SUBS.some(x => x.toLowerCase() === String(m.subreddit).toLowerCase())));
     // favor the better half by upvotes so the feed stays funny, but still vary it
     const top = ok.sort((a, b) => Number(b.ups) - Number(a.ups)).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
@@ -36,16 +36,21 @@ export function memeEmbed(m) {
 export function createMemes({ fetchImpl = globalThis.fetch, rnd = Math.random } = {}) {
     /** One meme this server hasn't had yet. Tries a few subreddits before giving up. */
     async function pick(seen = new Set()) {
-        const subs = [...MEME_SUBS].sort(() => rnd() - 0.5).slice(0, 4);
+        const subs = [...MEME_SUBS].sort(() => rnd() - 0.5);
+        const lists = [];
         for (const sub of subs) {
             try {
                 const res = await sourceFetch(fetchImpl, `https://meme-api.com/gimme/${encodeURIComponent(sub)}/30`);
                 if (!res.ok) continue;
                 const data = await res.json();
-                const m = chooseMeme(data.memes ?? (data.url ? [data] : []), seen, rnd);
+                const list = data.memes ?? (data.url ? [data] : []);
+                lists.push(list);
+                const m = chooseMeme(list, seen, rnd);
                 if (m) return m;
             } catch { /* that subreddit didn't answer: try the next */ }
         }
+        // Everything good has been posted here already: settle for a smaller hit rather than skip the hour.
+        for (const list of lists) { const m = chooseMeme(list, seen, rnd, 150); if (m) return m; }
         return null;
     }
     return { pick };

@@ -369,11 +369,19 @@ export function schedule(fn, everyMs, { onError = () => {}, setIntervalImpl = se
 }
 
 
+/** A server whose alert channel is gone or blocked is skipped for a day after each permanent failure, so one broken channel isn't hit every cycle. */
+const feedBlocked = (db, guildId, now) => Number(db.getMeta?.(`feedblock:${guildId}`) ?? 0) > now();
+function failedGuildPost({ db, notifier, log, now = () => Date.now() }, guildId, what) {
+    const f = notifier.lastPostFailure?.();
+    log(`${what} post failed in server ${guildId}${f?.detail ? `: ${f.detail}` : ""}${f?.permanent ? " (will retry tomorrow)" : ""}`);
+    if (f?.permanent) db.setMeta?.(`feedblock:${guildId}`, String(now() + 24 * 3_600_000));
+}
+
 /**
  * Servers that turned on the free game feed get new free games posted in their alert channel, once each.
  * Games only (no DLC), so the channel is not flooded; members who want DLC use /games freegames.
  */
-export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
+export async function runGuildFeeds({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
     const stats = { guilds: 0, posted: 0 };
     const guilds = db.guildsWithFreeFeed();
     if (!guilds.length) return stats;
@@ -381,6 +389,7 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
     try { list = (await enrichFree(await itad.getGiveawayList())).filter(g => g.url && !isDlc(g)); }
     catch (err) { log(`feed lookup failed: ${err.code ?? err.name}`); return stats; }
     for (const guild of guilds) {
+        if (feedBlocked(db, guild.guild_id, now)) continue;
         for (const store of QUIET_START) {
             const open = list.filter(g => String(g.id).startsWith(store.prefix));
             if (open.length && !db.guildHasSeen(guild.guild_id, store.marker)) { for (const g of open) db.guildMarkSeen(guild.guild_id, `free:${g.id}`); db.guildMarkSeen(guild.guild_id, store.marker); }
@@ -394,7 +403,7 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
             for (const part of chunked(games, 4)) {
                 const payload = freeGamesPayload(shop, part, { pager: db });
                 const ok = payload ? await notifier.postGuild(guild.guild_id, payload, "free") : true;
-                if (!ok) { log(`feed post failed for a server`); continue; }
+                if (!ok) { failedGuildPost({ db, notifier, log, now }, guild.guild_id, "feed"); continue; }
                 for (const g of part) db.guildMarkSeen(guild.guild_id, `free:${g.id}`);
                 stats.posted += part.length;
             }
@@ -408,7 +417,7 @@ export async function runGuildFeeds({ db, itad, notifier, log = () => {} }) {
  * Servers that turned on hot deals get Steam discounts of at least their minimum percent posted in the alert channel,
  * each deal once. A server's first run posts the best few and marks the rest as seen, so turning it on never floods the channel.
  */
-export async function runHotDeals({ db, itad, notifier, log = () => {} }) {
+export async function runHotDeals({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
     const stats = { guilds: 0, posted: 0 };
     const guilds = db.guildsWithHot();
     if (!guilds.length) return stats;
@@ -417,11 +426,12 @@ export async function runHotDeals({ db, itad, notifier, log = () => {} }) {
     catch (err) { log(`hot deals lookup failed: ${err.code ?? err.name}`); return stats; }
     const keyOf = d => `hot:${d.id}:${d.since ?? d.price}`;
     for (const guild of guilds) {
+        if (feedBlocked(db, guild.guild_id, now)) continue;
         const fresh = all.filter(d => d.cut >= guild.hot_min && !db.guildHasSeen(guild.guild_id, keyOf(d)));
         if (!fresh.length) continue;
         const payload = hotDealsPayload(fresh);
         if (!payload) { for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d)); continue; }
-        if (!(await notifier.postGuild(guild.guild_id, payload, "deals"))) { log("hot deal post failed for a server"); continue; }
+        if (!(await notifier.postGuild(guild.guild_id, payload, "deals"))) { failedGuildPost({ db, notifier, log, now }, guild.guild_id, "hot deal"); continue; }
         for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d));
         stats.guilds++; stats.posted += Math.min(6, fresh.length);
     }

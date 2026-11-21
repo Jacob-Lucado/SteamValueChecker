@@ -430,7 +430,7 @@ client.once(Events.ClientReady, c => {
     sched(
         async () => {
             const s = await runCycle({ db, itad, notifier, voiceMap, log: m => console.log(`[alerts] ${m}`) });
-            console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed} failed, ${s.deferred} held for quiet hours`);
+            console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed - (s.unreachable ?? 0)} failed, ${s.unreachable ?? 0} to members who can't be reached, ${s.deferred} held for quiet hours`);
             beat.alerts = Date.now();
             await ops.cycleDone(s);
         },

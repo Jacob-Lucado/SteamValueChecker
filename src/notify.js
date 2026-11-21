@@ -88,7 +88,9 @@ export function createNotifier({ db, discord, push = null }) {
     }
 
     /** Posts to a server's alert channel without mentioning anyone. Returns true on success. */
+    let lastPostFailure = null;
     async function postGuild(guildId, payload, pingKind = null) {
+        lastPostFailure = null;
         const guild = db.getGuild(guildId);
         if (!guild) return false;
         // Feeds can ping the server's own opt-in role (Free game pings, Deal pings). Nobody else is ever mentioned.
@@ -97,7 +99,8 @@ export function createNotifier({ db, discord, push = null }) {
         try {
             await discord.sendChannel(guild.channel_id, out);
             return true;
-        } catch {
+        } catch (e) {
+            lastPostFailure = { detail: describeError(e), permanent: isPermanent(e) };
             return false;
         }
     }
@@ -108,5 +111,5 @@ export function createNotifier({ db, discord, push = null }) {
         try { await discord.sendChannel(channelId, out); return true; } catch { return false; }
     }
 
-    return { deliver, postGuild, postChannel };
+    return { deliver, postGuild, postChannel, lastPostFailure: () => lastPostFailure };
 }

@@ -1,5 +1,10 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.78", date: "2026-11-20", title: "Fewer skipped memes, clearer failures", items: [
+        "**Auto memes** no longer skip an hour when the best posts were already shared: it checks every source and falls back to a smaller hit. A dead source was replaced too.",
+        "**Server posts:** when a free game or deal post can't be sent, the log names the server and Discord's reason, and a server with a blocked or deleted channel is skipped for a day instead of failing every cycle.",
+        "**Alert summary:** the hourly line now separates real failures from members who can't be reached.",
+    ] },
     { version: "2026.11.77", date: "2026-11-20", title: "Meme posts explain themselves", items: [
         "**Auto memes:** when the bot can't post in a server's meme channel it now says why (deleted channel, or a permission override on the channel or its category) instead of one generic message. A channel that is gone or blocked is retried once a day, not every hour.",
     ] },

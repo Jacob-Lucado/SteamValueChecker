@@ -88,3 +88,12 @@ test("a blocked or deleted meme channel says why, and is retried once a day inst
     await tickMemes(args);
     assert.equal(logs.length, 2, "retried after a day");
 });
+
+test("when every popular meme was already posted, a smaller one is used instead of skipping", async () => {
+    const small = { ...good("small1"), ups: 200 };
+    const r = rig({ answers: () => [small] });
+    const m = await r.memes.pick(new Set());
+    assert.equal(m.postLink, small.postLink);
+    assert.equal(chooseMeme([small], new Set()), null, "the normal bar is still 500");
+    assert.equal(chooseMeme([small], new Set(), () => 0, 150).postLink, small.postLink);
+});
