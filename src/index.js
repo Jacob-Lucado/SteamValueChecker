@@ -1139,7 +1139,9 @@ async function onInteraction(i, again = false) {
             await i.followUp({ embeds: [quickStart(publicBase)], flags: MessageFlags.Ephemeral }).catch(() => {});
         }
     } catch (err) {
-        console.error(`[${i.commandName}] ${err.stack ?? `${err.name}: ${err.message}`}`);
+        // The reply, the message or the channel is gone (someone deleted it, or the bot was removed mid-command). Nothing to fix, so a short line instead of a stack trace.
+        if ([10003, 10008, 10062, 40060].includes(Number(err?.code))) console.warn(`[${i.commandName}] Discord says it's gone (${err.code} ${String(err.message).slice(0, 40)}) in server ${i.guildId ?? "DM"}`);
+        else console.error(`[${i.commandName}] in server ${i.guildId ?? "DM"}: ${err.stack ?? `${err.name}: ${err.message}`}`);
         // Never leave the person staring at "The application did not respond".
         const msg = { content: "Something went wrong on the bot's side. Please try again in a moment.", flags: MessageFlags.Ephemeral };
         try { if (i.deferred || i.replied) await i.followUp(msg); else await i.reply(msg); } catch { /* the interaction may already be gone */ }
