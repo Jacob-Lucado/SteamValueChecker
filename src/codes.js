@@ -70,7 +70,7 @@ export function pendingFor(db, guildId, settings) {
  * One poll: read the feed, store anything new, retire what ended, post what each server has not had, and edit old posts.
  * `fetchCodes` is injectable for tests. A failed fetch still lets the expiry and edit steps run.
  */
-export async function runCodes({ db, api, base = null, notifier = null, fetchCodes = fetchAllCodes, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
+export async function runCodes({ db, api, base = null, notifier = null, fetchCodes = fetchAllCodes, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {}, health = null }) {
     const stats = { fetched: 0, added: 0, posted: 0, expired: 0, failed: 0, feedError: null };
     try {
         const got = await fetchCodes();
@@ -90,6 +90,7 @@ export async function runCodes({ db, api, base = null, notifier = null, fetchCod
 
     for (const settings of db.codeGuilds()) {
         const gid = settings.guild_id;
+        if (health?.blocked("codes", gid)) continue;
         const fresh = pendingFor(db, gid, settings);
         if (!fresh.length) continue;
         const first = !db.hasAnyCodePost(gid);
@@ -101,9 +102,11 @@ export async function runCodes({ db, api, base = null, notifier = null, fetchCod
                 const msg = await api.sendMessage(settings.channel_id, { ...codeEmbed(c, { base }), content: ping ? `<@&${ping}>` : undefined, allowed_mentions: ping ? { roles: [ping] } : { parse: [] } });
                 db.addCodePost(c.id, gid, settings.channel_id, msg?.id ?? null);
                 stats.posted++;
+                health?.ok("codes", gid);
             } catch (err) {
                 stats.failed++;
-                log(`code post failed for a server (${err?.status ?? err?.name})`);
+                if (health) await health.report({ feature: "codes", guildId: gid, channelId: settings.channel_id, err });
+                else log(`code post failed in server ${gid}, channel ${settings.channel_id}: ${err?.status ?? err?.name} ${err?.detail ?? err?.message ?? ""}`.trim());
                 break; // the channel is gone or locked; try again next poll instead of burning requests
             }
             await sleep(pace);

@@ -371,17 +371,19 @@ export function schedule(fn, everyMs, { onError = () => {}, setIntervalImpl = se
 
 /** A server whose alert channel is gone or blocked is skipped for a day after each permanent failure, so one broken channel isn't hit every cycle. */
 const feedBlocked = (db, guildId, now) => Number(db.getMeta?.(`feedblock:${guildId}`) ?? 0) > now();
-function failedGuildPost({ db, notifier, log, now = () => Date.now() }, guildId, what) {
+async function failedGuildPost({ db, notifier, log, health = null, now = () => Date.now() }, guildId, what, feature = "feed") {
     const f = notifier.lastPostFailure?.();
-    log(`${what} post failed in server ${guildId}${f?.detail ? `: ${f.detail}` : ""}${f?.permanent ? " (will retry tomorrow)" : ""}`);
+    if (health) await health.report({ feature, guildId, channelId: f?.channelId ?? db.getGuild?.(guildId)?.channel_id, err: f?.raw ?? f ?? { message: "unknown" } });
+    else log(`${what} post failed in server ${guildId}${f?.detail ? `: ${f.detail}` : ""}${f?.permanent ? " (will retry tomorrow)" : ""}`);
     if (f?.permanent) db.setMeta?.(`feedblock:${guildId}`, String(now() + 24 * 3_600_000));
 }
+const guildPostOk = (health, feature, guildId) => health?.ok(feature, guildId);
 
 /**
  * Servers that turned on the free game feed get new free games posted in their alert channel, once each.
  * Games only (no DLC), so the channel is not flooded; members who want DLC use /games freegames.
  */
-export async function runGuildFeeds({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+export async function runGuildFeeds({ db, itad, notifier, now = () => Date.now(), log = () => {}, health = null }) {
     const stats = { guilds: 0, posted: 0 };
     const guilds = db.guildsWithFreeFeed();
     if (!guilds.length) return stats;
@@ -403,7 +405,8 @@ export async function runGuildFeeds({ db, itad, notifier, now = () => Date.now()
             for (const part of chunked(games, 4)) {
                 const payload = freeGamesPayload(shop, part, { pager: db });
                 const ok = payload ? await notifier.postGuild(guild.guild_id, payload, "free") : true;
-                if (!ok) { failedGuildPost({ db, notifier, log, now }, guild.guild_id, "feed"); continue; }
+                if (!ok) { await failedGuildPost({ db, notifier, log, health, now }, guild.guild_id, "free game", "feed"); continue; }
+                guildPostOk(health, "feed", guild.guild_id);
                 for (const g of part) db.guildMarkSeen(guild.guild_id, `free:${g.id}`);
                 stats.posted += part.length;
             }
@@ -417,7 +420,7 @@ export async function runGuildFeeds({ db, itad, notifier, now = () => Date.now()
  * Servers that turned on hot deals get Steam discounts of at least their minimum percent posted in the alert channel,
  * each deal once. A server's first run posts the best few and marks the rest as seen, so turning it on never floods the channel.
  */
-export async function runHotDeals({ db, itad, notifier, now = () => Date.now(), log = () => {} }) {
+export async function runHotDeals({ db, itad, notifier, now = () => Date.now(), log = () => {}, health = null }) {
     const stats = { guilds: 0, posted: 0 };
     const guilds = db.guildsWithHot();
     if (!guilds.length) return stats;
@@ -431,7 +434,8 @@ export async function runHotDeals({ db, itad, notifier, now = () => Date.now(), 
         if (!fresh.length) continue;
         const payload = hotDealsPayload(fresh);
         if (!payload) { for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d)); continue; }
-        if (!(await notifier.postGuild(guild.guild_id, payload, "deals"))) { failedGuildPost({ db, notifier, log, now }, guild.guild_id, "hot deal"); continue; }
+        if (!(await notifier.postGuild(guild.guild_id, payload, "deals"))) { await failedGuildPost({ db, notifier, log, health, now }, guild.guild_id, "hot deal", "deals"); continue; }
+        guildPostOk(health, "deals", guild.guild_id);
         for (const d of fresh) db.guildMarkSeen(guild.guild_id, keyOf(d));
         stats.guilds++; stats.posted += Math.min(6, fresh.length);
     }
@@ -439,7 +443,7 @@ export async function runHotDeals({ db, itad, notifier, now = () => Date.now(), 
 }
 
 /** When a Steam sale or festival from the calendar is live, servers that asked get one post for it. */
-export async function runSaleStarts({ db, notifier, now = () => Date.now(), log = () => {}, prepUrl = null }) {
+export async function runSaleStarts({ db, notifier, now = () => Date.now(), log = () => {}, prepUrl = null, health = null }) {
     const stats = { posted: 0 };
     const guilds = db.guildsWithSaleFeed();
     if (!guilds.length) return stats;
@@ -447,18 +451,18 @@ export async function runSaleStarts({ db, notifier, now = () => Date.now(), log 
     for (const ev of all.filter(e => !e.live && e.kind === "sale" && e.start - now() <= 7 * 86400_000)) {
         const key = `salesoon:${ev.name}:${ev.start}`;
         for (const guild of guilds) {
-            if (db.guildHasSeen(guild.guild_id, key)) continue;
+            if (db.guildHasSeen(guild.guild_id, key) || feedBlocked(db, guild.guild_id, now)) continue;
             if (await notifier.postGuild(guild.guild_id, saleSoonPayload(ev, prepUrl), "deals")) { db.guildMarkSeen(guild.guild_id, key); stats.posted++; }
-            else log("sale heads-up post failed for a server");
+            else await failedGuildPost({ db, notifier, log, health, now }, guild.guild_id, "sale heads-up", "sale");
         }
     }
     const live = all.filter(e => e.live);
     for (const ev of live) {
         const key = `salestart:${ev.name}:${ev.start}`;
         for (const guild of guilds) {
-            if (db.guildHasSeen(guild.guild_id, key)) continue;
+            if (db.guildHasSeen(guild.guild_id, key) || feedBlocked(db, guild.guild_id, now)) continue;
             if (await notifier.postGuild(guild.guild_id, saleStartPayload(ev), "deals")) { db.guildMarkSeen(guild.guild_id, key); stats.posted++; }
-            else log("sale start post failed for a server");
+            else await failedGuildPost({ db, notifier, log, health, now }, guild.guild_id, "sale start", "sale");
         }
     }
     return stats;

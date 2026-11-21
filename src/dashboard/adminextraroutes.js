@@ -15,6 +15,9 @@ import { randomUUID } from "node:crypto";
 import { refreshRequest, removeRequestPosts } from "../requestsync.js";
 import * as xposterText from "../xposter.js";
 
+import { FEATURES } from "../feedhealth.js";
+const FEATURE_LABELS = Object.fromEntries(Object.entries(FEATURES).map(([k, v]) => [k, v.label]));
+
 export function createAdminExtraRoutes(ctx) {
     const { logFeed, ai, authorCard, bundleFeed, codes, config, dayKey, db, dm, guildList, health, inviteReport, isOwner, itad, logs, music, musicCall, now, ops, origin, rest, rt, session, square, storage, supporters, topgg, weekly, xposter } = ctx;
     return {
@@ -122,6 +125,17 @@ export function createAdminExtraRoutes(ctx) {
                 return { ...p, title: row?.title ?? "(removed)", store: p.path === "b" ? row?.store ?? "" : row?.shop ?? "", kind: p.path === "b" ? "Bundle" : row?.kind === "free" ? "Free game" : "Deal", url: `${origin}/${p.path}/${p.id}` };
             });
             return { invites, today: days.find(d => d.day === today) ?? { day: today, visits: 0, clicks: 0, previews: 0 }, week: { visits: sum(week, "visits"), clicks: sum(week, "clicks"), previews: sum(week, "previews") }, total: { visits: sum(pages, "visits"), clicks: sum(pages, "clicks") }, days: last, top };
+        },
+        // Servers whose posts are failing right now: what, where, why, and whether the owner was told.
+        "GET /api/admin/feedhealth": async (req) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            return { list: (ctx.feedHealth?.list() ?? []).map(r => ({ feature: r.feature, label: FEATURE_LABELS[r.feature] ?? r.feature, guildId: r.guildId, name: r.name, channelId: r.channelId, count: r.count, since: r.since, last: r.last, short: r.short, why: r.why, permanent: r.permanent, owner: r.owner, notifiedAt: r.notifiedAt })) };
+        },
+        "POST /api/admin/feedhealth/retry": async (req, body) => {
+            if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");
+            if (!ctx.feedHealth || !FEATURE_LABELS[body.feature]) throw new HttpError(400, "Unknown feed.");
+            ctx.feedHealth.retry(String(body.feature), String(body.guild_id ?? ""));
+            return { ok: true };
         },
         "GET /api/admin/logfeed": async (req) => {
             if (!isOwner(session(req))) throw new HttpError(403, "Only the bot owner can do this.");

@@ -100,7 +100,7 @@ export function createNotifier({ db, discord, push = null }) {
             await discord.sendChannel(guild.channel_id, out);
             return true;
         } catch (e) {
-            lastPostFailure = { detail: describeError(e), permanent: isPermanent(e) };
+            lastPostFailure = { detail: describeError(e), permanent: isPermanent(e), raw: e, channelId: guild.channel_id };
             return false;
         }
     }

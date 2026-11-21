@@ -4191,6 +4191,26 @@ test("giveaway creates have their own tight limit and the limiter map stays boun
     await t.close();
 });
 
+test("admin feed health: owner only, lists failing servers with the reason, and retry clears the back-off", async () => {
+    const { createFeedHealth } = await import("../src/feedhealth.js");
+    const holder = {};
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: () => ({ feedHealth: holder.h ??= createFeedHealth({ db: { getMeta: k => holder.db.getMeta(k), setMeta: (k, v) => holder.db.setMeta(k, v), listMetaPrefix: p => holder.db.listMetaPrefix(p) }, guildInfo: async () => ({ name: "Akatsuki", ownerId: "o9", channelName: "codes" }), sendDm: async () => {} }) }) });
+    holder.db = o.db;
+    try {
+        assert.equal((await o.request("/api/admin/feedhealth")).data.list.length, 0);
+        await holder.h.report({ feature: "codes", guildId: "g1", channelId: "c1", err: Object.assign(new Error("x"), { status: 403, detail: "Missing Access (code 50001)" }) });
+        const r = await o.request("/api/admin/feedhealth");
+        assert.equal(r.status, 200);
+        assert.equal(r.data.list[0].name, "Akatsuki");
+        assert.equal(r.data.list[0].label, "Game code posts");
+        assert.match(r.data.list[0].short, /50001/);
+        assert.equal(holder.h.blocked("codes", "g1"), true);
+        assert.equal((await o.request("/api/admin/feedhealth/retry", { method: "POST", body: { feature: "nope", guild_id: "g1" } })).status, 400);
+        assert.equal((await o.request("/api/admin/feedhealth/retry", { method: "POST", body: { feature: "codes", guild_id: "g1" } })).status, 200);
+        assert.equal(holder.h.blocked("codes", "g1"), false);
+    } finally { await o.close(); }
+});
+
 test("admin log feed: owner only, settings are checked, and the test message is sent", async () => {
     const { createLogFeed } = await import("../src/logfeed.js");
     const sent = [];

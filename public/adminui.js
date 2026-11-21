@@ -1316,7 +1316,7 @@
         const tile = (k, v, sub) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "v", text: String(v) }), sub && h("div", { class: "s", text: sub }));
         const lagBad = p.lagMs > 100;
         const st = await api("/api/admin/storage").catch(() => null);
-        const [eg, se, cw, pb] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null)]);
+        const [eg, se, cw, pb, fh] = await Promise.all([api("/api/admin/errors").catch(() => null), api("/api/admin/serverevents").catch(() => null), api("/api/admin/commandwatch").catch(() => null), api("/api/admin/problems").catch(() => null), api("/api/admin/feedhealth").catch(() => null)]);
         const ago = at => { const d = Math.round((Date.now() - at) / 1000); return d < 90 ? "just now" : up(d) + " ago"; };
         const lf = await api("/api/admin/logfeed").catch(() => null);
         const lfPanel = lf && (() => {
@@ -1330,6 +1330,18 @@
             h("div", { class: "row" }, modeSel, chan, b1, b2),
             h("p", { class: "muted small", text: lf.lastError ? `Last send failed: ${lf.lastError}` : lf.sent ? `${lf.sent} messages sent so far.` : "Nothing sent yet." }));
         })();
+        // Servers where a feed post is failing right now, with the reason and whether the owner was told.
+        const fhPanel = fh && h("div", { class: "panel" }, h("h3", { text: "Servers where posts are failing" }),
+          h("p", { class: "muted", text: "A permanent problem (deleted channel, missing permission) is retried once a day. The server owner gets a DM after the second failure, at most once a week." }),
+          fh.list.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Server", "What", "Why", "Tries", "Owner", ""].map(c => h("th", { text: c })))),
+            h("tbody", {}, fh.list.map(r => h("tr", {},
+              h("td", {}, h("b", { text: r.name || "Unknown server" }), h("div", { class: "muted small", text: r.guildId + (r.channelId ? " / " + r.channelId : "") })),
+              h("td", { text: r.label }),
+              h("td", {}, h("div", { text: r.short }), h("div", { class: "muted small", text: r.why })),
+              h("td", { text: r.count + " since " + ago(r.since) }),
+              h("td", { text: r.owner === "notified" ? "Told " + ago(r.notifiedAt) : r.owner || "Not yet" }),
+              h("td", {}, (() => { const b = h("button", { class: "btn gray small", type: "button", text: "Retry now" }); b.addEventListener("click", () => busy(b, async () => { await api("/api/admin/feedhealth/retry", { feature: r.feature, guild_id: r.guildId }); toast("It will try again on the next cycle."); })); return b; })())))))
+            : h("p", { class: "muted", text: "No server has a failing feed right now." }));
         const errPanel = eg && h("div", { class: "panel" }, h("h3", { text: "Errors by cause" }),
           eg.groups.length ? h("div", { class: "scroll-y" }, h("table", {}, h("thead", {}, h("tr", {}, ["Where", "What", "Times", "Last seen"].map(c => h("th", { text: c })))),
             h("tbody", {}, eg.groups.map(g => h("tr", {}, h("td", {}, h("b", { text: g.where })), h("td", { text: g.message }), h("td", { text: String(g.count), class: g.count >= 10 ? "bad" : "" }), h("td", { text: ago(g.last) })))))) : h("p", { class: "muted", text: eg.available ? "No errors logged. Nice." : "The log isn't running." }));
@@ -1362,6 +1374,7 @@
           storagePanel,
           pbPanel,
           lfPanel,
+          fhPanel,
           errPanel,
           cwPanel,
           srvPanel,

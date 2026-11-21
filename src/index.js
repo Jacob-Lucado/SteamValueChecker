@@ -127,6 +127,7 @@ import { createSetupHandlers } from "./setup.js";
 import { createTicketHandlers } from "./tickethandlers.js";
 import { createCodeHandlers } from "./codeshandlers.js";
 import { runCodes } from "./codes.js";
+import { createFeedHealth } from "./feedhealth.js";
 import { runBundleFeed } from "./bundlefeed.js";
 import { createXPoster } from "./xposter.js";
 import { createLogFeed } from "./logfeed.js";
@@ -271,6 +272,14 @@ logs.subscribe(logFeed.accept);
 const push = createPush({ db, contact: cfg.dashboard?.publicUrl ? `mailto:admin@${new URL(cfg.dashboard.publicUrl).hostname}` : undefined });
 push.publicKey(); // makes the keys once, before anything shares them
 const notifier = createNotifier({ db, discord, push });
+// Names the server and channel when a post fails, backs off on permanent problems, and tells the server's owner by DM once a week at most.
+const feedHealth = createFeedHealth({
+    db, log: m => console.warn(`[feeds] ${m}`), sendDm: (id, p) => discord.sendDm(id, p),
+    guildInfo: async (gid, cid) => {
+        const g = client.guilds.cache.get(String(gid)) ?? await client.guilds.fetch(String(gid)).catch(() => null);
+        return g ? { name: g.name, ownerId: g.ownerId, channelName: cid ? (g.channels.cache.get(String(cid))?.name ?? null) : null } : null;
+    }
+});
 // Community features (welcome, XP, invites, emoji) use the bot's REST helper, the same one the dashboard uses.
 const botRest = createDiscordRest({ clientId: cfg.clientId, clientSecret: cfg.dashboard?.clientSecret ?? "", botToken: cfg.token, redirectUri: "http://localhost/unused" });
 const toolsMenus = createRoleMenus({ db, api: botRest }), toolsStar = createStarboard({ db, api: botRest }), toolsPolls = createPolls({ db, api: botRest }), toolsSuggest = createSuggestions({ db, api: botRest });
@@ -371,14 +380,14 @@ let codesBusy = false;
 const pollCodes = async () => {
     if (codesBusy) return null;
     codesBusy = true;
-    try { return await runCodes({ db, api: botRest, base: publicBase, notifier, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
+    try { return await runCodes({ db, api: botRest, base: publicBase, notifier, health: feedHealth, log: m => console.log(`[codes] ${m}`) }); } finally { codesBusy = false; }
 };
 const codeUi = createCodeHandlers({ db, runNow: pollCodes });
 let bundlesBusy = false;
 const pollBundles = async ({ deep = false } = {}) => {
     if (bundlesBusy) return null;
     bundlesBusy = true;
-    try { const r = await runBundleFeed({ db, api: botRest, deep, log: m => console.log(`[bundles] ${m}`) }); beat.bundles = Date.now(); beat.bundleError = r?.feedError ?? null; return r; } finally { bundlesBusy = false; }
+    try { const r = await runBundleFeed({ db, api: botRest, deep, health: feedHealth, log: m => console.log(`[bundles] ${m}`) }); beat.bundles = Date.now(); beat.bundleError = r?.feedError ?? null; return r; } finally { bundlesBusy = false; }
 };
 const bundleUi = createBundleFeedHandlers({ db, runNow: pollBundles });
 let dropsBusy = false;
@@ -487,9 +496,9 @@ client.once(Events.ClientReady, c => {
             result.gameClub = await ops.job("game club", () => runGameClubs({ db, notifier, log }));
             result.playtests = await ops.job("playtests", () => runPlaytests({ db, news, abg, notifier, log }));
             result.epicSoon = await ops.job("epic soon", () => runEpicSoon({ db, soon: epicSoon, notifier, log }));
-            result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log }));
-            result.hotDeals = await ops.job("hot deals", () => runHotDeals({ db, itad, notifier, log }));
-            result.saleStarts = await ops.job("sale starts", () => runSaleStarts({ db, notifier, log, prepUrl: cfg.dashboard?.publicUrl ? `${String(cfg.dashboard.publicUrl).replace(/\/+$/, "")}/winter-sale` : null }));
+            result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log, health: feedHealth }));
+            result.hotDeals = await ops.job("hot deals", () => runHotDeals({ db, itad, notifier, log, health: feedHealth }));
+            result.saleStarts = await ops.job("sale starts", () => runSaleStarts({ db, notifier, log, health: feedHealth, prepUrl: cfg.dashboard?.publicUrl ? `${String(cfg.dashboard.publicUrl).replace(/\/+$/, "")}/winter-sale` : null }));
             result.serverDigests = await ops.job("server digests", () => runServerDigests({ db, itad, notifier, names: id => client.guilds.cache.get(id)?.name, log }));
             result.friends = await ops.job("friend reminders", () => runFriendReminders({ db, itad, notifier, log }));
             result.digests = await ops.job("digests", () => runDigests({ db, itad, notifier, log }));
@@ -1171,7 +1180,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ hilo, logFeed, push, referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ feedHealth, hilo, logFeed, push, referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

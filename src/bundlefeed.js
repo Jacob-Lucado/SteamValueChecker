@@ -54,7 +54,7 @@ export const pendingBundlesFor = (db, guildId, settings) => db.listFeedBundles({
  * One poll: read the stores, save anything new, retire what ended, post what each server has not had, and edit old posts.
  * `fetchBundles` is injectable for tests. A failed read still lets the expiry and edit steps run.
  */
-export async function runBundleFeed({ db, api, deep = false, fetchBundles = fetchAllBundles, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {} }) {
+export async function runBundleFeed({ db, api, deep = false, fetchBundles = fetchAllBundles, now = Date.now, sleep = sleepDefault, pace = 500, log = () => {}, health = null }) {
     const stats = { fetched: 0, added: 0, posted: 0, expired: 0, failed: 0, feedError: null };
     try {
         const got = await fetchBundles({ deep });
@@ -72,6 +72,7 @@ export async function runBundleFeed({ db, api, deep = false, fetchBundles = fetc
 
     for (const settings of db.bundleFeedGuilds()) {
         const gid = settings.guild_id;
+        if (health?.blocked("bundles", gid)) continue;
         const fresh = pendingBundlesFor(db, gid, settings);
         if (!fresh.length) continue;
         const first = !db.hasAnyFeedBundlePost(gid);
@@ -83,9 +84,11 @@ export async function runBundleFeed({ db, api, deep = false, fetchBundles = fetc
                 const msg = await api.sendMessage(settings.channel_id, { ...bundleFeedEmbed(b), content: ping ? `<@&${ping}>` : undefined, allowed_mentions: ping ? { roles: [ping] } : { parse: [] } });
                 db.addFeedBundlePost(b.id, gid, settings.channel_id, msg?.id ?? null);
                 stats.posted++;
+                health?.ok("bundles", gid);
             } catch (err) {
                 stats.failed++;
-                log(`bundle post failed for a server (${err?.status ?? err?.name})`);
+                if (health) await health.report({ feature: "bundles", guildId: gid, channelId: settings.channel_id, err });
+                else log(`bundle post failed in server ${gid}, channel ${settings.channel_id}: ${err?.status ?? err?.name} ${err?.detail ?? err?.message ?? ""}`.trim());
                 break; // the channel is gone or locked; try again next poll
             }
             await sleep(pace);
