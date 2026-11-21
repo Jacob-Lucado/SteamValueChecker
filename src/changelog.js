@@ -1,5 +1,17 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.82", date: "2026-11-20", title: "Higher or lower, and library duels", items: [
+        "**Higher or lower:** `/server trivia hilo` shows one game's launch price, Steam review count or Metacritic score, and you guess if the next game's is higher or lower. Every right guess keeps the streak going. Anyone can play, the server's longest streaks show on `/server trivia top`, and the Trivia page has the same game.",
+        "**Library duels:** comparing two libraries now keeps score on games owned, hours played and games finished, with a winner. It's on `/server compare` and the Compare page.",
+    ] },
+    { version: "2026.11.81", date: "2026-11-20", title: "Smart alerts", items: [
+        "**Smart alerts** are a new switch (`/alerts extras`, or the Alerts page). They're rare: a heads-up when a wishlist game's recent Steam reviews take a dive, a note when a game you sank hours into gets a patch after you've left it alone, and a time capsule on the anniversary of games you wishlisted or added a year ago.",
+        "`/alerts` was full, so the monthly backlog pick, the year in games card and smart alerts now share one command, `/alerts extras`.",
+    ] },
+    { version: "2026.11.80", date: "2026-11-20", title: "Wallet planner and backlog finish date", items: [
+        "**Wallet planner:** tell it what you want to spend, like a Steam wallet balance, and it picks the mix of unowned wishlist games that gets the most out of it, favoring starred games, big cuts, all-time lows and genres you play. Use `/me wishlist wallet` or the *Wallet planner* button on the Wishlist page.",
+        "**Backlog finish date:** `/me library backlog` and the Library page now guess when you'll get through your backlog, from the hours you really play each week and how long your finished games took. It's a guess, and it says so.",
+    ] },
     { version: "2026.11.79", date: "2026-11-20", title: "Clearer command errors", items: [
         "When a command fails because its reply or channel was deleted (or the bot was removed mid-command), the log now says so in one line instead of a stack trace. Every command error now also names the server it came from.",
     ] },

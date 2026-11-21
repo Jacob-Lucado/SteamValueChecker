@@ -3,7 +3,7 @@
 (function (root) {
   "use strict";
   async function view(ctx) {
-    const { api, app, busy, field, h, pageHead, ruleControl, select, state, steamLoginBtn, toast, wishCard } = ctx;
+    const { api, app, busy, field, h, money, pageHead, ruleControl, select, state, steamLoginBtn, toast, wishCard } = ctx;
     const list = h("div", { class: "muted", text: "Loading prices…" });
     const profile = h("input", { type: "text", placeholder: "Steam profile link, custom name or SteamID64", maxlength: "200" });
     const linked = Boolean(state.me.steam && state.me.steam.linked);
@@ -54,6 +54,21 @@
       h("div", { class: "row" }, linked ? importBtn : steamLoginBtn()),
       syncRow,
       linked ? null : h("details", { class: "paste" }, h("summary", { text: "Use a profile link instead" }), field("Profile", profile), importBtn));
+    // Wallet planner: type a budget and get the mix of games that uses it best.
+    const walletBudget = h("input", { type: "number", min: "1", max: "1000", step: "1", class: "wl-search", placeholder: "Budget, e.g. 50", "aria-label": "How much you want to spend", style: "max-width:11rem" });
+    const walletStar = h("input", { type: "checkbox" });
+    const walletOut = h("div", { class: "muted small", text: "Enter what you want to spend, like a Steam wallet balance. It picks the unowned wishlist games that get the most out of it." });
+    const walletGo = h("button", { class: "btn green small", type: "button", text: "Plan it", onclick: () => busy(walletGo, async () => {
+      const b = Number(walletBudget.value);
+      if (!(b >= 1)) return toast("Enter a budget first.");
+      const d = await api("/api/wishlist/wallet?budget=" + encodeURIComponent(b) + (walletStar.checked ? "&starred=1" : ""));
+      if (!d.picks.length) { walletOut.className = "notice warn"; walletOut.textContent = "Nothing unowned on your wishlist is priced within that budget right now."; return; }
+      walletOut.className = "";
+      walletOut.replaceChildren(
+        h("div", { class: "grid three" }, ...[["Spend", money(d.spent, d.currency)], ["Left over", money(d.left, d.currency)], ["Saved vs full price", money(d.saved, d.currency)]].map(([k, v]) => h("div", { class: "tile" }, h("div", { class: "k", text: k }), h("div", { class: "big", text: v })))),
+        h("div", { class: "stack" }, ...d.picks.map(p => h("div", { class: "row" }, h("div", {}, h("strong", { text: p.title }), h("div", { class: "muted small", text: p.why })), h("div", { text: money(p.price, d.currency) + (p.discount > 0 ? ` (-${Math.round(p.discount * 100)}%)` : "") })))));
+    }) });
+    const walletDrawer = drawer("Wallet planner", h("div", { class: "row" }, walletBudget, h("label", { class: "check" }, walletStar, "Only starred games"), walletGo), walletOut);
     const addDrawer = drawer("Add a game", field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField),
       h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("div", { class: "row" }, addBtn));
 
@@ -151,8 +166,8 @@
 
     app.replaceChildren(
       pageHead("Wishlist", "Sales first. You are alerted according to each game's rule."),
-      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "⇩ Export CSV", onclick: exportCsv }), h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; } })),
-      importDrawer, addDrawer,
+      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "⇩ Export CSV", onclick: exportCsv }), h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; walletDrawer.hidden = true; } }), h("button", { class: "chip-btn", type: "button", text: "💰 Wallet planner", onclick: () => { walletDrawer.hidden = !walletDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; if (!walletDrawer.hidden) walletBudget.focus(); } })),
+      importDrawer, addDrawer, walletDrawer,
       listBox);
     listBox.className = "muted"; listBox.textContent = "Loading prices…";
     loadList().then(() => { listBox.className = ""; });

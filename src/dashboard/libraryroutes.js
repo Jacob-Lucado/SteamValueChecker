@@ -6,6 +6,7 @@ import { MAX_UPLOAD_CHARS } from "../value.js";
 import { UserError } from "../errors.js";
 import { addBundle, bundleView } from "../bundles.js";
 import { importLibrary, libraryView, playNext } from "../library.js";
+import { backlogForecast } from "../pace.js";
 import { newsForUser } from "../news.js";
 import { parseUpload, sanitize } from "../parse.js";
 import { regionCurrency, spendSummary } from "../spend.js";
@@ -104,6 +105,11 @@ export function createLibraryRoutes(ctx) {
             if (!item) throw new HttpError(404, "That game is not in your library.");
             if (!db.setLibraryStatus(s.userId, item.itad_id, String(body.status))) throw new HttpError(400, "Pick backlog, playing, played, finished or dropped.");
             return { title: item.title, status: body.status };
+        },
+        "GET /api/library/forecast": async (req) => {
+            const s = session(req);
+            const view = await libraryView(db, itad, userRow(s), { snapshot: false });
+            return backlogForecast(view.rows, db.playtimeLog(s.userId));
         },
         "GET /api/library/next": async (req, _body, url) => {
             const s = session(req);

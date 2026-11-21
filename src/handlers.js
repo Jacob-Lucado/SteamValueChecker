@@ -20,12 +20,15 @@ import { supporterUntil, isFounder, wallName } from "./supporters.js";
 import { SUPPORTER_XP_BOOST } from "./square.js";
 import { parseTrigger, describeTrigger } from "./alerts.js";
 import { pushEvent } from "./adminlog.js";
+import { planWallet, likedGenres } from "./wallet.js";
+import { backlogForecast } from "./pace.js";
+import { tasteProfile } from "./taste.js";
 import { findItem, suggest, viewRows, filterRows, exportJson, addGameByTitle, applySteamImport, WishlistError } from "./wishlist.js";
 import { newsPayload } from "./render.js";
 import { contextWishlistEmbed, giftIdeasEmbed, playTogetherEmbed, ownersEmbed, coopEmbed } from "./render.js";
 import { renderHistoryChart } from "./historychart.js";
 import { steamReviews } from "./reviews.js";
-import { money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed, supporterEmbed } from "./render.js";
+import { walletEmbed, money, wishlistEmbed, WISHLIST_PER_PAGE, checkEmbed, libraryEmbed, serverListEmbed, leaderboardEmbed, boardEmbed, bundlesEmbed, leagueEmbed, badgesEmbed, alertHistoryEmbed, backlogEmbed, trendEmbed, challengeEmbed, spendEmbed, compareEmbed, serverStatsEmbed, statusEmbed, supporterEmbed } from "./render.js";
 import { summarize } from "./report.js";
 import { createNews, newsForUser } from "./news.js";
 import { current, dealVerdict } from "./alerts.js";
@@ -195,6 +198,20 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             collector.on("end", () => i.editReply({ components: [] }).catch(() => {}));
         } catch (err) {
             await failed(i, "wishlist view", err);
+        }
+    }
+
+    async function wishlistWallet(i, user) {
+        cooldown(i, "view");
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+            const { rows, currency } = await viewRows(db, itad, user);
+            if (!rows.length) throw new UserError("Your wishlist is empty. Use `/me wishlist import` or `/me wishlist add`.");
+            const budget = i.options.getNumber("budget", true);
+            const plan = planWallet(rows, budget, { likes: likedGenres(tasteProfile(db, user.discord_id)), include: i.options.getBoolean("starred") ? r => r.priority : null });
+            await i.editReply({ embeds: [walletEmbed(plan, budget, currency)] });
+        } catch (err) {
+            await failed(i, "wishlist wallet", err);
         }
     }
 
@@ -373,6 +390,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                 case "cleanup": return await wishlistCleanup(i);
                 case "priority": return await wishlistPriority(i);
                 case "view": return await wishlistView(i, user);
+                case "wallet": return await wishlistWallet(i, user);
                 case "alert": return await wishlistAlert(i);
                 case "check": return await wishlistCheck(i, user);
                 case "cards": {
@@ -513,15 +531,16 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                 db.updateUser(user.discord_id, { achv: on ? 1 : 0 });
                 return eph(i, on ? "You will get a heads-up when a game you have played for 5 hours or more is within 3 achievements of 100%. It needs Steam linked and achievements synced (`/me steam sync`). Your first check is quiet." : "Achievement heads-ups are off.");
             }
-            case "nudge": {
-                const on = i.options.getBoolean("enabled", true);
-                db.updateUser(user.discord_id, { nudge: on ? 1 : 0 });
-                return eph(i, on ? "On the 1st of each month you will get one game from your backlog to try, picked from what you haven't started. Mark games with `/me library status` and the pick gets better." : "The monthly backlog pick is off.");
-            }
-            case "yearinreview": {
-                const on = i.options.getBoolean("enabled", true);
-                db.updateUser(user.discord_id, { yearly: on ? 1 : 0 });
-                return eph(i, on ? "You will get your year in games card (hours, months, top games) by DM from December 26. It needs Steam linked. You can see it any time with `/me steam recap`." : "The year in games card is off.");
+            case "extras": {
+                const which = i.options.getString("which", true), on = i.options.getBoolean("enabled", true);
+                const copy = {
+                    nudge: [on ? "On the 1st of each month you will get one game from your backlog to try, picked from what you haven't started. Mark games with `/me library status` and the pick gets better." : "The monthly backlog pick is off."],
+                    yearly: [on ? "You will get your year in games card (hours, months, top games) by DM from December 26. It needs Steam linked. You can see it any time with `/me steam recap`." : "The year in games card is off."],
+                    smart: [on ? "Smart alerts are on. You'll hear when a wishlist game's reviews take a dive, when a game you sank hours into gets a patch after you've left it alone, and a time capsule on the anniversary of games you wishlisted or added a year ago. They're rare, and `/alerts quiethours` still applies." : "Smart alerts are off."]
+                }[which];
+                if (!copy) return eph(i, "Pick one of the three.");
+                db.updateUser(user.discord_id, { [which]: on ? 1 : 0 });
+                return eph(i, copy[0]);
             }
             case "milestones": {
                 const on = i.options.getBoolean("enabled", true);
@@ -711,7 +730,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
             if (sub === "backlog") {
                 const view = await libraryView(db, itad, user, { snapshot: false });
                 if (!view.rows.length) throw new UserError("Your library is empty. Use `/me library add` or `/me library import`.");
-                return void await i.editReply({ embeds: [backlogEmbed(view, playNext(view.rows))] });
+                return void await i.editReply({ embeds: [backlogEmbed(view, playNext(view.rows), backlogForecast(view.rows, db.playtimeLog(user.discord_id)))] });
             }
             if (sub === "news") {
                 const { known, posts } = await newsForUser(db, newsSource, user.discord_id);

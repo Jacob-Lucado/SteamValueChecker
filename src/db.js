@@ -28,6 +28,7 @@ import { twitchLinkSchema, twitchLinkStore } from "./twitchlink.js";
 import { clubSchema, clubStore } from "./gameclub.js";
 import { santaSchema, santaStore } from "./santa.js";
 import { triviaSchema, triviaStore } from "./trivia.js";
+import { hiloSchema, hiloStore } from "./hilo.js";
 import { profileSchema, profileStore } from "./profilestore.js";
 import { streamSchema, streamStore } from "./streamstore.js";
 import { memeSchema, memeStore } from "./memestore.js";
@@ -202,6 +203,7 @@ ${twitchLinkSchema}
 ${clubSchema}
 ${santaSchema}
 ${triviaSchema}
+${hiloSchema}
 ${profileSchema}
 ${streamSchema}
 ${memeSchema}
@@ -276,6 +278,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     addColumn("users", "yearly", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "nudge", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "achv", "INTEGER NOT NULL DEFAULT 0");
+    addColumn("users", "smart", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "playtest", "INTEGER NOT NULL DEFAULT 0");
     addColumn("users", "nowplaying", "INTEGER NOT NULL DEFAULT 0");
     addColumn("community", "ping_squad", "TEXT");
@@ -427,6 +430,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
     const club = clubStore({ run, get, all });
     const santa = santaStore({ run, get, all, now });
     const trivia = triviaStore({ run, get, all, now });
+    const hiloDb = hiloStore({ run, get, all });
     const prof = profileStore({ run, get, all });
     const streamLive = streamStore({ run, get, all, clean });
     const memes = memeStore({ run, all });
@@ -448,7 +452,7 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
 
     const SETTABLE = new Set(["hide_facts", "wish_sync", "wish_synced_at", "muted", "seen_version", "lang", "welcomed", "tipped",
         "steam_id", "region", "stores", "delivery", "paused", "dm_failures", "guild_id",
-        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "playtest", "playtest_skip", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
+        "quiet_start", "quiet_end", "tz", "digest", "digest_day", "last_digest_at", "bundles", "news", "dlc", "refund", "milestones", "yearly", "nudge", "achv", "smart", "playtest", "playtest_skip", "nowplaying", "share", "free", "free_dlc", "min_discount", "max_price", "lows_only", "promo_off", "last_seen"
     ]);
     function updateUser(id, fields) {
         for (const [k, v] of Object.entries(fields)) {
@@ -968,6 +972,6 @@ export function openDb(path = "data/steamvaluechecker.db", { now = () => Date.no
         countLibrary, listLibrary, upsertLibrary, setLibraryPaid, removeLibrary, setLibraryStatus, setProfile, publicProfileIds, getProfileBySlug, upsertSnapshot, listSnapshots, hasSnapshotToday, usersWithLibrary, sharedLeaderboard, sharedFinished, sharedHours, sharedHoursBetween, sharedGameHours,
         purgeHiddenGuilds, prunePolls, ownersOf, sharingMembers, setGameNight, gameNightOn, guildsWithGameNight, setGroupMin, setWeeklyDigest, guildsWithDigest, markGuildDigest, sharedWatchedItems, setFreeFeed, guildsWithFreeFeed, setHotMin, guildsWithHot, setSaleFeed, guildsWithSaleFeed, guildHasSeen, guildMarkSeen, pruneGuildSeen, guildStats, guildsWithGroupPings, getGuildDeal, setGuildDeal,
         addServerGame, listServerGames, getServerGame, toggleVote, removeServerGame,
-        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...tools, ...aiData, ...santa, ...trivia, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
+        blockGuild, unblockGuild, isGuildBlocked, blockedGuilds, tableSizes, stats, adminInsights, adminUser, clearAllDmFailures, backupTo, exportUser, deleteUser, getCardPrefs, setCardPrefs, ...tools, ...aiData, ...santa, ...trivia, ...hiloDb, ...giveaways, ...tickets, ...requests, ...promoCodes, ...bundleFeed, ...deals, ...indie, ...promoDrops, ...bans, ...music, ...pager, ...audit, ...adminLogin, ...staffChat, ...overlay, ...streamCard, ...streamOverlays, ...twitchLink, ...club, ...prof, ...streamLive, ...memes, ...community, ...steam, ...grabber, ...redeem, ...calendar, ...gifts, ...social, ...friends, ...challenges, ...bundles, ...broadcasts, ...lfg, close: () => db.close()
     };
 }

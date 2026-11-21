@@ -70,7 +70,10 @@ export function factsFrom(appid, data) {
     const blurb = strip(data.short_description);
     if (!year || !genres.length || blurb.length < 30) return null;
     return {
-        appid: Number(appid), name: data.name, year, genres,
+        v: 2, appid: Number(appid), name: data.name, year, genres,
+        price: data.is_free ? 0 : Number.isFinite(data.price_overview?.initial) ? data.price_overview.initial : null,
+        recs: Number.isFinite(data.recommendations?.total) ? data.recommendations.total : null,
+        meta: Number.isFinite(data.metacritic?.score) ? data.metacritic.score : null,
         developer: (data.developers ?? [])[0] ?? null,
         blurb, shot: data.screenshots?.[0]?.path_full ?? null, header: data.header_image ?? null
     };
@@ -83,7 +86,7 @@ export function createTrivia({ db, fetchImpl = fetch, sendMessage, editMessage, 
         const cached = db.getTriviaFacts(appid);
         if (cached) return cached;
         try {
-            const res = await fetchImpl(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`, { headers: { "Accept-Language": "en" }, signal: AbortSignal.timeout(8000) });
+            const res = await fetchImpl(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=english&cc=us`, { headers: { "Accept-Language": "en" }, signal: AbortSignal.timeout(8000) });
             if (!res.ok) return null;
             const j = await res.json();
             const facts = j?.[appid]?.success ? factsFrom(appid, j[appid].data) : null;
@@ -225,19 +228,21 @@ export function createTrivia({ db, fetchImpl = fetch, sendMessage, editMessage, 
             return {
                 color: 0x9b59b6, title: `🏆 Trivia leaderboard${guildName ? " • " + guildName : ""}`,
                 description: rows.length ? rows.map((r, i) => `${medal(i)} <@${r.user_id}>: **${r.points}** pts, ${r.correct} right, ${r.wins} win${r.wins === 1 ? "" : "s"}`).join("\n") : "No games played yet. A manager can start one with `/server trivia start`.",
+                ...(db.hiloTop ? (() => { const h = db.hiloTop(guildId, 5); return h.length ? { fields: [{ name: "🔼🔽 Higher or lower: longest streaks", value: h.map((r, i) => `${medal(i)} <@${r.user_id}>: **${r.best}** in a row`).join("\n") }] } : {}; })() : {}),
                 footer: { text: "All-time for this server" }
             };
         }
     };
 }
 
-export function createTriviaHandlers({ trivia }) {
+export function createTriviaHandlers({ trivia, hiloUi = null }) {
     const eph = (i, content) => i.reply({ content, flags: MessageFlags.Ephemeral });
     const manage = i => { if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new UserError("You need the Manage Server permission for that."); };
     async function handle(i) {
         try {
             if (!i.guildId) throw new UserError("Use this in a server.");
             const sub = i.options.getSubcommand();
+            if (sub === "hilo" && hiloUi) return await hiloUi.start(i);
             if (sub === "top") return void await i.reply({ embeds: [trivia.topEmbed(i.guildId, i.guild?.name)], allowedMentions: { parse: [] } });
             manage(i);
             if (sub === "start") {

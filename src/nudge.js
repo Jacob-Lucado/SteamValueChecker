@@ -10,7 +10,7 @@ export function nudgeEmbed(pick, remaining) {
         color: 0x5865f2, title: `🎯 This month, try ${pick.title}`,
         description: `${pick.why}${remaining > 0 ? `\n\n${remaining} more game${remaining === 1 ? "" : "s"} are waiting in your backlog.` : ""}`,
         thumbnail: Number.isInteger(pick.appid) ? { url: steamArt(pick.appid) } : undefined,
-        footer: { text: "Mark games with /me library status  •  Turn this off with /alerts nudge" }
+        footer: { text: "Mark games with /me library status  •  Turn this off with /alerts extras" }
     };
 }
 

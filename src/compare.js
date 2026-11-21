@@ -18,6 +18,17 @@ export function playTogether(db, aId, bId) {
     return { picks, untagged, shared: both.length };
 }
 
+/**
+ * The friendly scoreboard on top of a comparison: who has more games, more hours and more finished. A category nobody has
+ * anything in is left out, and ties count for nobody.
+ */
+export function duelOf(a, b) {
+    const cats = [["Games owned", a.games, b.games, n => String(n)], ["Hours played", Math.round(a.minutes / 60), Math.round(b.minutes / 60), n => n.toLocaleString("en-US") + "h"], ["Games finished", a.finished, b.finished, n => String(n)]];
+    const rounds = cats.filter(([, x, y]) => x > 0 || y > 0).map(([label, x, y, f]) => ({ label, a: f(x), b: f(y), winner: x > y ? "a" : y > x ? "b" : "tie" }));
+    const aWins = rounds.filter(r => r.winner === "a").length, bWins = rounds.filter(r => r.winner === "b").length;
+    return { rounds, aWins, bWins, verdict: aWins > bWins ? "a" : bWins > aWins ? "b" : "tie" };
+}
+
 export function compareLibraries(db, aId, bId) {
     const A = db.listLibrary(aId), B = db.listLibrary(bId);
     const mineB = new Map(B.map(x => [x.itad_id, x]));
@@ -33,5 +44,6 @@ export function compareLibraries(db, aId, bId) {
     onlyA.sort(byName); onlyB.sort(byName);
     const totals = list => ({ games: list.length, minutes: list.reduce((t, x) => t + (x.minutes ?? 0), 0), finished: list.filter(x => x.status === "finished").length });
     const union = A.length + B.length - shared.length;
-    return { shared, onlyA, onlyB, a: totals(A), b: totals(B), overlapPct: union ? Math.round((shared.length / union) * 100) : 0 };
+    const ta = totals(A), tb = totals(B);
+    return { shared, onlyA, onlyB, a: ta, b: tb, overlapPct: union ? Math.round((shared.length / union) * 100) : 0, duel: duelOf(ta, tb) };
 }

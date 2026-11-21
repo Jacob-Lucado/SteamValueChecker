@@ -22,7 +22,7 @@ export async function runYearInGames({ db, notifier, render, now = () => Date.no
         try { png = await render(id, null); } catch { png = null; }
         if (!png) { db.markSeen(id, key); stats.skipped++; continue; } // nothing tracked this year: nothing to send
         sentThisRun++;
-        const embed = { color: 0x5865f2, title: `🎮 Your ${year} in games`, image: { url: "attachment://year-in-games.png" }, footer: { text: "Turn this off with /alerts yearinreview. See it any time with /me steam recap" } };
+        const embed = { color: 0x5865f2, title: `🎮 Your ${year} in games`, image: { url: "attachment://year-in-games.png" }, footer: { text: "Turn this off with /alerts extras. See it any time with /me steam recap" } };
         const res = await notifier.deliver(user, { embeds: [embed], files: [{ attachment: Buffer.from(png), name: "year-in-games.png", description: `Your ${year} in games` }] }, "yearly");
         if (!res.ok) { stats.failed++; continue; }
         stats.delivered++;

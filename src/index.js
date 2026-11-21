@@ -86,12 +86,14 @@ import { runYearInGames } from "./yearly.js";
 import { runServerWrapped } from "./serverwrapped.js";
 import { runRivalries } from "./rivalry.js";
 import { runBacklogNudge, runAchievementNudges } from "./nudge.js";
+import { runReviewDrops, runWinBack, runTimeCapsule } from "./smartalerts.js";
 import { runSocialDigest } from "./socialdigest.js";
 import { runPlaytests, refreshPlaytestChannel } from "./playtests.js";
 import { createNowPlaying, runSquadUps } from "./nowplaying.js";
 import { createClubHandlers, runGameClubs } from "./gameclub.js";
 import { createSantaHandlers } from "./santa.js";
 import { createTrivia, createTriviaHandlers } from "./trivia.js";
+import { createHilo, createHiloHandlers } from "./hilo.js";
 import { createStreamGiveaways } from "./streamgiveaway.js";
 import { createTwitchChat } from "./twitchchat.js";
 import { createAbgFeed } from "./abgfeed.js";
@@ -412,7 +414,9 @@ const calendar = createCalendarService({ db, discord: gwDiscord, log: m => conso
 const clubUi = createClubHandlers({ db });
 const santaUi = createSantaHandlers({ db, itad, sendDm: (id, p) => discord.sendDm(id, p), nameOf: async id => { const u = await client.users.fetch(id).catch(() => null); return u ? (u.globalName || u.username) : `<@${id}>`; } });
 const trivia = createTrivia({ db, sendMessage: (c, p) => botRest.sendMessage(c, p), editMessage: (c, m, p) => botRest.editMessage(c, m, p), log: m => console.log(`[trivia] ${m}`) });
-const triviaUi = createTriviaHandlers({ trivia });
+const hilo = createHilo({ db });
+const hiloUi = createHiloHandlers({ hilo, db });
+const triviaUi = createTriviaHandlers({ trivia, hiloUi });
 const calendarUi = createCalendarHandlers({ db, calendar, publicUrl: publicBase });
 
 // Tracks health and DMs the owner (OWNER_DISCORD_ID) when something keeps failing.
@@ -470,6 +474,9 @@ client.once(Events.ClientReady, c => {
             result.achv = await ops.job("achievement nudges", () => runAchievementNudges({ db, notifier }));
             result.digest = await ops.job("feed digest", () => runSocialDigest({ db, notifier, dashboardUrl: cfg.dashboard?.publicUrl ?? null }));
             result.nudge = await ops.job("backlog pick", () => runBacklogNudge({ db, notifier }));
+            result.reviewDrops = await ops.job("review drops", () => runReviewDrops({ db, notifier }));
+            result.winBack = await ops.job("win-back patches", () => runWinBack({ db, news, notifier }));
+            result.capsule = await ops.job("time capsule", () => runTimeCapsule({ db, notifier }));
             result.yearly = await ops.job("year in games", () => runYearInGames({ db, notifier, render: (userId, name) => renderRecap({ db, userId, name }) }));
             result.serverWrapped = await ops.job("server wrapped", () => runServerWrapped({ db, notifier, log, guildName: id => client.guilds.cache.get(id)?.name,
                 nameOfMany: async ids => { const m = new Map(); await Promise.all([...new Set(ids)].map(async id => { try { const u = await client.users.fetch(id); m.set(id, u.globalName ?? u.username); } catch { m.set(id, "a member"); } })); return m; } }));
@@ -1009,6 +1016,7 @@ async function onInteraction(i, again = false) {
     if (i.isModalSubmit() && i.customId.startsWith("tk_")) return ticketUi.handleModal(i);
     if (i.isModalSubmit() && i.customId === FR.modal) return requestUi.handleModal(i);
     if (i.isButton() && i.customId.startsWith("trivia:")) return triviaUi.handleButton(i);
+    if (i.isButton() && i.customId.startsWith("hilo:")) return hiloUi.handleButton(i);
     if (i.isButton() && i.customId.startsWith("gw_")) return gw.handleButton(i);
     if (i.isModalSubmit() && i.customId.startsWith("gw_")) return gw.handleModal(i);
     if (i.isButton() && i.customId.startsWith(`${STOP_ID}:`)) {
@@ -1163,7 +1171,7 @@ const broadcaster = createBroadcaster({ publicUrl: publicBase, db, ownerId: cfg.
         return { attachment: Buffer.from(toPng(guildBannerSvg({ name: info.name, art: art(info.icon), logo: brandLogo() }))), name: "for-your-server.png", description: `Steam Value Checker message for ${info.name}` };
     },
     promoPayload: () => grabberPromo({ base: publicBase, url: process.env.EXTENSION_STORE_URL || EXTENSION_STORE_URL, dashboardUrl: publicBase }) });
-const dashboard = createDashboard({ logFeed, push, referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
+const dashboard = createDashboard({ hilo, logFeed, push, referrals, weekly, indieSvc, fortniteSvc: createFortnite({ apiKey: process.env.FORTNITE_API_KEY || "", creatorCode: process.env.FORTNITE_CREATOR_CODE || "LUCADO", log: m => console.log(`[fortnite] ${m}`) }), indieNews, spotlight: indieSpotlight, offsite, commandWatch, health: () => client.isReady(), square, supporters, leaveGuild: async id => { const g = client.guilds.cache.get(id); if (!g) return false; await g.leave(); return true; }, storage: () => storageReport({ dbPath: cfg.dbPath, backupDir: cfg.backupDir, db }), topgg, twitchReply: twitchChat.canSay, trivia, news, abg, nowPlaying, playtests: playtestRefresh, music, musicGuild, stations, broadcaster, db, itad, rest, codes: { poll: pollCodes }, bundleFeed: { poll: pollBundles }, xposter, drops: { poll: pollDrops }, fx, dm: (id, payload) => discord.sendDm(id, payload), ops, giveaways, tickets, logs, botInfo: aboutInfo, status, djsVersion: DJS_VERSION, botGuilds: id => client.guilds.cache.has(id), guildInvite: async id => {
         const g = client.guilds.cache.get(id);
         if (!g) throw new Error("The bot isn't in that server.");
         const me = g.members.me;

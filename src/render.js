@@ -447,7 +447,26 @@ export function serverStatsEmbed(s) {
 }
 
 /** The backlog card: how much sits unplayed and what to play next. */
-export function backlogEmbed(view, next) {
+/** The wallet planner's answer: what to buy with the budget and why. */
+export function walletEmbed(plan, budget, currency) {
+    if (!plan.picks.length) return { color: COLOR, title: "Wallet planner", description: `Nothing on your wishlist that you don't own is priced at or under **${money(budget, currency)}** right now. Try a bigger budget, or check back after the next sale.`, footer: { text: "Prices by IsThereAnyDeal" } };
+    const lines = plan.picks.map(p => `**${p.title}** ${money(p.price, currency)}${p.discount > 0 ? ` (-${Math.round(p.discount * 100)}%)` : ""}\n${p.why}`);
+    const out = []; let len = 0;
+    for (const l of lines) { if (len + l.length > 3400) break; out.push(l); len += l.length + 2; }
+    const more = lines.length - out.length;
+    return {
+        color: GREEN, title: `Best use of ${money(budget, currency)}`,
+        description: out.join("\n\n") + (more > 0 ? `\n\n…and ${more} more` : ""),
+        fields: [
+            { name: "Spend", value: money(plan.spent, currency), inline: true },
+            { name: "Left over", value: money(plan.left, currency), inline: true },
+            { name: "Saved vs full price", value: money(plan.saved, currency), inline: true }
+        ],
+        footer: { text: `Picked from ${plan.considered} game${plan.considered === 1 ? "" : "s"} you can afford  •  Prices by IsThereAnyDeal` }
+    };
+}
+
+export function backlogEmbed(view, next, forecast = null) {
     const t = view.totals, c = view.currency;
     const fields = [
         { name: "Not started", value: `**${t.backlogGames}** game${t.backlogGames === 1 ? "" : "s"}${t.backlogPaid > 0 ? `\n${money(t.backlogPaid, c)} spent` : ""}`, inline: true },
@@ -458,6 +477,7 @@ export function backlogEmbed(view, next) {
         fields.push({ name: "🎯 Play next", value: `**${next.pick.title}**\n${next.why}`.slice(0, 1000) });
         if (next.others.length) fields.push({ name: "Also in the running", value: next.others.map(o => o.title).join("\n").slice(0, 500) });
     }
+    if (forecast && forecast.games) fields.push({ name: "🗓️ Finish date, if you keep your pace", value: `${forecast.label}\nAbout ${forecast.hoursNeeded.toLocaleString("en-US")} hours at ${forecast.perGame} hours a game${forecast.perGameBasis === "finished" ? " (what your finished games took)" : ""}. It's a guess from your own habits.`.slice(0, 1000) });
     return { color: COLOR, title: "Your backlog", description: "Mark games with `/me library status`. Games are in your backlog until you change them.", fields, footer: { text: "Prices by IsThereAnyDeal" } };
 }
 
@@ -813,6 +833,7 @@ export function compareEmbed(r, meName, themName) {
         color: COLOR, title: `${meName} vs ${themName}`,
         description: `**${r.shared.length}** games in common (${r.overlapPct}% overlap). ${meName} owns **${r.a.games}**, ${themName} owns **${r.b.games}**.${r.a.minutes || r.b.minutes ? ` Hours on record: **${hrs(r.a.minutes)}** vs **${hrs(r.b.minutes)}**.` : ""}`,
         fields: [
+            ...(r.duel?.rounds?.length ? [{ name: `⚔️ Duel: ${r.duel.verdict === "tie" ? "all square" : `${r.duel.verdict === "a" ? meName : themName} wins ${Math.max(r.duel.aWins, r.duel.bWins)} to ${Math.min(r.duel.aWins, r.duel.bWins)}`}`, value: r.duel.rounds.map(x => `${x.winner === "a" ? "🏆" : "▫️"} ${x.label}: **${x.a}** vs **${x.b}** ${x.winner === "b" ? "🏆" : "▫️"}`).join("\n") }] : []),
             { name: "You both own", value: top(r.shared, 10, x => `• ${x.title}${x.aMinutes || x.bMinutes ? ` (${hrs(x.aMinutes)} / ${hrs(x.bMinutes)})` : ""}`).slice(0, 1020) },
             { name: `Only ${meName}`, value: top(r.onlyA, 8, x => `• ${x.title}`).slice(0, 1020), inline: true },
             { name: `Only ${themName}`, value: top(r.onlyB, 8, x => `• ${x.title}`).slice(0, 1020), inline: true }

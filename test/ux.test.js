@@ -261,3 +261,14 @@ test("channel delivery falls back to DMs when the channel is gone, and only coun
     assert.deepEqual([r.ok, r.permanent], [false, true]);
     assert.equal(db.getUser("c2").dm_failures, 1);
 });
+
+test("compare has a duel scoreboard: wins per category, ties count for nobody, empty categories are left out", async () => {
+    const { duelOf } = await import("../src/compare.js");
+    const d = duelOf({ games: 50, minutes: 6000, finished: 2 }, { games: 40, minutes: 12000, finished: 2 });
+    assert.deepEqual(d.rounds.map(r => r.winner), ["a", "b", "tie"]);
+    assert.equal(d.verdict, "tie");
+    const e = duelOf({ games: 5, minutes: 0, finished: 0 }, { games: 3, minutes: 0, finished: 0 });
+    assert.deepEqual(e.rounds.map(r => r.label), ["Games owned"]);
+    assert.equal(e.verdict, "a");
+    assert.equal(e.rounds[0].a, "5");
+});

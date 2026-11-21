@@ -14,7 +14,7 @@ import { alertHistoryEmbed } from "./render.js";
 const ID = "alerts";
 const COLOR = 0xff9800;
 const PAGES = [["types", "What you get"], ["delivery", "Where"], ["timing", "When"], ["more", "More"]];
-const MUTES = [["alert", "Sale alerts"], ["bundle", "Bundle and giveaway alerts"], ["free", "Free game alerts"], ["news", "News and patch notes"], ["dlc", "DLC sale alerts"], ["refund", "Refund reminders"], ["milestones", "Playtime milestones"], ["yearly", "Year in games card"], ["nudge", "Monthly backlog pick"], ["achv", "Almost-complete achievements"], ["playtest", "Playtests and demos"], ["digest", "Weekly digest"], ["release", "Release-day alerts"], ["friend", "Friend birthday reminders"], ["codes", "Game code alerts"], ["promo", "Promo news alerts"]];
+const MUTES = [["alert", "Sale alerts"], ["bundle", "Bundle and giveaway alerts"], ["free", "Free game alerts"], ["news", "News and patch notes"], ["dlc", "DLC sale alerts"], ["refund", "Refund reminders"], ["milestones", "Playtime milestones"], ["yearly", "Year in games card"], ["nudge", "Monthly backlog pick"], ["achv", "Almost-complete achievements"], ["smart", "Smart alerts"], ["playtest", "Playtests and demos"], ["digest", "Weekly digest"], ["release", "Release-day alerts"], ["friend", "Friend birthday reminders"], ["codes", "Game code alerts"], ["promo", "Promo news alerts"]];
 const mutedSet = u => new Set(String(u.muted ?? "").split(",").filter(Boolean));
 const pickedFamilies = s => GAME_FAMILIES.filter(f => !s.games?.length || f.games.every(g => s.games.includes(g)));
 
@@ -27,6 +27,7 @@ export const TOGGLES = [
     { key: "refund", label: "Refund window", hint: "A heads-up two days before the 14 days run out", ...col("refund") },
     { key: "milestones", label: "Playtime milestones", hint: "A card at 100, 250, 500, 1000 and 2000 hours", ...col("milestones") },
     { key: "achv", label: "Almost 100%", hint: "A few achievements short in a game you play a lot", ...col("achv") },
+    { key: "smart", label: "Smart alerts", hint: "Review drops, win-back patches and a time capsule", ...col("smart") },
     { key: "nudge", label: "Monthly backlog pick", hint: "One unplayed game to try on the 1st", ...col("nudge") },
     { key: "yearly", label: "Year in games", hint: "Your recap card after December 26", ...col("yearly") },
     { key: "codes", label: "Game codes", hint: "New codes for Borderlands, Genshin, Star Rail, Zenless, Destiny 2, Warframe", read: (u, s) => !!s.codes, write: (db, u, on) => db.setAlertSubs(u.discord_id, { codes: on }) },

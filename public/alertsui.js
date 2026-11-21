@@ -35,6 +35,7 @@
     const skipList = () => skipBoxes.map(l => l.firstChild).filter(cb => cb.checked).map(cb => cb.dataset.src);
     const achvOn = h("input", { type: "checkbox", checked: Boolean(s.achv) });
     const nudgeOn = h("input", { type: "checkbox", checked: Boolean(s.nudge) });
+    const smartOn = h("input", { type: "checkbox", checked: Boolean(s.smart) });
     const nowOn = h("input", { type: "checkbox", checked: Boolean(s.nowplaying) });
     const yearOn = h("input", { type: "checkbox", checked: Boolean(s.yearly) });
     const milesOn = h("input", { type: "checkbox", checked: Boolean(s.milestones) });
@@ -68,7 +69,7 @@
       const r = await api("/api/settings", {
         delivery: ch.checked ? "channel" : "dm", paused: paused.checked, region: region.value, stores: stores.value, guild_id: server.value || null,
         hide_facts: factBoxes.filter(b => !b.checked).map(b => b.dataset.key), quiet_start: qs.value || null, quiet_end: qe.value || null, tz: tz.value, digest: digest.checked, digest_day: Number(digestDay.value),
-        max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), playtest_skip: skipList(), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
+        max_price: Number(maxPrice.value || 0), lows_only: lowsOnly.checked, bundles: bundles.checked, share: share.checked, free: free.checked, free_dlc: freeDlc.checked, dlc: dlcOn.checked, refund: refundOn.checked, milestones: milesOn.checked, yearly: yearOn.checked, nudge: nudgeOn.checked, smart: smartOn.checked, nowplaying: nowOn.checked, achv: achvOn.checked, playtest: Number(playSel.value), playtest_skip: skipList(), news: Number(newsMode.value), min_discount: Number(minDisc.value || 0)
       });
       state.me.settings = r.settings;
       await codeRows.save();
@@ -97,6 +98,7 @@
         field("Playtests, demos and betas (Steam, Alpha Beta Gamer, Playtester, GamerPower and itch.io)", playSel), skipField,
         h("label", { class: "check" }, achvOn, "A heads-up when I am almost at 100% achievements in a game"),
         h("label", { class: "check" }, nudgeOn, "A monthly pick from my backlog to try next"),
+        h("label", { class: "check" }, smartOn, "Smart alerts: a wishlist game's reviews drop, a game I left gets a patch, and a time capsule from a year ago"),
         h("label", { class: "check" }, nowOn, "Show the game I am in on my server's Now playing board (needs Steam linked, library sharing and public game details)"),
         h("label", { class: "check" }, yearOn, "My year in games card, sent at the end of December"),
         h("label", { class: "check" }, milesOn, "A card when a game passes 100, 250, 500, 1000 or 2000 hours"),

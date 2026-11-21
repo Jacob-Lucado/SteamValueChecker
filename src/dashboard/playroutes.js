@@ -9,7 +9,7 @@ import { gameNight } from "../gamenight.js";
 import { whoIsPlaying } from "../nowplaying.js";
 
 export function createPlayRoutes(ctx) {
-    const { botGuilds, calendar, cooldown, db, dm, guildFor, isManager, isOwner, itad, lfg, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow } = ctx;
+    const { botGuilds, calendar, cooldown, db, dm, guildFor, hilo, isManager, isOwner, itad, lfg, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow } = ctx;
     return {
         // Game night on the dashboard: pick opted-in members of a server and see what they can play and buy together.
         "GET /api/gamenight/members": async (req, _b, url) => {
@@ -66,9 +66,18 @@ export function createPlayRoutes(ctx) {
             const s = session(req), g = guildFor(s, String(url.searchParams.get("guild") ?? ""));
             const canManage = isManager(g) || isOwner(s);
             const channels = canManage ? (await rest.listChannels(g.id).catch(() => [])).filter(c => c.type === undefined || c.type === 0 || c.type === 5).map(c => ({ id: c.id, name: c.name })) : [];
-            if (!trivia) return { enabled: false, canManage, channels, active: null, top: [] };
+            const hiloTop = await Promise.all(db.hiloTop(g.id, 5).map(async r => ({ name: (await rest.memberName(g.id, r.user_id).catch(() => null)) || "Member " + String(r.user_id).slice(-4), best: r.best })));
+            const hiloInfo = { available: Boolean(hilo), top: hiloTop, mine: db.hiloBest(g.id, s.userId) };
+            if (!trivia) return { enabled: false, canManage, channels, active: null, top: [], hilo: hiloInfo };
             const top = await Promise.all(trivia.top(g.id, 10).map(async r => ({ userId: r.user_id, name: (await rest.memberName(g.id, r.user_id).catch(() => null)) || "Member " + String(r.user_id).slice(-4), points: r.points, correct: r.correct, wins: r.wins })));
-            return { enabled: true, canManage, channels, active: trivia.active(g.id), top, mine: db.triviaRank(g.id, s.userId) };
+            return { enabled: true, canManage, channels, active: trivia.active(g.id), top, mine: db.triviaRank(g.id, s.userId), hilo: hiloInfo };
+        },
+        // Higher or lower. No token starts a round; a token and "h" or "l" answers it. Streaks count for the chosen server.
+        "POST /api/hilo": async (req, body) => {
+            const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));
+            if (!hilo) throw new HttpError(400, "Higher or lower isn't available right now.");
+            try { return await hilo.webStep({ guildId: g.id, userId: s.userId, token: body.token, dir: body.dir }); }
+            catch (e) { if (e instanceof UserError) throw new HttpError(400, e.message); throw e; }
         },
         "POST /api/trivia": async (req, body) => {
             const s = session(req), g = guildFor(s, String(body.guild_id ?? ""));

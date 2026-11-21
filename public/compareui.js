@@ -30,6 +30,8 @@
             h("div", { class: "tile" }, h("div", { class: "k", text: "Your games" }), h("div", { class: "v", text: String(r.a.games) }), h("div", { class: "s", text: hrs(r.a.minutes) ? hrs(r.a.minutes) + " on record" : "" })),
             h("div", { class: "tile" }, h("div", { class: "k", text: r.name + "'s games" }), h("div", { class: "v", text: String(r.b.games) }), h("div", { class: "s", text: hrs(r.b.minutes) ? hrs(r.b.minutes) + " on record" : "" })),
             h("div", { class: "tile" }, h("div", { class: "k", text: "You have, they don't" }), h("div", { class: "v", text: String(r.onlyA.length) }))),
+          r.duel && r.duel.rounds.length ? h("div", { class: "subpanel" }, h("h4", { text: "⚔️ Duel: " + (r.duel.verdict === "tie" ? "all square" : (r.duel.verdict === "a" ? "you win " : r.name + " wins ") + Math.max(r.duel.aWins, r.duel.bWins) + " to " + Math.min(r.duel.aWins, r.duel.bWins)) }),
+            h("ul", {}, ...r.duel.rounds.map(x => h("li", { text: `${x.winner === "a" ? "🏆 " : ""}${x.label}: you ${x.a}, them ${x.b}${x.winner === "b" ? " 🏆" : ""}` })))) : null,
           list(`You both own (${r.shared.length})`, r.shared, x => x.title + (x.aMinutes || x.bMinutes ? `  (you ${hrs(x.aMinutes) || "0h"}, them ${hrs(x.bMinutes) || "0h"})` : "")),
           list(`Only you (${r.onlyA.length})`, r.onlyA, x => x.title),
           list(`Only ${r.name} (${r.onlyB.length})`, r.onlyB, x => x.title)));

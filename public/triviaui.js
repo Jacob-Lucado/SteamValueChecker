@@ -33,7 +33,38 @@
         d.top.length ? h("ul", { class: "plain" }, d.top.map((r, i) => h("li", { text: `${medal(i)} ${r.name}: ${r.points} pts, ${r.correct} right, ${r.wins} win${r.wins === 1 ? "" : "s"}` })))
           : h("p", { class: "muted", text: "No games played yet." }),
         d.mine ? h("p", { class: "muted small", text: `You: ${d.mine.points} pts from ${d.mine.played} game${d.mine.played === 1 ? "" : "s"}.` }) : null));
+      parts.push(hiloPanel(d));
       out.replaceChildren(...parts);
+    }
+    // Higher or lower: a solo streak game. Best streaks count for the server picked above.
+    function hiloPanel(d) {
+      const box = h("div", { class: "panel" }, h("h3", { text: "🔼🔽 Higher or lower" }));
+      if (!d.hilo || !d.hilo.available) { box.append(h("p", { class: "muted", text: "Not available right now." })); return box; }
+      const stage = h("div"), start = h("button", { class: "btn green", type: "button", text: d.hilo.mine ? "Play again" : "Start a streak" });
+      const step = body => api("/api/hilo", { guild_id: guild.value, ...body });
+      const gameCard = (r, streak, token, note) => {
+        const guess = dir => busy(hi, async () => {
+          const res = await step({ token, dir });
+          if (!res.correct) {
+            stage.replaceChildren(h("div", { class: "notice warn", text: `❌ ${res.reveal.name} has ${res.reveal.value}. Final streak: ${res.streak}. Your best here: ${res.best}.` }), start);
+            start.textContent = "Play again"; return;
+          }
+          stage.replaceChildren(gameCard(res.round, res.streak, res.token, `✅ ${res.reveal.name} has ${res.reveal.value}.`));
+        });
+        const hi = h("button", { class: "btn green", type: "button", text: "Higher ⬆️", onclick: () => guess("h") });
+        const lo = h("button", { class: "btn red", type: "button", text: "Lower ⬇️", onclick: () => guess("l") });
+        return h("div", {}, note ? h("div", { class: "notice ok", text: note }) : null,
+          h("p", { class: "muted small", text: streak ? `Streak: ${streak}` : "First guess" }),
+          h("p", {}, h("strong", { text: r.a.name }), ` has a ${r.label} of `, h("strong", { text: r.a.value }), "."),
+          h("p", {}, "Does ", h("strong", { text: r.b.name }), ` have a higher or lower ${r.label}?`),
+          h("div", { class: "row" }, hi, lo));
+      };
+      start.addEventListener("click", () => busy(start, async () => { const res = await step({}); stage.replaceChildren(gameCard(res.round, 0, res.token, null)); }));
+      box.append(h("p", { class: "muted small", text: "Guess whether the next game's launch price, Steam review count or Metacritic score is higher or lower. Every right guess keeps the streak going. In Discord: /server trivia hilo." }), stage, h("div", { class: "row" }, start));
+      stage.replaceChildren();
+      if (d.hilo.top.length) box.append(h("ul", { class: "plain" }, d.hilo.top.map((r, i) => h("li", { text: `${["🥇", "🥈", "🥉"][i] || (i + 1) + "."} ${r.name}: ${r.best} in a row` }))));
+      if (d.hilo.mine) box.append(h("p", { class: "muted small", text: `Your best here: ${d.hilo.mine.best}.` }));
+      return box;
     }
     guild.addEventListener("change", load); await load();
   }

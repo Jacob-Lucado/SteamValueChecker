@@ -350,6 +350,87 @@ test("the Wishlist page filters by co-op and genre", { timeout: 120_000 }, async
     } finally { await browser.close(); await o.close(); }
 });
 
+test("the Wishlist wallet planner picks games that fit the budget", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        o.db.addItems("u1", [{ itad_id: "a", title: "Alpha Duo" }, { itad_id: "b", title: "Beta Solo" }]);
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/wishlist`, { waitUntil: "load" });
+        await page.getByText("Alpha Duo").first().waitFor({ timeout: 20_000 });
+        await page.getByRole("button", { name: /Wallet planner/ }).evaluate(el => el.click());
+        await page.getByLabel("How much you want to spend").fill("25");
+        await page.getByRole("button", { name: "Plan it" }).evaluate(el => el.click());
+        await page.getByText("Left over").first().waitFor({ timeout: 10_000 });
+        const text = await page.locator(".wl-drawer").filter({ hasText: "Wallet planner" }).innerText();
+        assert.match(text, /Alpha Duo/); assert.match(text, /Beta Solo/);
+        await page.getByLabel("How much you want to spend").fill("12");
+        await page.getByRole("button", { name: "Plan it" }).evaluate(el => el.click());
+        await page.waitForTimeout(600);
+        const one = await page.locator(".wl-drawer").filter({ hasText: "Wallet planner" }).innerText();
+        assert.equal(/Alpha Duo/.test(one) !== /Beta Solo/.test(one), true, "a 12 budget fits exactly one 10 game");
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
+
+test("the Trivia page plays Higher or lower and keeps the streak", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const { createHilo } = await import("../src/hilo.js");
+    const facts = [[1, "Cheap Game", 999, 50000, 80], [2, "Pricey Game", 5999, 9000, 90], [3, "Free Game", 0, 900000, 70], [4, "Mid Game", 2999, 200000, 60]].map(([appid, name, price, recs, meta]) => ({ v: 2, appid, name, year: "2020", genres: ["Action"], price, recs, meta }));
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: db => { for (const f of facts) db.saveTriviaFacts(f.appid, f); return { botGuilds: () => true, hilo: createHilo({ db, fetchImpl: async () => { throw new Error("offline"); }, pool: [1, 2, 3, 4] }) }; } });
+    try {
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/trivia`, { waitUntil: "load" });
+        await page.getByRole("button", { name: /Start a streak/ }).waitFor({ timeout: 20_000 });
+        await page.getByRole("button", { name: /Start a streak/ }).evaluate(el => el.click());
+        await page.getByRole("button", { name: /Higher/ }).waitFor({ timeout: 10_000 });
+        let played = 0, ended = false;
+        for (let n = 0; n < 6 && !ended; n++) {
+            await page.getByRole("button", { name: /Higher/ }).evaluate(el => el.click());
+            await page.waitForTimeout(500);
+            ended = (await page.getByText(/Final streak/).count()) > 0;
+            played++;
+        }
+        const best = o.db.hiloBest("g-admin", "u1");
+        assert.ok(best, "a streak or a finished game is saved");
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
+
+test("the Library page shows a backlog finish date", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        o.db.syncSteamGames("u1", [{ itad_id: "x1", title: "Unplayed One", appid: 81, minutes: 0, lastPlayed: null }, { itad_id: "x2", title: "Unplayed Two", appid: 82, minutes: 0, lastPlayed: null }]);
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/library`, { waitUntil: "load" });
+        await page.getByText("Backlog finish date").first().waitFor({ timeout: 20_000 });
+        await page.getByText(/hours waiting|guess from your own habits/).first().waitFor({ timeout: 10_000 });
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); await o.close(); }
+});
+
 test("the Library page's co-op filter keeps only co-op games", { timeout: 120_000 }, async t => {
     const browser = await launchBrowser();
     if (!browser) return t.skip("no Chromium here");

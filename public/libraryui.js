@@ -73,6 +73,19 @@
       return h("div", { class: "panel" }, h("div", { class: "row" }, h("h3", { text: "News for your games" }), go), out);
     }
 
+    // A guess at when the backlog is done, from the hours the member really plays.
+    function forecastPanel() {
+      const out = h("div", { class: "muted small", text: "Loading…" });
+      api("/api/library/forecast").then(f => {
+        if (!f.games) { out.textContent = f.label; return; }
+        out.className = "";
+        out.replaceChildren(h("div", { class: "big", text: f.date ? new Date(f.date + "T12:00:00Z").toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "No pace yet" }),
+          h("p", { class: "muted small", text: f.label }),
+          h("p", { class: "muted small", text: `${f.games} game${f.games === 1 ? "" : "s"} × about ${f.perGame} hours${f.perGameBasis === "finished" ? " (what your finished games took)" : ""} = ${f.hoursNeeded.toLocaleString()} hours. It's a guess from your own habits, so more play makes it sharper.` }));
+      }).catch(() => { out.textContent = "Couldn't work that out right now."; });
+      return h("div", { class: "panel" }, h("h3", { text: "🗓️ Backlog finish date" }), out);
+    }
+
     const offered = [];
     const nextOut = h("div");
     const nextBtn = h("button", { class: "btn green", text: "Pick for me", onclick: () => busy(nextBtn, async () => {
@@ -284,6 +297,7 @@
           h("div", { class: "grid four" }, tile("Not started", String(t.backlogGames), t.backlogPaid > 0 ? money(t.backlogPaid, cur) + " spent on unplayed games" : ""), tile("Playing", String(t.playing)), tile("Finished", String(t.finished)),
             h("div", { class: "tile" }, h("div", { class: "k", text: "What to play next" }), nextBtn)),
           nextOut,
+          t.backlogGames ? forecastPanel() : "",
           newsPanel(),
           challengePanel(), badgesPanel(), spendPanel(), bundlesPanel(() => load()), chart, backlogChart || "",
           h("div", { class: "panel" }, libHead, h("div", { class: "library-controls" }, search, statusFilter, sortBy), filterPanel, bar, tableHost));

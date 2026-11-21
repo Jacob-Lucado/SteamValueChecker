@@ -567,7 +567,7 @@ window.SVC_SITE = envIn => {
     return [type, value, save];
   }
 
-  async function wishlistView() { return (await lazy("WishlistUI")).view({ api, app, busy, field, h, pageHead, ruleControl, select, state, steamLoginBtn, toast, wishCard }); }
+  async function wishlistView() { return (await lazy("WishlistUI")).view({ api, app, busy, field, h, money, pageHead, ruleControl, select, state, steamLoginBtn, toast, wishCard }); }
 
   function wishCard(r, cur, reload, onPick, isPicked) { return window.WishCardUI.view({ api, busy, h, lineChart, money, ruleControl, select, state, steamArt, toast, verdictBadge }, r, cur, reload, onPick, isPicked); }
 
@@ -1510,7 +1510,7 @@ window.SVC_SITE = envIn => {
   const progressBar = f => { const i = h("div"); i.style.width = Math.round(f * 100) + "%"; return h("div", { class: "progress" }, i); };
 
   // ---------- notifications, what's new, search, shortcuts, contrast ----------
-  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", news: "News and patch notes", dlc: "DLC sales", refund: "Refund reminders", milestones: "Playtime milestones", yearly: "Year in games", nudge: "Backlog pick", achv: "Achievements", playtest: "Playtests and demos", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
+  const TYPE_LABEL = { alert: "Sale alerts", bundle: "Bundles & giveaways", free: "Free games", news: "News and patch notes", dlc: "DLC sales", refund: "Refund reminders", milestones: "Playtime milestones", yearly: "Year in games", nudge: "Backlog pick", achv: "Achievements", smart: "Smart alerts", playtest: "Playtests and demos", digest: "Weekly digest", release: "Release day", friend: "Friend birthdays", codes: "Game code alerts", promo: "Promo news alerts" };
   const PRIZE_STATUS = { assigned: "Waiting for you to claim", delivered: "Key sent", confirmed: "Redeemed", problem: "Problem reported", expired: "Expired" };
   const TYPE_ICON = { alert: "🔔", bundle: "🎁", free: "🆓", news: "🛠️", digest: "📰", release: "🎉", friend: "🎂", status: "🛠️", giveaway: "🏆", ticket: "🎫", codes: "🔑", promo: "🎟️" };
 

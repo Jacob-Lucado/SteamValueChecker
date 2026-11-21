@@ -22,6 +22,7 @@ import { regionCurrency } from "../spend.js";
 import { salePrep, saleRecap } from "../saleprep.js";
 import { salesBefore, upcomingSales } from "../salescal.js";
 import { summarize } from "../report.js";
+import { planWallet, likedGenres, MAX_BUDGET } from "../wallet.js";
 
 export function createWishlistRoutes(ctx) {
     const { MAX_HISTORY_POINTS, MUTE_DAYS, clientIp, config, cooldown, db, dm, idFinderLimit, isStaff, itad, now, num, profileCard, profileOrLinked, session, steamFetch, userRow } = ctx;
@@ -50,6 +51,16 @@ export function createWishlistRoutes(ctx) {
             const u = userRow(s);
             const { rows, currency } = await viewRows(db, itad, u);
             return { rows, currency, sync: { available: Boolean(u.steam_id), on: u.wish_sync !== 0, at: u.wish_synced_at ?? null } };
+        },
+        // "What should I spend my wallet on?" The best mix of unowned wishlist games for a budget.
+        "GET /api/wishlist/wallet": async (req, _b, url) => {
+            const s = session(req); const u = userRow(s);
+            const budget = Number(url.searchParams.get("budget"));
+            if (!(budget >= 1)) throw new HttpError(400, "Enter how much you want to spend.");
+            const { rows, currency } = await viewRows(db, itad, u);
+            const starred = url.searchParams.get("starred") === "1";
+            const plan = planWallet(rows, Math.min(MAX_BUDGET, budget), { likes: likedGenres(tasteProfile(db, s.userId)), include: starred ? r => r.priority : null });
+            return { ...plan, budget: Math.min(MAX_BUDGET, budget), currency };
         },
         // Keep the Steam wishlist current by itself (only after one import).
         "POST /api/wishlist/sync": async (req, body) => {
