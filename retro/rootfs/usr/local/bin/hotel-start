@@ -64,12 +64,18 @@ if [ ! -L "$HOTEL/hotel-files/c_images/album1584" ]; then
     rm -rf "$HOTEL/hotel-files/c_images/album1584"
     ln -s "$DATA/badges" "$HOTEL/hotel-files/c_images/album1584"
 fi
-if [ ! -f "$DATA/ExternalTexts.json" ]; then
-    cp "$HOTEL/hotel-files/gamedata/ExternalTexts.json" "$DATA/ExternalTexts.json"
+# The website replaces this file whole when it saves, so it needs a folder it can write to.
+mkdir -p "$DATA/texts"
+if [ ! -f "$DATA/texts/ExternalTexts.json" ]; then
+    if [ -f "$DATA/ExternalTexts.json" ]; then
+        mv "$DATA/ExternalTexts.json" "$DATA/texts/ExternalTexts.json"
+    else
+        cp "$HOTEL/hotel-files/gamedata/ExternalTexts.json" "$DATA/texts/ExternalTexts.json"
+    fi
 fi
-ln -sf "$DATA/ExternalTexts.json" "$HOTEL/hotel-files/gamedata/ExternalTexts.json"
+ln -sf "$DATA/texts/ExternalTexts.json" "$HOTEL/hotel-files/gamedata/ExternalTexts.json"
 cp /etc/hotel/seasonal-texts.json "$HOTEL/hotel-files/gamedata/seasonal-texts.json"
-chown -R www-data:www-data "$DATA/badges" "$DATA/ads" "$DATA/ExternalTexts.json"
+chown -R www-data:www-data "$DATA/badges" "$DATA/ads" "$DATA/texts"
 if [ ! -f "$DATA/storage/app/public/website_news_images/default.png" ]; then
     cp "$CMS/public/assets/images/hotel.png" "$DATA/storage/app/public/website_news_images/default.png"
 fi
@@ -270,7 +276,7 @@ INSERT INTO website_settings (\`key\`, value, comment) VALUES
     ('badge_path_filesystem', '$HOTEL/hotel-files/c_images/album1584', 'Folder Housekeeping saves badges to'),
     ('ads_path_filesystem', '$DATA/ads', 'Folder Housekeeping saves ads to'),
     ('ads_picture_path', '$SITE_URL/ads/', 'Where ad pictures are served'),
-    ('nitro_external_texts_file', '$HOTEL/hotel-files/gamedata/ExternalTexts.json', 'Badge names and descriptions for the client'),
+    ('nitro_external_texts_file', '$DATA/texts/ExternalTexts.json', 'Badge names and descriptions for the client'),
     ('flash_external_texts_file', '', 'Not used by this client')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
 EOF
