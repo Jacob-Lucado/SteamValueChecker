@@ -51,14 +51,28 @@ export function createMemes({ fetchImpl = globalThis.fetch, rnd = Math.random } 
     return { pick };
 }
 
+/** Discord's own error code from a failed call ("Missing Permissions (code 50013)" -> 50013). */
+const codeOf = e => Number(String(e?.detail ?? "").match(/code (\d+)/)?.[1]) || Number(e?.code) || null;
+
+/** What actually went wrong posting in a channel, in words a server admin can act on. `permanent` ones won't fix themselves. */
+export function whyPostFailed(e) {
+    const code = codeOf(e), status = e?.status;
+    if (code === 10003 || status === 404) return { permanent: true, text: "The meme channel was deleted. Pick a new one with `/manage memes setup`." };
+    if (code === 50001 || code === 50013 || status === 403) return { permanent: true, text: "I can't post in the meme channel. My invite gives me View Channel, Send Messages and Embed Links server-wide, so a permission setting on that channel (or its category) is probably blocking me. Open the channel's Permissions and allow those three for my role, or pick another channel with `/manage memes setup`." };
+    if (status === 429) return { permanent: false, text: "Discord asked me to slow down. I'll try again next time." };
+    if (status === 0 || status >= 500) return { permanent: false, text: "Discord isn't answering right now. I'll try again next time." };
+    return { permanent: false, text: `I couldn't post in the meme channel${code ? ` (Discord error ${code})` : ""}.` };
+}
+
 /** Posts one meme in the server's meme channel. Throws a UserError with a plain sentence when it can't. */
 export async function postMeme({ db, api, memes, guildId, now = () => Date.now() }) {
     const c = db.getCommunity(guildId);
     if (!c.meme_channel) throw new UserError("No meme channel is set. Pick one with `/manage memes setup` or on the dashboard's Community page.");
     const m = await memes.pick(db.memeSeen(guildId));
     if (!m) throw new UserError("I couldn't find a fresh meme right now. Try again in a few minutes.");
-    const sent = await api.sendMessage(c.meme_channel, { embeds: [memeEmbed(m)], allowed_mentions: { parse: [] } }).catch(() => null);
-    if (!sent) throw new UserError("I couldn't post in the meme channel. Give me View Channel, Send Messages and Embed Links there.");
+    let sent = null, failure = null;
+    try { sent = await api.sendMessage(c.meme_channel, { embeds: [memeEmbed(m)], allowed_mentions: { parse: [] } }); } catch (e) { failure = e; }
+    if (!sent) { const why = whyPostFailed(failure ?? {}); throw Object.assign(new UserError(why.text), { permanent: why.permanent, discordCode: codeOf(failure) }); }
     db.memeMark(guildId, m.postLink, now());
     db.setCommunity(guildId, { meme_at: now() });
     return { channelId: c.meme_channel, meme: m };
@@ -86,8 +100,9 @@ export async function tickMemes({ db, api, memes, now = () => Date.now(), has = 
             await postMeme({ db, api, memes, guildId: c.guild_id, now }); done++;
         } catch (e) {
             // a source hiccup is retried in ten minutes; anything else waits a full interval so a broken channel isn't hit every tick
-            db.setCommunity(c.guild_id, { meme_at: /fresh meme/.test(e.message) ? now() - every + 10 * 60_000 : now() });
-            log(`memes ${c.guild_id}: ${e.message}`);
+            // a channel that is gone or blocked won't fix itself, so it is tried once a day instead of every interval
+            db.setCommunity(c.guild_id, { meme_at: /fresh meme/.test(e.message) ? now() - every + 10 * 60_000 : e.permanent ? now() - every + 24 * 3_600_000 : now() });
+            log(`memes ${c.guild_id}: ${e.message}${e.discordCode ? ` [${e.discordCode}]` : ""}`);
             if (!/fresh meme/.test(e.message)) reportProblem(db, c.guild_id, "memes", "post the auto meme", e);
         }
         await sleep(1500);

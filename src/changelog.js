@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.77", date: "2026-11-20", title: "Meme posts explain themselves", items: [
+        "**Auto memes:** when the bot can't post in a server's meme channel it now says why (deleted channel, or a permission override on the channel or its category) instead of one generic message. A channel that is gone or blocked is retried once a day, not every hour.",
+    ] },
     { version: "2026.11.76", date: "2026-11-20", title: "Bot logs in Discord", items: [
         "**Logs in Discord (owner):** the bot's errors, warnings and anything that failed can now be posted to a Discord channel or your DMs. Pick *Off*, *Problems only* or *Everything* and the channel on the Admin page. Repeats fold into one line with a count, and it never sends more than five messages a minute. Server IDs in a line show as the server's name, so a failed delivery says which server it was.",
     ] },

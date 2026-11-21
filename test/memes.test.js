@@ -66,3 +66,25 @@ test("photos, questions and showcase posts are not treated as memes", () => {
     assert.equal(chooseMeme([good("z", { ups: 120 })]), null);
     assert.equal(chooseMeme([good("w", { title: "When the wishlist hits 90% off" })]).postLink, "https://redd.it/w");
 });
+
+test("a blocked or deleted meme channel says why, and is retried once a day instead of every hour", async () => {
+    const { whyPostFailed } = await import("../src/memes.js");
+    const { DiscordApiError } = await import("../src/dashboard/discord.js");
+    assert.match(whyPostFailed(new DiscordApiError(403, "x", "Missing Access (code 50001)")).text, /permission setting .* blocking me/);
+    assert.match(whyPostFailed(new DiscordApiError(404, "x", "Unknown Channel (code 10003)")).text, /deleted/);
+    assert.equal(whyPostFailed(new DiscordApiError(403, "x", "Missing Permissions (code 50013)")).permanent, true);
+    assert.equal(whyPostFailed(new DiscordApiError(500, "x")).permanent, false);
+    const r = rig();
+    r.db.setCommunity("g1", { meme_on: 1, meme_channel: "chBlocked", meme_hours: 1 });
+    r.api.sendMessage = async () => { throw new DiscordApiError(403, "Discord returned HTTP 403.", "Missing Access (code 50001)"); };
+    const logs = [];
+    const args = { db: r.db, api: r.api, memes: r.memes, now: r.now, has: () => true, sleep: async () => {}, log: m => logs.push(m) };
+    await tickMemes(args);
+    assert.match(logs[0], /blocking me.*\[50001\]/);
+    r.advance(2 * 3_600_000);
+    await tickMemes(args);
+    assert.equal(logs.length, 1, "not retried after two hours");
+    r.advance(23 * 3_600_000);
+    await tickMemes(args);
+    assert.equal(logs.length, 2, "retried after a day");
+});
