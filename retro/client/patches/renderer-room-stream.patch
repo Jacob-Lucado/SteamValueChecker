@@ -66,20 +66,22 @@ index 00000000..54385b6c
 +}
 diff --git a/packages/communication/src/messages/incoming/roomstream/RoomStreamMessageParser.ts b/packages/communication/src/messages/incoming/roomstream/RoomStreamMessageParser.ts
 new file mode 100644
-index 00000000..eab20059
+index 00000000..96e4b0f1
 --- /dev/null
 +++ b/packages/communication/src/messages/incoming/roomstream/RoomStreamMessageParser.ts
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,49 @@
 +import { IMessageDataWrapper, IMessageParser } from '@volt/api';
 +
 +export class RoomStreamMessageParser implements IMessageParser
 +{
++    private _roomId: number;
 +    private _kind: string;
 +    private _url: string;
 +    private _setBy: string;
 +
 +    flush(): boolean
 +    {
++        this._roomId = 0;
 +        this._kind = '';
 +        this._url = '';
 +        this._setBy = '';
@@ -89,11 +91,17 @@ index 00000000..eab20059
 +
 +    parse(wrapper: IMessageDataWrapper): boolean
 +    {
++        this._roomId = wrapper.readInt();
 +        this._kind = wrapper.readString();
 +        this._url = wrapper.readString();
 +        this._setBy = wrapper.readString();
 +
 +        return true;
++    }
++
++    public get roomId(): number
++    {
++        return this._roomId;
 +    }
 +
 +    public get kind(): string
