@@ -406,8 +406,8 @@ alerts
         .addIntegerOption(o => o.setName("mode").setDescription("What to send").setRequired(true).addChoices({ name: "Off", value: 0 }, { name: "Only games on my wishlist", value: 1 }, { name: "Every playtest and demo the bot finds", value: 2 })))
     .addSubcommand(s => s.setName("achievements").setDescription("A heads-up when you are a few achievements short of 100% in a game you play a lot (off by default)")
         .addBooleanOption(o => o.setName("enabled").setDescription("On or off").setRequired(true)))
-    .addSubcommand(s => s.setName("why").setDescription("Find out why a wishlist game didn't send you an alert")
-        .addStringOption(o => gameOption(o, true)))
+    .addSubcommand(s => s.setName("why").setDescription("Find out why a game didn't alert you, or see what would alert right now")
+        .addStringOption(o => gameOption(o, false)))
     .addSubcommand(s => s.setName("extras").setDescription("Monthly backlog pick, year in games card, smart alerts (all off by default)")
         .addStringOption(o => o.setName("which").setDescription("Which one").setRequired(true).addChoices(
             { name: "Monthly backlog pick", value: "nudge" }, { name: "Year in games card (December)", value: "yearly" }, { name: "Smart alerts: review drops, win-back, time capsule", value: "smart" }))

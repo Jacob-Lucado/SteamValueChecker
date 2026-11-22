@@ -2,7 +2,7 @@
 // Logic lives in db.js, alerts.js, steam.js and wishlist.js; this file only talks to Discord.
 
 import { reachLine } from "./reach.js";
-import { whyNoAlert, whyEmbed } from "./whynot.js";
+import { whyNoAlert, whyEmbed, whyEverything, overviewEmbed } from "./whynot.js";
 import { VIEW_SHOW } from "./constants.js";
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
@@ -248,7 +248,13 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
     /** /alerts why: runs the alert rules by hand for one wishlist game and says which one is in the way. */
     async function alertWhy(i, user) {
         cooldown(i, "view");
-        const found = findItem(db.listItems(i.user.id), i.options.getString("game", true));
+        const wanted = i.options.getString("game");
+        if (!wanted) {
+            // No game named: every game on the list at once, grouped by what is holding it back.
+            await i.deferReply({ flags: MessageFlags.Ephemeral });
+            try { return await i.editReply({ embeds: [overviewEmbed(await whyEverything({ db, itad, user }))] }); } catch (err) { return await failed(i, "alerts why", err); }
+        }
+        const found = findItem(db.listItems(i.user.id), wanted);
         if (found.ambiguous) return eph(i, `More than one match: ${found.ambiguous.map(t => `**${t}**`).join(", ")}. Be more specific.`);
         if (!found.item) return eph(i, "That game is not on your list.");
         await i.deferReply({ flags: MessageFlags.Ephemeral });

@@ -562,6 +562,9 @@ test("the Wishlist page's Why no alert? drawer names what is in the way", { time
         await drawer.getByRole("button", { name: "Check it" }).evaluate(el => el.click());
         await drawer.getByText(/Not sent: Your alerts are paused/).waitFor({ timeout: 10_000 });
         assert.match(await drawer.innerText(), /❌ Your alerts are paused/);
+        await drawer.getByRole("button", { name: "Check my whole list" }).evaluate(el => el.click());
+        await drawer.getByText(/0 of 1 would alert on the next run/).waitFor({ timeout: 10_000 });
+        assert.match(await drawer.innerText(), /1 alerts paused: Alpha Duo/);
         assert.deepEqual(errors, []);
         await ctx.close();
     } finally { await browser.close(); await o.close(); }

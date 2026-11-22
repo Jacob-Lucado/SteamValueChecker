@@ -63,4 +63,31 @@ test("/alerts why: answers privately with the reason for a game on the wishlist,
     assert.match(r.embeds[0].title, /Why no alert for Hades/);
     assert.match(r.embeds[0].description, /Not sent: Your alerts are paused/);
     assert.match((await call("Nope", "w2")).content ?? "", /not on your list/);
+    db.ensureUser("w3", null); db.addItems("w3", [{ itad_id: "g1", title: "Hades" }]);
+    const all = await call(null, "w3");
+    assert.equal(all.embeds[0].title, "Your alerts, right now");
+    assert.ok(all.embeds[0].fields.some(f => /Would alert/.test(f.name) && /Hades/.test(f.value)));
+});
+
+test("alerts overview: every game on the list is sorted into 'would alert' or the rule holding it back", async () => {
+    const { whyEverything, overviewEmbed } = await import("../src/whynot.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:"); db.ensureUser("o1", null);
+    db.addItems("o1", [{ itad_id: "a", title: "On Sale" }, { itad_id: "b", title: "Not On Sale" }, { itad_id: "c", title: "Shallow Cut" }, { itad_id: "d", title: "Owned Game" }]);
+    db.updateItem?.("o1", "c", { trigger_type: "percent", trigger_value: 70 });
+    db.syncSteamGames?.("o1", [{ itad_id: "d", title: "Owned Game", appid: 9, minutes: 10, lastPlayed: null }]);
+    const deal = (p, r) => ({ deals: [{ shop: { name: "Steam" }, price: { amount: p, currency: "USD" }, regular: { amount: r }, cut: Math.round((1 - p / r) * 100), url: "https://s" }], historyLow: { all: { amount: 1 } } });
+    const itad = { getPrices: async ids => new Map(ids.map(id => [id, id === "b" ? { deals: [deal(20, 20).deals[0]] } : deal(10, 20)])) };
+    const user = db.getUser("o1");
+    const o = await whyEverything({ db, itad, user, now: Date.UTC(2026, 10, 22, 18) });
+    assert.equal(o.total, 4);
+    const by = Object.fromEntries(o.blocked.map(g => [g.code, g.titles]));
+    assert.deepEqual(by.nosale, ["Not On Sale"]);
+    assert.deepEqual(by.owned, ["Owned Game"]);
+    assert.ok(o.would.includes("On Sale"));
+    const e = overviewEmbed(o);
+    assert.match(e.description, /all 4 games/);
+    assert.ok(e.fields.some(f => /Would alert on the next run/.test(f.name)));
+    assert.ok(e.fields.some(f => /not on sale right now/.test(f.name) && /Not On Sale/.test(f.value)));
+    assert.match(overviewEmbed(await whyEverything({ db, itad, user: { ...user, discord_id: "nobody" } })).description, /list is empty/);
 });

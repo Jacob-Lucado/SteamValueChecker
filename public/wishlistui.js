@@ -79,7 +79,16 @@
       whyOut.replaceChildren(h("div", { class: "notice " + (d.verdict === "would" ? "ok" : "warn"), role: "status" }, h("strong", { text: d.verdict === "would" ? d.headline : "Not sent: " + d.headline })),
         h("ul", { class: "stack" }, ...d.checks.map(c => h("li", { text: (c.ok ? "✅ " : "❌ ") + c.text.replace(/<t:(\d+):f>/g, (_m, t) => new Date(Number(t) * 1000).toLocaleString()).replace(/`/g, "") }))));
     }) });
-    const whyDrawer = drawer("Why no alert?", h("div", { class: "row" }, whySel, whyGo), whyOut);
+    // The whole list at once: which games would alert on the next run and what is holding the others back.
+    const whyAll = h("button", { class: "btn small", type: "button", text: "Check my whole list", onclick: () => busy(whyAll, async () => {
+      const d = await api("/api/wishlist/why");
+      whyOut.className = "";
+      whyOut.replaceChildren(
+        h("div", { class: "notice " + (d.would.length ? "ok" : "warn"), role: "status" }, h("strong", { text: d.total ? `${d.would.length} of ${d.total} would alert on the next run` : "Your list is empty." })),
+        d.would.length ? h("p", { text: "✅ " + d.would.join(", ") }) : null,
+        ...d.blocked.map(g => h("p", {}, h("strong", { text: `❌ ${g.titles.length} ${g.label}: ` }), h("span", { class: "muted", text: g.titles.slice(0, 12).join(", ") + (g.titles.length > 12 ? `, +${g.titles.length - 12} more` : "") }))));
+    }) });
+    const whyDrawer = drawer("Why no alert?", h("div", { class: "row" }, whySel, whyGo, whyAll), whyOut);
     function openWhy() {
       whyDrawer.hidden = !whyDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; walletDrawer.hidden = true;
       if (!whyDrawer.hidden) whySel.replaceChildren(h("option", { value: "", text: "Choose a game" }), ...(data?.rows ?? []).map(r => h("option", { value: r.itad_id, text: r.title })));

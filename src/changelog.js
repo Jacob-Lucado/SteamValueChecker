@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.92", date: "2026-11-22", title: "Your whole list, checked against your alert rules", items: [
+        "`/alerts why` without a game, and the new *Check my whole list* button in the Wishlist page's Why no alert? drawer, check every game on your list at once. You see which would alert on the next run and how many are held back by each rule (not on sale, short of your trigger, under your minimum discount, already alerted, quiet hours and so on).",
+    ] },
     { version: "2026.11.91", date: "2026-11-22", title: "Fixed channels are retried right away", items: [
         "After a post fails for good, the bot waits a day before trying that channel again. Now `/setup check:True` (or the Check button on the Community page) lifts that wait for every channel that passes, and the daily check does too. The DM to a server owner tells them about it.",
     ] },

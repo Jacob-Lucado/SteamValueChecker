@@ -4,7 +4,7 @@ import { HttpError } from "./http.js";
 import { addFamily, removeFamily, familyView } from "../family.js";
 import { wrappedData, SLIDES } from "../wrapped.js";
 import { SAMPLE_KINDS, sampleAlert } from "../samples.js";
-import { whyNoAlert } from "../whynot.js";
+import { whyNoAlert, whyEverything } from "../whynot.js";
 import { gameFacts } from "../gamefacts.js";
 import { addGameByTitle, applySteamImport, viewRows } from "../wishlist.js";
 import { artUrl } from "../render.js";
@@ -59,6 +59,8 @@ export function createWishlistRoutes(ctx) {
         "GET /api/wishlist/why": async (req, _b, url) => {
             const s = session(req);
             const u = userRow(s);
+            // No game named: the whole list at once.
+            if (!url.searchParams.get("itad_id")) return whyEverything({ db, itad, user: u, now: now() });
             const item = db.listItems(s.userId).find(i => i.itad_id === url.searchParams.get("itad_id"));
             if (!item) throw new HttpError(404, "That game isn't on your wishlist.");
             const prices = await itad.getPrices([item.itad_id], u.region);
