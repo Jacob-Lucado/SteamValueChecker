@@ -95,6 +95,32 @@ server {
     }
 
     # Answered by the game server: furniture data built from the furniture table, and badge rarity.
+    # AIR client: launcher settings, login tickets and game data, answered by the game server.
+    location = /api/client/air.json {
+        limit_except GET HEAD { deny all; }
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location ~ ^/api/client/(air-ticket|air-launcher-token)$ {
+        client_max_body_size 4k;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location = /gamedata/hashes {
+        limit_except GET HEAD { deny all; }
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location ~ ^/gamedata/(external_flash_texts|external_variables|furnidata_xml|productdata)/[^/]+$ {
+        limit_except GET HEAD { deny all; }
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
     location = /api/gamedata/furnidata { proxy_pass http://127.0.0.1:8080; }
     location = /api/badges/leaderboard { proxy_pass http://127.0.0.1:8080; }
 

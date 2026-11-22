@@ -98,14 +98,79 @@ case $SITE_URL in
 esac
 SOCKET_URL=$(printf '%s' "$SITE_URL" | sed 's#^http#ws#')/ws
 
+# ---------------------------------------------------------------- AIR client
+# Habbo's AIR texts and the patched client list come from PlusEMU's published manifest. The last good copy
+# stays on the volume, so a failed download on a later boot keeps the AIR client working.
+AIR_DIR=$DATA/air
+AIR_PORT=30000
+AIR_MANIFEST_URL=${AIR_MANIFEST_URL:-https://assets.plusemu.dev/air/latest.json}
+fetch_air_files() {
+    local tmp entry url sum
+    tmp=$(mktemp -d)
+    if ! curl -fsSL --retry 3 --max-time 60 "$AIR_MANIFEST_URL" -o "$tmp/latest.json" \
+        || ! jq -e '(.version | type == "string" and length > 0) and (.client.url | type == "string" and startswith("https://"))
+            and all(.externalVariables, .externalFlashTexts; (.url | type == "string" and startswith("https://")) and (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))' "$tmp/latest.json" > /dev/null 2>&1; then
+        rm -rf "$tmp"; return 1
+    fi
+    for entry in externalVariables:external_variables.txt externalFlashTexts:external_flash_texts.txt; do
+        url=$(jq -r ".${entry%%:*}.url" "$tmp/latest.json")
+        sum=$(jq -r ".${entry%%:*}.sha256" "$tmp/latest.json")
+        if ! curl -fsSL --retry 3 --max-time 300 "$url" -o "$tmp/${entry#*:}" || [ "$(sha256sum "$tmp/${entry#*:}" | cut -d' ' -f1)" != "$sum" ]; then
+            rm -rf "$tmp"; return 1
+        fi
+    done
+    mkdir -p "$AIR_DIR"
+    mv "$tmp/external_variables.txt" "$tmp/external_flash_texts.txt" "$AIR_DIR/"
+    jq -r .version "$tmp/latest.json" > "$AIR_DIR/version"
+    jq -r .client.url "$tmp/latest.json" > "$AIR_DIR/client-url"
+    rm -rf "$tmp"
+}
+if ! fetch_air_files; then echo "hotel-start: could not refresh the AIR client files"; fi
+
+AIR_READY=0
+if [ -s "$AIR_DIR/external_variables.txt" ] && [ -s "$AIR_DIR/external_flash_texts.txt" ] && [ -s "$AIR_DIR/client-url" ]; then
+    # Players' clients carry this key's public half, so it is made once and never replaced.
+    RSA_KEY=$DATA/rsa-private.pem
+    if [ ! -s "$RSA_KEY" ]; then
+        (cd "$EMU" && timeout 120 "./Plus Emulator" --generate-rsa-key "$RSA_KEY" < /dev/null) || rm -f "$RSA_KEY"
+    fi
+    if [ -s "$RSA_KEY" ]; then
+        chmod 600 "$RSA_KEY"
+        mkdir -p "$EMU/Config/air"
+        cp "$AIR_DIR/external_variables.txt" "$AIR_DIR/external_flash_texts.txt" "$EMU/Config/air/"
+        AIR_READY=1
+    fi
+fi
+AIR_GAME_HOST=${AIR_GAME_HOST:-${FLY_APP_NAME:+$FLY_APP_NAME.fly.dev}}
+AIR_GAME_HOST=${AIR_GAME_HOST:-127.0.0.1}
+AIR_VERSION=$(cat "$AIR_DIR/version" 2> /dev/null || true)
+AIR_CLIENT_URL=$(cat "$AIR_DIR/client-url" 2> /dev/null || true)
+
 # ---------------------------------------------------------------- game server and client settings
 # The game server and the camera service share this secret; a new one each boot is fine.
 CAMERA_SECRET=$(random_secret 48)
-jq --arg pass "$DB_PASSWORD" --arg backups "$DATA/backups" --arg photos "$DATA/camera" --arg bearer "$CAMERA_SECRET" '
+jq --argjson air "$AIR_READY" --argjson port "$AIR_PORT" --arg key "${RSA_KEY:-}" --arg site "$SITE_URL" --arg host "$AIR_GAME_HOST" \
+    --arg texts "$HOTEL/hotel-files/gamedata/ExternalTexts.json" --arg products "$HOTEL/hotel-files/gamedata/ProductData.json" \
+    --arg version "$AIR_VERSION" --arg client "$AIR_CLIENT_URL" \
+    --arg pass "$DB_PASSWORD" --arg backups "$DATA/backups" --arg photos "$DATA/camera" --arg bearer "$CAMERA_SECRET" '
     .Database.Hostname = "127.0.0.1" | .Database.Port = 3306 | .Database.Username = "hotel"
     | .Database.Password = $pass | .Database.Name = "plus"
     | .Database.Migrations.BackupDirectory = $backups
-    | .Flash.Hostname = "127.0.0.1"
+    | .Flash.Hostname = (if $air == 1 then "0.0.0.0" else "127.0.0.1" end) | .Flash.Port = $port
+    | (if $air == 1 then
+        .Encryption.RsaPrivateKeyFile = $key
+        | .AirClient.UrlPrefix = $site
+        | .AirClient.ExternalVariablesFiles = ["air/external_variables.txt"]
+        | .AirClient.ExternalTextsFiles = ["air/external_flash_texts.txt", $texts]
+        | .AirClient.ProductDataFile = $products
+        | .AirClient.Variables = {
+            "external.texts.txt": "\($site)/gamedata/external_flash_texts/1",
+            "external.override.texts.txt": "\($site)/gamedata/external_flash_texts/1",
+            "badge.image.path": "\($site)/hotel-files/c_images/album1584",
+            "image.library.catalogue.url": "\($site)/hotel-files/c_images/catalogue/"}
+        | .AirClient.GameHost = $host | .AirClient.GamePorts = ($port | tostring)
+        | .AirClient.ClientUrl = $client | .AirClient.ClientVersion = $version
+      else . end)
     | .Nitro.Hostname = "127.0.0.1" | .Nitro.Port = 2096 | .Nitro.Name = "Volt"
     | .Rcon.Hostname = "127.0.0.1" | .Rcon.Port = 30001 | .Rcon.AllowedAddresses = ["127.0.0.1", "localhost"]
     | .Camera.Bearer = $bearer | .Camera.OutputDirectory = $photos' /etc/hotel/emulator-config.json > "$EMU/Config/config.json"
@@ -212,6 +277,7 @@ set_env DB_PASSWORD "$DB_PASSWORD"
 set_env EMULATOR_DRIVER plus
 set_env CMS_THEME lucadoos
 set_env CLIENT_NITRO_ENABLED true
+set_env AIR_CLIENT_ENABLED "$([ "$AIR_READY" = 1 ] && echo true || echo false)"
 set_env NITRO_CLIENT_PATH "$SITE_URL/client"
 set_env RCON_HOST 127.0.0.1
 set_env RCON_PORT 30001

@@ -14,12 +14,12 @@ ARG VOLT_REPO=https://github.com/Jacob-Lucado/Volt.git
 ARG VOLT_REF=lucadoos
 ARG VOLT_SHA=unknown
 # The renderer commit that matches this client.
-ARG VOLT_RENDERER_REF=v1.0.4
+ARG VOLT_RENDERER_REF=v1.0.8
 ARG ADMINER_VERSION=6.3.0
 ARG HOTEL_FILES_URL=https://github.com/plus-emulator/plusemu-installer/releases/download/hotel-files
 
 # ---------------------------------------------------------------- game server
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS emulator
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS emulator
 ARG EMU_REPO
 ARG EMU_REF
 ARG EMU_SHA
