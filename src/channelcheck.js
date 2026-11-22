@@ -2,6 +2,7 @@
 // send messages and embed links there. Each row says what is wrong in plain words and how to fix it, so a server's manager can
 // fix a hidden channel or a category override without waiting for a failed post and an owner DM.
 import { FEATURES } from "./feedhealth.js";
+import { reportProblem, clearProblems } from "./guildproblems.js";
 
 const NEED = ["View Channel", "Send Messages", "Embed Links"];
 
@@ -29,7 +30,7 @@ export async function checkChannels({ db, guildId, inspect }) {
         if (!r) problem = "I couldn't look at that channel right now.";
         else if (!r.exists) problem = "That channel was deleted or I can't see it. A channel or category permission may be hiding it from me.";
         else if (r.missing?.length) problem = `I'm missing: ${r.missing.join(", ")}.`;
-        rows.push({ ...c, name: r?.name ?? null, ok: !problem, problem, fix: problem ? FEATURES[c.feature]?.fix ?? "Fix the channel's permissions." : null });
+        rows.push({ ...c, name: r?.name ?? null, unknown: !r, ok: !problem, problem, fix: problem ? FEATURES[c.feature]?.fix ?? "Fix the channel's permissions." : null });
     }
     return { rows, bad: rows.filter(r => !r.ok).length };
 }
@@ -63,4 +64,33 @@ export function clientInspector(client, guildId, PermissionFlagsBits) {
 /** The sentence a server manager sees when the bot can post text in a channel but not embeds (a plain test message goes through anyway). */
 export function embedGapMessage(name) {
     return `I can post in #${name}, but I'm missing Embed Links there, and every post I make is an embed. Allow Embed Links for the bot in that channel (check its category too), then try again.`;
+}
+
+/**
+ * Once a day, checks the channels every server picked and keeps the result on the server's Community page: a channel the bot can
+ * no longer post in (a permission changed, a category was locked) shows up there before a real post fails. A channel the bot just
+ * couldn't look at is left as it was. `inspectFor(guildId)` is the same inspector the /setup check uses.
+ */
+export async function runChannelAudit({ db, guildIds, inspectFor, now = () => Date.now(), log = () => {} }) {
+    const stats = { servers: 0, checked: 0, problems: 0, skipped: false };
+    const last = Number(db.getMeta("chanaudit:last") ?? 0);
+    if (now() - last < 20 * 3_600_000) return { ...stats, skipped: true };
+    db.setMeta("chanaudit:last", String(now()));
+    for (const gid of guildIds) {
+        if (!configuredChannels(db, gid).length) continue;
+        stats.servers++;
+        const { rows } = await checkChannels({ db, guildId: gid, inspect: inspectFor(gid) });
+        for (const r of rows) {
+            if (r.unknown) continue;
+            stats.checked++;
+            const key = `audit:${r.feature}`;
+            if (r.ok) clearProblems(db, gid, key);
+            else {
+                stats.problems++;
+                reportProblem(db, gid, key, `${r.label.toLowerCase()} in ${r.name ? `#${r.name}` : "the channel"}`, { message: `${r.problem} ${r.fix}` }, now());
+                log(`Channel check: ${r.label} in server ${gid}, channel ${r.channelId}: ${r.problem}`);
+            }
+        }
+    }
+    return stats;
 }

@@ -128,7 +128,7 @@ import { createTicketHandlers } from "./tickethandlers.js";
 import { createCodeHandlers } from "./codeshandlers.js";
 import { runCodes } from "./codes.js";
 import { createFeedHealth } from "./feedhealth.js";
-import { clientInspector } from "./channelcheck.js";
+import { clientInspector, runChannelAudit } from "./channelcheck.js";
 import { runBundleFeed } from "./bundlefeed.js";
 import { createXPoster } from "./xposter.js";
 import { createLogFeed } from "./logfeed.js";
@@ -497,6 +497,7 @@ client.once(Events.ClientReady, c => {
             result.gameClub = await ops.job("game club", () => runGameClubs({ db, notifier, log }));
             result.playtests = await ops.job("playtests", () => runPlaytests({ db, news, abg, notifier, log }));
             result.epicSoon = await ops.job("epic soon", () => runEpicSoon({ db, soon: epicSoon, notifier, log }));
+            result.channelAudit = await ops.job("channel check", () => runChannelAudit({ db, guildIds: [...client.guilds.cache.keys()], inspectFor: gid => clientInspector(client, gid, PermissionFlagsBits), log: m => console.warn(`[feeds] ${m}`) }));
             result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log, health: feedHealth }));
             result.hotDeals = await ops.job("hot deals", () => runHotDeals({ db, itad, notifier, log, health: feedHealth }));
             result.saleStarts = await ops.job("sale starts", () => runSaleStarts({ db, notifier, log, health: feedHealth, prepUrl: cfg.dashboard?.publicUrl ? `${String(cfg.dashboard.publicUrl).replace(/\/+$/, "")}/winter-sale` : null }));

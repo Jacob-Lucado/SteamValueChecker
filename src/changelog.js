@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.89", date: "2026-11-22", title: "Problems found before a post fails", items: [
+        "Once a day the bot now checks the channels every server picked for alerts, codes, bundles and promos. If it can no longer post in one (a permission changed, a category got locked), the server's Community page lists it with the fix, before a real post fails. It clears itself once the channel works again.",
+    ] },
     { version: "2026.11.88", date: "2026-11-22", title: "Why didn't I get an alert?", items: [
         "**`/alerts why`** and the **Why no alert?** button on the Wishlist page check one game against every rule the hourly alert run uses: owned, paused or snoozed, no sale, your trigger, minimum discount, price ceiling, record-lows-only, already alerted at that price, quiet hours, VR and Early Access skips, and closed DMs. It names the one in the way, with the numbers.",
     ] },

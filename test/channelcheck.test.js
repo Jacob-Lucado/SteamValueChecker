@@ -29,3 +29,27 @@ test("channel check: a server with nothing set up, and a channel that cannot be 
     assert.equal(r.rows[0].ok, false);
     assert.match(r.rows[0].problem, /couldn't look/);
 });
+
+test("channel audit: puts a blocked channel on the server's problem list, clears it once fixed, and runs once a day", async () => {
+    const { runChannelAudit } = await import("../src/channelcheck.js");
+    const { listProblems } = await import("../src/guildproblems.js");
+    const db = openDb(":memory:");
+    db.setCodeSettings("g1", { channel_id: "c1" });
+    let state = { exists: true, name: "codes", missing: ["Embed Links"] }, t = 1_800_000_000_000;
+    const lines = [], inspectFor = () => async () => state;
+    const run = () => runChannelAudit({ db, guildIds: ["g1", "g2"], inspectFor, now: () => t, log: m => lines.push(m) });
+    let r = await run();
+    assert.equal(r.servers, 1, "g2 has nothing set up");
+    assert.equal(r.problems, 1);
+    assert.match(listProblems(db, "g1")[0].why, /missing: Embed Links/);
+    assert.match(lines[0], /Channel check: Game code posts in server g1, channel c1/);
+    assert.equal((await run()).skipped, true, "not again the same day");
+    t += 21 * 3_600_000; state = { exists: true, name: "codes", missing: [] };
+    r = await run();
+    assert.equal(r.problems, 0);
+    assert.deepEqual(listProblems(db, "g1").filter(p => p.key.startsWith("audit:")), []);
+    t += 21 * 3_600_000; state = null;      // can't look right now: leave things as they are
+    db.setMeta("gprob:g1", JSON.stringify([{ key: "audit:codes", what: "x", why: "y", at: 1, count: 1 }]));
+    await run();
+    assert.equal(listProblems(db, "g1").length, 1);
+});
