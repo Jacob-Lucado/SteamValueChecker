@@ -91,3 +91,22 @@ test("alerts overview: every game on the list is sorted into 'would alert' or th
     assert.ok(e.fields.some(f => /not on sale right now/.test(f.name) && /Not On Sale/.test(f.value)));
     assert.match(overviewEmbed(await whyEverything({ db, itad, user: { ...user, discord_id: "nobody" } })).description, /list is empty/);
 });
+
+test("filter preview: shows which games a stricter or looser filter lets through or holds back", async () => {
+    const { previewFilters } = await import("../src/whynot.js");
+    const { openDb } = await import("../src/db.js");
+    const db = openDb(":memory:"); db.ensureUser("p1", null);
+    db.addItems("p1", [{ itad_id: "a", title: "Half Off" }, { itad_id: "b", title: "Small Cut" }]);
+    const mk = (p, r) => ({ deals: [{ shop: { name: "Steam" }, price: { amount: p, currency: "USD" }, regular: { amount: r }, cut: Math.round((1 - p / r) * 100), url: "https://s" }], historyLow: { all: { amount: 1 } } });
+    const itad = { getPrices: async ids => new Map(ids.map(id => [id, id === "a" ? mk(10, 20) : mk(18, 20)])) };
+    const user = db.getUser("p1");
+    const now = Date.UTC(2026, 10, 22, 18);
+    const same = await previewFilters({ db, itad, user, change: {}, now });
+    assert.equal(same.total, 2);
+    assert.equal(same.now, same.preview);
+    const strict = await previewFilters({ db, itad, user, change: { min_discount: 40 }, now });
+    assert.deepEqual(strict.holds, ["Small Cut"]);
+    assert.equal(strict.preview, strict.now - 1);
+    const none = await previewFilters({ db, itad, user: { ...user, discord_id: "nobody" }, change: { min_discount: 40 }, now });
+    assert.equal(none.total, 0);
+});

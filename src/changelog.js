@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.93", date: "2026-11-22", title: "See what your alert filters do before you save", items: [
+        "On the Alerts page, changing the minimum discount, the price ceiling or *Record lows only* now shows a live line: how many of your wishlist games would alert right now with those settings, how that compares to your saved ones, and which games the change lets through or holds back. Nothing is saved until you press Save.",
+    ] },
     { version: "2026.11.92", date: "2026-11-22", title: "Your whole list, checked against your alert rules", items: [
         "`/alerts why` without a game, and the new *Check my whole list* button in the Wishlist page's Why no alert? drawer, check every game on your list at once. You see which would alert on the next run and how many are held back by each rule (not on sale, short of your trigger, under your minimum discount, already alerted, quiet hours and so on).",
     ] },

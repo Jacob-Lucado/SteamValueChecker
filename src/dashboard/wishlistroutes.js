@@ -4,7 +4,7 @@ import { HttpError } from "./http.js";
 import { addFamily, removeFamily, familyView } from "../family.js";
 import { wrappedData, SLIDES } from "../wrapped.js";
 import { SAMPLE_KINDS, sampleAlert } from "../samples.js";
-import { whyNoAlert, whyEverything } from "../whynot.js";
+import { whyNoAlert, whyEverything, previewFilters } from "../whynot.js";
 import { gameFacts } from "../gamefacts.js";
 import { addGameByTitle, applySteamImport, viewRows } from "../wishlist.js";
 import { artUrl } from "../render.js";
@@ -56,6 +56,11 @@ export function createWishlistRoutes(ctx) {
         },
         // "What should I spend my wallet on?" The best mix of unowned wishlist games for a budget.
         // Runs the alert rules by hand for one wishlist game: the same check as /alerts why.
+        // What the alert filters on the settings page would do right now, before they are saved.
+        "GET /api/alerts/preview": async (req, _b, url) => {
+            const s = session(req), q = url.searchParams;
+            return previewFilters({ db, itad, user: userRow(s), now: now(), change: { min_discount: q.get("min_discount") ?? undefined, max_price: q.get("max_price") ?? undefined, lows_only: q.has("lows_only") ? q.get("lows_only") === "1" : undefined } });
+        },
         "GET /api/wishlist/why": async (req, _b, url) => {
             const s = session(req);
             const u = userRow(s);

@@ -20,6 +20,25 @@
     const minDisc = h("input", { type: "number", min: "0", max: "90", step: "5", value: String(s.min_discount || 0), class: "short-num", "aria-label": "Minimum discount percent" });
     const maxPrice = h("input", { type: "number", min: "0", max: "1000", step: "1", value: String(s.max_price || 0), class: "short-num", "aria-label": "Highest price worth an alert" });
     const lowsOnly = h("input", { type: "checkbox", checked: Boolean(s.lows_only) });
+    // Shows what the filters above would do to the wishlist right now, as they are changed (nothing is saved until Save).
+    const previewLine = h("p", { class: "muted small", "aria-live": "polite", text: "" });
+    let previewTimer = null, previewSeq = 0;
+    const refreshPreview = () => {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(async () => {
+        const seq = ++previewSeq;
+        try {
+          const q = new URLSearchParams({ min_discount: String(Number(minDisc.value || 0)), max_price: String(Number(maxPrice.value || 0)), lows_only: lowsOnly.checked ? "1" : "0" });
+          const d = await api("/api/alerts/preview?" + q);
+          if (seq !== previewSeq) return;
+          if (!d.total) { previewLine.textContent = ""; return; }
+          const diff = d.preview - d.now;
+          previewLine.textContent = `With these filters, ${d.preview} of your ${d.total} wishlist games would alert right now` + (diff ? ` (${Math.abs(diff)} ${diff > 0 ? "more" : "fewer"} than with your saved filters${d.lets.length ? ": " + d.lets.slice(0, 3).join(", ") : d.holds.length ? ": " + d.holds.slice(0, 3).join(", ") : ""}).` : ".");
+        } catch { previewLine.textContent = ""; }
+      }, 450);
+    };
+    for (const el of [minDisc, maxPrice]) el.addEventListener("input", refreshPreview);
+    lowsOnly.addEventListener("change", refreshPreview);
     const digest = h("input", { type: "checkbox", checked: s.digest });
     const digestDay = select(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => [String(i), d]), String(s.digest_day));
     const bundles = h("input", { type: "checkbox", checked: s.bundles });
@@ -93,6 +112,7 @@
         h("label", { class: "check" }, ch, "Server alert channel only. You are mentioned there, and everyone who can see the channel sees the game name."),
         field("Server for the alert channel", server), h("p", { class: "muted small", text: "Alerts that cannot be sent by DM go to this server's alert channel." }),
         field("Only alert for sales of at least this percent off (0 = any; starred games always come through)", minDisc),
+        previewLine,
         field("Only alert when the price is at or under this amount, in your store's currency (0 = no limit; starred games always come through)", maxPrice),
         h("label", { class: "check" }, lowsOnly, "Only alert for record lows (the lowest price ever seen; starred games always come through)"),
         h("label", { class: "check" }, paused, "Pause all alerts (your wishlist is kept)")),

@@ -97,13 +97,29 @@ export function overviewEmbed(o) {
 }
 
 /** Runs every wishlist game of one member through the rules with a single price lookup. VR/Early Access skips need a store lookup per game, so they are left to the one-game check. */
-export async function whyEverything({ db, itad, user, now = Date.now(), money }) {
+export async function whyEverything({ db, itad, user, now = Date.now(), money, prices = null }) {
     const items = db.listItems(user.discord_id).slice(0, 300);
     if (!items.length) return overview([]);
-    const prices = await itad.getPrices(items.map(i => i.itad_id), user.region);
+    prices ??= await itad.getPrices(items.map(i => i.itad_id), user.region);
     const owned = new Set(db.listLibrary(user.discord_id).map(g => g.itad_id)), guild = db.getGuild(user.guild_id);
     return overview(items.map(item => {
         const summary = summarize(prices.get(item.itad_id), { majorOnly: user.stores === "major" });
         return { title: item.title, res: whyNoAlert({ user, item, summary, owned: owned.has(item.itad_id), guild, now, money: money ?? (n => n.toFixed(2)) }) };
     }));
+}
+
+const num = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v) || 0));
+
+/**
+ * What changing the alert filters would do, before saving them: how many games would alert now with the saved settings and with the
+ * new ones, and which games the change lets through or holds back. `change` may hold min_discount, max_price and lows_only.
+ */
+export async function previewFilters({ db, itad, user, change, now = Date.now() }) {
+    const items = db.listItems(user.discord_id).slice(0, 300);
+    if (!items.length) return { total: 0, now: 0, preview: 0, lets: [], holds: [] };
+    const prices = await itad.getPrices(items.map(i => i.itad_id), user.region);
+    const next = { ...user, min_discount: num(change.min_discount ?? user.min_discount, 0, 90), max_price: num(change.max_price ?? user.max_price, 0, 1000), lows_only: change.lows_only ?? user.lows_only ? 1 : 0 };
+    const [a, b] = await Promise.all([whyEverything({ db, itad, user, now, prices }), whyEverything({ db, itad, user: next, now, prices })]);
+    const was = new Set(a.would), will = new Set(b.would);
+    return { total: b.total, now: a.would.length, preview: b.would.length, lets: b.would.filter(t => !was.has(t)), holds: a.would.filter(t => !will.has(t)) };
 }
