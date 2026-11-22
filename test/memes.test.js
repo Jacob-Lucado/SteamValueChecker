@@ -97,3 +97,17 @@ test("when every popular meme was already posted, a smaller one is used instead 
     assert.equal(chooseMeme([small], new Set()), null, "the normal bar is still 500");
     assert.equal(chooseMeme([small], new Set(), () => 0, 150).postLink, small.postLink);
 });
+
+test("memes: a blocked channel goes through feed health, which names the server once and lists it on the Community page", async () => {
+    const { createFeedHealth } = await import("../src/feedhealth.js");
+    const { listProblems } = await import("../src/guildproblems.js");
+    const r = rig();
+    r.db.setCommunity("g1", { meme_on: 1, meme_channel: "c1", meme_hours: 1 });
+    const lines = [];
+    const health = createFeedHealth({ db: r.db, log: m => lines.push(m), now: r.now });
+    r.api.sendMessage = async () => { throw Object.assign(new Error("x"), { status: 403, detail: "Missing Access (code 50001)" }); };
+    await tickMemes({ db: r.db, api: r.api, memes: r.memes, now: r.now, health, sleep: async () => {} });
+    assert.match(lines[0], /Auto meme posts failed in server g1, channel c1: 403 50001 Missing Access/);
+    assert.equal(listProblems(r.db, "g1").filter(p => p.key.startsWith("feed:memes")).length, 1);
+    assert.ok(health.blocked("memes", "g1"));
+});

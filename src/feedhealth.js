@@ -17,6 +17,7 @@ export const FEATURES = {
     deals: { label: "Hot deal posts", fix: "Pick another alert channel on the dashboard's Server page (or with `/setup`), or fix the permissions on the current one." },
     drops: { label: "Promo drop posts", fix: "Use `/server promos` to pick another channel, or fix the permissions on the current one." },
     news: { label: "Promo news posts", fix: "Use `/server promos` to pick another channel, or fix the permissions on the current one." },
+    memes: { label: "Auto meme posts", fix: "Use `/manage memes setup` to pick another channel, or fix the permissions on the current one." },
     sale: { label: "Steam sale posts", fix: "Pick another alert channel on the dashboard's Server page (or with `/setup`), or fix the permissions on the current one." }
 };
 

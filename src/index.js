@@ -863,7 +863,7 @@ client.once(Events.ClientReady, () => { // squad-up posts: two or more members i
 });
 client.once(Events.ClientReady, () => { // post a meme in every server whose timer is up (checked every five minutes)
     let busy = false;
-    const tick = () => { if (busy) return; busy = true; tickMemes({ db, api: botRest, memes, has: id => client.guilds.cache.has(id), log: m => console.log(`[memes] ${m}`) }).catch(() => {}).finally(() => { busy = false; }); };
+    const tick = () => { if (busy) return; busy = true; tickMemes({ db, api: botRest, memes, health: feedHealth, has: id => client.guilds.cache.has(id), log: m => console.log(`[memes] ${m}`) }).catch(() => {}).finally(() => { busy = false; }); };
     setTimeout(tick, 90_000).unref?.(); setInterval(tick, 5 * 60_000).unref?.();
 });
 // Starboard: reactions arrive as raw gateway events, so they count on messages the bot never saw too. Polls close themselves when their time is up.

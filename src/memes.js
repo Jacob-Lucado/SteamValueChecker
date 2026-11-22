@@ -77,7 +77,7 @@ export async function postMeme({ db, api, memes, guildId, now = () => Date.now()
     if (!m) throw new UserError("I couldn't find a fresh meme right now. Try again in a few minutes.");
     let sent = null, failure = null;
     try { sent = await api.sendMessage(c.meme_channel, { embeds: [memeEmbed(m)], allowed_mentions: { parse: [] } }); } catch (e) { failure = e; }
-    if (!sent) { const why = whyPostFailed(failure ?? {}); throw Object.assign(new UserError(why.text), { permanent: why.permanent, discordCode: codeOf(failure) }); }
+    if (!sent) { const why = whyPostFailed(failure ?? {}); throw Object.assign(new UserError(why.text), { permanent: why.permanent, discordCode: codeOf(failure), cause: failure }); }
     db.memeMark(guildId, m.postLink, now());
     db.setCommunity(guildId, { meme_at: now() });
     return { channelId: c.meme_channel, meme: m };
@@ -90,7 +90,7 @@ async function discoverChannel(api, guildId) {
 }
 
 /** Called every few minutes: posts in every server whose meme is due. One failure never stops the rest. */
-export async function tickMemes({ db, api, memes, now = () => Date.now(), has = () => true, sleep = ms => new Promise(r => setTimeout(r, ms)), log = () => {} }) {
+export async function tickMemes({ db, api, memes, now = () => Date.now(), has = () => true, health = null, sleep = ms => new Promise(r => setTimeout(r, ms)), log = () => {} }) {
     let done = 0;
     for (const c of db.allCommunity()) {
         if (!c.meme_on || !has(c.guild_id) || !featureOn(db, c.guild_id, "fun")) continue; // a server can switch the fun area off
@@ -103,12 +103,16 @@ export async function tickMemes({ db, api, memes, now = () => Date.now(), has = 
                 db.setCommunity(c.guild_id, { meme_channel: id });
             }
             await postMeme({ db, api, memes, guildId: c.guild_id, now }); done++;
+            health?.ok("memes", c.guild_id);
         } catch (e) {
             // a source hiccup is retried in ten minutes; anything else waits a full interval so a broken channel isn't hit every tick
             // a channel that is gone or blocked won't fix itself, so it is tried once a day instead of every interval
             db.setCommunity(c.guild_id, { meme_at: /fresh meme/.test(e.message) ? now() - every + 10 * 60_000 : e.permanent ? now() - every + 24 * 3_600_000 : now() });
-            log(`memes ${c.guild_id}: ${e.message}${e.discordCode ? ` [${e.discordCode}]` : ""}`);
-            if (!/fresh meme/.test(e.message)) reportProblem(db, c.guild_id, "memes", "post the auto meme", e);
+            if (health && e.cause && !/fresh meme/.test(e.message)) await health.report({ feature: "memes", guildId: c.guild_id, channelId: c.meme_channel, err: e.cause });   // names the server, backs off, tells the owner, and lists it on the Community page
+            else {
+                log(`memes ${c.guild_id}: ${e.message}${e.discordCode ? ` [${e.discordCode}]` : ""}`);
+                if (!/fresh meme/.test(e.message)) reportProblem(db, c.guild_id, "memes", "post the auto meme", e);
+            }
         }
         await sleep(1500);
     }
