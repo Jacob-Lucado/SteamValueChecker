@@ -8,7 +8,7 @@ import { whyNoAlert, whyEverything, previewFilters } from "../whynot.js";
 import { gameFacts } from "../gamefacts.js";
 import { addGameByTitle, applySteamImport, viewRows } from "../wishlist.js";
 import { artUrl } from "../render.js";
-import { buyOrWait } from "../advice.js";
+import { buyOrWait, suggestTarget } from "../advice.js";
 import { codeFamilies, codeGames } from "../codes.js";
 import { connectionPayload } from "../linkedroles.js";
 import { describeTrigger, parseTrigger } from "../alerts.js";
@@ -149,7 +149,7 @@ export function createWishlistRoutes(ctx) {
             const all = await itad.getHistory(id, u.region);
             const step = Math.max(1, Math.ceil(all.length / MAX_HISTORY_POINTS));
             const points = all.filter((_, i) => i % step === 0 || i === all.length - 1).map(p => ({ t: p.t, price: p.price, shop: p.shop }));
-            let advice = null;
+            let advice = null, target = null;
             try {
                 const prices = await itad.getPrices([id], u.region);
                 const sum = summarize(prices.get(id), { majorOnly: u.stores === "major" });
@@ -157,7 +157,8 @@ export function createWishlistRoutes(ctx) {
                 const cur = sum.currency || "USD";
                 advice = buyOrWait(all, nowPrice, { sales: upcomingSales(Date.now()), past: salesBefore(), money: n => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n); } catch { return String(n); } } });
             } catch { /* the chart works without it */ }
-            return { title: own.title, points, advice };
+            try { target = suggestTarget(all); } catch { /* optional */ }
+            return { title: own.title, points, advice, target };
         },
         "POST /api/wishlist/bulk": async (req, body) => {
             const s = session(req);

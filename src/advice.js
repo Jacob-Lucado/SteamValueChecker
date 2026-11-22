@@ -46,3 +46,23 @@ export function buyOrWait(points, price, { now = Date.now(), sales = [], past = 
     const label = { buy: "Buy now", lean_buy: "Leaning buy", lean_wait: "Leaning wait", wait: "Wait" }[verdict];
     return { verdict, label, reasons, low, median, dips, sinceLow, saleIn, oracle };
 }
+
+/**
+ * A realistic "tell me at this price" for a wishlist game, from a year of history: the price it sits at or under for roughly the
+ * cheapest quarter of that year. Not the all-time low (which may only happen once) and not a token discount. null when there is
+ * too little history, or the price has never moved.
+ */
+export function suggestTarget(points, { now = Date.now(), money = n => `$${Number(n).toFixed(2)}` } = {}) {
+    const pts = (points ?? []).filter(p => Number.isFinite(p.price) && p.price > 0 && p.t >= now - 365 * DAY).sort((a, b) => a.t - b.t);
+    if (pts.length < 4) return null;
+    // Weight each price by how long it lasted, so a one-day flash sale doesn't count as much as a month at a price.
+    const spans = pts.map((p, i) => ({ price: p.price, ms: Math.max(DAY, (pts[i + 1]?.t ?? now) - p.t) }));
+    const total = spans.reduce((s, x) => s + x.ms, 0);
+    const high = Math.max(...pts.map(p => p.price)), low = Math.min(...pts.map(p => p.price));
+    if (high - low < 0.5 || low / high > 0.95) return null;
+    let acc = 0, quarter = low;
+    for (const x of [...spans].sort((a, b) => a.price - b.price)) { acc += x.ms; quarter = x.price; if (acc >= total * 0.25) break; }
+    const price = Math.round(quarter * 100) / 100;
+    const share = Math.round(spans.filter(x => x.price <= price).reduce((s, x) => s + x.ms, 0) / total * 100);
+    return { price, low, high, share, text: `It has been at or under ${money(price)} about ${share}% of the past year (low ${money(low)}, high ${money(high)}).` };
+}

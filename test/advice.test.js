@@ -47,3 +47,16 @@ test("sale oracle: counts big sales that fit in the history where the game got n
     assert.equal(none.oracle.hit, 0);
     assert.match(none.reasons.join(" "), /not reached its low in any/);
 });
+
+test("suggested target: the price a game sits at or under for about the cheapest quarter of the year", async () => {
+    const { suggestTarget } = await import("../src/advice.js");
+    const now = Date.UTC(2026, 10, 22), DAY = 86400_000;
+    // 210 days at 30, 60 at 15, 40 at 24, then 50 back at 30: the cheapest quarter ends at 24.
+    const pts = [{ t: now - 360 * DAY, price: 30 }, { t: now - 150 * DAY, price: 15 }, { t: now - 90 * DAY, price: 24 }, { t: now - 50 * DAY, price: 30 }];
+    const t = suggestTarget(pts, { now });
+    assert.equal(t.price, 24);
+    assert.equal(t.low, 15);
+    assert.match(t.text, /at or under \$24\.00/);
+    assert.equal(suggestTarget(pts.slice(0, 3), { now }), null, "too little history");
+    assert.equal(suggestTarget(pts.map(p => ({ ...p, price: 30 })), { now }), null, "price never moved");
+});

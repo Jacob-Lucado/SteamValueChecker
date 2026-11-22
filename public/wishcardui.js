@@ -28,6 +28,8 @@
         const d = await api("/api/wishlist/history?itad_id=" + encodeURIComponent(r.itad_id));
         if (!d.points.length) { chartHolder.replaceChildren(h("p", { class: "muted small", text: "No price history yet." })); return; }
         chartHolder.replaceChildren(d.advice ? h("div", { class: "notice " + (d.advice.verdict === "buy" || d.advice.verdict === "lean_buy" ? "" : "warn") }, h("b", { text: "Buy now or wait? " + d.advice.label + ". " }), d.advice.reasons.join(" ")) : null,
+          d.target ? h("div", { class: "notice" }, h("b", { text: "Suggested alert price: " + money(d.target.price, cur) + ". " }), d.target.text + " ",
+            h("button", { class: "btn small", type: "button", text: "Alert me at " + money(d.target.price, cur), onclick: ev => busy(ev.currentTarget, async () => { await api("/api/wishlist/alert", { itad_id: r.itad_id, type: "price", value: d.target.price }); toast("Rule saved. You'll hear about " + r.title + " at " + money(d.target.price, cur) + " or less.", "ok"); reload(); }) })) : null,
           h("p", { class: "muted small", text: "Lowest store price over the last year, " + r.title }),
           lineChart([{ name: "Price", cls: "s0", points: d.points.map(p => ({ x: p.t, y: p.price })) }], { format: v => money(v, cur), label: "Price history for " + r.title }));
       });
