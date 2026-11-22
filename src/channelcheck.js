@@ -59,3 +59,8 @@ export function clientInspector(client, guildId, PermissionFlagsBits) {
         return { exists: true, name: ch.name, missing: p ? flags.filter(([f]) => !p.has(f)).map(([, n]) => n) : NEED };
     };
 }
+
+/** The sentence a server manager sees when the bot can post text in a channel but not embeds (a plain test message goes through anyway). */
+export function embedGapMessage(name) {
+    return `I can post in #${name}, but I'm missing Embed Links there, and every post I make is an embed. Allow Embed Links for the bot in that channel (check its category too), then try again.`;
+}

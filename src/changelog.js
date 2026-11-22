@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.86", date: "2026-11-22", title: "Catching a channel that can't show embeds", items: [
+        "Picking a channel for game codes, bundles or promo drops now also checks for **Embed Links**, in the slash commands and on the dashboard. A channel can take a plain test message and still fail every real post, because the posts are embeds. The bot now says so right away and doesn't save that channel.",
+    ] },
     { version: "2026.11.85", date: "2026-11-21", title: "Your play habits", items: [
         "**Play habits:** the hours recap (`/me steam recap`, and the Hours panel on the Steam page) now shows the day of the week you play most, your longest run of days in a row, the streak you're on right now and your biggest single day. It appears once the bot has seen you play on a few different days.",
     ] },

@@ -1,4 +1,5 @@
 // Discord side of the bundle feed: /server promos bundles. With no options it shows the settings and the newest bundles.
+import { embedGapMessage } from "./channelcheck.js";
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
 import { applyBundleFeedSettings, describeStores } from "./bundlefeed.js";
@@ -32,6 +33,7 @@ export function createBundleFeedHandlers({ db, runNow = null }) {
             if (ch) {
                 try { await ch.send({ content: "Game bundles will be posted in this channel: new ones from Humble, Fanatical, IndieGala and Steam, marked when they end.", allowedMentions: { parse: [] } }); }
                 catch { throw new UserError("I can't post in that channel. Give me View Channel, Send Messages and Embed Links there."); }
+                if (ch.permissionsFor?.(i.guild?.members?.me)?.has("EmbedLinks") === false) throw new UserError(embedGapMessage(ch.name));
                 patch.channel_id = ch.id;
             }
             if (role) patch.role_id = role.id;

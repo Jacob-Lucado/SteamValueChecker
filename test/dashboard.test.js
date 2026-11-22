@@ -389,6 +389,22 @@ test("alert channel: only people with Manage Server, and only if the bot can pos
     await t.close();
 });
 
+test("a codes, bundles or promo channel that can't show embeds is refused, even though a plain test message goes through", async () => {
+    let missing = ["Embed Links"];
+    const o = await signedIn({ config: { ownerId: "u1" }, extra: { codes: { poll: async () => ({}) }, channelCheck: () => async () => ({ exists: true, name: "codes", missing }) } });
+    const post = (path, body) => o.request(path, { method: "POST", body });
+    for (const [path, read] of [["/api/servers/codes", () => o.db.getCodeSettings("g-admin")], ["/api/servers/bundles", () => o.db.getBundleFeedSettings("g-admin")], ["/api/servers/drops", () => o.db.getDropSettings("g-admin")]]) {
+        missing = ["Embed Links"];
+        const r = await post(path, { guild_id: "g-admin", channel_id: "c1" });
+        assert.equal(r.status, 400, path);
+        assert.match(r.data.error, /missing Embed Links/, path);
+        assert.ok(!read().channel_id, `${path} was not saved`);
+        missing = [];
+        assert.equal((await post(path, { guild_id: "g-admin", channel_id: "c1" })).status, 200, path);
+        assert.equal(read().channel_id, "c1");
+    }
+});
+
 test("alert channel is not saved when the bot cannot post there", async () => {
     const t = await setup({ sendFails: true });
     await t.signIn();

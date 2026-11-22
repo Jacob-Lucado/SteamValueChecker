@@ -1,4 +1,5 @@
 // Discord side of promo drops: /server promos add, list, end, channel, ping and news.
+import { embedGapMessage } from "./channelcheck.js";
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
 import { applyDropSettings, cleanDrop, dropView } from "./drops.js";
@@ -55,6 +56,7 @@ export function createDropHandlers({ db, runNow = null }) {
                 if (!ch) return await eph(i, summary(gid));
                 try { await ch.send({ content: "Promo drops will be posted in this channel.", allowedMentions: { parse: [] } }); }
                 catch { throw new UserError("I can't post in that channel. Give me View Channel, Send Messages and Embed Links there."); }
+                if (ch.permissionsFor?.(i.guild?.members?.me)?.has("EmbedLinks") === false) throw new UserError(embedGapMessage(ch.name));
                 const s = applyDropSettings(db, gid, { channel_id: ch.id });
                 runNow?.().catch(() => {});
                 return await eph(i, `Saved. Drops go to <#${ch.id}>.\n` + summary(gid, s));

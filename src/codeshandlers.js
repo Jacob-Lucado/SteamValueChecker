@@ -1,4 +1,5 @@
 // Discord side of game codes: /games codes latest, channel, games and ping.
+import { embedGapMessage } from "./channelcheck.js";
 import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { UserError } from "./errors.js";
 import { applyCodeSettings, codeEmbed, codeView, describeGames, pendingFor } from "./codes.js";
@@ -44,6 +45,7 @@ export function createCodeHandlers({ db, runNow = null }) {
                 if (!ch) return await eph(i, summary(gid));
                 try { await ch.send({ content: "Game codes will be posted in this channel. New SHiFT codes show up here as they are listed.", allowedMentions: { parse: [] } }); }
                 catch { throw new UserError("I can't post in that channel. Give me View Channel, Send Messages and Embed Links there."); }
+                if (ch.permissionsFor?.(i.guild?.members?.me)?.has("EmbedLinks") === false) throw new UserError(embedGapMessage(ch.name));
                 const s = applyCodeSettings(db, gid, { channel_id: ch.id });
                 runNow?.().catch(() => {});
                 return await eph(i, `Saved. I'll post new codes in <#${ch.id}>.\n` + summary(gid, s));

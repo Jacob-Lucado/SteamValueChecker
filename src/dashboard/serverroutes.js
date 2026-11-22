@@ -1,5 +1,6 @@
 // The My servers page's API: what each managed server has set up, channels and roles, feeds, drops and events.
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
+import { embedGapMessage } from "../channelcheck.js";
 import { featureList, setFeature } from "../features.js";
 import { BUNDLE_STORES } from "../bundlefeedsource.js";
 import { DiscordApiError } from "./discord.js";
@@ -12,7 +13,7 @@ import { applyDropSettings, cleanDrop, dropView } from "../drops.js";
 import { autoSetup, setupStatus } from "../setup.js";
 
 export function createServerRoutes(ctx) {
-    const { botGuilds, bundleFeed, cd, codes, comm, config, cooldown, db, drops, guildChoices, guildFor, isManager, itad, managedGuild, managerGuild, names, now, rest, session, userRow } = ctx;
+    const { channelCheck, botGuilds, bundleFeed, cd, codes, comm, config, cooldown, db, drops, guildChoices, guildFor, isManager, itad, managedGuild, managerGuild, names, now, rest, session, userRow } = ctx;
     return {
         "GET /api/servers/bundles": async (req, _b, url) => {
             const s = session(req);
@@ -45,6 +46,7 @@ export function createServerRoutes(ctx) {
                     if (channel.id !== db.getBundleFeedSettings(g.id).channel_id) {
                         try { await rest.sendMessage(channel.id, { content: `Game bundles will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
                         catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
+                        if (channelCheck && (await channelCheck(g.id)(channel.id).catch(() => null))?.missing?.includes("Embed Links")) throw new HttpError(400, embedGapMessage(channel.name));
                     }
                 }
                 patch.channel_id = body.channel_id || null;
@@ -93,6 +95,7 @@ export function createServerRoutes(ctx) {
                     if (channel.id !== db.getCodeSettings(g.id).channel_id) {
                         try { await rest.sendMessage(channel.id, { content: `Game codes will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
                         catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
+                        if (channelCheck && (await channelCheck(g.id)(channel.id).catch(() => null))?.missing?.includes("Embed Links")) throw new HttpError(400, embedGapMessage(channel.name));
                     }
                 }
                 patch.channel_id = body.channel_id || null;
@@ -130,6 +133,7 @@ export function createServerRoutes(ctx) {
                     if (channel.id !== db.getDropSettings(g.id).channel_id) {
                         try { await rest.sendMessage(channel.id, { content: `Promo drops will be posted in this channel (set from the dashboard by <@${s.userId}>).`, allowed_mentions: { parse: [] } }); }
                         catch { throw new HttpError(400, `I cannot post in #${channel.name}. Give the bot View Channel, Send Messages and Embed Links there, then try again.`); }
+                        if (channelCheck && (await channelCheck(g.id)(channel.id).catch(() => null))?.missing?.includes("Embed Links")) throw new HttpError(400, embedGapMessage(channel.name));
                     }
                 }
                 patch.channel_id = body.channel_id || null;
