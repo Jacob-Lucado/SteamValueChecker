@@ -135,6 +135,7 @@ if [ -s "$AIR_DIR/external_variables.txt" ] && [ -s "$AIR_DIR/external_flash_tex
         (cd "$EMU" && timeout 120 "./Plus Emulator" --generate-rsa-key "$RSA_KEY" < /dev/null) || rm -f "$RSA_KEY"
     fi
     if [ -s "$RSA_KEY" ]; then
+        chown plusemu:plusemu "$RSA_KEY"
         chmod 600 "$RSA_KEY"
         mkdir -p "$EMU/Config/air"
         cp "$AIR_DIR/external_variables.txt" "$AIR_DIR/external_flash_texts.txt" "$EMU/Config/air/"
