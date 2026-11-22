@@ -1023,6 +1023,14 @@ window.SVC_SITE = envIn => {
           : h("p", { class: "muted small", text: "Set a target for hours played this year and see if you are on pace." }),
         h("div", { class: "rule inline" }, input, save));
     }
+    // Which days of the week you play, and how long your streaks run.
+    function habitsBox(x) {
+      const top = Math.max(...x.weekdays, 1), names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const bars = h("div", { class: "row", style: "align-items:flex-end;gap:6px;height:64px", role: "img", "aria-label": "Hours by day of the week. Favorite: " + x.favoriteDay });
+      x.weekdays.forEach((m, i) => { const col = h("div", { style: "flex:1;text-align:center" }); const b = h("div", { style: "background:var(--blue,#66c0f4);border-radius:3px 3px 0 0;min-height:2px;height:" + Math.round(m / top * 48) + "px", title: names[i] + ": " + hoursText(m) }); col.append(b, h("div", { class: "muted small", text: names[i] })); bars.append(col); });
+      return h("div", { class: "subpanel" }, h("h4", { text: "Your play habits" }), bars,
+        h("p", { class: "small", text: `You play most on ${x.favoriteDay}s. Longest streak: ${x.bestStreak} day${x.bestStreak === 1 ? "" : "s"} in a row${x.currentStreak > 1 ? ` (${x.currentStreak} right now)` : ""}. Biggest day: ${hoursText(x.bigDay.minutes)} on ${x.bigDay.day}.` }));
+    }
     const loadRecap = async () => {
       try {
         const r = await api("/api/steam/recap");
@@ -1041,7 +1049,7 @@ window.SVC_SITE = envIn => {
           h("div", { class: "grid two" },
             tile("This year (" + r.year + ")", hoursText(r.totalMinutes), `${r.games} game${r.games === 1 ? "" : "s"} on ${r.activeDays} day${r.activeDays === 1 ? "" : "s"}`),
             tile("Since you linked", hoursText(r.allTime.totalMinutes), `${r.allTime.games} game${r.allTime.games === 1 ? "" : "s"} on ${r.allTime.activeDays} day${r.allTime.activeDays === 1 ? "" : "s"}, from ${new Date(r.since).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`)),
-          goalBox(r.goal), card, h("div", { class: "row" }, save));
+          r.habits ? habitsBox(r.habits) : null, goalBox(r.goal), card, h("div", { class: "row" }, save));
       } catch (e) { out.className = ""; out.replaceChildren(h("div", { class: "notice warn", text: e.message })); }
     };
     loadRecap();

@@ -64,21 +64,44 @@ export function goalProgress(goalHours, totalMinutes, nowMs = Date.now()) {
         projected: Math.round(done / dayOfYear * (dayOfYear + daysLeft)), perWeek: done >= goalHours || !daysLeft ? 0 : Math.round((goalHours - done) / (daysLeft / 7) * 10) / 10, daysLeft };
 }
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+/**
+ * When someone plays: minutes per weekday, the favorite day, the longest run of days in a row, the run they are on now (it still
+ * counts if they played yesterday), and their biggest single day. `minutesByDay` is a Map of "YYYY-MM-DD" to minutes. Null under three days of play.
+ */
+export function playHabits(minutesByDay, nowMs = Date.now()) {
+    const days = [...minutesByDay.keys()].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    if (days.length < 3) return null;
+    const t = d => Date.parse(d + "T00:00:00Z"), DAY = 86400_000;
+    const weekdays = Array(7).fill(0);
+    let best = 1, run = 1, big = { day: days[0], minutes: 0 };
+    for (let i = 0; i < days.length; i++) {
+        const m = minutesByDay.get(days[i]) ?? 0;
+        weekdays[new Date(t(days[i])).getUTCDay()] += m;
+        if (m > big.minutes) big = { day: days[i], minutes: m };
+        if (i) { run = t(days[i]) - t(days[i - 1]) === DAY ? run + 1 : 1; best = Math.max(best, run); }
+    }
+    const today = Math.floor(nowMs / DAY) * DAY, last = t(days[days.length - 1]);
+    const current = today - last <= DAY ? run : 0;
+    const fav = weekdays.indexOf(Math.max(...weekdays));
+    return { weekdays, favoriteDay: WEEKDAYS[fav], bestStreak: best, currentStreak: current, bigDay: big };
+}
+
 /** Rows of { day, title, minutes } for one calendar year into a recap: totals, hours per month, top games. */
-export function recapSummary(rows, year) {
-    const months = Array(12).fill(0), per = new Map(), days = new Set();
+export function recapSummary(rows, year, nowMs = Date.now()) {
+    const months = Array(12).fill(0), per = new Map(), days = new Set(), byDay = new Map();
     let total = 0;
     for (const r of rows) {
         if (year !== null && !String(r.day).startsWith(String(year))) continue;
         const m = Number(String(r.day).slice(5, 7)) - 1;
         if (!(m >= 0 && m < 12)) continue;
-        months[m] += r.minutes; total += r.minutes; days.add(r.day);
+        months[m] += r.minutes; total += r.minutes; days.add(r.day); byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.minutes);
         const g = per.get(r.title) ?? { title: r.title, minutes: 0 };
         g.minutes += r.minutes; per.set(r.title, g);
     }
     const top = [...per.values()].sort((a, b) => b.minutes - a.minutes || a.title.localeCompare(b.title)).slice(0, 5);
     const best = total ? months.indexOf(Math.max(...months)) : null;
-    return { year, totalMinutes: total, months, top, games: per.size, activeDays: days.size, busiestMonth: best };
+    return { year, totalMinutes: total, months, top, games: per.size, activeDays: days.size, busiestMonth: best, habits: playHabits(byDay, nowMs) };
 }
 
 /** A new Steam game starts as backlog (barely touched), played (an hour or more), or playing (an hour or more, in the last two weeks). */

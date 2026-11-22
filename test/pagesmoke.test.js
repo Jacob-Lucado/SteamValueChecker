@@ -486,3 +486,28 @@ test("the Library page's co-op filter keeps only co-op games", { timeout: 120_00
         assert.deepEqual(errors, []);
     } finally { await browser.close(); await o.close(); }
 });
+
+test("the Steam page's hours panel shows play habits once there are a few days of play", { timeout: 120_000 }, async t => {
+    const browser = await launchBrowser();
+    if (!browser) return t.skip("no Chromium here");
+    const { createServer } = await import("node:net");
+    const port = await new Promise(r => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
+    const o = await signedIn({ port, config: { publicUrl: `http://127.0.0.1:${port}`, ownerId: "u1" }, extra: { botGuilds: () => true } });
+    try {
+        o.db.ensureUser("u1", "g-admin"); o.db.setSteamLink("u1", "76561198000000001", { verified: true });
+        // Three days in a row, ending today: each sync adds hours to the same game on a different day.
+        const real = Date.now;
+        try { for (const [back, minutes] of [[2, 60], [1, 180], [0, 240]]) { Date.now = () => real() - back * 86400_000; o.db.syncSteamGames("u1", [{ itad_id: "hab", title: "Habit Game", appid: 71, minutes, lastPlayed: null }], { track: true }); } } finally { Date.now = real; }
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await ctx.addCookies(o.cookie().split("; ").map(p => { const [name, ...v] = p.split("="); return { name, value: v.join("="), url: o.base }; }));
+        const page = await ctx.newPage();
+        await page.addInitScript(() => { try { localStorage.setItem("svc_visited", "1"); localStorage.setItem("svc_os_intro", "1"); } catch { /* no storage */ } });
+        const errors = []; page.on("pageerror", e => errors.push(e.message));
+        await page.goto(`${o.base}/steam`, { waitUntil: "load" });
+        const box = page.locator(".subpanel", { hasText: "Your play habits" });
+        await box.waitFor({ timeout: 20_000 });
+        assert.match(await box.innerText(), /Longest streak: 3 days in a row \(3 right now\)/);
+        assert.deepEqual(errors, []);
+        await ctx.close();
+    } finally { await browser.close(); await o.close(); }
+});

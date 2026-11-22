@@ -26,6 +26,11 @@ const line = (r, f) => `• **${r.title}** ${f(r)}`;
 const art = appid => steamArt(appid);
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function habitLines(h) {
+    const long = `**${h.bestStreak}** day${h.bestStreak === 1 ? "" : "s"} in a row`;
+    return [`Favorite day: **${h.favoriteDay}**`, `Longest streak: ${long}${h.currentStreak > 1 ? `, and you're on **${h.currentStreak}** right now` : ""}`,
+        `Biggest day: **${fmtHours(h.bigDay.minutes)}** on ${new Date(h.bigDay.day + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`].join("\n");
+}
 export function recapEmbed(r) {
     if (!r.totalMinutes) return { color: 0x66c0f4, title: `Hours tracked in ${r.year}`, description: (r.allTime?.totalMinutes ? `Nothing tracked this year yet, but **${fmtHours(r.allTime.totalMinutes)}** since you linked. ` : "Nothing tracked yet. ") + "Steam only shares lifetime hours per game, so this counts what you play after you link, as your library syncs (automatically every few hours)." };
     const peak = Math.max(...r.months), bars = " ▁▂▃▄▅▆▇█";
@@ -34,6 +39,7 @@ export function recapEmbed(r) {
         color: 0x66c0f4, title: `Hours tracked in ${r.year}`,
         description: `**${fmtHours(r.totalMinutes)}** across **${r.games}** game${r.games === 1 ? "" : "s"} on **${r.activeDays}** different day${r.activeDays === 1 ? "" : "s"}. Busiest month: **${MONTHS[r.busiestMonth]}**.\n\`${spark}\` Jan to Dec`,
         fields: [{ name: "Top games", value: r.top.map((g, n) => `${n + 1}. **${g.title}** ${fmtHours(g.minutes)}`).join("\n") },
+            ...(r.habits ? [{ name: "Your habits", value: habitLines(r.habits) }] : []),
             ...(r.allTime ? [{ name: "Since you linked", value: `**${fmtHours(r.allTime.totalMinutes)}** across **${r.allTime.games}** game${r.allTime.games === 1 ? "" : "s"}` }] : [])],
         footer: { text: "Steam only shares lifetime hours, so this counts what was added between syncs since you linked. It can't see earlier play." }
     };
