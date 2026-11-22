@@ -69,6 +69,21 @@
         h("div", { class: "stack" }, ...d.picks.map(p => h("div", { class: "row" }, h("div", {}, h("strong", { text: p.title }), h("div", { class: "muted small", text: p.why })), h("div", { text: money(p.price, d.currency) + (p.discount > 0 ? ` (-${Math.round(p.discount * 100)}%)` : "") })))));
     }) });
     const walletDrawer = drawer("Wallet planner", h("div", { class: "row" }, walletBudget, h("label", { class: "check" }, walletStar, "Only starred games"), walletGo), walletOut);
+    // "Why no alert?": runs the hourly alert rules by hand for one game and says what is in the way.
+    const whySel = h("select", { class: "wl-search", "aria-label": "Game to check", style: "max-width:22rem" });
+    const whyOut = h("div", { class: "muted small", text: "Pick a game you expected an alert for. It checks every rule the hourly alert run uses and names the one in the way." });
+    const whyGo = h("button", { class: "btn blue small", type: "button", text: "Check it", onclick: () => busy(whyGo, async () => {
+      if (!whySel.value) return toast("Pick a game first.");
+      const d = await api("/api/wishlist/why?itad_id=" + encodeURIComponent(whySel.value));
+      whyOut.className = "";
+      whyOut.replaceChildren(h("div", { class: "notice " + (d.verdict === "would" ? "ok" : "warn"), role: "status" }, h("strong", { text: d.verdict === "would" ? d.headline : "Not sent: " + d.headline })),
+        h("ul", { class: "stack" }, ...d.checks.map(c => h("li", { text: (c.ok ? "✅ " : "❌ ") + c.text.replace(/<t:(\d+):f>/g, (_m, t) => new Date(Number(t) * 1000).toLocaleString()).replace(/`/g, "") }))));
+    }) });
+    const whyDrawer = drawer("Why no alert?", h("div", { class: "row" }, whySel, whyGo), whyOut);
+    function openWhy() {
+      whyDrawer.hidden = !whyDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; walletDrawer.hidden = true;
+      if (!whyDrawer.hidden) whySel.replaceChildren(h("option", { value: "", text: "Choose a game" }), ...(data?.rows ?? []).map(r => h("option", { value: r.itad_id, text: r.title })));
+    }
     const addDrawer = drawer("Add a game", field("Title", title), h("div", { class: "row" }, field("Alert me on", addType), addValueField),
       h("label", { class: "check" }, watchOnly, "Just watch it once: remove it after the alert, or after 30 days"), h("div", { class: "row" }, addBtn));
 
@@ -166,8 +181,8 @@
 
     app.replaceChildren(
       pageHead("Wishlist", "Sales first. You are alerted according to each game's rule."),
-      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "⇩ Export CSV", onclick: exportCsv }), h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; walletDrawer.hidden = true; } }), h("button", { class: "chip-btn", type: "button", text: "💰 Wallet planner", onclick: () => { walletDrawer.hidden = !walletDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; if (!walletDrawer.hidden) walletBudget.focus(); } })),
-      importDrawer, addDrawer, walletDrawer,
+      h("div", { class: "wl-actions" }, h("button", { class: "chip-btn", type: "button", text: "⇩ Export CSV", onclick: exportCsv }), h("button", { class: "chip-btn", type: "button", text: "＋ Add a game", onclick: () => { addDrawer.hidden = !addDrawer.hidden; importDrawer.hidden = true; if (!addDrawer.hidden) title.focus(); } }), h("button", { class: "chip-btn", type: "button", text: "⬇ Import from Steam", onclick: () => { importDrawer.hidden = !importDrawer.hidden; addDrawer.hidden = true; walletDrawer.hidden = true; } }), h("button", { class: "chip-btn", type: "button", text: "🔎 Why no alert?", onclick: openWhy }), h("button", { class: "chip-btn", type: "button", text: "💰 Wallet planner", onclick: () => { walletDrawer.hidden = !walletDrawer.hidden; addDrawer.hidden = true; importDrawer.hidden = true; if (!walletDrawer.hidden) walletBudget.focus(); } })),
+      importDrawer, addDrawer, walletDrawer, whyDrawer,
       listBox);
     listBox.className = "muted"; listBox.textContent = "Loading prices…";
     loadList().then(() => { listBox.className = ""; });

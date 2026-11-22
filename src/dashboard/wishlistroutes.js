@@ -4,6 +4,8 @@ import { HttpError } from "./http.js";
 import { addFamily, removeFamily, familyView } from "../family.js";
 import { wrappedData, SLIDES } from "../wrapped.js";
 import { SAMPLE_KINDS, sampleAlert } from "../samples.js";
+import { whyNoAlert } from "../whynot.js";
+import { gameFacts } from "../gamefacts.js";
 import { addGameByTitle, applySteamImport, viewRows } from "../wishlist.js";
 import { artUrl } from "../render.js";
 import { buyOrWait } from "../advice.js";
@@ -53,6 +55,18 @@ export function createWishlistRoutes(ctx) {
             return { rows, currency, sync: { available: Boolean(u.steam_id), on: u.wish_sync !== 0, at: u.wish_synced_at ?? null } };
         },
         // "What should I spend my wallet on?" The best mix of unowned wishlist games for a budget.
+        // Runs the alert rules by hand for one wishlist game: the same check as /alerts why.
+        "GET /api/wishlist/why": async (req, _b, url) => {
+            const s = session(req);
+            const u = userRow(s);
+            const item = db.listItems(s.userId).find(i => i.itad_id === url.searchParams.get("itad_id"));
+            if (!item) throw new HttpError(404, "That game isn't on your wishlist.");
+            const prices = await itad.getPrices([item.itad_id], u.region);
+            const summary = summarize(prices.get(item.itad_id), { majorOnly: u.stores === "major" });
+            const owned = db.listLibrary(s.userId).some(g => g.itad_id === item.itad_id);
+            const store = item.appid ? (await gameFacts(item.appid).catch(() => null))?.store ?? null : null;
+            return { title: item.title, currency: summary?.currency ?? "USD", ...whyNoAlert({ user: u, item, summary, owned, guild: db.getGuild(u.guild_id), store, now: now() }) };
+        },
         "GET /api/wishlist/wallet": async (req, _b, url) => {
             const s = session(req); const u = userRow(s);
             const budget = Number(url.searchParams.get("budget"));

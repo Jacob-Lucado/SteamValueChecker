@@ -2,6 +2,7 @@
 // Logic lives in db.js, alerts.js, steam.js and wishlist.js; this file only talks to Discord.
 
 import { reachLine } from "./reach.js";
+import { whyNoAlert, whyEmbed } from "./whynot.js";
 import { VIEW_SHOW } from "./constants.js";
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
@@ -244,6 +245,25 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         }
     }
 
+    /** /alerts why: runs the alert rules by hand for one wishlist game and says which one is in the way. */
+    async function alertWhy(i, user) {
+        cooldown(i, "view");
+        const found = findItem(db.listItems(i.user.id), i.options.getString("game", true));
+        if (found.ambiguous) return eph(i, `More than one match: ${found.ambiguous.map(t => `**${t}**`).join(", ")}. Be more specific.`);
+        if (!found.item) return eph(i, "That game is not on your list.");
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+            const prices = await itad.getPrices([found.item.itad_id], user.region);
+            const summary = summarize(prices.get(found.item.itad_id), { majorOnly: user.stores === "major" });
+            const owned = db.listLibrary(user.discord_id).some(g => g.itad_id === found.item.itad_id);
+            const store = found.item.appid ? (await gameFacts(found.item.appid).catch(() => null))?.store ?? null : null;
+            const res = whyNoAlert({ user, item: found.item, summary, owned, guild: db.getGuild(user.guild_id), store, money: n => money(n, summary?.currency ?? "USD") });
+            await i.editReply({ embeds: [whyEmbed(found.item.title, res)] });
+        } catch (err) {
+            await failed(i, "alerts why", err);
+        }
+    }
+
     async function wishlistAlert(i) {
         let trig;
         try { trig = parseTrigger(i.options.getString("type", true), i.options.getNumber("value")); }
@@ -424,6 +444,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
         const user = db.ensureUser(i.user.id, i.guildId);
         const sub = i.options.getSubcommand();
         switch (sub) {
+            case "why": return await alertWhy(i, user);
             case "status": {
                 if (panels?.has("alerts")) return panels.open(i, "alerts");
                 const guild = db.getGuild(user.guild_id);

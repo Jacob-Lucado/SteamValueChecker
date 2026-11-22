@@ -47,7 +47,7 @@ export const HELP_PAGES = [
     { key: "alerts", label: "Sale alerts", emoji: "🔔", title: "/alerts",
         description: "How and where you hear about price drops. Only you see the replies.",
         fields: [
-            { name: "Settings", value: "`/alerts` `status`, `delivery`, `pause` / `resume`, `region`, `stores`, `quiethours`, `digest`, `mindiscount`, `bundles`, `news`, `dlc`, `refund`, `milestones`, `extras` (backlog pick, year in games, smart alerts), `achievements`, `playtests`, `freegames`, `codes`, `promos`, `mute`, `language`, `share`, `history`." },
+            { name: "Settings", value: "`/alerts` `status`, `why` (find out why a game didn't alert), `delivery`, `pause` / `resume`, `region`, `stores`, `quiethours`, `digest`, `mindiscount`, `bundles`, `news`, `dlc`, `refund`, `milestones`, `extras` (backlog pick, year in games, smart alerts), `achievements`, `playtests`, `freegames`, `codes`, `promos`, `mute`, `language`, `share`, `history`." },
             { name: "AI companion", value: "**Coming soon** (the full AI is not switched on yet; for now the bot answers prices, free games and your wishlist and library itself). Server managers can switch it on with `/manage community ai`. Then say `Hey AI` and a question (or mention the bot) and it answers, using live prices, free games and your own wishlist and library. It can add a game to your wishlist if you ask." },
             { name: "Language", value: "`/language` picks the language for the bot's buttons and alert messages: English, Spanish, French, German, Portuguese, Italian, Russian, Polish, Turkish, Japanese, Korean or Chinese. Command descriptions follow your Discord app's own language, and the dashboard has a language picker in the top bar." }
         ] },
