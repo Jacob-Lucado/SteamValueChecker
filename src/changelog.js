@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.84", date: "2026-11-21", title: "Steam review scores are back", items: [
+        "Steam stopped answering the bot's review lookup from its servers, so review scores on alerts and game cards (and the new review-drop alerts) were quietly missing. The bot now reads the same numbers from the game's store page when that happens.",
+    ] },
     { version: "2026.11.83", date: "2026-11-21", title: "Failing posts are explained and the owner is told", items: [
         "When a game code, bundle, free game, deal, sale or promo post can't be sent, the log now names the server and channel, Discord's exact answer and the plain reason (hidden channel, missing Embed Links, deleted channel).",
         "**Channel check:** `/setup check:True`, or *Check my post channels* on the Community page, tests every channel a server picked for alerts, codes, bundles and promos and says what's missing (View Channel, Send Messages, Embed Links) before a post fails.",

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseReviews, steamReviews, reviewLine, reviewDip } from "../src/reviews.js";
+import { readFileSync } from "node:fs";
+import { parseStorePage, parseReviews, steamReviews, reviewLine, reviewDip } from "../src/reviews.js";
 import { alertEmbed, checkEmbed } from "../src/render.js";
 
 const body = (pos, neg, desc) => ({ success: 1, query_summary: { review_score_desc: desc, total_positive: pos, total_negative: neg, total_reviews: pos + neg } });
@@ -43,4 +44,18 @@ test("reviews: a game whose last month is far worse than its overall score gets 
     assert.equal(v.dip.pct, 55);
     assert.match(reviewLine(v), /Lately worse: only \*\*55%\*\* of the last 400/);
     assert.doesNotMatch(reviewLine({ desc: "Very Positive", pct: 90, total: 5000 }), /Lately/);
+});
+
+test("reviews: when Steam sends the review endpoint to the front page, the store page's own summary is used", async () => {
+    const html = readFileSync(new URL("./fixtures/store-reviews-620.html", import.meta.url), "utf8");
+    const p = parseStorePage(html);
+    assert.deepEqual(p.all, { desc: "Overwhelmingly Positive", pct: 98, total: 175131 });
+    assert.equal(p.recent.total, 1543);
+    const calls = [];
+    // The review endpoint answers 200 with a web page (the redirect target), so reading it as JSON fails.
+    const fetchFn = async url => { calls.push(String(url)); return String(url).includes("/appreviews/") ? { ok: true, json: async () => { throw new SyntaxError("not json"); } } : { ok: true, text: async () => html }; };
+    const r = await steamReviews(620620, { fetchFn });
+    assert.equal(r.pct, 98); assert.equal(r.total, 175131);
+    assert.ok(calls.some(u => u.includes("/app/620620/")), "asked the store page");
+    assert.equal(parseStorePage("<html>nothing</html>").all, null);
 });

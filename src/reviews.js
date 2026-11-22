@@ -16,6 +16,21 @@ export function parseReviews(json) {
 }
 
 /**
+ * Steam sends datacenter addresses away from the review endpoint (a redirect to the store front page), but the game's own store
+ * page still shows both summaries. Reads them from that page: { all, recent } in the same shape parseReviews gives, or nulls.
+ */
+export function parseStorePage(html) {
+    const out = { all: null, recent: null };
+    const re = /game_review_summary[^>]*>([^<]+)<\/span>[\s\S]{0,300}?\(([\d,]+)\)[\s\S]{0,500}?(\d+)% of the ([\d,]+) user reviews (in the last 30 days|for this game)/g;
+    for (const m of String(html ?? "").matchAll(re)) {
+        const total = Number(m[4].replace(/,/g, "")), pct = Number(m[3]), desc = m[1].trim().slice(0, 40);
+        if (!Number.isFinite(total) || total < MIN_REVIEWS || /user reviews?$/i.test(desc)) continue;
+        out[m[5] === "for this game" ? "all" : "recent"] ??= { desc, pct, total };
+    }
+    return out;
+}
+
+/**
  * Spots a game whose last month of reviews is clearly worse than its overall score (a bad patch, a review bomb, a broken launch).
  * Needs enough recent reviews to mean something, and a real gap, so ordinary wobble doesn't trigger it.
  */
@@ -47,6 +62,15 @@ export async function steamReviews(appid, { fetchFn = globalThis.fetch, now = Da
             }
         }
     } catch { /* optional */ }
+    if (!value) {
+        try {
+            const page = await fetchFn(`https://store.steampowered.com/app/${appid}/?l=english`, { headers: { Cookie: "birthtime=0; wants_mature_content=1; lastagecheckage=1-0-1990", "User-Agent": "Mozilla/5.0 (compatible; SteamValueChecker)" }, signal: AbortSignal.timeout(6000) });
+            if (page.ok) {
+                const { all, recent } = parseStorePage(await page.text());
+                if (all) { value = all; const dip = recent ? reviewDip(all, recent) : null; if (dip) value.dip = dip; }
+            }
+        } catch { /* optional */ }
+    }
     if (cache.size > 3000) cache.clear();
     cache.set(appid, { at: now(), value });
     return value;
