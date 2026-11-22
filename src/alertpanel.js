@@ -1,5 +1,6 @@
 // /alerts opens this panel: every alert setting in three pages, changed with dropdowns and buttons.
 // The old /alerts subcommands still work and write the same columns.
+import { reachLine } from "./reach.js";
 import { ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from "discord.js";
 import { button, navRow, rowOf, select } from "./panel.js";
 import { UserError } from "./errors.js";
@@ -56,7 +57,7 @@ export function alertPanel({ db }) {
             const guild = db.getGuild(u.guild_id);
             return { ...base, title: "Your alerts · Where", description: [head, "", `📬 **Delivery:** ${u.delivery === "channel" ? "Server alert channel, you are mentioned" : "Direct message"}`,
                 `🌍 **Region:** ${REGIONS.find(r => r.value === u.region)?.name ?? u.region}`, `🏬 **Stores:** ${u.stores === "major" ? "Major stores" : "All tracked stores"}`,
-                `🗣️ **Language:** ${LANGS[u.lang] ?? "English"}`, `📣 **Server alert channel:** ${guild ? `<#${guild.channel_id}>` : "not set (DMs only)"}`].filter(x => x !== null).join("\n") };
+                `🗣️ **Language:** ${LANGS[u.lang] ?? "English"}`, `📣 **Server alert channel:** ${guild ? `<#${guild.channel_id}>` : "not set (DMs only)"}`, reachLine(u, guild) ? `\n${reachLine(u, guild)}` : null].filter(x => x !== null).join("\n") };
         }
         if (page === "more") {
             const m = mutedSet(u), fam = pickedFamilies(s);

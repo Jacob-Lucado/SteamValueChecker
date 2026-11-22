@@ -14,7 +14,7 @@ import { prefsPatch } from "../prefs.js";
 import { publishRequest } from "../requestsync.js";
 
 export function createMiscRoutes(ctx) {
-    const { PAGES, checkoutLimit, config, cooldown, db, isOwner, log, now, origin, publicSettings, referrals, remember, rest, session, square, supporters, topgg, userRow } = ctx;
+    const { dm, PAGES, checkoutLimit, config, cooldown, db, isOwner, log, now, origin, publicSettings, referrals, remember, rest, session, square, supporters, topgg, userRow } = ctx;
     return {
         "GET /api/topgg": async (req) => {
             const u = session(req);
@@ -52,6 +52,16 @@ export function createMiscRoutes(ctx) {
             for (const g of s.guilds) if (hit(g.name)) out.push({ kind: "Server", title: g.name, href: `#/servers/${g.id}` });
             for (const [id, name] of PAGES) if (hit(name)) out.push({ kind: "Page", title: name, href: "#/" + id });
             return { results: out.slice(0, 25) };
+        },
+        // Sends a short test DM. If it goes through, the "can't reach you" mark is cleared right away instead of at the next alert.
+        "POST /api/settings/dm-test": async (req) => {
+            const s = session(req);
+            if (!dm) throw new HttpError(503, "Direct messages aren't available right now.");
+            const undo = cooldown(s.userId, "dmtest");
+            try { await dm(s.userId, { embeds: [{ color: 0x57f287, title: "✅ I can reach you", description: "This is a test message from the dashboard. Your alerts will arrive here again." }] }); }
+            catch (e) { undo(); throw new HttpError(400, "Discord still refuses my messages to you. Allow direct messages from server members (Settings, Content & Social), then try again."); }
+            db.updateUser(s.userId, { dm_failures: 0 });
+            return { ok: true, settings: publicSettings(userRow(s)) };
         },
         "POST /api/settings": async (req, body) => {
             const s = session(req);

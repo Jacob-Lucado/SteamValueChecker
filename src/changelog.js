@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.87", date: "2026-11-22", title: "Told when your DMs are closed", items: [
+        "If Discord keeps refusing the bot's direct messages to you, your alert settings now say so: in `/alerts`, on the Where page, and at the top of the dashboard's Alerts page. It explains how to open your DMs, where your alerts go in the meantime, and the dashboard has a *Send me a test message* button that checks right away and clears the warning.",
+    ] },
     { version: "2026.11.86", date: "2026-11-22", title: "Catching a channel that can't show embeds", items: [
         "Picking a channel for game codes, bundles or promo drops now also checks for **Embed Links**, in the slash commands and on the dashboard. A channel can take a plain test message and still fail every real post, because the posts are embeds. The bot now says so right away and doesn't save that channel.",
     ] },

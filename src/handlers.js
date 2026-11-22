@@ -1,6 +1,7 @@
 // Discord handlers for the wishlist, alert, channel and data commands.
 // Logic lives in db.js, alerts.js, steam.js and wishlist.js; this file only talks to Discord.
 
+import { reachLine } from "./reach.js";
 import { VIEW_SHOW } from "./constants.js";
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { setProfile, publicWishlist } from "./profile.js";
@@ -438,6 +439,7 @@ export function createHandlers({ ownerId = null, panels, db, itad, nowPlaying = 
                             { name: "Region", value: user.region, inline: true },
                             { name: "Stores", value: user.stores === "major" ? "Major stores" : "All tracked stores", inline: true },
                             { name: "Server alert channel", value: guild ? `<#${guild.channel_id}>` : "Not set (DMs only)", inline: true },
+                            ...(reachLine(user, guild) ? [{ name: "⚠️ Alerts aren't reaching you", value: reachLine(user, guild).replace(/^⚠️ \*\*[^*]+\*\* /, "").slice(0, 1000) }] : []),
                             { name: "Quiet hours", value: describeQuiet(user), inline: true },
                             { name: "Weekly digest", value: describeDigest(user), inline: true },
                             { name: "Bundle, giveaway and subscription alerts", value: user.bundles === 0 ? "Off" : "On", inline: true },

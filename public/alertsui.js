@@ -75,8 +75,18 @@
       await codeRows.save();
       toast("Settings saved.", "ok");
     }) });
+    // Closed DMs mean nothing arrives; say so here, with the fix and a way to check right now.
+    let reachBox = h("div", { hidden: true });
+    if (s.reach) {
+      const testBtn = h("button", { class: "btn blue", type: "button", text: "Send me a test message" });
+      reachBox = h("div", { class: "panel notice warn", role: "alert" }, h("h3", { text: "⚠️ " + s.reach.title }), h("p", { text: s.reach.what }), h("p", { text: s.reach.meanwhile }), h("p", { class: "muted", text: s.reach.fix }), testBtn);
+      testBtn.addEventListener("click", () => busy(testBtn, async () => {
+        try { const r = await api("/api/settings/dm-test", { method: "POST", body: {} }); state.me.settings = r.settings; reachBox.replaceChildren(h("h3", { text: "✅ I can reach you" }), h("p", { text: "Check your Discord DMs for the test message. Alerts will arrive there again." })); reachBox.className = "panel notice ok"; }
+        catch (e) { toast(e.message, "warn"); }
+      }));
+    }
     app.replaceChildren(
-      pageHead("Alert settings", "How and where you hear about sales, free games, codes and giveaways."),
+      pageHead("Alert settings", "How and where you hear about sales, free games, codes and giveaways."), reachBox,
       h("div", { class: "panel" },
         h("h3", { text: "Delivery" }),
         h("label", { class: "check" }, dm, "Direct message. If it cannot be delivered, the server alert channel is used as a fallback."),

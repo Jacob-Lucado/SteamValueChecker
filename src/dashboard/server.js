@@ -76,6 +76,7 @@ import { indieBadgeSvg } from "../indiebadge.js";
 import { createStreams, canStreamIn } from "../streamlive.js";
 import { sanitize } from "../parse.js";
 import { prefsView } from "../prefs.js";
+import { reachNotice } from "../reach.js";
 import { renderSteamValue, renderRecap, renderProfileShare } from "../cardimg.js";
 import { renderWrapped } from "../wrapped.js";
 import { createBroadcaster } from "../broadcast.js";
@@ -985,7 +986,7 @@ export function createDashboard({ channelCheck = null, feedHealth = null, logFee
     };
 
     function publicSettings(u) {
-        return { region: u.region, stores: u.stores, delivery: u.delivery, paused: Boolean(u.paused), guild_id: u.guild_id, steam_id: u.steam_id, ...prefsView(u) };
+        return { region: u.region, stores: u.stores, delivery: u.delivery, paused: Boolean(u.paused), guild_id: u.guild_id, steam_id: u.steam_id, reach: reachNotice(u, db.getGuild(u.guild_id)), ...prefsView(u) };
     }
 
     function serversFor(s, u) {
@@ -1053,7 +1054,7 @@ export function createDashboard({ channelCheck = null, feedHealth = null, logFee
     const playRoutes = createPlayRoutes({ botGuilds, calendar, cooldown, db, dm, guildFor, hilo, isManager, isOwner, itad, lfg, managerGuild, now, nowPlaying, origin, rest, session, trivia, userRow });
     const redeemRoutes = createRedeemRoutes({ adminExtraRoutes, botGuilds, codes, cooldown, db, dm, fortniteRoutes, indieRoutes, isOwner, itad, musicRoutes, now, overlayRoutes, serverRoutes, session, userRow, wishlistRoutes });
     const modRoutes = createModRoutes({ MOD_ACTION_PERM, MOD_PERMS, botIn, cooldown, hasGuildPerm, isManager, md, modGuild, modr, session });
-    const miscRoutes = createMiscRoutes({ PAGES, checkoutLimit, config, cooldown, db, isOwner, log, now, origin, publicSettings, referrals, remember, rest, session, square, supporters, topgg, userRow });
+    const miscRoutes = createMiscRoutes({ dm, PAGES, checkoutLimit, config, cooldown, db, isOwner, log, now, origin, publicSettings, referrals, remember, rest, session, square, supporters, topgg, userRow });
     const routes = {
         ...overlayRoutes,
         ...adminRoutes,
