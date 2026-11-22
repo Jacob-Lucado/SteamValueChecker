@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
 import { createNotifier } from "../src/notify.js";
-import { runCycle, schedule } from "../src/poller.js";
+import { runCycle, schedule, describeFailures } from "../src/poller.js";
 import { alertEmbed } from "../src/render.js";
 
 const deal = (amount, regular, shop = "GOG") => ({ shop: { name: shop }, price: { amount, currency: "USD" }, regular: { amount: regular, currency: "USD" }, cut: 0, url: "https://deal.example/x" });
@@ -228,4 +228,16 @@ test("someone who skips VR-only or Early Access sale alerts doesn't get them, an
         const again = await runCycle(t);
         assert.equal(again.alerts, 0, "the skipped ones are remembered, not retried every hour");
     } finally { configureFacts(null); }
+});
+
+test("the hourly alert summary says why deliveries failed and which servers' alert channels are refusing", async () => {
+    const t = setup({ dmFails: true, prices: { a: { deals: [deal(10, 20)] }, b: { deals: [deal(10, 20)] } } });
+    t.notifier = createNotifier({ db: t.db, discord: { sendDm: async () => { throw new Error("Cannot send messages to this user"); }, sendChannel: async () => { throw Object.assign(new Error("Missing Access"), { status: 403, detail: "Missing Access (code 50001)" }); } } });
+    t.db.setGuildChannel("g1", "chan1", "owner");
+    on(t.db, "u1", ["a"]); on(t.db, "u2", ["b"]);
+    t.db.updateUser("u1", { delivery: "channel" });        // the alert channel refuses the post
+    t.db.updateUser("u2", { guild_id: null });              // DMs closed, no alert channel at all
+    const s = await runCycle(t);
+    assert.equal(describeFailures(s), "the server's alert channel refused the post: 1; DMs closed and no alert channel to fall back on: 1. Alert channels failing: server g1 (1, 403 Missing Access)");
+    assert.equal(describeFailures({}), "", "nothing failed, nothing to say");
 });

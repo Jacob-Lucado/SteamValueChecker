@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.90", date: "2026-11-22", title: "The hourly alert log says why", items: [
+        "The hourly alert summary in the log feed now ends with why deliveries failed (closed DMs with no alert channel, a refused alert channel, and so on) and names the servers whose alert channel keeps refusing, with Discord's answer.",
+    ] },
     { version: "2026.11.89", date: "2026-11-22", title: "Problems found before a post fails", items: [
         "Once a day the bot now checks the channels every server picked for alerts, codes, bundles and promos. If it can no longer post in one (a permission changed, a category got locked), the server's Community page lists it with the fix, before a real post fails. It clears itself once the channel works again.",
     ] },

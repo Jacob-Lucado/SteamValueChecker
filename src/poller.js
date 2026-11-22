@@ -29,6 +29,30 @@ const GROUP_REPING_MS = 14 * 86400_000;
 
 const chunked = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
+const REASON_WORDS = {
+    dm_failed_no_channel: "DMs closed and no alert channel to fall back on",
+    channel_failed: "the server's alert channel refused the post",
+    no_channel: "no alert channel set",
+    restricted: "members the bot restricted",
+    rate_limited: "Discord rate limit"
+};
+/** Counts a failed delivery by why it failed, and (for a refused alert channel) by server, so the hourly log line can say where and why. */
+function noteFailure(stats, user, res, n) {
+    const why = REASON_WORDS[res.reason] ?? String(res.reason ?? "unknown").replace(/_/g, " ");
+    (stats.reasons ??= {})[why] = (stats.reasons[why] ?? 0) + n;
+    if (res.reason === "channel_failed") {
+        const g = ((stats.servers ??= {})[user.guild_id ?? "none"] ??= { n: 0, detail: res.detail ?? "" });
+        g.n += n;
+    }
+}
+
+/** "DMs closed and no alert channel to fall back on: 12; the server's alert channel refused the post: 4 (server 123: 403 Missing Access)". Empty when nothing failed. */
+export function describeFailures(stats) {
+    const parts = Object.entries(stats.reasons ?? {}).sort((a, b) => b[1] - a[1]).map(([why, n]) => `${why}: ${n}`);
+    const servers = Object.entries(stats.servers ?? {}).sort((a, b) => b[1].n - a[1].n).slice(0, 3).map(([id, g]) => `server ${id} (${g.n}${g.detail ? `, ${g.detail}` : ""})`);
+    return parts.length ? `${parts.join("; ")}${servers.length ? `. Alert channels failing: ${servers.join(", ")}` : ""}` : "";
+}
+
 /**
  * Price alerts. Items are only marked as alerted after the message was delivered, so a failed
  * delivery or a quiet-hours deferral is retried on the next run instead of being lost.
@@ -125,6 +149,7 @@ export async function runCycle({ db, itad, notifier, voiceMap = null, now = () =
                 // A member with DMs closed and no alert channel is on them, not a bot fault, so it isn't counted toward an outage alert.
                 if (res.reason === "dm_failed_no_channel" || res.reason === "restricted" || res.permanent) stats.unreachable += part.length;
                 if (res.detail && !(res.reason === "dm_failed_no_channel" || res.reason === "restricted" || res.permanent)) stats.lastFailure = `${res.reason}, ${res.detail}`;
+                noteFailure(stats, user, res, part.length);
                 log(`delivery failed (${res.reason}${res.detail ? `: ${res.detail}` : ""}) in server ${user.guild_id ?? "none"}`);
             }
         }

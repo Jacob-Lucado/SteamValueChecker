@@ -106,7 +106,7 @@ import { runWishlistAutoSync } from "./wishlist.js";
 import { importWishlist } from "./steam.js";
 import { runFriendReminders } from "./friends.js";
 import { steamStillUpcoming } from "./steamrelease.js";
-import { runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runEpicSoon, runNews, runGuildFeeds, runHotDeals, runSaleStarts, runServerDigests, schedule } from "./poller.js";
+import { describeFailures, runCycle, runExtras, runReleases, runDigests, runSnapshots, runFreeGames, runEpicSoon, runNews, runGuildFeeds, runHotDeals, runSaleStarts, runServerDigests, schedule } from "./poller.js";
 import { createOps } from "./ops.js";
 import { runBackup } from "./backup.js";
 import { createSteamHandlers } from "./steamhandlers.js";
@@ -444,7 +444,7 @@ client.once(Events.ClientReady, c => {
     sched(
         async () => {
             const s = await runCycle({ db, itad, notifier, voiceMap, log: m => console.log(`[alerts] ${m}`) });
-            console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed - (s.unreachable ?? 0)} failed, ${s.unreachable ?? 0} to members who can't be reached, ${s.deferred} held for quiet hours`);
+            console.log(`[alerts] checked ${s.checked} items, ${s.alerts} alerts, ${s.delivered} delivered, ${s.failed - (s.unreachable ?? 0)} failed, ${s.unreachable ?? 0} to members who can't be reached, ${s.deferred} held for quiet hours${describeFailures(s) ? `. Why: ${describeFailures(s)}` : ""}`);
             beat.alerts = Date.now();
             await ops.cycleDone(s);
         },
