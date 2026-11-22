@@ -8,6 +8,9 @@ import { steamArt } from "./art.js";
 import { stepsOf } from "./gwpartner.js";
 import { isCode, kindInfo } from "./prizes.js";
 import { UserError } from "./errors.js";
+import { explain } from "./feedhealth.js";
+// "403 50001 Missing Access. The bot can't see that channel...": what Discord said and why, for the log.
+const whyFailed = e => { const x = explain(e); return `${x.short}. ${x.why}`; };
 import { regionCheck, parseRegions } from "./gwregion.js";
 import { VIDEO_TYPES, MEDIA_MAX_BYTES } from "./gwmedia.js";
 import { reportProblem as reportGuildProblem } from "./guildproblems.js";
@@ -241,7 +244,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             db.setGiveawayMessage(id, msg.id);
             videoDropped = msg.videoDropped;
         } catch (e) {
-            log(`giveaway post failed in ${g.channel_id}: ${e?.message ?? e}`);
+            log(`Giveaway post failed in server ${g.guild_id}, channel ${g.channel_id}: ${whyFailed(e)}`);
             db.deleteGiveaway(id); // nothing was announced, so no keys are kept
             const why = ({ 10003: "that channel no longer exists", 50001: "the bot can't see that channel", 50013: "the bot is missing a permission there", 50035: "Discord refused the post" })[e?.code] ?? null;
             const said = String(e?.message ?? e ?? "").replace(/\s+/g, " ").slice(0, 160);
@@ -427,7 +430,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
             try {
                 const m = await discord.post(g.channel_id, winnersPayload(g, keys));
                 db.setAnnounceMessage(g.id, m.id);
-            } catch (e) { log(`winners post failed: ${e?.name ?? "error"}`); reportGuildProblem(db, g.guild_id, "giveaway-winners", "announce the giveaway winners", e); }
+            } catch (e) { log(`Giveaway winners post failed in server ${g.guild_id}, channel ${g.channel_id}: ${whyFailed(e)}`); reportGuildProblem(db, g.guild_id, "giveaway-winners", "announce the giveaway winners", e); }
         } else {
             await announceNew(g, `**${g.title}** ended with no valid entries.`);
         }
@@ -527,7 +530,7 @@ export function createGiveawayService({ db, tickets = null, vault, discord, itad
         const channelId = await vouchChannel(g);
         db.openProof(k.id, now() + PROOF_WINDOW_MS);
         let vouched = false;
-        if (channelId) { try { await discord.post(channelId, vouchPayload(g, k, userId)); vouched = true; } catch (e) { log(`vouch post failed in ${channelId}: ${e?.message ?? e}`); } }
+        if (channelId) { try { await discord.post(channelId, vouchPayload(g, k, userId)); vouched = true; } catch (e) { log(`Giveaway vouch post failed in server ${g.guild_id}, channel ${channelId}: ${whyFailed(e)}`); } }
         await dmHost(g, hostNote(g, `<@${userId}> confirmed that **${k.label}** redeemed successfully.${vouched ? "" : "\nI could not post it in a vouches channel. Set one with `/server giveaway setup`."}`));
         return { vouched, proofMinutes: PROOF_WINDOW_MS / 60_000 };
     }

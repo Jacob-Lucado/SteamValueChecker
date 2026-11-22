@@ -832,3 +832,12 @@ test("server giveaway stats count entries, people, prizes and how many got claim
     assert.deepEqual([st.giveaways, st.entries, st.people, st.won], [1, 2, 2, 2], JSON.stringify(st));
     assert.equal(st.claimRate, 0); assert.equal(t.db.giveawayStats("nobody").claimRate, null);
 });
+
+test("a failed giveaway post is logged with the server, the channel, Discord's answer and the plain reason", async () => {
+    const lines = [];
+    const db = openDb(":memory:");
+    const discord = { post: async () => { throw Object.assign(new Error("Missing Access"), { status: 403, code: 50001, detail: "Missing Access (code 50001)" }); }, edit: async () => {}, dm: async () => {}, memberOk: async () => true, findChannelByName: async () => null };
+    const svc = createGiveawayService({ db, vault: createVault(SECRET), discord, now: () => 1_800_000_000_000, rand: () => 0, log: m => lines.push(m) });
+    await assert.rejects(svc.create({ guild_id: "G9", channel_id: "C9", host_id: "host", title: "T", duration_ms: 2 * HOUR, keys: [{ label: "Hades", key: "AAAAA-BBBBB-CCCCC" }] }), UserError);
+    assert.match(lines.join("\n"), /Giveaway post failed in server G9, channel C9: 403 50001 Missing Access\. The bot can't see that channel/);
+});
