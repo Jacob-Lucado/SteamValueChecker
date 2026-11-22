@@ -53,3 +53,25 @@ test("channel audit: puts a blocked channel on the server's problem list, clears
     await run();
     assert.equal(listProblems(db, "g1").length, 1);
 });
+
+test("channel check: a channel that now passes is tried again right away instead of after the day's wait", async () => {
+    const { releaseFixed, runChannelAudit } = await import("../src/channelcheck.js");
+    const { createFeedHealth } = await import("../src/feedhealth.js");
+    const db = openDb(":memory:");
+    db.setCodeSettings("g1", { channel_id: "c1" }); db.setBundleFeedSettings("g1", { channel_id: "c2" });
+    const t = 1_800_000_000_000, health = createFeedHealth({ db, now: () => t });
+    await health.report({ feature: "codes", guildId: "g1", channelId: "c1", err: { status: 403, detail: "Missing Access (code 50001)" } });
+    await health.report({ feature: "bundles", guildId: "g1", channelId: "c2", err: { status: 403, detail: "Missing Access (code 50001)" } });
+    assert.ok(health.blocked("codes", "g1") && health.blocked("bundles", "g1"));
+    // codes was fixed, bundles is still broken
+    const inspect = async id => (id === "c1" ? { exists: true, name: "codes", missing: [] } : { exists: true, name: "deals", missing: ["Embed Links"] });
+    const res = await checkChannels({ db, guildId: "g1", inspect });
+    assert.deepEqual(releaseFixed(res, "g1", health), ["codes"]);
+    assert.equal(health.blocked("codes", "g1"), false);
+    assert.equal(health.blocked("bundles", "g1"), true);
+    assert.match(checkEmbed(res, ["codes"]).footer.text, /tried again right away/);
+    // the daily audit does the same on its own
+    await health.report({ feature: "codes", guildId: "g1", channelId: "c1", err: { status: 403, detail: "Missing Access (code 50001)" } });
+    await runChannelAudit({ db, guildIds: ["g1"], inspectFor: () => inspect, health, now: () => t });
+    assert.equal(health.blocked("codes", "g1"), false);
+});

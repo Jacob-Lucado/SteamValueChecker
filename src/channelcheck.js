@@ -35,7 +35,7 @@ export async function checkChannels({ db, guildId, inspect }) {
     return { rows, bad: rows.filter(r => !r.ok).length };
 }
 
-export function checkEmbed(res) {
+export function checkEmbed(res, released = []) {
     if (!res.rows.length) return { color: 0x5865f2, title: "Channel check", description: "No post channels are set up yet. Run `/setup` to pick them." };
     const lines = res.rows.map(r => r.ok
         ? `✅ **${r.label}**: <#${r.channelId}> is fine.`
@@ -43,7 +43,7 @@ export function checkEmbed(res) {
     return {
         color: res.bad ? 0xed4245 : 0x57f287, title: res.bad ? `Channel check: ${res.bad} problem${res.bad === 1 ? "" : "s"}` : "Channel check: all good",
         description: lines.join("\n").slice(0, 3800),
-        footer: { text: `The bot needs ${NEED.join(", ")} in each channel. Check the category's permissions too.` }
+        footer: { text: released.length ? `Fixed channels will be tried again right away. The bot needs ${NEED.join(", ")} in each channel.` : `The bot needs ${NEED.join(", ")} in each channel. Check the category's permissions too.` }
     };
 }
 
@@ -71,7 +71,7 @@ export function embedGapMessage(name) {
  * no longer post in (a permission changed, a category was locked) shows up there before a real post fails. A channel the bot just
  * couldn't look at is left as it was. `inspectFor(guildId)` is the same inspector the /setup check uses.
  */
-export async function runChannelAudit({ db, guildIds, inspectFor, now = () => Date.now(), log = () => {} }) {
+export async function runChannelAudit({ db, guildIds, inspectFor, health = null, now = () => Date.now(), log = () => {} }) {
     const stats = { servers: 0, checked: 0, problems: 0, skipped: false };
     const last = Number(db.getMeta("chanaudit:last") ?? 0);
     if (now() - last < 20 * 3_600_000) return { ...stats, skipped: true };
@@ -79,7 +79,9 @@ export async function runChannelAudit({ db, guildIds, inspectFor, now = () => Da
     for (const gid of guildIds) {
         if (!configuredChannels(db, gid).length) continue;
         stats.servers++;
-        const { rows } = await checkChannels({ db, guildId: gid, inspect: inspectFor(gid) });
+        const res = await checkChannels({ db, guildId: gid, inspect: inspectFor(gid) });
+        const { rows } = res;
+        releaseFixed(res, gid, health);   // fixed since the last failure: no need to wait out the back-off
         for (const r of rows) {
             if (r.unknown) continue;
             stats.checked++;
@@ -93,4 +95,14 @@ export async function runChannelAudit({ db, guildIds, inspectFor, now = () => Da
         }
     }
     return stats;
+}
+
+/**
+ * A channel that now passes is tried again right away: the bot waits a day after a permanent failure, and a manager who just fixed
+ * the permissions shouldn't have to wait it out. Returns the features that were released.
+ */
+export function releaseFixed(res, guildId, health) {
+    const released = [];
+    for (const r of res.rows) if (r.ok && health?.blocked?.(r.feature, guildId)) { health.retry(r.feature, guildId); released.push(r.feature); }
+    return released;
 }

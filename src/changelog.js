@@ -1,5 +1,8 @@
 // What's new. Newest first. The dashboard shows a banner for the newest entry until it is dismissed, and /bot changelog lists them.
 export const CHANGELOG = [
+    { version: "2026.11.91", date: "2026-11-22", title: "Fixed channels are retried right away", items: [
+        "After a post fails for good, the bot waits a day before trying that channel again. Now `/setup check:True` (or the Check button on the Community page) lifts that wait for every channel that passes, and the daily check does too. The DM to a server owner tells them about it.",
+    ] },
     { version: "2026.11.90", date: "2026-11-22", title: "The hourly alert log says why", items: [
         "The hourly alert summary in the log feed now ends with why deliveries failed (closed DMs with no alert channel, a refused alert channel, and so on) and names the servers whose alert channel keeps refusing, with Discord's answer.",
     ] },

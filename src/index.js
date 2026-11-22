@@ -411,7 +411,7 @@ try {
 const musicOff = i => (i.isRepliable?.() ? i.reply({ content: "Music isn't available on this bot right now.", flags: MessageFlags.Ephemeral }).catch(() => {}) : null);
 const requestUi = createRequestHandlers({ db, publicUrl: publicBase, publish: id => publishRequest({ db, api: botRest, id, base: publicBase }) });
 const ticketUi = createTicketHandlers({ db, tickets, ownerId: cfg.ownerId, publicUrl: publicBase });
-const setupUi = createSetupHandlers({ db, publicUrl: publicBase, inspectFor: gid => clientInspector(client, gid, PermissionFlagsBits) });
+const setupUi = createSetupHandlers({ db, publicUrl: publicBase, inspectFor: gid => clientInspector(client, gid, PermissionFlagsBits), feedHealth });
 const giveaways = cfg.keySecret
     ? createGiveawayService({ db, tickets, vault: createVault(cfg.keySecret), discord: gwDiscord, itad, countryLookup: id => fetchSteamCountry(id, cfg.steamApiKey), multiBannerUrl: cfg.dashboard?.publicUrl ? `${cfg.dashboard.publicUrl.replace(/\/$/, "")}/multikey.png` : null, log: m => console.log(`[giveaway] ${m}`) })
     : null;
@@ -497,7 +497,7 @@ client.once(Events.ClientReady, c => {
             result.gameClub = await ops.job("game club", () => runGameClubs({ db, notifier, log }));
             result.playtests = await ops.job("playtests", () => runPlaytests({ db, news, abg, notifier, log }));
             result.epicSoon = await ops.job("epic soon", () => runEpicSoon({ db, soon: epicSoon, notifier, log }));
-            result.channelAudit = await ops.job("channel check", () => runChannelAudit({ db, guildIds: [...client.guilds.cache.keys()], inspectFor: gid => clientInspector(client, gid, PermissionFlagsBits), log: m => console.warn(`[feeds] ${m}`) }));
+            result.channelAudit = await ops.job("channel check", () => runChannelAudit({ db, health: feedHealth, guildIds: [...client.guilds.cache.keys()], inspectFor: gid => clientInspector(client, gid, PermissionFlagsBits), log: m => console.warn(`[feeds] ${m}`) }));
             result.feeds = await ops.job("server feeds", () => runGuildFeeds({ db, itad, notifier, log, health: feedHealth }));
             result.hotDeals = await ops.job("hot deals", () => runHotDeals({ db, itad, notifier, log, health: feedHealth }));
             result.saleStarts = await ops.job("sale starts", () => runSaleStarts({ db, notifier, log, health: feedHealth, prepUrl: cfg.dashboard?.publicUrl ? `${String(cfg.dashboard.publicUrl).replace(/\/+$/, "")}/winter-sale` : null }));

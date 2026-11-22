@@ -2,11 +2,11 @@
 // server.js passes in the helpers it already has (ctx) and merges these routes into its table.
 import { HttpError } from "./http.js";
 import { UserError } from "../errors.js";
-import { checkChannels } from "../channelcheck.js";
+import { checkChannels, releaseFixed } from "../channelcheck.js";
 import { renderWelcomeCard } from "../cardimg.js";
 
 export function createCommunityRoutes(ctx) {
-    const { channelCheck, db, botGuilds, botIn, cd, comm, cooldown, guildFor, guildList, isManager, managerGuild, playtests, session } = ctx;
+    const { channelCheck, feedHealth, db, botGuilds, botIn, cd, comm, cooldown, guildFor, guildList, isManager, managerGuild, playtests, session } = ctx;
     return {
         // ---- community: welcome, XP and levels, invites and referrals, emoji, one-click server build ----
         "GET /api/community": async (req, _b, url) => {
@@ -85,7 +85,7 @@ export function createCommunityRoutes(ctx) {
         "GET /api/community/channelcheck": async (req, _b, url) => {
             const g = managerGuild(session(req), url.searchParams.get("guild"));
             if (!channelCheck) throw new HttpError(503, "The channel check isn't available on this bot.");
-            return comm(() => checkChannels({ db, guildId: g.id, inspect: channelCheck(g.id) }));
+            return comm(async () => { const res = await checkChannels({ db, guildId: g.id, inspect: channelCheck(g.id) }); return { ...res, released: releaseFixed(res, g.id, feedHealth) }; });
         },
         "POST /api/community/problems/clear": async (req, body) => comm(() => cd.dismissProblem(managerGuild(session(req), String(body.guild_id)).id, body.key)),
         "POST /api/community/autorole": async (req, body) => comm(() => cd.autorole(managerGuild(session(req), String(body.guild_id)).id, body)),

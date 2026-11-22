@@ -53,7 +53,7 @@ export function ownerNotice({ feature, serverName, channelId, channelName, info,
                 `${f.label} for **${serverName}** keep failing in ${channelName ? `**#${channelName}**` : `<#${channelId}>`}${since ? ` (since <t:${Math.floor(since / 1000)}:R>)` : ""}.`,
                 `Discord says: \`${info.short}\`. ${info.why}`,
                 `**To fix it:** give the bot View Channel, Send Messages and Embed Links in that channel (check the category's permissions too). ${f.fix}`,
-                "I'll keep trying once a day and won't message you about this again for a week."
+                "Once it's fixed, run `/setup check:True` in the server to confirm and I'll try again right away. Otherwise I try once a day, and I won't message you about this again for a week."
             ].join("\n\n").slice(0, 1800),
             footer: { text: "You got this because you own the server. Steam Value Checker" }
         }]
